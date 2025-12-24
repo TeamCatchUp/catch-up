@@ -1,5 +1,3 @@
 export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">홈 페이지</div>
-  );
+  return <div className="flex min-h-screen">홈페이지</div>;
 }

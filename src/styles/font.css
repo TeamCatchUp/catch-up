@@ -1,0 +1,74 @@
+@font-face {
+  font-family: 'Pretendard';
+  src: '/public/fonts/PretendardVariable.woff2' format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  /* display */
+  --text-display-xlarge: 32px;
+  --text-display-xlarge--line-height: 48px;
+  --text-display-xlarge--font-weight: 600;
+
+  --text-display-large: 28px;
+  --text-display-large--line-height: 42px;
+  --text-display-large--font-weight: 600;
+
+  /* heading */
+  --text-heading-xlarge: 24px;
+  --text-heading-xlarge--line-height: 36px;
+  --text-heading-xlarge--font-weight: 600;
+
+  --text-heading-large: 19px;
+  --text-heading-large--line-height: 28.5px;
+  --text-heading-large--font-weight: 600;
+
+  --text-heading-medium: 17px;
+  --text-heading-medium--line-height: 25.5px;
+  --text-heading-medium--font-weight: 600;
+
+  --text-heading-small: 15px;
+  --text-heading-small--line-height: 22.5px;
+  --text-heading-small--font-weight: 600;
+
+  /* body */
+  --text-body-large: 19px;
+  --text-body-large--line-height: 28.5px;
+  --text-body-large--font-weight: 500;
+
+  --text-body-medium: 17px;
+  --text-body-medium--line-height: 25.5px;
+  --text-body-medium--font-weight: 500;
+
+  --text-body-small: 15px;
+  --text-body-small--line-height: 22.5px;
+  --text-body-small--font-weight: 500;
+
+  --text-body-xsmall: 13px;
+  --text-body-xsmall--line-height: 19.5px;
+  --text-body-xsmall--font-weight: 500;
+
+  /* label */
+  --text-label-large: 19px;
+  --text-label-large--line-height: 28.5px;
+  --text-label-large--font-weight: 500;
+
+  --text-label-medium: 17px;
+  --text-label-medium--line-height: 25.5px;
+  --text-label-medium--font-weight: 400;
+
+  --text-label-small: 15px;
+  --text-label-small--line-height: 22.5px;
+  --text-label-small--font-weight: 400;
+
+  --text-label-xsmall: 13px;
+  --text-label-xsmall--line-height: 19.5px;
+  --text-label-xsmall--font-weight: 400;
+}
+
+@theme {
+  /* letter-spacing */
+  --tracking-tight: -0.02em;
+}
