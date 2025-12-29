@@ -26,5 +26,5 @@ app.include_router(chat_router)
 
 # 헬스 체크
 @app.get("/")
-async def health_chech():
+async def health_check():
     return {"status": "ok", "message": "RAG Server is running."}
