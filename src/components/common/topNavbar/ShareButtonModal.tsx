@@ -13,30 +13,46 @@ const members = [
 
 const ShareButtonModal = () => {
   return (
-    <div className="border-neutral-4 flex h-[492px] w-[380px] flex-col gap-3 rounded-2xl border bg-white px-1.5 pt-3">
-      <div className="flex items-center justify-between gap-1.5 px-1">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="share-modal-title"
+      className="border-neutral-4 flex h-[492px] w-[380px] flex-col gap-3 rounded-2xl border bg-white px-1.5 pt-3"
+    >
+      <header className="flex items-center justify-between gap-1.5 px-1">
+        <label htmlFor="share-input" className="sr-only">
+          이메일 또는 그룹 입력
+        </label>
         <input
+          id="share-input"
           className="text-body-small placeholder-gray-30 focus:caret-blue-30 focus:bg-neutral-1 focus:border-blue-30 border-neutral-3 h-[46px] w-[289px] rounded-xl border p-3 transition-colors outline-none"
           placeholder="이메일 또는 그룹을 입력하세요."
         />
         <button className="text-body-medium h-10 cursor-pointer rounded-lg border bg-blue-50 px-4 py-1.5 whitespace-nowrap text-white">
           초대
         </button>
-      </div>
-      <div className="flex flex-col gap-1.5 overflow-y-auto">
-        {members.map((member, index) => (
-          <div
-            key={index}
-            className="hover:bg-neutral-2 flex h-[51px] w-[365px] cursor-pointer items-center gap-4 rounded-lg p-1"
-          >
-            <DefaultProfile className="h-10 w-10" />
-            <div>
-              <div className="text-body-small">{member.name}</div>
-              <div className="text-body-xsmall text-gray-50">{member.role}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+      </header>
+
+      <section aria-labelledby="share-modal-title" className="overflow-y-auto">
+        <h2 id="share-modal-title" className="sr-only">
+          초대 가능한 멤버 목록
+        </h2>
+        <ul className="flex flex-col gap-1.5">
+          {members.map((member, index) => (
+            <li
+              key={index}
+              className="hover:bg-neutral-2 focus:bg-neutral-2 flex h-[51px] w-[365px] cursor-pointer items-center gap-4 rounded-lg p-1 focus:outline-none"
+              tabIndex={0}
+            >
+              <DefaultProfile className="h-10 w-10" />
+              <div>
+                <p className="text-body-small">{member.name}</p>
+                <p className="text-body-xsmall text-gray-50">{member.role}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
 };
