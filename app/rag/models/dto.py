@@ -13,7 +13,16 @@ class ChatRequest(BaseModel):
     )
 
 
+class Source(BaseModel):
+    source: str | None = None  # 문서 출처
+    category: str | None = None  # 카테고리
+    page: int | None = None
+    content: str | None = None  # 실제 내용
+    file_path: str | None = None
+    file_name: str | None = None
+
+
 # 응답
 class ChatResponse(BaseModel):
     answer: str = Field(..., description="AI의 답변 텍스트")
-    sources: List[str] = Field(default=[], description="참고한 문서 출처 목록")
+    sources: List[Source] = Field(default=[], description="참고한 문서 출처 목록")

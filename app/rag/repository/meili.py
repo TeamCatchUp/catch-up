@@ -1,73 +1,132 @@
+import logging
+from typing import Optional
+
 import meilisearch
-from app.core.config import settings
-from app.rag.repository.base import VectorStoreRepository
 from langchain_community.vectorstores import Meilisearch
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
+
+from app.core.config import settings
+from app.rag.repository.base import VectorStoreRepository
+
+logger = logging.getLogger(__name__)
 
 
 class LangChainMeiliRepository(VectorStoreRepository):
     def __init__(self):
         self.embeddings = OpenAIEmbeddings()
 
-        self.vector_store = Meilisearch(
-            embedding=self.embeddings,
-            url=settings.MEILI_HTTP_ADDR,
-            api_key=settings.MEILI_KEY,
-            index_name=settings.MEILI_INDEX,
+        self.client = meilisearch.Client(
+            settings.MEILI_HTTP_ADDR, settings.MEILI_KEY, timeout=10
         )
 
-        self.admin_client = meilisearch.Client(
-            settings.MEILI_HTTP_ADDR, settings.MEILI_KEY
-        )
-
-    def initialize(self):
+    def initialize(self, index_names: list[str] = None):
         """
-        Meilisearch 초기 설정을 주입한다.
+        사용할 모든 인덱스에 대해 초기 설정을 수행한다.
 
         인덱스가 없다면 생성하고, hybrid search를 위한 embedder를 설정한다.
         FastAPI 서버 최초 실행 시점에 lifespan을 통해 실행된다.
         """
+
+        targets: list[str] = index_names or [settings.MEILI_DEFAULT_INDEX]
+
         config = {"primaryKey": "id"}
 
-        try:
-            self.admin_client.create_index(settings.MEILI_INDEX, config)
-        except:
-            pass
+        for index_name in targets:
+            # 인덱스 생성
+            try:
+                task = self.client.create_index(index_name, config)
+                self.client.wait_for_task(task.task_uid)
+                logger.info(f"Created index '{index_name}'. (Skipped if exists)")
+            except Exception as e:
+                logger.warning(f"Failed to create index for '{index_name}': {e}")
 
-        index = self.admin_client.index(settings.MEILI_INDEX)
+            index = self.client.index(index_name)
 
-        task = index.update_embedders(
-            {"default": {"source": "userProvided", "dimensions": 1536}}
-        )
+            # 임베더 설정
+            try:
+                task = index.update_embedders(
+                    {"default": {"source": "userProvided", "dimensions": 1536}}
+                )
+                self.client.wait_for_task(task.task_uid)
 
-        self.admin_client.wait_for_task(task.task_uid)
+                logger.info(f"Updated embedders for '{index_name}'.")
 
-        task_filter = index.update_filterable_attributes(["role", "category"])
-        self.admin_client.wait_for_task(task_filter.task_uid)
+            except Exception as e:
+                logger.warning(f"Failed to update embedders for '{index_name}': {e}")
+
+            # 필터링 가능한 속성 정의
+            try:
+                task = index.update_filterable_attributes(
+                    [
+                        # "metadata.role",
+                        "metadata.category",
+                        "metadata.source",
+                        "metadata.file_path",
+                        # "metadata.status"
+                        "metadata.file_name",
+                    ]
+                )
+                self.client.wait_for_task(task.task_uid)
+                logger.info(f"Updated filters for '{index_name}'.")
+            except Exception as e:
+                logger.warning(f"Failed to update filters for '{index_name}': {e}")
+
+            logger.info(f"embedders: {index.get_embedders()}")
 
     def retrieve(
-        self, query: str, k: int = 3, semantic_ratio: float = 0.5
+        self,
+        query: str,
+        index_name: Optional[str] = None,
+        k: int = 3,
+        semantic_ratio: float = 0.5,
+        filters: Optional[dict] = None,
     ) -> list[Document]:
-        """
-        Meilisearch vector store에서 검색을 수행한다.
+        target_index = index_name or settings.MEILI_DEFAULT_INDEX
 
-        Meilisearch의 hybrid search를 기반으로 사용자 쿼리와 키워드가 일치하거나 의미적으로 유사한 Document에 대한 List를 반환한다.
+        print(self.client.index(index_name).get_settings())
 
-        Args:
-            - query (str): 사용자의 자연어 질문
-            - k (int): 상위 k개의 Document (default: 3)
-            - semantic_ratio (float): 의미적 유사도 반영 가중치 (default: 0.5)
+        # vector_store = Meilisearch(
+        #     embedding=self.embeddings, client=self.client, index_name=target_index
+        # )
 
-        Returns:
-            docs (list[Document]):
-                상위 K개의 검색 결과
-                - Document: langchain Documnet 객체
-        """
-        docs = self.vector_store.similarity_search(
-            query=query,
-            k=k,
-            hybrid={"semanticRatio": semantic_ratio, "embedder": "default"},
-        )
+        # docs = vector_store.similarity_search(
+        #     query=query,
+        #     k=k,
+        #     hybrid={"semanticRatio": semantic_ratio},
+        # )
+
+        index = self.client.index(target_index)
+
+        vector = self.embeddings.embed_query(query)
+
+        search_params = {
+            "vector": vector,  # 생성한 벡터 주입
+            "limit": k,
+            "hybrid": {
+                "semanticRatio": semantic_ratio,
+                "embedder": "default",  # userProvided에서는 명시적으로 지정해야 함
+            },
+        }
+
+        if filters:
+            search_params["filter"] = filters
+
+        results = index.search(query, search_params)
+
+        logger.info(results)
+
+        docs = []
+        for hit in results.get("hits", []):
+            content = hit.get("text") or hit.get("content") or ""
+            metadata = hit.get("metadata", {})
+
+            if not metadata:
+                metadata = {
+                    k: v
+                    for k, v in hit.items()
+                    if k not in ["id", "text", "content", "_vectors", "_semanticScore"]
+                }
+            docs.append(Document(page_content=content, metadata=metadata))
 
         return docs

@@ -1,6 +1,7 @@
+from langchain_core.messages import HumanMessage
+
 from app.rag.graph import get_compiled_graph
 from app.rag.models.dto import ChatResponse
-from langchain_core.messages import HumanMessage
 
 
 class ChatService:

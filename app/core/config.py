@@ -20,11 +20,18 @@ class Settings(BaseSettings):
 
     MEILI_HTTP_ADDR: str = "http://localhost:7700"
     MEILI_KEY: str | None = None
-    MEILI_INDEX: str
+    MEILI_DEFAULT_INDEX: str | None
+    MEILI_GITHUB_CODEBASE_INDEX: str | None
+    MEILI_GITHUB_ISSUES_INDEX: str | None
+    MEILI_GITHUB_PRS_INDEX: str | None
 
     OPENAI_API_KEY: str
 
     REDIS_URL: str
+
+    LANGFUSE_SECRET_KEY: str
+    LANGFUSE_PUBLIC_KEY: str
+    LANGFUSE_BASE_URL: str
 
     model_config = SettingsConfigDict(
         env_prefix="", case_sensitive=False, env_file=".env", env_file_encoding="utf-8"
