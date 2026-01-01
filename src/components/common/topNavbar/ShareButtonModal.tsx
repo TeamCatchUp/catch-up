@@ -1,0 +1,44 @@
+import DefaultProfile from '@/assets/svgs/navbar/default_profile.svg';
+
+const members = [
+  { name: '팀원G', role: 'PM' },
+  { name: '팀원G', role: 'Designer' },
+  { name: '팀원G', role: 'Developer' },
+  { name: '팀원G', role: 'Tester' },
+  { name: '팀원G', role: 'Backend' },
+  { name: '팀원G', role: 'Frontend' },
+  { name: '팀원G', role: 'QA' },
+  { name: '팀원G', role: 'PM' },
+];
+
+const ShareButtonModal = () => {
+  return (
+    <div className="border-neutral-4 flex h-[492px] w-[380px] flex-col gap-3 rounded-2xl border bg-white px-1.5 pt-3">
+      <div className="flex items-center justify-between gap-1.5 px-1">
+        <input
+          className="text-body-small placeholder-gray-30 focus:caret-blue-30 focus:bg-neutral-1 focus:border-blue-30 border-neutral-3 h-[46px] w-[289px] rounded-xl border p-3 transition-colors outline-none"
+          placeholder="이메일 또는 그룹을 입력하세요."
+        />
+        <button className="text-body-medium h-10 cursor-pointer rounded-lg border bg-blue-50 px-4 py-1.5 whitespace-nowrap text-white">
+          초대
+        </button>
+      </div>
+      <div className="flex flex-col gap-1.5 overflow-y-auto">
+        {members.map((member, index) => (
+          <div
+            key={index}
+            className="hover:bg-neutral-2 flex h-[51px] w-[365px] cursor-pointer items-center gap-4 rounded-lg p-1"
+          >
+            <DefaultProfile className="h-10 w-10" />
+            <div>
+              <div className="text-body-small">{member.name}</div>
+              <div className="text-body-xsmall text-gray-50">{member.role}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default ShareButtonModal;
