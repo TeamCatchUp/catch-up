@@ -1,8 +1,8 @@
 import { Metadata } from 'next';
 import '@/styles/globals.css';
-import OpenedSideNavbar from '@/components/common/navbar/OpenedSideNavbar';
-// import ClosedSideNavbar from '@/components/common/navbar/ClosedSideNavbar';
-import TopNavbar from '@/components/common/navbar/TopNavbar';
+import OpenedSideNavbar from '@/components/common/sideNavbar/OpenedSideNavbar';
+// import ClosedSideNavbar from '@/components/common/sideNavbar/ClosedSideNavbar';
+import TopNavbar from '@/components/common/topNavbar/TopNavbar';
 
 export const metadata: Metadata = {
   title: 'CATCHUP',
