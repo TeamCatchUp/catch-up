@@ -17,15 +17,29 @@ const MoreButtonModal = () => {
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
 
   const toggleButton = (key: string) => {
+    if (key === 'link') return handleLinkClick();
+
+    setIsLinkModalOpen(false);
     setSelectedButton((prev) => (prev === key ? null : key));
   };
 
-  const toggleLinkModal = () => {
-    setIsLinkModalOpen((prev) => !prev);
+  const handleLinkClick = () => {
+    if (isLinkModalOpen) {
+      setIsLinkModalOpen(false);
+      setSelectedButton(null);
+    } else {
+      setIsLinkModalOpen(true);
+      setSelectedButton('link');
+    }
   };
 
   return (
-    <div className="border-neutral-4 shadow-dropdown-menu flex h-[368px] w-[283px] flex-col gap-3 rounded-2xl border bg-white px-1.5 py-3">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="more-modal-title"
+      className="border-neutral-4 shadow-dropdown-menu flex h-[368px] w-[283px] flex-col gap-3 rounded-2xl border bg-white px-1.5 py-3"
+    >
       <section className="border-neutral-3 px-1.5">
         <label htmlFor="more-search" className="sr-only">
           검색어 입력
@@ -33,7 +47,10 @@ const MoreButtonModal = () => {
         <input
           id="more-search"
           placeholder="검색어를 입력하세요."
-          onClick={() => toggleButton('input')}
+          onFocus={() => {
+            setSelectedButton(null);
+            setIsLinkModalOpen(false);
+          }}
           className="text-body-small placeholder-gray-30 focus:caret-blue-30 focus:bg-neutral-1 focus:border-blue-30 border-neutral-3 h-10 w-[257px] rounded-xl border px-3 py-2 transition-colors outline-none"
         />
       </section>
@@ -86,10 +103,7 @@ const MoreButtonModal = () => {
         <div className="width-[269px] border-neutral-2 my-px border"></div>
 
         <button
-          onClick={() => {
-            toggleButton('link');
-            toggleLinkModal();
-          }}
+          onClick={handleLinkClick}
           aria-pressed={selectedButton === 'link'}
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'link' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
