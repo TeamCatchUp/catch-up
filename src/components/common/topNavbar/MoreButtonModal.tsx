@@ -10,16 +10,20 @@ import Alarm from '@/assets/svgs/navbar/alarm.svg';
 import Rotate from '@/assets/svgs/navbar/rotate.svg';
 import ArrowRight from '@/assets/svgs/navbar/arrow_right.svg';
 import LinkModal from './LinkModal';
+import GetAlertModal from './GetAlertModal';
 
 const MoreButtonModal = () => {
   const today = new Date();
   const [selectedButton, setSelectedButton] = useState<string | null>(null);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [isGetAlertModalOpen, setIsGetAlertModalOpen] = useState(false);
 
   const toggleButton = (key: string) => {
     if (key === 'link') return handleLinkClick();
+    if (key === 'alert') return handleGetAlertClick();
 
     setIsLinkModalOpen(false);
+    setIsGetAlertModalOpen(false);
     setSelectedButton((prev) => (prev === key ? null : key));
   };
 
@@ -29,7 +33,19 @@ const MoreButtonModal = () => {
       setSelectedButton(null);
     } else {
       setIsLinkModalOpen(true);
+      setIsGetAlertModalOpen(false);
       setSelectedButton('link');
+    }
+  };
+
+  const handleGetAlertClick = () => {
+    if (isGetAlertModalOpen) {
+      setIsGetAlertModalOpen(false);
+      setSelectedButton(null);
+    } else {
+      setIsGetAlertModalOpen(true);
+      setIsLinkModalOpen(false);
+      setSelectedButton('alert');
     }
   };
 
@@ -50,6 +66,7 @@ const MoreButtonModal = () => {
           onFocus={() => {
             setSelectedButton(null);
             setIsLinkModalOpen(false);
+            setIsGetAlertModalOpen(false);
           }}
           className="text-body-small placeholder-gray-30 focus:caret-blue-30 focus:bg-neutral-1 focus:border-blue-30 border-neutral-3 h-10 w-[257px] rounded-xl border px-3 py-2 transition-colors outline-none"
         />
@@ -61,7 +78,7 @@ const MoreButtonModal = () => {
           aria-pressed={selectedButton === 'new'}
           className={`flex h-10 cursor-pointer items-center gap-2 rounded-lg p-2 transition-colors ${selectedButton === 'new' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <AddSmall className="relative right-px bottom-0.5 h-5 w-5 text-gray-50" />
+          <AddSmall className="text-gray-80 relative right-px bottom-0.5 h-5 w-5" />
           <span>새 인수인계 시작하기</span>
         </button>
 
@@ -71,7 +88,7 @@ const MoreButtonModal = () => {
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'text' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
           <div className="flex cursor-pointer items-center gap-2">
-            <IconType className="relative right-px bottom-0.5 h-5 w-5 text-gray-50" />
+            <IconType className="text-gray-80 relative right-px bottom-0.5 h-5 w-5" />
             <span>글자 크기</span>
           </div>
           <div className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
@@ -87,7 +104,7 @@ const MoreButtonModal = () => {
           aria-pressed={selectedButton === 'help'}
           className={`flex h-10 cursor-pointer items-center gap-2 rounded-lg p-2 transition-colors ${selectedButton === 'help' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <Error className="relative h-5 w-5 text-gray-50" />
+          <Error className="text-gray-80 relative h-5 w-5" />
           <span>도움말</span>
         </button>
 
@@ -96,7 +113,7 @@ const MoreButtonModal = () => {
           aria-pressed={selectedButton === 'version'}
           className={`flex h-10 cursor-pointer items-center gap-2 rounded-lg p-2 transition-colors ${selectedButton === 'version' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <Storage className="relative right-0.5 bottom-0.5 h-5 w-5 text-gray-50" />
+          <Storage className="text-gray-80 relative right-0.5 bottom-0.5 h-5 w-5" />
           <span>버전 기록</span>
         </button>
 
@@ -108,7 +125,7 @@ const MoreButtonModal = () => {
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'link' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
           <div className="flex cursor-pointer items-center gap-2">
-            <CloudCheck className="relative right-0.5 bottom-0.5 h-5 w-5.5 text-gray-50" />
+            <CloudCheck className="text-gray-80 relative right-0.5 bottom-0.5 h-5 w-5.5" />
             <span className="relative right-0.5">연결</span>
           </div>
           <div className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
@@ -120,12 +137,12 @@ const MoreButtonModal = () => {
         <div className="width-[269px] border-neutral-2 my-px border"></div>
 
         <button
-          onClick={() => toggleButton('alert')}
+          onClick={handleGetAlertClick}
           aria-pressed={selectedButton === 'alert'}
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'alert' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
           <div className="flex cursor-pointer items-center gap-2">
-            <Alarm className="relative right-0.5 bottom-0.5 h-5.5 w-5 text-gray-50" />
+            <Alarm className="text-gray-80 relative right-0.5 bottom-0.5 h-5.5 w-5" />
             <span>알림받기</span>
           </div>
           <div className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
@@ -151,6 +168,11 @@ const MoreButtonModal = () => {
       {isLinkModalOpen && (
         <div className="absolute top-[167px] right-[275px]">
           <LinkModal />
+        </div>
+      )}
+      {isGetAlertModalOpen && (
+        <div className="absolute top-[267px] right-[275px]">
+          <GetAlertModal />
         </div>
       )}
     </div>

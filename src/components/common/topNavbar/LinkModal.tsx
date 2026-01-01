@@ -19,7 +19,7 @@ const LinkModal = () => {
       <button className="flex h-10 w-[269px] cursor-pointer items-center justify-between p-2">
         <div className="flex gap-2">
           <JiraLogo className="h-5 w-5" aria-hidden="true" />
-          <span>Jira</span>
+          <span className="text-gray-80">Jira</span>
         </div>
         <div className="flex items-center">
           <span className="text-body-xsmall text-gray-50">미연동</span>
@@ -30,7 +30,7 @@ const LinkModal = () => {
       <button className="flex h-10 w-[269px] cursor-pointer items-center justify-between p-2">
         <div className="flex gap-2">
           <ConfluenceLogo className="h-5 w-5" aria-hidden="true" />
-          <span>Confluence</span>
+          <span className="text-gray-80">Confluence</span>
         </div>
         <div className="flex items-center">
           <span className="text-body-xsmall text-gray-50">연동</span>
@@ -41,7 +41,7 @@ const LinkModal = () => {
       <button className="flex h-10 w-[269px] cursor-pointer items-center justify-between p-2">
         <div className="flex gap-2">
           <GithubLogo className="h-5.5 w-6" aria-hidden="true" />
-          <span className="relative top-px right-1">Github</span>
+          <span className="text-gray-80 relative top-px right-1">Github</span>
         </div>
         <div className="flex items-center">
           <span className="text-body-xsmall text-gray-50">미연동</span>
@@ -52,7 +52,7 @@ const LinkModal = () => {
       <button className="flex h-10 w-[269px] cursor-pointer items-center justify-between p-2">
         <div className="flex gap-2">
           <SlackLogo className="h-5.5 w-5.5" aria-hidden="true" />
-          <span className="relative top-px right-0.5">Slack</span>
+          <span className="text-gray-80 relative top-px right-0.5">Slack</span>
         </div>
         <div className="flex items-center">
           <span className="text-body-xsmall text-gray-50">미연동</span>
