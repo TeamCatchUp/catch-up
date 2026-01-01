@@ -9,13 +9,19 @@ import CloudCheck from '@/assets/svgs/navbar/cloud_check.svg';
 import Alarm from '@/assets/svgs/navbar/alarm.svg';
 import Rotate from '@/assets/svgs/navbar/rotate.svg';
 import ArrowRight from '@/assets/svgs/navbar/arrow_right.svg';
+import LinkModal from './LinkModal';
 
 const MoreButtonModal = () => {
   const today = new Date();
   const [selectedButton, setSelectedButton] = useState<string | null>(null);
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
 
   const toggleButton = (key: string) => {
     setSelectedButton((prev) => (prev === key ? null : key));
+  };
+
+  const toggleLinkModal = () => {
+    setIsLinkModalOpen((prev) => !prev);
   };
 
   return (
@@ -42,22 +48,22 @@ const MoreButtonModal = () => {
           <span>새 인수인계 시작하기</span>
         </button>
 
-        <div
+        <button
           onClick={() => toggleButton('text')}
           aria-pressed={selectedButton === 'text'}
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'text' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <button className="flex cursor-pointer items-center gap-2">
+          <div className="flex cursor-pointer items-center gap-2">
             <IconType className="relative right-px bottom-0.5 h-5 w-5 text-gray-50" />
             <span>글자 크기</span>
-          </button>
-          <button className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
+          </div>
+          <div className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
             <span>중간</span>
             <ArrowRight className="text-gray-30 h-6 w-6" />
-          </button>
-        </div>
+          </div>
+        </button>
 
-        <div className="width-[269px] border-neutral-2 border"></div>
+        <div className="width-[269px] border-neutral-2 my-px border"></div>
 
         <button
           onClick={() => toggleButton('help')}
@@ -77,41 +83,44 @@ const MoreButtonModal = () => {
           <span>버전 기록</span>
         </button>
 
-        <div className="width-[269px] border-neutral-2 border"></div>
+        <div className="width-[269px] border-neutral-2 my-px border"></div>
 
-        <div
-          onClick={() => toggleButton('link')}
+        <button
+          onClick={() => {
+            toggleButton('link');
+            toggleLinkModal();
+          }}
           aria-pressed={selectedButton === 'link'}
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'link' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <button className="flex cursor-pointer items-center gap-2">
+          <div className="flex cursor-pointer items-center gap-2">
             <CloudCheck className="relative right-0.5 bottom-0.5 h-5 w-5.5 text-gray-50" />
             <span className="relative right-0.5">연결</span>
-          </button>
-          <button className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
+          </div>
+          <div className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
             <span>Jira</span>
             <ArrowRight className="text-gray-30 h-6 w-6" />
-          </button>
-        </div>
+          </div>
+        </button>
 
-        <div className="width-[269px] border-neutral-2 border"></div>
+        <div className="width-[269px] border-neutral-2 my-px border"></div>
 
-        <div
+        <button
           onClick={() => toggleButton('alert')}
           aria-pressed={selectedButton === 'alert'}
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'alert' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <button className="flex cursor-pointer items-center gap-2">
+          <div className="flex cursor-pointer items-center gap-2">
             <Alarm className="relative right-0.5 bottom-0.5 h-5.5 w-5 text-gray-50" />
             <span>알림받기</span>
-          </button>
-          <button className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
+          </div>
+          <div className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
             멘션
             <ArrowRight className="text-gray-30" />
-          </button>
-        </div>
+          </div>
+        </button>
 
-        <div className="width-[269px] border-neutral-2 border"></div>
+        <div className="width-[269px] border-neutral-2 my-px border"></div>
       </section>
 
       <button
@@ -124,6 +133,12 @@ const MoreButtonModal = () => {
           {today.getFullYear()}년 {today.getMonth() + 1}월 {today.getDate()}일
         </span>
       </button>
+
+      {isLinkModalOpen && (
+        <div className="absolute top-[167px] right-[275px]">
+          <LinkModal />
+        </div>
+      )}
     </div>
   );
 };
