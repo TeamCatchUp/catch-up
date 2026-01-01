@@ -6,4 +6,5 @@
   --shadow-rag-bar: 1px 1px 30px 0 rgba(181, 199, 228, 0.4);
   --shadow-selection-bar: 0 0 40px 0 rgba(0, 0, 0, 0.2);
   --shadow-modal: 0 6px 25px 0 rgba(0, 0, 0, 0.28);
+  --shadow-dropdown-menu: 0 4px 15px 0 rgba(0, 0, 0, 0.08);
 }
