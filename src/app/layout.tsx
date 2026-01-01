@@ -3,7 +3,12 @@ import '@/styles/globals.css';
 import OpenedSideNavbar from '@/components/common/navbar/OpenedSideNavbar';
 // import ClosedSideNavbar from '@/components/common/navbar/ClosedSideNavbar';
 import TopNabar from '@/components/common/navbar/TopNavbar';
-export const metadata: Metadata = { title: 'CATCHUP', description: 'CATCHUP 서비스 홈페이지' };
+
+export const metadata: Metadata = {
+  title: 'CATCHUP',
+  description: 'CATCHUP 서비스 홈페이지',
+};
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko">
