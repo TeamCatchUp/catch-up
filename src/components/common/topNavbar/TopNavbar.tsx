@@ -4,13 +4,21 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Home from '@/assets/svgs/navbar/home.svg';
 import Kebeb_2 from '@/assets/svgs/navbar/kebeb_2.svg';
-import ShareButtonModal from '@/components/common/topNavbar/ShareButtonModal';
+import ShareButtonModal from './ShareButtonModal';
+import MoreButtonModal from './MoreButtonModal';
 
 const TopNavbar = () => {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isMoreModalOpen, setIsMoreModalOpen] = useState(false);
 
   const toggleShareModal = () => {
     setIsShareModalOpen((prev) => !prev);
+    setIsMoreModalOpen(false);
+  };
+
+  const toggleMoreModal = () => {
+    setIsMoreModalOpen((prev) => !prev);
+    setIsShareModalOpen(false);
   };
 
   return (
@@ -35,16 +43,28 @@ const TopNavbar = () => {
           >
             공유
           </button>
-          <button className="border-neutral-3 hover:border-neutral-4 active:border-neutral-5 active:bg-neutral-3 hover:bg-neutral-2 cursor-pointer rounded-lg border px-1.5 py-1.5 transition-colors">
-            <Kebeb_2 className="h-6 w-6" />
+          <button
+            className={`${
+              isMoreModalOpen
+                ? 'border-neutral-4 bg-neutral-2 active:border-neutral-5 active:bg-neutral-3'
+                : 'border-neutral-3 active:border-neutral-5 active:bg-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 bg-white'
+            } cursor-pointer rounded-lg border px-1.5 py-1.5 transition-colors`}
+          >
+            <Kebeb_2 onClick={toggleMoreModal} className="h-6 w-6" />
           </button>
         </div>
       </div>
 
       {/* 공유 모달 */}
       {isShareModalOpen && (
-        <div className="absolute right-[86px]">
+        <div className="absolute top-[50px] right-[86px]">
           <ShareButtonModal />
+        </div>
+      )}
+      {/* 더보기 모달 */}
+      {isMoreModalOpen && (
+        <div className="absolute top-[50px] right-10">
+          <MoreButtonModal />
         </div>
       )}
     </nav>

@@ -18,7 +18,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <OpenedSideNavbar />
           </aside>
           <div className="flex flex-1 flex-col">
-            <header className="h-13">
+            <header className="h-[53px] flex-shrink-0">
               <TopNavbar />
             </header>
             <main className="flex-1 overflow-y-auto">{children}</main>

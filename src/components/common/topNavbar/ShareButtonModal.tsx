@@ -17,7 +17,7 @@ const ShareButtonModal = () => {
       role="dialog"
       aria-modal="true"
       aria-labelledby="share-modal-title"
-      className="border-neutral-4 flex h-[492px] w-[380px] flex-col gap-3 rounded-2xl border bg-white px-1.5 pt-3"
+      className="border-neutral-4 shadow-dropdown-menu flex h-[492px] w-[380px] flex-col gap-3 rounded-2xl border bg-white px-1.5 pt-3"
     >
       <header className="flex items-center justify-between gap-1.5 px-1">
         <label htmlFor="share-input" className="sr-only">
