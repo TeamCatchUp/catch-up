@@ -27,11 +27,11 @@ const SideNavbar = () => {
   const [isOpen, setIsOpen] = useState(true);
 
   return (
-    <nav className={`border-neutral-3 flex h-full ${isOpen ? 'w-[241px]' : 'w-15'} flex-col gap-4 border-r px-2`}>
+    <nav className={`border-neutral-3 flex h-full ${isOpen ? 'w-[241px]' : 'w-[62px]'} flex-col gap-4 border-r px-2`}>
       <div className={`flex items-center justify-between px-1 pt-2.5`}>
         <div onClick={() => !isOpen && setIsOpen(true)} className="flex items-center gap-2.5">
           <div className="border-neutral-3 flex h-10 w-10 cursor-pointer items-center rounded-xl border-[0.5px] px-[5px] py-1.5">
-            <CatchupLogo className="h-5 w-[26px]" />
+            <CatchupLogo className="relative left-px h-[20.53px] w-[27px]" />
           </div>
           <div className="relative top-0.5 flex items-center">{isOpen && <CatchupLogoLetter />}</div>
         </div>
@@ -68,10 +68,10 @@ const SideNavbar = () => {
       {isOpen && <div className={`border-neutral-3 'w-60' absolute bottom-[70px] left-0 border`} />}
 
       <div className="absolute bottom-2.5 flex w-[225px] justify-between px-1.5 py-1">
-        <div className="flex cursor-pointer gap-4">
-          <DefaultProfile className="h-10 w-10" />
+        <div className="flex cursor-pointer items-center gap-4">
+          <DefaultProfile className="relative right-1 h-10 w-10" />
           {isOpen && (
-            <div className="">
+            <div>
               <div className="text-heading-small text-gray-80">이진수</div>
               <div className="text-body-small text-gray-50">사업 개발</div>
             </div>
