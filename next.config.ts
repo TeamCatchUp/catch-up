@@ -3,7 +3,11 @@ import path from 'path';
 
 const nextConfig = {
   reactStrictMode: true,
+  output: 'export',
 
+  images: {
+    unoptimized: true,
+  },
   experimental: {
     // @ts-expect-error Next 16 turbo option
     turbo: false,
