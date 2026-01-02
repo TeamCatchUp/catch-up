@@ -171,7 +171,7 @@ const MoreButtonModal = () => {
         </div>
       )}
       {isGetAlertModalOpen && (
-        <div className="absolute top-[267px] right-[275px]">
+        <div className="absolute top-[167px] right-[275px]">
           <GetAlertModal />
         </div>
       )}
