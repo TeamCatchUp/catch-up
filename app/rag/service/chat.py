@@ -1,3 +1,4 @@
+from langfuse import observe
 from langchain_core.messages import HumanMessage
 
 from app.rag.graph import get_compiled_graph
@@ -8,6 +9,7 @@ class ChatService:
     def __init__(self):
         pass
 
+    @observe()
     async def chat(self, query: str, role: str, session_id: str) -> ChatResponse:
         app = await get_compiled_graph()
 

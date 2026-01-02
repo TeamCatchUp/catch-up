@@ -11,6 +11,10 @@ router = APIRouter()
 async def chat_response(
     request: ChatRequest, service: ChatService = Depends(get_chat_service)
 ) -> ChatResponse:
-    return await service.chat(
+    response = await service.chat(
         query=request.query, role=request.role, session_id=request.session_id
     )
+    
+    print(response.answer)
+    
+    return response

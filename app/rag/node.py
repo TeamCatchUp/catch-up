@@ -43,7 +43,10 @@ async def router_node(state: AgentState):
     history_messages = filtered_messages[:-1][-6:]
 
     chain = prompt | structured_llm
-    answer = await chain.ainvoke({"question": question, "history": history_messages})
+    answer = await chain.ainvoke(
+        input={"question": question, "history": history_messages},
+        config={"callbacks": [langfuse_handler]},
+    )
 
     return {"datasource": answer.datasource}
 
@@ -66,7 +69,9 @@ async def chitchat_node(state: AgentState):
     )
 
     chain = prompt | llm | StrOutputParser()
-    answer = await chain.ainvoke({"messages": filtered_messages})
+    answer = await chain.ainvoke(
+        input={"messages": filtered_messages}, config={"callbacks": [langfuse_handler]}
+    )
 
     return {"messages": [AIMessage(content=answer)], "sources": []}
 
@@ -93,9 +98,9 @@ async def rewrite_node(state: AgentState):
     chain = prompt | llm | StrOutputParser()
     answer = await chain.ainvoke(
         input={
-            "history": history_text,
-            "question": original_question,
-        },
+                "history": history_text,
+                "question": original_question,
+            },
         config={"callbacks": [langfuse_handler]},
     )
 
@@ -173,7 +178,10 @@ async def grade_node(state: AgentState):
     )
 
     answer = await chain.ainvoke(
-        input={"question": question, "context": context_text},
+        input={
+                "question": question,
+                "context": context_text
+            },
         config={"callbacks": [langfuse_handler]},
     )
 
