@@ -1,8 +1,8 @@
-import JiraLogo from '@/assets/svgs/logo/logo_jira.svg';
-import ConfluenceLogo from '@/assets/svgs/logo/logo_confluence.svg';
-import GithubLogo from '@/assets/svgs/logo/logo_github.svg';
-import SlackLogo from '@/assets/svgs/logo/logo_slack.svg';
-import ArrowRight from '@/assets/svgs/navbar/arrow_right.svg';
+import JiraLogo from '/public/icons/logo/Jira.svg';
+import ConfluenceLogo from 'public/icons/logo/Counfluence.svg';
+import GithubLogo from '/public/icons/logo/Github.svg';
+import SlackLogo from '/public/icons/logo/Slack.svg';
+import ArrowRight from '/public/icons/icon/arrow_right.svg';
 
 const LinkModal = () => {
   return (
@@ -34,7 +34,7 @@ const LinkModal = () => {
         </div>
         <div className="flex items-center">
           <span className="text-body-xsmall text-gray-50">연동</span>
-          <ArrowRight className="text-gray-30" w-6 h-6 />
+          <ArrowRight className="text-gray-30 h-6 w-6" />
         </div>
       </button>
 
@@ -45,7 +45,7 @@ const LinkModal = () => {
         </div>
         <div className="flex items-center">
           <span className="text-body-xsmall text-gray-50">미연동</span>
-          <ArrowRight className="text-gray-30" w-6 h-6 />
+          <ArrowRight className="text-gray-30 h-6 w-6" />
         </div>
       </button>
 

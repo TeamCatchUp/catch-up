@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import Home from '@/assets/svgs/navbar/home.svg';
-import Kebeb_2 from '@/assets/svgs/navbar/kebeb_2.svg';
+import Home from '/public/icons/icon/home.svg';
+import Kebeb_2 from '/public/icons/icon/kebeb 2.svg';
 import ShareButtonModal from './ShareButtonModal';
 import MoreButtonModal from './MoreButtonModal';
 
@@ -28,7 +28,7 @@ const TopNavbar = () => {
           <Link href="/">
             <button className="flex cursor-pointer gap-2">
               <Home className="h-6 w-6" />
-              <span className="text-heading-medium">홈</span>
+              <span className="text-heading-medium relative top-[0.5px]">홈</span>
             </button>
           </Link>
         </div>
