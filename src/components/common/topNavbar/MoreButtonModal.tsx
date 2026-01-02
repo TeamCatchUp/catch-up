@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import AddSmall from '@/assets/svgs/navbar/add_small.svg';
-import IconType from '@/assets/svgs/navbar/icon_type.svg';
-import Error from '@/assets/svgs/navbar/error.svg';
-import Storage from '@/assets/svgs/navbar/storage.svg';
-import CloudCheck from '@/assets/svgs/navbar/cloud_check.svg';
-import Alarm from '@/assets/svgs/navbar/alarm.svg';
-import Rotate from '@/assets/svgs/navbar/rotate.svg';
-import ArrowRight from '@/assets/svgs/navbar/arrow_right.svg';
+import AddSmall from '@/assets/icons/icon/add_small.svg';
+import IconType from '@/assets/icons/icon/icon_type.svg';
+import Error from '@/assets/icons/icon/error.svg';
+import Storage from '@/assets/icons/icon/storage.svg';
+import CloudCheck from '@/assets/icons/icon/cloud_check.svg';
+import Alarm from '@/assets/icons/icon/alarm.svg';
+import Rotate from '@/assets/icons/icon/rotate.svg';
+import ArrowRight from '@/assets/icons/icon/arrow_right.svg';
 import LinkModal from './LinkModal';
 import GetAlertModal from './GetAlertModal';
 
@@ -78,7 +78,7 @@ const MoreButtonModal = () => {
           aria-pressed={selectedButton === 'new'}
           className={`flex h-10 cursor-pointer items-center gap-2 rounded-lg p-2 transition-colors ${selectedButton === 'new' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <AddSmall className="text-gray-80 relative right-px bottom-0.5 h-5 w-5" />
+          <AddSmall className="relative right-px bottom-0.5 h-5 w-5 text-gray-50" />
           <span>새 인수인계 시작하기</span>
         </button>
 
@@ -88,7 +88,7 @@ const MoreButtonModal = () => {
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'text' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
           <div className="flex cursor-pointer items-center gap-2">
-            <IconType className="text-gray-80 relative right-px bottom-0.5 h-5 w-5" />
+            <IconType className="relative right-px bottom-0.5 h-5 w-5 text-gray-50" />
             <span>글자 크기</span>
           </div>
           <div className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
@@ -104,8 +104,8 @@ const MoreButtonModal = () => {
           aria-pressed={selectedButton === 'help'}
           className={`flex h-10 cursor-pointer items-center gap-2 rounded-lg p-2 transition-colors ${selectedButton === 'help' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <Error className="text-gray-80 relative h-5 w-5" />
-          <span>도움말</span>
+          <Error className="relative right-0.5 bottom-px h-5.5 w-5.5 text-gray-50" />
+          <span className="relative right-0.5">도움말</span>
         </button>
 
         <button
@@ -113,7 +113,7 @@ const MoreButtonModal = () => {
           aria-pressed={selectedButton === 'version'}
           className={`flex h-10 cursor-pointer items-center gap-2 rounded-lg p-2 transition-colors ${selectedButton === 'version' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <Storage className="text-gray-80 relative right-0.5 bottom-0.5 h-5 w-5" />
+          <Storage className="relative right-0.5 bottom-0.5 h-5 w-5 text-gray-50" />
           <span>버전 기록</span>
         </button>
 
@@ -125,7 +125,7 @@ const MoreButtonModal = () => {
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'link' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
           <div className="flex cursor-pointer items-center gap-2">
-            <CloudCheck className="text-gray-80 relative right-0.5 bottom-0.5 h-5 w-5.5" />
+            <CloudCheck className="relative right-0.5 bottom-0.5 h-5 w-5.5 text-gray-50" />
             <span className="relative right-0.5">연결</span>
           </div>
           <div className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
@@ -142,7 +142,7 @@ const MoreButtonModal = () => {
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'alert' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
           <div className="flex cursor-pointer items-center gap-2">
-            <Alarm className="text-gray-80 relative right-0.5 bottom-0.5 h-5.5 w-5" />
+            <Alarm className="relative right-0.5 bottom-0.5 h-5.5 w-5 text-gray-50" />
             <span>알림받기</span>
           </div>
           <div className="text-body-xsmall flex cursor-pointer items-center text-gray-50">

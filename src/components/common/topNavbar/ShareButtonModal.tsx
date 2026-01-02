@@ -1,4 +1,4 @@
-import DefaultProfile from '@/assets/svgs/navbar/default_profile.svg';
+import LoadingProfile from '@/assets/icons/icon/loading_profile.svg';
 
 const members = [
   { name: '팀원G', role: 'PM' },
@@ -44,7 +44,7 @@ const ShareButtonModal = () => {
               className="hover:bg-neutral-2 focus:bg-neutral-2 flex h-[51px] w-[365px] cursor-pointer items-center gap-4 rounded-lg p-1 focus:outline-none"
               tabIndex={0}
             >
-              <DefaultProfile className="h-10 w-10" />
+              <LoadingProfile className="h-10 w-10" />
               <div>
                 <p className="text-body-small">{member.name}</p>
                 <p className="text-body-xsmall text-gray-50">{member.role}</p>
