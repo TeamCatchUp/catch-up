@@ -37,44 +37,44 @@ const cardData = [
 
 const RecentlyChecked = () => {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center">
+    <section className="flex flex-col gap-3">
+      <header className="flex items-center">
         <div className="border-neutral-3 bg-blue-1 mr-2.5 rounded-lg border-[0.5px] p-1.5">
           <Storage className="h-[22px] w-[22px] text-blue-50" />
         </div>
-        <div className="text-heading-large text-gray-80 mr-1">최근 확인한 업무</div>
+        <h2 className="text-heading-large text-gray-80 mr-1">최근 확인한 업무</h2>
         <ArrowRight className="relative right-1 h-6 w-6 cursor-pointer p-0.5 text-gray-50" />
-      </div>
+      </header>
 
-      <div className="flex gap-4">
+      <ul className="flex gap-4">
         {cardData.map((card, idx) => {
           return (
-            <section
+            <li
               key={idx}
               className="border-neutral-3 flex w-[359px] flex-col gap-3 rounded-2xl border bg-white px-5 py-4"
             >
-              <div className="h-[37.5px] w-[57px] border"></div>
+              <div className="h-[37.5px] w-[57px] border" />
 
-              <div className="text-heading-medium text-gray-80 truncate">{card.title}</div>
+              <h3 className="text-heading-medium text-gray-80 truncate">{card.title}</h3>
 
               <div className="flex flex-col">
                 <div className="flex flex-col gap-[5px]">
                   <div className="flex gap-4">
                     <div className="flex items-center gap-1.5">
                       <Depart className="text-gray-20 h-4 w-4" />
-                      <div className="text-body-small text-gray-50">담당 부서</div>
+                      <span className="text-body-small text-gray-50">담당 부서</span>
                     </div>
-                    <div className="text-body-small text-gray-70">{card.depart} 팀</div>
+                    <span className="text-body-small text-gray-70">{card.depart} 팀</span>
                   </div>
 
                   <div className="flex gap-7">
                     <div className="flex items-center gap-1.5">
                       <Manager className="text-gray-20 h-4 w-4" />
-                      <div className="text-body-small text-gray-50">담당자</div>
+                      <span className="text-body-small text-gray-50">담당자</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <LoadingProfile className="h-[25px] w-[25px]" />
-                      <div className="text-body-small text-gray-70">{card.manager}</div>
+                      <span className="text-body-small text-gray-70">{card.manager}</span>
                     </div>
                   </div>
                 </div>
@@ -87,14 +87,14 @@ const RecentlyChecked = () => {
                   <Source className="text-gray-20 h-4 w-4" />
                   <span className="text-body-small text-gray-50">{card.source}</span>
                 </div>
-                <div className="text-body-small text-gray-80 line-clamp-1">{card.sourceTitle}</div>
-                <div className="text-body-xsmall line-clamp-2 text-gray-50">{card.sourceDescription}</div>
+                <p className="text-body-small text-gray-80 line-clamp-1">{card.sourceTitle}</p>
+                <p className="text-body-xsmall line-clamp-2 text-gray-50">{card.sourceDescription}</p>
               </div>
-            </section>
+            </li>
           );
         })}
-      </div>
-    </div>
+      </ul>
+    </section>
   );
 };
 

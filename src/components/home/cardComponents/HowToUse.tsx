@@ -28,29 +28,29 @@ const cardData = [
 
 const HowToUse = () => {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
+    <section className="flex flex-col gap-3">
+      <header className="flex items-center gap-3">
         <div className="border-neutral-3 bg-blue-1 rounded-lg border-[0.5px] p-1.5">
           <Explore className="h-5 w-5 text-blue-50" />
         </div>
-        <div className="text-heading-large text-gray-80">Catch Up을 활용하는 방법</div>
-      </div>
+        <h2 className="text-heading-large text-gray-80">Catch Up을 활용하는 방법</h2>
+      </header>
 
-      <div className="flex gap-4">
+      <ul className="flex gap-4">
         {cardData.map((card, idx) => {
           const CardImg = card.image;
           return (
-            <section key={idx} className="border-neutral-3 w-[359px] rounded-2xl border">
+            <li key={idx} className="border-neutral-3 w-[359px] rounded-2xl border">
               <CardImg className="h-[151.5px] w-[358px] rounded-t-2xl" />
 
               <div className="flex h-48 w-[354px] flex-col gap-3 rounded-b-2xl bg-white p-4 text-gray-50">
                 <div className="rounded-md2 bg-neutral-2 flex w-max items-center gap-1 px-1.5 py-0.5">
                   <WebTraffic className="h-4 w-4 text-gray-50" />
-                  <div className="text-body-xsmall relative top-[0.5px]">{card.label}</div>
+                  <span className="text-body-xsmall relative top-[0.5px]">{card.label}</span>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <div className="text-heading-medium text-gray-80">{card.title}</div>
-                  <div className="text-body-small whitespace-pre-line text-gray-50">{card.description}</div>
+                  <h3 className="text-heading-medium text-gray-80">{card.title}</h3>
+                  <p className="text-body-small whitespace-pre-line text-gray-50">{card.description}</p>
                 </div>
 
                 <button
@@ -61,11 +61,11 @@ const HowToUse = () => {
                   <ArrowRight className="text-gray-70 relative right-px bottom-0.5 flex h-5 w-5" />
                 </button>
               </div>
-            </section>
+            </li>
           );
         })}
-      </div>
-    </div>
+      </ul>
+    </section>
   );
 };
 

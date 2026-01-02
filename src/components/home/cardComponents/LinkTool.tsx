@@ -30,19 +30,19 @@ const cardData = [
 
 const LinkTool = () => {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
+    <section className="flex flex-col gap-3">
+      <header className="flex items-center gap-3">
         <div className="border-neutral-3 bg-blue-1 rounded-lg border-[0.5px] p-1.5">
           <CloudCheck className="h-5 w-5 text-blue-50" />
         </div>
-        <div className="text-heading-large text-gray-80">협업 툴 연동하기</div>
-      </div>
+        <h2 className="text-heading-large text-gray-80">협업 툴 연동하기</h2>
+      </header>
 
-      <div className="grid grid-cols-2 gap-2">
+      <ul className="grid grid-cols-2 gap-2">
         {cardData.map((card, idx) => {
           const CardImg = card.image;
           return (
-            <div
+            <li
               key={idx}
               className="border-neutral-3 flex h-[85px] w-[549px] items-center justify-between rounded-2xl border bg-white px-5 py-4"
             >
@@ -51,19 +51,19 @@ const LinkTool = () => {
                   <CardImg className="h-7 w-7" />
                 </div>
                 <div>
-                  <div className="text-heading-large text-gray-70">{card.title}</div>
-                  <div className="text-body-xsmall text-gray-50">{card.description}</div>
+                  <h3 className="text-heading-large text-gray-70">{card.title}</h3>
+                  <p className="text-body-xsmall text-gray-50">{card.description}</p>
                 </div>
               </div>
 
               <button className="bg-neutral-1 border-neutral-3 flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border p-1.5">
                 <ArrowOutward className="text-gray-70 h-6" />
               </button>
-            </div>
+            </li>
           );
         })}
-      </div>
-    </div>
+      </ul>
+    </section>
   );
 };
 
