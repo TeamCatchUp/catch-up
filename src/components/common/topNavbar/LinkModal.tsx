@@ -23,7 +23,7 @@ const LinkModal = () => {
         </div>
         <div className="flex items-center">
           <span className="text-body-xsmall text-gray-50">미연동</span>
-          <ArrowRight className="text-gray-30" w-6 h-6 />
+          <ArrowRight className="text-gray-30 h-6 w-6" />
         </div>
       </button>
 

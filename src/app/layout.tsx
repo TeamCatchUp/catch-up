@@ -1,8 +1,7 @@
 import { Metadata } from 'next';
 import '@/styles/globals.css';
-import OpenedSideNavbar from '@/components/common/sideNavbar/OpenedSideNavbar';
-// import ClosedSideNavbar from '@/components/common/sideNavbar/ClosedSideNavbar';
 import TopNavbar from '@/components/common/topNavbar/TopNavbar';
+import SideNavbar from '@/components/common/sideNavbar/SideNavbar';
 
 export const metadata: Metadata = {
   title: 'CATCHUP',
@@ -14,8 +13,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="ko">
       <body className="h-screen">
         <div className="flex h-full">
-          <aside className="w-60 flex-shrink-0">
-            <OpenedSideNavbar />
+          <aside className="">
+            <SideNavbar />
           </aside>
           <div className="flex flex-1 flex-col">
             <header className="h-[53px] flex-shrink-0">
