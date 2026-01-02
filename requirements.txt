@@ -4,10 +4,11 @@ langchain_community==0.4.1
 langchain_core==1.2.5
 langchain_openai==1.1.6
 langchain_text_splitters==1.1.0
+langfuse==3.11.2
+langgraph==1.0.5
 meilisearch==0.38.0
 numpy==2.4.0
-pydantic==2.12.5
 pydantic_settings==2.12.0
 python-dotenv==1.2.1
-ragas==0.4.2
+redis==7.1.0
 sentence_transformers==5.2.0
