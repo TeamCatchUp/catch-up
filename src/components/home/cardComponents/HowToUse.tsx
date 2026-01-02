@@ -28,7 +28,7 @@ const cardData = [
 
 const HowToUse = () => {
   return (
-    <div className="-z-999 flex flex-col gap-3">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
         <div className="border-neutral-3 bg-blue-1 rounded-lg border-[0.5px] p-1.5">
           <Explore className="h-5 w-5 text-blue-50" />
@@ -40,8 +40,8 @@ const HowToUse = () => {
         {cardData.map((card, idx) => {
           const CardImg = card.image;
           return (
-            <section key={idx} className="border-neutral-3 w-[356px] rounded-2xl border">
-              <CardImg className="h-[150px] w-[354px] rounded-t-2xl" />
+            <section key={idx} className="border-neutral-3 w-[359px] rounded-2xl border">
+              <CardImg className="h-[151.5px] w-[358px] rounded-t-2xl" />
 
               <div className="flex h-48 w-[354px] flex-col gap-3 rounded-b-2xl bg-white p-4 text-gray-50">
                 <div className="rounded-md2 bg-neutral-2 flex w-max items-center gap-1 px-1.5 py-0.5">
@@ -53,9 +53,12 @@ const HowToUse = () => {
                   <div className="text-body-small whitespace-pre-line text-gray-50">{card.description}</div>
                 </div>
 
-                <button className="border-neutral-3 active:border-neutral-5 active:bg-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 mt-1 mr-px ml-auto flex h-9 w-[101px] cursor-pointer items-center gap-1 rounded-lg border bg-white px-2 py-1.5">
-                  <div className="text-body-xsmall text-gray-80 whitespace-nowrap">더 알아보기</div>
-                  <ArrowRight className="text-gray-70 relative right-px" />
+                <button
+                  type="button"
+                  className="border-neutral-3 active:border-neutral-5 active:bg-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 mt-1 mr-px ml-auto flex h-9 w-[101px] cursor-pointer items-center gap-1 rounded-lg border bg-white px-2 py-1.5"
+                >
+                  <span className="text-body-xsmall text-gray-80 whitespace-nowrap">더 알아보기</span>
+                  <ArrowRight className="text-gray-70 relative right-px bottom-0.5 flex h-5 w-5" />
                 </button>
               </div>
             </section>
