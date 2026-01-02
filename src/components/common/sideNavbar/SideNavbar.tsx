@@ -65,13 +65,13 @@ const SideNavbar = () => {
         })}
       </div>
 
-      {isOpen && <div className={`border-neutral-3 'w-60' absolute bottom-[70px] left-0 border`} />}
+      {isOpen && <div className={`border-neutral-3 absolute bottom-[70px] left-0 w-60 border`} />}
 
-      <div className="absolute bottom-2.5 flex w-[225px] justify-between px-1.5 py-1">
+      <div className="absolute bottom-2.5 flex h-[54px] w-[225px] justify-between px-1.5 py-1">
         <div className="flex cursor-pointer items-center gap-4">
           <DefaultProfile className="relative right-1 h-10 w-10" />
           {isOpen && (
-            <div>
+            <div className="relative top-px">
               <div className="text-heading-small text-gray-80">이진수</div>
               <div className="text-body-small text-gray-50">사업 개발</div>
             </div>
@@ -79,7 +79,7 @@ const SideNavbar = () => {
         </div>
         {isOpen && (
           <div className="relative bottom-1 flex cursor-pointer items-center p-0.5">
-            <UnfoldMore className="h-6 w-6" />
+            <UnfoldMore className="relative top-px h-6 w-6" />
           </div>
         )}
       </div>
