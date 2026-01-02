@@ -34,7 +34,7 @@ const TopNavbar = () => {
         </div>
 
         <ul className="flex items-center justify-center gap-2">
-          <li>
+          <li className="relative">
             <button
               onClick={toggleShareModal}
               aria-expanded={isShareModalOpen}
@@ -47,9 +47,15 @@ const TopNavbar = () => {
             >
               공유
             </button>
+            {/* 공유 모달 */}
+            {isShareModalOpen && (
+              <div className="absolute top-full right-0 z-50 mt-1.5">
+                <ShareButtonModal />
+              </div>
+            )}
           </li>
 
-          <li>
+          <li className="relative">
             <button
               aria-expanded={isMoreModalOpen}
               aria-controls="more-modal"
@@ -62,22 +68,15 @@ const TopNavbar = () => {
             >
               <Kebeb_2 className="h-6 w-6" />
             </button>
+            {/* 더보기 모달 */}
+            {isMoreModalOpen && (
+              <div className="absolute top-full right-0 z-50 mt-1.5">
+                <MoreButtonModal />
+              </div>
+            )}
           </li>
         </ul>
       </div>
-
-      {/* 공유 모달 */}
-      {isShareModalOpen && (
-        <div className="absolute top-[50px] right-[86px]">
-          <ShareButtonModal />
-        </div>
-      )}
-      {/* 더보기 모달 */}
-      {isMoreModalOpen && (
-        <div className="absolute top-[50px] right-10">
-          <MoreButtonModal />
-        </div>
-      )}
     </nav>
   );
 };
