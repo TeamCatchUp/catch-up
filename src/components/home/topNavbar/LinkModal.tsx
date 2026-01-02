@@ -1,8 +1,8 @@
-import JiraLogo from '@/assets/icons/logo/Jira.svg';
-import ConfluenceLogo from '@/assets/icons/logo/Counfluence.svg';
-import GithubLogo from '@/assets/icons/logo/GitHub.svg';
-import SlackLogo from '@/assets/icons/logo/Slack.svg';
-import ArrowRight from '@/assets/icons/icon/arrow_right.svg';
+import JiraLogo from '/public/icons/logo/Jira.svg';
+import ConfluenceLogo from '/public/icons/logo/Counfluence.svg';
+import GithubLogo from '/public/icons/logo/GitHub.svg';
+import SlackLogo from '/public/icons/logo/Slack.svg';
+import ArrowRight from '/public/icons/icon/arrow_right.svg';
 
 const LinkModal = () => {
   return (

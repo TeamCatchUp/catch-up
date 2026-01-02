@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import AddSmall from '@/assets/icons/icon/add_small.svg';
-import IconType from '@/assets/icons/icon/icon_type.svg';
-import Error from '@/assets/icons/icon/error.svg';
-import Storage from '@/assets/icons/icon/storage.svg';
-import CloudCheck from '@/assets/icons/icon/cloud_check.svg';
-import Alarm from '@/assets/icons/icon/alarm.svg';
-import Rotate from '@/assets/icons/icon/rotate.svg';
-import ArrowRight from '@/assets/icons/icon/arrow_right.svg';
+import AddSmall from '/public/icons/icon/add_small.svg';
+import IconType from '/public/icons/icon/icon_type.svg';
+import Error from '/public/icons/icon/error.svg';
+import Storage from '/public/icons/icon/storage.svg';
+import CloudCheck from '/public/icons/icon/cloud_check.svg';
+import Alarm from '/public/icons/icon/alarm.svg';
+import Rotate from '/public/icons/icon/rotate.svg';
+import ArrowRight from '/public/icons/icon/arrow_right.svg';
 import LinkModal from './LinkModal';
 import GetAlertModal from './GetAlertModal';
 
