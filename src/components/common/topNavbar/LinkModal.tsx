@@ -1,6 +1,6 @@
 import JiraLogo from '@/assets/icons/logo/Jira.svg';
 import ConfluenceLogo from '@/assets/icons/logo/Counfluence.svg';
-import GithubLogo from '@/assets/icons/logo/Github.svg';
+import GithubLogo from '@/assets/icons/logo/GitHub.svg';
 import SlackLogo from '@/assets/icons/logo/Slack.svg';
 import ArrowRight from '@/assets/icons/icon/arrow_right.svg';
 
