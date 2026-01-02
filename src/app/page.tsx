@@ -1,3 +1,9 @@
+import HomeTopNavbar from '@/components/home/topNavbar/TopNavbar';
+
 export default function Home() {
-  return <div className="flex min-h-screen">홈페이지</div>;
+  return (
+    <div className="flex min-h-screen">
+      <HomeTopNavbar />
+    </div>
+  );
 }
