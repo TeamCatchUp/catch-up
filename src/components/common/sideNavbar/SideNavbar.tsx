@@ -3,16 +3,16 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import CatchupLogo from '@/assets/icons/logo/logo_catchup.svg';
-import CatchupLogoLetter from '@/assets/icons/logo/logo_catchup_letter.svg';
-import Close from '@/assets/icons/icon/close.svg';
-import Home from '@/assets/icons/icon/home.svg';
-import Search from '@/assets/icons/icon/search.svg';
-import Dashboard from '@/assets/icons/icon/dashboard.svg';
-import Stacks from '@/assets/icons/icon/stacks.svg';
-import Mail from '@/assets/icons/icon/mail.svg';
-import DefaultProfile from '@/assets/icons/icon/default_profile.svg';
-import UnfoldMore from '@/assets/icons/icon/unfold_more.svg';
+import CatchupLogo from '/public/icons/logo/logo_catchup.svg';
+import CatchupLogoLetter from '/public/icons/logo/logo_catchup_letter.svg';
+import Close from '/public/icons/icon/close.svg';
+import Home from '/public/icons/icon/home.svg';
+import Search from '/public/icons/icon/search.svg';
+import Dashboard from '/public/icons/icon/dashboard.svg';
+import Stacks from '/public/icons/icon/stacks.svg';
+import Mail from '/public/icons/icon/mail.svg';
+import DefaultProfile from '/public/icons/icon/default_profile.svg';
+import UnfoldMore from '/public/icons/icon/unfold_more.svg';
 
 const navItems = [
   { name: '홈', href: '/', Icon: Home },
@@ -27,36 +27,43 @@ const SideNavbar = () => {
   const [isOpen, setIsOpen] = useState(true);
 
   return (
-    <nav className={`border-neutral-3 flex h-full ${isOpen ? 'w-[241px]' : 'w-[62px]'} flex-col gap-4 border-r px-2`}>
-      <div className={`flex items-center justify-between px-1 pt-2.5`}>
-        <div onClick={() => !isOpen && setIsOpen(true)} className="flex items-center gap-2.5">
+    <nav
+      className={`border-neutral-3 flex h-full ${isOpen ? 'w-[241px] px-2 py-2.5' : 'w-[61px] items-center py-5'} flex-col gap-4 border-r`}
+    >
+      <div className={`flex ${isOpen ? 'items-center justify-between' : ''}`}>
+        <div onClick={() => !isOpen && setIsOpen(true)} className={`flex items-center gap-2.5 ${isOpen ? 'px-1' : ''}`}>
           <div className="border-neutral-3 flex h-10 w-10 cursor-pointer items-center rounded-xl border-[0.5px] px-[5px] py-1.5">
-            <CatchupLogo className="relative left-px h-[20.53px] w-[27px]" />
+            <CatchupLogo className="relative left-px h-[30px] w-7" />
           </div>
-          <div className="relative top-0.5 flex items-center">{isOpen && <CatchupLogoLetter />}</div>
+          {isOpen && (
+            <div className="relative top-0.5 flex items-center">
+              {' '}
+              <CatchupLogoLetter />
+            </div>
+          )}
         </div>
         {isOpen && (
           <Close
             onClick={() => setIsOpen(false)}
-            className="relative right-0.5 h-6 w-6 cursor-pointer p-0.5 text-gray-50"
+            className="relative right-1 bottom-0.5 h-6 w-6 cursor-pointer p-0.5 text-gray-50"
           />
         )}
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className={`flex flex-col ${isOpen ? 'gap-1' : 'gap-2'}`}>
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
               key={item.name}
               href={item.href}
-              className={`flex h-10 cursor-pointer items-center gap-3 rounded-lg border border-none px-2.5 py-2 ${isOpen ? 'w-[226px]' : 'w-12'} ${isActive ? 'bg-blue-1 border-neutral-1' : ''}`}
+              className={`flex h-10 cursor-pointer items-center rounded-lg border-none ${isOpen ? 'w-[226px] gap-3 px-2.5 py-2' : 'w-10 items-center justify-center'} ${isActive ? 'bg-blue-1 border-neutral-1' : ''}`}
             >
-              <item.Icon className={`h-5.5 w-5.5 ${isActive ? 'text-blue-50' : 'text-gray-70'}`} />
+              <item.Icon
+                className={`${isOpen ? 'h-5.5 w-5.5' : 'h-7 w-7'} ${isActive ? 'text-blue-50' : 'text-gray-70'}`}
+              />
               {isOpen && (
-                <span
-                  className={`text-body-small relative ${item.name === '홈' ? 'top-[1.5px]' : 'top-px'} ${isActive ? 'text-blue-55' : 'text-gray-80'}`}
-                >
+                <span className={`text-body-small relative ${isActive ? 'text-blue-55' : 'text-gray-80'}`}>
                   {item.name}
                 </span>
               )}
@@ -67,9 +74,11 @@ const SideNavbar = () => {
 
       {isOpen && <div className={`border-neutral-3 absolute bottom-[70px] left-0 w-60 border`} />}
 
-      <div className="absolute bottom-2.5 flex h-[54px] w-[225px] justify-between px-1.5 py-1">
-        <div className="flex cursor-pointer items-center gap-4">
-          <DefaultProfile className="relative right-1 h-10 w-10" />
+      <div
+        className={`absolute bottom-2.5 flex h-[54px] ${isOpen ? 'w-[225px] justify-between px-1.5 py-1' : 'justify-center'}`}
+      >
+        <div className={`flex cursor-pointer items-center ${isOpen ? 'gap-4' : 'justify-center'}`}>
+          <DefaultProfile className="h-10 w-10" />
           {isOpen && (
             <div className="relative top-px">
               <div className="text-heading-small text-gray-80">이진수</div>
