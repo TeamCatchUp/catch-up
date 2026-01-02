@@ -3,16 +3,16 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import CatchupLogo from '/public/icons/logo/logo_catchup.svg';
-import CatchupLogoLetter from '/public/icons/logo/logo_catchup_letter.svg';
-import Close from '/public/icons/icon/close.svg';
-import Home from '/public/icons/icon/home.svg';
-import Search from '/public/icons/icon/search.svg';
-import Dashboard from '/public/icons/icon/dashboard.svg';
-import Stacks from '/public/icons/icon/stacks.svg';
-import Mail from '/public/icons/icon/mail.svg';
-import DefaultProfile from '/public/icons/icon/default_profile.svg';
-import UnfoldMore from '/public/icons/icon/unfold_more.svg';
+import CatchupLogo from '@/assets/icons/logo/logo_catchup.svg';
+import CatchupLogoLetter from '@/assets/icons/logo/logo_catchup_letter.svg';
+import Close from '@/assets/icons/icon/close.svg';
+import Home from '@/assets/icons/icon/home.svg';
+import Search from '@/assets/icons/icon/search.svg';
+import Dashboard from '@/assets/icons/icon/dashboard.svg';
+import Stacks from '@/assets/icons/icon/stacks.svg';
+import Mail from '@/assets/icons/icon/mail.svg';
+import DefaultProfile from '@/assets/icons/icon/default_profile.svg';
+import UnfoldMore from '@/assets/icons/icon/unfold_more.svg';
 
 const navItems = [
   { name: '홈', href: '/', Icon: Home },

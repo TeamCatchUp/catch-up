@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import Home from '/public/icons/icon/home.svg';
-import Kebeb_2 from '/public/icons/icon/kebeb 2.svg';
+import Home from '@/assets/icons/icon/home.svg';
+import Kebeb_2 from '@/assets/icons/icon/kebeb 2.svg';
 import ShareButtonModal from './ShareButtonModal';
 import MoreButtonModal from './MoreButtonModal';
 

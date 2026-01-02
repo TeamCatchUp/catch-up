@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import ToggleOn from '/public/icons/icon/state=On.svg';
-import ToggleOff from '/public/icons/icon/state=Off.svg';
+import ToggleOn from '@/assets/icons/icon/state=On.svg';
+import ToggleOff from '@/assets/icons/icon/state=Off.svg';
 
 const alertItems = ['멘션', '인계자 설정', '인수자 설정', '미팅 1시간 전', '미팅 30분 전', '미팅 시작'];
 
