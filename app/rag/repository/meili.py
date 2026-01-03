@@ -27,6 +27,7 @@ class LangChainMeiliRepository(VectorStoreRepository):
         인덱스가 없다면 생성하고, hybrid search를 위한 embedder를 설정한다.
         FastAPI 서버 최초 실행 시점에 lifespan을 통해 실행된다.
         """
+        logger.info(f"Meilisearch HTTP address: {settings.MEILI_HTTP_ADDR}")
 
         targets: list[str] = index_names or [settings.MEILI_DEFAULT_INDEX]
 

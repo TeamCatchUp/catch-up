@@ -1,0 +1,26 @@
+# Git 관리 폴더
+.git
+.gitignore
+
+# 로컬 가상환경
+venv/
+.venv/
+env/
+
+# 환경 변수 파일
+.env*
+
+# 캐시
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE 설정
+.vscode/
+.idea/
+
+# Docker 관련
+Dockerfile
+docker-compose.yml
+*.md

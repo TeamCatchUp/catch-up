@@ -34,7 +34,11 @@ class Settings(BaseSettings):
     LANGFUSE_BASE_URL: str
 
     model_config = SettingsConfigDict(
-        env_prefix="", case_sensitive=False, env_file=".env", env_file_encoding="utf-8"
+        env_prefix="",
+        case_sensitive=False,
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
     )
 
 

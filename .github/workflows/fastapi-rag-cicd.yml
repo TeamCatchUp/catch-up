@@ -1,0 +1,85 @@
+name: FastAPI Rag Server with Docker - Push based
+on:
+  push:
+    branches:
+      - "release/**"
+      
+jobs:
+  build:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ github.sha }}
+    
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY_URL }}
+          username: ${{ secrets.DOCKER_REGISTRY_USER_NAME }}
+          password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+          
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy FastAPI Server to OCI Instance
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Deploy to OCI
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.OCI_INSTANCE_HOST }}
+          username: ubuntu
+          key: ${{ secrets.OCI_INSTANCE_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.OCI_INSTANCE_SSH_PORT }}
+          command_timeout: 30m
+          script: |
+            cd ~
+            
+            if [ ! -d "CatchUp-RAG-Server" ]; then
+              echo "Repository not found. Cloning..."
+              git clone https://github.com/TeamCatchUp/CatchUp-RAG-Server.git
+            fi
+
+            cd CatchUp-RAG-Server
+            
+            echo "Pulling latest code..."
+            git fetch origin
+            git checkout release/rag-v0.1.0
+            git pull origin release/rag-v0.1.0
+            
+            echo "Injecting '.env' file..."
+            touch .env
+            echo "${{ secrets.DOTENV_FILE }}" > .env
+            echo "IMAGE_TAG=${{ needs.build.outputs.image_tag }}" >> .env
+            
+            echo "Pulling new image..."
+            docker compose pull
+            
+            echo "Shutting down containers..."          
+            docker compose down
+            
+            echo "Running containers..."
+            docker compose up -d
+            
+            echo "Pruning old images..."
+            docker image prune -a -f
+            
+            docker ps
+            
+            

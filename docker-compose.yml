@@ -1,0 +1,45 @@
+services:
+  fastapi-rag-server:
+    image: "${DOCKER_REGISTRY_URL}/${DOCKER_IMAGE_NAME}:${IMAGE_TAG}"
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    networks:
+      - app_net
+    depends_on:
+      - redis
+      - meilisearch
+    restart: always
+  
+  redis:
+    image: redis
+    env_file:
+      - .env
+    ports:
+      - "6380:6379"
+    networks:
+      - app_net
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./redis_data:/data
+    command: redis-server /usr/local/etc/redis/redis.conf
+    restart: always
+  
+  meilisearch:
+    image: getmeili/meilisearch:v1.16
+    env_file:
+      - .env
+    environment:
+      - MEILI_HTTP_ADDR=0.0.0.0:7700
+    networks:
+      - app_net
+    ports:
+      - "7700:7700"
+    volumes:
+      - ./meili_data:/meili_data
+    restart: always
+
+networks:
+  app_net:
+    driver: bridge
