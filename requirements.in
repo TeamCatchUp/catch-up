@@ -1,0 +1,29 @@
+# --- PyTorch (CPU Only for Deploy) ---
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchaudio
+torchvision
+
+# --- Core Server ---
+fastapi
+uvicorn
+python-dotenv
+python-multipart
+
+# --- AI & RAG ---
+langchain
+langchain-community
+langchain-openai
+langchain-text-splitters
+langfuse
+langgraph
+meilisearch
+faiss-cpu
+sentence-transformers
+openai
+tiktoken
+cohere
+
+# --- Database & Utils ---
+redis
+SQLAlchemy
