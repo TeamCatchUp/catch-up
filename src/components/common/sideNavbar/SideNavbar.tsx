@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import clsx from 'clsx';
 import CatchupLogo from '/public/icons/logo/logo_catchup.svg';
 import CatchupLogoLetter from '/public/icons/logo/logo_catchup_letter.svg';
 import Close from '/public/icons/icon/close.svg';
@@ -28,12 +29,20 @@ const SideNavbar = () => {
   const isRagAnswerPage = pathname === '/rag_answer';
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
 
+  // SNB item (메뉴 상태별 스타일 CSS)
+  const defaultClass =
+    'border-transparent bg-white hover:bg-neutral-2 hover:border-neutral-2 active:bg-neutral-3 active:border active:border-neutral-3'; // hover, active
+  const selectedClass = 'border-neutral-2 border bg-blue-1 hover:border-neutral-2 hover:bg-blue-5';
+
   return (
     <nav
-      className={`border-neutral-3 flex h-full bg-white ${isOpen ? 'w-[241px] px-2 py-2.5' : 'w-[61px] items-center py-5'} flex-col gap-4 border-r`}
+      className={clsx(
+        'border-neutral-3 flex h-full flex-col gap-4 border-r bg-white',
+        isOpen ? 'w-[241px] px-2 py-2.5' : 'w-[61px] items-center py-5',
+      )}
     >
-      <div className={`flex ${isOpen ? 'items-center justify-between' : ''}`}>
-        <div className={`flex items-center gap-2.5 ${isOpen ? 'px-1' : ''}`}>
+      <div className={clsx('flex', isOpen ? 'items-center justify-between' : '')}>
+        <div className={clsx('flex items-center gap-2.5', isOpen ? 'px-1' : '')}>
           <div className="group border-neutral-3 relative flex h-10 w-10 cursor-pointer items-center rounded-xl border-[0.5px] px-[5px] py-1.5">
             <CatchupLogo className="relative left-px h-[30px] w-7" />
 
@@ -68,13 +77,25 @@ const SideNavbar = () => {
             <Link
               key={item.name}
               href={item.href}
-              className={`flex h-10 cursor-pointer items-center rounded-lg border-none ${isOpen ? 'w-[226px] gap-3 px-2.5 py-2' : 'w-10 items-center justify-center'} ${isActive ? 'bg-blue-1 border-neutral-1' : ''}`}
+              className={clsx(
+                'group flex h-10 cursor-pointer items-center rounded-lg',
+                isActive ? selectedClass : defaultClass,
+                isOpen ? 'w-[226px] gap-3 px-2.5 py-2' : 'w-10 items-center justify-center',
+              )}
             >
               <item.Icon
-                className={`${isOpen ? 'h-5.5 w-5.5' : 'h-7 w-7'} ${isActive ? 'text-blue-50' : 'text-gray-70'}`}
+                className={clsx(
+                  isOpen ? 'h-5.5 w-5.5' : 'h-7 w-7',
+                  isActive ? 'text-blue-50 group-hover:text-blue-50' : 'text-gray-70',
+                )}
               />
               {isOpen && (
-                <span className={`text-body-small relative ${isActive ? 'text-blue-55' : 'text-gray-80'}`}>
+                <span
+                  className={clsx(
+                    'text-body-small relative',
+                    isActive ? 'text-blue-55 group-hover:text-blue-55' : 'text-gray-80',
+                  )}
+                >
                   {item.name}
                 </span>
               )}
@@ -91,9 +112,12 @@ const SideNavbar = () => {
       {isOpen && <div className={`border-neutral-3 absolute bottom-[70px] left-0 w-60 border`} />}
 
       <div
-        className={`absolute bottom-2.5 flex h-[54px] ${isOpen ? 'w-[225px] justify-between px-1.5 py-1' : 'justify-center'}`}
+        className={clsx(
+          'absolute bottom-2.5 flex h-[54px]',
+          isOpen ? 'w-[225px] justify-between px-1.5 py-1' : 'justify-center',
+        )}
       >
-        <div className={`flex cursor-pointer items-center ${isOpen ? 'gap-4' : 'justify-center'}`}>
+        <div className={clsx('flex cursor-pointer items-center', isOpen ? 'gap-4' : 'justify-center')}>
           <DefaultProfile className="h-10 w-10" />
           {isOpen && (
             <div className="relative top-px">
