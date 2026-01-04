@@ -30,7 +30,7 @@ const SideNavbar = () => {
 
   return (
     <nav
-      className={`border-neutral-3 flex h-full ${isOpen ? 'w-[241px] px-2 py-2.5' : 'w-[61px] items-center py-5'} flex-col gap-4 border-r`}
+      className={`border-neutral-3 flex h-full bg-white ${isOpen ? 'w-[241px] px-2 py-2.5' : 'w-[61px] items-center py-5'} flex-col gap-4 border-r`}
     >
       <div className={`flex ${isOpen ? 'items-center justify-between' : ''}`}>
         <div className={`flex items-center gap-2.5 ${isOpen ? 'px-1' : ''}`}>
@@ -77,6 +77,11 @@ const SideNavbar = () => {
                 <span className={`text-body-small relative ${isActive ? 'text-blue-55' : 'text-gray-80'}`}>
                   {item.name}
                 </span>
+              )}
+              {item.name === '수신함' && (
+                <div className="rounded-md2 bg-blue-1 border-blue-30 ml-auto flex h-[23px] w-[23px] items-center justify-center border-[0.5px] px-0.5">
+                  <span className="text-body-small text-blue-40">2</span>
+                </div>
               )}
             </Link>
           );
