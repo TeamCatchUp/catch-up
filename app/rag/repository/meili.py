@@ -2,11 +2,10 @@ import logging
 from typing import Optional
 
 import meilisearch
-from langchain_community.vectorstores import Meilisearch
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 
-from app.core.config import settings
+from app.core.config import settings, MeiliEnvironment
 from app.rag.repository.base import VectorStoreRepository
 
 logger = logging.getLogger(__name__)
@@ -27,8 +26,7 @@ class LangChainMeiliRepository(VectorStoreRepository):
         인덱스가 없다면 생성하고, hybrid search를 위한 embedder를 설정한다.
         FastAPI 서버 최초 실행 시점에 lifespan을 통해 실행된다.
         """
-        logger.info(f"Meilisearch HTTP address: {settings.MEILI_HTTP_ADDR}")
-
+        logger.info(f"Initializing meilisearch indicies...")
         targets: list[str] = index_names or [settings.MEILI_DEFAULT_INDEX]
 
         config = {"primaryKey": "id"}
@@ -60,11 +58,9 @@ class LangChainMeiliRepository(VectorStoreRepository):
             try:
                 task = index.update_filterable_attributes(
                     [
-                        # "metadata.role",
                         "metadata.category",
                         "metadata.source",
                         "metadata.file_path",
-                        # "metadata.status"
                         "metadata.file_name",
                     ]
                 )
@@ -74,6 +70,7 @@ class LangChainMeiliRepository(VectorStoreRepository):
                 logger.warning(f"Failed to update filters for '{index_name}': {e}")
 
             logger.info(f"embedders: {index.get_embedders()}")
+            
 
     def retrieve(
         self,
@@ -83,51 +80,55 @@ class LangChainMeiliRepository(VectorStoreRepository):
         semantic_ratio: float = 0.5,
         filters: Optional[dict] = None,
     ) -> list[Document]:
+        
+        # 검색 대상 인덱스
         target_index = index_name or settings.MEILI_DEFAULT_INDEX
 
-        print(self.client.index(index_name).get_settings())
-
-        # vector_store = Meilisearch(
-        #     embedding=self.embeddings, client=self.client, index_name=target_index
-        # )
-
-        # docs = vector_store.similarity_search(
-        #     query=query,
-        #     k=k,
-        #     hybrid={"semanticRatio": semantic_ratio},
-        # )
-
+        # Meilisearch 인덱스 객체
         index = self.client.index(target_index)
-
+        
+        # 사용자 자연어 쿼리 임베딩
         vector = self.embeddings.embed_query(query)
 
+        # 검색 파라미터 설정 (hybrid search)
         search_params = {
-            "vector": vector,  # 생성한 벡터 주입
+            "vector": vector,
             "limit": k,
             "hybrid": {
                 "semanticRatio": semantic_ratio,
-                "embedder": "default",  # userProvided에서는 명시적으로 지정해야 함
+                "embedder": "default",
             },
         }
 
+        # 필터 존재 시 추가
         if filters:
             search_params["filter"] = filters
 
+        # Meilisearch 검색
         results = index.search(query, search_params)
+        logger.info(f"Search results count: {len(results.get('hits', []))}")
 
-        logger.info(results)
-
+        # 반환할 검색 결과 리스트
         docs = []
         for hit in results.get("hits", []):
-            content = hit.get("text") or hit.get("content") or ""
-            metadata = hit.get("metadata", {})
-
-            if not metadata:
-                metadata = {
+            content = hit.get("text") or hit.get("content") or "" # 본문 내용
+            
+            # 메타 데이터에서 제외할 필드명
+            excluded_keys = [
+                "text",
+                "content",
+                "_vectors",
+                "_semantics",
+                "_formatted"
+            ]
+            
+            # 메타 데이터 필터링
+            metadata = {
                     k: v
                     for k, v in hit.items()
-                    if k not in ["id", "text", "content", "_vectors", "_semanticScore"]
+                    if k not in excluded_keys
                 }
+            # 검색 결과 리스트에 추가
             docs.append(Document(page_content=content, metadata=metadata))
 
         return docs
