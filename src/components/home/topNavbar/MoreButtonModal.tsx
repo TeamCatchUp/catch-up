@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import AddSmall from '/public/icons/icon/add_small.svg';
 import IconType from '/public/icons/icon/icon_type.svg';
 import Error from '/public/icons/icon/error.svg';
@@ -11,12 +11,18 @@ import Rotate from '/public/icons/icon/rotate.svg';
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
 import LinkModal from './LinkModal';
 import GetAlertModal from './GetAlertModal';
+import { useOutsideClick } from '@/hooks/useOutsideClick';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
-const MoreButtonModal = () => {
+const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
   const today = new Date();
   const [selectedButton, setSelectedButton] = useState<string | null>(null);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [isGetAlertModalOpen, setIsGetAlertModalOpen] = useState(false);
+
+  useOutsideClick(modalRef, onClose);
+  useEscapeKey(onClose);
 
   const toggleButton = (key: string) => {
     if (key === 'link') return handleLinkClick();
@@ -51,6 +57,7 @@ const MoreButtonModal = () => {
 
   return (
     <div
+      ref={modalRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="more-modal-title"

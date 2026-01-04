@@ -50,7 +50,7 @@ const TopNavbar = () => {
             {/* 공유 모달 */}
             {isShareModalOpen && (
               <div className="absolute top-full right-0 mt-1.5">
-                <ShareButtonModal />
+                <ShareButtonModal onClose={() => setIsShareModalOpen(false)} />
               </div>
             )}
           </li>
@@ -71,7 +71,7 @@ const TopNavbar = () => {
             {/* 더보기 모달 */}
             {isMoreModalOpen && (
               <div className="absolute top-full right-0 mt-1.5">
-                <MoreButtonModal />
+                <MoreButtonModal onClose={() => setIsMoreModalOpen(false)} />
               </div>
             )}
           </li>
