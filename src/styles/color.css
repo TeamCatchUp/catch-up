@@ -178,4 +178,8 @@
   --color-alpha-white-25: rgba(255, 255, 255, 0.25);
   --color-alpha-white-10: rgba(255, 255, 255, 0.1);
   --color-alpha-white-0: rgba(255, 255, 255, 0);
+
+  /* noraml */
+  --color-nomal-alternative: #6d7882;
+  --color-nomal-normal: #33363d;
 }
