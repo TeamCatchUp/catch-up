@@ -5,19 +5,27 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
 
-
+# 서버 구동 환경
 class Environment(StrEnum):
     development = "development"
     testing = "testing"
     production = "production"
 
+# Meilisearch 구동 환경
+class MeiliEnvironment(StrEnum):
+    development = "development"
+    production = "production"
 
+
+# env 파일명
 env_file = ".env"
 
 
+# 환경변수 주입
 class Settings(BaseSettings):
     ENV: Environment = Environment.development
 
+    MEILI_ENVIRONMENT: MeiliEnvironment = "development"
     MEILI_HTTP_ADDR: str = "http://localhost:7700"
     MEILI_KEY: str | None = None
     MEILI_DEFAULT_INDEX: str | None
@@ -42,4 +50,5 @@ class Settings(BaseSettings):
     )
 
 
+# settings 변수로 환경변수 접근 가능
 settings = Settings()
