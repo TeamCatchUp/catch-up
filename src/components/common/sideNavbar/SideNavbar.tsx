@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import CatchupLogo from '/public/icons/logo/logo_catchup.svg';
 import CatchupLogoLetter from '/public/icons/logo/logo_catchup_letter.svg';
 import Close from '/public/icons/icon/close.svg';
+import Open from '/public/icons/icon/open.svg';
 import Home from '/public/icons/icon/home.svg';
 import Search from '/public/icons/icon/search.svg';
 import Dashboard from '/public/icons/icon/dashboard.svg';
@@ -31,13 +32,22 @@ const SideNavbar = () => {
       className={`border-neutral-3 flex h-full ${isOpen ? 'w-[241px] px-2 py-2.5' : 'w-[61px] items-center py-5'} flex-col gap-4 border-r`}
     >
       <div className={`flex ${isOpen ? 'items-center justify-between' : ''}`}>
-        <div onClick={() => !isOpen && setIsOpen(true)} className={`flex items-center gap-2.5 ${isOpen ? 'px-1' : ''}`}>
-          <div className="border-neutral-3 flex h-10 w-10 cursor-pointer items-center rounded-xl border-[0.5px] px-[5px] py-1.5">
+        <div className={`flex items-center gap-2.5 ${isOpen ? 'px-1' : ''}`}>
+          <div className="group border-neutral-3 relative flex h-10 w-10 cursor-pointer items-center rounded-xl border-[0.5px] px-[5px] py-1.5">
             <CatchupLogo className="relative left-px h-[30px] w-7" />
+
+            {!isOpen && (
+              <button
+                onClick={() => setIsOpen(true)}
+                className="transition:opacity bg-neutral-2 active:bg-neutral-3 border-neutral-5 absolute inset-0 cursor-pointer rounded-xl border-[0.5px] p-1.5 opacity-0 group-hover:opacity-100"
+              >
+                <Open className="h-6 w-6" />
+              </button>
+            )}
           </div>
+
           {isOpen && (
             <div className="relative top-0.5 flex items-center">
-              {' '}
               <CatchupLogoLetter />
             </div>
           )}
