@@ -15,6 +15,8 @@ import Stacks from '/public/icons/icon/stacks.svg';
 import Mail from '/public/icons/icon/mail.svg';
 import DefaultProfile from '/public/icons/icon/default_profile.svg';
 import UnfoldMore from '/public/icons/icon/unfold_more.svg';
+import Kebeb from '/public/icons/icon/kebeb 2.svg';
+import ArrowRight from '/public/icons/icon/arrow_right.svg';
 
 const navItems = [
   { name: '홈', href: '/', Icon: Home },
@@ -22,6 +24,14 @@ const navItems = [
   { name: '내 업무 관리하기', href: '/dashboard', Icon: Dashboard },
   { name: '인수인계 DB', href: '/stacks', Icon: Stacks },
   { name: '수신함', href: '/mail', Icon: Mail },
+];
+
+// 내 질문 목록 더미데이터
+const queryItems = [
+  { id: 1, content: '연동 테스트 중단 리스크', href: '/' },
+  { id: 2, content: 'A사 API 명세 버전 이슈', href: '/search' },
+  { id: 3, content: 'SSO 토큰 만료 해결 여부', href: '/dashboard' },
+  { id: 4, content: 'A사 API 연동 오류 원인 정리', href: '/stacks' },
 ];
 
 const SideNavbar = () => {
@@ -41,6 +51,7 @@ const SideNavbar = () => {
         isOpen ? 'w-[241px] px-2 py-2.5' : 'w-[61px] items-center py-5',
       )}
     >
+      {/* 로고/열림 버튼 */}
       <div className={clsx('flex', isOpen ? 'items-center justify-between' : '')}>
         <div className={clsx('flex items-center gap-2.5', isOpen ? 'px-1' : '')}>
           <div className="group border-neutral-3 relative flex h-10 w-10 cursor-pointer items-center rounded-xl border-[0.5px] px-[5px] py-1.5">
@@ -70,6 +81,7 @@ const SideNavbar = () => {
         )}
       </div>
 
+      {/* 메뉴 */}
       <div className={`flex flex-col ${isOpen ? 'gap-1' : 'gap-2'}`}>
         {navItems.map((item) => {
           const isActive = pathname === item.href;
@@ -99,7 +111,7 @@ const SideNavbar = () => {
                   {item.name}
                 </span>
               )}
-              {item.name === '수신함' && (
+              {isOpen && item.name === '수신함' && (
                 <div className="rounded-md2 bg-blue-1 border-blue-30 ml-auto flex h-[23px] w-[23px] items-center justify-center border-[0.5px] px-0.5">
                   <span className="text-body-small text-blue-40">2</span>
                 </div>
@@ -108,6 +120,35 @@ const SideNavbar = () => {
           );
         })}
       </div>
+
+      {/* 질문 목록 */}
+      {isOpen && (
+        <div className="flex flex-col">
+          <div className="flex h-7 items-center px-2.5">
+            <span className="text-body-xsmall text-gray-70">내 질문</span>
+            <ArrowRight className="h-5 w-5 text-gray-50" />
+          </div>
+          <div className="mt-2 flex flex-col">
+            {queryItems.map((query) => {
+              const isActive = pathname === query.href;
+              return (
+                <Link
+                  key={query.id}
+                  href={query.href}
+                  className={clsx('group flex cursor-pointer rounded-lg py-2', isActive ? selectedClass : defaultClass)}
+                >
+                  <span className={clsx('text-body-small px-2.5', isActive ? 'text-blue-55' : 'text-gray-80')}>
+                    {query.content}
+                  </span>
+                  <span className="mr-2.5 ml-auto flex h-5 w-5 items-center opacity-0 transition-opacity group-hover:opacity-100">
+                    <Kebeb className="text-gray-50" />
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {isOpen && <div className={`border-neutral-3 absolute bottom-[70px] left-0 w-60 border`} />}
 

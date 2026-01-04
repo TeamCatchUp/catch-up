@@ -26,7 +26,7 @@ const TopNavbar = () => {
       <div className="flex justify-between px-10 py-2">
         <div className="flex items-center justify-center">
           <Link href="/">
-            <button className="flex cursor-pointer gap-2">
+            <button className="text-gray-80 flex cursor-pointer gap-2">
               <Home className="h-6 w-6" />
               <span className="text-heading-medium relative top-[0.5px]">홈</span>
             </button>
@@ -39,7 +39,7 @@ const TopNavbar = () => {
               onClick={toggleShareModal}
               aria-expanded={isShareModalOpen}
               aria-controls="share-modal"
-              className={`text-body-small cursor-pointer rounded-lg border px-2.5 py-1.5 transition-colors ${
+              className={`text-body-small text-gray-70 cursor-pointer rounded-lg border px-2.5 py-1.5 transition-colors ${
                 isShareModalOpen
                   ? 'border-neutral-4 bg-neutral-2 active:border-neutral-5 active:bg-neutral-3'
                   : 'border-neutral-3 active:border-neutral-5 active:bg-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 bg-white'
@@ -66,7 +66,7 @@ const TopNavbar = () => {
                   : 'border-neutral-3 active:border-neutral-5 active:bg-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 bg-white'
               } cursor-pointer rounded-lg border px-1.5 py-1.5 transition-colors`}
             >
-              <Kebeb_2 className="h-6 w-6" />
+              <Kebeb_2 className="text-gray-70 h-6 w-6" />
             </button>
             {/* 더보기 모달 */}
             {isMoreModalOpen && (
