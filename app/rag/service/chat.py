@@ -10,10 +10,14 @@ class ChatService:
         pass
 
     @observe()
-    async def chat(self, query: str, role: str, session_id: str) -> ChatResponse:
+    async def chat(self, query: str, role: str, session_id: str, index_name: str) -> ChatResponse:
         app = await get_compiled_graph()
 
-        inputs = {"messages": [HumanMessage(content=query)], "role": role}
+        inputs = {
+                "messages": [HumanMessage(content=query)],
+                "role": role,
+                "index_name": index_name
+            }
 
         config = {"configurable": {"thread_id": session_id}}
 
