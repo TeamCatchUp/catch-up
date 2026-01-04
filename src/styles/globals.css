@@ -20,3 +20,11 @@
     letter-spacing: var(--tracking-tight);
   }
 }
+
+@layer utilities {
+  .bg-home-gradient {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 55%, rgba(241, 244, 250, 0.5) 100%),
+      rgba(245, 246, 252, 0.6);
+  }
+}

@@ -1,5 +1,6 @@
 import Storage from '/public/icons/icon/storage.svg';
 import ArrowRight from '/public/icons/icon/arrow_right2.svg';
+import Folder from '/public/icons/icon/home_card_folder.svg';
 import Depart from '/public/icons/icon/business_center_filled.svg';
 import Manager from '/public/icons/icon/person_filled.svg';
 import LoadingProfile from '/public/icons/icon/loading_profile.svg';
@@ -42,8 +43,8 @@ const RecentlyChecked = () => {
         <div className="border-neutral-3 bg-blue-1 mr-2.5 rounded-lg border-[0.5px] p-1.5">
           <Storage className="h-[22px] w-[22px] text-blue-50" />
         </div>
-        <h2 className="text-heading-large text-gray-80 mr-1">최근 확인한 업무</h2>
-        <ArrowRight className="relative right-1 h-6 w-6 cursor-pointer p-0.5 text-gray-50" />
+        <h2 className="text-heading-large text-gray-80">최근 확인한 업무</h2>
+        <ArrowRight className="relative left-1 h-6 w-6 cursor-pointer p-0.5 text-gray-50" />
       </header>
 
       <ul className="flex gap-4">
@@ -53,7 +54,7 @@ const RecentlyChecked = () => {
               key={idx}
               className="border-neutral-3 flex w-[359px] flex-col gap-3 rounded-2xl border bg-white px-5 py-4"
             >
-              <div className="h-[37.5px] w-[57px] border" />
+              <Folder className="relative right-1 h-[42px] w-[62px]" />
 
               <h3 className="text-heading-medium text-gray-80 truncate">{card.title}</h3>
 

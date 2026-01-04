@@ -5,7 +5,7 @@ import RecentlyChecked from '@/components/home/cardComponents/RecentlyChecked';
 
 export default function Home() {
   return (
-    <div className="flex flex-col">
+    <div className="bg-home-gradient flex min-h-screen flex-col">
       <HomeTopNavbar />
       {/* 검색 */}
       <div className="flex flex-col items-center gap-16 px-12 py-10">
