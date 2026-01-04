@@ -25,7 +25,8 @@ const navItems = [
 
 const SideNavbar = () => {
   const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(true);
+  const isRagAnswerPage = pathname === '/rag_answer';
+  const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
 
   return (
     <nav
