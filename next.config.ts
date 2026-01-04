@@ -23,7 +23,8 @@ const nextConfig = {
       use: ['@svgr/webpack'],
     });
 
-    fileLoaderRule.exclude = /\.svg$/i;
+    // fileLoaderRule.exclude = /\.svg$/i;
+    if (fileLoaderRule) fileLoaderRule.exclude = /\.svg$/i;
 
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
