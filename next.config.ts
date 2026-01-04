@@ -3,7 +3,6 @@ import path from 'path';
 
 const nextConfig = {
   reactStrictMode: true,
-  output: 'export',
 
   images: {
     unoptimized: true,
