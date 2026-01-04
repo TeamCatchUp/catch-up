@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className="h-screen">
+      <body className="h-screen overflow-hidden">
         <div className="flex h-full">
           <aside>
             <SideNavbar />
