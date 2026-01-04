@@ -1,5 +1,6 @@
 services:
   fastapi-rag-server:
+    container_name: fastapi-rag-server
     image: "${DOCKER_REGISTRY_URL}/${DOCKER_IMAGE_NAME}:${IMAGE_TAG}"
     env_file:
       - .env
@@ -13,6 +14,7 @@ services:
     restart: always
   
   redis:
+    container_name: redis
     image: redis
     env_file:
       - .env
@@ -27,6 +29,7 @@ services:
     restart: always
   
   meilisearch:
+    container_name: meilisearch
     image: getmeili/meilisearch:v1.16
     env_file:
       - .env

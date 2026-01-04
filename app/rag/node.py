@@ -110,30 +110,23 @@ async def rewrite_node(state: AgentState):
 async def retrieve_node(state: AgentState):
     meili_repo = get_vector_repository()
 
-    datasource = state.get("datasource", "codebase")
-
     query = state.get("current_query") or state["messages"][-1].content
 
-    index_map = {
-        "codebase": settings.MEILI_GITHUB_CODEBASE_INDEX,
-        "issue_tracker": settings.MEILI_GITHUB_ISSUES_INDEX,
-        "pr_history": settings.MEILI_GITHUB_PRS_INDEX,
-    }
+    target_index = state.get("index_name", "")
 
-    target_index = index_map.get(datasource, settings.MEILI_DEFAULT_INDEX)
-
-    docs = meili_repo.retrieve(query=query, index_name=target_index, k=3)
+    docs = meili_repo.retrieve(query=query, index_name=target_index, k=10)
 
     doc_data_list = []
     for doc in docs:
         doc_data_list.append(
             {
-                "content": doc.page_content,
-                "file_name": doc.metadata.get("file_name"),
+                "source_type": "github",
+                "text": doc.page_content,
                 "file_path": doc.metadata.get("file_path"),
                 "category": doc.metadata.get("category"),
                 "source": doc.metadata.get("source"),
-                "source_type": datasource,
+                "html_url": doc.metadata.get("html_url"),
+                "language": doc.metadata.get("language"),
             }
         )
 
@@ -151,25 +144,27 @@ async def grade_node(state: AgentState):
 
     # retry는 최대 3번까지만 재시도
     if state.get("retry_count", 0) >= 3:
-        return "generate_answer"
+        return {"grade_status": "max_retries"}
 
     retrieved_docs = state.get("retrieved_docs", [])
 
-    context_text = "\n".join(
+    context_text = "\n\n".join(
         [
             f"""
-            파일명: {doc["file_name"]}
-            경로: {doc["file_path"]}
-            카테고리: {doc["category"]}
+            [문서 정보]
+            출처: {doc.get("source", "unknown")}
+            파일 경로: {doc.get("file_path", "N/A")}
+            카테고리: {doc.get("category", "N/A")}
+            프로그래밍 언어: {doc.get("language", "N/A")}
             내용:
-            {doc["content"]}
+            {doc.get("text", "")}
             """.strip()
             for doc in retrieved_docs
         ]
     )
 
     if not context_text:
-        return "rewrite_answer"
+        return {"grade_status": "bad"}
 
     prompt = get_prompt_template("grade")
 
@@ -187,7 +182,7 @@ async def grade_node(state: AgentState):
 
     is_relevant = answer.binary_score == "yes"
 
-    return "generate_answer" if is_relevant else "rewrite_answer"
+    return {"grade_status": "good" if is_relevant else "bad"}
 
 
 async def generate_node(state: AgentState):
@@ -208,9 +203,9 @@ async def generate_node(state: AgentState):
         source = doc.get("source", "unknown")
         category = doc.get("category", "기타")
         file_path = doc.get("file_path", "")
-        content = doc.get("content", "")
+        text = doc.get("text", "")
 
-        formatted_doc = f"[{i}] 출처: {source} ({file_path}) | 카테고리: {category}\n내용:\n{content}"
+        formatted_doc = f"[{i}] 출처: {source} ({file_path}) | 카테고리: {category}\n내용:\n{text}"
         context_text_list.append(formatted_doc)
     context_text = "\n\n".join(context_text_list)
 
@@ -258,13 +253,14 @@ async def generate_node(state: AgentState):
             seen.add(identifier)
 
             source_entry = {
-                "source": doc.get("source", "unknown"),
-                "category": doc.get("category", "기타"),
-                "file_path": doc.get("file_path", ""),
-                "file_name": doc.get("file_name", ""),
-                "content": (doc.get("content") or "")[:500] + " ... (생략됨)",
+                "source_type": "github",
+                "text": doc.get("text"), # 원문 전체
+                "file_path": file_path,
+                "category": doc.get("category"),
+                "source": source_name,
+                "html_url": doc.get("html_url"),
+                "language": doc.get("language"),
             }
-
             unique_sources.append(source_entry)
 
     return {"messages": [AIMessage(content=answer)], "sources": unique_sources}
