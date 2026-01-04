@@ -22,7 +22,7 @@ const TopNavbar = () => {
   };
 
   return (
-    <nav aria-label="메인 네비게이션" className="border-neutral-3 h-full w-full border-b">
+    <nav aria-label="메인 네비게이션" className="border-neutral-3 sticky top-0 z-50 h-full w-full border-b bg-white">
       <div className="flex justify-between px-10 py-2">
         <div className="flex items-center justify-center">
           <Link href="/">
@@ -49,8 +49,8 @@ const TopNavbar = () => {
             </button>
             {/* 공유 모달 */}
             {isShareModalOpen && (
-              <div className="absolute top-full right-0 z-50 mt-1.5">
-                <ShareButtonModal />
+              <div className="absolute top-full right-0 mt-1.5">
+                <ShareButtonModal onClose={() => setIsShareModalOpen(false)} />
               </div>
             )}
           </li>
@@ -70,8 +70,8 @@ const TopNavbar = () => {
             </button>
             {/* 더보기 모달 */}
             {isMoreModalOpen && (
-              <div className="absolute top-full right-0 z-50 mt-1.5">
-                <MoreButtonModal />
+              <div className="absolute top-full right-0 mt-1.5">
+                <MoreButtonModal onClose={() => setIsMoreModalOpen(false)} />
               </div>
             )}
           </li>

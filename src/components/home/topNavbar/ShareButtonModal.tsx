@@ -1,3 +1,6 @@
+import { useRef } from 'react';
+import { useOutsideClick } from '@/hooks/useOutsideClick';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 import LoadingProfile from '/public/icons/icon/loading_profile.svg';
 
 const members = [
@@ -11,9 +14,15 @@ const members = [
   { name: '팀원G', role: 'PM' },
 ];
 
-const ShareButtonModal = () => {
+const ShareButtonModal = ({ onClose }: { onClose: () => void }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useOutsideClick(modalRef, onClose);
+  useEscapeKey(onClose);
+
   return (
     <div
+      ref={modalRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="share-modal-title"
