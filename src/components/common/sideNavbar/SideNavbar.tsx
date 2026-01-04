@@ -47,7 +47,7 @@ const SideNavbar = () => {
   return (
     <nav
       className={clsx(
-        'border-neutral-3 flex h-full flex-col gap-4 border-r bg-white',
+        'border-neutral-3 flex h-screen flex-col gap-4 border-r bg-white',
         isOpen ? 'w-[241px] px-2 py-2.5' : 'w-[61px] items-center py-5',
       )}
     >
@@ -123,12 +123,12 @@ const SideNavbar = () => {
 
       {/* 질문 목록 */}
       {isOpen && (
-        <div className="flex flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex h-7 items-center px-2.5">
             <span className="text-body-xsmall text-gray-70">내 질문</span>
             <ArrowRight className="h-5 w-5 text-gray-50" />
           </div>
-          <div className="mt-2 flex flex-col">
+          <div className="mt-2 flex flex-col overflow-y-auto">
             {queryItems.map((query) => {
               const isActive = pathname === query.href;
               return (
@@ -137,7 +137,7 @@ const SideNavbar = () => {
                   href={query.href}
                   className={clsx('group flex cursor-pointer rounded-lg py-2', isActive ? selectedClass : defaultClass)}
                 >
-                  <span className={clsx('text-body-small px-2.5', isActive ? 'text-blue-55' : 'text-gray-80')}>
+                  <span className={clsx('text-body-small truncate px-2.5', isActive ? 'text-blue-55' : 'text-gray-80')}>
                     {query.content}
                   </span>
                   <span className="mr-2.5 ml-auto flex h-5 w-5 items-center opacity-0 transition-opacity group-hover:opacity-100">
@@ -150,28 +150,30 @@ const SideNavbar = () => {
         </div>
       )}
 
-      {isOpen && <div className={`border-neutral-3 absolute bottom-[70px] left-0 w-60 border`} />}
-
-      <div
-        className={clsx(
-          'absolute bottom-2.5 flex h-[54px]',
-          isOpen ? 'w-[225px] justify-between px-1.5 py-1' : 'justify-center',
-        )}
-      >
-        <div className={clsx('flex cursor-pointer items-center', isOpen ? 'gap-4' : 'justify-center')}>
-          <DefaultProfile className="h-10 w-10" />
+      {/* 유저 */}
+      <div className={'mt-auto flex flex-col gap-1.5'}>
+        {isOpen && <div className={`border-neutral-3 relative right-2 w-60 border`} />}
+        <div
+          className={clsx(
+            'flex h-[54px] cursor-pointer items-center',
+            isOpen ? 'w-[225px] justify-between px-1.5 py-1' : 'justify-center',
+          )}
+        >
+          <div className={clsx('flex gap-4', isOpen ? 'mt-auto' : '')}>
+            <DefaultProfile className="h-10 w-10" />
+            {isOpen && (
+              <div className="relative top-px">
+                <div className="text-heading-small text-gray-80">이진수</div>
+                <div className="text-body-small text-gray-50">사업 개발</div>
+              </div>
+            )}
+          </div>
           {isOpen && (
-            <div className="relative top-px">
-              <div className="text-heading-small text-gray-80">이진수</div>
-              <div className="text-body-small text-gray-50">사업 개발</div>
+            <div className="relative bottom-1 flex cursor-pointer items-center p-0.5">
+              <UnfoldMore className="relative top-px h-6 w-6" />
             </div>
           )}
         </div>
-        {isOpen && (
-          <div className="relative bottom-1 flex cursor-pointer items-center p-0.5">
-            <UnfoldMore className="relative top-px h-6 w-6" />
-          </div>
-        )}
       </div>
     </nav>
   );
