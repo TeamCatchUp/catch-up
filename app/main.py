@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
         elif settings.MEILI_ENVIRONMENT == MeiliEnvironment.development:
             repo = get_vector_repository()
             if hasattr(repo, "initialize"):
-                repo.initialize(
+                await repo.initialize(
                     [
                         settings.MEILI_GITHUB_CODEBASE_INDEX,
                         settings.MEILI_GITHUB_ISSUES_INDEX,

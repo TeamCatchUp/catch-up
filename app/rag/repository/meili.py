@@ -1,25 +1,30 @@
+import asyncio
 import logging
 from typing import Optional
 
-import meilisearch
+from meilisearch_python_sdk import AsyncClient
+from meilisearch_python_sdk.models.search import Hybrid
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 
-from app.core.config import settings, MeiliEnvironment
+from app.core.config import settings
 from app.rag.repository.base import VectorStoreRepository
 
 logger = logging.getLogger(__name__)
+
+# Embedding Rate Limit 제한
+embedding_semaphore = asyncio.Semaphore(10)
 
 
 class LangChainMeiliRepository(VectorStoreRepository):
     def __init__(self):
         self.embeddings = OpenAIEmbeddings()
 
-        self.client = meilisearch.Client(
-            settings.MEILI_HTTP_ADDR, settings.MEILI_KEY, timeout=10
+        self.client = AsyncClient(
+            settings.MEILI_HTTP_ADDR, settings.MEILI_KEY, timeout=30
         )
 
-    def initialize(self, index_names: list[str] = None):
+    async def initialize(self, index_names: list[str] = None):
         """
         사용할 모든 인덱스에 대해 초기 설정을 수행한다.
 
@@ -34,8 +39,7 @@ class LangChainMeiliRepository(VectorStoreRepository):
         for index_name in targets:
             # 인덱스 생성
             try:
-                task = self.client.create_index(index_name, config)
-                self.client.wait_for_task(task.task_uid)
+                await self.client.create_index(index_name, config)
                 logger.info(f"Created index '{index_name}'. (Skipped if exists)")
             except Exception as e:
                 logger.warning(f"Failed to create index for '{index_name}': {e}")
@@ -44,10 +48,9 @@ class LangChainMeiliRepository(VectorStoreRepository):
 
             # 임베더 설정
             try:
-                task = index.update_embedders(
+                await index.update_embedders(
                     {"default": {"source": "userProvided", "dimensions": 1536}}
                 )
-                self.client.wait_for_task(task.task_uid)
 
                 logger.info(f"Updated embedders for '{index_name}'.")
 
@@ -56,7 +59,7 @@ class LangChainMeiliRepository(VectorStoreRepository):
 
             # 필터링 가능한 속성 정의
             try:
-                task = index.update_filterable_attributes(
+                await index.update_filterable_attributes(
                     [
                         "metadata.category",
                         "metadata.source",
@@ -64,15 +67,14 @@ class LangChainMeiliRepository(VectorStoreRepository):
                         "metadata.file_name",
                     ]
                 )
-                self.client.wait_for_task(task.task_uid)
                 logger.info(f"Updated filters for '{index_name}'.")
             except Exception as e:
                 logger.warning(f"Failed to update filters for '{index_name}': {e}")
 
-            logger.info(f"embedders: {index.get_embedders()}")
+            logger.info(f"embedders: {await index.get_embedders()}")
             
 
-    def retrieve(
+    async def retrieve(
         self,
         query: str,
         index_name: Optional[str] = None,
@@ -87,17 +89,17 @@ class LangChainMeiliRepository(VectorStoreRepository):
         # Meilisearch 인덱스 객체
         index = self.client.index(target_index)
         
-        # 사용자 자연어 쿼리 임베딩
-        vector = self.embeddings.embed_query(query)
+        async with embedding_semaphore:
+            vector = await self.embeddings.aembed_query(query) # 사용자 자연어 쿼리 임베딩
 
         # 검색 파라미터 설정 (hybrid search)
         search_params = {
             "vector": vector,
             "limit": k,
-            "hybrid": {
-                "semanticRatio": semantic_ratio,
-                "embedder": "default",
-            },
+            "hybrid": Hybrid(
+                semantic_ratio=semantic_ratio,
+                embedder="default"
+            ),
         }
 
         # 필터 존재 시 추가
@@ -105,12 +107,12 @@ class LangChainMeiliRepository(VectorStoreRepository):
             search_params["filter"] = filters
 
         # Meilisearch 검색
-        results = index.search(query, search_params)
-        logger.info(f"Search results count: {len(results.get('hits', []))}")
+        results = await index.search(query, **search_params)
+        logger.info(f"Search results count: {len(results.hits)}")
 
         # 반환할 검색 결과 리스트
         docs = []
-        for hit in results.get("hits", []):
+        for hit in results.hits:
             content = hit.get("text") or hit.get("content") or "" # 본문 내용
             
             # 메타 데이터에서 제외할 필드명
