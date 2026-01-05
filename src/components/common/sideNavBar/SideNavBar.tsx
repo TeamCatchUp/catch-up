@@ -28,10 +28,10 @@ const navItems = [
 
 // 내 질문 목록 더미데이터
 const queryItems = [
-  { id: 1, content: '연동 테스트 중단 리스크', href: '/' },
-  { id: 2, content: 'A사 API 명세 버전 이슈', href: '/search' },
-  { id: 3, content: 'SSO 토큰 만료 해결 여부', href: '/dashboard' },
-  { id: 4, content: 'A사 API 연동 오류 원인 정리', href: '/stacks' },
+  { id: 1, content: '연동 테스트 중단 리스크' },
+  { id: 2, content: 'A사 API 명세 버전 이슈' },
+  { id: 3, content: 'SSO 토큰 만료 해결 여부' },
+  { id: 4, content: 'A사 API 연동 오류 원인 정리' },
 ];
 
 const SideNavBar = () => {
@@ -134,20 +134,18 @@ const SideNavBar = () => {
           </div>
           <div className="mt-2 flex flex-col overflow-y-auto">
             {queryItems.map((query) => {
-              const isActive = pathname === query.href;
               return (
-                <Link
+                <button
                   key={query.id}
-                  href={query.href}
-                  className={clsx('group flex cursor-pointer rounded-lg py-2', isActive ? selectedClass : defaultClass)}
+                  // , isActive ? selectedClass : defaultClass
+                  className={clsx('group flex cursor-pointer rounded-lg py-2')}
                 >
-                  <span className={clsx('text-body-small truncate px-2.5', isActive ? 'text-blue-55' : 'text-gray-80')}>
-                    {query.content}
-                  </span>
+                  {/* , isActive ? 'text-blue-55' : 'text-gray-80' */}
+                  <span className={clsx('text-body-small truncate px-2.5')}>{query.content}</span>
                   <span className="mr-2.5 ml-auto flex h-5 w-5 items-center opacity-0 transition-opacity group-hover:opacity-100">
                     <Kebeb className="text-gray-50" />
                   </span>
-                </Link>
+                </button>
               );
             })}
           </div>
