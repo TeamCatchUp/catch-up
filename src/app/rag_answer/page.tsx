@@ -12,10 +12,49 @@ import Copy from '/public/icons/icon/copy.svg';
 import ThumbsDown from '/public/icons/icon/thumbs-down.svg';
 import Rotate from '/public/icons/icon/rotate.svg';
 import Cancel from '/public/icons/icon/cancel.svg';
-// import Align from '/public/icons/icon/align.svg';
-// import Github from '/public/icons/logo/GitHub.svg';
-// import ArrowRight from '/public/icons/icon/arrow_right.svg';
-import RagHeader from '@/components/rag/RagHeader';
+import Github from '/public/icons/logo/GitHub.svg';
+import ArrowRight from '/public/icons/icon/arrow_right.svg';
+import RagContentHeader from '@/components/rag/RagContentHeader';
+import RagRightAdditionalHeader from '@/components/rag/RagRightAdditionalHeader';
+import SourceComponent from '@/components/rag/SourceComponent';
+import DetailedTaskComponent from '@/components/rag/DetailedTaskComponent';
+
+const icon = [
+  { name: 'Copy', icon: Copy },
+  { name: 'Share', icon: Share },
+  { name: 'ThumbsDown', icon: ThumbsDown },
+  { name: 'Rotate', icon: Rotate },
+  { name: 'Kebeb', icon: Kebeb },
+];
+
+const feedback = [
+  { id: 1, content: '존재하지 않는 자료를 참고했어요' },
+  { id: 2, content: '최신 내용이 반영되지 않았어요' },
+  { id: 3, content: '답변의 출처가 없어요' },
+  { id: 4, content: '중요한 정보가 누락되었어요' },
+  { id: 5, content: '유용하지 않은 정보를 참고해요' },
+  { id: 6, content: '내가 원하는 내용이 아니에요' },
+  { id: 7, content: '답변이 너무 길어요' },
+  { id: 8, content: '더 자세히...' },
+];
+
+const sources = [
+  {
+    id: 1,
+    title: '잠재 파트너사 컨택 관련',
+    subtitle: '일본 시장 진출 Kick-off 회의록 text text text text text text',
+    content:
+      '일본의 DX(Digital Transformation) 수요 증가에 따른 시장 기회 포착.- Goal: 2024년 3분기 내 일본 법인 설립 여부 결정을 위한 근거 데이터(Quantitative/Qualitative) 확보.',
+    date: '2025.12.15',
+  },
+  {
+    id: 2,
+    title: '잠재 파트너사 컨택 관련',
+    subtitle: '일본 시장 진출 Kick-off 회의록',
+    content: '일본의 DX(Digital Transformation) 수요 증가에 따른 시장 기회 포착',
+    date: '2026.01.02',
+  },
+];
 
 export default function Page() {
   const today = new Date();
@@ -26,24 +65,8 @@ export default function Page() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
 
-  const icon = [
-    { name: 'Copy', icon: Copy },
-    { name: 'Share', icon: Share },
-    { name: 'ThumbsDown', icon: ThumbsDown },
-    { name: 'Rotate', icon: Rotate },
-    { name: 'Kebeb', icon: Kebeb },
-  ];
-
-  const feedback = [
-    { id: 1, content: '존재하지 않는 자료를 참고했어요' },
-    { id: 2, content: '최신 내용이 반영되지 않았어요' },
-    { id: 3, content: '답변의 출처가 없어요' },
-    { id: 4, content: '중요한 정보가 누락되었어요' },
-    { id: 5, content: '유용하지 않은 정보를 참고해요' },
-    { id: 6, content: '내가 원하는 내용이 아니에요' },
-    { id: 7, content: '답변이 너무 길어요' },
-    { id: 8, content: '더 자세히...' },
-  ];
+  // 오른쪽 컴포넌트 헤더
+  const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
 
   // 더미데이터
   const content = {
@@ -64,14 +87,12 @@ export default function Page() {
     }
   }, [showFeedback]);
 
-  // 디자인 시스템 CSS
-  const outlineGray = 'hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3';
   return (
     <div className="flex h-screen w-full">
       <div className="flex flex-1 flex-col">
         <div className="flex h-full flex-col bg-white">
           {/* 헤더 */}
-          <RagHeader />
+          <RagContentHeader />
 
           {/* 답변 콘텐츠 영역 */}
           <div className="border-r-neutral-3 relative flex flex-1 flex-col justify-center border-r">
@@ -80,7 +101,7 @@ export default function Page() {
               {/* 날짜 */}
               <div className="flex h-7 items-center justify-center gap-4">
                 <div className="text-neutral-4 w-[347.5px] border" />
-                <span className={`body-xsmall rounded-full px-1.5 py-1 text-gray-50 ${outlineGray} cursor-pointer`}>
+                <span className={`body-xsmall outline-gray cursor-pointer rounded-full px-1.5 py-1 text-gray-50`}>
                   {month}.{day}
                 </span>
                 <div className="text-neutral-4 w-[347.5px] border" />
@@ -91,7 +112,7 @@ export default function Page() {
                 <div className="mx-auto mb-8 flex w-[773px] items-center justify-center gap-3">
                   <div className="text-heading-xlarge text-gray-70 h-auto w-[674px] flex-1">{content.title}</div>
                   <button
-                    className={`${outlineGray} border-neutral-3 flex h-7.5 items-center justify-center gap-1 self-end rounded-lg border px-2 py-1`}
+                    className={`outline-gray border-neutral-3 flex h-7.5 items-center justify-center gap-1 self-end rounded-lg border px-2 py-1`}
                   >
                     <div className="text-gray-70 cursor-pointer">
                       <EditPencil className="text-gray-70 h-5 w-5" />
@@ -120,7 +141,7 @@ export default function Page() {
                         onClick={() => {
                           if (isThumbsDown) setShowFeedback((prev) => !prev);
                         }}
-                        className={`cursor-pointer rounded-lg p-1.5 ${outlineGray} ${activeClass}`}
+                        className={`outline-gray cursor-pointer rounded-lg p-1.5 ${activeClass}`}
                       >
                         <Icon className="h-6 w-6 text-gray-50" />
                       </button>
@@ -136,7 +157,7 @@ export default function Page() {
                       <span className="text-body-small text-gray-50">답변이 마음에 들지 않은 이유가 무엇인가요?</span>
                       <div
                         onClick={() => setShowFeedback(false)}
-                        className={`flex cursor-pointer items-center rounded-full p-0.5 ${outlineGray}`}
+                        className={`$outline-gray flex cursor-pointer items-center rounded-full p-0.5`}
                       >
                         <Cancel className={`relative bottom-[0.5px] h-4.5 w-4.5 text-gray-50`} />
                       </div>
@@ -146,7 +167,7 @@ export default function Page() {
                         return (
                           <button
                             key={idx}
-                            className={`${outlineGray} border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1`}
+                            className={`outline-gray border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1`}
                           >
                             {feedback.content}
                           </button>
@@ -169,7 +190,7 @@ export default function Page() {
                 ))}
               </div>
               <div className="border-neutral-4 shadow-rag-bar flex w-[773px] items-center gap-2 rounded-full border px-3 py-2.5">
-                <button className={`flex items-center rounded-full p-1.5 ${outlineGray} cursor-pointer`}>
+                <button className={`outline-gray flex cursor-pointer items-center rounded-full p-1.5`}>
                   <Add className="text-gray-70 h-7 w-7" />
                 </button>
                 <input className="flex-1 outline-none" placeholder="업무 흐름이나 인수인계 내용을 질문해보세요" />
@@ -183,7 +204,16 @@ export default function Page() {
       </div>
 
       {/* 출처 컴포넌트 */}
-      <div className="ml-auto flex w-[405px] justify-end">출처 컴포넌트</div>
+      <div className="ml-auto flex h-screen w-[405px] justify-end">
+        <div className="flex w-full flex-col">
+          <RagRightAdditionalHeader activeTab={activeTab} onChange={setActiveTab} sourceCount={sources.length} />
+          {/* 컴포넌트 내용 */}
+          <div className="flex-1 overflow-y-auto">
+            {activeTab === 'source' && <SourceComponent sources={sources} />}
+            {activeTab === 'detail' && <DetailedTaskComponent />}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -159,7 +159,7 @@ const SideNavbar = () => {
         {isOpen && <div className={`border-neutral-3 relative right-2 w-60 border`} />}
         <div
           className={clsx(
-            'flex h-[54px] cursor-pointer items-center',
+            'outline-gray flex h-[54px] cursor-pointer items-center rounded-lg',
             isOpen ? 'w-[225px] justify-between px-1.5 py-1' : 'justify-center',
           )}
         >
