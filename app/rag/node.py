@@ -128,6 +128,8 @@ async def retrieve_node(state: AgentState):
     meili_repo = get_vector_repository()
 
     query = state.get("current_query") or state["messages"][-1].content
+    
+    logger.info(f"retrieval target query: {query}")
 
     target_index = state.get("index_name", "")
 
@@ -135,7 +137,7 @@ async def retrieve_node(state: AgentState):
             query=query, 
             index_name=target_index, 
             k=30,
-            semantic_ratio=0.8
+            semantic_ratio=0.5
         )
 
     doc_data_list = []
