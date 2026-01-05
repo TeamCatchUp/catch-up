@@ -5,19 +5,16 @@ import Add from '/public/icons/icon/add_small.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
 import EditPencil from '/public/icons/icon/edit_pencil.svg';
-// import Delete from '/public/icons/icon/detete_2.svg';
-// import Reset from '/public/icons/icon/reset.svg';
 import ArrowSend from '/public/icons/icon/arrow_send.svg';
 import Copy from '/public/icons/icon/copy.svg';
 import ThumbsDown from '/public/icons/icon/thumbs-down.svg';
 import Rotate from '/public/icons/icon/rotate.svg';
 import Cancel from '/public/icons/icon/cancel.svg';
-import Github from '/public/icons/logo/GitHub.svg';
-import ArrowRight from '/public/icons/icon/arrow_right.svg';
-import RagContentHeader from '@/components/rag/RagContentHeader';
-import RagRightAdditionalHeader from '@/components/rag/RagRightAdditionalHeader';
-import SourceComponent from '@/components/rag/SourceComponent';
-import DetailedTaskComponent from '@/components/rag/DetailedTaskComponent';
+import Filter from '@/components/rag/answerComponent/Filter';
+import RagContentHeader from '@/components/rag/answerComponent/RagContentHeader';
+import RagRightAdditionalHeader from '@/components/rag/rightComponent/sourceComponent/RagRightAdditionalHeader';
+import SourceComponent from '@/components/rag/rightComponent/sourceComponent/SourceComponent';
+import DetailedTasksComponent from '@/components/rag/rightComponent/detailedTasksComponent/DetailedTasksComponent';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -38,23 +35,7 @@ const feedback = [
   { id: 8, content: '더 자세히...' },
 ];
 
-const sources = [
-  {
-    id: 1,
-    title: '잠재 파트너사 컨택 관련',
-    subtitle: '일본 시장 진출 Kick-off 회의록 text text text text text text',
-    content:
-      '일본의 DX(Digital Transformation) 수요 증가에 따른 시장 기회 포착.- Goal: 2024년 3분기 내 일본 법인 설립 여부 결정을 위한 근거 데이터(Quantitative/Qualitative) 확보.',
-    date: '2025.12.15',
-  },
-  {
-    id: 2,
-    title: '잠재 파트너사 컨택 관련',
-    subtitle: '일본 시장 진출 Kick-off 회의록',
-    content: '일본의 DX(Digital Transformation) 수요 증가에 따른 시장 기회 포착',
-    date: '2026.01.02',
-  },
-];
+const keyword = ['임직원이 가장 많이 물어보는 질문', '프로젝트 검색하기', '최근 변경사항 요약', '이 업무 한 줄 요약'];
 
 export default function Page() {
   const today = new Date();
@@ -73,8 +54,23 @@ export default function Page() {
     title: '지금 일본 시장 진출 프로젝트에서 가장 큰 걸림돌(Blocker)이 뭐야? 그리고 어떻게 해결하고 있어?',
     content: '현재 논의된 핵심 이슈는 일본 경쟁사 A사의 가격 정책에 포함된 숨겨진 비용입니다.',
   };
-
-  const keyword = ['임직원이 가장 많이 물어보는 질문', '프로젝트 검색하기', '최근 변경사항 요약', '이 업무 한 줄 요약'];
+  const sources = [
+    {
+      id: 1,
+      title: '잠재 파트너사 컨택 관련',
+      subtitle: '일본 시장 진출 Kick-off 회의록 text text text text text text',
+      content:
+        '일본의 DX(Digital Transformation) 수요 증가에 따른 시장 기회 포착.- Goal: 2024년 3분기 내 일본 법인 설립 여부 결정을 위한 근거 데이터(Quantitative/Qualitative) 확보.',
+      date: '2025.12.15',
+    },
+    {
+      id: 2,
+      title: '잠재 파트너사 컨택 관련',
+      subtitle: '일본 시장 진출 Kick-off 회의록',
+      content: '일본의 DX(Digital Transformation) 수요 증가에 따른 시장 기회 포착',
+      date: '2026.01.02',
+    },
+  ];
 
   useEffect(() => {
     if (showFeedback && scrollRef.current) {
@@ -122,7 +118,9 @@ export default function Page() {
                 </div>
 
                 {/* 필터링 */}
-                <div className="border-neutral-3 mx-auto h-[211px] w-[773px] rounded-xl border"></div>
+                <div className="border-neutral-3 mx-auto h-[213px] w-[773px] rounded-xl border">
+                  <Filter />
+                </div>
 
                 {/* 내용 */}
                 <div className="mx-auto mt-8 flex h-auto w-[773px] flex-col gap-5">
@@ -210,7 +208,7 @@ export default function Page() {
           {/* 컴포넌트 내용 */}
           <div className="flex-1 overflow-y-auto">
             {activeTab === 'source' && <SourceComponent sources={sources} />}
-            {activeTab === 'detail' && <DetailedTaskComponent />}
+            {activeTab === 'detail' && <DetailedTasksComponent />}
           </div>
         </div>
       </div>

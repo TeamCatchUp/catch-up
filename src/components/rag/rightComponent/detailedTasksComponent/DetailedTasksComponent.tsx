@@ -1,4 +1,4 @@
-const DetailedTaskComponent = () => {
+const DetailedTasksComponent = () => {
   return (
     <div className="">
       <div className="">상세 업무 컴포넌트</div>
@@ -6,4 +6,4 @@ const DetailedTaskComponent = () => {
   );
 };
 
-export default DetailedTaskComponent;
+export default DetailedTasksComponent;

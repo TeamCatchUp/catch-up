@@ -2,7 +2,7 @@ import clsx from 'clsx';
 import { useState } from 'react';
 import Align from '/public/icons/icon/align.svg';
 import Divider from '/public/icons/icon/divider.svg';
-import SourceCardsComponent from '@/components/rag/SourceCardsComponent';
+import SourceCardsComponent from '@/components/rag/rightComponent/sourceComponent/SourceCardsComponent';
 
 interface Source {
   id: number;
