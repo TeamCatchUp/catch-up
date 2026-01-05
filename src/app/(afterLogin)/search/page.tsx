@@ -89,7 +89,7 @@ export default function Search() {
                 <SearchOptionButton Icon={IconGithub} label="github" />
                 <SearchOptionButton Icon={IconSlack} label="Slack" />
               </div>
-              <IconDivider />
+              <IconDivider className="h-6 w-6 text-gray-5" />
               <div className="flex items-center gap-2">
                 <SearchOptionButton Icon={IconPerson} label="담당자" />
                 <SearchOptionButton Icon={IconTag} label="부서명" />
