@@ -11,7 +11,7 @@ function CallbackHandler() {
     const token = searchParams.get('token');
 
     if (token) {
-      localStorage.setItem('accessToken', token);
+      localStorage.setItem('access', token);
 
       router.replace('/');
     } else {

@@ -5,7 +5,7 @@ import CatchUpLogo from '@/public/icons/logo/catchUp.svg';
 
 export default function Login() {
   const handleGoogleLogin = () => {
-    window.location.href = `https://0-0-0-0.example.io`;
+    window.location.href = `https://0-0-0-0.example.io/oauth2/authorization/google`;
   };
 
   return (

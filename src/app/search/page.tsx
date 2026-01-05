@@ -16,10 +16,27 @@ import IconArrowRight from '@/public/icons/icon/arrow_right2.svg';
 import { FilterChip } from '@/components/UI/SearchFilter';
 import { SearchOptionButton } from '@/components/UI/SearchOptionButton';
 import { SearchSuggestion } from '@/components/UI/SearchSuggestion';
+import { sendChatQuery } from 'src/util/sendChatQuery';
 
 export default function Search() {
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!inputValue.trim()) return;
+
+    setLoading(true);
+    try {
+      const result = await sendChatQuery(inputValue);
+      console.log('서버 응답:', result);
+      setInputValue(''); // 전송 후 입력창 초기화
+    } catch (error) {
+      alert('전송에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const hasText = inputValue.trim().length > 0;
 
@@ -50,14 +67,17 @@ export default function Search() {
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               value={inputValue}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               onChange={(e) => setInputValue(e.target.value)}
             />
           </div>
-          <div
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
             className={`rounded-rounded flex items-center border border-solid p-2 ${hasText ? 'border-blue-50 bg-blue-50' : 'bg-neutral-1 border-neutral-2'}`}
           >
             <IconArrowSend className={`${hasText ? 'brightness-0 invert' : ''} h-6 w-6`} />
-          </div>
+          </button>
         </div>
 
         {isFocused && (
