@@ -16,28 +16,21 @@ import IconArrowRight from '@/public/icons/icon/arrow_right2.svg';
 import { FilterChip } from '@/components/UI/SearchFilter';
 import { SearchOptionButton } from '@/components/UI/SearchOptionButton';
 import { SearchSuggestion } from '@/components/UI/SearchSuggestion';
-import { sendChatQuery } from 'src/util/sendChatQuery';
+import { useRouter } from 'next/navigation';
 
 export default function Search() {
+  const router = useRouter();
+
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!inputValue.trim()) return;
 
-    setLoading(true);
-    try {
-      const result = await sendChatQuery(inputValue);
-      console.log('서버 응답:', result);
-      setInputValue(''); // 전송 후 입력창 초기화
-    } catch (error) {
-      alert('전송에 실패했습니다. 다시 시도해주세요.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    const newSessionId = crypto.randomUUID();
 
+    router.push(`/ragAnswer/${newSessionId}?q=${encodeURIComponent(inputValue)}`);
+  };
   const hasText = inputValue.trim().length > 0;
 
   return (
@@ -89,7 +82,7 @@ export default function Search() {
                 <SearchOptionButton Icon={IconGithub} label="github" />
                 <SearchOptionButton Icon={IconSlack} label="Slack" />
               </div>
-              <IconDivider className="h-6 w-6 text-gray-5" />
+              <IconDivider className="text-gray-5 h-6 w-6" />
               <div className="flex items-center gap-2">
                 <SearchOptionButton Icon={IconPerson} label="담당자" />
                 <SearchOptionButton Icon={IconTag} label="부서명" />
