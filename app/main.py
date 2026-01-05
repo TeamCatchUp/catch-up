@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app import __version__
 from app.core.config import settings, MeiliEnvironment
 from app.rag.api.router import router as chat_router
 from app.rag.factory import get_vector_repository
@@ -10,7 +11,7 @@ from app.rag.factory import get_vector_repository
 # logging 설정
 logging.basicConfig(
     level=logging.INFO,
-    format="(%(asctime)s) %(name)s: [%(levelname)s] %(message)s",
+    format="(%(asctime)s) %(name)s.%(funcName)s:%(lineno)d: [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
@@ -49,7 +50,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
         title="CatchUp RAG Server",
         lifespan=lifespan,
-        redirect_slashes=False
+        redirect_slashes=False,
+        version=__version__
     )
 
 

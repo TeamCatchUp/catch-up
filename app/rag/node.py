@@ -1,13 +1,13 @@
 from typing import Annotated, Any
+import logging
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph.message import add_messages
 
-from app.core.config import settings
 from app.observability.langfuse_client import langfuse_handler
-from app.rag.factory import get_llm_service, get_vector_repository
+from app.rag.factory import get_llm_service, get_vector_repository, get_rerank_service
 from app.rag.models.grade import GradeDocuments
 from app.rag.models.route import RouteQuery
 from app.rag.prompts.system import (
@@ -19,10 +19,15 @@ from app.rag.prompts.utils import get_prompt_template
 from app.rag.state import AgentState
 
 
+logger = logging.getLogger(__name__)
+
+
 async def router_node(state: AgentState):
     messages = state["messages"]
-    question = state.get("current_query") or get_latest_query(messages)
-
+    question = get_latest_query(messages) # 반드시 가장 최근의 질문을 기반으로 답변
+    
+    logger.info(question)
+    
     llm_service = get_llm_service()
     llm = llm_service.get_llm()
 
@@ -114,7 +119,12 @@ async def retrieve_node(state: AgentState):
 
     target_index = state.get("index_name", "")
 
-    docs = meili_repo.retrieve(query=query, index_name=target_index, k=10)
+    docs = meili_repo.retrieve(
+            query=query, 
+            index_name=target_index, 
+            k=100,
+            semantic_ratio=0.8
+        )
 
     doc_data_list = []
     for doc in docs:
@@ -131,6 +141,22 @@ async def retrieve_node(state: AgentState):
         )
 
     return {"retrieved_docs": doc_data_list}
+
+
+async def rerank_node(state: AgentState):
+    rerank_service = get_rerank_service()
+    
+    query = state.get("current_query") or state["messages"][-1].content
+    
+    retrieved_docs = state.get("retrieved_docs", [])
+    
+    reranked_docs = await rerank_service.rerank(
+        query=query,
+        documents=retrieved_docs,
+        top_n=5
+    )
+    
+    return {"retrieved_docs": reranked_docs}
 
 
 async def grade_node(state: AgentState):
@@ -191,7 +217,7 @@ async def generate_node(state: AgentState):
     trimmer = llm_service.get_trimmer()
 
     messages = state["messages"]
-    current_query = state.get("current_query") or get_latest_query(messages)
+    current_query = get_latest_query(messages)
 
     # agent state로부터 검색 결과 획득
     retrieved_docs: list[dict[str, Any]] = state.get("retrieved_docs", [])
@@ -226,8 +252,12 @@ async def generate_node(state: AgentState):
         m for m in messages if isinstance(m, (HumanMessage, AIMessage))
     ]
 
+    history_messages = conversation_messages[:-1]
+    
     # 대화 히스토리 trim
-    trimmed_history = trimmer.invoke(conversation_messages)
+    trimmed_history = trimmer.invoke(history_messages)
+    
+    logger.info(context_text)
 
     # llm 호출
     answer = await chain.ainvoke(
