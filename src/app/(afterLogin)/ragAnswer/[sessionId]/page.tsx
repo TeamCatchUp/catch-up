@@ -77,7 +77,7 @@ export default function Page() {
       const { scrollHeight, clientHeight } = scrollRef.current;
       scrollRef.current.scrollTo({
         top: scrollHeight - clientHeight,
-        behavior: 'smooth', // 부드럽게 이동
+        behavior: 'smooth',
       });
     }
   }, [chatData?.messages, isLoading]);
@@ -167,9 +167,7 @@ export default function Page() {
       <div className="flex min-w-0 flex-1 flex-col">
         <RagContentHeader />
 
-        {/* 💡 핵심: flex-1과 overflow-hidden을 주어 내부 스크롤 영역을 확보합니다 */}
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r">
-          {/* 💡 메시지 리스트: h-full 대신 flex-1을 쓰고 overflow-y-auto를 적용 */}
           <div ref={scrollRef} className="flex flex-1 flex-col gap-10 overflow-y-auto scroll-smooth px-24 py-9">
             {/* 날짜 표시 */}
             <div className="flex items-center justify-center gap-4">
@@ -196,7 +194,6 @@ export default function Page() {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-5">
-                    {/* 첫 답변에만 필터 노출하고 싶다면 idx === 1 조건 추가 가능 */}
                     <div className="border-neutral-3 bg-neutral-1 rounded-xl border p-4">
                       <Filter />
                     </div>
@@ -264,7 +261,7 @@ export default function Page() {
         </div>
       </div>
 
-      {/* 우측 사이드바: 고정 높이 유지 */}
+      {/* 우측 사이드바 */}
       <div className="border-neutral-3 flex w-[405px] flex-none flex-col border-l bg-white">
         <RagRightAdditionalHeader activeTab={activeTab} onChange={setActiveTab} sourceCount={currentSources.length} />
         <div className="flex-1 overflow-y-auto">
