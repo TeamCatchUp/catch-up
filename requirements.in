@@ -13,6 +13,8 @@ python-multipart
 # --- AI & RAG ---
 langchain
 langchain-community
+langgraph-checkpoint-redis
+langchain-cohere
 langchain-openai
 langchain-text-splitters
 langfuse
