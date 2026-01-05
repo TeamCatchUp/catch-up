@@ -14,13 +14,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className="h-screen overflow-hidden">
+      <body className="h-screen">
+        {/* overflow-hidden */}
         <div className="flex h-full">
           <aside>
             <SideNavbar />
           </aside>
           <div className="flex flex-1 flex-col">
-            <main className="flex-1 overflow-y-auto">{children}</main>
+            <main className="flex-1 overflow-auto">{children}</main>
           </div>
         </div>
       </body>

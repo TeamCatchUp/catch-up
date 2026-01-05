@@ -57,8 +57,10 @@ const HowToUse = () => {
                   type="button"
                   className="border-neutral-3 active:border-neutral-5 active:bg-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 mt-1 mr-px ml-auto flex h-9 w-[101px] cursor-pointer items-center gap-1 rounded-lg border bg-white px-2 py-1.5"
                 >
-                  <span className="text-body-xsmall text-gray-80 whitespace-nowrap">더 알아보기</span>
-                  <ArrowRight className="text-gray-70 relative right-px bottom-0.5 flex h-5 w-5" />
+                  <span className="text-body-xsmall text-gray-80 relative top-[0.5px] left-px whitespace-nowrap">
+                    더 알아보기
+                  </span>
+                  <ArrowRight className="text-gray-70 relative left-1 flex h-5 w-5" />
                 </button>
               </div>
             </li>

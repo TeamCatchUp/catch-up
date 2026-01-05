@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
@@ -38,6 +38,10 @@ const SideNavbar = () => {
   const pathname = usePathname();
   const isRagAnswerPage = pathname === '/rag_answer';
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
+
+  useEffect(() => {
+    setIsOpen(!isRagAnswerPage);
+  }, [isRagAnswerPage]);
 
   // SNB item (메뉴 상태별 스타일 CSS)
   const defaultClass =
