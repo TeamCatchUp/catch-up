@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import Add from '/public/icons/icon/add_small.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
@@ -52,8 +54,14 @@ export default function Page() {
   // 더미데이터
   const content = {
     title: '지금 일본 시장 진출 프로젝트에서 가장 큰 걸림돌(Blocker)이 뭐야? 그리고 어떻게 해결하고 있어?',
-    content: '현재 논의된 핵심 이슈는 일본 경쟁사 A사의 가격 정책에 포함된 숨겨진 비용입니다.',
+    content: `
+**핵심 이슈 요약**
+
+- [x] 경쟁사 가격 정책 분석 완료
+- [ ] 파트너사 재협상
+    `,
   };
+
   const sources = [
     {
       id: 1,
@@ -124,7 +132,9 @@ export default function Page() {
 
                 {/* 내용 */}
                 <div className="mx-auto mt-8 flex h-auto w-[773px] flex-col gap-5">
-                  <div className="text-body-medium text-gray-80">{content.content}</div>
+                  <div className="text-body-medium text-gray-80 prose prose-sm prose-neutral max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{content.content}</ReactMarkdown>
+                  </div>
                   <div className="text-body-small text-gray-30">질문과 연관된 39개의 핵심 자료를 선별했어요.</div>
                 </div>
                 {/* 피드백 */}

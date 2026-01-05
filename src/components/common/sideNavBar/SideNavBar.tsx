@@ -34,9 +34,9 @@ const queryItems = [
   { id: 4, content: 'A사 API 연동 오류 원인 정리', href: '/stacks' },
 ];
 
-const SideNavbar = () => {
+const SideNavBar = () => {
   const pathname = usePathname();
-  const isRagAnswerPage = pathname === '/rag_answer';
+  const isRagAnswerPage = pathname === '/ragAnswer';
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
 
   useEffect(() => {
@@ -183,4 +183,4 @@ const SideNavbar = () => {
   );
 };
 
-export default SideNavbar;
+export default SideNavBar;
