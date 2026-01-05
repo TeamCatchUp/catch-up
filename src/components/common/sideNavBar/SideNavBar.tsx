@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
@@ -34,10 +34,14 @@ const queryItems = [
   { id: 4, content: 'A사 API 연동 오류 원인 정리', href: '/stacks' },
 ];
 
-const SideNavbar = () => {
+const SideNavBar = () => {
   const pathname = usePathname();
-  const isRagAnswerPage = pathname === '/rag_answer';
+  const isRagAnswerPage = pathname === '/ragAnswer';
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
+
+  useEffect(() => {
+    setIsOpen(!isRagAnswerPage);
+  }, [isRagAnswerPage]);
 
   // SNB item (메뉴 상태별 스타일 CSS)
   const defaultClass =
@@ -155,7 +159,7 @@ const SideNavbar = () => {
         {isOpen && <div className={`border-neutral-3 relative right-2 w-60 border`} />}
         <div
           className={clsx(
-            'flex h-[54px] cursor-pointer items-center',
+            'outline-gray flex h-[54px] cursor-pointer items-center rounded-lg',
             isOpen ? 'w-[225px] justify-between px-1.5 py-1' : 'justify-center',
           )}
         >
@@ -179,4 +183,4 @@ const SideNavbar = () => {
   );
 };
 
-export default SideNavbar;
+export default SideNavBar;

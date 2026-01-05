@@ -154,7 +154,7 @@ const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
           </div>
           <div className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
             멘션
-            <ArrowRight className="text-gray-30" />
+            <ArrowRight className="text-gray-30 h-6 w-6" />
           </div>
         </button>
 

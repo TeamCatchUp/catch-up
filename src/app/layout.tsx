@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import '@/styles/globals.css';
-import SideNavbar from '@/components/common/sideNavbar/SideNavbar';
+import SideNavBar from '@/components/common/sideNavBar/SideNavBar';
 
 export const metadata: Metadata = {
   title: 'CatchUp',
@@ -14,13 +14,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className="h-screen overflow-hidden">
+      <body className="h-screen">
         <div className="flex h-full">
           <aside>
-            <SideNavbar />
+            <SideNavBar />
           </aside>
           <div className="flex flex-1 flex-col">
-            <main className="flex-1 overflow-y-auto">{children}</main>
+            <main className="flex-1 overflow-auto">{children}</main>
           </div>
         </div>
       </body>
