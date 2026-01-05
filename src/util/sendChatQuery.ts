@@ -3,7 +3,7 @@ import api from 'src/api/axios';
 export const sendChatQuery = async (queryText: string) => {
   const requestBody = {
     query: queryText,
-    sessionId: '045cea3a-615e-4be1-a401-90945519b0cc',
+    sessionId: 'c2dbc41b-c58f-4175-a2bc-9ebf7f8085d1',
     indexName: 'CatchUp_BE_develop_code',
   };
 
