@@ -6,12 +6,22 @@ from app.rag.models.dto import ChatResponse
 
 
 class ChatService:
+    
+    # Compiled Graph
+    _app = None
+    
     def __init__(self):
         pass
+    
+    async def _get_app(self):
+        # 싱글톤
+        if ChatService._app is None:
+            ChatService._app = await get_compiled_graph()
+        return ChatService._app
 
     @observe()
     async def chat(self, query: str, role: str, session_id: str, index_name: str) -> ChatResponse:
-        app = await get_compiled_graph()
+        app = await self._get_app()
 
         inputs = {
                 "messages": [HumanMessage(content=query)],

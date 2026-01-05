@@ -5,7 +5,7 @@ from langchain_openai import ChatOpenAI
 
 class LlmService:
     def __init__(self):
-        self.llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
         self.output_parser = StrOutputParser()
 
