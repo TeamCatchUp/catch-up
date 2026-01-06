@@ -19,6 +19,7 @@ import SourceComponent from '@/components/rag/rightComponent/sourceComponent/Sou
 import DetailedTasksComponent from '@/components/rag/rightComponent/detailedTasksComponent/DetailedTasksComponent';
 import { useParams, useSearchParams } from 'next/navigation';
 import { sendChatQuery } from 'src/util/sendChatQuery';
+import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -156,7 +157,12 @@ export default function Page() {
     }
   };
 
-  if (!chatData) return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
+  if (!chatData)
+    return (
+      <div className="p-10 text-center">
+        <RagAnswerSkeleton />
+      </div>
+    );
 
   // 가장 마지막 답변의 출처 개수 계산
   const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
@@ -205,6 +211,12 @@ export default function Page() {
                     <div className="text-body-small text-gray-30">
                       질문과 연관된 {msg.sources?.length || 0}개의 핵심 자료를 선별했어요.
                     </div>
+
+                    {isLoading && (
+                      <div className="mx-auto flex">
+                        <RagAnswerSkeleton />
+                      </div>
+                    )}
 
                     <div className="flex gap-1">
                       {icon.map((item, i) => {
@@ -259,9 +271,9 @@ export default function Page() {
               </div>
             ))}
 
-            {isLoading && (
+            {/* {isLoading && (
               <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10">답변을 생성하고 있습니다...</div>
-            )}
+            )} */}
           </div>
 
           <div className="w-full flex-none bg-white px-24 py-4">
