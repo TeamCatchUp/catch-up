@@ -10,6 +10,7 @@ interface Source {
   subtitle: string;
   content: string;
   date: string;
+  htmlUrl: string;
 }
 
 interface Props {
