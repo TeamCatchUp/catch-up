@@ -8,6 +8,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph.message import add_messages
 
 from app.observability.langfuse_client import langfuse_handler
+from app.core.config import settings
 from app.rag.factory import get_llm_service, get_vector_repository, get_rerank_service
 from app.rag.models.grade import GradeDocuments
 from app.rag.models.route import RouteQuery
@@ -136,8 +137,8 @@ async def retrieve_node(state: AgentState):
     docs = await meili_repo.retrieve(
             query=query, 
             index_name=target_index, 
-            k=30,
-            semantic_ratio=0.5
+            k=settings.MEILISEARCH_TOP_K,
+            semantic_ratio=settings.MEILISEARCH_SEMANTIC_RATIO
         )
 
     doc_data_list = []
@@ -168,7 +169,7 @@ async def rerank_node(state: AgentState):
         reranked_docs = await rerank_service.rerank(
             query=query,
             documents=retrieved_docs,
-            top_n=5
+            top_n=settings.COHERE_RERANK_TOP_N
         )
         
     return {"retrieved_docs": reranked_docs}

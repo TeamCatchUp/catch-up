@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     LANGFUSE_BASE_URL: str
     
     COHERE_API_KEY: str
+    
+    # Performance variables
+    COHERE_RERANK_TOP_N: int
+    MEILISEARCH_SEMANTIC_RATIO: float
+    MEILISEARCH_TOP_K: int
+    OPENAI_EMBEDDING_MODEL: str
+    OPENAI_CHAT_MODEL: str
 
     model_config = SettingsConfigDict(
         env_prefix="",

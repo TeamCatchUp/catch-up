@@ -18,7 +18,7 @@ embedding_semaphore = asyncio.Semaphore(10)
 
 class LangChainMeiliRepository(VectorStoreRepository):
     def __init__(self):
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        self.embeddings = OpenAIEmbeddings(model=settings.OPENAI_EMBEDDING_MODEL)
 
         self.client = AsyncClient(
             settings.MEILI_HTTP_ADDR, settings.MEILI_KEY, timeout=30
