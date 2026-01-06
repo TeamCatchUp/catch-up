@@ -44,7 +44,7 @@ const LinkTool = () => {
           return (
             <li
               key={idx}
-              className="border-neutral-3 flex h-[85px] w-[549px] items-center justify-between rounded-2xl border bg-white px-5 py-4"
+              className="border-neutral-3 flex h-21.25 w-137.25 items-center justify-between rounded-2xl border bg-white px-5 py-4"
             >
               <div className="flex items-center gap-4">
                 <div className="border-neutral-5 shadow-button flex h-10 w-10 items-center justify-center rounded-xl border">

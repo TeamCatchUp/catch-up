@@ -13,7 +13,7 @@ interface Props {
 const SourceCardsComponent = ({ source }: Props) => {
   return (
     <div className="flex flex-col gap-2">
-      <div className="hover:bg-neutral-2 flex w-[375px] cursor-pointer flex-col gap-1.5 rounded-xl bg-white p-2">
+      <div className="hover:bg-neutral-2 flex w-93.75 cursor-pointer flex-col gap-1.5 rounded-xl bg-white p-2">
         {/* 제목 */}
         <div className="flex gap-1.5">
           <div className="shadow-button border-neutral-2 flex h-7 w-7 items-center justify-center border">

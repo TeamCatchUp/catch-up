@@ -10,13 +10,13 @@ const LinkModal = () => {
       role="dialog"
       aria-modal="true"
       aria-labelledby="link-modal-title"
-      className="shadow-dropdown-menu border-neutral-4 h-[182px] w-[281px] gap-0.5 rounded-2xl border bg-white px-1.5 py-2"
+      className="shadow-dropdown-menu border-neutral-4 h-45.5] w-70.25 gap-0.5 rounded-2xl border bg-white px-1.5 py-2"
     >
       <h2 id="link-model-title" className="sr-only">
         외부 서비스 연결
       </h2>
 
-      <button className="flex h-10 w-[269px] cursor-pointer items-center justify-between p-2">
+      <button className="flex h-10 w-67.25 cursor-pointer items-center justify-between p-2">
         <div className="flex gap-2">
           <JiraLogo className="h-5 w-5" aria-hidden="true" />
           <span className="text-gray-80">Jira</span>
@@ -27,7 +27,7 @@ const LinkModal = () => {
         </div>
       </button>
 
-      <button className="flex h-10 w-[269px] cursor-pointer items-center justify-between p-2">
+      <button className="flex h-10 w-67.25 cursor-pointer items-center justify-between p-2">
         <div className="flex gap-2">
           <ConfluenceLogo className="h-5 w-5" aria-hidden="true" />
           <span className="text-gray-80">Confluence</span>
@@ -38,7 +38,7 @@ const LinkModal = () => {
         </div>
       </button>
 
-      <button className="flex h-10 w-[269px] cursor-pointer items-center justify-between p-2">
+      <button className="flex h-10 w-67.25 cursor-pointer items-center justify-between p-2">
         <div className="flex gap-2">
           <GithubLogo className="h-5.5 w-6" aria-hidden="true" />
           <span className="text-gray-80 relative top-px right-1">Github</span>
@@ -49,7 +49,7 @@ const LinkModal = () => {
         </div>
       </button>
 
-      <button className="flex h-10 w-[269px] cursor-pointer items-center justify-between p-2">
+      <button className="flex h-10 w-67.25 cursor-pointer items-center justify-between p-2">
         <div className="flex gap-2">
           <SlackLogo className="h-5.5 w-5.5" aria-hidden="true" />
           <span className="text-gray-80 relative top-px right-0.5">Slack</span>

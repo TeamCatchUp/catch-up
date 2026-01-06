@@ -21,7 +21,7 @@ const GetAlertModal = () => {
       role="dialog"
       aria-modal="true"
       aria-labelledby="alert-modal-title"
-      className="shadow-dropdown-menu border-neutral-4 h-64 w-[281px] rounded-2xl border bg-white px-1.5 py-2"
+      className="shadow-dropdown-menu border-neutral-4 h-64 w-70.25 rounded-2xl border bg-white px-1.5 py-2"
     >
       <h2 id="alert-modal-title" className="sr-only">
         알림 설정

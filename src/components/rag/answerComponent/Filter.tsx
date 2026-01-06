@@ -32,7 +32,7 @@ const Filter = () => {
   return (
     <div className="flex h-full flex-col justify-center gap-2.5 px-4 py-3">
       <div className="text-body-xsmall text-gray-50">기간 선택</div>
-      <div className="flex h-[35px] items-center gap-1.5">
+      <div className="flex h-8.75 items-center gap-1.5">
         {filter.map((item) => {
           const isActive = activeFilters.includes(item.id);
 
@@ -56,7 +56,7 @@ const Filter = () => {
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           placeholder="키워드 추가"
-          className="text-body-small border-neutral-3 text-gray-70 placeholder:text-gray-30 h-9 w-[273px] rounded-lg border px-3 py-1.5 focus:outline-none"
+          className="text-body-small border-neutral-3 text-gray-70 placeholder:text-gray-30 h-9 w-68.25 rounded-lg border px-3 py-1.5 focus:outline-none"
         />
         <div className="outline-gray flex h-6.5 w-6.5 cursor-pointer items-center justify-center rounded-full">
           <Delete className="h-5 w-5 text-gray-50" />
@@ -67,7 +67,7 @@ const Filter = () => {
           value={secondKeyword}
           onChange={(e) => setSecondKeyword(e.target.value)}
           placeholder="키워드 추가"
-          className="text-body-small border-neutral-3 text-gray-70 placeholder:text-gray-30 h-9 w-[273px] rounded-lg border px-3 py-1.5 focus:outline-none"
+          className="text-body-small border-neutral-3 text-gray-70 placeholder:text-gray-30 h-9 w-68.25 rounded-lg border px-3 py-1.5 focus:outline-none"
         />
         <div className="ml-auto flex h-9 w-18 items-center gap-2">
           <button

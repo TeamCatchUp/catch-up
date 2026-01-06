@@ -47,7 +47,7 @@ export default function Search() {
         ))}
       </div>
       <div
-        className={`shadow-rag-bar border-neutral-4 flex w-[760px] flex-col items-center gap-2.5 border border-solid bg-white ${isFocused ? 'h-[502px] max-h-[540px] min-h-[370px] rounded-[28px] p-3 px-4' : 'rounded-rounded h-auto p-3 px-4'} `}
+        className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center gap-2.5 border border-solid bg-white ${isFocused ? 'h-125.5 max-h-135 min-h-92.5 rounded-[28px] p-3 px-4' : 'rounded-rounded h-auto p-3 px-4'} `}
       >
         <div className="flex w-full items-center justify-between">
           <div className="flex flex-1 items-center gap-2">

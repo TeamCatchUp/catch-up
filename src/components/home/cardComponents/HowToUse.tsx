@@ -40,10 +40,10 @@ const HowToUse = () => {
         {cardData.map((card, idx) => {
           const CardImg = card.image;
           return (
-            <li key={idx} className="border-neutral-3 w-[359px] rounded-2xl border">
-              <CardImg className="h-[151.5px] w-[358px] rounded-t-2xl" />
+            <li key={idx} className="border-neutral-3 w-89.75 rounded-2xl border">
+              <CardImg className="h-[151.5px] w-89.5 rounded-t-2xl" />
 
-              <div className="flex h-48 w-[354px] flex-col gap-3 rounded-b-2xl bg-white p-4 text-gray-50">
+              <div className="flex h-48 w-88.5 flex-col gap-3 rounded-b-2xl bg-white p-4 text-gray-50">
                 <div className="rounded-md2 bg-neutral-2 flex w-max items-center gap-1 px-1.5 py-0.5">
                   <WebTraffic className="h-4 w-4 text-gray-50" />
                   <span className="text-body-xsmall relative top-[0.5px]">{card.label}</span>
@@ -55,7 +55,7 @@ const HowToUse = () => {
 
                 <button
                   type="button"
-                  className="border-neutral-3 active:border-neutral-5 active:bg-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 mt-1 mr-px ml-auto flex h-9 w-[101px] cursor-pointer items-center gap-1 rounded-lg border bg-white px-2 py-1.5"
+                  className="border-neutral-3 active:border-neutral-5 active:bg-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 mt-1 mr-px ml-auto flex h-9 w-25.25 cursor-pointer items-center gap-1 rounded-lg border bg-white px-2 py-1.5"
                 >
                   <span className="text-body-xsmall text-gray-80 relative top-[0.5px] left-px whitespace-nowrap">
                     더 알아보기
