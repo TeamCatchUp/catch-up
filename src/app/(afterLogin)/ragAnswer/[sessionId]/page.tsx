@@ -301,7 +301,7 @@ export default function Page() {
                   <Add className="text-gray-70 h-7 w-7" />
                 </button>
                 <textarea
-                  className="text-body-medium resize-non max-h-[26px] flex-1 overflow-hidden overflow-y-auto outline-none"
+                  className="text-body-medium max-h-[26px] flex-1 resize-none overflow-hidden overflow-y-auto outline-none"
                   placeholder="추가 질문을 입력하세요"
                   value={newInput}
                   onChange={(e) => {
