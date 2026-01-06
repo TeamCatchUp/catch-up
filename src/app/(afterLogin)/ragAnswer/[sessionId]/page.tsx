@@ -277,7 +277,7 @@ export default function Page() {
 
           <div className="w-full flex-none bg-white px-24 py-4">
             <div className="mx-auto w-193.25">
-              <div className="no-scrollbar mb-4 flex justify-start gap-2.5 overflow-x-auto">
+              {/* <div className="no-scrollbar mb-4 flex justify-start gap-2.5 overflow-x-auto">
                 {['연차 신청', '근태 관리', '비용 정산'].map((item, index) => (
                   <button
                     key={index}
@@ -286,7 +286,7 @@ export default function Page() {
                     {item}
                   </button>
                 ))}
-              </div>
+              </div> */}
 
               {/* 입력바 */}
               <div className="border-neutral-4 shadow-rag-bar flex items-center gap-2 rounded-full border bg-white px-3 py-2.5">

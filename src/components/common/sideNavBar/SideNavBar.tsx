@@ -75,7 +75,10 @@ const SideNavBar = () => {
     >
       {/* 로고/열림 버튼 */}
       <div className={clsx('flex', isOpen ? 'items-center justify-between' : '')}>
-        <div className={clsx('flex items-center gap-2.5', isOpen ? 'px-1' : '')}>
+        <div
+          onClick={() => router.push('/')}
+          className={clsx('flex cursor-pointer items-center gap-2.5', isOpen ? 'px-1' : '')}
+        >
           <div className="group border-neutral-3 relative flex h-10 w-10 items-center rounded-xl border-[0.5px] px-1.25 py-1.5">
             <CatchupLogo className="relative left-px h-7.5 w-7" />
 
