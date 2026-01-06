@@ -24,6 +24,8 @@ const SourceCardsComponent = ({ source }: Props) => {
     window.open(source.htmlUrl, '_blank', 'noopener,noreferrer');
   };
 
+  const fileName = source.htmlUrl ? source.htmlUrl.split('/').pop() : source.title;
+
   return (
     <div className="flex flex-col gap-2">
       <div
@@ -36,7 +38,7 @@ const SourceCardsComponent = ({ source }: Props) => {
             <Github className="h-5 w-5" />
           </div>
           <div className="secondary-mono flex cursor-pointer rounded-full px-1.5 py-1">
-            <div className="text-gray-70 text-body-xsmall truncate">{source.title}</div>
+            <div className="text-gray-70 text-body-xsmall truncate">{fileName}</div>
             <ArrowRight className="text-gray-30 h-5 w-5" />
           </div>
         </div>
