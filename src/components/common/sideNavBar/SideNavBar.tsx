@@ -193,7 +193,7 @@ const SideNavBar = () => {
             <DefaultProfile className="h-10 w-10" />
             {isOpen && (
               <div className="relative top-px max-w-31">
-                <div className="text-heading-small text-gray-80">{user?.name ?? '이름없음'}</div>
+                <div className="text-heading-small text-gray-80 truncate">{user?.name ?? '이름없음'}</div>
                 <div className="text-body-small truncate text-gray-50">{user?.email ?? ''}</div>
               </div>
             )}

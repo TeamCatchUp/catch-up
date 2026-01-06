@@ -55,6 +55,7 @@ export default function Page() {
   const day = String(today.getDate()).padStart(2, '0');
 
   const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: number]: boolean }>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
 
@@ -216,7 +217,7 @@ export default function Page() {
                     <div className="border-neutral-3 mb-3 rounded-xl border">
                       <Filter />
                     </div>
-                    <div className="text-body-medium text-gray-80 prose prose-neutral max-w-none">
+                    <div className="text-body-medium text-gray-80 prose prose-neutral max-w-none break-words">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                     </div>
                     <div className="text-body-small text-gray-30">
@@ -231,7 +232,12 @@ export default function Page() {
                           <button
                             key={i}
                             onClick={() => {
-                              if (isThumbsDown) setShowFeedback((prev) => !prev);
+                              if (isThumbsDown) {
+                                setFeedbackVisibleMap((prev) => ({
+                                  ...prev,
+                                  [idx]: !prev[idx],
+                                }));
+                              }
                             }}
                             className={`outline-gray cursor-pointer rounded-lg p-1.5 ${activeClass}`}
                           >
@@ -241,7 +247,7 @@ export default function Page() {
                       })}
                     </div>
                     {/* 피드백 */}
-                    {showFeedback && (
+                    {feedbackVisibleMap[idx] && (
                       <div
                         ref={feedbackRef}
                         className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4"
@@ -251,7 +257,7 @@ export default function Page() {
                             답변이 마음에 들지 않은 이유가 무엇인가요?
                           </span>
                           <div
-                            onClick={() => setShowFeedback(false)}
+                            onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [idx]: false }))}
                             className="outline-gray flex cursor-pointer items-center rounded-full p-0.5"
                           >
                             <Cancel className="relative bottom-[0.5px] h-4.5 w-4.5 text-gray-50" />
@@ -281,11 +287,6 @@ export default function Page() {
                 <RagAnswerSkeleton />
               </div>
             )}
-            {/* {isLoading && (
-              <div className="mx-auto flex">
-                <RagAnswerSkeleton />
-              </div>
-            )} */}
           </div>
 
           <div className="w-full flex-none bg-white px-24 py-4">
@@ -306,12 +307,22 @@ export default function Page() {
                 <button className="outline-gray cursor-pointer rounded-full p-1.5">
                   <Add className="text-gray-70 h-7 w-7" />
                 </button>
-                <input
-                  className="text-body-medium flex-1 outline-none"
+                <textarea
+                  className="text-body-medium resize-non max-h-[26px] flex-1 overflow-hidden overflow-y-auto outline-none"
                   placeholder="추가 질문을 입력하세요"
                   value={newInput}
-                  onChange={(e) => setNewInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                  onChange={(e) => {
+                    setNewInput(e.target.value);
+                    // 내용에 맞춰 높이 자동 조절
+                    e.target.style.height = 'auto';
+                    e.target.style.height = Math.min(e.target.scrollHeight, 26) + 'px';
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
                 />
                 <button
                   onClick={handleSendMessage}
