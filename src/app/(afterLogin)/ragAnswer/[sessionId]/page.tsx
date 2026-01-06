@@ -131,6 +131,7 @@ export default function Page() {
       setIsLoading(false);
     }
   };
+
   const handleSendMessage = async () => {
     if (!newInput.trim() || isLoading || !chatData) return; // chatData 체크 추가
 
@@ -291,7 +292,7 @@ export default function Page() {
 
           <div className="w-full flex-none bg-white px-24 py-4">
             <div className="mx-auto w-193.25">
-              <div className="no-scrollbar mb-4 flex justify-start gap-2.5 overflow-x-auto">
+              {/* <div className="no-scrollbar mb-4 flex justify-start gap-2.5 overflow-x-auto">
                 {['연차 신청', '근태 관리', '비용 정산'].map((item, index) => (
                   <button
                     key={index}
@@ -300,7 +301,7 @@ export default function Page() {
                     {item}
                   </button>
                 ))}
-              </div>
+              </div> */}
 
               {/* 입력바 */}
               <div className="border-neutral-4 shadow-rag-bar flex items-center gap-2 rounded-full border bg-white px-3 py-2.5">
@@ -308,7 +309,7 @@ export default function Page() {
                   <Add className="text-gray-70 h-7 w-7" />
                 </button>
                 <textarea
-                  className="text-body-medium resize-non max-h-[26px] flex-1 overflow-hidden overflow-y-auto outline-none"
+                  className="text-body-medium max-h-[26px] flex-1 resize-none overflow-hidden overflow-y-auto outline-none"
                   placeholder="추가 질문을 입력하세요"
                   value={newInput}
                   onChange={(e) => {

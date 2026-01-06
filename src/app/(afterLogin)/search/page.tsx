@@ -96,9 +96,9 @@ export default function Search() {
         </div>
       </div>
       <div className="text-blue-55 text-body-small flex items-center gap-2.5">
-        {['연차 신청 방법', '권한 신청 방법', '피그마 관련 내부 그라운드 룰', '데이터 요청 방법'].map((text) => (
+        {/* {['연차 신청 방법', '권한 신청 방법', '피그마 관련 내부 그라운드 룰', '데이터 요청 방법'].map((text) => (
           <FilterChip key={text} label={text} />
-        ))}
+        ))} */}
       </div>
       <div
         ref={containerRef}
@@ -133,7 +133,7 @@ export default function Search() {
             onMouseDown={(e) => e.preventDefault()}
             className="border-neutral-4 flex w-full flex-col gap-2.5 overflow-visible border-t pt-4"
           >
-            <div className="no-scrollbar flex items-center gap-1.5 self-stretch overflow-x-auto px-1.5 whitespace-nowrap">
+            <div className="flex items-center gap-1.5 self-stretch px-1.5 whitespace-nowrap">
               <div className="flex items-center gap-2">
                 <SearchOptionButton
                   Icon={IconJira}
