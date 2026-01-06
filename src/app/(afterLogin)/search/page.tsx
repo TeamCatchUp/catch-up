@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconJira from '@/public/icons/logo/Jira.svg';
@@ -23,7 +23,15 @@ export default function Search() {
 
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const toggleOption = (label: string) => {
+    setSelectedOptions((prev) => (prev.includes(label) ? prev.filter((item) => item !== label) : [...prev, label]));
+  };
+
   const handleSubmit = () => {
     if (!inputValue.trim()) return;
 
@@ -31,6 +39,7 @@ export default function Search() {
 
     router.push(`/ragAnswer/${newSessionId}?q=${encodeURIComponent(inputValue)}`);
   };
+
   const hasText = inputValue.trim().length > 0;
 
   return (
@@ -47,6 +56,13 @@ export default function Search() {
         ))}
       </div>
       <div
+        ref={containerRef}
+        onFocus={() => setIsFocused(true)}
+        onBlur={(e) => {
+          if (!containerRef.current?.contains(e.relatedTarget as Node)) {
+            setIsFocused(false);
+          }
+        }}
         className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center gap-2.5 border border-solid bg-white ${isFocused ? 'h-125.5 max-h-135 min-h-92.5 rounded-[28px] p-3 px-4' : 'rounded-rounded h-auto p-3 px-4'} `}
       >
         <div className="flex w-full items-center justify-between">
@@ -57,8 +73,6 @@ export default function Search() {
             <input
               className="text-body-medium w-full outline-none"
               placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
               value={inputValue}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               onChange={(e) => setInputValue(e.target.value)}
@@ -77,16 +91,51 @@ export default function Search() {
           <div className="border-neutral-4 flex w-full flex-col gap-2.5 overflow-y-auto border-t pt-4">
             <div className="flex items-center gap-1.5 self-stretch px-1.5">
               <div className="flex items-center gap-2">
-                <SearchOptionButton Icon={IconJira} label="Jira" />
-                <SearchOptionButton Icon={IconWiki} label="Wiki" />
-                <SearchOptionButton Icon={IconGithub} label="github" />
-                <SearchOptionButton Icon={IconSlack} label="Slack" />
+                <SearchOptionButton
+                  Icon={IconJira}
+                  label="Jira"
+                  selected={selectedOptions.includes('Jira')}
+                  onClick={() => toggleOption('Jira')}
+                />
+                <SearchOptionButton
+                  Icon={IconWiki}
+                  label="Wiki"
+                  selected={selectedOptions.includes('Wiki')}
+                  onClick={() => toggleOption('Wiki')}
+                />
+                <SearchOptionButton
+                  Icon={IconGithub}
+                  label="Github"
+                  selected={selectedOptions.includes('Github')}
+                  onClick={() => toggleOption('Github')}
+                />
+                <SearchOptionButton
+                  Icon={IconSlack}
+                  label="Slack"
+                  selected={selectedOptions.includes('Slack')}
+                  onClick={() => toggleOption('Slack')}
+                />
               </div>
               <IconDivider className="text-gray-5 h-6 w-6" />
               <div className="flex items-center gap-2">
-                <SearchOptionButton Icon={IconPerson} label="담당자" />
-                <SearchOptionButton Icon={IconTag} label="부서명" />
-                <SearchOptionButton Icon={IconSpace} label="프로젝트" />
+                <SearchOptionButton
+                  Icon={IconPerson}
+                  label="담당자"
+                  selected={selectedOptions.includes('담당자')}
+                  onClick={() => toggleOption('담당자')}
+                />
+                <SearchOptionButton
+                  Icon={IconTag}
+                  label="부서명"
+                  selected={selectedOptions.includes('부서명')}
+                  onClick={() => toggleOption('부서명')}
+                />
+                <SearchOptionButton
+                  Icon={IconSpace}
+                  label="프로젝트"
+                  selected={selectedOptions.includes('프로젝트')}
+                  onClick={() => toggleOption('프로젝트')}
+                />
               </div>
               <div className="flex h-7 w-7 items-center justify-center gap-2.5 p-0.5">
                 <IconArrowRight />
