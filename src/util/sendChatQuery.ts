@@ -1,10 +1,10 @@
 import api from 'src/api/axios';
 
-export const sendChatQuery = async (queryText: string, sessionId: string) => {
+export const sendChatQuery = async (queryText: string, sessionId: string, repo: string) => {
   const requestBody = {
     query: queryText,
     sessionId: sessionId,
-    indexName: 'CatchUp_BE_develop_code',
+    indexName: repo,
   };
 
   try {
