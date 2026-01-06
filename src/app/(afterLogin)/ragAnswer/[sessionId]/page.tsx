@@ -276,14 +276,16 @@ export default function Page() {
               </div>
             ))}
 
-            {/* {isLoading && (
-              <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10">답변을 생성하고 있습니다...</div>
-            )} */}
             {isLoading && (
-              <div className="mx-auto flex">
+              <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10">
                 <RagAnswerSkeleton />
               </div>
             )}
+            {/* {isLoading && (
+              <div className="mx-auto flex">
+                <RagAnswerSkeleton />
+              </div>
+            )} */}
           </div>
 
           <div className="w-full flex-none bg-white px-24 py-4">
