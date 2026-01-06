@@ -96,9 +96,9 @@ export default function Search() {
         </div>
       </div>
       <div className="text-blue-55 text-body-small flex items-center gap-2.5">
-        {['연차 신청 방법', '권한 신청 방법', '피그마 관련 내부 그라운드 룰', '데이터 요청 방법'].map((text) => (
+        {/* {['연차 신청 방법', '권한 신청 방법', '피그마 관련 내부 그라운드 룰', '데이터 요청 방법'].map((text) => (
           <FilterChip key={text} label={text} />
-        ))}
+        ))} */}
       </div>
       <div
         ref={containerRef}
