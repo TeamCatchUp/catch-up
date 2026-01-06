@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
 import clsx from 'clsx';
+import { useState, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useUserStore } from '@/store/userStore';
 import CatchupLogo from '/public/icons/logo/logo_catchup.svg';
 import CatchupLogoLetter from '/public/icons/logo/logo_catchup_letter.svg';
 import Close from '/public/icons/icon/close.svg';
@@ -35,17 +35,14 @@ const queryItems = [
   { id: 4, content: 'A사 API 연동 오류 원인 정리' },
 ];
 
-interface UserResponse {
-  name: string;
-  email: string;
-}
-
 const SideNavBar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const isRagAnswerPage = pathname === '/ragAnswer';
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+
+  const user = useUserStore((state) => state.user);
+  const setUser = useUserStore((state) => state.setUser);
 
   useEffect(() => {
     setIsOpen(!isRagAnswerPage);
@@ -57,11 +54,9 @@ const SideNavBar = () => {
   const selectedClass = 'border-neutral-2 border bg-blue-1 hover:border-neutral-2 hover:bg-blue-5';
 
   useEffect(() => {
-    console.log('accessToken:', localStorage.getItem('accessToken'));
     const fetchUser = async () => {
       try {
         const res = await api.get('/api/me');
-        console.log('me response:', res.data);
         setUser(res.data);
       } catch (err) {
         console.error('유저 정보 조회 실패: ', err);
@@ -69,7 +64,7 @@ const SideNavBar = () => {
     };
 
     fetchUser();
-  }, []);
+  }, [setUser]);
 
   return (
     <nav
@@ -200,7 +195,7 @@ const SideNavBar = () => {
             {isOpen && (
               <div className="relative top-px">
                 <div className="text-heading-small text-gray-80">{user?.name ?? '이름없음'}</div>
-                <div className="text-body-small text-gray-50">사업 개발</div>
+                <div className="text-body-small text-gray-50">{user?.email ?? ''}</div>
               </div>
             )}
           </div>
