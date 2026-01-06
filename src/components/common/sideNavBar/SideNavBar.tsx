@@ -52,14 +52,14 @@ const SideNavBar = () => {
     <nav
       className={clsx(
         'border-neutral-3 flex h-screen flex-col gap-4 border-r bg-white',
-        isOpen ? 'w-[241px] px-2 py-2.5' : 'w-[61px] items-center py-5',
+        isOpen ? 'w-60.25 px-2 py-2.5' : 'w-15.25 items-center py-5',
       )}
     >
       {/* 로고/열림 버튼 */}
       <div className={clsx('flex', isOpen ? 'items-center justify-between' : '')}>
         <div className={clsx('flex items-center gap-2.5', isOpen ? 'px-1' : '')}>
-          <div className="group border-neutral-3 relative flex h-10 w-10 cursor-pointer items-center rounded-xl border-[0.5px] px-[5px] py-1.5">
-            <CatchupLogo className="relative left-px h-[30px] w-7" />
+          <div className="group border-neutral-3 relative flex h-10 w-10 cursor-pointer items-center rounded-xl border-[0.5px] px-1.25 py-1.5">
+            <CatchupLogo className="relative left-px h-7.5 w-7" />
 
             {!isOpen && (
               <button
@@ -96,7 +96,7 @@ const SideNavBar = () => {
               className={clsx(
                 'group flex h-10 cursor-pointer items-center rounded-lg',
                 isActive ? selectedClass : defaultClass,
-                isOpen ? 'w-[226px] gap-3 px-2.5 py-2' : 'w-10 items-center justify-center',
+                isOpen ? 'w-56.5 gap-3 px-2.5 py-2' : 'w-10 items-center justify-center',
               )}
             >
               <item.Icon
@@ -116,7 +116,7 @@ const SideNavBar = () => {
                 </span>
               )}
               {isOpen && item.name === '수신함' && (
-                <div className="rounded-md2 bg-blue-1 border-blue-30 ml-auto flex h-[23px] w-[23px] items-center justify-center border-[0.5px] px-0.5">
+                <div className="rounded-md2 bg-blue-1 border-blue-30 ml-auto flex h-5.75 w-5.75 items-center justify-center border-[0.5px] px-0.5">
                   <span className="text-body-small text-blue-40">2</span>
                 </div>
               )}
@@ -157,8 +157,8 @@ const SideNavBar = () => {
         {isOpen && <div className={`border-neutral-3 relative right-2 w-60 border`} />}
         <div
           className={clsx(
-            'outline-gray flex h-[54px] cursor-pointer items-center rounded-lg',
-            isOpen ? 'w-[225px] justify-between px-1.5 py-1' : 'justify-center',
+            'outline-gray flex h-13.5 cursor-pointer items-center rounded-lg',
+            isOpen ? 'w-56.25 justify-between px-1.5 py-1' : 'justify-center',
           )}
         >
           <div className={clsx('flex gap-4', isOpen ? 'mt-auto' : '')}>

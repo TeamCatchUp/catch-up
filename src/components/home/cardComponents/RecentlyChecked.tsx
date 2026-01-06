@@ -41,7 +41,7 @@ const RecentlyChecked = () => {
     <section className="flex flex-col gap-3">
       <header className="flex items-center">
         <div className="border-neutral-3 bg-blue-1 mr-2.5 rounded-lg border-[0.5px] p-1.5">
-          <Storage className="h-[22px] w-[22px] text-blue-50" />
+          <Storage className="h-5.5 w-5.5 text-blue-50" />
         </div>
         <h2 className="text-heading-large text-gray-80">최근 확인한 업무</h2>
         <ArrowRight className="relative left-1 h-6 w-6 cursor-pointer p-0.5 text-gray-50" />
@@ -52,14 +52,14 @@ const RecentlyChecked = () => {
           return (
             <li
               key={idx}
-              className="border-neutral-3 flex w-[359px] flex-col gap-3 rounded-2xl border bg-white px-5 py-4"
+              className="border-neutral-3 flex w-89.75 flex-col gap-3 rounded-2xl border bg-white px-5 py-4"
             >
-              <Folder className="relative right-1 h-[42px] w-[62px]" />
+              <Folder className="relative right-1 h-10.5 w-15.5" />
 
               <h3 className="text-heading-medium text-gray-80 truncate">{card.title}</h3>
 
               <div className="flex flex-col">
-                <div className="flex flex-col gap-[5px]">
+                <div className="flex flex-col gap-1.25">
                   <div className="flex gap-4">
                     <div className="flex items-center gap-1.5">
                       <Depart className="text-gray-20 h-4 w-4" />
@@ -74,14 +74,14 @@ const RecentlyChecked = () => {
                       <span className="text-body-small text-gray-50">담당자</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <LoadingProfile className="h-[25px] w-[25px]" />
+                      <LoadingProfile className="h-6.25 w-6.25" />
                       <span className="text-body-small text-gray-70">{card.manager}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="border-neutral-2 w-[317px] border"></div>
+              <div className="border-neutral-2 w-79.25 border"></div>
 
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-1.5">

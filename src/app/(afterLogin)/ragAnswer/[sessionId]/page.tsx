@@ -180,7 +180,7 @@ export default function Page() {
 
             {/* 채팅 내용 순회 */}
             {chatData.messages.map((msg: any, idx: number) => (
-              <div key={idx} className="mx-auto flex w-[773px] flex-col gap-6">
+              <div key={idx} className="mx-auto flex w-193.25 flex-col gap-6">
                 {msg.role === 'user' ? (
                   <div className="flex flex-col gap-4">
                     <div className="flex items-center justify-between">
@@ -190,7 +190,7 @@ export default function Page() {
                         <span className="text-body-xsmall text-gray-80">수정하기</span>
                       </button>
                     </div>
-                    <div className="bg-neutral-3 h-[1px] w-full" />
+                    <div className="bg-neutral-3 h-px w-full" />
                   </div>
                 ) : (
                   <div className="flex flex-col gap-5">
@@ -217,12 +217,12 @@ export default function Page() {
             ))}
 
             {isLoading && (
-              <div className="text-gray-40 mx-auto w-[773px] animate-pulse pb-10">답변을 생성하고 있습니다...</div>
+              <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10">답변을 생성하고 있습니다...</div>
             )}
           </div>
 
           <div className="border-neutral-2 w-full flex-none border-t bg-white px-24 py-6">
-            <div className="mx-auto w-[773px]">
+            <div className="mx-auto w-193.25">
               <div className="no-scrollbar mb-4 flex justify-start gap-2.5 overflow-x-auto">
                 {['연차 신청', '근태 관리', '비용 정산'].map((item, index) => (
                   <button
@@ -262,7 +262,7 @@ export default function Page() {
       </div>
 
       {/* 우측 사이드바 */}
-      <div className="border-neutral-3 flex w-[405px] flex-none flex-col border-l bg-white">
+      <div className="border-neutral-3 flex w-101.25 flex-none flex-col border-l bg-white">
         <RagRightAdditionalHeader activeTab={activeTab} onChange={setActiveTab} sourceCount={currentSources.length} />
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'source' && <SourceComponent sources={currentSources} />}

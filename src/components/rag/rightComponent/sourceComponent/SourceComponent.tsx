@@ -34,7 +34,7 @@ const SourceComponent = ({ sources }: Props) => {
   };
 
   return (
-    <div className="flex w-[405px] flex-col gap-3 px-4 py-3">
+    <div className="flex w-101.25 flex-col gap-3 px-4 py-3">
       {/* 필터링 */}
       <div className="-mb-4 flex w-full overflow-x-auto">
         <div className="flex h-9 min-w-max items-center gap-0.5">

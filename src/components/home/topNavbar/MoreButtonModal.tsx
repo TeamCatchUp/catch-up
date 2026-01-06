@@ -61,7 +61,7 @@ const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
       role="dialog"
       aria-modal="true"
       aria-labelledby="more-modal-title"
-      className="border-neutral-4 shadow-dropdown-menu flex h-[368px] w-[283px] flex-col gap-3 rounded-2xl border bg-white px-1.5 py-3"
+      className="border-neutral-4 shadow-dropdown-menu flex h-92 w-70.75 flex-col gap-3 rounded-2xl border bg-white px-1.5 py-3"
     >
       <section className="border-neutral-3 px-1.5">
         <label htmlFor="more-search" className="sr-only">
@@ -75,7 +75,7 @@ const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
             setIsLinkModalOpen(false);
             setIsGetAlertModalOpen(false);
           }}
-          className="text-body-small placeholder-gray-30 focus:caret-blue-30 focus:bg-neutral-1 focus:border-blue-30 border-neutral-3 h-10 w-[257px] rounded-xl border px-3 py-2 transition-colors outline-none"
+          className="text-body-small placeholder-gray-30 focus:caret-blue-30 focus:bg-neutral-1 focus:border-blue-30 border-neutral-3 h-10 w-64.25 rounded-xl border px-3 py-2 transition-colors outline-none"
         />
       </section>
 
@@ -173,12 +173,12 @@ const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
       </button>
 
       {isLinkModalOpen && (
-        <div className="absolute top-[167px] right-[275px]">
+        <div className="absolute top-41.75 right-68.75">
           <LinkModal />
         </div>
       )}
       {isGetAlertModalOpen && (
-        <div className="absolute top-[167px] right-[275px]">
+        <div className="absolute top-41.75 right-68.75">
           <GetAlertModal />
         </div>
       )}
