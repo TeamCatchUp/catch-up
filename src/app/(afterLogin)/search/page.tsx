@@ -21,6 +21,7 @@ import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { useOutsideClick } from '@/hooks/useOutsideClick';
 import DropdownModal from '@/components/modal/DropdownModal';
 import { useUserStore } from '@/store/userStore';
+import { RECOMMAND_QUESTIONS } from '@/constants/recommandQuestion';
 
 export default function Search() {
   const router = useRouter();
@@ -33,6 +34,12 @@ export default function Search() {
   const [isGithubModalOpen, setIsGithubModalOpen] = useState(false);
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
 
+  const currentSuggestions = selectedRepoId ? RECOMMAND_QUESTIONS[selectedRepoId] || [] : [];
+
+  const handleSuggestionClick = (question: string) => {
+    setInputValue(question);
+    inputRef.current?.focus();
+  };
   const gitToggleOption = (label: string) => {
     setSelectedOptions((prev) => (prev.includes(label) ? prev.filter((item) => item !== label) : [...prev, label]));
   };
@@ -143,11 +150,10 @@ export default function Search() {
                 <div className="relative">
                   <SearchOptionButton
                     Icon={IconGithub}
-                    label={selectedRepoId ? `Github : ${selectedRepoId}` : 'Github'}
+                    label={selectedRepoId ? 'Github' + ':' + selectedRepoId : 'Github'}
                     selected={selectedOptions.includes('Github')}
                     onClick={handleGithubClick}
                   />
-
                   {isGithubModalOpen && (
                     <div className="absolute top-full left-0 z-[100] mt-2">
                       <DropdownModal
@@ -196,9 +202,15 @@ export default function Search() {
               </div>
             </div>
             <div className="flex flex-[1_0_0] flex-col items-start gap-4 self-stretch">
-              <SearchSuggestion title="최근 질문" />
-              <SearchSuggestion title="최근 확인한 지라 티켓" />
-              <SearchSuggestion title="캐치업에서 열어본 파일" />
+              {selectedRepoId && currentSuggestions.length > 0 && (
+                <div className="border-neutral-1 flex flex-[1_0_0] flex-col items-start gap-4 self-stretch border-t pt-4">
+                  <SearchSuggestion
+                    title="레포지토리 맞춤 질문"
+                    suggestions={currentSuggestions}
+                    onItemClick={(question) => setInputValue(question)}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
