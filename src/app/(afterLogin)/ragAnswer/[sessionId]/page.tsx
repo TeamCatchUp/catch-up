@@ -212,12 +212,6 @@ export default function Page() {
                       질문과 연관된 {msg.sources?.length || 0}개의 핵심 자료를 선별했어요.
                     </div>
 
-                    {isLoading && (
-                      <div className="mx-auto flex">
-                        <RagAnswerSkeleton />
-                      </div>
-                    )}
-
                     <div className="flex gap-1">
                       {icon.map((item, i) => {
                         const isThumbsDown = item.name === 'ThumbsDown';
@@ -274,6 +268,11 @@ export default function Page() {
             {/* {isLoading && (
               <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10">답변을 생성하고 있습니다...</div>
             )} */}
+            {isLoading && (
+              <div className="mx-auto flex">
+                <RagAnswerSkeleton />
+              </div>
+            )}
           </div>
 
           <div className="w-full flex-none bg-white px-24 py-4">
