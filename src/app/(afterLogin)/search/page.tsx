@@ -20,6 +20,7 @@ import { SearchSuggestion } from '@/components/UI/SearchSuggestion';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { useOutsideClick } from '@/hooks/useOutsideClick';
 import DropdownModal from '@/components/modal/DropdownModal';
+import { useUserStore } from '@/store/userStore';
 
 export default function Search() {
   const router = useRouter();
@@ -47,6 +48,7 @@ export default function Search() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const user = useUserStore((state) => state.user);
 
   useEscapeKey(() => {
     setIsFocused(false);
@@ -81,7 +83,7 @@ export default function Search() {
   return (
     <div className="flex flex-col items-center gap-4 self-stretch pt-16 pb-16">
       <div className="flex h-24 flex-col items-center justify-center gap-3">
-        <div className="text-display-xlarge text-nomal-normal">반갑습니다, 이진수님!</div>
+        <div className="text-display-xlarge text-nomal-normal">반갑습니다, {user?.name}님!</div>
         <div className="text-heading-large text-nomal-alternative">
           무엇을 도와드릴까요? 필요한 업무정보를 찾아보세요.
         </div>

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
 import clsx from 'clsx';
+import { useState, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useUserStore } from '@/store/userStore';
 import CatchupLogo from '/public/icons/logo/logo_catchup.svg';
 import CatchupLogoLetter from '/public/icons/logo/logo_catchup_letter.svg';
 import Close from '/public/icons/icon/close.svg';
@@ -17,6 +17,7 @@ import DefaultProfile from '/public/icons/icon/default_profile.svg';
 import UnfoldMore from '/public/icons/icon/unfold_more.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
+import api from '@/api/axios';
 
 const navItems = [
   { name: '홈', href: '/', Icon: Home },
@@ -40,6 +41,9 @@ const SideNavBar = () => {
   const isRagAnswerPage = pathname === '/ragAnswer';
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
 
+  const user = useUserStore((state) => state.user);
+  const setUser = useUserStore((state) => state.setUser);
+
   useEffect(() => {
     setIsOpen(!isRagAnswerPage);
   }, [isRagAnswerPage]);
@@ -48,6 +52,19 @@ const SideNavBar = () => {
   const defaultClass =
     'border-transparent bg-white hover:bg-neutral-2 hover:border-neutral-2 active:bg-neutral-3 active:border active:border-neutral-3'; // hover, active
   const selectedClass = 'border-neutral-2 border bg-blue-1 hover:border-neutral-2 hover:bg-blue-5';
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await api.get('/api/me');
+        setUser(res.data);
+      } catch (err) {
+        console.error('유저 정보 조회 실패: ', err);
+      }
+    };
+
+    fetchUser();
+  }, [setUser]);
 
   return (
     <nav
@@ -59,7 +76,7 @@ const SideNavBar = () => {
       {/* 로고/열림 버튼 */}
       <div className={clsx('flex', isOpen ? 'items-center justify-between' : '')}>
         <div className={clsx('flex items-center gap-2.5', isOpen ? 'px-1' : '')}>
-          <div className="group border-neutral-3 relative flex h-10 w-10 cursor-pointer items-center rounded-xl border-[0.5px] px-1.25 py-1.5">
+          <div className="group border-neutral-3 relative flex h-10 w-10 items-center rounded-xl border-[0.5px] px-1.25 py-1.5">
             <CatchupLogo className="relative left-px h-7.5 w-7" />
 
             {!isOpen && (
@@ -79,10 +96,9 @@ const SideNavBar = () => {
           )}
         </div>
         {isOpen && (
-          <Close
-            onClick={() => setIsOpen(false)}
-            className="relative right-1 bottom-0.5 h-6 w-6 cursor-pointer p-0.5 text-gray-50"
-          />
+          <div className="outline-gray flex items-center justify-center rounded-full p-0.5">
+            <Close onClick={() => setIsOpen(false)} className="h-6 w-6 cursor-pointer text-gray-50" />
+          </div>
         )}
       </div>
 
@@ -176,9 +192,9 @@ const SideNavBar = () => {
           <div className={clsx('flex gap-4', isOpen ? 'mt-auto' : '')}>
             <DefaultProfile className="h-10 w-10" />
             {isOpen && (
-              <div className="relative top-px">
-                <div className="text-heading-small text-gray-80">이진수</div>
-                <div className="text-body-small text-gray-50">사업 개발</div>
+              <div className="relative top-px max-w-31">
+                <div className="text-heading-small text-gray-80">{user?.name ?? '이름없음'}</div>
+                <div className="text-body-small truncate text-gray-50">{user?.email ?? ''}</div>
               </div>
             )}
           </div>
