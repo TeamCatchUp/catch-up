@@ -76,7 +76,7 @@ const SideNavBar = () => {
       {/* 로고/열림 버튼 */}
       <div className={clsx('flex', isOpen ? 'items-center justify-between' : '')}>
         <div className={clsx('flex items-center gap-2.5', isOpen ? 'px-1' : '')}>
-          <div className="group border-neutral-3 relative flex h-10 w-10 cursor-pointer items-center rounded-xl border-[0.5px] px-1.25 py-1.5">
+          <div className="group border-neutral-3 relative flex h-10 w-10 items-center rounded-xl border-[0.5px] px-1.25 py-1.5">
             <CatchupLogo className="relative left-px h-7.5 w-7" />
 
             {!isOpen && (
@@ -96,10 +96,9 @@ const SideNavBar = () => {
           )}
         </div>
         {isOpen && (
-          <Close
-            onClick={() => setIsOpen(false)}
-            className="relative right-1 bottom-0.5 h-6 w-6 cursor-pointer p-0.5 text-gray-50"
-          />
+          <div className="outline-gray flex items-center justify-center rounded-full p-0.5">
+            <Close onClick={() => setIsOpen(false)} className="h-6 w-6 cursor-pointer text-gray-50" />
+          </div>
         )}
       </div>
 
@@ -193,9 +192,9 @@ const SideNavBar = () => {
           <div className={clsx('flex gap-4', isOpen ? 'mt-auto' : '')}>
             <DefaultProfile className="h-10 w-10" />
             {isOpen && (
-              <div className="relative top-px">
+              <div className="relative top-px max-w-31">
                 <div className="text-heading-small text-gray-80">{user?.name ?? '이름없음'}</div>
-                <div className="text-body-small text-gray-50">{user?.email ?? ''}</div>
+                <div className="text-body-small truncate text-gray-50">{user?.email ?? ''}</div>
               </div>
             )}
           </div>
