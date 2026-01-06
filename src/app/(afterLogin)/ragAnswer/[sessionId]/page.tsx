@@ -168,11 +168,14 @@ export default function Page() {
         <RagContentHeader />
 
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r">
-          <div ref={scrollRef} className="flex flex-1 flex-col gap-10 overflow-y-auto scroll-smooth px-24 py-9">
+          <div
+            ref={scrollRef}
+            className="flex flex-1 flex-col items-center gap-10 overflow-y-auto scroll-smooth px-24 py-9"
+          >
             {/* 날짜 표시 */}
-            <div className="flex items-center justify-center gap-4">
+            <div className="flex w-192.75 items-center justify-center gap-4">
               <div className="border-neutral-4 flex-1 border-t" />
-              <span className="text-body-xsmall bg-neutral-1 rounded-full px-1.5 py-1 text-gray-50">
+              <span className="text-body-xsmall outline-gray cursor-pointer rounded-full px-1.5 py-1 text-gray-50">
                 {month}.{day}
               </span>
               <div className="border-neutral-4 flex-1 border-t" />
@@ -185,16 +188,15 @@ export default function Page() {
                   <div className="flex flex-col gap-4">
                     <div className="flex items-center justify-between">
                       <div className="text-heading-xlarge text-gray-70 flex-1">{msg.content}</div>
-                      <button className="border-neutral-3 hover:bg-neutral-1 flex items-center gap-1 self-end rounded-lg border px-2 py-1">
+                      <button className="border-neutral-3 outline-gray flex cursor-pointer items-center justify-center gap-1 self-end rounded-lg border px-2 py-1">
                         <EditPencil className="text-gray-70 h-5 w-5" />
-                        <span className="text-body-xsmall text-gray-80">수정하기</span>
+                        <span className="text-body-xsmall text-gray-80 outline-gray">수정하기</span>
                       </button>
                     </div>
-                    <div className="bg-neutral-3 h-px w-full" />
                   </div>
                 ) : (
                   <div className="flex flex-col gap-5">
-                    <div className="border-neutral-3 bg-neutral-1 rounded-xl border p-4">
+                    <div className="border-neutral-3 mb-3 rounded-xl border">
                       <Filter />
                     </div>
                     <div className="text-body-medium text-gray-80 prose prose-neutral max-w-none">
@@ -205,12 +207,53 @@ export default function Page() {
                     </div>
 
                     <div className="flex gap-1">
-                      {icon.map((item, i) => (
-                        <button key={i} className="hover:bg-neutral-2 rounded-lg p-1.5">
-                          <item.icon className="h-6 w-6 text-gray-50" />
-                        </button>
-                      ))}
+                      {icon.map((item, i) => {
+                        const isThumbsDown = item.name === 'ThumbsDown';
+                        const activeClass = isThumbsDown && showFeedback ? 'bg-neutral-3 border-neutral-5' : '';
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              if (isThumbsDown) setShowFeedback((prev) => !prev);
+                            }}
+                            className={`outline-gray cursor-pointer rounded-lg p-1.5 ${activeClass}`}
+                          >
+                            <item.icon className="h-6 w-6 text-gray-50" />
+                          </button>
+                        );
+                      })}
                     </div>
+                    {/* 피드백 */}
+                    {showFeedback && (
+                      <div
+                        ref={feedbackRef}
+                        className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4"
+                      >
+                        <div className="flex justify-between">
+                          <span className="text-body-small text-gray-50">
+                            답변이 마음에 들지 않은 이유가 무엇인가요?
+                          </span>
+                          <div
+                            onClick={() => setShowFeedback(false)}
+                            className="outline-gray flex cursor-pointer items-center rounded-full p-0.5"
+                          >
+                            <Cancel className="relative bottom-[0.5px] h-4.5 w-4.5 text-gray-50" />
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
+                          {feedback.map((feedback, idx) => {
+                            return (
+                              <button
+                                key={idx}
+                                className="outline-gray border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1"
+                              >
+                                {feedback.content}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -221,13 +264,13 @@ export default function Page() {
             )}
           </div>
 
-          <div className="border-neutral-2 w-full flex-none border-t bg-white px-24 py-6">
+          <div className="w-full flex-none bg-white px-24 py-4">
             <div className="mx-auto w-193.25">
               <div className="no-scrollbar mb-4 flex justify-start gap-2.5 overflow-x-auto">
                 {['연차 신청', '근태 관리', '비용 정산'].map((item, index) => (
                   <button
                     key={index}
-                    className="border-blue-30 bg-blue-1 text-body-small text-blue-55 rounded-full border px-3 py-1.5 whitespace-nowrap"
+                    className="border-blue-30 bg-blue-1 text-body-small hover:bg-blue-5 active:border-blue-45 text-blue-55 cursor-pointer rounded-full border px-3 py-1.5 whitespace-nowrap"
                   >
                     {item}
                   </button>
@@ -236,7 +279,7 @@ export default function Page() {
 
               {/* 입력바 */}
               <div className="border-neutral-4 shadow-rag-bar flex items-center gap-2 rounded-full border bg-white px-3 py-2.5">
-                <button className="hover:bg-neutral-1 rounded-full p-1.5">
+                <button className="outline-gray cursor-pointer rounded-full p-1.5">
                   <Add className="text-gray-70 h-7 w-7" />
                 </button>
                 <input
@@ -249,11 +292,13 @@ export default function Page() {
                 <button
                   onClick={handleSendMessage}
                   disabled={isLoading || !newInput.trim()}
-                  className={`rounded-full p-2 transition-colors ${
+                  className={`cursor-pointer rounded-full p-2 transition-colors ${
                     newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border'
                   }`}
                 >
-                  <ArrowSend className={`h-6 w-6 ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`} />
+                  <ArrowSend
+                    className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
+                  />
                 </button>
               </div>
             </div>

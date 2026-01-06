@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import clsx from 'clsx';
 import CatchupLogo from '/public/icons/logo/logo_catchup.svg';
 import CatchupLogoLetter from '/public/icons/logo/logo_catchup_letter.svg';
 import Close from '/public/icons/icon/close.svg';
 import Open from '/public/icons/icon/open.svg';
 import Home from '/public/icons/icon/home.svg';
-import Search from '/public/icons/icon/search.svg';
+import Search from '/public/icons/icon/edit_square.svg';
 import Dashboard from '/public/icons/icon/dashboard.svg';
 import Stacks from '/public/icons/icon/stacks.svg';
 import Mail from '/public/icons/icon/mail.svg';
@@ -20,7 +20,7 @@ import ArrowRight from '/public/icons/icon/arrow_right.svg';
 
 const navItems = [
   { name: '홈', href: '/', Icon: Home },
-  { name: '업무이력 검색', href: '/search', Icon: Search },
+  { name: '캐치스턴트 AI', href: '/search', Icon: Search },
   { name: '내 업무 관리하기', href: '/dashboard', Icon: Dashboard },
   { name: '인수인계 DB', href: '/stacks', Icon: Stacks },
   { name: '수신함', href: '/mail', Icon: Mail },
@@ -36,6 +36,7 @@ const queryItems = [
 
 const SideNavBar = () => {
   const pathname = usePathname();
+  const router = useRouter();
   const isRagAnswerPage = pathname === '/ragAnswer';
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
 
@@ -89,10 +90,21 @@ const SideNavBar = () => {
       <div className={`flex flex-col ${isOpen ? 'gap-1' : 'gap-2'}`}>
         {navItems.map((item) => {
           const isActive = pathname === item.href;
+
+          const handleClick = () => {
+            if (item.href === '/search') {
+              const newSessionId = crypto.randomUUID();
+              // router.push(`/ragAnswer/${newSessionId}`);
+              router.push(`/search`);
+            } else {
+              router.push(item.href);
+            }
+          };
+
           return (
-            <Link
+            <button
               key={item.name}
-              href={item.href}
+              onClick={handleClick}
               className={clsx(
                 'group flex h-10 cursor-pointer items-center rounded-lg',
                 isActive ? selectedClass : defaultClass,
@@ -120,7 +132,7 @@ const SideNavBar = () => {
                   <span className="text-body-small text-blue-40">2</span>
                 </div>
               )}
-            </Link>
+            </button>
           );
         })}
       </div>
