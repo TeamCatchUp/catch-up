@@ -17,6 +17,7 @@ import DefaultProfile from '/public/icons/icon/default_profile.svg';
 import UnfoldMore from '/public/icons/icon/unfold_more.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
+import api from '@/api/axios';
 
 const navItems = [
   { name: '홈', href: '/', Icon: Home },
@@ -34,11 +35,17 @@ const queryItems = [
   { id: 4, content: 'A사 API 연동 오류 원인 정리' },
 ];
 
+interface UserResponse {
+  name: string;
+  email: string;
+}
+
 const SideNavBar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const isRagAnswerPage = pathname === '/ragAnswer';
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
 
   useEffect(() => {
     setIsOpen(!isRagAnswerPage);
@@ -48,6 +55,21 @@ const SideNavBar = () => {
   const defaultClass =
     'border-transparent bg-white hover:bg-neutral-2 hover:border-neutral-2 active:bg-neutral-3 active:border active:border-neutral-3'; // hover, active
   const selectedClass = 'border-neutral-2 border bg-blue-1 hover:border-neutral-2 hover:bg-blue-5';
+
+  useEffect(() => {
+    console.log('accessToken:', localStorage.getItem('accessToken'));
+    const fetchUser = async () => {
+      try {
+        const res = await api.get('/api/me');
+        console.log('me response:', res.data);
+        setUser(res.data);
+      } catch (err) {
+        console.error('유저 정보 조회 실패: ', err);
+      }
+    };
+
+    fetchUser();
+  }, []);
 
   return (
     <nav
@@ -177,7 +199,7 @@ const SideNavBar = () => {
             <DefaultProfile className="h-10 w-10" />
             {isOpen && (
               <div className="relative top-px">
-                <div className="text-heading-small text-gray-80">이진수</div>
+                <div className="text-heading-small text-gray-80">{user?.name ?? '이름없음'}</div>
                 <div className="text-body-small text-gray-50">사업 개발</div>
               </div>
             )}
