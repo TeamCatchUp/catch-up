@@ -19,6 +19,7 @@ import { SearchOptionButton } from '@/components/UI/SearchOptionButton';
 import { SearchSuggestion } from '@/components/UI/SearchSuggestion';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { useOutsideClick } from '@/hooks/useOutsideClick';
+import DropdownModal from '@/components/modal/DropdownModal';
 import { useUserStore } from '@/store/userStore';
 
 export default function Search() {
@@ -28,6 +29,22 @@ export default function Search() {
   const [isFocused, setIsFocused] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const [isGithubModalOpen, setIsGithubModalOpen] = useState(false);
+  const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
+
+  const gitToggleOption = (label: string) => {
+    setSelectedOptions((prev) => (prev.includes(label) ? prev.filter((item) => item !== label) : [...prev, label]));
+  };
+
+  const handleGithubClick = () => {
+    if (selectedOptions.includes('Github')) {
+      toggleOption('Github');
+      setSelectedRepoId(null);
+    } else {
+      setIsGithubModalOpen(true);
+    }
+  };
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -50,9 +67,15 @@ export default function Search() {
   const handleSubmit = () => {
     if (!inputValue.trim()) return;
 
-    const newSessionId = crypto.randomUUID();
+    if (selectedOptions.includes('Github') && !selectedRepoId) {
+      alert('레포지토리를 선택해주세요.');
+      setIsGithubModalOpen(true);
+      return;
+    }
 
-    router.push(`/ragAnswer/${newSessionId}?q=${encodeURIComponent(inputValue)}`);
+    const newSessionId = crypto.randomUUID();
+    const githubQuery = selectedRepoId ? `&repo=${selectedRepoId}` : '';
+    router.push(`/ragAnswer/${newSessionId}?q=${encodeURIComponent(inputValue)}${githubQuery}`);
   };
 
   const hasText = inputValue.trim().length > 0;
@@ -101,7 +124,7 @@ export default function Search() {
         {isFocused && (
           <div
             onMouseDown={(e) => e.preventDefault()}
-            className="border-neutral-4 flex w-full flex-col gap-2.5 overflow-y-auto border-t pt-4"
+            className="border-neutral-4 flex w-full flex-col gap-2.5 overflow-visible border-t pt-4"
           >
             <div className="flex items-center gap-1.5 self-stretch px-1.5">
               <div className="flex items-center gap-2">
@@ -117,12 +140,30 @@ export default function Search() {
                   selected={selectedOptions.includes('Wiki')}
                   onClick={() => toggleOption('Wiki')}
                 />
-                <SearchOptionButton
-                  Icon={IconGithub}
-                  label="Github"
-                  selected={selectedOptions.includes('Github')}
-                  onClick={() => toggleOption('Github')}
-                />
+                <div className="relative">
+                  <SearchOptionButton
+                    Icon={IconGithub}
+                    label="Github"
+                    selected={selectedOptions.includes('Github')}
+                    onClick={handleGithubClick}
+                  />
+
+                  {/* 💡 DropdownModal 배치 */}
+                  {isGithubModalOpen && (
+                    <div className="absolute top-full left-0 z-[100] mt-2">
+                      <DropdownModal
+                        onClose={() => setIsGithubModalOpen(false)}
+                        onSelect={(id) => {
+                          setSelectedRepoId(id);
+                          if (!selectedOptions.includes('Github')) {
+                            gitToggleOption('Github');
+                          }
+                          setIsGithubModalOpen(false);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
                 <SearchOptionButton
                   Icon={IconSlack}
                   label="Slack"

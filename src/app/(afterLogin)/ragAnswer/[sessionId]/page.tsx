@@ -45,6 +45,7 @@ export default function Page() {
   const params = useParams();
   const searchParams = useSearchParams();
   const sessionId = params.sessionId as string;
+  const repo = searchParams.get('repo');
   const [chatData, setChatData] = useState<any>(null);
 
   const initialQuery = searchParams.get('q'); // URL에서 질문 추출
@@ -95,46 +96,56 @@ export default function Page() {
 
   const fetchFirstAnswer = async (query: string) => {
     setIsLoading(true);
+    const safeRepo = repo || '';
+
     const initialData = {
       sessionId,
       title: query,
+      repo: safeRepo,
       messages: [{ role: 'user', content: query, timestamp: new Date().toISOString() }],
     };
     setChatData(initialData);
 
     try {
-      const result = await sendChatQuery(query, sessionId);
+      const result = await sendChatQuery(query, sessionId, safeRepo);
+
       const finalData = {
         ...initialData,
         messages: [
           ...initialData.messages,
-          { role: 'assistant', content: result.answer, sources: result.sources, timestamp: new Date().toISOString() },
+          {
+            role: 'assistant',
+            content: result.answer,
+            sources: result.sources || [],
+            timestamp: new Date().toISOString(),
+          },
         ],
       };
       setChatData(finalData);
       localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
     } catch (error) {
+      console.error(error);
       alert('답변을 가져오는데 실패했습니다.');
     } finally {
       setIsLoading(false);
     }
   };
-
   const handleSendMessage = async () => {
-    if (!newInput.trim() || isLoading) return;
+    if (!newInput.trim() || isLoading || !chatData) return; // chatData 체크 추가
+
+    const safeRepo = repo || chatData.repo || ''; // 현재 상태의 repo 활용
 
     const userMessage = { role: 'user', content: newInput, timestamp: new Date().toISOString() };
-
     const updatedData = {
       ...chatData,
-      messages: [...chatData.messages, userMessage],
+      messages: [...(chatData.messages || []), userMessage],
     };
+
     setChatData(updatedData);
     setNewInput('');
     setIsLoading(true);
-
     try {
-      const result = await sendChatQuery(newInput, sessionId);
+      const result = await sendChatQuery(newInput, sessionId, safeRepo);
 
       const assistantMessage = {
         role: 'assistant',
