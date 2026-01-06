@@ -11,7 +11,7 @@ export const SearchOptionButton = ({ Icon, label, selected = false, onClick }: S
   <button
     onClick={onClick}
     className={clsx(
-      'flex h-9 max-w-36 cursor-pointer items-center justify-center gap-1 rounded-lg border border-solid px-2 py-1.5 transition-colors',
+      'flex h-9 cursor-pointer items-center justify-center gap-1 rounded-lg border border-solid px-2 py-1.5 transition-colors',
       selected ? 'border-blue-30 bg-blue-1' : 'border-neutral-3 bg-white',
       !selected && 'hover:border-neutral-3 hover:bg-neutral-2 active:border-neutral-3 active:bg-neutral-3',
     )}

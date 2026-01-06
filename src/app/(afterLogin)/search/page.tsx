@@ -126,7 +126,7 @@ export default function Search() {
             onMouseDown={(e) => e.preventDefault()}
             className="border-neutral-4 flex w-full flex-col gap-2.5 overflow-visible border-t pt-4"
           >
-            <div className="flex items-center gap-1.5 self-stretch px-1.5">
+            <div className="no-scrollbar flex items-center gap-1.5 self-stretch overflow-x-auto px-1.5 whitespace-nowrap">
               <div className="flex items-center gap-2">
                 <SearchOptionButton
                   Icon={IconJira}
@@ -143,12 +143,11 @@ export default function Search() {
                 <div className="relative">
                   <SearchOptionButton
                     Icon={IconGithub}
-                    label="Github"
+                    label={selectedRepoId ? `Github : ${selectedRepoId}` : 'Github'}
                     selected={selectedOptions.includes('Github')}
                     onClick={handleGithubClick}
                   />
 
-                  {/* 💡 DropdownModal 배치 */}
                   {isGithubModalOpen && (
                     <div className="absolute top-full left-0 z-[100] mt-2">
                       <DropdownModal
@@ -171,7 +170,7 @@ export default function Search() {
                   onClick={() => toggleOption('Slack')}
                 />
               </div>
-              <IconDivider className="text-gray-5 h-6 w-6" />
+              <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
               <div className="flex items-center gap-2">
                 <SearchOptionButton
                   Icon={IconPerson}
