@@ -210,7 +210,7 @@ export default function Page() {
                     <div className="border-neutral-3 mb-3 rounded-xl border">
                       <Filter />
                     </div>
-                    <div className="text-body-medium text-gray-80 prose prose-neutral max-w-none">
+                    <div className="text-body-medium text-gray-80 prose prose-neutral max-w-none break-words">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                     </div>
                     <div className="text-body-small text-gray-30">
@@ -293,12 +293,21 @@ export default function Page() {
                 <button className="outline-gray cursor-pointer rounded-full p-1.5">
                   <Add className="text-gray-70 h-7 w-7" />
                 </button>
-                <input
-                  className="text-body-medium flex-1 outline-none"
+                <textarea
+                  className="text-body-medium resize-non max-h-[26px] flex-1 overflow-hidden overflow-y-auto outline-none"
                   placeholder="추가 질문을 입력하세요"
                   value={newInput}
-                  onChange={(e) => setNewInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                  onChange={(e) => {
+                    setNewInput(e.target.value);
+                    e.target.style.height = 'auto';
+                    e.target.style.height = Math.min(e.target.scrollHeight, 26) + 'px';
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
                 />
                 <button
                   onClick={handleSendMessage}
