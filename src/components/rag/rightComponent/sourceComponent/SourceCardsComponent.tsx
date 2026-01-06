@@ -13,7 +13,13 @@ interface Props {
 
 const SourceCardsComponent = ({ source }: Props) => {
   const handleClick = () => {
-    if (!source.htmlUrl) return;
+    console.log('source:', source);
+    console.log('htmlUrl:', source.htmlUrl);
+
+    if (!source.htmlUrl) {
+      console.log('url 없음');
+      return;
+    }
 
     window.open(source.htmlUrl, '_blank', 'noopener,noreferrer');
   };
@@ -35,7 +41,7 @@ const SourceCardsComponent = ({ source }: Props) => {
           </div>
         </div>
         {/* 소제목 */}
-        <div className="text-body-small text-gray-70 truncate">{source.subtitle}</div>
+        <div className="text-body-small text-gray-70 truncate">소제목{source.subtitle}</div>
         {/* 내용 */}
         <div className="text-body-xsmall line-clamp-2 text-gray-50">{source.content}</div>
         {/* 날짜 */}
