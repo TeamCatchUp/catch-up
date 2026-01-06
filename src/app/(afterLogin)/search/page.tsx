@@ -133,7 +133,7 @@ export default function Search() {
             onMouseDown={(e) => e.preventDefault()}
             className="border-neutral-4 flex w-full flex-col gap-2.5 overflow-visible border-t pt-4"
           >
-            <div className="no-scrollbar flex items-center gap-1.5 self-stretch overflow-x-auto px-1.5 whitespace-nowrap">
+            <div className="flex items-center gap-1.5 self-stretch px-1.5 whitespace-nowrap">
               <div className="flex items-center gap-2">
                 <SearchOptionButton
                   Icon={IconJira}
