@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconJira from '@/public/icons/logo/Jira.svg';
@@ -16,7 +17,8 @@ import IconArrowRight from '@/public/icons/icon/arrow_right2.svg';
 import { FilterChip } from '@/components/UI/SearchFilter';
 import { SearchOptionButton } from '@/components/UI/SearchOptionButton';
 import { SearchSuggestion } from '@/components/UI/SearchSuggestion';
-import { useRouter } from 'next/navigation';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
+import { useOutsideClick } from '@/hooks/useOutsideClick';
 
 export default function Search() {
   const router = useRouter();
@@ -27,6 +29,17 @@ export default function Search() {
   const [loading, setLoading] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEscapeKey(() => {
+    setIsFocused(false);
+    inputRef.current?.blur();
+  });
+
+  useOutsideClick(containerRef, () => {
+    setIsFocused(false);
+    inputRef.current?.blur();
+  });
 
   const toggleOption = (label: string) => {
     setSelectedOptions((prev) => (prev.includes(label) ? prev.filter((item) => item !== label) : [...prev, label]));
@@ -57,12 +70,6 @@ export default function Search() {
       </div>
       <div
         ref={containerRef}
-        onFocus={() => setIsFocused(true)}
-        onBlur={(e) => {
-          if (!containerRef.current?.contains(e.relatedTarget as Node)) {
-            setIsFocused(false);
-          }
-        }}
         className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center gap-2.5 border border-solid bg-white ${isFocused ? 'h-125.5 max-h-135 min-h-92.5 rounded-[28px] p-3 px-4' : 'rounded-rounded h-auto p-3 px-4'} `}
       >
         <div className="flex w-full items-center justify-between">
@@ -71,9 +78,11 @@ export default function Search() {
               <IconAdd className="h-6 w-6" />
             </div>
             <input
+              ref={inputRef}
               className="text-body-medium w-full outline-none"
               placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
               value={inputValue}
+              onFocus={() => setIsFocused(true)}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
               onChange={(e) => setInputValue(e.target.value)}
             />
@@ -88,7 +97,10 @@ export default function Search() {
         </div>
 
         {isFocused && (
-          <div className="border-neutral-4 flex w-full flex-col gap-2.5 overflow-y-auto border-t pt-4">
+          <div
+            onMouseDown={(e) => e.preventDefault()}
+            className="border-neutral-4 flex w-full flex-col gap-2.5 overflow-y-auto border-t pt-4"
+          >
             <div className="flex items-center gap-1.5 self-stretch px-1.5">
               <div className="flex items-center gap-2">
                 <SearchOptionButton
