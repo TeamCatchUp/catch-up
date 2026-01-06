@@ -168,12 +168,12 @@ export default function Page() {
     }
   };
 
-  if (!chatData)
-    return (
-      <div className="p-10 text-center">
-        <RagAnswerSkeleton />
-      </div>
-    );
+  // if (!chatData)
+  //   return (
+  //     <div className="p-10 text-center">
+  //       <RagAnswerSkeleton />
+  //     </div>
+  //   );
 
   // 가장 마지막 답변의 출처 개수 계산
   const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
