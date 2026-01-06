@@ -54,6 +54,7 @@ export default function Page() {
   const day = String(today.getDate()).padStart(2, '0');
 
   const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: number]: boolean }>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
 
@@ -129,6 +130,7 @@ export default function Page() {
       setIsLoading(false);
     }
   };
+
   const handleSendMessage = async () => {
     if (!newInput.trim() || isLoading || !chatData) return; // chatData 체크 추가
 
@@ -225,7 +227,12 @@ export default function Page() {
                           <button
                             key={i}
                             onClick={() => {
-                              if (isThumbsDown) setShowFeedback((prev) => !prev);
+                              if (isThumbsDown) {
+                                setFeedbackVisibleMap((prev) => ({
+                                  ...prev,
+                                  [idx]: !prev[idx],
+                                }));
+                              }
                             }}
                             className={`outline-gray cursor-pointer rounded-lg p-1.5 ${activeClass}`}
                           >
@@ -235,7 +242,7 @@ export default function Page() {
                       })}
                     </div>
                     {/* 피드백 */}
-                    {showFeedback && (
+                    {feedbackVisibleMap[idx] && (
                       <div
                         ref={feedbackRef}
                         className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4"
@@ -245,7 +252,7 @@ export default function Page() {
                             답변이 마음에 들지 않은 이유가 무엇인가요?
                           </span>
                           <div
-                            onClick={() => setShowFeedback(false)}
+                            onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [idx]: false }))}
                             className="outline-gray flex cursor-pointer items-center rounded-full p-0.5"
                           >
                             <Cancel className="relative bottom-[0.5px] h-4.5 w-4.5 text-gray-50" />
