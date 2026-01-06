@@ -313,7 +313,6 @@ export default function Page() {
                   value={newInput}
                   onChange={(e) => {
                     setNewInput(e.target.value);
-                    // 내용에 맞춰 높이 자동 조절
                     e.target.style.height = 'auto';
                     e.target.style.height = Math.min(e.target.scrollHeight, 26) + 'px';
                   }}
