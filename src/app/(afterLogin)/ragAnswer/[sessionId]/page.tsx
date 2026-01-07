@@ -213,7 +213,7 @@ export default function Page() {
                     <div className="border-neutral-3 mb-3 rounded-xl border">
                       <Filter />
                     </div>
-                    <div className="text-body-medium text-gray-80 prose prose-neutral max-w-none break-words">
+                    <div className="text-gray-80 prose prose-neutral max-w-none break-words">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                     </div>
                     <div className="text-body-small text-gray-30">
