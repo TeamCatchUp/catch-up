@@ -223,6 +223,7 @@ export default function Page() {
                     <div className="flex gap-1">
                       {icon.map((item, i) => {
                         const isThumbsDown = item.name === 'ThumbsDown';
+                        const isActive = feedbackVisibleMap[idx];
                         const activeClass = isThumbsDown && showFeedback ? 'bg-neutral-3 border-neutral-5' : '';
                         return (
                           <button
