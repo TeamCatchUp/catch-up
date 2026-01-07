@@ -1,5 +1,6 @@
 'use client';
 
+import clsx from 'clsx';
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -224,7 +225,6 @@ export default function Page() {
                       {icon.map((item, i) => {
                         const isThumbsDown = item.name === 'ThumbsDown';
                         const isActive = feedbackVisibleMap[idx];
-                        const activeClass = isThumbsDown && showFeedback ? 'bg-neutral-3 border-neutral-5' : '';
                         return (
                           <button
                             key={i}
@@ -236,7 +236,10 @@ export default function Page() {
                                 }));
                               }
                             }}
-                            className={`outline-gray cursor-pointer rounded-lg p-1.5 ${activeClass}`}
+                            className={clsx(
+                              'outline-gray cursor-pointer rounded-lg p-1.5',
+                              isThumbsDown && isActive && 'bg-neutral-3 border-neutral-5',
+                            )}
                           >
                             <item.icon className="h-6 w-6 text-gray-50" />
                           </button>
