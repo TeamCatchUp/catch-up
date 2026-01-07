@@ -59,7 +59,7 @@ export default function Page() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
 
-  // 오른쪽 컴포넌트 헤더
+  // 우측 컴포넌트 헤더
   const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
 
   const [newInput, setNewInput] = useState('');
