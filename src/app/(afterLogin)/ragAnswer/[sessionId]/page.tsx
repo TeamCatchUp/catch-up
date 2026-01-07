@@ -1,3 +1,5 @@
+'use client';
+
 import clsx from 'clsx';
 import { useState } from 'react';
 import Align from '/public/icons/icon/align.svg';
