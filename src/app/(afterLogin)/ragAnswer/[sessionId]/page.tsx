@@ -340,7 +340,7 @@ export default function Page() {
       <div className="border-neutral-3 flex w-101.25 flex-none flex-col border-l bg-white">
         <RagRightAdditionalHeader activeTab={activeTab} onChange={setActiveTab} sourceCount={currentSources.length} />
         <div className="flex-1 overflow-y-auto">
-          {activeTab === 'source' && <SourceComponent sources={currentSources} />}
+          {activeTab === 'source' && <SourceComponent sources={currentSources} isLoading={isLoading} />}
           {activeTab === 'detail' && <DetailedTasksComponent />}
         </div>
       </div>

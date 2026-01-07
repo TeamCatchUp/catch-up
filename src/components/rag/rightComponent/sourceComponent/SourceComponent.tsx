@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Align from '/public/icons/icon/align.svg';
 import Divider from '/public/icons/icon/divider.svg';
 import SourceCardsComponent from '@/components/rag/rightComponent/sourceComponent/SourceCardsComponent';
+import RagSourceSkeleton from '@/components/Skeleton/RagSourceSkeleton';
 
 interface Source {
   id: number;
@@ -15,6 +16,7 @@ interface Source {
 
 interface Props {
   sources: Source[];
+  isLoading?: boolean;
 }
 
 const filterCategory = [
@@ -27,7 +29,7 @@ const filterCategory = [
   { id: 7, category: '댓글' },
 ];
 
-const SourceComponent = ({ sources }: Props) => {
+const SourceComponent = ({ sources, isLoading = false }: Props) => {
   const [activeFilters, setActiveFilters] = useState<number[]>([]);
 
   const toggleFilter = (id: number) => {
@@ -71,9 +73,11 @@ const SourceComponent = ({ sources }: Props) => {
 
       <div className="flex flex-col gap-2">
         {/* 출처 카드 컴포넌트 */}
-        {sources.map((source) => (
-          <SourceCardsComponent key={source.id} source={source} />
-        ))}
+        {isLoading ? (
+          <RagSourceSkeleton />
+        ) : (
+          sources.map((source) => <SourceCardsComponent key={source.id} source={source} />)
+        )}
       </div>
     </div>
   );
