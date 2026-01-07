@@ -87,6 +87,17 @@ export default function Page() {
   }, [chatData?.messages, isLoading]);
 
   useEffect(() => {
+    const isFeedbackOpen = Object.values(feedbackVisibleMap).some(Boolean);
+
+    if (isFeedbackOpen && feedbackRef.current) {
+      feedbackRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'end',
+      });
+    }
+  }, [feedbackVisibleMap]);
+
+  useEffect(() => {
     const saved = localStorage.getItem(`chat_${sessionId}`);
 
     if (saved) {
