@@ -19,6 +19,7 @@ import SourceComponent from '@/components/rag/rightComponent/sourceComponent/Sou
 import DetailedTasksComponent from '@/components/rag/rightComponent/detailedTasksComponent/DetailedTasksComponent';
 import { useParams, useSearchParams } from 'next/navigation';
 import { sendChatQuery } from 'src/util/sendChatQuery';
+import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -278,7 +279,9 @@ export default function Page() {
             ))}
 
             {isLoading && (
-              <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10">답변을 생성하고 있습니다...</div>
+              <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10">
+                <RagAnswerSkeleton />
+              </div>
             )}
           </div>
 
