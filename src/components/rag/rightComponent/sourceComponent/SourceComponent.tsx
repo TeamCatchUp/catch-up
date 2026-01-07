@@ -91,7 +91,7 @@ const SourceComponent = ({ sources, isLoading = false }: Props) => {
         {isLoading ? (
           <RagSourceSkeleton />
         ) : (
-          sources.map((source) => <SourceCardsComponent key={source.id} source={source} />)
+          filteredSources.map((source) => <SourceCardsComponent key={source.id} source={source} />)
         )}
       </div>
     </div>
