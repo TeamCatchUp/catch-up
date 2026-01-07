@@ -1,4 +1,4 @@
-import SourceFile from '/pulic/icons/icon/source-file.svg';
+import SourceFile from '/public/icons/icon/source-file.svg';
 
 const RagSourceSkeleton = () => {
   return (
