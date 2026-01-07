@@ -58,7 +58,8 @@ export default function Page() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: number]: boolean }>({});
   const scrollRef = useRef<HTMLDivElement>(null);
-  const feedbackRef = useRef<HTMLDivElement>(null);
+  // const feedbackRef = useRef<HTMLDivElement>(null);
+  const feedfbackRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   // 오른쪽 컴포넌트 헤더
   const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
@@ -87,10 +88,19 @@ export default function Page() {
   }, [chatData?.messages, isLoading]);
 
   useEffect(() => {
-    const isFeedbackOpen = Object.values(feedbackVisibleMap).some(Boolean);
+    // const isFeedbackOpen = Object.values(feedbackVisibleMap).some(Boolean);
 
-    if (isFeedbackOpen && feedbackRef.current) {
-      feedbackRef.current.scrollIntoView({
+    // if (isFeedbackOpen && feedbackRef.current) {
+    //   feedbackRef.current.scrollIntoView({
+    //     behavior: 'smooth',
+    //     block: 'end',
+    //   });
+    // }
+    const openIdx = Object.entries(feedbackVisibleMap).find(([, value]) => value)?.[0];
+
+    if (openIdx !== undefined) {
+      const el = feedfbackRefs.current[Number(openIdx)];
+      el?.scrollIntoView({
         behavior: 'smooth',
         block: 'end',
       });
@@ -260,7 +270,10 @@ export default function Page() {
                     {/* 피드백 */}
                     {feedbackVisibleMap[idx] && (
                       <div
-                        ref={feedbackRef}
+                        // ref={feedbackRef}
+                        ref={(el) => {
+                          feedfbackRefs.current[idx] = el;
+                        }}
                         className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4"
                       >
                         <div className="flex justify-between">
