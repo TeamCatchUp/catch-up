@@ -2,10 +2,12 @@ from langchain_core.messages import trim_messages
 from langchain_core.output_parsers import StrOutputParser
 from langchain_openai import ChatOpenAI
 
+from app.core.config import settings
+
 
 class LlmService:
     def __init__(self):
-        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        self.llm = ChatOpenAI(model=settings.OPENAI_CHAT_MODEL, temperature=0)
 
         self.output_parser = StrOutputParser()
 

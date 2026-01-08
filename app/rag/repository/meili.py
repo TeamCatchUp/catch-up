@@ -18,7 +18,9 @@ embedding_semaphore = asyncio.Semaphore(10)
 
 class LangChainMeiliRepository(VectorStoreRepository):
     def __init__(self):
-        self.embeddings = OpenAIEmbeddings()
+        self.embeddings = OpenAIEmbeddings(model=settings.OPENAI_EMBEDDING_MODEL)
+        
+        self.embeddings.dimensions = 3072
 
         self.client = AsyncClient(
             settings.MEILI_HTTP_ADDR, settings.MEILI_KEY, timeout=30
@@ -105,6 +107,8 @@ class LangChainMeiliRepository(VectorStoreRepository):
         # 필터 존재 시 추가
         if filters:
             search_params["filter"] = filters
+            
+        logger.info(f"query: {query}")
 
         # Meilisearch 검색
         results = await index.search(query, **search_params)
