@@ -36,7 +36,6 @@ const SourceComponent = ({ sources, isLoading = false }: Props) => {
   const [activeFilters, setActiveFilters] = useState<FilterType[]>([]);
 
   const toggleFilter = (type: FilterType) => {
-    // setActiveFilters((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
     if (type === 'all') {
       setActiveFilters([]);
       return;
@@ -63,14 +62,12 @@ const SourceComponent = ({ sources, isLoading = false }: Props) => {
 
           {/* 필터 버튼 */}
           {filterCategory.map((category) => {
-            // const isActive = activeFilters.includes(category.id);
             const isActive =
               category.type === 'all' ? activeFilters.length === 0 : activeFilters.includes(category.type);
 
             return (
               <button
                 key={category.id}
-                // onClick={() => toggleFilter(category.id)}
                 onClick={() => toggleFilter(category.type)}
                 className={clsx(
                   'text-body-small flex h-full shrink-0 cursor-pointer items-center justify-center rounded-full px-3 leading-none whitespace-nowrap transition',
