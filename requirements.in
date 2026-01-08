@@ -20,6 +20,7 @@ langchain-text-splitters
 langfuse
 langgraph
 meilisearch
+meilisearch-python-sdk
 faiss-cpu
 sentence-transformers
 openai

@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated, Any
 import logging
 
@@ -7,6 +8,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph.message import add_messages
 
 from app.observability.langfuse_client import langfuse_handler
+from app.core.config import settings
 from app.rag.factory import get_llm_service, get_vector_repository, get_rerank_service
 from app.rag.models.grade import GradeDocuments
 from app.rag.models.route import RouteQuery
@@ -20,6 +22,11 @@ from app.rag.state import AgentState
 
 
 logger = logging.getLogger(__name__)
+
+
+# llm 호출 Rate Limit 방어
+llm_semaphore = asyncio.Semaphore(10)
+rerank_semaphore = asyncio.Semaphore(10)
 
 
 async def router_node(state: AgentState):
@@ -48,10 +55,12 @@ async def router_node(state: AgentState):
     history_messages = filtered_messages[:-1][-6:]
 
     chain = prompt | structured_llm
-    answer = await chain.ainvoke(
-        input={"question": question, "history": history_messages},
-        config={"callbacks": [langfuse_handler]},
-    )
+    
+    async with llm_semaphore:
+        answer = await chain.ainvoke(
+            input={"question": question, "history": history_messages},
+            config={"callbacks": [langfuse_handler]},
+        )
 
     return {"datasource": answer.datasource}
 
@@ -74,9 +83,11 @@ async def chitchat_node(state: AgentState):
     )
 
     chain = prompt | llm | StrOutputParser()
-    answer = await chain.ainvoke(
-        input={"messages": filtered_messages}, config={"callbacks": [langfuse_handler]}
-    )
+    
+    async with llm_semaphore:
+        answer = await chain.ainvoke(
+            input={"messages": filtered_messages}, config={"callbacks": [langfuse_handler]}
+        )
 
     return {"messages": [AIMessage(content=answer)], "sources": []}
 
@@ -101,13 +112,15 @@ async def rewrite_node(state: AgentState):
     prompt = get_prompt_template("rewrite")
 
     chain = prompt | llm | StrOutputParser()
-    answer = await chain.ainvoke(
-        input={
-                "history": history_text,
-                "question": original_question,
-            },
-        config={"callbacks": [langfuse_handler]},
-    )
+    
+    async with llm_semaphore:
+        answer = await chain.ainvoke(
+            input={
+                    "history": history_text,
+                    "question": original_question,
+                },
+            config={"callbacks": [langfuse_handler]},
+        )
 
     return {"current_query": answer, "retry_count": current_try_cnt + 1}
 
@@ -116,14 +129,16 @@ async def retrieve_node(state: AgentState):
     meili_repo = get_vector_repository()
 
     query = state.get("current_query") or state["messages"][-1].content
+    
+    logger.info(f"retrieval target query: {query}")
 
     target_index = state.get("index_name", "")
 
-    docs = meili_repo.retrieve(
+    docs = await meili_repo.retrieve(
             query=query, 
             index_name=target_index, 
-            k=100,
-            semantic_ratio=0.8
+            k=settings.MEILISEARCH_TOP_K,
+            semantic_ratio=settings.MEILISEARCH_SEMANTIC_RATIO
         )
 
     doc_data_list = []
@@ -150,12 +165,13 @@ async def rerank_node(state: AgentState):
     
     retrieved_docs = state.get("retrieved_docs", [])
     
-    reranked_docs = await rerank_service.rerank(
-        query=query,
-        documents=retrieved_docs,
-        top_n=5
-    )
-    
+    async with rerank_semaphore:
+        reranked_docs = await rerank_service.rerank(
+            query=query,
+            documents=retrieved_docs,
+            top_n=settings.COHERE_RERANK_TOP_N
+        )
+        
     return {"retrieved_docs": reranked_docs}
 
 
@@ -198,13 +214,14 @@ async def grade_node(state: AgentState):
         GradeDocuments, method="function_calling"
     )
 
-    answer = await chain.ainvoke(
-        input={
-                "question": question,
-                "context": context_text
-            },
-        config={"callbacks": [langfuse_handler]},
-    )
+    async with llm_semaphore:
+        answer = await chain.ainvoke(
+            input={
+                    "question": question,
+                    "context": context_text
+                },
+            config={"callbacks": [langfuse_handler]},
+        )
 
     is_relevant = answer.binary_score == "yes"
 
@@ -260,15 +277,16 @@ async def generate_node(state: AgentState):
     logger.info(context_text)
 
     # llm 호출
-    answer = await chain.ainvoke(
-        input={
-            "history": trimmed_history,
-            "context": context_text,
-            "query": current_query,
-            "role": state.get("role", "user"),
-        },
-        config={"callbacks": [langfuse_handler]},
-    )
+    async with llm_semaphore:
+        answer = await chain.ainvoke(
+            input={
+                "history": trimmed_history,
+                "context": context_text,
+                "query": current_query,
+                "role": state.get("role", "user"),
+            },
+            config={"callbacks": [langfuse_handler]},
+        )
 
     # 사용자에게 제공할 source 정제
     unique_sources = []
