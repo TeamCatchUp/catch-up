@@ -37,7 +37,7 @@ const SourceCardsComponent = ({ source }: Props) => {
           <div className="shadow-button border-neutral-2 flex h-7 w-7 items-center justify-center border">
             <Github className="h-5 w-5" />
           </div>
-          <div className="secondary-mono flex cursor-pointer rounded-full px-1.5 py-1">
+          <div className="text-button-secondary-mono flex cursor-pointer px-1.5 py-1">
             <div className="text-gray-70 text-body-xsmall truncate">{fileName}</div>
             <ArrowRight className="text-gray-30 h-5 w-5" />
           </div>

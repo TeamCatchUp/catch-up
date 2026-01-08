@@ -1,0 +1,61 @@
+@import './color.css';
+@import './radius.css';
+
+/* 버튼별 스타일(색상) 분리 */
+@layer utilities {
+  /* icon-buttons */
+  .icon-button-solid-blue {
+    @apply hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 rounded-lg bg-blue-50 text-white;
+  }
+
+  .icon-button-outline-gray {
+    @apply disabled:text-gray-20 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 disabled:border-neutral-2 text-gray-70 border-neutral-3 rounded-lg border bg-white;
+  }
+
+  .icon-button-only-gray {
+    @apply active:text-gray-70 disabled:text-gray-20 hover:text-gray-70 hover:bg-neutral-2 active:bg-neutral-3 disabled:bg-neutral-2 rounded-lg text-gray-50;
+  }
+
+  .icon-button-only-blue {
+    @apply hover:bg-blue-6 active:bg-blue-10 active:text-blue-60 disabled:text-gray-20 rounded-full text-blue-50;
+  }
+
+  /* box-buttons */
+  .box-button-solid-primary {
+    @apply hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 rounded-lg bg-blue-50;
+  }
+
+  .box-button-outline-gray {
+    @apply border-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 disabled:bg-neutral-1 border-neutral-3 rounded-lg border bg-white;
+  }
+
+  /* capsule-button */
+  .capsule-button-solid-primary {
+    @apply active:bg-blue-60 disabled:bg-blue-10 rounded-full bg-blue-50 text-white hover:bg-blue-50;
+  }
+
+  .capsule-button-outline-mono {
+    @apply group border-neutral-4 hover:bg-neutral-2 active:border-neutral-3 active:bg-neutral-3 disabled:border-neutral-4 disabled:bg-neutral-1 rounded-full border bg-white;
+  }
+
+  .capsule-button-outline-blue {
+    @apply group border-blue-30 bg-blue-1 hover:bg-blue-5 active:bg-blue-5 active:border-blue-45 disabled:text-gray-30 disabled:bg-neutral-1 disabled:border-neutral-2 rounded-full border;
+  }
+
+  .capsule-button-outline-purple {
+    @apply group bg-violet-5 rounded-full;
+  }
+
+  .capsule-button-outline-light-blue {
+    @apply group bg-blue-light-blue-5 rounded-full;
+  }
+
+  /* text-button */
+  .text-button-primary-blue {
+    @apply group hover:bg-blue-5 active:bg-blue-5 rounded-full bg-white;
+  }
+
+  .text-button-secondary-mono {
+    @apply group hover:bg-neutral-2 active:bg-neutral-3 rounded-full bg-white;
+  }
+}

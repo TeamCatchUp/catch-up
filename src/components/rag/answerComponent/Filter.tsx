@@ -42,7 +42,7 @@ const Filter = () => {
               onClick={() => toggleFilter(item.id)}
               className={clsx(
                 'text-body-small flex cursor-pointer items-center justify-center rounded-full px-3 py-1.5',
-                isActive ? 'border-neutral-5 border text-black' : 'secondary-mono text-gray-50',
+                isActive ? 'border-neutral-5 border text-black' : 'text-button-secondary-mono text-gray-50',
               )}
             >
               {item.name}
@@ -58,7 +58,7 @@ const Filter = () => {
           placeholder="키워드 추가"
           className="text-body-small border-neutral-3 text-gray-70 placeholder:text-gray-30 h-9 w-68.25 rounded-lg border px-3 py-1.5 focus:outline-none"
         />
-        <div className="outline-gray flex h-6.5 w-6.5 cursor-pointer items-center justify-center rounded-full">
+        <div className="box-button-outline-gray flex h-6.5 w-6.5 cursor-pointer items-center justify-center rounded-full">
           <Delete className="h-5 w-5 text-gray-50" />
         </div>
       </div>
@@ -72,7 +72,7 @@ const Filter = () => {
         <div className="ml-auto flex h-9 w-18 items-center gap-2">
           <button
             onClick={handleReset}
-            className="outline-gray flex h-6.5 w-6.5 cursor-pointer items-center justify-center rounded-full"
+            className="box-button-outline-gray flex h-6.5 w-6.5 cursor-pointer items-center justify-center rounded-full"
           >
             <Reset className="h-5 w-5 text-gray-50" />
           </button>

@@ -189,7 +189,7 @@ export default function Page() {
             {/* 날짜 표시 */}
             <div className="flex w-192.75 items-center justify-center gap-4">
               <div className="border-neutral-4 flex-1 border-t" />
-              <span className="text-body-xsmall outline-gray cursor-pointer rounded-full px-1.5 py-1 text-gray-50">
+              <span className="text-body-xsmall px-1.5 py-1 text-gray-50">
                 {month}.{day}
               </span>
               <div className="border-neutral-4 flex-1 border-t" />
@@ -202,9 +202,9 @@ export default function Page() {
                   <div className="flex flex-col gap-4">
                     <div className="flex items-center justify-between">
                       <div className="text-heading-xlarge text-gray-70 flex-1">{msg.content}</div>
-                      <button className="border-neutral-3 outline-gray flex cursor-pointer items-center justify-center gap-1 self-end rounded-lg border px-2 py-1">
+                      <button className="border-neutral-3 box-button-outline-gray flex cursor-pointer items-center justify-center gap-1 self-end rounded-lg border px-2 py-1">
                         <EditPencil className="text-gray-70 h-5 w-5" />
-                        <span className="text-body-xsmall text-gray-80 outline-gray">수정하기</span>
+                        <span className="text-body-xsmall text-gray-80">수정하기</span>
                       </button>
                     </div>
                   </div>
@@ -235,7 +235,7 @@ export default function Page() {
                                 }));
                               }
                             }}
-                            className={`outline-gray cursor-pointer rounded-lg p-1.5 ${activeClass}`}
+                            className={`icon-button-outline-gray cursor-pointer p-1.5 ${activeClass}`}
                           >
                             <item.icon className="h-6 w-6 text-gray-50" />
                           </button>
@@ -254,7 +254,7 @@ export default function Page() {
                           </span>
                           <div
                             onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [idx]: false }))}
-                            className="outline-gray flex cursor-pointer items-center rounded-full p-0.5"
+                            className="box-button-outline-gray flex cursor-pointer items-center rounded-full p-0.5"
                           >
                             <Cancel className="relative bottom-[0.5px] h-4.5 w-4.5 text-gray-50" />
                           </div>
@@ -264,7 +264,7 @@ export default function Page() {
                             return (
                               <button
                                 key={idx}
-                                className="outline-gray border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1"
+                                className="box-button-outline-gray border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1"
                               >
                                 {feedback.content}
                               </button>
@@ -300,7 +300,7 @@ export default function Page() {
 
               {/* 입력바 */}
               <div className="border-neutral-4 shadow-rag-bar flex items-center gap-2 rounded-full border bg-white px-3 py-2.5">
-                <button className="outline-gray cursor-pointer rounded-full p-1.5">
+                <button className="box-button-outline-gray cursor-pointer rounded-full p-1.5">
                   <Add className="text-gray-70 h-7 w-7" />
                 </button>
                 <textarea
