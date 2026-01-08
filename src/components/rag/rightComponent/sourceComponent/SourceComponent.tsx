@@ -7,6 +7,7 @@ import RagSourceSkeleton from '@/components/Skeleton/RagSourceSkeleton';
 
 interface Source {
   id: number;
+  sourceType: 'file' | 'wiki' | 'url' | 'github' | 'slack' | 'comment';
   title: string;
   subtitle: string;
   content: string;
@@ -20,21 +21,31 @@ interface Props {
 }
 
 const filterCategory = [
-  { id: 1, category: '전체' },
-  { id: 2, category: '첨부파일' },
-  { id: 3, category: 'Wiki' },
-  { id: 4, category: 'URL' },
-  { id: 5, category: 'Github' },
-  { id: 6, category: 'Slack' },
-  { id: 7, category: '댓글' },
-];
+  { id: 1, category: '전체', type: 'all' },
+  { id: 2, category: '첨부파일', type: 'file' },
+  { id: 3, category: 'Wiki', type: 'wiki' },
+  { id: 4, category: 'URL', type: 'url' },
+  { id: 5, category: 'Github', type: 'github' },
+  { id: 6, category: 'Slack', type: 'slack' },
+  { id: 7, category: '댓글', type: 'comment' },
+] as const;
+
+type FilterType = (typeof filterCategory)[number]['type'];
 
 const SourceComponent = ({ sources, isLoading = false }: Props) => {
-  const [activeFilters, setActiveFilters] = useState<number[]>([]);
+  const [activeFilters, setActiveFilters] = useState<FilterType[]>([]);
 
-  const toggleFilter = (id: number) => {
-    setActiveFilters((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
+  const toggleFilter = (type: FilterType) => {
+    if (type === 'all') {
+      setActiveFilters([]);
+      return;
+    }
+
+    setActiveFilters((prev) => (prev.includes(type) ? prev.filter((v) => v !== type) : [...prev, type]));
   };
+
+  const filteredSources =
+    activeFilters.length === 0 ? sources : sources.filter((source) => activeFilters.includes(source.sourceType));
 
   return (
     <div className="flex w-101.25 flex-col gap-3 px-4 py-3">
@@ -51,12 +62,13 @@ const SourceComponent = ({ sources, isLoading = false }: Props) => {
 
           {/* 필터 버튼 */}
           {filterCategory.map((category) => {
-            const isActive = activeFilters.includes(category.id);
+            const isActive =
+              category.type === 'all' ? activeFilters.length === 0 : activeFilters.includes(category.type);
 
             return (
               <button
                 key={category.id}
-                onClick={() => toggleFilter(category.id)}
+                onClick={() => toggleFilter(category.type)}
                 className={clsx(
                   'text-body-small flex h-full shrink-0 cursor-pointer items-center justify-center rounded-full px-3 leading-none whitespace-nowrap transition',
                   isActive
@@ -76,7 +88,7 @@ const SourceComponent = ({ sources, isLoading = false }: Props) => {
         {isLoading ? (
           <RagSourceSkeleton />
         ) : (
-          sources.map((source) => <SourceCardsComponent key={source.id} source={source} />)
+          filteredSources.map((source) => <SourceCardsComponent key={source.id} source={source} />)
         )}
       </div>
     </div>
