@@ -17,7 +17,7 @@
   }
 
   .icon-button-only-blue {
-    @apply hover:bg-blue-6 active:bg-blue-10 active:text-blue-60 disabled:text-gray-20 rounded-full text-blue-50;
+    @apply hover:bg-blue-5 active:bg-blue-10 active:text-blue-60 disabled:text-gray-20 rounded-full text-blue-50;
   }
 
   /* box-buttons */
