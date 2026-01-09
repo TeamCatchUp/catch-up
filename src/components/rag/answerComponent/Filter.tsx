@@ -58,7 +58,7 @@ const Filter = () => {
           placeholder="키워드 추가"
           className="text-body-small border-neutral-3 text-gray-70 placeholder:text-gray-30 h-9 w-68.25 rounded-lg border px-3 py-1.5 focus:outline-none"
         />
-        <div className="box-button-outline-gray flex h-6.5 w-6.5 cursor-pointer items-center justify-center rounded-full">
+        <div className="icon-button-only-gray flex h-6.5 w-6.5 cursor-pointer items-center justify-center rounded-full">
           <Delete className="h-5 w-5 text-gray-50" />
         </div>
       </div>
@@ -72,12 +72,12 @@ const Filter = () => {
         <div className="ml-auto flex h-9 w-18 items-center gap-2">
           <button
             onClick={handleReset}
-            className="box-button-outline-gray flex h-6.5 w-6.5 cursor-pointer items-center justify-center rounded-full"
+            className="icon-button-only-gray flex h-6.5 w-6.5 cursor-pointer items-center justify-center rounded-full"
           >
-            <Reset className="h-5 w-5 text-gray-50" />
+            <Reset className="h-6 w-6 text-gray-50" />
           </button>
-          <button className="border-neutral-2 bg-neutral-1 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border p-0.5">
-            <ArrowSend className="text-gray-30 h-5 w-5" />
+          <button className="border-neutral-2 bg-neutral-1 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border">
+            <ArrowSend className="text-gray-30 h-6 w-6" />
           </button>
         </div>
       </div>
