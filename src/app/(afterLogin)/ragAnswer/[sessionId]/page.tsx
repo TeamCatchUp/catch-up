@@ -303,7 +303,7 @@ export default function Page() {
 
               {/* 입력바 */}
               <div className="border-neutral-4 shadow-rag-bar flex items-center gap-2 rounded-full border bg-white px-3 py-2.5">
-                <button className="box-button-outline-gray cursor-pointer rounded-full p-1.5">
+                <button className="icon-button-only-gray cursor-pointer rounded-full p-1.5">
                   <Add className="text-gray-70 h-7 w-7" />
                 </button>
                 <textarea
