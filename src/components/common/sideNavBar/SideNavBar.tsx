@@ -202,8 +202,8 @@ const SideNavBar = () => {
             )}
           </div>
           {isOpen && (
-            <div className="relative bottom-1 flex cursor-pointer items-center p-0.5">
-              <UnfoldMore className="relative top-px h-6 w-6" />
+            <div className="bottom-1 flex cursor-pointer items-center p-0.5">
+              <UnfoldMore className="h-6 w-6" />
             </div>
           )}
         </div>
