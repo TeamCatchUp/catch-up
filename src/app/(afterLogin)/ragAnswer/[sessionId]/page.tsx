@@ -238,7 +238,7 @@ export default function Page() {
                                 }));
                               }
                             }}
-                            className={`icon-button-outline-gray cursor-pointer p-1.5 ${activeClass}`}
+                            className={`icon-button-only-gray cursor-pointer p-1.5 ${activeClass}`}
                           >
                             <item.icon className="h-6 w-6 text-gray-50" />
                           </button>
@@ -257,7 +257,7 @@ export default function Page() {
                           </span>
                           <div
                             onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [idx]: false }))}
-                            className="box-button-outline-gray flex cursor-pointer items-center rounded-full p-0.5"
+                            className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
                           >
                             <Cancel className="relative bottom-[0.5px] h-4.5 w-4.5 text-gray-50" />
                           </div>

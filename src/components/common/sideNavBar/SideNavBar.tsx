@@ -99,7 +99,7 @@ const SideNavBar = () => {
           )}
         </div>
         {isOpen && (
-          <div className="box-button-outline-gray flex items-center justify-center rounded-full p-0.5">
+          <div className="icon-button-only-gray flex items-center justify-center rounded-full p-0.5">
             <Close onClick={() => setIsOpen(false)} className="h-6 w-6 cursor-pointer text-gray-50" />
           </div>
         )}
@@ -188,7 +188,7 @@ const SideNavBar = () => {
         {isOpen && <div className={`border-neutral-3 relative right-2 w-60 border`} />}
         <div
           className={clsx(
-            'box-button-outline-gray flex h-13.5 cursor-pointer items-center rounded-lg',
+            'icon-button-only-gray flex h-13.5 cursor-pointer items-center rounded-lg',
             isOpen ? 'w-56.25 justify-between px-1.5 py-1' : 'justify-center',
           )}
         >

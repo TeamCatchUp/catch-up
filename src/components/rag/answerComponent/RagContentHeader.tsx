@@ -13,9 +13,7 @@ const RagHeader = () => {
           <span className={`text-heading-small ml-1.5 cursor-pointer text-gray-50`}>업무 어시스선트</span>
         </button>
         <ArrowRight2 className="h-5 w-5 text-gray-50" />
-        <button
-          className={`text-heading-small text-gray-80 box-button-outline-gray cursor-pointer rounded-xl px-2 py-1`}
-        >
+        <button className={`text-heading-small text-gray-80 icon-button-only-gray cursor-pointer rounded-xl px-2 py-1`}>
           현재 페이지
         </button>
       </div>
@@ -27,10 +25,10 @@ const RagHeader = () => {
           <Add className="text-gray-70 flex h-5 w-5" />
           <span className={`text-body-small text-gray-70 whitespace-nowrap`}>새 업무 질문</span>
         </button>
-        <button className={`box-button-outline-gray flex items-center rounded-lg p-1.5`}>
+        <button className={`icon-button-only-gray flex items-center rounded-lg p-1.5`}>
           <Share className="h-6 w-6 cursor-pointer text-gray-50" />
         </button>
-        <button className={`box-button-outline-gray flex items-center rounded-lg p-1.5`}>
+        <button className={`icon-button-icon-gray flex items-center rounded-lg p-1.5`}>
           <Kebeb className="h-6 w-6 cursor-pointer text-gray-50" />
         </button>
       </div>
