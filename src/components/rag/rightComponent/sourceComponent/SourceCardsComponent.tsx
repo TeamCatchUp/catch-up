@@ -2,28 +2,20 @@ import Github from '/public/icons/logo/GitHub.svg';
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
 
 interface Props {
-  source: {
-    title: string;
-    subtitle: string;
-    content: string;
-    date: string;
-    htmlUrl: string;
-  };
+  source: ChatSource;
 }
 
 const SourceCardsComponent = ({ source }: Props) => {
   const handleClick = () => {
-    console.log('source:', source);
-    console.log('htmlUrl:', source.htmlUrl);
-
     if (!source.htmlUrl) {
-      console.log('url 없음');
+      // console.log('url 없음');
       return;
     }
 
     window.open(source.htmlUrl, '_blank', 'noopener,noreferrer');
   };
 
+  // 중간시연용
   const fileName = source.htmlUrl ? source.htmlUrl.split('/').pop() : source.title;
 
   return (

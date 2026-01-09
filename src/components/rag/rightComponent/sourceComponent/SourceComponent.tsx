@@ -5,18 +5,8 @@ import Divider from '/public/icons/icon/divider.svg';
 import SourceCardsComponent from '@/components/rag/rightComponent/sourceComponent/SourceCardsComponent';
 import RagSourceSkeleton from '@/components/Skeleton/RagSourceSkeleton';
 
-interface Source {
-  id: number;
-  sourceType: 'file' | 'wiki' | 'url' | 'github' | 'slack' | 'comment';
-  title: string;
-  subtitle: string;
-  content: string;
-  date: string;
-  htmlUrl: string;
-}
-
 interface Props {
-  sources: Source[];
+  sources: ChatSource[];
   isLoading?: boolean;
 }
 
