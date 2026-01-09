@@ -70,9 +70,11 @@ async def get_compiled_graph():
     workflow.add_edge("generate", END)
 
     redis_client = Redis.from_url(settings.REDIS_URL)
+    
+    # Thread(session)-level 단기 영속성
     checkpointer = AsyncRedisSaver(redis_client=redis_client)
 
-    await checkpointer.setup()  # 인덱스 생성
+    await checkpointer.setup() # 인덱스 생성
 
     return workflow.compile(checkpointer=checkpointer).with_config(
         {"callbacks": [langfuse_handler]}
