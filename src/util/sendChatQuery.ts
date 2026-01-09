@@ -1,6 +1,6 @@
 import api from 'src/api/axios';
 
-export const sendChatQuery = async (queryText: string, sessionId: string, repo: string) => {
+export const sendChatQuery = async (queryText: string, sessionId: string, repo: string): Promise<ChatResponse> => {
   const requestBody = {
     query: queryText,
     sessionId: sessionId,

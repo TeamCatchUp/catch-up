@@ -9,7 +9,7 @@ export default function Home() {
     <div className="bg-home-gradient flex flex-col">
       <HomeTopNavbar />
       <Search />
-      <div className="flex flex-col items-center gap-16 px-12 py-10">
+      <div className="flex flex-col items-center gap-16 px-16 pt-10 pb-30">
         <RecentlyChecked />
         <HowToUse />
         <LinkTool />

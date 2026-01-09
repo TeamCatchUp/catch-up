@@ -6,29 +6,31 @@ import Kebeb from '/public/icons/icon/kebeb 2.svg';
 
 const RagHeader = () => {
   return (
-    <div className="border-r-neutral-3 border-b-neutral-3 sticky top-0 z-100 flex min-w-240.75 justify-between border-r border-b bg-white px-10 py-2">
+    <div className="border-r-neutral-3 border-b-neutral-3 sticky top-0 z-100 flex min-w-240.75 justify-between border-r border-b bg-white px-16 py-2">
       <div className="flex items-center">
-        <button className={`outline-gray} flex items-center rounded-xl px-2 py-1`}>
+        <button className={`box-button-outline-gray} flex items-center rounded-xl px-2 py-1`}>
           <Menu className="h-5 w-5 text-gray-50" />
           <span className={`text-heading-small ml-1.5 cursor-pointer text-gray-50`}>업무 어시스선트</span>
         </button>
         <ArrowRight2 className="h-5 w-5 text-gray-50" />
-        <button className={`text-heading-small text-gray-80 outline-gray cursor-pointer rounded-xl px-2 py-1`}>
+        <button
+          className={`text-heading-small text-gray-80 box-button-outline-gray cursor-pointer rounded-xl px-2 py-1`}
+        >
           현재 페이지
         </button>
       </div>
 
       <div className="flex items-center gap-1.5">
         <button
-          className={`border-neutral-3 outline-gray flex w-29.75 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5`}
+          className={`border-neutral-3 box-button-outline-gray flex w-29.75 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5`}
         >
           <Add className="text-gray-70 flex h-5 w-5" />
           <span className={`text-body-small text-gray-70 whitespace-nowrap`}>새 업무 질문</span>
         </button>
-        <button className={`outline-gray flex items-center rounded-lg p-1.5`}>
+        <button className={`box-button-outline-gray flex items-center rounded-lg p-1.5`}>
           <Share className="h-6 w-6 cursor-pointer text-gray-50" />
         </button>
-        <button className={`outline-gray flex items-center rounded-lg p-1.5`}>
+        <button className={`box-button-outline-gray flex items-center rounded-lg p-1.5`}>
           <Kebeb className="h-6 w-6 cursor-pointer text-gray-50" />
         </button>
       </div>

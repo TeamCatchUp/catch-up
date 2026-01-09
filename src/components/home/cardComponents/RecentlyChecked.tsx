@@ -47,7 +47,7 @@ const RecentlyChecked = () => {
         <ArrowRight className="relative left-1 h-6 w-6 cursor-pointer p-0.5 text-gray-50" />
       </header>
 
-      <ul className="flex gap-4">
+      <ul className="flex gap-5">
         {cardData.map((card, idx) => {
           return (
             <li

@@ -5,18 +5,8 @@ import Divider from '/public/icons/icon/divider.svg';
 import SourceCardsComponent from '@/components/rag/rightComponent/sourceComponent/SourceCardsComponent';
 import RagSourceSkeleton from '@/components/Skeleton/RagSourceSkeleton';
 
-interface Source {
-  id: number;
-  sourceType: 'file' | 'wiki' | 'url' | 'github' | 'slack' | 'comment';
-  title: string;
-  subtitle: string;
-  content: string;
-  date: string;
-  htmlUrl: string;
-}
-
 interface Props {
-  sources: Source[];
+  sources: ChatSource[];
   isLoading?: boolean;
 }
 
@@ -53,7 +43,7 @@ const SourceComponent = ({ sources, isLoading = false }: Props) => {
       <div className="-mb-4 flex w-full overflow-x-auto">
         <div className="flex h-9 min-w-max items-center gap-0.5">
           {/* Align */}
-          <button className="outline-gray flex h-full w-9 shrink-0 cursor-pointer rounded-lg p-1.5">
+          <button className="box-button-outline-gray flex h-8 w-8 shrink-0 cursor-pointer rounded-lg p-0.5">
             <Align className="block h-6 w-6 text-gray-50" />
           </button>
 
