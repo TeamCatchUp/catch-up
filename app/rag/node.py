@@ -269,13 +269,12 @@ async def generate_node(state: AgentState):
         m for m in messages if isinstance(m, (HumanMessage, AIMessage))
     ]
 
+    # 마지막 대화를 제외한 모든 사용자-어시스턴트 대화 내용
     history_messages = conversation_messages[:-1]
     
     # 대화 히스토리 trim
     trimmed_history = trimmer.invoke(history_messages)
     
-    logger.info(context_text)
-
     # llm 호출
     async with llm_semaphore:
         answer = await chain.ainvoke(
