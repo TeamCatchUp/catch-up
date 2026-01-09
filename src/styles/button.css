@@ -47,7 +47,7 @@
   }
 
   .capsule-button-outline-light-blue {
-    @apply bg-blue-light-blue-5 rounded-full;
+    @apply bg-light-blue-5 rounded-full;
   }
 
   /* text-button */
