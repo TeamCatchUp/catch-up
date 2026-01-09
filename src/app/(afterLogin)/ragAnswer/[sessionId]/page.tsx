@@ -201,7 +201,10 @@ export default function Page() {
                 {msg.role === 'user' ? (
                   <div className="flex flex-col gap-4">
                     <div className="flex items-center justify-between">
-                      <div className="text-heading-xlarge text-gray-70 flex-1">{msg.content}</div>
+                      <div className="text-heading-xlarge text-gray-70 flex-1">
+                        {/* {msg.content} */}
+                        {msg.content.replace(/\\n/g, '\n')}
+                      </div>
                       <button className="border-neutral-3 box-button-outline-gray flex cursor-pointer items-center justify-center gap-1 self-end rounded-lg border px-2 py-1">
                         <EditPencil className="text-gray-70 h-5 w-5" />
                         <span className="text-body-xsmall text-gray-80">수정하기</span>
