@@ -259,7 +259,7 @@ export default function Page() {
                             onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [idx]: false }))}
                             className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
                           >
-                            <Cancel className="relative bottom-[0.5px] h-4.5 w-4.5 text-gray-50" />
+                            <Cancel className="h-4.5 w-4.5 text-gray-50" />
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">

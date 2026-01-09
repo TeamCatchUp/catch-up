@@ -28,7 +28,7 @@ const RagHeader = () => {
         <button className={`icon-button-only-gray flex items-center rounded-lg p-1.5`}>
           <Share className="h-6 w-6 cursor-pointer text-gray-50" />
         </button>
-        <button className={`icon-button-icon-gray flex items-center rounded-lg p-1.5`}>
+        <button className={`icon-button-only-gray flex items-center rounded-lg p-1.5`}>
           <Kebeb className="h-6 w-6 cursor-pointer text-gray-50" />
         </button>
       </div>
