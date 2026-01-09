@@ -35,27 +35,27 @@
   }
 
   .capsule-button-outline-mono {
-    @apply group border-neutral-4 hover:bg-neutral-2 active:border-neutral-3 active:bg-neutral-3 disabled:border-neutral-4 disabled:bg-neutral-1 rounded-full border bg-white;
+    @apply border-neutral-4 hover:bg-neutral-2 active:border-neutral-3 active:bg-neutral-3 disabled:border-neutral-4 disabled:bg-neutral-1 rounded-full border bg-white;
   }
 
   .capsule-button-outline-blue {
-    @apply group border-blue-30 bg-blue-1 hover:bg-blue-5 active:bg-blue-5 active:border-blue-45 disabled:text-gray-30 disabled:bg-neutral-1 disabled:border-neutral-2 rounded-full border;
+    @apply border-blue-30 bg-blue-1 hover:bg-blue-5 active:bg-blue-5 active:border-blue-45 disabled:text-gray-30 disabled:bg-neutral-1 disabled:border-neutral-2 rounded-full border;
   }
 
   .capsule-button-outline-purple {
-    @apply group bg-violet-5 rounded-full;
+    @apply bg-violet-5 rounded-full;
   }
 
   .capsule-button-outline-light-blue {
-    @apply group bg-blue-light-blue-5 rounded-full;
+    @apply bg-blue-light-blue-5 rounded-full;
   }
 
   /* text-button */
   .text-button-primary-blue {
-    @apply group hover:bg-blue-5 active:bg-blue-5 rounded-full bg-white;
+    @apply hover:bg-blue-5 active:bg-blue-5 rounded-full bg-white;
   }
 
   .text-button-secondary-mono {
-    @apply group hover:bg-neutral-2 active:bg-neutral-3 rounded-full bg-white;
+    @apply hover:bg-neutral-2 active:bg-neutral-3 rounded-full bg-white;
   }
 }

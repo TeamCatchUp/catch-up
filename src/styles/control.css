@@ -14,7 +14,7 @@
 
   /* drop-down (title, datepicker, state 공통 적용) */
   .drop-down {
-    @apply group border-neutral-3 hover:border-neutral-3 hover:bg-neutral-2 active:bg-neutral-3 active:border-neutral-4 rounded-lg border bg-white;
+    @apply border-neutral-3 hover:border-neutral-3 hover:bg-neutral-2 active:bg-neutral-3 active:border-neutral-4 rounded-lg border bg-white;
   }
 
   /* chips (selected는 따로 처리 필요) */
