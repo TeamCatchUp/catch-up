@@ -22,7 +22,7 @@ const SourceCardsComponent = ({ source }: Props) => {
     <div className="flex flex-col gap-2">
       <div
         onClick={handleClick}
-        className="hover:bg-neutral-2 flex w-93.75 cursor-pointer flex-col gap-1.5 rounded-xl bg-white p-2"
+        className="hover:bg-neutral-2 flex w-93.25 cursor-pointer flex-col gap-1.5 rounded-xl bg-white p-2.5"
       >
         {/* 제목 */}
         <div className="flex gap-1.5">
