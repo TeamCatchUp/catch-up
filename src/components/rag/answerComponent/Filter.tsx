@@ -74,7 +74,7 @@ const Filter = () => {
             onClick={handleReset}
             className="icon-button-only-gray flex h-6.5 w-6.5 cursor-pointer items-center justify-center rounded-full"
           >
-            <Reset className="h-6 w-6 text-gray-50" />
+            <Reset className="h-5 w-5 text-gray-50" />
           </button>
           <button className="border-neutral-2 bg-neutral-1 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border">
             <ArrowSend className="text-gray-30 h-6 w-6" />
