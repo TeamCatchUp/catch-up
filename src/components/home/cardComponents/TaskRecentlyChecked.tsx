@@ -36,7 +36,7 @@ const cardData = [
   },
 ];
 
-const RecentlyChecked = () => {
+const TaskRecentlyChecked = () => {
   return (
     <section className="flex flex-col gap-3">
       <header className="flex items-center">
@@ -99,4 +99,4 @@ const RecentlyChecked = () => {
   );
 };
 
-export default RecentlyChecked;
+export default TaskRecentlyChecked;
