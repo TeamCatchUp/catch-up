@@ -19,6 +19,7 @@ import SourceComponent from '@/components/rag/rightComponent/sourceComponent/Sou
 import DetailedTasksComponent from '@/components/rag/rightComponent/detailedTasksComponent/DetailedTasksComponent';
 import { useParams, useSearchParams } from 'next/navigation';
 import { sendChatQuery } from 'src/util/sendChatQuery';
+import AnswerActionButtons from '@/components/rag/answerComponent/AnswerActionButtons';
 import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
 
 const icon = [
@@ -223,7 +224,7 @@ export default function Page() {
                       질문과 연관된 {msg.sources?.length || 0}개의 핵심 자료를 선별했어요.
                     </div>
 
-                    <div className="flex gap-1">
+                    {/* <div className="flex gap-1">
                       {icon.map((item, i) => {
                         const isThumbsDown = item.name === 'ThumbsDown';
                         const activeClass = isThumbsDown && showFeedback ? 'bg-neutral-3 border-neutral-5' : '';
@@ -244,7 +245,13 @@ export default function Page() {
                           </button>
                         );
                       })}
-                    </div>
+                    </div> */}
+                    <AnswerActionButtons
+                      icons={icon}
+                      messageIdx={idx}
+                      feedbackVisibleMap={feedbackVisibleMap}
+                      setFeedbackVisibleMap={setFeedbackVisibleMap}
+                    />
                     {/* 피드백 */}
                     {feedbackVisibleMap[idx] && (
                       <div
