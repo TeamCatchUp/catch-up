@@ -1,6 +1,7 @@
 import asyncio
 from typing import Annotated, Any
 import logging
+import re
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
@@ -33,7 +34,7 @@ async def router_node(state: AgentState):
     messages = state["messages"]
     question = get_latest_query(messages) # 반드시 가장 최근의 질문을 기반으로 답변
     
-    logger.info(question)
+    logger.info(f"질문: {question}")
     
     llm_service = get_llm_service()
     llm = llm_service.get_llm()
@@ -130,7 +131,7 @@ async def retrieve_node(state: AgentState):
 
     query = state.get("current_query") or state["messages"][-1].content
     
-    logger.info(f"retrieval target query: {query}")
+    logger.info(f"Vector Store 검색어: {query}")
 
     target_index = state.get("index_name", "")
 
@@ -239,18 +240,8 @@ async def generate_node(state: AgentState):
     # agent state로부터 검색 결과 획득
     retrieved_docs: list[dict[str, Any]] = state.get("retrieved_docs", [])
 
-    # 검색 결과 formatting
-    context_text_list = []
-    for i, doc in enumerate(retrieved_docs):
-        print(i, doc)
-        source = doc.get("source", "unknown")
-        category = doc.get("category", "기타")
-        file_path = doc.get("file_path", "")
-        text = doc.get("text", "")
-
-        formatted_doc = f"[{i}] 출처: {source} ({file_path}) | 카테고리: {category}\n내용:\n{text}"
-        context_text_list.append(formatted_doc)
-    context_text = "\n\n".join(context_text_list)
+    # 문서 전처리 (Context 텍스트 생성 및 Source 객체 초기화)
+    context_text, processed_sources = _preprocess_documents(retrieved_docs)
 
     # 프롬프트 생성
     prompt = ChatPromptTemplate.from_messages(
@@ -275,7 +266,7 @@ async def generate_node(state: AgentState):
     # 대화 히스토리 trim
     trimmed_history = trimmer.invoke(history_messages)
     
-    # llm 호출
+    # LLM 호출
     async with llm_semaphore:
         answer = await chain.ainvoke(
             input={
@@ -286,34 +277,128 @@ async def generate_node(state: AgentState):
             },
             config={"callbacks": [langfuse_handler]},
         )
+    
+    # LLM이 답변에 사용한 Document의 인덱스 파싱
+    cited_indices = extract_citation(answer)
+    logger.info(f"LLM이 인용한 문서 인덱스: {cited_indices}")
 
-    # 사용자에게 제공할 source 정제
-    unique_sources = []
-    seen = set()
-    for doc in retrieved_docs:
-        source_name = doc.get("source", "unknown")
+    # 사용자에게 제공할 최종 source 정제
+    final_sources = _select_final_sources(
+        processed_sources=processed_sources,
+        cited_indices=cited_indices,
+        threshold=settings.RERANK_THRESHOLD
+    )
+
+    return {"messages": [AIMessage(content=answer)], "sources": final_sources}
+
+
+def _preprocess_documents(retrieved_docs: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
+    """
+    검색 결과를 LLM용 Context Text와 Frontend용 Source 객체로 변환
+    """
+    # context_text 생성을 위한 임시 리스트
+    context_text_list = []
+    
+    # 사용자 제공용 Source 리스트
+    processed_sources = []
+    
+    for i, doc in enumerate(retrieved_docs):
+        
+        # LLM 제공용 Context 상세
+        source = doc.get("source", "unknown")
+        category = doc.get("category", "기타")
         file_path = doc.get("file_path", "")
+        text = doc.get("text", "")
 
-        identifier = f"{source_name}_{file_path}"
-
-        if identifier not in seen:
-            seen.add(identifier)
-
-            source_entry = {
+        formatted_doc = f"[{i}] 출처: {source} ({file_path}) | 카테고리: {category}\n내용:\n{text}"
+        context_text_list.append(formatted_doc)
+        
+        # 사용자에게 반환할 Source 객체 사전 생성
+        source_entry = {
+                "index": i, # Rerank 결과 상의 원래 ID
+                "is_cited": False,
                 "source_type": "github",
-                "text": doc.get("text"), # 원문 전체
+                "text": text, # 원문 전체
                 "file_path": file_path,
-                "category": doc.get("category"),
-                "source": source_name,
+                "category": category,
+                "source": source,
                 "html_url": doc.get("html_url"),
                 "language": doc.get("language"),
+                "relevance_score": doc.get("relevance_score")
             }
-            unique_sources.append(source_entry)
+        processed_sources.append(source_entry)
+    
+    # LLM 제공용 context 연결 
+    context_text = "\n\n".join(context_text_list)
+    
+    return context_text, processed_sources
 
-    return {"messages": [AIMessage(content=answer)], "sources": unique_sources}
+
+def _select_final_sources(
+    processed_sources: list[dict[str, Any]], cited_indices: set[int], threshold: float
+) -> list[dict[str, Any]]:
+    """
+    인용 여부, Threshold, Fallback 로직을 통해 최종 Source 리스트 선정 및 정렬
+    """
+    final_sources = []
+    seen_indices = set()
+    
+    # LLM이 인용한 document가 존재하는 경우
+    if cited_indices:
+        valid_indices = [i for i in cited_indices if 0 <= i < len(processed_sources)]
+        for i in valid_indices:
+            if i not in seen_indices:
+                processed_sources[i]["is_cited"] = True
+                final_sources.append(processed_sources[i])
+                seen_indices.add(i)
+        logger.info(f"LLM이 인용한 문서: {len(final_sources)}개")
+    
+    # 점수 내림차순 정렬 (객체 자체 정렬)
+    sorted_by_score = sorted(
+        processed_sources, key=lambda x: x['relevance_score'], reverse=True
+    )
+    
+    # LLM이 언급하지 않았지만 threshold 기준으로 관련 있는 문서
+    cnt = 0
+    for doc in sorted_by_score:
+        idx = doc['index']
+        if doc.get('relevance_score') >= threshold:
+            if idx not in seen_indices:
+                final_sources.append(doc)
+                seen_indices.add(idx)
+                cnt += 1
+    logger.info(f"threshold를 통과한 문서: {cnt}개")
+    
+    # 인용도 없고 점수도 전부 낮은 경우에 top-3 (Fallback)
+    if not final_sources and processed_sources:
+        logger.info("Fallback: 인용 또는 Threshold 기반 답변 출처가 존재하지 않습니다. Top-3개의 문서를 출처에 포함합니다.")
+        # 이미 점수순으로 정렬된 리스트 활용
+        for doc in sorted_by_score[:3]:
+            idx = doc['index']
+            final_sources.append(doc)
+            seen_indices.add(idx)
+
+    # 인용된 것이 먼저 오고, 원본 인덱스 기준 오름차순 정렬
+    final_sources.sort(
+        key=lambda x: (not x['is_cited'], x['index'])
+    )
+    
+    return final_sources
 
 
 def get_latest_query(messages: Annotated[list, add_messages]):
     return next(
         (m.content for m in reversed(messages) if isinstance(m, HumanMessage)), ""
     )
+
+
+def extract_citation(text: str) -> set[int]:
+    matches = re.findall(r'\[(\d+(?:,\s*\d+)*)\]', text)
+    
+    indices = set()
+    for match in matches:
+        for num_str in match.split(','):
+            if num_str.strip().isdigit():
+                indices.add(int(num_str.strip()))
+                
+    return indices

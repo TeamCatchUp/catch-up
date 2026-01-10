@@ -38,7 +38,7 @@ class RerankService():
             query=query
         )
         
-        logger.info(f"reranked docs: {reranked_docs}")
+        logger.info(f"Reranked docs count: {len(reranked_docs)}")
         
         # Document -> dict
         result_docs = [
@@ -48,7 +48,5 @@ class RerankService():
             }
             for doc in reranked_docs
         ]
-        
-        logger.info(f"result_docs: {result_docs[0]}")
-                
+                        
         return result_docs
