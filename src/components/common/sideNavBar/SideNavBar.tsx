@@ -84,7 +84,11 @@ const SideNavBar = () => {
 
             {!isOpen && (
               <button
-                onClick={() => setIsOpen(true)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsOpen(true);
+                }}
                 className="transition:opacity bg-neutral-2 active:bg-neutral-3 border-neutral-5 absolute inset-0 cursor-pointer rounded-xl border-[0.5px] p-1.5 opacity-0 group-hover:opacity-100"
               >
                 <Open className="h-6 w-6" />
