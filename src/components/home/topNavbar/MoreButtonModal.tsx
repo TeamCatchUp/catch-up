@@ -186,7 +186,7 @@ const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
 
       <button onClick={() => toggleButton('sync')} className="text-label-xsmall flex h-10 items-center gap-2.5 px-2">
         <Rotate className="text-gray-30 h-5 w-5 cursor-pointer" />
-        <span className="flex cursor-pointer items-center text-gray-50">
+        <span className="relative top-px flex cursor-pointer items-center text-gray-50">
           {today.getFullYear()}년 {today.getMonth() + 1}월 {today.getDate()}일
         </span>
       </button>
