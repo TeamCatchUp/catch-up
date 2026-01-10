@@ -1,3 +1,4 @@
+import time
 from langfuse import observe
 from langchain_core.messages import HumanMessage
 
@@ -30,11 +31,16 @@ class ChatService:
             }
 
         config = {"configurable": {"thread_id": session_id}}
-
+        
+        start = time.perf_counter()
         final_state = await app.ainvoke(inputs, config)
+        end = time.perf_counter()
+        
+        elapsed_time = end - start
 
         last_message = final_state["messages"][-1]
         sources = final_state.get("sources", [])
+        
 
         answer_text = (
             last_message.content
@@ -42,4 +48,4 @@ class ChatService:
             else "답변을 생성하지 못했습니다."
         )
 
-        return ChatResponse(answer=answer_text, sources=sources)
+        return ChatResponse(answer=answer_text, sources=sources, process_time=elapsed_time)

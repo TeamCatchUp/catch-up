@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     LANGFUSE_BASE_URL: str
     
     COHERE_API_KEY: str
+    RERANK_THRESHOLD: float
     
     # Performance variables
     COHERE_RERANK_TOP_N: int

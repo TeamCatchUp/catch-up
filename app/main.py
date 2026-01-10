@@ -1,7 +1,8 @@
+import time
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from app import __version__
 from app.core.config import settings, MeiliEnvironment
@@ -63,3 +64,16 @@ app.include_router(chat_router)
 @app.get("/")
 async def health_check():
     return {"status": "ok", "message": "RAG Server is running."}
+
+
+# 응답 시간 추출
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.perf_counter()
+    
+    response = await call_next(request)
+    
+    process_time = time.perf_counter() - start_time
+    logger.info(f"{request.method} {request.url.path} ===> {process_time:.4f}s")
+    
+    return response

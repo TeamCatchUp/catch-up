@@ -6,13 +6,15 @@ from pydantic import BaseModel, Field
 
 # 각 Source별 필수 필드 정의
 class BaseSource(BaseModel):
-    source_type: str = Field(..., description="소스 종류 구분")
+    index: int | None # LLM이 참고한 문서 번호
+    is_cited: bool = Field(default=False, description="LLM 인용 여부")
+    source_type: str = Field(..., description="소스 종류 구분") # TODO: 세분화
     text: str | None = Field(None, description="본문 내용")
+    relevance_score: float = Field(..., description="사용자 쿼리와 출처의 관련 정도")
 
 # Github 코드 메타데이터
 class GithubSource(BaseSource):
     source_type: Literal["github"] = "github"
-    
     file_path: str | None = None # 파일 경로
     category: str | None = None  # 카테고리
     source: str | None = None  # 문서 출처
@@ -40,3 +42,4 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str = Field(..., description="AI의 답변 텍스트")
     sources: list[Source] = Field(default_factory=list, description="참고한 문서 출처 목록")
+    process_time: float = Field(..., description="답변 생성 시간")
