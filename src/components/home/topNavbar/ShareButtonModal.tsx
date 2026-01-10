@@ -26,7 +26,7 @@ const ShareButtonModal = ({ onClose }: { onClose: () => void }) => {
       role="dialog"
       aria-modal="true"
       aria-labelledby="share-modal-title"
-      className="border-neutral-4 shadow-dropdown-menu flex h-[492px] w-[380px] flex-col gap-3 rounded-2xl border bg-white px-1.5 pt-3"
+      className="border-neutral-4 shadow-dropdown-menu flex h-102.5 w-85.5 flex-col gap-3 rounded-2xl border bg-white px-1.5 pt-3"
     >
       <header className="flex items-center justify-between gap-1.5 px-1">
         <label htmlFor="share-input" className="sr-only">
@@ -34,7 +34,7 @@ const ShareButtonModal = ({ onClose }: { onClose: () => void }) => {
         </label>
         <input
           id="share-input"
-          className="text-body-small placeholder-gray-30 focus:caret-blue-30 focus:bg-neutral-1 focus:border-blue-30 border-neutral-3 h-[46px] w-[289px] rounded-xl border p-3 transition-colors outline-none"
+          className="text-body-small placeholder-gray-30 focus:caret-blue-30 focus:bg-neutral-1 focus:border-blue-30 border-neutral-3 h-10 w-62.5 rounded-xl border p-3 transition-colors outline-none"
           placeholder="이메일 또는 그룹을 입력하세요."
         />
         <button className="text-body-medium h-10 cursor-pointer rounded-lg border bg-blue-50 px-4 py-1.5 whitespace-nowrap text-white">
@@ -50,7 +50,7 @@ const ShareButtonModal = ({ onClose }: { onClose: () => void }) => {
           {members.map((member, index) => (
             <li
               key={index}
-              className="hover:bg-neutral-2 focus:bg-neutral-2 flex h-[51px] w-[365px] cursor-pointer items-center gap-4 rounded-lg p-1 focus:outline-none"
+              className="hover:bg-neutral-2 focus:bg-neutral-2 flex h-12.75 w-91.25 cursor-pointer items-center gap-4 rounded-lg p-1 focus:outline-none"
               tabIndex={0}
             >
               <LoadingProfile className="h-10 w-10" />

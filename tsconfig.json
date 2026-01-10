@@ -30,7 +30,8 @@
       "@/constants/*": ["src/constants/*"],
       "@/assets/*": ["src/assets/*"],
       "@/apis/*": ["src/apis/*"],
-      "@/store/*": ["src/store/*"]
+      "@/store/*": ["src/store/*"],
+      "@/api/*": ["src/api/*"]
     }
   },
   "include": [

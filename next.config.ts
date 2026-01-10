@@ -3,15 +3,17 @@ import path from 'path';
 
 const nextConfig = {
   reactStrictMode: true,
-  output: 'export',
 
   images: {
     unoptimized: true,
   },
+
   experimental: {
     // @ts-expect-error Next 16 turbo option
     turbo: false,
   },
+
+  output: 'standalone',
 
   webpack(config) {
     const fileLoaderRule = config.module.rules.find(
@@ -24,7 +26,8 @@ const nextConfig = {
       use: ['@svgr/webpack'],
     });
 
-    fileLoaderRule.exclude = /\.svg$/i;
+    // fileLoaderRule.exclude = /\.svg$/i;
+    if (fileLoaderRule) fileLoaderRule.exclude = /\.svg$/i;
 
     config.resolve.alias = {
       ...(config.resolve.alias || {}),

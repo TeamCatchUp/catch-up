@@ -82,6 +82,9 @@ const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
   return (
     <div
       ref={modalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="more-modal-title"
       className="border-neutral-4 shadow-dropdown-menu flex h-92 w-63 flex-col gap-3 rounded-2xl border bg-white px-1.5 py-3"
     >
       <section className="border-neutral-3 px-1.5">
@@ -92,18 +95,20 @@ const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
             setIsLinkModalOpen(false);
             setIsGetAlertModalOpen(false);
           }}
-          className="text-body-small placeholder-gray-30 focus:caret-blue-30 focus:bg-neutral-1 focus:border-blue-30 border-neutral-3 h-10 w-[257px] rounded-xl border px-3 py-2 transition-colors outline-none"
+          className="text-body-small placeholder-gray-30 focus:caret-blue-30 focus:bg-neutral-1 focus:border-blue-30 border-neutral-3 h-10 w-57 rounded-xl border px-3 py-2 transition-colors outline-none"
         />
       </section>
 
-      <section className="text-body-small text-gray-80 flex flex-col">
+      <section className="text-body-small text-gray-80 flex flex-col justify-center">
         <button
           onClick={() => toggleButton('new')}
           aria-pressed={selectedButton === 'new'}
-          className={`flex h-10 cursor-pointer items-center gap-2 rounded-lg p-2 transition-colors ${selectedButton === 'new' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
+          className={`flex h-10 cursor-pointer items-center rounded-lg p-2 transition-colors ${selectedButton === 'new' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <AddSmall className="relative right-px bottom-0.5 h-5 w-5 text-gray-50" />
-          <span>새 인수인계 시작하기</span>
+          <div className="flex items-center justify-center gap-2.5">
+            <AddSmall className="h-6 w-6 text-gray-50" />
+            <span className="relative top-px">새 인수인계 시작하기</span>
+          </div>
         </button>
 
         <button
@@ -111,12 +116,12 @@ const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
           aria-pressed={selectedButton === 'text'}
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'text' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <div className="flex cursor-pointer items-center gap-2">
-            <IconType className="relative right-px bottom-0.5 h-5 w-5 text-gray-50" />
-            <span>글자 크기</span>
+          <div className="flex cursor-pointer items-center gap-2.5">
+            <IconType className="h-6 w-6 text-gray-50" />
+            <span className="relative top-px">글자 크기</span>
           </div>
           <div className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
-            <span>중간</span>
+            <span className="relative top-px">중간</span>
             <ArrowRight className="text-gray-30 h-6 w-6" />
           </div>
         </button>
@@ -127,15 +132,15 @@ const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
           onClick={() => toggleButton('help')}
           className={`flex h-10 cursor-pointer items-center gap-2.5 rounded-lg p-2 transition-colors ${selectedButton === 'help' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <Error className="relative right-0.5 bottom-px h-5.5 w-5.5 text-gray-50" />
-          <span className="relative right-0.5">도움말</span>
+          <Error className="h-6 w-6 text-gray-50" />
+          <span className="">도움말</span>
         </button>
 
         <button
           onClick={() => toggleButton('version')}
           className={`flex h-10 cursor-pointer items-center gap-2.5 rounded-lg p-2 transition-colors ${selectedButton === 'version' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <Storage className="relative right-0.5 bottom-0.5 h-5 w-5 text-gray-50" />
+          <Storage className="h-6 w-6 text-gray-50" />
           <span>버전 기록</span>
         </button>
 
@@ -145,9 +150,9 @@ const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
           onClick={handleLinkClick}
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'link' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <div className="flex cursor-pointer items-center gap-2">
-            <CloudCheck className="relative right-0.5 bottom-0.5 h-5 w-5.5 text-gray-50" />
-            <span className="relative right-0.5">연결</span>
+          <div className="flex cursor-pointer items-center gap-2.5">
+            <CloudCheck className="h-6 w-6 text-gray-50" />
+            <span>연결</span>
           </div>
           <div className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
             {linkedList.length > 0 && (
@@ -164,8 +169,8 @@ const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
           aria-pressed={selectedButton === 'alert'}
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'alert' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
-          <div className="flex cursor-pointer items-center gap-2">
-            <Alarm className="relative right-0.5 bottom-0.5 h-5.5 w-5 text-gray-50" />
+          <div className="flex cursor-pointer items-center gap-2.5">
+            <Alarm className="h-6 w-6 text-gray-50" />
             <span>알림받기</span>
           </div>
           <div className="text-body-xsmall flex cursor-pointer items-center text-gray-50">
