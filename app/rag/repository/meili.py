@@ -108,8 +108,6 @@ class LangChainMeiliRepository(VectorStoreRepository):
         if filters:
             search_params["filter"] = filters
             
-        logger.info(f"Query: {query}")
-
         # Meilisearch 검색
         results = await index.search(query, **search_params)
         logger.info(f"Search results count: {len(results.hits)}")

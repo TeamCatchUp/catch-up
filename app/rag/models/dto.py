@@ -42,3 +42,4 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str = Field(..., description="AI의 답변 텍스트")
     sources: list[Source] = Field(default_factory=list, description="참고한 문서 출처 목록")
+    process_time: float = Field(..., description="답변 생성 시간")
