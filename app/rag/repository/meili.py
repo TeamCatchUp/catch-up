@@ -19,7 +19,7 @@ embedding_semaphore = asyncio.Semaphore(10)
 class LangChainMeiliRepository(VectorStoreRepository):
     def __init__(self):
         self.embeddings = OpenAIEmbeddings(model=settings.OPENAI_EMBEDDING_MODEL)
-        
+
         self.embeddings.dimensions = 3072
 
         self.client = AsyncClient(
@@ -74,7 +74,6 @@ class LangChainMeiliRepository(VectorStoreRepository):
                 logger.warning(f"Failed to update filters for '{index_name}': {e}")
 
             logger.info(f"embedders: {await index.get_embedders()}")
-            
 
     async def retrieve(
         self,
@@ -84,30 +83,28 @@ class LangChainMeiliRepository(VectorStoreRepository):
         semantic_ratio: float = 0.5,
         filters: Optional[dict] = None,
     ) -> list[Document]:
-        
         # 검색 대상 인덱스
         target_index = index_name or settings.MEILI_DEFAULT_INDEX
 
         # Meilisearch 인덱스 객체
         index = self.client.index(target_index)
-        
+
         async with embedding_semaphore:
-            vector = await self.embeddings.aembed_query(query) # 사용자 자연어 쿼리 임베딩
+            vector = await self.embeddings.aembed_query(
+                query
+            )  # 사용자 자연어 쿼리 임베딩
 
         # 검색 파라미터 설정 (hybrid search)
         search_params = {
             "vector": vector,
             "limit": k,
-            "hybrid": Hybrid(
-                semantic_ratio=semantic_ratio,
-                embedder="default"
-            ),
+            "hybrid": Hybrid(semantic_ratio=semantic_ratio, embedder="default"),
         }
 
         # 필터 존재 시 추가
         if filters:
             search_params["filter"] = filters
-            
+
         # Meilisearch 검색
         results = await index.search(query, **search_params)
         logger.info(f"Search results count: {len(results.hits)}")
@@ -115,23 +112,13 @@ class LangChainMeiliRepository(VectorStoreRepository):
         # 반환할 검색 결과 리스트
         docs = []
         for hit in results.hits:
-            content = hit.get("text") or hit.get("content") or "" # 본문 내용
-            
+            content = hit.get("text") or hit.get("content") or ""  # 본문 내용
+
             # 메타 데이터에서 제외할 필드명
-            excluded_keys = [
-                "text",
-                "content",
-                "_vectors",
-                "_semantics",
-                "_formatted"
-            ]
-            
+            excluded_keys = ["text", "content", "_vectors", "_semantics", "_formatted"]
+
             # 메타 데이터 필터링
-            metadata = {
-                    k: v
-                    for k, v in hit.items()
-                    if k not in excluded_keys
-                }
+            metadata = {k: v for k, v in hit.items() if k not in excluded_keys}
             # 검색 결과 리스트에 추가
             docs.append(Document(page_content=content, metadata=metadata))
 

@@ -28,7 +28,6 @@ def route_after_grade(state: AgentState):
     if grade_status == "bad":
         return "rewrite"
     return "generate"
-    
 
 
 async def get_compiled_graph():
@@ -44,37 +43,29 @@ async def get_compiled_graph():
     workflow.add_node("generate", generate_node)
 
     workflow.set_entry_point("router")
-    
+
     workflow.add_conditional_edges(
-        "router",
-        route_question,
-        {
-            "rewrite": "rewrite",
-            "chitchat": "chitchat"
-        }
+        "router", route_question, {"rewrite": "rewrite", "chitchat": "chitchat"}
     )
     workflow.add_edge("chitchat", END)
-    
+
     workflow.add_edge("rewrite", "retrieve")
     workflow.add_edge("retrieve", "rerank")
     workflow.add_edge("rerank", "grade")
     workflow.add_conditional_edges(
         "grade",
         route_after_grade,
-        {
-            "generate": "generate", 
-            "rewrite": "rewrite"
-        },
+        {"generate": "generate", "rewrite": "rewrite"},
     )
 
     workflow.add_edge("generate", END)
 
     redis_client = Redis.from_url(settings.REDIS_URL)
-    
+
     # Thread(session)-level 단기 영속성
     checkpointer = AsyncRedisSaver(redis_client=redis_client)
 
-    await checkpointer.setup() # 인덱스 생성
+    await checkpointer.setup()  # 인덱스 생성
 
     return workflow.compile(checkpointer=checkpointer).with_config(
         {"callbacks": [langfuse_handler]}
