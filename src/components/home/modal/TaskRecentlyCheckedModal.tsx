@@ -69,7 +69,7 @@ const TaskRecentlyCheckedModal = ({ task, onClose }: TaskRecentlyCheckedModalPro
                   <span className="text-body-small text-gray-80 max-w-58 truncate">
                     한도 계산 API 리팩토링 현황 공유 및 머시기
                   </span>
-                  <span className="text-body-xsmall text-green-60 bg-green-10 rounded-md2 flex items-center justify-center px-1.5 py-0.5 text-center">
+                  <span className="text-body-xsmall text-green-60 bg-green-10 rounded-md2 flex items-center justify-center px-1.5 py-0.5 text-center whitespace-nowrap">
                     부서O
                   </span>
                 </div>
@@ -83,7 +83,7 @@ const TaskRecentlyCheckedModal = ({ task, onClose }: TaskRecentlyCheckedModalPro
                   <span className="text-body-small text-gray-80 max-w-58 truncate">
                     한도 계산 API 리팩토링 현황 공유 및 머시기
                   </span>
-                  <span className="text-body-xsmall text-green-60 bg-green-10 rounded-md2 flex items-center justify-center px-1.5 py-0.5 text-center">
+                  <span className="text-body-xsmall text-green-60 bg-green-10 rounded-md2 flex items-center justify-center px-1.5 py-0.5 text-center whitespace-nowrap">
                     부서O
                   </span>
                 </div>
@@ -133,7 +133,7 @@ const TaskRecentlyCheckedModal = ({ task, onClose }: TaskRecentlyCheckedModalPro
           <div className="text-body-xsmall px-1.5 text-gray-50">관련 업무 질문 히스토리</div>
           <button className="text-button-primary-blue flex h-7 w-23 cursor-pointer items-center justify-center gap-0.5 px-1.5 py-1">
             <Add className="h-4.5 w-4.5 text-blue-50" />
-            <span className="text-blue-55 text-body-xsmall relative top-px">새 질문하기</span>
+            <span className="text-blue-55 text-body-xsmall relative top-px whitespace-nowrap">새 질문하기</span>
           </button>
           <div className="flex flex-col gap-1">
             <div className="icon-button-only-gray flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1">
