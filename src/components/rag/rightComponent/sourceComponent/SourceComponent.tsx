@@ -73,7 +73,7 @@ const SourceComponent = ({ sources, isLoading = false }: Props) => {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="mt-4 flex flex-col gap-2">
         {/* 출처 카드 컴포넌트 */}
         {isLoading ? (
           <RagSourceSkeleton />
