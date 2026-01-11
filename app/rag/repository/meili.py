@@ -8,7 +8,6 @@ from meilisearch_python_sdk import AsyncClient
 from meilisearch_python_sdk.models.search import Hybrid, SearchParams
 
 from app.core.config import settings
-from app.rag.repository.base import VectorStoreRepository
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ logger = logging.getLogger(__name__)
 embedding_semaphore = asyncio.Semaphore(10)
 
 
-class LangChainMeiliRepository(VectorStoreRepository):
+class LangChainMeiliRepository():
     def __init__(self):
         self.embeddings = OpenAIEmbeddings(model=settings.OPENAI_EMBEDDING_MODEL)
 

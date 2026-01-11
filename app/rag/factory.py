@@ -1,13 +1,12 @@
 from functools import lru_cache
 
-from app.rag.repository.base import VectorStoreRepository
 from app.rag.repository.meili import LangChainMeiliRepository
 from app.rag.service.llm import LlmService
 from app.rag.service.rerank import RerankService
 
 
 @lru_cache(maxsize=1)
-def get_vector_repository() -> VectorStoreRepository:
+def get_vector_repository() -> LangChainMeiliRepository:
     return LangChainMeiliRepository()
 
 
