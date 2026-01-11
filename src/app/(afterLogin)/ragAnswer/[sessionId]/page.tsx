@@ -7,6 +7,7 @@ import Add from '/public/icons/icon/add_small.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
 import EditPencil from '/public/icons/icon/edit_pencil.svg';
+import ToggleOff from '/public/icons/icon/State=Off.svg';
 import ArrowSend from '/public/icons/icon/arrow_send.svg';
 import Copy from '/public/icons/icon/copy.svg';
 import ThumbsDown from '/public/icons/icon/thumbs-down.svg';
@@ -63,6 +64,7 @@ export default function Page() {
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: number]: boolean }>({});
   const [isMultiLine, setIsMultiLine] = useState(false);
   const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: number]: boolean }>({});
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
@@ -268,7 +270,17 @@ export default function Page() {
                 ) : (
                   <div className="flex flex-col gap-5">
                     <div className="border-neutral-3 mb-3 rounded-xl border">
-                      <FilterComponent />
+                      {/* <FilterComponent /> */}
+                      {!isFilterOpen ? (
+                        <div className="flex items-center gap-3">
+                          <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
+                          <button onClick={() => setIsFilterOpen(true)}>
+                            <ToggleOff />
+                          </button>
+                        </div>
+                      ) : (
+                        <FilterComponent isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} />
+                      )}
                     </div>
                     <div className="text-gray-80 prose prose-neutral max-w-none break-words">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content.replace(/\\n/g, '\n')}</ReactMarkdown>
