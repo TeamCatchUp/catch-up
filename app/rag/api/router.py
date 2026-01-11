@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends
 import logging
+
+from fastapi import APIRouter, Depends
 
 from app.rag.dependencies import get_chat_service
 from app.rag.models.dto import ChatRequest, ChatResponse

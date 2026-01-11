@@ -1,9 +1,9 @@
 import logging
 
-from langchain_core.documents import Document
 from langchain_cohere import CohereRerank
-from app.core.config import settings
+from langchain_core.documents import Document
 
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 

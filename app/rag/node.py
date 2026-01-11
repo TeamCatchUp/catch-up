@@ -1,16 +1,16 @@
 import asyncio
-from typing import Annotated, Any
 import logging
 import re
+from typing import Annotated, Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph.message import add_messages
 
-from app.observability.langfuse_client import langfuse_handler
 from app.core.config import settings
-from app.rag.factory import get_llm_service, get_vector_repository, get_rerank_service
+from app.observability.langfuse_client import langfuse_handler
+from app.rag.factory import get_llm_service, get_rerank_service, get_vector_repository
 from app.rag.models.grade import GradeDocuments
 from app.rag.models.route import RouteQuery
 from app.rag.prompts.system import (
@@ -20,7 +20,6 @@ from app.rag.prompts.system import (
 )
 from app.rag.prompts.utils import get_prompt_template
 from app.rag.state import AgentState
-
 
 logger = logging.getLogger(__name__)
 

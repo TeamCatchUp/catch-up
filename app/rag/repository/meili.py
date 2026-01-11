@@ -2,10 +2,10 @@ import asyncio
 import logging
 from typing import Optional
 
-from meilisearch_python_sdk import AsyncClient
-from meilisearch_python_sdk.models.search import Hybrid
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
+from meilisearch_python_sdk import AsyncClient
+from meilisearch_python_sdk.models.search import Hybrid
 
 from app.core.config import settings
 from app.rag.repository.base import VectorStoreRepository

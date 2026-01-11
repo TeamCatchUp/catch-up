@@ -1,11 +1,11 @@
-import time
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 
 from app import __version__
-from app.core.config import settings, MeiliEnvironment
+from app.core.config import MeiliEnvironment, settings
 from app.rag.api.router import router as chat_router
 from app.rag.factory import get_vector_repository
 

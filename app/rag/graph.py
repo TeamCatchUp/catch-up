@@ -7,9 +7,9 @@ from app.observability.langfuse_client import langfuse_handler
 from app.rag.node import (
     chitchat_node,
     generate_node,
-    retrieve_node,
-    rerank_node,
     grade_node,
+    rerank_node,
+    retrieve_node,
     rewrite_node,
     router_node,
 )
