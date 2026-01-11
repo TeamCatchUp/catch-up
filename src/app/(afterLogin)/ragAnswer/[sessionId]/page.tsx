@@ -21,6 +21,8 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { sendChatQuery } from 'src/util/sendChatQuery';
 import AnswerActionButtons from '@/components/rag/answerComponent/AnswerActionButtons';
 import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
+import ErrorResponse from '@/components/rag/answerComponent/ErrorResponse';
+import ErrorSourceComponent from '@/components/rag/rightComponent/sourceComponent/ErrorSourceComponent';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -43,6 +45,8 @@ const feedback = [
 
 export default function Page() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
+
   const params = useParams();
   const searchParams = useSearchParams();
   const sessionId = params.sessionId as string;
@@ -127,7 +131,7 @@ export default function Page() {
       localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
     } catch (error) {
       console.error(error);
-      alert('답변을 가져오는데 실패했습니다.');
+      setIsError(true);
     } finally {
       setIsLoading(false);
     }
@@ -165,7 +169,7 @@ export default function Page() {
       setChatData(finalData);
       localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
     } catch (error) {
-      alert('답변을 가져오지 못했습니다.');
+      setIsError(true);
     } finally {
       setIsLoading(false);
     }
@@ -185,7 +189,7 @@ export default function Page() {
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r">
           <div
             ref={scrollRef}
-            className="flex flex-1 flex-col items-center gap-10 overflow-y-auto scroll-smooth px-24 py-9"
+            className="flex flex-1 flex-col items-center gap-8 overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
           >
             {/* 날짜 표시 */}
             <div className="flex w-192.75 items-center justify-center gap-4">
@@ -201,12 +205,9 @@ export default function Page() {
               <div key={idx} className="mx-auto flex w-193.25 flex-col gap-6">
                 {msg.role === 'user' ? (
                   <div className="flex flex-col gap-4">
-                    <div className="flex items-center justify-between">
-                      <div className="text-heading-xlarge text-gray-70 flex-1">
-                        {/* {msg.content} */}
-                        {msg.content.replace(/\\n/g, '\n')}
-                      </div>
-                      <button className="border-neutral-3 box-button-outline-gray flex cursor-pointer items-center justify-center gap-1 self-end rounded-lg border px-2 py-1">
+                    <div className="flex">
+                      <span className="text-heading-xlarge text-gray-70 flex">{msg.content}</span>
+                      <button className="border-neutral-3 box-button-outline-gray flex cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1">
                         <EditPencil className="text-gray-70 h-5 w-5" />
                         <span className="text-body-xsmall text-gray-80">수정하기</span>
                       </button>
@@ -218,34 +219,12 @@ export default function Page() {
                       <Filter />
                     </div>
                     <div className="text-gray-80 prose prose-neutral max-w-none break-words">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content.replace(/\\n/g, '\n')}</ReactMarkdown>
                     </div>
                     <div className="text-body-small text-gray-30">
                       질문과 연관된 {msg.sources?.length || 0}개의 핵심 자료를 선별했어요.
                     </div>
 
-                    {/* <div className="flex gap-1">
-                      {icon.map((item, i) => {
-                        const isThumbsDown = item.name === 'ThumbsDown';
-                        const activeClass = isThumbsDown && showFeedback ? 'bg-neutral-3 border-neutral-5' : '';
-                        return (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              if (isThumbsDown) {
-                                setFeedbackVisibleMap((prev) => ({
-                                  ...prev,
-                                  [idx]: !prev[idx],
-                                }));
-                              }
-                            }}
-                            className={`icon-button-only-gray cursor-pointer p-1.5 ${activeClass}`}
-                          >
-                            <item.icon className="h-6 w-6 text-gray-50" />
-                          </button>
-                        );
-                      })}
-                    </div> */}
                     <AnswerActionButtons
                       icons={icon}
                       messageIdx={idx}
@@ -288,9 +267,20 @@ export default function Page() {
               </div>
             ))}
 
-            {isLoading && (
+            {isLoading && !isError && (
               <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10">
                 <RagAnswerSkeleton />
+              </div>
+            )}
+
+            {!isLoading && isError && (
+              <div className="mx-auto w-193.25 pb-10">
+                <ErrorResponse
+                  icons={icon}
+                  messageIdx={chatData.messages.length}
+                  feedbackVisibleMap={feedbackVisibleMap}
+                  setFeedbackVisibleMap={setFeedbackVisibleMap}
+                />
               </div>
             )}
           </div>
@@ -350,7 +340,9 @@ export default function Page() {
       <div className="border-neutral-3 flex w-101.25 flex-none flex-col border-l bg-white">
         <RagRightAdditionalHeader activeTab={activeTab} onChange={setActiveTab} sourceCount={currentSources.length} />
         <div className="flex-1 overflow-y-auto">
-          {activeTab === 'source' && <SourceComponent sources={currentSources} isLoading={isLoading} />}
+          {activeTab === 'source' && (
+            <SourceComponent sources={currentSources} isLoading={isLoading} isError={isError} />
+          )}
           {activeTab === 'detail' && <DetailedTasksComponent />}
         </div>
       </div>
