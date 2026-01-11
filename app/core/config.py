@@ -49,7 +49,8 @@ class Settings(BaseSettings):
     # Performance variables
     COHERE_RERANK_TOP_N: int
     MEILISEARCH_SEMANTIC_RATIO: float
-    MEILISEARCH_TOP_K: int
+    MEILISEARCH_MIN_K_PER_INDEX: int
+    MEILISEARCH_GLOBAL_RETRIEVAL_BUDGET: int
     OPENAI_EMBEDDING_MODEL: str
     OPENAI_CHAT_MODEL: str
 

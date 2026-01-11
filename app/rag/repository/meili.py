@@ -1,11 +1,11 @@
 import asyncio
 import logging
-from typing import Optional
+from typing import Optional, Any
 
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from meilisearch_python_sdk import AsyncClient
-from meilisearch_python_sdk.models.search import Hybrid
+from meilisearch_python_sdk.models.search import Hybrid, SearchParams
 
 from app.core.config import settings
 from app.rag.repository.base import VectorStoreRepository
@@ -75,7 +75,7 @@ class LangChainMeiliRepository(VectorStoreRepository):
 
             logger.info(f"embedders: {await index.get_embedders()}")
 
-    async def retrieve(
+    async def search(
         self,
         query: str,
         index_name: Optional[str] = None,
@@ -83,6 +83,9 @@ class LangChainMeiliRepository(VectorStoreRepository):
         semantic_ratio: float = 0.5,
         filters: Optional[dict] = None,
     ) -> list[Document]:
+        
+        """단일 쿼리, 단일 인덱스 검색"""
+        
         # 검색 대상 인덱스
         target_index = index_name or settings.MEILI_DEFAULT_INDEX
 
@@ -123,3 +126,53 @@ class LangChainMeiliRepository(VectorStoreRepository):
             docs.append(Document(page_content=content, metadata=metadata))
 
         return docs
+    
+    
+    async def multi_search(
+        self,
+        search_requests: list[dict[str, Any]]
+    ) -> list[list[Document]]:
+        """다중 쿼리, 다중 인덱스 검색"""
+        
+        if not search_requests:
+            return []
+        
+        queries = [req["query"] for req in search_requests]
+        
+        async with embedding_semaphore:
+            vectors = await self.embeddings.aembed_documents(queries)
+        
+        multisearch_queries = []
+        for i, req in enumerate(search_requests):
+            search_query = SearchParams(
+                index_uid=req["index_name"],
+                query=req["query"],
+                vector=vectors[i],
+                limit=req.get("k", 5),
+                hybrid=Hybrid(
+                    semantic_ratio=req.get("semantic_ratio", 0.5),
+                    embedder="default"
+                ),
+            )
+            
+            if req.get("filter"):
+                search_query["filter"] = req.get("filter")
+        
+            multisearch_queries.append(search_query)
+        
+        response = await self.client.multi_search(multisearch_queries)
+        
+        all_results = []
+        
+        for result_set in response:
+            docs = []
+            for hit in result_set.hits:
+                content = hit.get("text") or hit.get("content") or ""
+                
+                excluded_keys = ["text", "content", "_vectors", "_semantics", "_formatted"]
+                metadata = {k: v for k, v in hit.items() if k not in excluded_keys}
+                
+                docs.append(Document(page_content=content, metadata=metadata))
+            all_results.append(docs)
+         
+        return all_results

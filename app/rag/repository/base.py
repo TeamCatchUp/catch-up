@@ -5,5 +5,5 @@ from langchain_core.documents import Document
 
 class VectorStoreRepository(ABC):
     @abstractmethod
-    def retrieve(self, query: str, k: int) -> list[Document]:
+    def search(self, query: str, k: int) -> list[Document]:
         pass

@@ -8,6 +8,7 @@ from app.rag.node import (
     chitchat_node,
     generate_node,
     grade_node,
+    plan_node,
     rerank_node,
     retrieve_node,
     rewrite_node,
@@ -37,6 +38,7 @@ async def get_compiled_graph():
     workflow.add_node("router", router_node)
     workflow.add_node("chitchat", chitchat_node)
     workflow.add_node("rewrite", rewrite_node)
+    workflow.add_node("plan", plan_node)
     workflow.add_node("retrieve", retrieve_node)
     workflow.add_node("rerank", rerank_node)
     workflow.add_node("grade", grade_node)
@@ -49,7 +51,8 @@ async def get_compiled_graph():
     )
     workflow.add_edge("chitchat", END)
 
-    workflow.add_edge("rewrite", "retrieve")
+    workflow.add_edge("rewrite", "plan")
+    workflow.add_edge("plan", "retrieve")
     workflow.add_edge("retrieve", "rerank")
     workflow.add_edge("rerank", "grade")
     workflow.add_conditional_edges(

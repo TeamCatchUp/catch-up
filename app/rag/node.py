@@ -3,6 +3,7 @@ import logging
 import re
 from typing import Annotated, Any
 
+from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -13,6 +14,7 @@ from app.observability.langfuse_client import langfuse_handler
 from app.rag.factory import get_llm_service, get_rerank_service, get_vector_repository
 from app.rag.models.grade import GradeDocuments
 from app.rag.models.route import RouteQuery
+from app.rag.models.plan import SearchQuery, SearchPlan
 from app.rag.prompts.system import (
     SYSTEM_ASSISTANT_PROMPT,
     SYSTEM_CHITCHAT_PROMPT,
@@ -29,7 +31,16 @@ llm_semaphore = asyncio.Semaphore(10)
 rerank_semaphore = asyncio.Semaphore(10)
 
 
+INDEX_MAPPING_RULES = {
+    "codebase": ["_code"],
+    "jira_issue": ["_jira", "_ticket"],   
+    "github_issue": ["_gh_issue", "_issue"],
+    "pr_history": ["_pr", "_commit"],            
+}
+
+
 async def router_node(state: AgentState):
+    logger.info("router node 진입")
     messages = state["messages"]
     question = get_latest_query(messages)  # 반드시 가장 최근의 질문을 기반으로 답변
 
@@ -66,6 +77,7 @@ async def router_node(state: AgentState):
 
 
 async def chitchat_node(state: AgentState):
+    logger.info("chitchat node 진입")
     llm_service = get_llm_service()
     llm = llm_service.get_llm()
 
@@ -94,6 +106,7 @@ async def chitchat_node(state: AgentState):
 
 
 async def rewrite_node(state: AgentState):
+    logger.info("rewrite node 진입")
     llm_service = get_llm_service()
     llm = llm_service.get_llm()
 
@@ -122,41 +135,109 @@ async def rewrite_node(state: AgentState):
             },
             config={"callbacks": [langfuse_handler]},
         )
+        
+    logger.info(f"원본 쿼리: {original_question}\n재작성된 쿼리: {answer}")
 
     return {"current_query": answer, "retry_count": current_try_cnt + 1}
 
 
+async def plan_node(state: AgentState):
+    logger.info("plan node 진입")
+    llm_service = get_llm_service()    
+    llm = llm_service.get_llm()
+    
+    current_query = state.get("current_query") or get_latest_query(state["messages"])
+    
+    structured_llm = llm.with_structured_output(SearchPlan, method="function_calling")
+    
+    prompt = get_prompt_template("plan")
+    
+    chain = prompt | structured_llm
+    
+    async with llm_semaphore:
+        plan: SearchPlan = await chain.ainvoke(
+            input={"current_query": current_query},
+            config={"callbacks": [langfuse_handler]}
+        )
+
+    for q in plan.queries:
+        logger.info(f"query plan: [{q.datasource}] {q.query}")
+        
+    return {"search_queries": plan.queries}
+
+
 async def retrieve_node(state: AgentState):
+    logger.info("retrieve 노드 진입")
+    
     meili_repo = get_vector_repository()
 
-    query = state.get("current_query") or state["messages"][-1].content
-
-    logger.info(f"Vector Store 검색어: {query}")
-
-    target_index = state.get("index_name", "")
-
-    docs = await meili_repo.retrieve(
-        query=query,
-        index_name=target_index,
-        k=settings.MEILISEARCH_TOP_K,
-        semantic_ratio=settings.MEILISEARCH_SEMANTIC_RATIO,
+    plans = state.get("search_queries", [])
+    user_scope = state.get("index_name", [])
+    
+    if not plans:
+        logger.warning("검색 계획 없음. Fallback 실행.")
+        current_query = state.get("current_query") or get_latest_query(state["messages"][-1].content)
+        plans = [SearchQuery(datasource="codebase", query=current_query)]
+        
+    search_requests = []
+    
+    total_target_indicies = 0
+    resolved_plans: list[tuple[str, str]] = []
+    
+    for plan in plans:
+        target_indices = _resolve_indices(plan.datasource, user_scope)
+        if target_indices:
+            total_target_indicies += len(target_indices)
+            resolved_plans.append((plan, target_indices))
+        else:
+            logger.info(f"Skip: {plan.datasource} (User Scope 없음)")
+    
+    if total_target_indicies == 0:
+        logger.warning("실행할 검색 작업이 없습니다.")
+    
+    dynamic_k = max(
+        settings.MEILISEARCH_MIN_K_PER_INDEX,
+        settings.MEILISEARCH_GLOBAL_RETRIEVAL_BUDGET // total_target_indicies
     )
-
-    doc_data_list = []
-    for doc in docs:
-        doc_data_list.append(
-            {
-                "source_type": "github",
+    logger.info(f"Dynmic K 적용 중: 총 {total_target_indicies}개 인덱스 (각 {dynamic_k}개 문서 검색)")
+    
+    for plan, indicies in resolved_plans:
+        for index_name in indicies:
+            search_requests.append({
+                "index_name": index_name,
+                "query": plan.query,
+                "k": dynamic_k,
+                "semantic_ratio": settings.MEILISEARCH_SEMANTIC_RATIO
+            })
+    
+    search_plan = [
+        {
+            "index": req["index_name"],
+            "query": req["query"],
+        }
+        for req in search_requests
+    ]
+    logger.info("검색 계획: %s", search_plan)
+        
+    search_results: list[list[Document]] = await meili_repo.multi_search(search_requests)
+        
+    flat_docs = []
+    
+    for docs in search_results:
+        for doc in docs:
+            flat_docs.append({
+                "source_type": "github", 
                 "text": doc.page_content,
                 "file_path": doc.metadata.get("file_path"),
                 "category": doc.metadata.get("category"),
                 "source": doc.metadata.get("source"),
                 "html_url": doc.metadata.get("html_url"),
                 "language": doc.metadata.get("language"),
-            }
-        )
+            })
+            
+    logger.info(f"총 검색된 문서 수: {len(flat_docs)} (Budget: {settings.MEILISEARCH_GLOBAL_RETRIEVAL_BUDGET})")
 
-    return {"retrieved_docs": doc_data_list}
+    return {"retrieved_docs": flat_docs}
 
 
 async def rerank_node(state: AgentState):
@@ -400,3 +481,14 @@ def extract_citation(text: str) -> set[int]:
                 indices.add(int(num_str.strip()))
 
     return indices
+
+
+def _resolve_indices(datasource_type: str, user_scope: list[str]) -> list[str]:
+    valid_suffix = INDEX_MAPPING_RULES.get(datasource_type, [])
+    resolved = []
+    
+    for index_name in user_scope:
+        if any(suffix in index_name for suffix in valid_suffix):
+            resolved.append(index_name)
+    
+    return resolved
