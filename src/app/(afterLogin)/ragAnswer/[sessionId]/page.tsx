@@ -7,7 +7,7 @@ import Add from '/public/icons/icon/add_small.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
 import EditPencil from '/public/icons/icon/edit_pencil.svg';
-import ToggleOff from '/public/icons/icon/State=Off.svg';
+import ToggleOff from '/public/icons/icon/state=Off.svg';
 import ArrowSend from '/public/icons/icon/arrow_send.svg';
 import Copy from '/public/icons/icon/copy.svg';
 import ThumbsDown from '/public/icons/icon/thumbs-down.svg';
