@@ -269,10 +269,10 @@ export default function Page() {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-5">
-                    <div className="border-neutral-3 mb-3 rounded-xl border">
+                    <div className={`mb-3 rounded-xl ${isFilterOpen ? '' : 'border-neutral-3 border'} `}>
                       {!isFilterOpen ? (
                         <div className="flex items-center gap-3">
-                          <span className="text-body-xsmall !border-none text-gray-50">답변 세부 필터</span>
+                          <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
                           <button onClick={() => setIsFilterOpen(true)} className="cursor-pointer">
                             <ToggleOff />
                           </button>
