@@ -4,10 +4,12 @@ import Align from '/public/icons/icon/align.svg';
 import Divider from '/public/icons/icon/divider.svg';
 import SourceCardsComponent from '@/components/rag/rightComponent/sourceComponent/SourceCardsComponent';
 import RagSourceSkeleton from '@/components/Skeleton/RagSourceSkeleton';
+import ErrorSourceComponent from './ErrorSourceComponent';
 
 interface Props {
   sources: ChatSource[];
   isLoading?: boolean;
+  isError?: boolean;
 }
 
 const filterCategory = [
@@ -22,7 +24,7 @@ const filterCategory = [
 
 type FilterType = (typeof filterCategory)[number]['type'];
 
-const SourceComponent = ({ sources, isLoading = false }: Props) => {
+const SourceComponent = ({ sources, isLoading, isError }: Props) => {
   const [activeFilters, setActiveFilters] = useState<FilterType[]>([]);
 
   const toggleFilter = (type: FilterType) => {
@@ -75,7 +77,9 @@ const SourceComponent = ({ sources, isLoading = false }: Props) => {
 
       <div className="mt-4 flex flex-col gap-2">
         {/* 출처 카드 컴포넌트 */}
-        {isLoading ? (
+        {isError ? (
+          <ErrorSourceComponent />
+        ) : isLoading ? (
           <RagSourceSkeleton />
         ) : (
           filteredSources.map((source) => <SourceCardsComponent key={source.id} source={source} />)

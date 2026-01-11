@@ -7,12 +7,14 @@ import Add from '/public/icons/icon/add_small.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
 import EditPencil from '/public/icons/icon/edit_pencil.svg';
+import ToggleOff from '/public/icons/icon/state=Off.svg';
 import ArrowSend from '/public/icons/icon/arrow_send.svg';
 import Copy from '/public/icons/icon/copy.svg';
 import ThumbsDown from '/public/icons/icon/thumbs-down.svg';
 import Rotate from '/public/icons/icon/rotate.svg';
 import Cancel from '/public/icons/icon/cancel.svg';
-import Filter from '@/components/rag/answerComponent/Filter';
+import Filter from '/public/icons/icon/filter-2.svg';
+import FilterComponent from '@/components/rag/answerComponent/Filter';
 import RagContentHeader from '@/components/rag/answerComponent/RagContentHeader';
 import RagRightAdditionalHeader from '@/components/rag/rightComponent/sourceComponent/RagRightAdditionalHeader';
 import SourceComponent from '@/components/rag/rightComponent/sourceComponent/SourceComponent';
@@ -21,6 +23,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { sendChatQuery } from 'src/util/sendChatQuery';
 import AnswerActionButtons from '@/components/rag/answerComponent/AnswerActionButtons';
 import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
+import ErrorResponse from '@/components/rag/answerComponent/ErrorResponse';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -43,13 +46,15 @@ const feedback = [
 
 export default function Page() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
+
   const params = useParams();
   const searchParams = useSearchParams();
   const sessionId = params.sessionId as string;
   const repo = searchParams.get('repo');
   const [chatData, setChatData] = useState<any>(null);
 
-  const initialQuery = searchParams.get('q'); // URL에서 질문 추출
+  const initialQuery = searchParams.get('q');
 
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -57,13 +62,18 @@ export default function Page() {
 
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: number]: boolean }>({});
+  const [isMultiLine, setIsMultiLine] = useState(false);
+  const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: number]: boolean }>({});
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 우측 컴포넌트 헤더
   const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
 
   const [newInput, setNewInput] = useState('');
+  const previousLengthRef = useRef(0);
 
   useEffect(() => {
     if (showFeedback && scrollRef.current) {
@@ -127,16 +137,16 @@ export default function Page() {
       localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
     } catch (error) {
       console.error(error);
-      alert('답변을 가져오는데 실패했습니다.');
+      setIsError(true);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSendMessage = async () => {
-    if (!newInput.trim() || isLoading || !chatData) return; // chatData 체크 추가
+    if (!newInput.trim() || isLoading || !chatData) return;
 
-    const safeRepo = repo || chatData.repo || ''; // 현재 상태의 repo 활용
+    const safeRepo = repo || chatData.repo || '';
 
     const userMessage = { role: 'user', content: newInput, timestamp: new Date().toISOString() };
     const updatedData = {
@@ -146,7 +156,14 @@ export default function Page() {
 
     setChatData(updatedData);
     setNewInput('');
+    setIsMultiLine(false);
     setIsLoading(true);
+    previousLengthRef.current = 0;
+
+    if (textAreaRef.current) {
+      textAreaRef.current.style.height = 'auto';
+    }
+
     try {
       const result = await sendChatQuery(newInput, sessionId, safeRepo);
 
@@ -165,29 +182,71 @@ export default function Page() {
       setChatData(finalData);
       localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
     } catch (error) {
-      alert('답변을 가져오지 못했습니다.');
+      setIsError(true);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setNewInput(e.target.value);
+
+    const currentLength = e.target.value.length;
+    const isTyping = currentLength > previousLengthRef.current;
+    previousLengthRef.current = currentLength;
+
+    // !multiLine의 maxHeight(26px) 제약에서 스크롤이 생기는지 확인
+    e.target.style.height = 'auto';
+    e.target.style.maxHeight = '26px'; // !multiLine의 maxHeight
+    const hasOverflow = e.target.scrollHeight > e.target.clientHeight;
+
+    // 높이 복원
+    e.target.style.maxHeight = isMultiLine ? '114px' : '26px';
+    e.target.style.height = 'auto';
+    const finalHeight = e.target.scrollHeight;
+    e.target.style.height = Math.min(finalHeight, 114) + 'px';
+
+    let shouldBeMultiLine;
+
+    if (!isMultiLine) {
+      // !multiLine 상태: 스크롤 생기면 multiLine으로
+      shouldBeMultiLine = hasOverflow;
+    } else {
+      // multiLine 상태: 삭제 중일 때만 스크롤 없으면 !multiLine으로
+      if (isTyping) {
+        shouldBeMultiLine = true; // 입력 중이면 multiLine 유지
+      } else {
+        shouldBeMultiLine = hasOverflow; // 삭제 중: 스크롤 없으면 !multiLine으로
+      }
+    }
+
+    if (shouldBeMultiLine !== isMultiLine) {
+      setIsMultiLine(shouldBeMultiLine);
+      setTimeout(() => {
+        if (textAreaRef.current) {
+          textAreaRef.current.focus();
+          const length = textAreaRef.current.value.length;
+          textAreaRef.current.setSelectionRange(length, length);
+        }
+      }, 0);
+    }
+  };
+
   if (!chatData) return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
 
-  // 가장 마지막 답변의 출처 개수 계산
   const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
   const currentSources = lastAssistantMessage?.sources || [];
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-white">
-      {/* 왼쪽 메인 영역 */}
       <div className="flex min-w-0 flex-1 flex-col">
         <RagContentHeader />
 
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r">
           <div
             ref={scrollRef}
-            className="flex flex-1 flex-col items-center gap-10 overflow-y-auto scroll-smooth px-24 py-9"
+            className="flex flex-1 flex-col items-center gap-8 overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
           >
-            {/* 날짜 표시 */}
             <div className="flex w-192.75 items-center justify-center gap-4">
               <div className="border-neutral-4 flex-1 border-t" />
               <span className="text-body-xsmall px-1.5 py-1 text-gray-50">
@@ -196,91 +255,91 @@ export default function Page() {
               <div className="border-neutral-4 flex-1 border-t" />
             </div>
 
-            {/* 채팅 내용 순회 */}
             {chatData.messages.map((msg: any, idx: number) => (
               <div key={idx} className="mx-auto flex w-193.25 flex-col gap-6">
                 {msg.role === 'user' ? (
                   <div className="flex flex-col gap-4">
-                    <div className="flex items-center justify-between">
-                      <div className="text-heading-xlarge text-gray-70 flex-1">
-                        {/* {msg.content} */}
-                        {msg.content.replace(/\\n/g, '\n')}
-                      </div>
-                      <button className="border-neutral-3 box-button-outline-gray flex cursor-pointer items-center justify-center gap-1 self-end rounded-lg border px-2 py-1">
+                    <div className="group relative max-w-full">
+                      <span className="text-heading-xlarge text-gray-70 mr-5">{msg.content}</span>
+                      <button className="border-neutral-3 box-button-outline-gray inline-flex translate-y-1 cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100">
                         <EditPencil className="text-gray-70 h-5 w-5" />
-                        <span className="text-body-xsmall text-gray-80">수정하기</span>
+                        <span className="text-body-xsmall text-gray-80 whitespace-nowrap">수정하기</span>
                       </button>
                     </div>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-5">
                     <div className="border-neutral-3 mb-3 rounded-xl border">
-                      <Filter />
+                      {/* <FilterComponent /> */}
+                      {!isFilterOpen ? (
+                        <div className="flex items-center gap-3">
+                          <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
+                          <button onClick={() => setIsFilterOpen(true)}>
+                            <ToggleOff />
+                          </button>
+                        </div>
+                      ) : (
+                        <FilterComponent isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} />
+                      )}
                     </div>
                     <div className="text-gray-80 prose prose-neutral max-w-none break-words">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content.replace(/\\n/g, '\n')}</ReactMarkdown>
                     </div>
                     <div className="text-body-small text-gray-30">
                       질문과 연관된 {msg.sources?.length || 0}개의 핵심 자료를 선별했어요.
                     </div>
 
-                    {/* <div className="flex gap-1">
-                      {icon.map((item, i) => {
-                        const isThumbsDown = item.name === 'ThumbsDown';
-                        const activeClass = isThumbsDown && showFeedback ? 'bg-neutral-3 border-neutral-5' : '';
-                        return (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              if (isThumbsDown) {
-                                setFeedbackVisibleMap((prev) => ({
-                                  ...prev,
-                                  [idx]: !prev[idx],
-                                }));
-                              }
-                            }}
-                            className={`icon-button-only-gray cursor-pointer p-1.5 ${activeClass}`}
-                          >
-                            <item.icon className="h-6 w-6 text-gray-50" />
-                          </button>
-                        );
-                      })}
-                    </div> */}
                     <AnswerActionButtons
                       icons={icon}
                       messageIdx={idx}
                       feedbackVisibleMap={feedbackVisibleMap}
                       setFeedbackVisibleMap={setFeedbackVisibleMap}
                     />
-                    {/* 피드백 */}
                     {feedbackVisibleMap[idx] && (
                       <div
                         ref={feedbackRef}
                         className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4"
                       >
-                        <div className="flex justify-between">
-                          <span className="text-body-small text-gray-50">
-                            답변이 마음에 들지 않은 이유가 무엇인가요?
-                          </span>
-                          <div
-                            onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [idx]: false }))}
-                            className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
-                          >
-                            <Cancel className="h-4.5 w-4.5 text-gray-50" />
+                        {feedbackSubmittedMap[idx] ? (
+                          <div className="text-body-small flex items-center justify-center text-gray-50">
+                            피드백을 주셔서 감사합니다!
                           </div>
-                        </div>
-                        <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
-                          {feedback.map((feedback, idx) => {
-                            return (
-                              <button
-                                key={idx}
-                                className="box-button-outline-gray border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1"
+                        ) : (
+                          <>
+                            <div className="flex justify-between">
+                              <span className="text-body-small text-gray-50">
+                                답변이 마음에 들지 않은 이유가 무엇인가요?
+                              </span>
+                              <div
+                                onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [idx]: false }))}
+                                className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
                               >
-                                {feedback.content}
-                              </button>
-                            );
-                          })}
-                        </div>
+                                <Cancel className="h-4.5 w-4.5 text-gray-50" />
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
+                              {feedback.map((feedback, idx) => {
+                                return (
+                                  <button
+                                    key={idx}
+                                    onClick={() => {
+                                      setFeedbackSubmittedMap((prev) => ({ ...prev, [idx]: true }));
+                                      setTimeout(() => {
+                                        setFeedbackVisibleMap((prev) => ({
+                                          ...prev,
+                                          [idx]: false,
+                                        }));
+                                      }, 3000);
+                                    }}
+                                    className="box-button-outline-gray border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1"
+                                  >
+                                    {feedback.content}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -288,69 +347,144 @@ export default function Page() {
               </div>
             ))}
 
-            {isLoading && (
+            {isLoading && !isError && (
               <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10">
                 <RagAnswerSkeleton />
               </div>
             )}
+
+            {!isLoading && isError && (
+              <div className="mx-auto w-193.25 pb-10">
+                <ErrorResponse
+                  icons={icon}
+                  messageIdx={chatData.messages.length}
+                  feedbackVisibleMap={feedbackVisibleMap}
+                  setFeedbackVisibleMap={setFeedbackVisibleMap}
+                />
+              </div>
+            )}
           </div>
 
-          <div className="w-full flex-none bg-white px-24 py-4">
+          <div className="w-full flex-none bg-white px-24 pt-4 pb-8">
             <div className="mx-auto w-193.25">
-              {/* <div className="no-scrollbar mb-4 flex justify-start gap-2.5 overflow-x-auto">
-                {['연차 신청', '근태 관리', '비용 정산'].map((item, index) => (
+              <div className="no-scrollbar flex justify-start gap-2.5 overflow-x-auto">
+                {/* {[
+                  '임직원이 가장 많이 물어보는 질문',
+                  '프로젝트 검색하기',
+                  '최근 변경사항 요약',
+                  '이 업무 한 줄 요약',
+                ].map((item, index) => (
                   <button
                     key={index}
                     className="border-blue-30 bg-blue-1 text-body-small hover:bg-blue-5 active:border-blue-45 text-blue-55 cursor-pointer rounded-full border px-3 py-1.5 whitespace-nowrap"
                   >
                     {item}
                   </button>
-                ))}
-              </div> */}
-
-              {/* 입력바 */}
-              <div className="border-neutral-4 shadow-rag-bar flex items-center gap-2 rounded-full border bg-white px-3 py-2.5">
-                <button className="icon-button-only-gray cursor-pointer rounded-full p-1.5">
-                  <Add className="text-gray-70 h-7 w-7" />
-                </button>
-                <textarea
-                  className="text-body-medium max-h-[26px] flex-1 resize-none overflow-hidden overflow-y-auto outline-none"
-                  placeholder="추가 질문을 입력하세요"
-                  value={newInput}
-                  onChange={(e) => {
-                    setNewInput(e.target.value);
-                    e.target.style.height = 'auto';
-                    e.target.style.height = Math.min(e.target.scrollHeight, 26) + 'px';
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={isLoading || !newInput.trim()}
-                  className={`cursor-pointer rounded-full p-2 transition-colors ${
-                    newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border'
-                  }`}
-                >
-                  <ArrowSend
-                    className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
-                  />
-                </button>
+                ))} */}
               </div>
+
+              {!isMultiLine ? (
+                <div className="border-neutral-4 shadow-rag-bar flex items-center gap-2 rounded-full border bg-white px-3 py-2.5">
+                  <div className="group relative">
+                    <button className="icon-button-only-gray cursor-pointer !rounded-full p-1.5">
+                      <Add className="text-gray-70 h-7 w-7" />
+                    </button>
+                    <div className="shadow-tooltip bg-alpha-black-75 text-label-small pointer-events-none absolute top-11 left-1/2 -translate-x-1/2 rounded-lg px-2.5 py-1.5 whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
+                      파일 추가 및 기타
+                    </div>
+                  </div>
+
+                  <textarea
+                    ref={textAreaRef}
+                    placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
+                    value={newInput}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    rows={1}
+                    className="text-body-medium placeholder:text-gray-30 flex-1 resize-none overflow-hidden outline-none"
+                    style={{ height: 'auto', minHeight: '26px', maxHeight: '26px' }}
+                  />
+                  <div className="flex shrink-0 items-center gap-3">
+                    <div className="box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1">
+                      <Filter className="relative top-0.5 h-4.5 w-4.5" />
+                      <span className="text-body-xsmall text-gray-50">필터</span>
+                    </div>
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={isLoading || !newInput.trim()}
+                      className={`cursor-pointer rounded-full p-2 transition-colors ${
+                        newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border'
+                      }`}
+                    >
+                      <ArrowSend
+                        className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="border-neutral-4 shadow-rag-bar flex flex-col gap-2 rounded-3xl border bg-white px-3 py-2.5">
+                  <textarea
+                    ref={textAreaRef}
+                    placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
+                    value={newInput}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    rows={1}
+                    className="text-body-medium placeholder:text-gray-30 w-full resize-none overflow-hidden overflow-y-auto px-2.5 outline-none"
+                    style={{ height: 'auto', minHeight: '26px', maxHeight: '114px' }}
+                  />
+                  <div className="flex w-full items-center">
+                    <div className="group relative">
+                      <button className="icon-button-only-gray cursor-pointer !rounded-full p-1.5">
+                        <Add className="text-gray-70 h-7 w-7" />
+                      </button>
+                      <div className="shadow-tooltip bg-alpha-black-75 text-label-small pointer-events-none absolute top-11 left-1/2 -translate-x-1/2 rounded-lg px-2.5 py-1.5 whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
+                        파일 추가 및 기타
+                      </div>
+                    </div>
+                    <div className="flex-1" />
+                    <div className="flex shrink-0 items-center gap-3">
+                      <div className="box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1">
+                        <Filter className="relative top-0.5 h-4.5 w-4.5" />
+                        <span className="text-body-xsmall text-gray-50">필터</span>
+                      </div>
+                      <button
+                        onClick={handleSendMessage}
+                        disabled={isLoading || !newInput.trim()}
+                        className={`cursor-pointer rounded-full p-2 transition-colors ${
+                          newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border'
+                        }`}
+                      >
+                        <ArrowSend
+                          className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* 우측 사이드바 */}
       <div className="border-neutral-3 flex w-101.25 flex-none flex-col border-l bg-white">
         <RagRightAdditionalHeader activeTab={activeTab} onChange={setActiveTab} sourceCount={currentSources.length} />
         <div className="flex-1 overflow-y-auto">
-          {activeTab === 'source' && <SourceComponent sources={currentSources} isLoading={isLoading} />}
+          {activeTab === 'source' && (
+            <SourceComponent sources={currentSources} isLoading={isLoading} isError={isError} />
+          )}
           {activeTab === 'detail' && <DetailedTasksComponent />}
         </div>
       </div>

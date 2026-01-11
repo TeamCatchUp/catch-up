@@ -2,6 +2,7 @@
 
 import clsx from 'clsx';
 import { useState } from 'react';
+import ToggleOn from '/public/icons/icon/state=On.svg';
 import Delete from '/public/icons/icon/delete_2.svg';
 import Reset from '/public/icons/icon/reset.svg';
 import ArrowSend from '/public/icons/icon/arrow_send.svg';
@@ -14,7 +15,12 @@ const filter = [
   { id: 5, name: '지난 1년' },
 ];
 
-const Filter = () => {
+interface FilterComponentsProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const Filter = ({ isOpen, onClose }: FilterComponentsProps) => {
   const [activeFilters, setActiveFilters] = useState<number[]>([]);
   const [keyword, setKeyword] = useState('');
   const [secondKeyword, setSecondKeyword] = useState('');
@@ -31,7 +37,12 @@ const Filter = () => {
 
   return (
     <div className="flex h-full flex-col justify-center gap-2.5 px-4 py-3">
-      <div className="text-body-xsmall text-gray-50">기간 선택</div>
+      <div className="flex justify-between">
+        <span className="text-body-xsmall text-gray-50">기간 선택</span>
+        <button onClick={onClose}>
+          <ToggleOn />
+        </button>
+      </div>
       <div className="flex h-8.75 items-center gap-1.5">
         {filter.map((item) => {
           const isActive = activeFilters.includes(item.id);
