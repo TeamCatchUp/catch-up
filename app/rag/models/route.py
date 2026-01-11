@@ -12,5 +12,5 @@ class RouteQuery(BaseModel):
             "1. 'chitchat': 단순 인사, 날씨, 안부, 자기소개 등 검색이 필요 없는 일상 대화.\n"
             "2. 'search_pipeline': 코드, 버그, 지라(Jira), Pull Request, 기능 구현, 에러 원인 분석 등 "
             "소프트웨어 개발 프로젝트와 관련된 모든 기술적인 질문"
-        )
+        ),
     )
