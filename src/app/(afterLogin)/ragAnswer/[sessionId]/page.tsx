@@ -205,11 +205,11 @@ export default function Page() {
               <div key={idx} className="mx-auto flex w-193.25 flex-col gap-6">
                 {msg.role === 'user' ? (
                   <div className="flex flex-col gap-4">
-                    <div className="flex">
-                      <span className="text-heading-xlarge text-gray-70 flex">{msg.content}</span>
-                      <button className="border-neutral-3 box-button-outline-gray flex cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1">
+                    <div className="group relative max-w-full">
+                      <span className="text-heading-xlarge text-gray-70 mr-5">{msg.content}</span>
+                      <button className="border-neutral-3 box-button-outline-gray inline-flex translate-y-1 cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100">
                         <EditPencil className="text-gray-70 h-5 w-5" />
-                        <span className="text-body-xsmall text-gray-80">수정하기</span>
+                        <span className="text-body-xsmall text-gray-80 whitespace-nowrap">수정하기</span>
                       </button>
                     </div>
                   </div>
