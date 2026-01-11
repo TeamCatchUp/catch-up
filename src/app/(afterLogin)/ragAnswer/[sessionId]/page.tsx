@@ -269,7 +269,7 @@ export default function Page() {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-5">
-                    <div className={`mb-3 rounded-xl ${isFilterOpen ? '' : 'border-neutral-3 border'} `}>
+                    <div className={`mb-3 rounded-xl ${isFilterOpen ? 'border-neutral-3 border' : ''} `}>
                       {!isFilterOpen ? (
                         <div className="flex items-center gap-3">
                           <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
