@@ -62,6 +62,8 @@ export default function Page() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: number]: boolean }>({});
   const [isMultiLine, setIsMultiLine] = useState(false);
+  const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: number]: boolean }>({});
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
@@ -286,29 +288,46 @@ export default function Page() {
                         ref={feedbackRef}
                         className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4"
                       >
-                        <div className="flex justify-between">
-                          <span className="text-body-small text-gray-50">
-                            답변이 마음에 들지 않은 이유가 무엇인가요?
-                          </span>
-                          <div
-                            onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [idx]: false }))}
-                            className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
-                          >
-                            <Cancel className="h-4.5 w-4.5 text-gray-50" />
+                        {feedbackSubmittedMap[idx] ? (
+                          <div className="text-body-small flex items-center justify-center text-gray-50">
+                            피드백을 주셔서 감사합니다!
                           </div>
-                        </div>
-                        <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
-                          {feedback.map((feedback, idx) => {
-                            return (
-                              <button
-                                key={idx}
-                                className="box-button-outline-gray border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1"
+                        ) : (
+                          <>
+                            <div className="flex justify-between">
+                              <span className="text-body-small text-gray-50">
+                                답변이 마음에 들지 않은 이유가 무엇인가요?
+                              </span>
+                              <div
+                                onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [idx]: false }))}
+                                className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
                               >
-                                {feedback.content}
-                              </button>
-                            );
-                          })}
-                        </div>
+                                <Cancel className="h-4.5 w-4.5 text-gray-50" />
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
+                              {feedback.map((feedback, idx) => {
+                                return (
+                                  <button
+                                    key={idx}
+                                    onClick={() => {
+                                      setFeedbackSubmittedMap((prev) => ({ ...prev, [idx]: true }));
+                                      setTimeout(() => {
+                                        setFeedbackVisibleMap((prev) => ({
+                                          ...prev,
+                                          [idx]: false,
+                                        }));
+                                      }, 3000);
+                                    }}
+                                    className="box-button-outline-gray border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1"
+                                  >
+                                    {feedback.content}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
