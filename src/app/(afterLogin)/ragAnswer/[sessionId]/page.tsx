@@ -334,29 +334,35 @@ export default function Page() {
             )}
           </div>
 
-          <div className="w-full flex-none bg-white px-24 py-4">
+          <div className="w-full flex-none bg-white px-24 pt-4 pb-8">
             <div className="mx-auto w-193.25">
-              <div className="no-scrollbar mb-4 flex justify-start gap-2.5 overflow-x-auto">
+              <div className="no-scrollbar flex justify-start gap-2.5 overflow-x-auto">
                 {/* {[
-//                   '임직원이 가장 많이 물어보는 질문',
-//                   '프로젝트 검색하기',
-//                   '최근 변경사항 요약',
-//                   '이 업무 한 줄 요약',
-//                 ].map((item, index) => (
-//                   <button
-//                     key={index}
-//                     className="border-blue-30 bg-blue-1 text-body-small hover:bg-blue-5 active:border-blue-45 text-blue-55 cursor-pointer rounded-full border px-3 py-1.5 whitespace-nowrap"
-//                   >
-//                     {item}
-//                   </button>
-//                 ))} */}
+                  '임직원이 가장 많이 물어보는 질문',
+                  '프로젝트 검색하기',
+                  '최근 변경사항 요약',
+                  '이 업무 한 줄 요약',
+                ].map((item, index) => (
+                  <button
+                    key={index}
+                    className="border-blue-30 bg-blue-1 text-body-small hover:bg-blue-5 active:border-blue-45 text-blue-55 cursor-pointer rounded-full border px-3 py-1.5 whitespace-nowrap"
+                  >
+                    {item}
+                  </button>
+                ))} */}
               </div>
 
               {!isMultiLine ? (
                 <div className="border-neutral-4 shadow-rag-bar flex items-center gap-2 rounded-full border bg-white px-3 py-2.5">
-                  <button className="icon-button-only-gray cursor-pointer rounded-full p-1.5">
-                    <Add className="text-gray-70 h-7 w-7" />
-                  </button>
+                  <div className="group relative">
+                    <button className="icon-button-only-gray cursor-pointer !rounded-full p-1.5">
+                      <Add className="text-gray-70 h-7 w-7" />
+                    </button>
+                    <div className="shadow-tooltip bg-alpha-black-75 text-label-small pointer-events-none absolute top-11 left-1/2 -translate-x-1/2 rounded-lg px-2.5 py-1.5 whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
+                      파일 추가 및 기타
+                    </div>
+                  </div>
+
                   <textarea
                     ref={textAreaRef}
                     placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
@@ -408,9 +414,14 @@ export default function Page() {
                     style={{ height: 'auto', minHeight: '26px', maxHeight: '114px' }}
                   />
                   <div className="flex w-full items-center">
-                    <button className="icon-button-only-gray cursor-pointer rounded-full p-1.5">
-                      <Add className="text-gray-70 h-7 w-7" />
-                    </button>
+                    <div className="group relative">
+                      <button className="icon-button-only-gray cursor-pointer !rounded-full p-1.5">
+                        <Add className="text-gray-70 h-7 w-7" />
+                      </button>
+                      <div className="shadow-tooltip bg-alpha-black-75 text-label-small pointer-events-none absolute top-11 left-1/2 -translate-x-1/2 rounded-lg px-2.5 py-1.5 whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
+                        파일 추가 및 기타
+                      </div>
+                    </div>
                     <div className="flex-1" />
                     <div className="flex shrink-0 items-center gap-3">
                       <div className="box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1">
