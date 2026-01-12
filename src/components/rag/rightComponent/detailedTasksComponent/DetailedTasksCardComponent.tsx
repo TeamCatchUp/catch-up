@@ -6,6 +6,7 @@ import CheckboxChecked from '/public/icons/icon/checkbox_checked.svg';
 import Connector from '/public/icons/icon/connector.svg';
 import LastConnector from '/public/icons/icon/last_connector.svg';
 import DetailedTaskModal from './DetailedTaskModal';
+import SelectionBarModal from './SelectionBarModal';
 
 interface SubTask {
   id: number;
@@ -87,12 +88,20 @@ const createInitialCheckedMap = () => {
 const DetailedTasksCardComponent = () => {
   const [checkedMap, setCheckedMap] = useState(createInitialCheckedMap);
   const [openMap, setOpenMap] = useState<Record<number, boolean>>({});
-  const [selected, setSelected] = useState<{
+
+  // detail modal (업무 선택)
+  const [detailModal, setDetailModal] = useState<{
     type: 'task' | 'subtask';
-    taskId: Number;
-    subId?: Number;
+    taskId: number;
+    subId?: number;
   } | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // selection bar (체크박스 선택)
+  const [checkModal, setCheckModal] = useState<{
+    type: 'task' | 'subtask';
+    taskId: number;
+    subId?: number;
+  } | null>(null);
 
   // 상위 업무
   const toggleTask = (task: Task) => {
@@ -100,15 +109,6 @@ const DetailedTasksCardComponent = () => {
       const current = prev[task.id];
       const nextChecked = !current?.checked;
 
-      //   const subChecked = Object.fromEntries(task.subtasks.map((sub) => [sub.id, nextChecked]));
-
-      //   return {
-      //     ...prev,
-      //     [task.id]: {
-      //       checked: nextChecked,
-      //       subtasks: subChecked,
-      //     },
-      //   };
       return {
         ...prev,
         [task.id]: {
@@ -117,13 +117,17 @@ const DetailedTasksCardComponent = () => {
         },
       };
     });
+
+    // setCheckModal({ type: 'task', taskId: task.id });
+    setCheckModal((prev) =>
+      prev?.type === 'task' && prev.taskId === task.id ? null : { type: 'task', taskId: task.id },
+    );
   };
 
   // 하위 업무
   const toggleSubTask = (task: Task, subId: number) => {
     setCheckedMap((prev) => {
       const taskState = prev[task.id];
-      if (!taskState) return prev;
 
       const nextSubtasks = {
         ...taskState.subtasks,
@@ -140,19 +144,13 @@ const DetailedTasksCardComponent = () => {
         },
       };
     });
-  };
 
-  //   const handleTaskClick = (taskId: number) => {
-  //     setSelected({ type: 'task', taskId });
-  //     setIsModalOpen(true);
-  //   };
-  //   const handleSubTaskClick = (taskId: number, subId: number) => {
-  //     setSelected({ type: 'subtask', taskId, subId });
-  //     setIsModalOpen(true);
-  //   };
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setSelected(null);
+    // setCheckModal({ type: 'subtask', taskId: task.id, subId });
+    setCheckModal((prev) =>
+      prev?.type === 'subtask' && prev.taskId === task.id && prev.subId === subId
+        ? null
+        : { type: 'subtask', taskId: task.id, subId },
+    );
   };
 
   return (
@@ -162,9 +160,8 @@ const DetailedTasksCardComponent = () => {
         제목
       </div>
       {MOCK_TASK.map((task) => {
-        const taskState = checkedMap[task.id];
-        const checked = taskState?.checked;
-        const opened = openMap[task.id] ?? false;
+        const opened = openMap[task.id];
+        const checked = checkedMap[task.id]?.checked;
 
         return (
           <div key={task.id} className="flex flex-col">
@@ -172,9 +169,8 @@ const DetailedTasksCardComponent = () => {
             <div
               className={clsx(
                 'border-neutral-4 flex items-center border-b px-2 py-3',
-                isModalOpen &&
-                  selected?.type === 'task' &&
-                  selected.taskId === task.id &&
+                detailModal?.type === 'task' &&
+                  detailModal.taskId === task.id &&
                   'rounded-md2 !border-blue-30 bg-blue-1 border',
               )}
             >
@@ -208,8 +204,13 @@ const DetailedTasksCardComponent = () => {
 
               <span
                 onClick={() => {
-                  setSelected({ type: 'task', taskId: task.id });
-                  setIsModalOpen(true);
+                  //   setDetailModal({ type: 'task', taskId: task.id });
+                  setDetailModal(
+                    (prev) =>
+                      prev?.type === 'task' && prev.taskId === task.id
+                        ? null // 이미 열려있으면 닫기
+                        : { type: 'task', taskId: task.id }, // 아니면 새로 열기
+                  );
                 }}
                 className="text-body-small text-gray-90 cursor-pointer truncate hover:underline"
               >
@@ -222,17 +223,16 @@ const DetailedTasksCardComponent = () => {
               <div>
                 {task.subtasks.map((sub, idx) => {
                   const isLast = idx === task.subtasks.length - 1;
-                  const subChecked = checkedMap[task.id]?.subtasks?.[sub.id] ?? false;
+                  const subChecked = checkedMap[task.id].subtasks[sub.id];
 
                   return (
                     <div
                       key={sub.id}
                       className={clsx(
                         'border-neutral-4 flex h-11.75 items-center border-b',
-                        isModalOpen &&
-                          selected?.type === 'subtask' &&
-                          selected.taskId === task.id &&
-                          selected.subId === sub.id &&
+                        detailModal?.type === 'subtask' &&
+                          detailModal.taskId === task.id &&
+                          detailModal.subId === sub.id &&
                           'rounded-md2 !border-blue-30 bg-blue-1 border',
                       )}
                     >
@@ -255,8 +255,15 @@ const DetailedTasksCardComponent = () => {
 
                         <span
                           onClick={() => {
-                            setSelected({ type: 'subtask', taskId: task.id, subId: sub.id });
-                            setIsModalOpen(true);
+                            // setDetailModal({ type: 'subtask', taskId: task.id, subId: sub.id });
+                            {
+                              setDetailModal(
+                                (prev) =>
+                                  prev?.type === 'subtask' && prev.taskId === task.id && prev.subId === sub.id
+                                    ? null // 이미 열려있으면 닫기
+                                    : { type: 'subtask', taskId: task.id, subId: sub.id }, // 아니면 새로 열기
+                              );
+                            }
                           }}
                           className="text-body-small text-gray-90 flex-1 cursor-pointer truncate hover:underline"
                         >
@@ -271,7 +278,8 @@ const DetailedTasksCardComponent = () => {
           </div>
         );
       })}
-      {isModalOpen && <DetailedTaskModal onClose={closeModal} />}
+      {detailModal && <DetailedTaskModal onClose={() => setDetailModal(null)} data={detailModal} />}
+      {checkModal && <SelectionBarModal onClose={() => setCheckModal(null)} data={checkModal} />}
     </div>
   );
 };

@@ -1,11 +1,16 @@
 interface DetailedTaskModalProps {
   onClose: () => void;
+  data: {
+    type: 'task' | 'subtask';
+    taskId: number;
+    subId?: Number;
+  };
 }
 
-const DetailedTaskModal = ({ onClose }: DetailedTaskModalProps) => {
+const DetailedTaskModal = ({ onClose, data }: DetailedTaskModalProps) => {
   return (
     <div className="">
-      <div className="">모달모달</div>
+      <div className="">deatiled Modal</div>
     </div>
   );
 };
