@@ -5,11 +5,12 @@ from pydantic import BaseModel, Field
 
 # 정보 검색이 필요한지, 일상 대화인지 여부에 대한 쿼리 라우터
 class RouteQuery(BaseModel):
-    datasource: Literal["chitchat", "codebase", "issue_tracker", "pr_history"] = Field(
+    datasource: Literal["chitchat", "search_pipeline"] = Field(
         ...,
-        description="질문의 성격에 따라 적절한 데이터 소스를 선택하세요. "
-        "코드 구현/문법 질문은 'codebase', "
-        "버그/기능요청/히스토리 질문은 'issue_tracker', "
-        "코드 변경 내역 질문은 'pr_history', "
-        "일상 대화는 'chitchat'입니다.",
+        description=(
+            "질문의 성격에 따라 다음 단계로 라우팅합니다:\n"
+            "1. 'chitchat': 단순 인사, 날씨, 안부, 자기소개 등 검색이 필요 없는 일상 대화.\n"
+            "2. 'search_pipeline': 코드, 버그, 지라(Jira), Pull Request, 기능 구현, 에러 원인 분석 등 "
+            "소프트웨어 개발 프로젝트와 관련된 모든 기술적인 질문"
+        ),
     )
