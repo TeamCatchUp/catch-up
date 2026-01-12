@@ -6,9 +6,6 @@ import Person from '/public/icons/icon/person.svg';
 import Tag from '/public/icons/icon/tag.svg';
 import Space from '/public/icons/icon/space.svg';
 import ArrowRight from '/public/icons/icon/arrow_right2.svg';
-import DropDownUp from '/public/icons/icon/dropdown, up.svg';
-import Connector from '/public/icons/icon/connector.svg';
-import LastConnector from '/public/icons/icon/last_connector.svg';
 import RagDetailedTasksSkeleton from '@/components/Skeleton/RagDetailedTasksSkeleton';
 import DetailedTasksCardComponent from './DetailedTasksCardComponent';
 import { SearchOptionButton } from '@/components/UI/SearchOptionButton';
@@ -48,7 +45,7 @@ const DetailedTasksComponent = () => {
   };
 
   return (
-    <div className="flex w-101.25 flex-col gap-3 px-4 py-3">
+    <div className="flex w-full flex-col gap-3 px-4 py-3">
       <div className="flex w-full overflow-x-auto">
         <div className="flex h-9 min-w-max items-center gap-0.5">
           <button className="icon-button-only-gray flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg p-0.5">
@@ -70,13 +67,9 @@ const DetailedTasksComponent = () => {
             );
           })}
           <button className="icon-button-only-gray flex h-6.5 w-6.5 cursor-pointer items-center justify-center !rounded-full">
-            <ArrowRight className="text-gray-50" />
+            <ArrowRight className="h-5 w-5 text-gray-50" />
           </button>
         </div>
-      </div>
-
-      <div className="bg-neutral-1 text-body-xsmall flex items-center justify-center rounded-t-2xl rounded-b-md py-1.5 text-gray-50">
-        제목
       </div>
 
       <div className="flex flex-col gap-2">
