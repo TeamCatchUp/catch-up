@@ -35,7 +35,7 @@ class ChatRequest(BaseModel):
     session_id: str = Field(
         default_factory=lambda: str(uuid.uuid4()), description="대화 세션 ID"
     )
-    index_name: list[str] = Field(description="검색 대상 인덱스 리스트")
+    index_list: list[str] = Field(description="검색 대상 인덱스 리스트")
 
 
 # 채팅 응답

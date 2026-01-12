@@ -22,14 +22,14 @@ class ChatService:
 
     @observe()
     async def chat(
-        self, query: str, role: str, session_id: str, index_name: str
+        self, query: str, role: str, session_id: str, index_list: list[str]
     ) -> ChatResponse:
         app = await self._get_app()
 
         inputs = {
             "messages": [HumanMessage(content=query)],
             "role": role,
-            "index_name": index_name,
+            "index_list": index_list,
         }
 
         config = {"configurable": {"thread_id": session_id}}

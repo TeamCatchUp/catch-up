@@ -43,5 +43,5 @@ class AgentState(TypedDict):
     search_queries: list[SearchQuery]
     retrieved_docs: list[dict[str, Any]]  # 검색 결과
     sources: list[dict[str, Any]]  # generate_node가 생성하는 최종 출처 데이터
-    index_name: list[str]  # 검색 대상 인덱스 이름
+    index_list: list[str]  # 검색 대상 인덱스 이름
     grade_status: Literal["good", "bad", "max_retries"]

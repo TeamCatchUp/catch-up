@@ -19,7 +19,7 @@ async def chat_response(
         query=request.query,
         role=request.role,
         session_id=request.session_id,
-        index_name=request.index_name,
+        index_list=request.index_list,
     )
 
     return response

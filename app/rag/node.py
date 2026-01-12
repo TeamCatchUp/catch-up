@@ -172,7 +172,7 @@ async def retrieve_node(state: AgentState):
     meili_repo = get_vector_repository()
 
     plans = state.get("search_queries", [])
-    user_scope = state.get("index_name", [])
+    user_scope = state.get("index_list", [])
 
     if not plans:
         logger.warning("검색 계획 없음. Fallback 실행.")

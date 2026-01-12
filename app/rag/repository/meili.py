@@ -25,7 +25,7 @@ class LangChainMeiliRepository:
             settings.MEILI_HTTP_ADDR, settings.MEILI_KEY, timeout=30
         )
 
-    async def initialize(self, index_names: list[str] = None):
+    async def initialize(self, index_list: list[str] = None):
         """
         사용할 모든 인덱스에 대해 초기 설정을 수행한다.
 
@@ -33,7 +33,7 @@ class LangChainMeiliRepository:
         FastAPI 서버 최초 실행 시점에 lifespan을 통해 실행된다.
         """
         logger.info(f"Initializing meilisearch indicies...")
-        targets: list[str] = index_names or [settings.MEILI_DEFAULT_INDEX]
+        targets: list[str] = index_list or [settings.MEILI_DEFAULT_INDEX]
 
         config = {"primaryKey": "id"}
 
