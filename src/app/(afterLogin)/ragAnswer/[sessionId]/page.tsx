@@ -478,7 +478,11 @@ export default function Page() {
         </div>
       </div>
 
-      <div className="border-neutral-3 flex w-101.25 flex-none flex-col border-l bg-white">
+      <div
+        className={`border-neutral-3 flex flex-none flex-col border-l bg-white ${
+          activeTab === 'source' ? 'w-101.25' : 'w-125'
+        }`}
+      >
         <RagRightAdditionalHeader activeTab={activeTab} onChange={setActiveTab} sourceCount={currentSources.length} />
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'source' && (
