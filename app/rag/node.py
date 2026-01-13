@@ -14,6 +14,13 @@ from app.observability.langfuse_client import langfuse_handler
 from app.rag.factory import get_llm_service, get_rerank_service, get_vector_repository
 from app.rag.models.grade import GradeDocuments
 from app.rag.models.plan import SearchPlan, SearchQuery
+from app.rag.models.retrieve import (
+    SourceType,
+    BaseSearchResult,
+    CodeSearchResult,
+    PullRequestSearchResult,
+    IssueSearchResult
+)
 from app.rag.models.route import RouteQuery
 from app.rag.prompts.system import (
     SYSTEM_ASSISTANT_PROMPT,
@@ -229,21 +236,23 @@ async def retrieve_node(state: AgentState):
         search_requests
     )
 
-    flat_docs = []
+    flat_docs: list[BaseSearchResult]= []
 
     for docs in search_results:
         for doc in docs:
-            flat_docs.append(
-                {
-                    "source_type": "github",
-                    "text": doc.page_content,
-                    "file_path": doc.metadata.get("file_path"),
-                    "category": doc.metadata.get("category"),
-                    "source": doc.metadata.get("source"),
-                    "html_url": doc.metadata.get("html_url"),
-                    "language": doc.metadata.get("language"),
-                }
-            )
+            source_type = doc.get("source_type")
+            
+            try:
+                if source_type == SourceType.CODE:                   
+                    flat_docs.append(CodeSearchResult.from_search_result_doc(doc))
+                    
+                elif source_type == SourceType.PULL_REQUEST:
+                    flat_docs.append(PullRequestSearchResult.from_search_result_doc(doc))
+                    
+                elif source_type == SourceType.ISSUE:
+                    flat_docs.append(IssueSearchResult.from_search_result_doc(doc))
+            except Exception as e:
+                logger.warning(f"Failed to parse document {doc.metadata.get("id")}: {e}")            
 
     logger.info(
         f"총 검색된 문서 수: {len(flat_docs)} (Budget: {settings.MEILISEARCH_GLOBAL_RETRIEVAL_BUDGET})"
