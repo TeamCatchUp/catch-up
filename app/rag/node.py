@@ -253,6 +253,7 @@ async def retrieve_node(state: AgentState):
 
 
 async def rerank_node(state: AgentState):
+    logger.info("rerank node 진입")
     rerank_service = get_rerank_service()
 
     query = state.get("current_query") or state["messages"][-1].content
@@ -268,6 +269,7 @@ async def rerank_node(state: AgentState):
 
 
 async def grade_node(state: AgentState):
+    logger.info("grade node 진입")
     llm_service = get_llm_service()
     llm = llm_service.get_llm()
 
@@ -318,6 +320,7 @@ async def grade_node(state: AgentState):
 
 
 async def generate_node(state: AgentState):
+    logger.info("generate node 진입")
     llm_service = get_llm_service()
     llm = llm_service.get_llm()
     trimmer = llm_service.get_trimmer()
