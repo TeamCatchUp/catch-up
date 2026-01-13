@@ -7,7 +7,12 @@ from langchain_core.messages import HumanMessage
 from langfuse import observe
 
 from app.rag.graph import get_compiled_graph
-from app.rag.models.dto import ChatResponse
+from app.rag.models.dto import (
+    ChatResponse,
+    ChatStreamingResponse,
+    ChatStreamingFinalResponse,
+    ChatStreamingKeepAliveResponse
+)
 
 logger = logging.getLogger(__name__)
 
@@ -103,11 +108,9 @@ class ChatService:
                 
                 # 각 노드에 진입할 때마다 반환
                 if kind == "on_chain_start" and name in NODE_STATUS_MAP:
-                    yield {
-                        "type": "status",
-                        "node": name,
-                        "message": NODE_STATUS_MAP[name]
-                    }
+                    yield ChatStreamingResponse(
+                        type="status", node=name, message=NODE_STATUS_MAP[name]
+                    ).model_dump()
                 
                 # Keep-alive
                 elif kind == "on_chat_model_stream" and event["metadata"].get("langgraph_node") == "generate":
@@ -115,7 +118,9 @@ class ChatService:
                     
                     # 최소 1초 간격으로 ping을 보냄
                     if current_time - last_ping_time > 1.0:
-                        yield {"type": "ping"}
+                        
+                        yield ChatStreamingKeepAliveResponse(type="ping").model_dump()
+
                         last_ping_time = current_time
                         
                 # generate node 종료 시점에 수행할 작업
@@ -132,13 +137,14 @@ class ChatService:
                         last_message = node_output["messages"][-1]
                         answer_text = last_message.content
                         sources = node_output.get("sources", [])
-
-                        yield {
-                            "type": "result",
-                            "answer": answer_text,
-                            "sources": sources,
-                            "process_time": elapsed_time
-                        }
+                        
+                        yield ChatStreamingFinalResponse(
+                            type="result",
+                            node=name,
+                            answer=answer_text,
+                            sources=sources,
+                            process_time=elapsed_time
+                        ).model_dump()
                         
         except asyncio.CancelledError:
             logger.warning("클라이언트 연결이 종료되었습니다.")
