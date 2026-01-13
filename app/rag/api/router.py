@@ -1,5 +1,5 @@
-import logging
 import json
+import logging
 import time
 
 from fastapi import APIRouter, Depends
@@ -32,16 +32,16 @@ async def chat_response(
 async def chat_response_stream(
     request: ChatRequest, service: ChatService = Depends(get_chat_service)
 ):
-    async def event_generator():        
+    async def event_generator():
         async for chunk in service.chat_stream(
             query=request.query,
             role=request.role,
             session_id=request.session_id,
-            index_list=request.index_list
+            index_list=request.index_list,
         ):
-            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"   
-                 
+            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
             if chunk["type"] == "result":
                 yield "data: [DONE]\n\n"
-            
+
     return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -36,7 +36,7 @@ class ChatRequest(BaseModel):
         default_factory=lambda: str(uuid.uuid4()), description="대화 세션 ID"
     )
     index_list: list[str] = Field(description="검색 대상 인덱스 리스트")
-        
+
 
 # 최종 채팅 응답
 class ChatResponse(BaseModel):
@@ -45,7 +45,7 @@ class ChatResponse(BaseModel):
         default_factory=list, description="참고한 문서 출처 목록"
     )
     process_time: float = Field(..., description="답변 생성 시간")
-    
+
 
 # (Streaming) 중간 과정 응답
 class ChatStreamingResponse(BaseModel):
@@ -56,10 +56,12 @@ class ChatStreamingResponse(BaseModel):
 
 # (Streaming) Keep-alive Ping
 class ChatStreamingKeepAliveResponse(BaseModel):
-    type: Literal["ping"] = Field(..., description="Keep-Alive 핑")    
-    
+    type: Literal["ping"] = Field(..., description="Keep-Alive 핑")
 
-# (Streaming) 최종 채팅 응답 
+
+# (Streaming) 최종 채팅 응답
 class ChatStreamingFinalResponse(ChatResponse):
     type: Literal["result"] = Field(..., description="최종 payload 유형")
-    node: Literal["generate", "chitchat"] = Field(..., description="최종 답변 생성 노드 이름")
+    node: Literal["generate", "chitchat"] = Field(
+        ..., description="최종 답변 생성 노드 이름"
+    )
