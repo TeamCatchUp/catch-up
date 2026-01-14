@@ -31,7 +31,7 @@
 
   /* capsule-button */
   .capsule-button-solid-primary {
-    @apply active:bg-blue-60 disabled:bg-blue-10 rounded-full bg-blue-50 text-white hover:bg-blue-50;
+    @apply active:bg-blue-60 disabled:bg-blue-10 hover:bg-blue-55 rounded-full bg-blue-50 text-white;
   }
 
   .capsule-button-outline-mono {
