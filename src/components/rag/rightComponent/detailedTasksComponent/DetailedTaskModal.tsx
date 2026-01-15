@@ -7,26 +7,15 @@ import Check from '/public/icons/icon/check.svg';
 import Edit from '/public/icons/icon/edit_square.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import InfoTabContent from './detailedTasksModalContent/InfoTabContent';
-// // Info
-// import Flag from '/public/icons/icon/flag_filled.svg';
-// import Menu from '/public/icons/icon/menu.svg';
-// import UnfoldMore from '/public/icons/icon/unfold_more.svg';
-// import Status from '/public/icons/icon/status_filled.svg';
-// import Progress from '/public/icons/icon/progress.svg';
-// import Person from '/public/icons/icon/person_filled.svg';
-// import DefaultProfile from '/public/icons/icon/default_profile.svg';
-// import Divider from '/public/icons/icon/divider.svg';
-// import Calendar from '/public/icons/icon/calendar_filled.svg';
-// 첨부파일
-import File from '/public/icons/icon/file.svg';
-// 위키
-import Wiki from '/public/icons/logo/Wiki.svg';
-// url
-import Link from '/public/icons/icon/link.svg';
+import FilesTabContent from './detailedTasksModalContent/FilesTabContent';
+import WikiTabContent from './detailedTasksModalContent/WikiTabContent';
+import URLTabContent from './detailedTasksModalContent/URLTabContent';
+import NotionTabContent from './detailedTasksModalContent/NotionTabContent';
+import NoDataContent from './detailedTasksModalContent/NoDataContent';
 // 댓글
-// import DefaultProfile from '/public/icons/icon/default_profile.svg';
+import DefaultProfile from '/public/icons/icon/default_profile.svg';
 import LastConnector from '/public/icons/icon/last_connector.svg';
-// import Link from '/public/icons/icon/link.svg';
+import Link from '/public/icons/icon/link.svg';
 
 interface DetailedTaskModalProps {
   onClose: () => void;
@@ -56,15 +45,15 @@ const DetailedTaskModal = ({ onClose, data }: DetailedTaskModalProps) => {
       case 'info':
         return <InfoTabContent />;
       case 'files':
-        return <div className="p-4">첨부파일 컨텐츠</div>;
+        return <FilesTabContent />;
       case 'wiki':
-        return <div className="p-4">Wiki 컨텐츠</div>;
+        return <WikiTabContent />;
       case 'url':
-        return <div className="p-4">URL 컨텐츠</div>;
+        return <URLTabContent />;
       case 'comments':
         return <div className="p-4">댓글 컨텐츠</div>;
       case 'notion':
-        return <div className="p-4">Notion 컨텐츠</div>;
+        return <NotionTabContent />;
       default:
         return null;
     }
@@ -131,7 +120,7 @@ const DetailedTaskModal = ({ onClose, data }: DetailedTaskModalProps) => {
       </div>
       <span className="bg-neutral-3 relative bottom-2.75 flex h-px" />
 
-      <div className="mt-4 flex h-100 flex-col overflow-y-auto">
+      <div className="mt-4 flex flex-1 flex-col overflow-y-auto">
         {/* content */}
         {renderTabContent()}
 
@@ -156,7 +145,7 @@ const DetailedTaskModal = ({ onClose, data }: DetailedTaskModalProps) => {
         </div>
       </div>
       {/* 기능 버튼 */}
-      <div className="mt-3 flex h-9 items-center justify-between gap-4">
+      <div className="mt-2 flex h-9 items-center justify-between gap-4">
         <button className="capsule-button-outline-blue flex w-48 cursor-pointer items-center justify-center gap-1.5 px-3 py-1.5">
           <div className="relative top-px flex h-5 w-5 items-center">
             <Edit className="text-blue-50" />
