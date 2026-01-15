@@ -116,12 +116,14 @@ const DetailedTasksCardComponent = () => {
     return selectedTasks.reduce((sum, task) => sum + task.subtasks.length, 0);
   }, [selectedTasks]);
 
-  // selection bar 표시 여부 업데이트
+  // selection bar 표시 여부
   useMemo(() => {
-    setShowSelectionBar(totalCheckedCount > 0);
+    if (!detailModal) {
+      setShowSelectionBar(totalCheckedCount > 0);
+    }
   }, [totalCheckedCount]);
 
-  // 상위 업무
+  // 상위 업무 (checkbox)
   const toggleTask = (task: Task) => {
     setCheckedMap((prev) => {
       const current = prev[task.id];
@@ -135,9 +137,11 @@ const DetailedTasksCardComponent = () => {
         },
       };
     });
+
+    setDetailModal(null);
   };
 
-  // 하위 업무
+  // 하위 업무 (checkbox)
   const toggleSubTask = (task: Task, subId: number) => {
     setCheckedMap((prev) => {
       const taskState = prev[task.id];
@@ -157,6 +161,8 @@ const DetailedTasksCardComponent = () => {
         },
       };
     });
+
+    setDetailModal(null);
   };
 
   // SelectionBarModal에서 하위 업무 체크 해제
@@ -167,16 +173,53 @@ const DetailedTasksCardComponent = () => {
     }
   };
 
-  // 상세 업무 모달에서 체크 제어
+  // 상세 업무 모달에서 체크 제어 (DetailTaskModal)
   const handleCheckToggleFromModal = (taskId: number, subId?: number) => {
     const task = MOCK_TASK.find((t) => t.id === taskId);
     if (!task) return;
 
-    if (subId !== undefined) {
-      toggleSubTask(task, subId);
-    } else {
-      toggleTask(task);
-    }
+    setCheckedMap((prev) => {
+      if (subId !== undefined) {
+        // 하위 업무 체크
+        const taskState = prev[taskId];
+        const nextSubtasks = {
+          ...taskState.subtasks,
+          [subId]: !taskState.subtasks[subId],
+        };
+        const allChecked = Object.values(nextSubtasks).every(Boolean);
+
+        return {
+          ...prev,
+          [taskId]: {
+            checked: allChecked,
+            subtasks: nextSubtasks,
+          },
+        };
+      } else {
+        // 상위 업무 체크
+        const current = prev[taskId];
+        const nextChecked = !current?.checked;
+
+        return {
+          ...prev,
+          [taskId]: {
+            checked: nextChecked,
+            subtasks: Object.fromEntries(task.subtasks.map((sub) => [sub.id, nextChecked])),
+          },
+        };
+      }
+    });
+  };
+
+  const handleDetailModalOpen = (type: 'task' | 'subtask', taskId: number, subId?: number) => {
+    setShowSelectionBar(false);
+    setDetailModal((prev) =>
+      prev?.type === type && prev.taskId === taskId && prev.subId === subId ? null : { type, taskId, subId },
+    );
+  };
+
+  const handleSelectionBarClose = () => {
+    setShowSelectionBar(false);
   };
 
   return (
@@ -230,9 +273,7 @@ const DetailedTasksCardComponent = () => {
 
               <span
                 onClick={() => {
-                  setDetailModal((prev) =>
-                    prev?.type === 'task' && prev.taskId === task.id ? null : { type: 'task', taskId: task.id },
-                  );
+                  handleDetailModalOpen('task', task.id);
                 }}
                 className="text-body-small text-gray-90 cursor-pointer truncate hover:underline"
               >
@@ -277,11 +318,7 @@ const DetailedTasksCardComponent = () => {
 
                         <span
                           onClick={() => {
-                            setDetailModal((prev) =>
-                              prev?.type === 'subtask' && prev.taskId === task.id && prev.subId === sub.id
-                                ? null
-                                : { type: 'subtask', taskId: task.id, subId: sub.id },
-                            );
+                            handleDetailModalOpen('subtask', task.id, sub.id);
                           }}
                           className="text-body-small text-gray-90 flex-1 cursor-pointer truncate hover:underline"
                         >
