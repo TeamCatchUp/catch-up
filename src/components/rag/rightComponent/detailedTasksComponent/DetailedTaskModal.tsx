@@ -14,6 +14,7 @@ import URLTabContent from './detailedTasksModalContent/URLTabContent';
 import CommentsTabContent from './detailedTasksModalContent/CommentsTabContent';
 import NoDataContent from './detailedTasksModalContent/NoDataContent';
 import RelatedTasksSection from './detailedTasksModalContent/RelatedTasksSection';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface DetailedTaskModalProps {
   onClose: () => void;
@@ -32,6 +33,8 @@ type TabType = 'info' | 'files' | 'wiki' | 'url' | 'comments' | 'notion' | 'slac
 const DetailedTaskModal = ({ onClose, data, tasks, checkedMap, onToggleCheck }: DetailedTaskModalProps) => {
   const [activeTab, setActiveTab] = useState<TabType>('info');
   const [relatedTasksOpen, setRelatedTasksOpen] = useState(true);
+
+  useEscapeKey(onClose);
 
   const tabs = [
     { id: 'info' as TabType, label: 'Info', count: 0, locked: false },
@@ -102,7 +105,10 @@ const DetailedTaskModal = ({ onClose, data, tasks, checkedMap, onToggleCheck }: 
           <button className="icon-button-only-gray flex h-7 w-7 cursor-pointer items-center justify-center rounded-full! p-0.5">
             <Kebab className="h-5 w-5 text-gray-50" />
           </button>
-          <button className="icon-button-only-gray flex h-7 w-7 cursor-pointer items-center justify-center rounded-full! p-0.5">
+          <button
+            onClick={onClose}
+            className="icon-button-only-gray flex h-7 w-7 cursor-pointer items-center justify-center rounded-full! p-0.5"
+          >
             <Cancel className="h-5 w-5 text-gray-50" />
           </button>
         </div>

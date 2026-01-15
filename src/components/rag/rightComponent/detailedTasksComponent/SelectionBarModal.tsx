@@ -8,6 +8,7 @@ import CheckboxChecked from '/public/icons/icon/task.svg';
 import Edit from '/public/icons/icon/edit_square.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import ToolTip from '@/components/common/ToolTip';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface SelectionBarModalProps {
   onClose: () => void;
@@ -29,6 +30,8 @@ const SelectionBarModal = ({ onClose, selectedTasks, totalCheckedCount, onSubtas
   const toggleTaskExpansion = (taskId: number) => {
     setExpandedTasks((prev) => ({ ...prev, [taskId]: !prev[taskId] }));
   };
+
+  useEscapeKey(onClose);
 
   return (
     <div className="absolute bottom-3.5 flex flex-col gap-2">
