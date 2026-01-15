@@ -90,7 +90,7 @@ const CommentsTabContent = () => {
     });
   };
 
-  const renderReplies = (replies: Reply[], isExpanded: boolean) => {
+  const renderReplies = (replies: Reply[], isExpanded: boolean, commentId: number) => {
     if (replies.length === 0) return null;
 
     // closed 답글 (?개의 답글 더보기)
@@ -102,8 +102,13 @@ const CommentsTabContent = () => {
             <LoadingProfile className="h-6.25 w-6.25" />
             <LoadingProfile className="relative right-1.5 h-6.25 w-6.25" />
           </div>
-          <button className="group text-button-primary-blue flex cursor-pointer items-center justify-center px-1.5 py-1">
-            <span className="text-body-xsmall text-blue-55 group-active:text-blue-60!">2개의 답글 더보기</span>
+          <button
+            onClick={() => toggleReplies(commentId)}
+            className="group text-button-primary-blue flex cursor-pointer items-center justify-center px-1.5 py-1"
+          >
+            <span className="text-body-xsmall text-blue-55 group-active:!text-blue-60">
+              {replies.length}개의 답글 더보기
+            </span>
           </button>
         </div>
       );
@@ -192,11 +197,7 @@ const CommentsTabContent = () => {
             )}
 
             {/* 답글 렌더링 */}
-            {hasReplies && (
-              <button onClick={() => toggleReplies(comment.id)} className="w-full text-left">
-                {renderReplies(comment.replies, isExpanded)}
-              </button>
-            )}
+            {hasReplies && renderReplies(comment.replies, isExpanded, comment.id)}
           </div>
         );
       })}
