@@ -13,20 +13,25 @@ import WikiTabContent from './detailedTasksModalContent/WikiTabContent';
 import URLTabContent from './detailedTasksModalContent/URLTabContent';
 import CommentsTabContent from './detailedTasksModalContent/CommentsTabContent';
 import NoDataContent from './detailedTasksModalContent/NoDataContent';
+import RelatedTasksSection from './detailedTasksModalContent/RelatedTasksSection';
 
 interface DetailedTaskModalProps {
   onClose: () => void;
   data: {
     type: 'task' | 'subtask';
     taskId: number;
-    subId?: Number;
+    subId?: number;
   };
+  tasks: Task[];
+  checkedMap: Record<number, { checked: boolean; subtasks: Record<number, boolean> }>;
+  onToggleCheck: (taskId: number, subId?: number) => void;
 }
 
 type TabType = 'info' | 'files' | 'wiki' | 'url' | 'comments' | 'notion' | 'slack';
 
-const DetailedTaskModal = ({ onClose, data }: DetailedTaskModalProps) => {
+const DetailedTaskModal = ({ onClose, data, tasks, checkedMap, onToggleCheck }: DetailedTaskModalProps) => {
   const [activeTab, setActiveTab] = useState<TabType>('info');
+  const [relatedTasksOpen, setRelatedTasksOpen] = useState(true);
 
   const tabs = [
     { id: 'info' as TabType, label: 'Info', count: 0, locked: false },
@@ -37,6 +42,12 @@ const DetailedTaskModal = ({ onClose, data }: DetailedTaskModalProps) => {
     { id: 'notion' as TabType, label: 'Notion', count: 0, locked: true },
     { id: 'slack' as TabType, label: 'Slack', count: 0, locked: true },
   ];
+
+  const currentTask = tasks.find((t) => t.id === data.taskId);
+  const currentSubTask = data.type === 'subtask' ? currentTask?.subtasks.find((s) => s.id === data.subId) : null;
+  const taskTitle = data.type === 'task' ? currentTask?.title : currentSubTask?.title;
+  const isChecked =
+    data.type === 'task' ? checkedMap[data.taskId]?.checked : checkedMap[data.taskId]?.subtasks[data.subId!];
 
   const renderTabContent = () => {
     const tab = tabs.find((t) => t.id === activeTab);
@@ -67,6 +78,14 @@ const DetailedTaskModal = ({ onClose, data }: DetailedTaskModalProps) => {
     }
   };
 
+  const handleCheckToggle = () => {
+    if (data.type === 'task') {
+      onToggleCheck(data.taskId);
+    } else {
+      onToggleCheck(data.taskId, data.subId);
+    }
+  };
+
   return (
     <div className="shadow-rag-bar border-neutral-4 absolute bottom-4 ml-8 flex h-145 w-108.75 flex-col rounded-2xl border bg-white p-5">
       {/* TopMenuBar */}
@@ -90,12 +109,16 @@ const DetailedTaskModal = ({ onClose, data }: DetailedTaskModalProps) => {
       </div>
       {/* title */}
       <div className="mt-4 flex max-h-14.5 items-center gap-2.5">
-        <button className="border-neutral-3 bg-neutral-1 flex h-8.5 w-8.5 cursor-pointer items-center justify-center rounded-lg border p-1.5">
-          <Check className="text-gray-30 h-5.5 w-5.5" />
+        <button
+          onClick={handleCheckToggle}
+          className={clsx(
+            'flex h-8.5 w-8.5 cursor-pointer items-center justify-center rounded-lg border p-1.5',
+            isChecked ? 'border-blue-45 bg-blue-1' : 'border-neutral-3 bg-neutral-1',
+          )}
+        >
+          <Check className={clsx('h-5.5 w-5.5', isChecked ? 'text-gray-50' : 'text-gray-30')} />
         </button>
-        <span className="text-heading-large text-gray-70 line-clamp-2">
-          국내 주요 고객사(Top 5) 사용 패턴 분석 및 개선 포인트 도출
-        </span>
+        <span className="text-heading-large text-gray-70 line-clamp-2">{taskTitle}</span>
       </div>
       {/* option bar */}
       <div className="mt-3.5 flex h-12 gap-5 overflow-x-auto">
@@ -146,21 +169,7 @@ const DetailedTaskModal = ({ onClose, data }: DetailedTaskModalProps) => {
           <div className="mt-6 flex flex-col gap-4">
             {/* divider */}
             <div className="border-neutral-3 flex border" />
-            {/* 상위 업무 */}
-            <div className="flex gap-1.5">
-              <button className="cursor-pointer">
-                <DropDownDown className="text-gray-70 h-4.5 w-4.5" />
-              </button>
-              <span className="text-heading-small text-gray-80">상위 업무</span>
-              <span className="text-heading-small text-blue-40">1</span>
-            </div>
-            <div className="text-body-small text-gray-70 flex w-98 flex-wrap gap-x-3 gap-y-2.5">
-              <span className="capsule-button-outline-purple px-3 py-1.5">일본 파트너사 콜드메일 제목 수정안 검토</span>
-              <span className="capsule-button-outline-purple px-3 py-1.5">일본 파트너사 콜</span>
-              <span className="capsule-button-outline-light-blue px-3 py-1.5">
-                일본 파트너사 콜드메일 제목 수정안 검토
-              </span>
-            </div>
+            <RelatedTasksSection type={data.type} currentTask={currentTask} />
           </div>
         )}
       </div>
