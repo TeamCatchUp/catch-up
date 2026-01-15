@@ -516,7 +516,7 @@ const DetailedTasksCardComponent = () => {
                 'border-neutral-4 flex items-center border-b px-2 py-3',
                 detailModal?.type === 'task' &&
                   detailModal.taskId === task.id &&
-                  'rounded-md2 !border-blue-30 bg-blue-1 border',
+                  'rounded-md2 border-blue-30! bg-blue-1 border',
               )}
             >
               {/* dropdown */}
@@ -574,7 +574,7 @@ const DetailedTasksCardComponent = () => {
                         detailModal?.type === 'subtask' &&
                           detailModal.taskId === task.id &&
                           detailModal.subId === sub.id &&
-                          'rounded-md2 !border-blue-30 bg-blue-1 border',
+                          'rounded-md2 border-blue-30! bg-blue-1 border',
                       )}
                     >
                       <div className="flex min-w-0 items-center gap-1.5 pr-3 pl-11.5">

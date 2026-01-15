@@ -66,7 +66,7 @@ const DetailedTasksComponent = () => {
               />
             );
           })}
-          <button className="icon-button-only-gray flex h-6.5 w-6.5 cursor-pointer items-center justify-center !rounded-full">
+          <button className="icon-button-only-gray flex h-6.5 w-6.5 cursor-pointer items-center justify-center rounded-full!">
             <ArrowRight className="h-5 w-5 text-gray-50" />
           </button>
         </div>

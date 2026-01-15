@@ -385,7 +385,7 @@ export default function Page() {
               {!isMultiLine ? (
                 <div className="border-neutral-4 shadow-rag-bar flex items-center gap-2 rounded-full border bg-white px-3 py-2.5">
                   <div className="group relative">
-                    <button className="icon-button-only-gray cursor-pointer !rounded-full p-1.5">
+                    <button className="icon-button-only-gray cursor-pointer rounded-full! p-1.5">
                       <Add className="text-gray-70 h-7 w-7" />
                     </button>
                     <div className="shadow-tooltip bg-alpha-black-75 text-label-small pointer-events-none absolute top-11 left-1/2 -translate-x-1/2 rounded-lg px-2.5 py-1.5 whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
@@ -445,7 +445,7 @@ export default function Page() {
                   />
                   <div className="flex w-full items-center">
                     <div className="group relative">
-                      <button className="icon-button-only-gray cursor-pointer !rounded-full p-1.5">
+                      <button className="icon-button-only-gray cursor-pointer rounded-full! p-1.5">
                         <Add className="text-gray-70 h-7 w-7" />
                       </button>
                       <div className="shadow-tooltip bg-alpha-black-75 text-label-small pointer-events-none absolute top-11 left-1/2 -translate-x-1/2 rounded-lg px-2.5 py-1.5 whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
