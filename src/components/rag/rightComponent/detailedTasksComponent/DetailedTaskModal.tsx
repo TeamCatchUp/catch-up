@@ -6,16 +6,13 @@ import Cancel from '/public/icons/icon/cancel.svg';
 import Check from '/public/icons/icon/check.svg';
 import Edit from '/public/icons/icon/edit_square.svg';
 import Share from '/public/icons/icon/share_2.svg';
+import Lock from '/public/icons/icon/lock_filled.svg';
 import InfoTabContent from './detailedTasksModalContent/InfoTabContent';
 import FilesTabContent from './detailedTasksModalContent/FilesTabContent';
 import WikiTabContent from './detailedTasksModalContent/WikiTabContent';
 import URLTabContent from './detailedTasksModalContent/URLTabContent';
-import NotionTabContent from './detailedTasksModalContent/NotionTabContent';
+import CommentsTabContent from './detailedTasksModalContent/CommentsTabContent';
 import NoDataContent from './detailedTasksModalContent/NoDataContent';
-// 댓글
-import DefaultProfile from '/public/icons/icon/default_profile.svg';
-import LastConnector from '/public/icons/icon/last_connector.svg';
-import Link from '/public/icons/icon/link.svg';
 
 interface DetailedTaskModalProps {
   onClose: () => void;
@@ -26,21 +23,28 @@ interface DetailedTaskModalProps {
   };
 }
 
-type TabType = 'info' | 'files' | 'wiki' | 'url' | 'comments' | 'notion';
+type TabType = 'info' | 'files' | 'wiki' | 'url' | 'comments' | 'notion' | 'slack';
 
 const DetailedTaskModal = ({ onClose, data }: DetailedTaskModalProps) => {
   const [activeTab, setActiveTab] = useState<TabType>('info');
 
   const tabs = [
-    { id: 'info' as TabType, label: 'Info', count: 0 },
-    { id: 'files' as TabType, label: '첨부파일', count: 2 },
-    { id: 'wiki' as TabType, label: 'Wiki', count: 1 },
-    { id: 'url' as TabType, label: 'URL', count: 2 },
-    { id: 'comments' as TabType, label: '댓글', count: 5 },
-    { id: 'notion' as TabType, label: 'Notion', count: 2 },
+    { id: 'info' as TabType, label: 'Info', count: 0, locked: false },
+    { id: 'files' as TabType, label: '첨부파일', count: 2, locked: false },
+    { id: 'wiki' as TabType, label: 'Wiki', count: 1, locked: false },
+    { id: 'url' as TabType, label: 'URL', count: 0, locked: false },
+    { id: 'comments' as TabType, label: '댓글', count: 5, locked: false },
+    { id: 'notion' as TabType, label: 'Notion', count: 0, locked: true },
+    { id: 'slack' as TabType, label: 'Slack', count: 0, locked: true },
   ];
 
   const renderTabContent = () => {
+    const tab = tabs.find((t) => t.id === activeTab);
+
+    if (tab?.count === 0 && activeTab !== 'info') {
+      return <NoDataContent />;
+    }
+
     switch (activeTab) {
       case 'info':
         return <InfoTabContent />;
@@ -51,11 +55,15 @@ const DetailedTaskModal = ({ onClose, data }: DetailedTaskModalProps) => {
       case 'url':
         return <URLTabContent />;
       case 'comments':
-        return <div className="p-4">댓글 컨텐츠</div>;
-      case 'notion':
-        return <NotionTabContent />;
+        return <CommentsTabContent />;
       default:
-        return null;
+        return <NoDataContent />;
+    }
+  };
+
+  const handleTabClick = (tab: (typeof tabs)[0]) => {
+    if (!tab.locked) {
+      setActiveTab(tab.id);
     }
   };
 
@@ -90,29 +98,39 @@ const DetailedTaskModal = ({ onClose, data }: DetailedTaskModalProps) => {
         </span>
       </div>
       {/* option bar */}
-      <div className="mt-3.5 flex h-15 gap-5 overflow-x-auto">
+      <div className="mt-3.5 flex h-12 gap-5 overflow-x-auto">
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={clsx('relative flex shrink-0 cursor-pointer items-center justify-center gap-1.5')}
+            onClick={() => handleTabClick(tab)}
+            className={clsx(
+              'relative flex shrink-0 items-center justify-center gap-1.5',
+              tab.locked ? 'cursor-not-allowed' : 'cursor-pointer',
+            )}
           >
             <span
-              className={clsx('text-heading-small relative', activeTab === tab.id ? 'text-blue-55' : 'text-gray-50')}
+              className={clsx(
+                'text-heading-small relative',
+                tab.locked ? 'text-gray-50' : activeTab === tab.id ? 'text-blue-55' : 'text-gray-50',
+              )}
             >
               {tab.label}
             </span>
-            {tab.count > 0 && (
-              <span
-                className={clsx(
-                  'text-body-xsmall rounded-md2 flex h-5 w-5 items-center justify-center text-center',
-                  activeTab === tab.id ? 'bg-blue-50 text-white' : 'bg-neutral-3 text-gray-50',
-                )}
-              >
-                {tab.count}
-              </span>
+            {tab.locked ? (
+              <Lock className="h-3.5 w-3.5 text-gray-50" />
+            ) : (
+              tab.count > 0 && (
+                <span
+                  className={clsx(
+                    'text-body-xsmall rounded-md2 flex h-5 w-5 items-center justify-center text-center',
+                    activeTab === tab.id ? 'bg-blue-50 text-white' : 'bg-neutral-3 text-gray-50',
+                  )}
+                >
+                  {tab.count}
+                </span>
+              )
             )}
-            {activeTab === tab.id && (
+            {activeTab === tab.id && !tab.locked && (
               <div className="bg-blue-45 absolute right-0 bottom-1.75 left-0 z-50 h-0.5 translate-y-1.5" />
             )}
           </button>
@@ -124,25 +142,27 @@ const DetailedTaskModal = ({ onClose, data }: DetailedTaskModalProps) => {
         {/* content */}
         {renderTabContent()}
 
-        {/* divider */}
-        <div className="mt-6 flex flex-col gap-4">
-          <div className="border-neutral-3 flex border" />
-          {/* 상위 업무 */}
-          <div className="flex gap-1.5">
-            <button className="cursor-pointer">
-              <DropDownDown className="text-gray-70 h-4.5 w-4.5" />
-            </button>
-            <span className="text-heading-small text-gray-80">상위 업무</span>
-            <span className="text-heading-small text-blue-40">1</span>
+        {activeTab !== 'comments' && (
+          <div className="mt-6 flex flex-col gap-4">
+            {/* divider */}
+            <div className="border-neutral-3 flex border" />
+            {/* 상위 업무 */}
+            <div className="flex gap-1.5">
+              <button className="cursor-pointer">
+                <DropDownDown className="text-gray-70 h-4.5 w-4.5" />
+              </button>
+              <span className="text-heading-small text-gray-80">상위 업무</span>
+              <span className="text-heading-small text-blue-40">1</span>
+            </div>
+            <div className="text-body-small text-gray-70 flex w-98 flex-wrap gap-x-3 gap-y-2.5">
+              <span className="capsule-button-outline-purple px-3 py-1.5">일본 파트너사 콜드메일 제목 수정안 검토</span>
+              <span className="capsule-button-outline-purple px-3 py-1.5">일본 파트너사 콜</span>
+              <span className="capsule-button-outline-light-blue px-3 py-1.5">
+                일본 파트너사 콜드메일 제목 수정안 검토
+              </span>
+            </div>
           </div>
-          <div className="text-body-small text-gray-70 flex w-98 flex-wrap gap-x-3 gap-y-2.5">
-            <span className="capsule-button-outline-purple px-3 py-1.5">일본 파트너사 콜드메일 제목 수정안 검토</span>
-            <span className="capsule-button-outline-purple px-3 py-1.5">일본 파트너사 콜</span>
-            <span className="capsule-button-outline-light-blue px-3 py-1.5">
-              일본 파트너사 콜드메일 제목 수정안 검토
-            </span>
-          </div>
-        </div>
+        )}
       </div>
       {/* 기능 버튼 */}
       <div className="mt-2 flex h-9 items-center justify-between gap-4">
