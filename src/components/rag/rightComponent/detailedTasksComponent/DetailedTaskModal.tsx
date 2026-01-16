@@ -32,7 +32,6 @@ type TabType = 'info' | 'files' | 'wiki' | 'url' | 'comments' | 'notion' | 'slac
 
 const DetailedTaskModal = ({ onClose, data, tasks, checkedMap, onToggleCheck }: DetailedTaskModalProps) => {
   const [activeTab, setActiveTab] = useState<TabType>('info');
-  const [relatedTasksOpen, setRelatedTasksOpen] = useState(true);
 
   useEscapeKey(onClose);
 

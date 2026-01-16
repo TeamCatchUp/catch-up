@@ -93,6 +93,7 @@ const DetailedTasksCardComponent = () => {
     const result: Array<{
       taskId: number;
       taskTitle: string;
+      taskChecked: boolean; // 상위 업무 체크 여부
       subtasks: Array<{ id: number; title: string }>;
     }> = [];
 
@@ -104,6 +105,7 @@ const DetailedTasksCardComponent = () => {
         result.push({
           taskId: task.id,
           taskTitle: task.title,
+          taskChecked: taskState.checked,
           subtasks: checkedSubtasks,
         });
       }
@@ -165,6 +167,14 @@ const DetailedTasksCardComponent = () => {
     setDetailModal(null);
   };
 
+  // selection bar에서 상위 업무 체크 해제 -> 해당 하위 업무도 해제
+  const handleTaskToggleFromModal = (taskId: number) => {
+    const task = MOCK_TASK.find((t) => t.id === taskId);
+    if (task) {
+      toggleTask(task);
+    }
+  };
+
   // SelectionBarModal에서 하위 업무 체크 해제
   const handleSubtaskToggleFromModal = (taskId: number, subId: number) => {
     const task = MOCK_TASK.find((t) => t.id === taskId);
@@ -218,7 +228,8 @@ const DetailedTasksCardComponent = () => {
     );
   };
 
-  const handleSelectionBarClose = () => {
+  const handleClearAll = () => {
+    setCheckedMap(createInitialCheckedMap());
     setShowSelectionBar(false);
   };
 
@@ -345,8 +356,10 @@ const DetailedTasksCardComponent = () => {
       {showSelectionBar && (
         <SelectionBarModal
           onClose={() => setShowSelectionBar(false)}
+          onClearAll={handleClearAll}
           selectedTasks={selectedTasks}
           totalCheckedCount={totalCheckedCount}
+          onTaskToggle={handleTaskToggleFromModal}
           onSubtaskToggle={handleSubtaskToggleFromModal}
         />
       )}
