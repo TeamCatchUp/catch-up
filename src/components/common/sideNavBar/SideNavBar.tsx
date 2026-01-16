@@ -21,6 +21,7 @@ import ArrowRight from '/public/icons/icon/arrow_right.svg';
 import Necessary from '/public/icons/icon/necessary.svg';
 import ToolTip from '@/components/common/ToolTip';
 import TeamSpaceMoreModal from '@/components/common/sideNavBar/modal/TeamSpaceMoreModal';
+import TeamSpaceDropDownModal from '@/components/common/sideNavBar/modal/TeamSpaceDropDownModal';
 import api from '@/api/axios';
 
 const navItems = [
@@ -55,7 +56,8 @@ const SideNavBar = () => {
   const router = useRouter();
   const isRagAnswerPage = pathname === '/ragAnswer';
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage); // SNB opened 여부
-  const [isTeamSpaceModalOpen, setIsTeamSpaceModalOpen] = useState(false); // 팀스페이스 더보기 버튼 모달 opened 여부
+  const [isTeamSpaceMoreModalOpen, setIsTeamSpaceMoreModalOpen] = useState(false); // 팀스페이스 더보기 버튼 모달 opened 여부
+  const [isTeamDropDownModalOpen, setIsTeamDropDownModalOpen] = useState(false); // 팀스페이스 드롭다운 버튼 모달 opened 여부
 
   const user = useUserStore((state) => state.user);
   const setUser = useUserStore((state) => state.setUser);
@@ -140,15 +142,21 @@ const SideNavBar = () => {
         <div
           className={clsx(
             'group/teamspace border-neutral-3 flex flex-col justify-center gap-1.5 rounded-xl! border px-2.5 py-2',
-            isTeamSpaceModalOpen ? 'bg-neutral-2' : 'hover:bg-neutral-2 bg-white',
+            isTeamSpaceMoreModalOpen || isTeamDropDownModalOpen ? 'bg-neutral-2' : 'hover:bg-neutral-2 bg-white',
           )}
         >
           <span className="flex items-center justify-between">
             <span className="text-body-xsmall text-gray-50">팀스페이스</span>
             <Dropdown
+              onClick={() => {
+                setIsTeamDropDownModalOpen(!isTeamDropDownModalOpen);
+                setIsTeamSpaceMoreModalOpen(false);
+              }}
               className={clsx(
-                'h-4 w-4 text-gray-50 transition-opacity',
-                isTeamSpaceModalOpen ? 'opacity-100' : 'opacity-0 group-hover/teamspace:opacity-100',
+                'h-4 w-4 cursor-pointer rounded-full text-gray-50 transition-opacity',
+                isTeamDropDownModalOpen
+                  ? 'bg-neutral-3 opacity-100'
+                  : 'hover:bg-neutral-3 active:bg-neutral-4 opacity-0 group-hover/teamspace:opacity-100',
               )}
             />
           </span>
@@ -165,7 +173,7 @@ const SideNavBar = () => {
             <div className="relative min-w-0 flex-1">
               <div
                 className={clsx(
-                  isTeamSpaceModalOpen
+                  isTeamSpaceMoreModalOpen
                     ? 'text-body-small text-gray-80 relative top-px left-1 max-w-36 truncate'
                     : 'text-body-small text-gray-80 relative top-px left-1 max-w-42 truncate group-hover/teamspace:max-w-36',
                 )}
@@ -174,10 +182,13 @@ const SideNavBar = () => {
               </div>
               <div className="group absolute top-0 right-0">
                 <button
-                  onClick={() => setIsTeamSpaceModalOpen(!isTeamSpaceModalOpen)}
+                  onClick={() => {
+                    setIsTeamSpaceMoreModalOpen(!isTeamSpaceMoreModalOpen);
+                    setIsTeamDropDownModalOpen(false);
+                  }}
                   className={clsx(
                     'ml-3 flex h-5.5 w-5.5 cursor-pointer items-center justify-center rounded-full p-0.5 transition-opacity',
-                    isTeamSpaceModalOpen
+                    isTeamSpaceMoreModalOpen
                       ? 'bg-neutral-3 opacity-100'
                       : 'hover:bg-neutral-3 active:bg-neutral-4 opacity-0 group-hover/teamspace:opacity-100',
                   )}
@@ -191,28 +202,53 @@ const SideNavBar = () => {
             </div>
           </div>
           {/* 팀스페이스 모달 */}
-          {isTeamSpaceModalOpen && (
+          {isTeamSpaceMoreModalOpen && (
             <div className="absolute top-32 left-49 z-100">
-              <TeamSpaceMoreModal onClose={() => setIsTeamSpaceModalOpen(false)} />
+              <TeamSpaceMoreModal onClose={() => setIsTeamSpaceMoreModalOpen(false)} />
+            </div>
+          )}
+          {isTeamDropDownModalOpen && (
+            <div className="absolute top-17.5 left-58.5 z-100">
+              <TeamSpaceDropDownModal onClose={() => setIsTeamDropDownModalOpen(false)} />
             </div>
           )}
         </div>
       )}
       {!isOpen && (
-        <div className="group border-neutral-3 hover:bg-neutral-2 shadow-blue-bottom flex h-10 w-14.5 cursor-pointer items-center justify-center rounded-xl border bg-white p-1.5">
+        <div
+          className={clsx(
+            'group border-neutral-3 shadow-blue-bottom flex h-10 w-14.5 cursor-pointer items-center justify-center rounded-xl border p-1.5',
+            isTeamDropDownModalOpen ? 'bg-neutral-2' : 'hover:bg-neutral-2 bg-white',
+          )}
+        >
           <div className="flex items-center gap-1.5">
             <div className="relative flex">
-              <div className="text-body-small rounded-md2 bg-neutral-2 group-hover:bg-neutral-3 flex h-6 w-6 items-center justify-center text-gray-50">
+              <div
+                className={clsx(
+                  'text-body-small rounded-md2 flex h-6 w-6 items-center justify-center text-gray-50',
+                  isTeamDropDownModalOpen ? 'bg-neutral-3' : 'bg-neutral-2 group-hover:bg-neutral-3',
+                )}
+              >
                 팀
               </div>
               <div className="absolute bottom-4.75 left-4.5">
                 <Necessary className="h-2 w-2" />
               </div>
             </div>
-            <div className="h-4 w-4">
+            <div
+              onClick={() => {
+                setIsTeamDropDownModalOpen(!isTeamDropDownModalOpen);
+              }}
+              className="h-4 w-4"
+            >
               <Dropdown className="text-gray-50" />
             </div>
           </div>
+          {isTeamDropDownModalOpen && (
+            <div className="absolute top-20 left-17 z-100">
+              <TeamSpaceDropDownModal onClose={() => setIsTeamDropDownModalOpen(false)} />
+            </div>
+          )}
         </div>
       )}
 
