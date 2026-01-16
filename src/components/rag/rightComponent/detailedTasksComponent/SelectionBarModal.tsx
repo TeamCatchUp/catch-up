@@ -200,13 +200,12 @@ const SelectionBarModal = ({
         </div>
       </div>
       <div className="group pointer-events-auto relative left-55 w-9">
-        {/* <div className="group pointer-events-none flex justify-center"> */}
         <button
           onClick={handleClearAll}
           className="text-button-secondary-mono shadow-button border-neutral-3 pointer-events-auto flex h-9 w-9 cursor-pointer items-center justify-center border p-1.5"
         >
           <Cancel className="text-gray-70 h-6 w-6" />
-          <div className="relative top-6 left-1/2">
+          <div className="relative bottom-4.25 left-1">
             <ToolTip text="전체 선택 취소" />
           </div>
         </button>
