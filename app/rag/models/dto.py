@@ -3,6 +3,8 @@ from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
+from app.rag.models.retrieve import SourceType
+
 
 # 각 Source별 필수 필드 정의
 class BaseSource(BaseModel):
@@ -15,7 +17,7 @@ class BaseSource(BaseModel):
 
 # Github 코드 메타데이터
 class GithubSource(BaseSource):
-    source_type: Literal["github"] = "github"
+    source_type: Literal[SourceType.CODE] = SourceType.CODE
     file_path: str | None = None  # 파일 경로
     category: str | None = None  # 카테고리
     source: str | None = None  # 문서 출처
@@ -52,7 +54,18 @@ class ChatStreamingResponse(BaseModel):
     type: str = Field(..., description="payload 유형")
     node: str = Field(..., description="실행 중인 노드 이름")
     message: str = Field(..., description="payload")
+    
+# (Streaming) 인터럽트 Server -> Client 
+class ChatStreamingInterruptResponse(BaseModel):
+    type: Literal["interrupt"] = Field(default="interrupt", description="HITL 인터럽트")
+    node: str = Field(..., description="중단된 노드 이름")
+    payload: Any = Field(..., description="인터럽트 데이터 (PR 후보 리스트)")
 
+# (Streaming) 인터럽트 Client -> Server
+class ChatStreamingResumeReqeust(BaseModel):
+    session_id: str = Field(..., description="PR 수동 선택 후 재개할 세션 ID")
+    selected_ids: list[str] = Field(..., description="사용자가 선택한 PR 번호 리스트")
+    
 
 # (Streaming) Keep-alive Ping
 class ChatStreamingKeepAliveResponse(BaseModel):

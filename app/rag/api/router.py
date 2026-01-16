@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from app.rag.dependencies import get_chat_service
-from app.rag.models.dto import ChatRequest, ChatResponse
+from app.rag.models.dto import ChatRequest, ChatResponse, ChatStreamingResumeReqeust
 from app.rag.service.chat import ChatService
 
 logger = logging.getLogger()
@@ -41,7 +41,19 @@ async def chat_response_stream(
         ):
             yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
 
-            if chunk["type"] == "result":
-                yield "data: [DONE]\n\n"
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+
+@router.post("/api/chat/stream/resume")
+async def chat_resume(
+    request: ChatStreamingResumeReqeust,
+    service: ChatService = Depends(get_chat_service)
+):
+    async def event_generator():
+        async for chunk in service.chat_stream(
+            session_id=request.session_id,
+            resume_data=request.selected_ids
+        ):
+            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+        
     return StreamingResponse(event_generator(), media_type="text/event-stream")

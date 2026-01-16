@@ -1,9 +1,10 @@
 import asyncio
 import logging
 import time
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Any
 
 from langchain_core.messages import HumanMessage
+from langgraph.types import Command
 from langfuse import observe
 
 from app.rag.graph import get_compiled_graph
@@ -12,6 +13,7 @@ from app.rag.models.dto import (
     ChatStreamingFinalResponse,
     ChatStreamingKeepAliveResponse,
     ChatStreamingResponse,
+    ChatStreamingInterruptResponse
 )
 
 logger = logging.getLogger(__name__)
@@ -77,20 +79,29 @@ class ChatService:
 
     @observe()
     async def chat_stream(
-        self, query: str, role: str, session_id: str, index_list: list[str]
+        self,
+        session_id: str,
+        query: str = None,
+        role: str = "user",
+        index_list: list[str] = None,
+        resume_data: Any = None
     ) -> AsyncGenerator[dict, None]:
         # Compiled Graph
         app = await self._get_app()
-
-        # Graph 입력 값
-        inputs = {
-            "messages": [HumanMessage(content=query)],
-            "role": role,
-            "index_list": index_list,
-        }
-
+        
         # Checkpointer 설정
         config = {"configurable": {"thread_id": session_id}}
+        
+        if resume_data is not None:
+            inputs = Command(resume=resume_data)
+            logger.info(f"Session {session_id}: Resuming with data: {resume_data}")
+        else:
+            # Graph 입력 값
+            inputs = {
+                "messages": [HumanMessage(content=query)],
+                "role": role,
+                "index_list": index_list,
+            }
 
         # 실행 시간 측정 시작
         start = time.perf_counter()
@@ -123,7 +134,7 @@ class ChatService:
                         last_ping_time = current_time
 
                 # generate node 종료 시점에 수행할 작업
-                elif kind == "on_chain_end" and name == "generate":
+                elif kind == "on_chain_end" and name in ("generate", "chitchat"):
                     end = time.perf_counter()
                     elapsed_time = end - start
 
@@ -142,10 +153,29 @@ class ChatService:
                             sources=sources,
                             process_time=elapsed_time,
                         ).model_dump()
+                        
+            snapshot = await app.aget_state(config)
+            
+            logger.info(snapshot)
+            
+            if snapshot.next and ((payload := snapshot.tasks[0].interrupts) is not None):
+                interrupt_value = payload[0].value
+                
+                logger.info(f"Session {session_id}: Interrupted at {snapshot.next}")
+                
+                yield ChatStreamingInterruptResponse(
+                    type="interrupt",
+                    node=list(snapshot.next)[0],
+                    payload=interrupt_value,
+                ).model_dump()
 
         except asyncio.CancelledError:
             logger.warning("클라이언트 연결이 종료되었습니다.")
             raise
+        
+        except Exception as e:
+            logger.error(f"Streaming 중 에러 발생: {e}")
 
         finally:
-            logger.info(f"Streaming 종료. ===> {elapsed_time:.4f}s")
+            elapsed_time = time.perf_counter() - start;
+            logger.info(f"Streaming 종료. ===> duration: {elapsed_time:.4f}s")

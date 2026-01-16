@@ -4,7 +4,9 @@ from typing import Annotated, Any, Literal, Optional, TypedDict
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph.message import add_messages
 
+from app.rag.models.manage_pr_context import PullRequestSelected
 from app.rag.models.plan import SearchQuery
+from app.rag.models.retrieve import BaseSearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +40,12 @@ def message_reducer(left: list, right: list):
 class AgentState(TypedDict):
     messages: Annotated[list, message_reducer]  # 대화 내용
     current_query: Optional[str]  # 현재 질문
-    retry_count: int  # rewrite 재시도 횟수
     datasource: str  # chitchat vs search_pipline
-    search_queries: list[SearchQuery]
-    retrieved_docs: list[dict[str, Any]]  # 검색 결과
-    sources: list[dict[str, Any]]  # generate_node가 생성하는 최종 출처 데이터
+    retry_count: int  # rewrite 재시도 횟수
     index_list: list[str]  # 검색 대상 인덱스 이름
+    search_queries: list[SearchQuery]
+    selected_prs: list[PullRequestSelected]  # interrupt() 시에 사용자가 선택한  PR 목록
+    pr_context: str  # generate_node에 넘겨줄, 사용자가 선택한 pull request 관련 context
+    retrieved_docs: list[BaseSearchResult]  # 검색 결과
     grade_status: Literal["good", "bad", "max_retries"]
+    sources: list[dict[str, Any]]  # generate_node가 생성하는 최종 출처 데이터
