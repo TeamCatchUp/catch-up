@@ -121,7 +121,7 @@ const DetailedTaskModal = ({ onClose, data, tasks, checkedMap, onToggleCheck }: 
             isChecked ? 'border-blue-45 bg-blue-1' : 'border-neutral-3 bg-neutral-1',
           )}
         >
-          <Check className={clsx('h-5.5 w-5.5', isChecked ? 'text-gray-50' : 'text-gray-30')} />
+          <Check className={clsx('h-5.5 w-5.5', isChecked ? 'text-blue-50' : 'text-gray-30')} />
         </button>
         <span className="text-heading-large text-gray-70 line-clamp-2">{taskTitle}</span>
       </div>
