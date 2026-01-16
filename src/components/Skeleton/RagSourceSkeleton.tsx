@@ -2,7 +2,7 @@ import SourceFile from '/public/icons/icon/source-file.svg';
 
 const RagSourceSkeleton = () => {
   return (
-    <div className="flex w-93.25 flex-col items-center justify-center gap-5">
+    <div className="mt-2 flex w-93.25 flex-col items-center justify-center gap-5">
       <div className="bg-blue-1 flex w-93.25 animate-pulse flex-col items-center justify-center gap-5 rounded-2xl p-5">
         <SourceFile className="h-23 w-28.75" />
         <span className="text-body-small text-gray-30">출처를 분석하는 중입니다.</span>
