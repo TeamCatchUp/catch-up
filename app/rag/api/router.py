@@ -1,8 +1,12 @@
-from fastapi import APIRouter, Depends
+import json
 import logging
+import time
+
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 
 from app.rag.dependencies import get_chat_service
-from app.rag.models.dto import ChatRequest, ChatResponse
+from app.rag.models.dto import ChatRequest, ChatResponse, ChatStreamingResumeReqeust
 from app.rag.service.chat import ChatService
 
 logger = logging.getLogger()
@@ -18,9 +22,38 @@ async def chat_response(
         query=request.query,
         role=request.role,
         session_id=request.session_id,
-        index_name=request.index_name
+        index_list=request.index_list,
     )
-    
-    logger.info(f"\n질문: {request.query}\n답변: {response.answer}")
-    
+
     return response
+
+
+@router.post("/api/chat/stream")
+async def chat_response_stream(
+    request: ChatRequest, service: ChatService = Depends(get_chat_service)
+):
+    async def event_generator():
+        async for chunk in service.chat_stream(
+            query=request.query,
+            role=request.role,
+            session_id=request.session_id,
+            index_list=request.index_list,
+        ):
+            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.post("/api/chat/stream/resume")
+async def chat_resume(
+    request: ChatStreamingResumeReqeust,
+    service: ChatService = Depends(get_chat_service)
+):
+    async def event_generator():
+        async for chunk in service.chat_stream(
+            session_id=request.session_id,
+            resume_data=request.selected_ids
+        ):
+            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+        
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

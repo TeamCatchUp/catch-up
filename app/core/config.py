@@ -5,11 +5,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
 
+
 # 서버 구동 환경
 class Environment(StrEnum):
     development = "development"
     testing = "testing"
     production = "production"
+
 
 # Meilisearch 구동 환경
 class MeiliEnvironment(StrEnum):
@@ -40,15 +42,24 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: str
     LANGFUSE_PUBLIC_KEY: str
     LANGFUSE_BASE_URL: str
-    
+
     COHERE_API_KEY: str
+    RERANK_THRESHOLD: float
+
+    # Performance variables
+    COHERE_RERANK_TOP_N: int
+    MEILISEARCH_SEMANTIC_RATIO: float
+    MEILISEARCH_MIN_K_PER_INDEX: int
+    MEILISEARCH_GLOBAL_RETRIEVAL_BUDGET: int
+    OPENAI_EMBEDDING_MODEL: str
+    OPENAI_CHAT_MODEL: str
 
     model_config = SettingsConfigDict(
         env_prefix="",
         case_sensitive=False,
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore"
+        extra="ignore",
     )
 
 
