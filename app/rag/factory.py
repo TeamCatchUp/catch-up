@@ -1,6 +1,7 @@
 from functools import lru_cache
 
 from app.rag.repository.meili import LangChainMeiliRepository
+from app.rag.service.github import GithubService
 from app.rag.service.llm import LlmService
 from app.rag.service.rerank import RerankService
 
@@ -18,3 +19,7 @@ def get_llm_service() -> LlmService:
 @lru_cache(maxsize=1)
 def get_rerank_service() -> RerankService:
     return RerankService()
+
+@lru_cache(maxsize=1)
+def get_github_service() -> GithubService:
+    return GithubService()

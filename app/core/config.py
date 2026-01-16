@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     OPENAI_EMBEDDING_MODEL: str
     OPENAI_CHAT_MODEL: str
 
+    GITHUB_TOKEN: str
+
     model_config = SettingsConfigDict(
         env_prefix="",
         case_sensitive=False,
