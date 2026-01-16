@@ -1,10 +1,11 @@
-from enum import Enum
+from enum import IntEnum
+from typing import Optional
 
 from langchain_core.documents import Document
 from pydantic import BaseModel, Field
 
 
-class SourceType(Enum):
+class SourceType(IntEnum):
     CODE = 0
     PULL_REQUEST = 1
     ISSUE = 2
@@ -19,13 +20,14 @@ class BaseSearchResult(BaseModel):
     source: str = Field(description="출처 이름")
     text: str = Field(description="문서 본문")
     html_url: str = Field(description="Github url")
+    relevance_score: Optional[float] = Field(None, description="Rerank 점수")
 
     @classmethod
     def _base_kwargs_from_doc(cls, doc: Document) -> dict:
         metadata = doc.metadata
         return {
             "id": metadata.get("id"),
-            "source_type": SourceType(metadata.get("source_type")),  # 0 -> CODE
+            "source_type": SourceType(metadata.get("sourceType")),  # 0 -> CODE
             "source": metadata.get("source"),
             "text": doc.page_content,
             "html_url": metadata.get("html_url"),
@@ -35,8 +37,8 @@ class BaseSearchResult(BaseModel):
 # Code
 class CodeSearchResult(BaseSearchResult):
     file_path: str = Field(description="파일 경로")
-    category: str = Field(default=0, description="파일 범주")
-    language: str | None = Field(default=0, description="프로그래밍 언어")
+    category: str = Field(default="", description="파일 범주")
+    language: str | None = Field(default="", description="프로그래밍 언어")
 
     @classmethod
     def from_search_result_doc(cls, doc: Document) -> "CodeSearchResult":

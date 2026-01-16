@@ -4,6 +4,7 @@ from langchain_cohere import CohereRerank
 from langchain_core.documents import Document
 
 from app.core.config import settings
+from app.rag.models.retrieve import BaseSearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -18,25 +19,40 @@ class RerankService:
         return self.reranker
 
     async def rerank(
-        self, query: str, documents: list[dict], top_n: int = 5
-    ) -> list[dict]:
-        # dict -> Document
+        self,
+        query: str,
+        documents: list[BaseSearchResult],
+        top_n: int = 5
+    ) -> list[BaseSearchResult]:
+        
+        if not documents:
+            return []
+        
+        # BaseSearchResult -> Document
         input_docs = [
-            Document(page_content=doc.get("text", ""), metadata=doc)
+            Document(
+                page_content=doc.text,
+                metadata={"original_doc": doc}
+            )
             for doc in documents
         ]
 
         self.reranker.top_n = top_n
-
-        reranked_docs = await self.reranker.acompress_documents(
-            documents=input_docs, query=query
+        
+        # Rerank 호출
+        reranked_docs: list[Document] = await self.reranker.acompress_documents(
+            documents=input_docs,
+            query=query
         )
 
         logger.info(f"Reranked docs count: {len(reranked_docs)}")
+        
+        # Document -> BaseSearchResult
+        result_models = []
+        for doc in reranked_docs:
+            original_model: BaseSearchResult = doc.metadata.get("original_doc")
+            new_score = doc.metadata.get("relevance_score")
+            original_model.relevance_score = new_score
+            result_models.append(original_model)
 
-        # Document -> dict
-        result_docs = [
-            {"text": doc.page_content, **doc.metadata} for doc in reranked_docs
-        ]
-
-        return result_docs
+        return result_models

@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph.message import add_messages
+from langgraph.types import interrupt
 
 from app.core.config import settings
 from app.observability.langfuse_client import langfuse_handler
@@ -21,6 +22,7 @@ from app.rag.models.retrieve import (
     PullRequestSearchResult,
     IssueSearchResult
 )
+from app.rag.models.manage_pr_context import PullRequestCandidate
 from app.rag.models.route import RouteQuery
 from app.rag.prompts.system import (
     SYSTEM_ASSISTANT_PROMPT,
@@ -240,8 +242,7 @@ async def retrieve_node(state: AgentState):
 
     for docs in search_results:
         for doc in docs:
-            source_type = doc.get("source_type")
-            
+            source_type = doc.metadata.get("sourceType")  # TODO: sourceType -> source_type 통일
             try:
                 if source_type == SourceType.CODE:                   
                     flat_docs.append(CodeSearchResult.from_search_result_doc(doc))
@@ -267,14 +268,76 @@ async def rerank_node(state: AgentState):
 
     query = state.get("current_query") or state["messages"][-1].content
 
-    retrieved_docs = state.get("retrieved_docs", [])
+    retrieved_docs: list[BaseSearchResult] = state.get("retrieved_docs", [])
 
     async with rerank_semaphore:
         reranked_docs = await rerank_service.rerank(
-            query=query, documents=retrieved_docs, top_n=settings.COHERE_RERANK_TOP_N
+            query=query,
+            documents=retrieved_docs,
+            top_n=settings.COHERE_RERANK_TOP_N
         )
-
+    
     return {"retrieved_docs": reranked_docs}
+
+
+async def manage_pr_context_node(state: AgentState):
+    logger.info("manage_pr_context 노드 진입")
+    
+    retrieved_docs: list[BaseSearchResult] = state.get("retrieved_docs", [])
+    pr_docs: list[PullRequestSearchResult] = []
+    other_docs: list[BaseSearchResult] = []
+    
+    for doc in retrieved_docs:
+        if doc.source_type == SourceType.PULL_REQUEST:
+            pr_docs.append(doc)
+        else:
+            other_docs.append(doc)
+    
+    selected_pr_ids = []
+    
+    candidates: list[dict[str, Any]] = [
+        PullRequestCandidate.from_search_result_doc(doc).model_dump()
+        for doc in pr_docs
+    ]
+    
+    logger.info("[INTERRUPT] 사용자 PR 선택을 위해 인터럽트 실행")   
+    user_selection_ids = interrupt(candidates)
+    logger.info(f"user_seslection_ids: {user_selection_ids}")
+
+    
+    # if not pr_docs:
+    #     logger.info("Skip: PR 관련 문서 없음.")
+    #     return {"retrieved_docs": docs}
+    
+    # elif len(pr_docs) == 1:
+    #     target_pr = pr_docs[0]
+    #     logger.info("PR 1개 발견. 자동 선택 - [#{target_pr.pr_number}]")
+    #     selected_pr_ids.append(target_pr)
+    
+    # else:
+    #     logger.info(f"PR {len(pr_docs)} 발견. 사용자 선택 요청을 위해 interrupt.")
+        
+    #     candidates: PullRequestCandidate = [
+    #         PullRequestCandidate.from_search_result_doc(doc).model_dump()
+    #         for doc in pr_docs
+    #     ]
+        
+    #     user_selection_ids = interrupt(candidates)
+        
+    #     logger.info(f"사용자 선택 완료: {user_selection_ids}")
+        
+    #     selected_pr_ids = [
+    #         doc for doc in pr_docs 
+    #         if doc.metadata.get("pr_number") in user_selection_ids
+    #     ]
+    
+    enriched_pr_docs = []
+    
+    # for doc in selected_pr_ids:
+        # full_content = await github_service.get_pr_detail()
+    
+    return {"retrieved_docs": retrieved_docs}
+        
 
 
 async def grade_node(state: AgentState):
@@ -291,18 +354,18 @@ async def grade_node(state: AgentState):
     if state.get("retry_count", 0) >= 3:
         return {"grade_status": "max_retries"}
 
-    retrieved_docs = state.get("retrieved_docs", [])
+    retrieved_docs: list[BaseSearchResult] = state.get("retrieved_docs", [])
 
     context_text = "\n\n".join(
         [
             f"""
             [문서 정보]
-            출처: {doc.get("source", "unknown")}
-            파일 경로: {doc.get("file_path", "N/A")}
-            카테고리: {doc.get("category", "N/A")}
-            프로그래밍 언어: {doc.get("language", "N/A")}
+            출처: {getattr(doc, "source", "unknown")}
+            파일 경로: {getattr(doc, "file_path", "N/A")}
+            카테고리: {getattr(doc, "category", "N/A")}
+            프로그래밍 언어: {getattr(doc, "language", "N/A")}
             내용:
-            {doc.get("text", "")}
+            {doc.text}
             """.strip()
             for doc in retrieved_docs
         ]
@@ -338,7 +401,7 @@ async def generate_node(state: AgentState):
     current_query = get_latest_query(messages)
 
     # agent state로부터 검색 결과 획득
-    retrieved_docs: list[dict[str, Any]] = state.get("retrieved_docs", [])
+    retrieved_docs: list[BaseSearchResult] = state.get("retrieved_docs", [])
 
     # 문서 전처리 (Context 텍스트 생성 및 Source 객체 초기화)
     context_text, processed_sources = _preprocess_documents(retrieved_docs)
@@ -393,7 +456,7 @@ async def generate_node(state: AgentState):
 
 
 def _preprocess_documents(
-    retrieved_docs: list[dict[str, Any]],
+    retrieved_docs: list[BaseSearchResult],
 ) -> tuple[str, list[dict[str, Any]]]:
     """
     검색 결과를 LLM용 Context Text와 Frontend용 Source 객체로 변환
@@ -406,10 +469,10 @@ def _preprocess_documents(
 
     for i, doc in enumerate(retrieved_docs):
         # LLM 제공용 Context 상세
-        source = doc.get("source", "unknown")
-        category = doc.get("category", "기타")
-        file_path = doc.get("file_path", "")
-        text = doc.get("text", "")
+        source = getattr(doc, "source", "unknown")
+        category = getattr(doc, "category", "기타")
+        file_path = getattr(doc, "file_path", "")
+        text = doc.text
 
         formatted_doc = (
             f"[{i}] 출처: {source} ({file_path}) | 카테고리: {category}\n내용:\n{text}"
@@ -420,14 +483,14 @@ def _preprocess_documents(
         source_entry = {
             "index": i,  # Rerank 결과 상의 원래 ID
             "is_cited": False,
-            "source_type": "github",
+            "source_type": doc.source_type,
             "text": text,  # 원문 전체
             "file_path": file_path,
             "category": category,
             "source": source,
-            "html_url": doc.get("html_url"),
-            "language": doc.get("language"),
-            "relevance_score": doc.get("relevance_score"),
+            "html_url": getattr(doc, "html_url", None),
+            "language": getattr(doc, "language", None),
+            "relevance_score": doc.relevance_score,
         }
         processed_sources.append(source_entry)
 

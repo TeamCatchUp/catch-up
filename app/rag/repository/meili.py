@@ -162,7 +162,7 @@ class LangChainMeiliRepository:
         for result_set in response:
             docs = []
             for hit in result_set.hits:
-                content = hit.get("text") or hit.get("content") or ""
+                content = hit.get("text") or hit.get("content") or hit.get("body") or ""
 
                 excluded_keys = [
                     "text",
