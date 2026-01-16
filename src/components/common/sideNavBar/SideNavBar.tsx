@@ -20,6 +20,7 @@ import UnfoldMore from '/public/icons/icon/unfold_more.svg';
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
 import Necessary from '/public/icons/icon/necessary.svg';
 import ToolTip from '@/components/common/ToolTip';
+import TeamSpaceMoreModal from '@/components/common/sideNavBar/modal/TeamSpaceMoreModal';
 import api from '@/api/axios';
 
 const navItems = [
@@ -53,7 +54,8 @@ const SideNavBar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const isRagAnswerPage = pathname === '/ragAnswer';
-  const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
+  const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage); // SNB opened 여부
+  const [isTeamSpaceModalOpen, setIsTeamSpaceModalOpen] = useState(false); // 팀스페이스 더보기 버튼 모달 opened 여부
 
   const user = useUserStore((state) => state.user);
   const setUser = useUserStore((state) => state.setUser);
@@ -135,10 +137,20 @@ const SideNavBar = () => {
 
       {/* 팀스페이스 */}
       {isOpen && (
-        <div className="group/teamspace hover:bg-neutral-2 border-neutral-3 flex flex-col justify-center gap-1.5 rounded-xl! border bg-white px-2.5 py-2">
+        <div
+          className={clsx(
+            'group/teamspace border-neutral-3 flex flex-col justify-center gap-1.5 rounded-xl! border px-2.5 py-2',
+            isTeamSpaceModalOpen ? 'bg-neutral-2' : 'hover:bg-neutral-2 bg-white',
+          )}
+        >
           <span className="flex items-center justify-between">
             <span className="text-body-xsmall text-gray-50">팀스페이스</span>
-            <Dropdown className="h-4 w-4 text-gray-50 opacity-0 transition-opacity group-hover/teamspace:opacity-100" />
+            <Dropdown
+              className={clsx(
+                'h-4 w-4 text-gray-50 transition-opacity',
+                isTeamSpaceModalOpen ? 'opacity-100' : 'opacity-0 group-hover/teamspace:opacity-100',
+              )}
+            />
           </span>
           <div className="flex">
             <div className="flex items-center">
@@ -149,18 +161,41 @@ const SideNavBar = () => {
                 <Necessary className="h-2 w-2" />
               </div>
             </div>
-            <span className="text-body-small text-gray-80 relative top-px left-1 max-w-42 truncate group-hover/teamspace:max-w-36">
-              팀스페이스 text text text text
-            </span>
-            <div className="group">
-              <span className="hover:bg-neutral-3 active:bg-neutral-4 ml-3 flex h-5.5 w-5.5 cursor-pointer items-center justify-center rounded-full p-0.5 opacity-0 transition-opacity group-hover/teamspace:opacity-100">
-                <Kebeb className="h-4.5 w-4.5 text-gray-50" />
-              </span>
-              <div className="relative bottom-6.75 left-9">
-                <ToolTip text={'팀원 추가 및 설정'} />
+
+            <div className="relative min-w-0 flex-1">
+              <div
+                className={clsx(
+                  isTeamSpaceModalOpen
+                    ? 'text-body-small text-gray-80 relative top-px left-1 max-w-36 truncate'
+                    : 'text-body-small text-gray-80 relative top-px left-1 max-w-42 truncate group-hover/teamspace:max-w-36',
+                )}
+              >
+                팀스페이스 text text text text
+              </div>
+              <div className="group absolute top-0 right-0">
+                <button
+                  onClick={() => setIsTeamSpaceModalOpen(!isTeamSpaceModalOpen)}
+                  className={clsx(
+                    'ml-3 flex h-5.5 w-5.5 cursor-pointer items-center justify-center rounded-full p-0.5 transition-opacity',
+                    isTeamSpaceModalOpen
+                      ? 'bg-neutral-3 opacity-100'
+                      : 'hover:bg-neutral-3 active:bg-neutral-4 opacity-0 group-hover/teamspace:opacity-100',
+                  )}
+                >
+                  <Kebeb className="h-4.5 w-4.5 text-gray-50" />
+                </button>
+                <div className="relative bottom-6.75 left-9">
+                  <ToolTip text={'팀원 추가 및 설정'} />
+                </div>
               </div>
             </div>
           </div>
+          {/* 팀스페이스 모달 */}
+          {isTeamSpaceModalOpen && (
+            <div className="absolute top-32 left-49 z-100">
+              <TeamSpaceMoreModal onClose={() => setIsTeamSpaceModalOpen(false)} />
+            </div>
+          )}
         </div>
       )}
       {!isOpen && (
