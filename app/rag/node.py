@@ -1,4 +1,5 @@
 import asyncio
+from collections import defaultdict
 import logging
 import re
 from typing import Annotated, Any
@@ -275,15 +276,24 @@ async def rerank_node(state: AgentState):
     query = state.get("current_query") or state["messages"][-1].content
 
     retrieved_docs: list[BaseSearchResult] = state.get("retrieved_docs", [])
+    
+    if not retrieved_docs:
+        return {"retrieved_docs": []}
 
     async with rerank_semaphore:
         reranked_docs = await rerank_service.rerank(
             query=query,
             documents=retrieved_docs,
-            top_n=settings.COHERE_RERANK_TOP_N
+            top_n=settings.COHERE_RERANK_TOP_N  # 50개 정도 넉넉히
         )
+        
+    final_docs = select_diverse_top_k(
+        reranked_docs=reranked_docs,
+        total_k=settings.CUSTOM_RERANK_TOTAL_K,  # 최종 10개
+        min_guarantee=2  # 최소 2개 보장
+    )
     
-    return {"retrieved_docs": reranked_docs}
+    return {"retrieved_docs": final_docs}
 
 
 async def manage_pr_context_node(state: AgentState):
@@ -309,7 +319,7 @@ async def manage_pr_context_node(state: AgentState):
         target_prs = [pr_docs[0]]
     
     else:
-        logger.info(f"PR {pr_docs}개 발견. 사용자 선택 요청 (Interrupt)")
+        logger.info(f"PR {len(pr_docs)}개 발견. 사용자 선택 요청 (Interrupt)")
         
         candidates: list[dict[str, Any]] = [
             PullRequestCandidate.from_search_result_doc(doc).model_dump()
@@ -317,7 +327,7 @@ async def manage_pr_context_node(state: AgentState):
         ]
                 
         user_selected_prs: list[PullRequestUserSelected] = interrupt(candidates)
-        logger.info(f"사용자 선택 완료: {user_selected_prs}")
+        logger.info(f"사용자 선택 완료: {len(user_selected_prs)} 개")
         
         if not user_selected_prs:
             logger.info("Skip: 사용자가 선택한 PR이 없음.")
@@ -340,7 +350,6 @@ async def manage_pr_context_node(state: AgentState):
     for pr, context_data in zip(target_prs, results):
         pr.file_context = context_data
         logger.info(f"PR #{pr.pr_number} 컨텍스트 업데이트 완료 ({len(context_data)} 파일)")
-        logger.info(f"file_context: {pr.file_context}")
     
     return {"retrieved_docs": retrieved_docs}
 
@@ -450,6 +459,63 @@ async def generate_node(state: AgentState):
     )
 
     return {"messages": [AIMessage(content=answer)], "sources": final_sources}
+
+
+def select_diverse_top_k(
+    reranked_docs: list[BaseSearchResult],
+    total_k: int,
+    min_guarantee: int
+) -> list[BaseSearchResult]:
+    """Rerank된 소스 타입들이 골고루 섞이도록 동적으로 Top K 선정"""
+    
+    if not reranked_docs:
+        return []
+    
+    # 문서 그룹핑
+    docs_by_source_type: dict[SourceType, list[BaseSearchResult]] = defaultdict(list)
+    for doc in reranked_docs:
+        docs_by_source_type[doc.source_type].append(doc)
+    
+    # Source Type 종류
+    active_source_types: list[SourceType] = list(docs_by_source_type.keys())
+    
+    selected_docs = []
+    seen_ids = set()
+    
+    # 최소 보장 개수만큼 slot 차지
+    for source_type in active_source_types:
+        
+        # 특정 Source Type에 해당하는 문서 후보
+        candidates = docs_by_source_type[source_type]
+        
+        # 할당량 결정
+        count_to_take = min(len(candidates), min_guarantee)
+        for i in range(count_to_take):
+            if len(selected_docs) >= total_k:
+                break
+            
+            doc = candidates[i]
+            if doc.id not in seen_ids:
+                selected_docs.append(doc)
+                seen_ids.add(doc.id)
+    
+    remaining_slots = total_k - len(selected_docs)
+    
+    # 자리가 남았으면 selected_docs에 아직 포함되지 않은 것들을 앞에서부터 넣어줌 (이미 reranker가 정렬해준 상태)
+    if remaining_slots > 0:
+        for doc in reranked_docs:
+            if doc.id not in seen_ids:
+                selected_docs.append(doc)
+                seen_ids.add(doc.id)
+                remaining_slots -= 1
+                if remaining_slots == 0:
+                    break
+    
+    # 고르게 담긴 문서들을 relevance_score 기준으로 정렬해서 LLM에게 제공
+    selected_docs.sort(key=lambda x: x.relevance_score, reverse=True)
+    
+    return selected_docs
+    
 
 
 def _preprocess_documents(
