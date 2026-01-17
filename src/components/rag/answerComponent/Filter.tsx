@@ -3,9 +3,9 @@
 import clsx from 'clsx';
 import { useState } from 'react';
 import ToggleOn from '/public/icons/icon/state=On.svg';
-import Delete from '/public/icons/icon/delete_2.svg';
-import Reset from '/public/icons/icon/reset.svg';
-import ArrowSend from '/public/icons/icon/arrow_send.svg';
+// import Delete from '/public/icons/icon/delete_2.svg';
+// import Reset from '/public/icons/icon/reset.svg';
+// import ArrowSend from '/public/icons/icon/arrow_send.svg';
 
 const filter = [
   { id: 1, name: '모든 날짜' },
@@ -21,19 +21,19 @@ interface FilterComponentsProps {
 }
 
 const Filter = ({ isOpen, onClose }: FilterComponentsProps) => {
-  const [activeFilters, setActiveFilters] = useState<number[]>([]);
-  const [keyword, setKeyword] = useState('');
-  const [secondKeyword, setSecondKeyword] = useState('');
+  const [activeFilters, setActiveFilters] = useState<number[]>([1]);
+  // const [keyword, setKeyword] = useState('');
+  // const [secondKeyword, setSecondKeyword] = useState('');
 
   const toggleFilter = (id: number) => {
     setActiveFilters((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
   };
 
-  const handleReset = () => {
-    setActiveFilters([]);
-    setKeyword('');
-    setSecondKeyword('');
-  };
+  // const handleReset = () => {
+  //   setActiveFilters([1]);
+  //   setKeyword('');
+  //   setSecondKeyword('');
+  // };
 
   return (
     <div className="flex h-full flex-col justify-center gap-2.5 px-4 py-3">
@@ -61,7 +61,7 @@ const Filter = ({ isOpen, onClose }: FilterComponentsProps) => {
           );
         })}
       </div>
-      <div className="text-body-xsmall text-gray-50">키워드 필터</div>
+      {/* <div className="text-body-xsmall text-gray-50">키워드 필터</div>
       <div className="flex h-9 items-center gap-1.5">
         <input
           value={keyword}
@@ -91,7 +91,7 @@ const Filter = ({ isOpen, onClose }: FilterComponentsProps) => {
             <ArrowSend className="text-gray-30 h-6 w-6" />
           </button>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 };
