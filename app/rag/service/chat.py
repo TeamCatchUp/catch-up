@@ -155,9 +155,7 @@ class ChatService:
                         ).model_dump()
                         
             snapshot = await app.aget_state(config)
-            
-            logger.info(snapshot)
-            
+                        
             if snapshot.next and ((payload := snapshot.tasks[0].interrupts) is not None):
                 interrupt_value = payload[0].value
                 
