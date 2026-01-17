@@ -21,7 +21,7 @@ interface FilterComponentsProps {
 }
 
 const Filter = ({ isOpen, onClose }: FilterComponentsProps) => {
-  const [activeFilters, setActiveFilters] = useState<number[]>([]);
+  const [activeFilters, setActiveFilters] = useState<number[]>([1]);
   // const [keyword, setKeyword] = useState('');
   // const [secondKeyword, setSecondKeyword] = useState('');
 
@@ -30,7 +30,7 @@ const Filter = ({ isOpen, onClose }: FilterComponentsProps) => {
   };
 
   // const handleReset = () => {
-  //   setActiveFilters([]);
+  //   setActiveFilters([1]);
   //   setKeyword('');
   //   setSecondKeyword('');
   // };

@@ -404,7 +404,7 @@ export default function Page() {
                     }
                   }}
                   rows={1}
-                  className="text-body-medium placeholder:text-gray-30 flex-1 resize-none overflow-y-auto px-2.5 outline-none"
+                  className="text-body-medium placeholder:text-gray-30 flex-1 resize-none overflow-y-auto pr-2.5 outline-none"
                   style={{ height: '26px', maxHeight: '156px' }}
                 />
 
