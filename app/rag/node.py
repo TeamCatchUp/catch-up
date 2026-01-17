@@ -363,16 +363,8 @@ async def grade_node(state: AgentState):
 
     context_text = "\n\n".join(
         [
-            f"""
-            [문서 정보]
-            출처: {getattr(doc, "source", "unknown")}
-            파일 경로: {getattr(doc, "file_path", "N/A")}
-            카테고리: {getattr(doc, "category", "N/A")}
-            프로그래밍 언어: {getattr(doc, "language", "N/A")}
-            내용:
-            {doc.text}
-            """.strip()
-            for doc in retrieved_docs
+            doc.to_context_text(index=i) 
+            for i, doc in enumerate(retrieved_docs, start=1)
         ]
     )
 
@@ -472,68 +464,50 @@ def _preprocess_documents(
     # 사용자 제공용 Source 리스트
     processed_sources = []
 
-    for i, doc in enumerate(retrieved_docs):
-        # LLM 제공용 Context 상세
-        source = getattr(doc, "source", "unknown")
-        category = getattr(doc, "category", "기타")
-        file_path = getattr(doc, "file_path", "")
-        text = doc.text
-
-        formatted_doc = (
-            f"[{i}] 출처: {source} ({file_path}) | 카테고리: {category}\n내용:\n{text}"
-        )
-        context_text_list.append(formatted_doc)
-
-        # 사용자에게 반환할 Source 객체 사전 생성
-        source_entry = {
-            "index": i,  # Rerank 결과 상의 원래 ID
-            "is_cited": False,
-            "source_type": doc.source_type,
-            "text": text,  # 원문 전체
-            "file_path": file_path,
-            "category": category,
-            "source": source,
-            "html_url": getattr(doc, "html_url", None),
-            "language": getattr(doc, "language", None),
-            "relevance_score": doc.relevance_score,
-        }
-        processed_sources.append(source_entry)
+    for i, doc in enumerate(retrieved_docs, start=1):
+        formatted_text = doc.to_context_text(index=i)
+        context_text_list.append(formatted_text)
+        
+        source_dto = BaseSource.from_search_result(index=i, doc=doc)
+        processed_sources.append(source_dto)
 
     # LLM 제공용 context 연결
-    context_text = "\n\n".join(context_text_list)
+    full_context_text = "\n\n".join(context_text_list)
 
-    return context_text, processed_sources
+    return full_context_text, processed_sources
 
 
 def _select_final_sources(
-    processed_sources: list[dict[str, Any]], cited_indices: set[int], threshold: float
-) -> list[dict[str, Any]]:
+    processed_sources: list[BaseSource], cited_indices: set[int], threshold: float
+) -> list[BaseSource]:
     """
     인용 여부, Threshold, Fallback 로직을 통해 최종 Source 리스트 선정 및 정렬
     """
-    final_sources = []
+    final_sources: list[BaseSource] = []
     seen_indices = set()
 
     # LLM이 인용한 document가 존재하는 경우
     if cited_indices:
-        valid_indices = [i for i in cited_indices if 0 <= i < len(processed_sources)]
-        for i in valid_indices:
-            if i not in seen_indices:
-                processed_sources[i]["is_cited"] = True
-                final_sources.append(processed_sources[i])
-                seen_indices.add(i)
+        for cited_num in cited_indices:
+            idx = cited_num - 1  # 1-based -> 0-based 변환
+            if 0 <= idx < len(processed_sources):
+                if idx not in seen_indices:
+                    processed_sources[idx].is_cited = True
+                    final_sources.append(processed_sources[idx])
+                    seen_indices.add(idx)
+                    
         logger.info(f"LLM이 인용한 문서: {len(final_sources)}개")
 
     # 점수 내림차순 정렬 (객체 자체 정렬)
     sorted_by_score = sorted(
-        processed_sources, key=lambda x: x["relevance_score"], reverse=True
+        processed_sources, key=lambda x: x.relevance_score, reverse=True
     )
 
     # LLM이 언급하지 않았지만 threshold 기준으로 관련 있는 문서
     cnt = 0
     for doc in sorted_by_score:
-        idx = doc["index"]
-        if doc.get("relevance_score") >= threshold:
+        idx = doc.index - 1  # 1-based -> 0-based 변환
+        if doc.relevance_score >= threshold:
             if idx not in seen_indices:
                 final_sources.append(doc)
                 seen_indices.add(idx)
@@ -547,12 +521,12 @@ def _select_final_sources(
         )
         # 이미 점수순으로 정렬된 리스트 활용
         for doc in sorted_by_score[:3]:
-            idx = doc["index"]
+            idx = doc.index
             final_sources.append(doc)
             seen_indices.add(idx)
 
     # 인용된 것이 먼저 오고, 원본 인덱스 기준 오름차순 정렬
-    final_sources.sort(key=lambda x: (not x["is_cited"], x["index"]))
+    final_sources.sort(key=lambda x: (not x.is_cited, x.index))
 
     return final_sources
 
