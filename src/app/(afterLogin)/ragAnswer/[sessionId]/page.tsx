@@ -27,7 +27,9 @@ import { sendChatQuery } from 'src/util/sendChatQuery';
 import AnswerActionButtons from '@/components/rag/answerComponent/AnswerActionButtons';
 import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
 import ErrorResponse from '@/components/rag/answerComponent/ErrorResponse';
+import EditMessageInput from '@/components/rag/EditMessageInput';
 import ToolTip from '@/components/common/ToolTip';
+import { timeStamp } from 'console';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -57,6 +59,7 @@ export default function Page() {
   const sessionId = params.sessionId as string;
   const repo = searchParams.get('repo');
   const [chatData, setChatData] = useState<any>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
   const initialQuery = searchParams.get('q');
 
@@ -209,6 +212,58 @@ export default function Page() {
     setIsMultiLine(e.target.scrollHeight > 26);
   };
 
+  // 수정 완료 핸들러
+  const handleSubmitEdit = async (messageId: string, newContent: string) => {
+    if (!chatData) return;
+
+    const messageIndex = chatData.messages.findIndex((m: any) => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    // 수정된 메시지 이후의 모든 메시지 삭제
+    const newMessages = chatData.messages.slice(0, messageIndex);
+
+    const userMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: newContent,
+      timeStamp: new Date().toISOString(),
+    };
+
+    const updatedData = {
+      ...chatData,
+      messages: [...newMessages, userMessage],
+    };
+
+    setChatData(updatedData);
+    setEditingMessageId(null);
+    setIsLoading(true);
+
+    try {
+      const safeRepo = repo || chatData.repo || '';
+      const result = await sendChatQuery(newContent, sessionId, safeRepo);
+
+      const assistantMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: result.answer,
+        sources: result.sources || [],
+        timestamp: new Date().toISOString(),
+      };
+
+      const finalData = {
+        ...updatedData,
+        messages: [...updatedData.messages, assistantMessage],
+      };
+
+      setChatData(finalData);
+      localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
+    } catch (err) {
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!chatData) return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
 
   const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
@@ -236,13 +291,24 @@ export default function Page() {
               <div key={msg.id} className="mx-auto flex w-193.25 flex-col gap-6">
                 {msg.role === 'user' ? (
                   <div className="flex flex-col gap-4">
-                    <div className="group relative max-w-full">
-                      <span className="text-heading-xlarge text-gray-70 mr-5">{msg.content}</span>
-                      <button className="border-neutral-3 box-button-outline-gray inline-flex translate-y-1 cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100">
-                        <EditPencil className="text-gray-70 h-5 w-5" />
-                        <span className="text-body-xsmall text-gray-80 whitespace-nowrap">수정하기</span>
-                      </button>
-                    </div>
+                    {editingMessageId === msg.id ? (
+                      <EditMessageInput
+                        initialContent={msg.content}
+                        onCancel={() => setEditingMessageId(null)}
+                        onSubmit={(newContent) => handleSubmitEdit(msg.id, newContent)}
+                      />
+                    ) : (
+                      <div className="group relative max-w-full">
+                        <span className="text-heading-xlarge text-gray-70 mr-5">{msg.content}</span>
+                        <button
+                          onClick={() => setEditingMessageId(msg.id)}
+                          className="border-neutral-3 box-button-outline-gray inline-flex translate-y-1 cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100"
+                        >
+                          <EditPencil className="text-gray-70 h-5 w-5" />
+                          <span className="text-body-xsmall text-gray-80 whitespace-nowrap">수정하기</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
