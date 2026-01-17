@@ -9,9 +9,9 @@ export function useOutsideClick<T extends HTMLElement>(ref: React.RefObject<T | 
       }
     };
 
-    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('click', handleClick);
     return () => {
-      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('click', handleClick);
     };
   }, [ref, onClose]);
 }

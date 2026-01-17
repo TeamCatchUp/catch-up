@@ -30,6 +30,7 @@ import ErrorResponse from '@/components/rag/answerComponent/ErrorResponse';
 import EditMessageInput from '@/components/rag/EditMessageInput';
 import ToolTip from '@/components/common/ToolTip';
 import { timeStamp } from 'console';
+import TeamSpaceModal from '@/components/rag/modal/TeamSpaceModal';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -72,6 +73,7 @@ export default function Page() {
   const [isMultiLine, setIsMultiLine] = useState(false);
   const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: string]: boolean }>({});
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isSpaceDropDownOpen, setIsSpaceDropDownOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
@@ -314,13 +316,52 @@ export default function Page() {
                   <div className="flex flex-col gap-2">
                     <div className={`mb-3 rounded-xl ${isFilterOpen ? 'border-neutral-3 border' : ''} `}>
                       {!isFilterOpen ? (
-                        <div className="flex items-center gap-1">
-                          <div className="icon-button-only-gray flex cursor-pointer items-center gap-1">
+                        // <div className="flex items-center gap-1">
+                        //   <div className="icon-button-only-gray flex cursor-pointer items-center gap-1">
+                        //     <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
+                        //       스페이스명 text text text
+                        //     </div>
+                        //     <DropDown className="text-gray-70 relative bottom-px h-4 w-4 shrink-0" />
+                        //   </div>
+                        //   <Divider className="text-neutral-4 h-6 w-6 shrink-0" />
+                        //   <div className="flex shrink-0 items-center gap-3">
+                        //     <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
+                        //     <button onClick={() => setIsFilterOpen(true)} className="cursor-pointer">
+                        //       <ToggleOff />
+                        //     </button>
+                        //   </div>
+                        // </div>
+                        <div className="group relative flex items-center gap-1">
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsSpaceDropDownOpen((prev) => !prev);
+                            }}
+                            className="icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1"
+                          >
                             <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
                               스페이스명 text text text
                             </div>
-                            <DropDown className="text-gray-70 relative bottom-px h-4 w-4 shrink-0" />
+                            <DropDown
+                              className={clsx(
+                                'text-gray-70 relative bottom-px h-4 w-4 shrink-0',
+                                isSpaceDropDownOpen ? 'rotate-180' : '',
+                              )}
+                            />
                           </div>
+                          <div className="absolute bottom-12.5 left-23.75">
+                            <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
+                          </div>
+                          {/* TeamSpace 드롭다운 모달 */}
+                          {isSpaceDropDownOpen && (
+                            <div className="absolute top-10.5 z-100">
+                              <TeamSpaceModal
+                                onClose={() => {
+                                  setIsSpaceDropDownOpen(false);
+                                }}
+                              />
+                            </div>
+                          )}
                           <Divider className="text-neutral-4 h-6 w-6 shrink-0" />
                           <div className="flex shrink-0 items-center gap-3">
                             <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
@@ -331,12 +372,42 @@ export default function Page() {
                         </div>
                       ) : (
                         <div className="flex flex-col gap-2">
-                          <div className="icon-button-only-gray flex cursor-pointer items-center gap-1">
+                          {/* <div className="icon-button-only-gray flex cursor-pointer items-center gap-1">
                             <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
                               스페이스명 text text text
                             </div>
                             <DropDown className="text-gray-70 relative bottom-px h-4 w-4 shrink-0" />
+                          </div> */}
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsSpaceDropDownOpen((prev) => !prev);
+                            }}
+                            className="icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1"
+                          >
+                            <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
+                              스페이스명 text text text
+                            </div>
+                            <DropDown
+                              className={clsx(
+                                'text-gray-70 relative bottom-px h-4 w-4 shrink-0',
+                                isSpaceDropDownOpen ? 'rotate-180' : '',
+                              )}
+                            />
                           </div>
+                          <div className="absolute bottom-12.5 left-23.75">
+                            <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
+                          </div>
+                          {/* TeamSpace 드롭다운 모달 */}
+                          {isSpaceDropDownOpen && (
+                            <div className="absolute top-10.5 z-100">
+                              <TeamSpaceModal
+                                onClose={() => {
+                                  setIsSpaceDropDownOpen(false);
+                                }}
+                              />
+                            </div>
+                          )}
                           <FilterComponent isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} />
                         </div>
                       )}

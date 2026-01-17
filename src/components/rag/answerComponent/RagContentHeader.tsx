@@ -8,7 +8,7 @@ const RagHeader = () => {
   return (
     <div className="border-r-neutral-3 border-b-neutral-3 sticky top-0 z-100 flex min-w-240.75 justify-between border-r border-b bg-white px-16 py-2">
       <div className="flex items-center">
-        <button className={`box-button-outline-gray} flex items-center rounded-xl px-2 py-1`}>
+        <button className={`icon-button-only-gray flex items-center rounded-xl px-2 py-1`}>
           <Menu className="h-5 w-5 text-gray-50" />
           <span className={`text-heading-small ml-1.5 cursor-pointer text-gray-50`}>업무 어시스선트</span>
         </button>
