@@ -7,6 +7,8 @@ import Add from '/public/icons/icon/add_small.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
 import EditPencil from '/public/icons/icon/edit_pencil.svg';
+import Divider from '/public/icons/icon/divider.svg';
+import DropDown from '/public/icons/icon/dropdown_down.svg';
 import ToggleOff from '/public/icons/icon/state=Off.svg';
 import ArrowSend from '/public/icons/icon/arrow_send.svg';
 import Copy from '/public/icons/icon/copy.svg';
@@ -268,17 +270,34 @@ export default function Page() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-5">
+                  <div className="flex flex-col gap-2">
                     <div className={`mb-3 rounded-xl ${isFilterOpen ? 'border-neutral-3 border' : ''} `}>
                       {!isFilterOpen ? (
-                        <div className="flex items-center gap-3">
-                          <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
-                          <button onClick={() => setIsFilterOpen(true)} className="cursor-pointer">
-                            <ToggleOff />
-                          </button>
+                        <div className="flex items-center gap-1">
+                          <div className="icon-button-only-gray flex cursor-pointer items-center gap-1">
+                            <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
+                              스페이스명 text text text
+                            </div>
+                            <DropDown className="text-gray-70 relative bottom-px h-4 w-4 shrink-0" />
+                          </div>
+                          <Divider className="text-neutral-4 h-6 w-6 shrink-0" />
+                          <div className="flex shrink-0 items-center gap-3">
+                            <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
+                            <button onClick={() => setIsFilterOpen(true)} className="cursor-pointer">
+                              <ToggleOff />
+                            </button>
+                          </div>
                         </div>
                       ) : (
-                        <FilterComponent isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} />
+                        <div className="flex flex-col gap-2">
+                          <div className="icon-button-only-gray flex cursor-pointer items-center gap-1">
+                            <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
+                              스페이스명 text text text
+                            </div>
+                            <DropDown className="text-gray-70 relative bottom-px h-4 w-4 shrink-0" />
+                          </div>
+                          <FilterComponent isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} />
+                        </div>
                       )}
                     </div>
                     <div className="text-gray-80 prose prose-neutral max-w-none break-words">
