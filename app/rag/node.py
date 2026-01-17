@@ -295,10 +295,19 @@ async def manage_pr_context_node(state: AgentState):
     
     selected_pr_ids = []
     
-    candidates: list[dict[str, Any]] = [
-        PullRequestCandidate.from_search_result_doc(doc).model_dump()
-        for doc in pr_docs
-    ]
+    # candidates: list[dict[str, Any]] = [
+    #     PullRequestCandidate.from_search_result_doc(doc).model_dump()
+    #     for doc in pr_docs
+    # ]
+    
+    candidates = [PullRequestCandidate(
+        id="hi",
+        pr_number=86,
+        title="#86 풀리퀘스트",
+        repo_name="CatchUP!",
+        summary="요약임다",
+        owner="ba2slk"
+    )]
     
     logger.info("[INTERRUPT] 사용자 PR 선택을 위해 인터럽트 실행")   
     user_selection_ids = interrupt(candidates)

@@ -4,7 +4,7 @@ from typing import Annotated, Any, Literal, Optional, TypedDict
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph.message import add_messages
 
-from app.rag.models.manage_pr_context import PullRequestSelected
+from app.rag.models.manage_pr_context import PullRequestUserSelected
 from app.rag.models.plan import SearchQuery
 from app.rag.models.retrieve import BaseSearchResult
 
@@ -44,7 +44,7 @@ class AgentState(TypedDict):
     retry_count: int  # rewrite 재시도 횟수
     index_list: list[str]  # 검색 대상 인덱스 이름
     search_queries: list[SearchQuery]
-    selected_prs: list[PullRequestSelected]  # interrupt() 시에 사용자가 선택한  PR 목록
+    selected_prs: list[PullRequestUserSelected]  # interrupt() 시에 사용자가 선택한  PR 목록
     pr_context: str  # generate_node에 넘겨줄, 사용자가 선택한 pull request 관련 context
     retrieved_docs: list[BaseSearchResult]  # 검색 결과
     grade_status: Literal["good", "bad", "max_retries"]
