@@ -4,6 +4,8 @@ from typing import Optional
 from langchain_core.documents import Document
 from pydantic import BaseModel, Field
 
+from app.rag.models.pr_base import PRFileContext
+
 
 class SourceType(IntEnum):
     CODE = 0
@@ -18,8 +20,8 @@ class BaseSearchResult(BaseModel):
         description="출처 유형(0: code, 1: pull request, 2: issue)"
     )
     source: str = Field(description="출처 이름")
-    text: str = Field(description="문서 본문")
-    html_url: str = Field(description="Github url")
+    text: str = Field(default="", description="문서 본문")
+    html_url: str = Field(default="", description="Github url")
     relevance_score: Optional[float] = Field(None, description="Rerank 점수")
 
     @classmethod
@@ -32,6 +34,9 @@ class BaseSearchResult(BaseModel):
             "text": doc.page_content,
             "html_url": metadata.get("html_url"),
         }
+    
+    def to_context_text(self, index: int) -> str:
+        return f"[{index}] 출처: {self.source} | 유형: {self.source_type.name}\n내용:\n{self.text}"
 
 
 # Code
@@ -51,6 +56,13 @@ class CodeSearchResult(BaseSearchResult):
             file_path=metadata.get("file_path", ""),
             category=metadata.get("category", ""),
             language=metadata.get("language", ""),
+        )
+    
+    def to_context_text(self, index: int) -> str:
+        return (
+            f"[{index}] 출처: {self.source} ({self.file_path}) | "
+            f"언어: {self.language or 'N/A'}\n"
+            f"코드 내용:\n{self.text}"
         )
 
 
@@ -78,6 +90,7 @@ class PullRequestSearchResult(BaseSearchResult):
     owner: str = Field(default="")
     repo_name: str = Field(default="")
     branch: str = Field(default="")
+    file_context: list[PRFileContext] = Field(default_factory=list)
 
     @classmethod
     def from_search_result_doc(cls, doc: Document) -> "PullRequestSearchResult":
@@ -111,6 +124,26 @@ class PullRequestSearchResult(BaseSearchResult):
             repo_name=metadata.get("repo_name"),
             branch=metadata.get("branch"),
         )
+    
+    def to_context_text(self, index: int) -> str:
+        header = (
+            f"[{index}] 출처: {self.source} (PR #{self.pr_number}) | "
+            f"제목: {self.title} | 상태: {self.state}\n"
+        )
+        
+        content = f"=== PR 본문/요약 ===\n{self.body}"
+        
+        if self.file_context:
+            content += "\n=== 변경된 파일 상세 (Diff 포함) ===\n"
+            for fc in self.file_context:
+                content += (
+                    f"파일: {fc.path} ({fc.status})"
+                    f"변경: +{fc.additions} / -{fc.deletions}"
+                    f"Diff: \n{fc.patch}\n"
+                    f"---\n"
+                )
+        return header + content
+        
 
 
 class IssueSearchResult(BaseSearchResult):

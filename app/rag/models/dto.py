@@ -3,29 +3,78 @@ from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
-from app.rag.models.retrieve import SourceType
+from app.rag.models.retrieve import BaseSearchResult, CodeSearchResult, PullRequestSearchResult, SourceType
 from app.rag.models.manage_pr_context import PullRequestUserSelected
 
 # 각 Source별 필수 필드 정의
 class BaseSource(BaseModel):
     index: int | None  # LLM이 참고한 문서 번호
     is_cited: bool = Field(default=False, description="LLM 인용 여부")
-    source_type: str = Field(..., description="소스 종류 구분")  # TODO: 세분화
-    text: str | None = Field(None, description="본문 내용")
+    source_type: str = Field(..., description="소스 종류 구분")
+    source: str = Field(..., description="출처 이름")
     relevance_score: float = Field(..., description="사용자 쿼리와 출처의 관련 정도")
+    text: str | None = Field(None, description="프론트엔드 표시용 본문 텍스트")
+    
+    @classmethod
+    def from_search_result(
+        cls,
+        index: int,
+        doc: BaseSearchResult,
+        is_cited: bool = False
+    ) -> "SourceResponse":
+        """SearchResult -> XXXSource 변환"""
+        base_data = {
+            "index": index,
+            "is_cited": is_cited,
+            "source_type": doc.source_type,
+            "source": doc.source,
+            "relevance_score": doc.relevance_score or 0.0,
+            "html_url": doc.html_url,
+            "text": doc.text or getattr(doc, "body", "")
+        }
+        
+        if doc.source_type == SourceType.CODE:
+            if isinstance(doc, CodeSearchResult):
+                return CodeSource(
+                    **base_data,
+                    file_path=doc.file_path,
+                    category=doc.category,
+                    language=doc.language
+                )
+        
+        elif doc.source_type == SourceType.PULL_REQUEST:
+            if isinstance(doc, PullRequestSearchResult):
+                return PullRequestSource(
+                    **base_data,
+                    title=doc.title,
+                    pr_number=doc.pr_number,
+                    state=doc.state,
+                    created_at=doc.created_at
+                )
+        
+        elif doc.source_type == SourceType.ISSUE:
+            pass
 
-
-# Github 코드 메타데이터
-class GithubSource(BaseSource):
+# 코드 메타데이터
+class CodeSource(BaseSource):
     source_type: Literal[SourceType.CODE] = SourceType.CODE
     file_path: str | None = None  # 파일 경로
     category: str | None = None  # 카테고리
-    source: str | None = None  # 문서 출처
-    html_url: str | None = None  # Github 소스코드 url
     language: str | None = None  # 프로그래밍 언어
+    
+# PR 메타데이터
+class PullRequestSource(BaseSource):
+    source_type: Literal[SourceType.PULL_REQUEST] = SourceType.PULL_REQUEST
+    title: str = Field(..., description="PR 제목")
+    pr_number: int = Field(..., description="PR 번호")
+    state: str = Field(..., description="PR 상태")
+    created_at: int = Field(..., description="생성일")
 
 
-Source = Annotated[Union[GithubSource], Field(discriminator="source_type")]
+SourceResponse = Annotated[
+    Union[CodeSource, PullRequestSource],
+    Field(discriminator="source_type")
+]
 
 
 # 채팅 요청
@@ -43,7 +92,7 @@ class ChatRequest(BaseModel):
 # 최종 채팅 응답
 class ChatResponse(BaseModel):
     answer: str = Field(..., description="AI의 답변 텍스트")
-    sources: list[Source] = Field(
+    sources: list[SourceResponse] = Field(
         default_factory=list, description="참고한 문서 출처 목록"
     )
     process_time: float = Field(..., description="답변 생성 시간")
