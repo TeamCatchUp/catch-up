@@ -388,7 +388,7 @@ const SideNavBar = () => {
         )}
         {isUserModalOpen && (
           <div className="absolute bottom-15.5">
-            <UserModal onClose={() => setIsUserModalOpen(false)} />
+            <UserModal onClose={() => setIsUserModalOpen(false)} userName={user?.name} userEmail={user?.email} />
           </div>
         )}
       </div>

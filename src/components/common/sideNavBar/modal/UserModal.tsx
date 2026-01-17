@@ -12,9 +12,11 @@ import { useOutsideClick } from '@/hooks/useOutsideClick';
 
 interface UserModalProps {
   onClose: () => void;
+  userName?: string;
+  userEmail?: string;
 }
 
-const UserModal = ({ onClose }: UserModalProps) => {
+const UserModal = ({ onClose, userName, userEmail }: UserModalProps) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
@@ -30,8 +32,8 @@ const UserModal = ({ onClose }: UserModalProps) => {
       <div className="flex h-12 items-center gap-4 px-1">
         <DefaultProfile className="h-10 w-10 shrink-0" />
         <div className="relative top-px flex min-w-0 flex-col">
-          <span className="text-heading-small text-gray-80 truncate">팀원G팀원G팀원G팀원G팀원G</span>
-          <span className="text-body-small truncate text-gray-50">PMPMPMPMPMPMPMPMPM</span>
+          <span className="text-heading-small text-gray-80 truncate">{userName ?? '이름없음'}</span>
+          <span className="text-body-small truncate text-gray-50">{userEmail ?? ''}</span>
         </div>
       </div>
       {/* 메뉴 */}
