@@ -1,5 +1,6 @@
 'use client';
 
+import clsx from 'clsx';
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -26,6 +27,7 @@ import { sendChatQuery } from 'src/util/sendChatQuery';
 import AnswerActionButtons from '@/components/rag/answerComponent/AnswerActionButtons';
 import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
 import ErrorResponse from '@/components/rag/answerComponent/ErrorResponse';
+import ToolTip from '@/components/common/ToolTip';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -75,7 +77,6 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
 
   const [newInput, setNewInput] = useState('');
-  const previousLengthRef = useRef(0);
 
   useEffect(() => {
     if (showFeedback && scrollRef.current) {
@@ -164,12 +165,12 @@ export default function Page() {
 
     setChatData(updatedData);
     setNewInput('');
-    setIsMultiLine(false);
     setIsLoading(true);
-    previousLengthRef.current = 0;
+    setIsMultiLine(false);
 
+    // textarea 높이 초기화
     if (textAreaRef.current) {
-      textAreaRef.current.style.height = 'auto';
+      textAreaRef.current.style.height = '26px';
     }
 
     try {
@@ -197,48 +198,15 @@ export default function Page() {
     }
   };
 
+  // 검색어 입력창 style 제어
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNewInput(e.target.value);
 
-    const currentLength = e.target.value.length;
-    const isTyping = currentLength > previousLengthRef.current;
-    previousLengthRef.current = currentLength;
-
-    // !multiLine의 maxHeight(26px) 제약에서 스크롤이 생기는지 확인
     e.target.style.height = 'auto';
-    e.target.style.maxHeight = '26px'; // !multiLine의 maxHeight
-    const hasOverflow = e.target.scrollHeight > e.target.clientHeight;
+    const newHeight = Math.min(e.target.scrollHeight, 156);
+    e.target.style.height = newHeight + 'px';
 
-    // 높이 복원
-    e.target.style.maxHeight = isMultiLine ? '114px' : '26px';
-    e.target.style.height = 'auto';
-    const finalHeight = e.target.scrollHeight;
-    e.target.style.height = Math.min(finalHeight, 114) + 'px';
-
-    let shouldBeMultiLine;
-
-    if (!isMultiLine) {
-      // !multiLine 상태: 스크롤 생기면 multiLine으로
-      shouldBeMultiLine = hasOverflow;
-    } else {
-      // multiLine 상태: 삭제 중일 때만 스크롤 없으면 !multiLine으로
-      if (isTyping) {
-        shouldBeMultiLine = true; // 입력 중이면 multiLine 유지
-      } else {
-        shouldBeMultiLine = hasOverflow; // 삭제 중: 스크롤 없으면 !multiLine으로
-      }
-    }
-
-    if (shouldBeMultiLine !== isMultiLine) {
-      setIsMultiLine(shouldBeMultiLine);
-      setTimeout(() => {
-        if (textAreaRef.current) {
-          textAreaRef.current.focus();
-          const length = textAreaRef.current.value.length;
-          textAreaRef.current.setSelectionRange(length, length);
-        }
-      }, 0);
-    }
+    setIsMultiLine(e.target.scrollHeight > 26);
   };
 
   if (!chatData) return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
@@ -392,8 +360,8 @@ export default function Page() {
 
           <div className="w-full flex-none bg-white px-24 pt-4 pb-8">
             <div className="mx-auto w-193.25">
-              <div className="no-scrollbar flex justify-start gap-2.5 overflow-x-auto">
-                {/* {[
+              {/* <div className="no-scrollbar flex justify-start gap-2.5 overflow-x-auto">
+                {[
                   '임직원이 가장 많이 물어보는 질문',
                   '프로젝트 검색하기',
                   '최근 변경사항 요약',
@@ -405,100 +373,61 @@ export default function Page() {
                   >
                     {item}
                   </button>
-                ))} */}
-              </div>
+                ))}
+              </div> */}
 
-              {!isMultiLine ? (
-                <div className="border-neutral-4 shadow-rag-bar flex items-center gap-2 rounded-full border bg-white px-3 py-2.5">
-                  <div className="group relative">
-                    <button className="icon-button-only-gray cursor-pointer rounded-full! p-1.5">
-                      <Add className="text-gray-70 h-7 w-7" />
-                    </button>
-                    <div className="shadow-tooltip bg-alpha-black-75 text-label-small pointer-events-none absolute top-11 left-1/2 -translate-x-1/2 rounded-lg px-2.5 py-1.5 whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
-                      파일 추가 및 기타
-                    </div>
+              {/* 검색 입력창 */}
+              <div
+                className={clsx(
+                  'border-neutral-4 shadow-rag-bar flex gap-2 border bg-white px-3 py-2.5',
+                  isMultiLine ? 'items-end rounded-3xl' : 'items-center rounded-full',
+                )}
+              >
+                <div className="group relative flex-shrink-0">
+                  <button className="icon-button-only-gray cursor-pointer rounded-full! p-1.5">
+                    <Add className="text-gray-70 h-7 w-7" />
+                  </button>
+                  <div className="relative top-0.5 right-10">
+                    <ToolTip text={'파일 추가 및 기타'} />
                   </div>
+                </div>
 
-                  <textarea
-                    ref={textAreaRef}
-                    placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
-                    value={newInput}
-                    onChange={handleInputChange}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    rows={1}
-                    className="text-body-medium placeholder:text-gray-30 flex-1 resize-none overflow-hidden outline-none"
-                    style={{ height: 'auto', minHeight: '26px', maxHeight: '26px' }}
-                  />
-                  <div className="flex shrink-0 items-center gap-3">
+                <textarea
+                  ref={textAreaRef}
+                  placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
+                  value={newInput}
+                  onChange={handleInputChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  rows={1}
+                  className="text-body-medium placeholder:text-gray-30 flex-1 resize-none overflow-y-auto px-2.5 outline-none"
+                  style={{ height: '26px', maxHeight: '156px' }}
+                />
+
+                <div className="flex flex-shrink-0 items-center gap-3">
+                  {!newInput.trim() && (
                     <div className="box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1">
                       <Filter className="relative top-0.5 h-4.5 w-4.5" />
                       <span className="text-body-xsmall text-gray-50">필터</span>
                     </div>
-                    <button
-                      onClick={handleSendMessage}
-                      disabled={isLoading || !newInput.trim()}
-                      className={`cursor-pointer rounded-full p-2 transition-colors ${
-                        newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border'
-                      }`}
-                    >
-                      <ArrowSend
-                        className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
-                      />
-                    </button>
-                  </div>
+                  )}
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={isLoading || !newInput.trim()}
+                    className={`cursor-pointer rounded-full p-2 transition-colors ${
+                      newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border'
+                    }`}
+                  >
+                    <ArrowSend
+                      className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
+                    />
+                  </button>
                 </div>
-              ) : (
-                <div className="border-neutral-4 shadow-rag-bar flex flex-col gap-2 rounded-3xl border bg-white px-3 py-2.5">
-                  <textarea
-                    ref={textAreaRef}
-                    placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
-                    value={newInput}
-                    onChange={handleInputChange}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    rows={1}
-                    className="text-body-medium placeholder:text-gray-30 w-full resize-none overflow-hidden overflow-y-auto px-2.5 outline-none"
-                    style={{ height: 'auto', minHeight: '26px', maxHeight: '114px' }}
-                  />
-                  <div className="flex w-full items-center">
-                    <div className="group relative">
-                      <button className="icon-button-only-gray cursor-pointer rounded-full! p-1.5">
-                        <Add className="text-gray-70 h-7 w-7" />
-                      </button>
-                      <div className="shadow-tooltip bg-alpha-black-75 text-label-small pointer-events-none absolute top-11 left-1/2 -translate-x-1/2 rounded-lg px-2.5 py-1.5 whitespace-nowrap text-white opacity-0 transition-opacity group-hover:opacity-100">
-                        파일 추가 및 기타
-                      </div>
-                    </div>
-                    <div className="flex-1" />
-                    <div className="flex shrink-0 items-center gap-3">
-                      <div className="box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1">
-                        <Filter className="relative top-0.5 h-4.5 w-4.5" />
-                        <span className="text-body-xsmall text-gray-50">필터</span>
-                      </div>
-                      <button
-                        onClick={handleSendMessage}
-                        disabled={isLoading || !newInput.trim()}
-                        className={`cursor-pointer rounded-full p-2 transition-colors ${
-                          newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border'
-                        }`}
-                      >
-                        <ArrowSend
-                          className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
-                        />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
