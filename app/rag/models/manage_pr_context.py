@@ -9,6 +9,7 @@ class PullRequestCandidate(BaseModel):
     title: str = Field(default="")
     repo_name: str = Field(default="")
     summary: str = Field(default="")
+    owner: str = Field(default="")
     
     @classmethod
     def from_search_result_doc(
@@ -20,7 +21,8 @@ class PullRequestCandidate(BaseModel):
             pr_number = res.pr_number,
             title = res.title,
             repo_name = res.repo_name,
-            summary = res.body[:100] if res.body else ""
+            summary = res.body[:100] if res.body else "",
+            owner=res.owner
         )
     
 
@@ -46,3 +48,8 @@ class PRFileContext(BaseModel):
     previous_filename: Optional[str] = Field(default=None, description="Renaming의 경우 이전 파일 이름 포함")
     patch: str = Field(default="", description="변경된 코드 내용 (Diff)")
     comments: List[PRComment] = Field(default_factory=list, description="해당 파일에 달린 리뷰 코멘트 목록")
+    
+class PullRequestUserSelected(BaseModel): 
+    pr_number: int = Field(default=0)
+    repo_name: str = Field(default="")
+    owner: str = Field(default="")

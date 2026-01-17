@@ -4,7 +4,7 @@ from typing import Annotated, Any, Literal, Optional, Union
 from pydantic import BaseModel, Field
 
 from app.rag.models.retrieve import SourceType
-
+from app.rag.models.manage_pr_context import PullRequestUserSelected
 
 # 각 Source별 필수 필드 정의
 class BaseSource(BaseModel):
@@ -62,9 +62,9 @@ class ChatStreamingInterruptResponse(BaseModel):
     payload: Any = Field(..., description="인터럽트 데이터 (PR 후보 리스트)")
 
 # (Streaming) 인터럽트 Client -> Server
-class ChatStreamingResumeReqeust(BaseModel):
+class ChatStreamingResumeRequest(BaseModel):
     session_id: str = Field(..., description="PR 수동 선택 후 재개할 세션 ID")
-    selected_ids: list[str] = Field(..., description="사용자가 선택한 PR 번호 리스트")
+    user_selected_pull_requests: list[PullRequestUserSelected] = Field(..., description="사용자가 선택한 PR 번호 리스트")
     
 
 # (Streaming) Keep-alive Ping
