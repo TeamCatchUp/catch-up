@@ -12,7 +12,13 @@ from langgraph.types import interrupt
 
 from app.core.config import settings
 from app.observability.langfuse_client import langfuse_handler
-from app.rag.factory import get_llm_service, get_rerank_service, get_vector_repository
+from app.rag.factory import (
+    get_github_service,
+    get_llm_service,
+    get_rerank_service,
+    get_vector_repository
+)
+from app.rag.models.dto import BaseSource
 from app.rag.models.grade import GradeDocuments
 from app.rag.models.plan import SearchPlan, SearchQuery
 from app.rag.models.retrieve import (
@@ -22,7 +28,7 @@ from app.rag.models.retrieve import (
     PullRequestSearchResult,
     IssueSearchResult
 )
-from app.rag.models.manage_pr_context import PullRequestCandidate
+from app.rag.models.manage_pr_context import PullRequestCandidate, PullRequestUserSelected
 from app.rag.models.route import RouteQuery
 from app.rag.prompts.system import (
     SYSTEM_ASSISTANT_PROMPT,
@@ -44,7 +50,7 @@ INDEX_MAPPING_RULES = {
     "codebase": ["_code"],
     "jira_issue": ["_jira", "_ticket"],
     "github_issue": ["_gh_issue", "_issue"],
-    "pr_history": ["_pr", "_commit"],
+    "pr_history": ["_pr"],
 }
 
 
@@ -281,72 +287,62 @@ async def rerank_node(state: AgentState):
 
 
 async def manage_pr_context_node(state: AgentState):
-    logger.info("manage_pr_context 노드 진입")
+    logger.info("manage_pr_context node 진입")
     
-    retrieved_docs: list[BaseSearchResult] = state.get("retrieved_docs", [])
-    pr_docs: list[PullRequestSearchResult] = []
-    other_docs: list[BaseSearchResult] = []
+    github_service = get_github_service()
     
-    for doc in retrieved_docs:
-        if doc.source_type == SourceType.PULL_REQUEST:
-            pr_docs.append(doc)
-        else:
-            other_docs.append(doc)
+    retrieved_docs: list[BaseSearchResult] = state.get("retrieved_docs", [])  # truth
     
-    selected_pr_ids = []
-    
-    # candidates: list[dict[str, Any]] = [
-    #     PullRequestCandidate.from_search_result_doc(doc).model_dump()
-    #     for doc in pr_docs
-    # ]
-    
-    candidates = [PullRequestCandidate(
-        id="hi",
-        pr_number=86,
-        title="#86 풀리퀘스트",
-        repo_name="CatchUP!",
-        summary="요약임다",
-        owner="ba2slk"
-    )]
-    
-    logger.info("[INTERRUPT] 사용자 PR 선택을 위해 인터럽트 실행")   
-    user_selection_ids = interrupt(candidates)
-    logger.info(f"user_seslection_ids: {user_selection_ids}")
+    pr_docs: list[PullRequestSearchResult] = [
+        doc for doc in retrieved_docs
+        if doc.source_type == SourceType.PULL_REQUEST
+    ]
 
+    if not pr_docs:
+        logger.info("Skip: PR 관련 문서 없음")
+        return {"retrieved_docs": retrieved_docs}
     
-    # if not pr_docs:
-    #     logger.info("Skip: PR 관련 문서 없음.")
-    #     return {"retrieved_docs": docs}
+    target_prs: list[PullRequestSearchResult] = []
+
+    if len(pr_docs) == 1:
+        logger.info(f"PR 1개 발견. 자동 선택 - [#{pr_docs[0].pr_number}]")
+        target_prs = [pr_docs[0]]
     
-    # elif len(pr_docs) == 1:
-    #     target_pr = pr_docs[0]
-    #     logger.info("PR 1개 발견. 자동 선택 - [#{target_pr.pr_number}]")
-    #     selected_pr_ids.append(target_pr)
-    
-    # else:
-    #     logger.info(f"PR {len(pr_docs)} 발견. 사용자 선택 요청을 위해 interrupt.")
+    else:
+        logger.info(f"PR {pr_docs}개 발견. 사용자 선택 요청 (Interrupt)")
         
-    #     candidates: PullRequestCandidate = [
-    #         PullRequestCandidate.from_search_result_doc(doc).model_dump()
-    #         for doc in pr_docs
-    #     ]
+        candidates: list[dict[str, Any]] = [
+            PullRequestCandidate.from_search_result_doc(doc).model_dump()
+            for doc in pr_docs
+        ]
+                
+        user_selected_prs: list[PullRequestUserSelected] = interrupt(candidates)
+        logger.info(f"사용자 선택 완료: {user_selected_prs}")
         
-    #     user_selection_ids = interrupt(candidates)
+        if not user_selected_prs:
+            logger.info("Skip: 사용자가 선택한 PR이 없음.")
+            return {"retrieved_docs": retrieved_docs}
         
-    #     logger.info(f"사용자 선택 완료: {user_selection_ids}")
+        selected_pr_numbers = {item.pr_number for item in user_selected_prs}
         
-    #     selected_pr_ids = [
-    #         doc for doc in pr_docs 
-    #         if doc.metadata.get("pr_number") in user_selection_ids
-    #     ]
+        target_prs: list[PullRequestSearchResult] = [
+                pr for pr in pr_docs 
+                if pr.pr_number in selected_pr_numbers
+            ]
+        
+    tasks = [
+        github_service.get_pr_context(pr.owner, pr.repo_name, pr.pr_number)
+        for pr in target_prs
+    ]
     
-    enriched_pr_docs = []
+    results = await asyncio.gather(*tasks)
     
-    # for doc in selected_pr_ids:
-        # full_content = await github_service.get_pr_detail()
+    for pr, context_data in zip(target_prs, results):
+        pr.file_context = context_data
+        logger.info(f"PR #{pr.pr_number} 컨텍스트 업데이트 완료 ({len(context_data)} 파일)")
+        logger.info(f"file_context: {pr.file_context}")
     
     return {"retrieved_docs": retrieved_docs}
-        
 
 
 async def grade_node(state: AgentState):
