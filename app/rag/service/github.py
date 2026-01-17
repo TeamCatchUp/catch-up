@@ -5,7 +5,7 @@ import re
 from typing import Any, Dict, List
 
 from app.core.config import settings
-from app.rag.models.manage_pr_context import PRFileContext, PRComment
+from app.rag.models.pr_base import PRFileContext
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class GithubService:
     def __init__(self):
         self.token = settings.GITHUB_TOKEN
-        self.base_url = "https://api.github.com/repos"
+        self.base_url = settings.GITHUB_BASE_URL
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",

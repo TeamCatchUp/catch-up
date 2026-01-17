@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     OPENAI_CHAT_MODEL: str
 
     GITHUB_TOKEN: str
+    GITHUB_BASE_URL: str
 
     model_config = SettingsConfigDict(
         env_prefix="",
