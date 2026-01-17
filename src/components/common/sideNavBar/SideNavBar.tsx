@@ -22,6 +22,7 @@ import Necessary from '/public/icons/icon/necessary.svg';
 import ToolTip from '@/components/common/ToolTip';
 import TeamSpaceMoreModal from '@/components/common/sideNavBar/modal/TeamSpaceMoreModal';
 import TeamSpaceDropDownModal from '@/components/common/sideNavBar/modal/TeamSpaceDropDownModal';
+import UserModal from '@/components/common/sideNavBar/modal/UserModal';
 import api from '@/api/axios';
 
 const navItems = [
@@ -58,6 +59,7 @@ const SideNavBar = () => {
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage); // SNB opened 여부
   const [isTeamSpaceMoreModalOpen, setIsTeamSpaceMoreModalOpen] = useState(false); // 팀스페이스 더보기 버튼 모달 opened 여부
   const [isTeamDropDownModalOpen, setIsTeamDropDownModalOpen] = useState(false); // 팀스페이스 드롭다운 버튼 모달 opened 여부
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false); // 유저 모달 opened 여부
 
   const user = useUserStore((state) => state.user);
   const setUser = useUserStore((state) => state.setUser);
@@ -351,6 +353,7 @@ const SideNavBar = () => {
       <div className={'group mt-auto flex flex-col gap-1.5'}>
         {isOpen && <div className={`border-neutral-3 relative right-2 w-60 border`} />}
         <div
+          onClick={() => setIsUserModalOpen(!isUserModalOpen)}
           className={clsx(
             'icon-button-only-gray flex h-13.5 cursor-pointer items-center rounded-lg',
             isOpen ? 'w-56.25 justify-between px-1.5 py-1' : 'justify-center',
@@ -381,6 +384,11 @@ const SideNavBar = () => {
                 </div>
               }
             />
+          </div>
+        )}
+        {isUserModalOpen && (
+          <div className="absolute bottom-15.5">
+            <UserModal onClose={() => setIsUserModalOpen(false)} />
           </div>
         )}
       </div>
