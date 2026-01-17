@@ -63,9 +63,9 @@ export default function Page() {
   const day = String(today.getDate()).padStart(2, '0');
 
   const [showFeedback, setShowFeedback] = useState(false);
-  const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: number]: boolean }>({});
+  const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: string]: boolean }>({});
   const [isMultiLine, setIsMultiLine] = useState(false);
-  const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: number]: boolean }>({});
+  const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: string]: boolean }>({});
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -116,7 +116,7 @@ export default function Page() {
       sessionId,
       title: query,
       repo: safeRepo,
-      messages: [{ role: 'user', content: query, timestamp: new Date().toISOString() }],
+      messages: [{ id: crypto.randomUUID(), role: 'user', content: query, timestamp: new Date().toISOString() }],
     };
     setChatData(initialData);
 
@@ -128,6 +128,7 @@ export default function Page() {
         messages: [
           ...initialData.messages,
           {
+            id: crypto.randomUUID(),
             role: 'assistant',
             content: result.answer,
             sources: result.sources || [],
@@ -150,7 +151,12 @@ export default function Page() {
 
     const safeRepo = repo || chatData.repo || '';
 
-    const userMessage = { role: 'user', content: newInput, timestamp: new Date().toISOString() };
+    const userMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: newInput,
+      timestamp: new Date().toISOString(),
+    };
     const updatedData = {
       ...chatData,
       messages: [...(chatData.messages || []), userMessage],
@@ -170,6 +176,7 @@ export default function Page() {
       const result = await sendChatQuery(newInput, sessionId, safeRepo);
 
       const assistantMessage = {
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: result.answer,
         sources: result.sources || [],
@@ -257,8 +264,8 @@ export default function Page() {
               <div className="border-neutral-4 flex-1 border-t" />
             </div>
 
-            {chatData.messages.map((msg: any, idx: number) => (
-              <div key={idx} className="mx-auto flex w-193.25 flex-col gap-6">
+            {chatData.messages.map((msg: any) => (
+              <div key={msg.id} className="mx-auto flex w-193.25 flex-col gap-6">
                 {msg.role === 'user' ? (
                   <div className="flex flex-col gap-4">
                     <div className="group relative max-w-full">
@@ -309,16 +316,16 @@ export default function Page() {
 
                     <AnswerActionButtons
                       icons={icon}
-                      messageIdx={idx}
+                      messageIdx={msg.id}
                       feedbackVisibleMap={feedbackVisibleMap}
                       setFeedbackVisibleMap={setFeedbackVisibleMap}
                     />
-                    {feedbackVisibleMap[idx] && (
+                    {feedbackVisibleMap[msg.id] && (
                       <div
                         ref={feedbackRef}
                         className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4"
                       >
-                        {feedbackSubmittedMap[idx] ? (
+                        {feedbackSubmittedMap[msg.id] ? (
                           <div className="text-body-small flex items-center justify-center text-gray-50">
                             피드백을 주셔서 감사합니다!
                           </div>
@@ -329,29 +336,29 @@ export default function Page() {
                                 답변이 마음에 들지 않은 이유가 무엇인가요?
                               </span>
                               <div
-                                onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [idx]: false }))}
+                                onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [msg.id]: false }))}
                                 className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
                               >
                                 <Cancel className="h-4.5 w-4.5 text-gray-50" />
                               </div>
                             </div>
                             <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
-                              {feedback.map((feedback, idx) => {
+                              {feedback.map((feedbackItem, feedbackIdx) => {
                                 return (
                                   <button
-                                    key={idx}
+                                    key={feedbackIdx}
                                     onClick={() => {
-                                      setFeedbackSubmittedMap((prev) => ({ ...prev, [idx]: true }));
+                                      setFeedbackSubmittedMap((prev) => ({ ...prev, [msg.id]: true }));
                                       setTimeout(() => {
                                         setFeedbackVisibleMap((prev) => ({
                                           ...prev,
-                                          [idx]: false,
+                                          [msg.id]: false,
                                         }));
                                       }, 3000);
                                     }}
                                     className="box-button-outline-gray border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1"
                                   >
-                                    {feedback.content}
+                                    {feedbackItem.content}
                                   </button>
                                 );
                               })}
