@@ -13,6 +13,7 @@ class BaseSource(BaseModel):
     source_type: str = Field(..., description="소스 종류 구분")
     source: str = Field(..., description="출처 이름")
     relevance_score: float = Field(..., description="사용자 쿼리와 출처의 관련 정도")
+    html_url: str | None = Field(None, description="Github 원본 링크")
     text: str | None = Field(None, description="프론트엔드 표시용 본문 텍스트")
     
     @classmethod
@@ -22,7 +23,7 @@ class BaseSource(BaseModel):
         doc: BaseSearchResult,
         is_cited: bool = False
     ) -> "SourceResponse":
-        """SearchResult -> XXXSource 변환"""
+        """BaseSearchResult -> SourceResponse 변환"""
         base_data = {
             "index": index,
             "is_cited": is_cited,
