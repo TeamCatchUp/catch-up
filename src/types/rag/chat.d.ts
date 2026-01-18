@@ -20,4 +20,6 @@ interface ChatSource {
   content: string;
   date: string;
   htmlUrl: string;
+  // 임시
+  count: number;
 }
