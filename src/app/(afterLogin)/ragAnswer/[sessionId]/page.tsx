@@ -338,7 +338,10 @@ export default function Page() {
                                 e.stopPropagation();
                                 setIsSpaceDropDownOpen((prev) => !prev);
                               }}
-                              className="group icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1"
+                              className={clsx(
+                                'icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1',
+                                isSpaceDropDownOpen ? 'bg-neutral-3' : 'icon-button-only-gray',
+                              )}
                             >
                               <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
                                 스페이스명 text text text
@@ -389,7 +392,7 @@ export default function Page() {
                                 }}
                                 className={clsx(
                                   'flex cursor-pointer items-center gap-1 px-2 py-1',
-                                  isSpaceDropDownOpen ? 'bg-neutral-3' : 'icon-button-only-gray',
+                                  isSpaceDropDownOpen ? 'bg-neutral-3 rounded-lg' : 'icon-button-only-gray',
                                 )}
                               >
                                 <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
@@ -408,7 +411,7 @@ export default function Page() {
                             </div>
                             {/* TeamSpace 드롭다운 모달 */}
                             {isSpaceDropDownOpen && (
-                              <div className="absolute top-15 z-100">
+                              <div className="absolute top-10 z-100">
                                 <TeamSpaceModal
                                   onClose={() => {
                                     setIsSpaceDropDownOpen(false);
