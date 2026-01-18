@@ -365,7 +365,7 @@ const SideNavBar = () => {
 
         {/* 유저 */}
         <div className={'group mt-auto flex flex-col gap-1.5'}>
-          {isOpen && <div className={`border-neutral-3 relative right-2 w-60 border`} />}
+          {isOpen && <div className={`bg-neutral-3 relative right-2 h-px w-60`} />}
           <div
             onClick={() => setIsUserModalOpen(!isUserModalOpen)}
             className={clsx(

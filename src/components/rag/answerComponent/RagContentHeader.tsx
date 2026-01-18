@@ -8,17 +8,22 @@ import Add from '/public/icons/icon/add_small.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
 import CatchAssistantModal from '@/components/rag/modal/CatchAssistantModal';
+import QuestionsListModal from '@/components/rag/modal/QuestionsListInSessionModal';
 
 const RagHeader = () => {
   const [isCatchModalOpen, setIsCatchModalOpen] = useState(false);
+  const [isQuestionsListOpen, setIsQuestionsListOpen] = useState(false);
 
   return (
     <>
       <div className="border-r-neutral-3 border-b-neutral-3 sticky top-0 z-100 flex min-w-240.75 justify-between border-r border-b bg-white px-16 py-2">
         {/* 좌측 메뉴 */}
-        <div className="flex items-center">
+        <div className="relative flex items-center">
           <button
-            onClick={() => setIsCatchModalOpen(true)}
+            onClick={() => {
+              setIsQuestionsListOpen(false);
+              setIsCatchModalOpen(true);
+            }}
             className={clsx(
               'icon-button-only-gray flex items-center rounded-xl px-2 py-1',
               isCatchModalOpen && 'bg-neutral-3 rounded-xl',
@@ -29,10 +34,23 @@ const RagHeader = () => {
           </button>
           <ArrowRight2 className="h-5 w-5 text-gray-50" />
           <button
-            className={`text-heading-small text-gray-80! icon-button-only-gray max-w-50 cursor-pointer truncate rounded-xl px-2 py-1`}
+            onClick={() => {
+              setIsCatchModalOpen(false);
+              setIsQuestionsListOpen(true);
+            }}
+            className={clsx(
+              'text-heading-small text-gray-80! icon-button-only-gray max-w-50 cursor-pointer truncate rounded-xl px-2 py-1',
+              isQuestionsListOpen && 'bg-neutral-3 rounded-xl',
+            )}
           >
             현재페이지현재페이지현재페이지
           </button>
+          {/* 대화 내 질문 목록 모달 */}
+          {isQuestionsListOpen && (
+            <div className="absolute top-8.5 left-35">
+              <QuestionsListModal onClose={() => setIsQuestionsListOpen(false)} />
+            </div>
+          )}
         </div>
 
         {/* 우측 메뉴 */}

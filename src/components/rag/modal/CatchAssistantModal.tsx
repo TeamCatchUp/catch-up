@@ -1,6 +1,5 @@
 'use client';
 
-import clsx from 'clsx';
 import { useState, useRef } from 'react';
 import AI from '/public/icons/icon/ai.svg';
 import Add from '/public/icons/icon/add_small.svg';
@@ -45,7 +44,7 @@ const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
       </div>
 
       {/* divider */}
-      <div className="border-neutral-3 relative right-3 h-px w-189.25 border" />
+      <div className="bg-neutral-3 relative right-3 h-px w-189.25" />
 
       {/* 질문 목록 */}
       <div className="flex flex-col gap-3 overflow-y-auto px-2 pb-4">
