@@ -380,7 +380,7 @@ export default function Page() {
                             </div>
                             <DropDown className="text-gray-70 relative bottom-px h-4 w-4 shrink-0" />
                           </div> */}
-                          <div className="group flex gap-1">
+                          <div className="group relative flex gap-1">
                             <div
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -404,7 +404,7 @@ export default function Page() {
                           </div>
                           {/* TeamSpace 드롭다운 모달 */}
                           {isSpaceDropDownOpen && (
-                            <div className="absolute top-10.5 z-100">
+                            <div className="absolute top-20 z-100">
                               <TeamSpaceModal
                                 onClose={() => {
                                   setIsSpaceDropDownOpen(false);
