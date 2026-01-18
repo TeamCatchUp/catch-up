@@ -398,11 +398,11 @@ export default function Page() {
                                 <DropDown
                                   className={clsx(
                                     'text-gray-70 relative bottom-px h-4 w-4 shrink-0',
-                                    isSpaceDropDownOpen ? 'rotate-180' : '',
+                                    isSpaceDropDownOpen ? 'rotate-180 rounded-lg' : '',
                                   )}
                                 />
                               </div>
-                              <div className="absolute bottom-12.5 left-23.75">
+                              <div className="absolute bottom-10.5 left-23.75">
                                 <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
                               </div>
                             </div>
