@@ -340,7 +340,7 @@ export default function Page() {
                               }}
                               className={clsx(
                                 'icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1',
-                                isSpaceDropDownOpen ? 'bg-neutral-3' : 'icon-button-only-gray',
+                                isSpaceDropDownOpen ? 'bg-neutral-3 rounded-lg' : 'icon-button-only-gray',
                               )}
                             >
                               <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
@@ -349,7 +349,7 @@ export default function Page() {
                               <DropDown
                                 className={clsx(
                                   'text-gray-70 relative bottom-px h-4 w-4 shrink-0',
-                                  isSpaceDropDownOpen ? 'rotate-180' : '',
+                                  isSpaceDropDownOpen ? 'rotate-180' : 'bottom-px',
                                 )}
                               />
                             </div>
@@ -400,8 +400,8 @@ export default function Page() {
                                 </div>
                                 <DropDown
                                   className={clsx(
-                                    'text-gray-70 relative bottom-px h-4 w-4 shrink-0',
-                                    isSpaceDropDownOpen ? 'rotate-180 rounded-lg' : '',
+                                    'text-gray-70 relative h-4 w-4 shrink-0',
+                                    isSpaceDropDownOpen ? 'rotate-180 rounded-lg' : 'bottom-px',
                                   )}
                                 />
                               </div>
@@ -411,7 +411,7 @@ export default function Page() {
                             </div>
                             {/* TeamSpace 드롭다운 모달 */}
                             {isSpaceDropDownOpen && (
-                              <div className="absolute top-10 z-100">
+                              <div className="absolute top-10.5 z-100">
                                 <TeamSpaceModal
                                   onClose={() => {
                                     setIsSpaceDropDownOpen(false);
