@@ -331,26 +331,28 @@ export default function Page() {
                         //     </button>
                         //   </div>
                         // </div>
-                        <div className="group relative flex items-center gap-1">
-                          <div
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setIsSpaceDropDownOpen((prev) => !prev);
-                            }}
-                            className="icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1"
-                          >
-                            <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
-                              스페이스명 text text text
+                        <div className="relative flex items-center gap-1">
+                          <div className="group relative flex items-center gap-1">
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsSpaceDropDownOpen((prev) => !prev);
+                              }}
+                              className="group icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1"
+                            >
+                              <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
+                                스페이스명 text text text
+                              </div>
+                              <DropDown
+                                className={clsx(
+                                  'text-gray-70 relative bottom-px h-4 w-4 shrink-0',
+                                  isSpaceDropDownOpen ? 'rotate-180' : '',
+                                )}
+                              />
                             </div>
-                            <DropDown
-                              className={clsx(
-                                'text-gray-70 relative bottom-px h-4 w-4 shrink-0',
-                                isSpaceDropDownOpen ? 'rotate-180' : '',
-                              )}
-                            />
-                          </div>
-                          <div className="absolute bottom-12.5 left-23.75">
-                            <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
+                            <div className="absolute bottom-12.5 left-23.75">
+                              <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
+                            </div>
                           </div>
                           {/* TeamSpace 드롭다운 모달 */}
                           {isSpaceDropDownOpen && (
@@ -378,7 +380,7 @@ export default function Page() {
                             </div>
                             <DropDown className="text-gray-70 relative bottom-px h-4 w-4 shrink-0" />
                           </div> */}
-                          <div className="flex gap-1">
+                          <div className="group flex gap-1">
                             <div
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -399,17 +401,17 @@ export default function Page() {
                             <div className="absolute bottom-12.5 left-23.75">
                               <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
                             </div>
-                            {/* TeamSpace 드롭다운 모달 */}
-                            {isSpaceDropDownOpen && (
-                              <div className="absolute top-10.5 z-100">
-                                <TeamSpaceModal
-                                  onClose={() => {
-                                    setIsSpaceDropDownOpen(false);
-                                  }}
-                                />
-                              </div>
-                            )}
                           </div>
+                          {/* TeamSpace 드롭다운 모달 */}
+                          {isSpaceDropDownOpen && (
+                            <div className="absolute top-10.5 z-100">
+                              <TeamSpaceModal
+                                onClose={() => {
+                                  setIsSpaceDropDownOpen(false);
+                                }}
+                              />
+                            </div>
+                          )}
                           <FilterComponent isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} />
                         </div>
                       )}
