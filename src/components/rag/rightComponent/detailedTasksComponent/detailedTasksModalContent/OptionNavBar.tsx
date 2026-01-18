@@ -1,4 +1,7 @@
 import clsx from 'clsx';
+import { useRef, useState, useEffect } from 'react';
+import ArrowLeft from '/public/icons/icon/arrow_left2.svg';
+import ArrowRight from '/public/icons/icon/arrow_right2.svg';
 import Lock from '/public/icons/icon/lock_filled.svg';
 
 type TabType = 'info' | 'files' | 'wiki' | 'url' | 'comments' | 'notion' | 'slack';
@@ -17,10 +20,35 @@ interface TaskDetailTabsProps {
 }
 
 const OptionalNavbar = ({ tabs, activeTab, onChange }: TaskDetailTabsProps) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  const checkScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(Math.ceil(el.scrollLeft + el.clientWidth) < el.scrollWidth - 1); // 보정값
+  };
+
+  const scrollByAmount = (amount: number) => {
+    scrollRef.current?.scrollBy({
+      left: amount,
+      behavior: 'smooth',
+    });
+  };
+
+  useEffect(() => {
+    checkScroll();
+  }, [tabs]);
+
   return (
-    <>
+    <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} className="relative">
       {/* option bar */}
-      <div className="mt-3.5 flex h-12 gap-5 overflow-x-auto">
+      <div ref={scrollRef} onScroll={checkScroll} className="mt-3.5 flex h-12 gap-5 overflow-x-auto">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -38,6 +66,7 @@ const OptionalNavbar = ({ tabs, activeTab, onChange }: TaskDetailTabsProps) => {
             >
               {tab.label}
             </span>
+
             {tab.locked ? (
               <Lock className="h-3.5 w-3.5 text-gray-50" />
             ) : (
@@ -58,9 +87,32 @@ const OptionalNavbar = ({ tabs, activeTab, onChange }: TaskDetailTabsProps) => {
           </button>
         ))}
       </div>
+
+      {/* < 버튼 */}
+      {hovered && canScrollLeft && (
+        <button
+          onClick={() => scrollByAmount(-200)}
+          className="box-button-outline-gray rounded-md2! absolute top-1/2 left-0 z-10 flex h-7.5 w-7.5 -translate-y-1/2 cursor-pointer items-center justify-center"
+        >
+          <ArrowLeft className="text-gray-70 h-5 w-5" />
+        </button>
+      )}
+      {/* > 버튼 */}
+      {hovered && canScrollRight && (
+        <button
+          onClick={() => scrollByAmount(200)}
+          className="box-button-outline-gray rounded-md2! absolute top-1/2 right-0 z-10 flex h-7.5 w-7.5 -translate-y-1/2 cursor-pointer items-center justify-center"
+        >
+          <ArrowRight className="text-gray-70 h-5 w-5" />
+        </button>
+      )}
+
       <span className="bg-neutral-3 relative bottom-2.75 flex h-px" />
-    </>
+    </div>
   );
 };
+
+{
+}
 
 export default OptionalNavbar;
