@@ -14,6 +14,8 @@ import URLTabContent from './detailedTasksModalContent/URLTabContent';
 import CommentsTabContent from './detailedTasksModalContent/CommentsTabContent';
 import NoDataContent from './detailedTasksModalContent/NoDataContent';
 import RelatedTasksSection from './detailedTasksModalContent/RelatedTasksSection';
+import OptionNavBar from './detailedTasksModalContent/OptionNavBar';
+import DetailedTaskContent from './detailedTasksModalContent/DetailedTaskContent';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface DetailedTaskModalProps {
@@ -126,58 +128,15 @@ const DetailedTaskModal = ({ onClose, data, tasks, checkedMap, onToggleCheck }: 
         <span className="text-heading-large text-gray-70 line-clamp-2">{taskTitle}</span>
       </div>
       {/* option bar */}
-      <div className="mt-3.5 flex h-12 gap-5 overflow-x-auto">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => handleTabClick(tab)}
-            className={clsx(
-              'relative flex shrink-0 items-center justify-center gap-1.5',
-              tab.locked ? 'cursor-not-allowed' : 'cursor-pointer',
-            )}
-          >
-            <span
-              className={clsx(
-                'text-heading-small relative',
-                tab.locked ? 'text-gray-50' : activeTab === tab.id ? 'text-blue-55' : 'text-gray-50',
-              )}
-            >
-              {tab.label}
-            </span>
-            {tab.locked ? (
-              <Lock className="h-3.5 w-3.5 text-gray-50" />
-            ) : (
-              tab.count > 0 && (
-                <span
-                  className={clsx(
-                    'text-body-xsmall rounded-md2 flex h-5 w-5 items-center justify-center text-center',
-                    activeTab === tab.id ? 'bg-blue-50 text-white' : 'bg-neutral-3 text-gray-50',
-                  )}
-                >
-                  {tab.count}
-                </span>
-              )
-            )}
-            {activeTab === tab.id && !tab.locked && (
-              <div className="bg-blue-45 absolute right-0 bottom-1.75 left-0 z-50 h-0.5 translate-y-1.5" />
-            )}
-          </button>
-        ))}
-      </div>
-      <span className="bg-neutral-3 relative bottom-2.75 flex h-px" />
+      <OptionNavBar tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+      {/* 내용 */}
+      <DetailedTaskContent
+        activeTab={activeTab}
+        renderContent={renderTabContent}
+        type={data.type}
+        currentTask={currentTask}
+      />
 
-      <div className="mt-4 flex flex-1 flex-col overflow-y-auto">
-        {/* content */}
-        {renderTabContent()}
-
-        {activeTab !== 'comments' && (
-          <div className="mt-6 flex flex-col gap-4">
-            {/* divider */}
-            <div className="border-neutral-3 flex border" />
-            <RelatedTasksSection type={data.type} currentTask={currentTask} />
-          </div>
-        )}
-      </div>
       {/* 기능 버튼 */}
       <div className="mt-2 flex h-9 items-center justify-between gap-4">
         <button className="capsule-button-outline-blue flex w-48 cursor-pointer items-center justify-center gap-1.5 px-3 py-1.5">
