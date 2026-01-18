@@ -221,6 +221,44 @@ const DetailedTasksCardComponent = () => {
     });
   };
 
+  // 이동 가능한 전체 업무 목록 (업무 목록을 순서 리스트로 만듦) - 상세 업무 모달
+  const flatTaskList = useMemo(() => {
+    const result: Array<{
+      type: 'task' | 'subtask';
+      taskId: number;
+      subId?: number;
+    }> = [];
+
+    MOCK_TASK.forEach((task) => {
+      result.push({ type: 'task', taskId: task.id });
+
+      task.subtasks.forEach((sub) => {
+        result.push({ type: 'subtask', taskId: task.id, subId: sub.id });
+      });
+    });
+    return result;
+  }, []);
+
+  // 현재 업무의 index 계산
+  const currentIndex = useMemo(() => {
+    if (!detailModal) return -1;
+
+    return flatTaskList.findIndex(
+      (item) => item.type == detailModal.type && item.taskId === detailModal.taskId && item.subId === detailModal.subId,
+    );
+  }, [detailModal, flatTaskList]);
+
+  // 이전 업무 이동 핸들러 - 상세 업무 모달
+  const goPrev = () => {
+    if (currentIndex <= 0) return;
+    setDetailModal(flatTaskList[currentIndex - 1]);
+  };
+  // 다음 업무 이동 핸들러 - 상세 업무 모달
+  const goNext = () => {
+    if (currentIndex === -1 || currentIndex >= flatTaskList.length - 1) return;
+    setDetailModal(flatTaskList[currentIndex + 1]);
+  };
+
   const handleDetailModalOpen = (type: 'task' | 'subtask', taskId: number, subId?: number) => {
     setShowSelectionBar(false);
     setDetailModal((prev) =>
@@ -351,6 +389,10 @@ const DetailedTasksCardComponent = () => {
           tasks={MOCK_TASK}
           checkedMap={checkedMap}
           onToggleCheck={handleCheckToggleFromModal}
+          onPrev={goPrev}
+          onNext={goNext}
+          disablePrev={currentIndex <= 0}
+          disableNext={currentIndex >= flatTaskList.length - 1}
         />
       )}
       {showSelectionBar && (

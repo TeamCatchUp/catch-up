@@ -26,9 +26,9 @@ const RelatedTasksSection = ({ type, currentTask }: RelatedTasksSectionProps) =>
           <span className="text-heading-small text-blue-40">{subtasks.length}</span>
         </div>
         {isOpen && (
-          <div className="text-body-small text-gray-70 flex w-98 flex-wrap gap-x-3 gap-y-2.5">
+          <div className="text-body-small text-gray-70 flex max-w-98 flex-wrap gap-x-3 gap-y-2.5">
             {subtasks.map((sub) => (
-              <span key={sub.id} className="capsule-button-outline-light-blue px-3 py-1.5">
+              <span key={sub.id} className="capsule-button-outline-light-blue truncate px-3 py-1.5">
                 {sub.title}
               </span>
             ))}
@@ -47,8 +47,8 @@ const RelatedTasksSection = ({ type, currentTask }: RelatedTasksSectionProps) =>
           <span className="text-heading-small text-blue-40">1</span>
         </div>
         {isOpen && (
-          <div className="text-body-small text-gray-70 flex w-98 flex-wrap gap-x-3 gap-y-2.5">
-            <span className="capsule-button-outline-purple px-3 py-1.5">{currentTask.title}</span>
+          <div className="text-body-small text-gray-70 flex max-w-98 flex-wrap gap-x-3 gap-y-2.5">
+            <span className="capsule-button-outline-purple truncate px-3 py-1.5">{currentTask.title}</span>
           </div>
         )}
       </>

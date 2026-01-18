@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { useState } from 'react';
 import Align from '/public/icons/icon/align.svg';
 import Divider from '/public/icons/icon/divider.svg';
+import AddCircle from '/public/icons/icon/add_circle.svg';
 import SourceCardsComponent from '@/components/rag/rightComponent/sourceComponent/SourceCardsComponent';
 import RagSourceSkeleton from '@/components/Skeleton/RagSourceSkeleton';
 import ErrorSourceComponent from './ErrorSourceComponent';
@@ -24,6 +25,43 @@ const filterCategory = [
 
 type FilterType = (typeof filterCategory)[number]['type'];
 
+// 출처 자료 더미데이터
+const MOCK_SOURCES: ChatSource[] = [
+  {
+    id: 1,
+    sourceType: 'github',
+    title: '잠재 파트너사 컨택 관련 (네이버)',
+    subtitle: '일본 시장 진출 Kic일본 시장 진출 Kic일본 시장 진출 Kic일본',
+    content:
+      '미리보기 text text text text text text text text text text text texttext text texttext text texttext text text text text texttext text text text text text text text text',
+    date: '3일 전 변경',
+    htmlUrl: 'https://www.naver.com',
+    count: 1,
+  },
+  {
+    id: 2,
+    sourceType: 'wiki',
+    title: '잠재 파트너사 컨택 관련 (구글)',
+    subtitle: '일본 시장 진출 Kic일본 시장 진출 Kic일본 시장 진출 Kic일본',
+    content:
+      '미리보기 text text text text text text text text text text text texttext text texttext text texttext text text text text texttext text text text text text text text text',
+    date: '3일 전 변경',
+    htmlUrl: 'https://www.google.com',
+    count: 1,
+  },
+  {
+    id: 3,
+    sourceType: 'github',
+    title: '잠재 파트너사 컨택 관련 (구글)',
+    subtitle: '일본 시장 진출 Kic일본 시장 진출 Kic일본 시장 진출 Kic일본',
+    content:
+      '미리보기 text text text text text text text text text text text texttext text texttext text texttext text text text text texttext text text text text text text text text',
+    date: '3일 전 변경',
+    htmlUrl: 'https://www.google.com',
+    count: 0,
+  },
+];
+
 const SourceComponent = ({ sources, isLoading, isError }: Props) => {
   const [activeFilters, setActiveFilters] = useState<FilterType[]>([]);
 
@@ -38,6 +76,10 @@ const SourceComponent = ({ sources, isLoading, isError }: Props) => {
 
   const filteredSources =
     activeFilters.length === 0 ? sources : sources.filter((source) => activeFilters.includes(source.sourceType));
+
+  // 출처 number 렌더링
+  const sourcesWithNum = filteredSources.filter((source) => source.count && source.count > 0);
+  const recommendedSources = filteredSources.filter((source) => !source.count || source.count === 0);
 
   return (
     <div className="flex w-101.25 flex-col gap-3 px-4 py-3">
@@ -82,7 +124,28 @@ const SourceComponent = ({ sources, isLoading, isError }: Props) => {
         ) : isLoading ? (
           <RagSourceSkeleton />
         ) : (
-          filteredSources.map((source) => <SourceCardsComponent key={source.id} source={source} />)
+          <div className="flex flex-col gap-2">
+            {filteredSources.map((source) => (
+              <SourceCardsComponent key={source.id} source={source} showCount count={source.count} />
+            ))}
+
+            {/* divider */}
+            {recommendedSources.length > 0 && (
+              <>
+                <div className="bg-neutral-4 mt-1 mb-4 h-px w-93.25" />
+
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center gap-1.5 px-1.5">
+                    <AddCircle className="text-gray-70 h-5 w-5" />
+                    <span className="text-body-small text-gray-70 relative top-[1.5px]">참고하면 좋은 문서들</span>
+                  </div>
+                </div>
+                {filteredSources.map((source) => (
+                  <SourceCardsComponent key={source.id} source={source} showCount={false} />
+                ))}
+              </>
+            )}
+          </div>
         )}
       </div>
     </div>

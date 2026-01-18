@@ -36,7 +36,7 @@ const Filter = ({ isOpen, onClose }: FilterComponentsProps) => {
   // };
 
   return (
-    <div className="flex h-full flex-col justify-center gap-2.5 px-4 py-3">
+    <div className="border-neutral-3 flex h-full flex-col justify-center gap-2.5 rounded-xl border p-4">
       <div className="flex justify-between">
         <span className="text-body-xsmall text-gray-50">기간 선택</span>
         <button onClick={onClose} className="cursor-pointer">
