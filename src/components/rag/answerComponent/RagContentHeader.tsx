@@ -1,4 +1,4 @@
-import Menu from '/public/icons/icon/menu.svg';
+import AI from '/public/icons/icon/ai.svg';
 import ArrowRight2 from '/public/icons/icon/arrow_right2.svg';
 import Add from '/public/icons/icon/add_small.svg';
 import Share from '/public/icons/icon/share_2.svg';
@@ -9,12 +9,14 @@ const RagHeader = () => {
     <div className="border-r-neutral-3 border-b-neutral-3 sticky top-0 z-100 flex min-w-240.75 justify-between border-r border-b bg-white px-16 py-2">
       <div className="flex items-center">
         <button className={`icon-button-only-gray flex items-center rounded-xl px-2 py-1`}>
-          <Menu className="h-5 w-5 text-gray-50" />
-          <span className={`text-heading-small ml-1.5 cursor-pointer text-gray-50`}>업무 어시스선트</span>
+          <AI className="h-5 w-5 text-gray-50" />
+          <span className={`text-heading-small ml-1.5 cursor-pointer text-gray-50`}>캐치스턴트 AI</span>
         </button>
         <ArrowRight2 className="h-5 w-5 text-gray-50" />
-        <button className={`text-heading-small text-gray-80 icon-button-only-gray cursor-pointer rounded-xl px-2 py-1`}>
-          현재 페이지
+        <button
+          className={`text-heading-small text-gray-80 icon-button-only-gray max-w-50 cursor-pointer truncate rounded-xl px-2 py-1`}
+        >
+          현재페이지현재페이지현재페이지
         </button>
       </div>
 
