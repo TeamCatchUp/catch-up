@@ -125,7 +125,7 @@ const SourceComponent = ({ sources, isLoading, isError }: Props) => {
           <RagSourceSkeleton />
         ) : (
           <div className="flex flex-col gap-2">
-            {filteredSources.map((source) => (
+            {sourcesWithNum.map((source) => (
               <SourceCardsComponent key={source.id} source={source} showCount count={source.count} />
             ))}
 
@@ -140,7 +140,7 @@ const SourceComponent = ({ sources, isLoading, isError }: Props) => {
                     <span className="text-body-small text-gray-70 relative top-[1.5px]">참고하면 좋은 문서들</span>
                   </div>
                 </div>
-                {filteredSources.map((source) => (
+                {recommendedSources.map((source) => (
                   <SourceCardsComponent key={source.id} source={source} showCount={false} />
                 ))}
               </>
