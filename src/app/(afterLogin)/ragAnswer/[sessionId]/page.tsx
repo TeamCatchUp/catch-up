@@ -313,24 +313,8 @@ export default function Page() {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    {/* <div className={`mb-3 rounded-xl ${isFilterOpen ? 'border-neutral-3 border' : ''} `}> */}
                     <div className={`mb-3 rounded-xl`}>
                       {!isFilterOpen ? (
-                        // <div className="flex items-center gap-1">
-                        //   <div className="icon-button-only-gray flex cursor-pointer items-center gap-1">
-                        //     <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
-                        //       스페이스명 text text text
-                        //     </div>
-                        //     <DropDown className="text-gray-70 relative bottom-px h-4 w-4 shrink-0" />
-                        //   </div>
-                        //   <Divider className="text-neutral-4 h-6 w-6 shrink-0" />
-                        //   <div className="flex shrink-0 items-center gap-3">
-                        //     <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
-                        //     <button onClick={() => setIsFilterOpen(true)} className="cursor-pointer">
-                        //       <ToggleOff />
-                        //     </button>
-                        //   </div>
-                        // </div>
                         <div className="relative flex items-center gap-1">
                           <div className="group relative flex items-center gap-1">
                             <div
@@ -377,12 +361,6 @@ export default function Page() {
                         </div>
                       ) : (
                         <div className="flex flex-col gap-2">
-                          {/* <div className="icon-button-only-gray flex cursor-pointer items-center gap-1">
-                            <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
-                              스페이스명 text text text
-                            </div>
-                            <DropDown className="text-gray-70 relative bottom-px h-4 w-4 shrink-0" />
-                          </div> */}
                           <div className="relative flex gap-1">
                             <div className="group relative w-fit gap-1">
                               <div

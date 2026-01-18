@@ -28,11 +28,25 @@ interface DetailedTaskModalProps {
   tasks: Task[];
   checkedMap: Record<number, { checked: boolean; subtasks: Record<number, boolean> }>;
   onToggleCheck: (taskId: number, subId?: number) => void;
+  onPrev: () => void;
+  onNext: () => void;
+  disablePrev: boolean;
+  disableNext: boolean;
 }
 
 type TabType = 'info' | 'files' | 'wiki' | 'url' | 'comments' | 'notion' | 'slack';
 
-const DetailedTaskModal = ({ onClose, data, tasks, checkedMap, onToggleCheck }: DetailedTaskModalProps) => {
+const DetailedTaskModal = ({
+  onClose,
+  data,
+  tasks,
+  checkedMap,
+  onToggleCheck,
+  onPrev,
+  onNext,
+  disablePrev,
+  disableNext,
+}: DetailedTaskModalProps) => {
   const [activeTab, setActiveTab] = useState<TabType>('info');
 
   useEscapeKey(onClose);
@@ -95,10 +109,18 @@ const DetailedTaskModal = ({ onClose, data, tasks, checkedMap, onToggleCheck }: 
       {/* TopMenuBar */}
       <div className="flex justify-between">
         <div className="flex gap-1.5">
-          <button className="rounded-md2! box-button-outline-gray h-7.5 w-7.5 cursor-pointer p-1">
+          <button
+            onClick={onPrev}
+            // disabled={disablePrev}
+            className="rounded-md2! box-button-outline-gray h-7.5 w-7.5 cursor-pointer p-1"
+          >
             <DropDownDown className="h-5 w-5 rotate-180" />
           </button>
-          <button className="rounded-md2! box-button-outline-gray h-7.5 w-7.5 cursor-pointer p-1">
+          <button
+            onClick={onNext}
+            // disabled={disableNext}
+            className="rounded-md2! box-button-outline-gray h-7.5 w-7.5 cursor-pointer p-1"
+          >
             <DropDownDown className="h-5 w-5" />
           </button>
         </div>
