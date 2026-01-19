@@ -10,8 +10,9 @@ from app.rag.models.manage_pr_context import PullRequestUserSelected
 class BaseSource(BaseModel):
     index: int | None  # LLM이 참고한 문서 번호
     is_cited: bool = Field(default=False, description="LLM 인용 여부")
-    source_type: str = Field(..., description="소스 종류 구분")
-    source: str = Field(..., description="출처 이름")
+    source_type: SourceType = Field(..., description="소스 종류 구분")
+    owner: str = Field(..., description="레포지토리 소유자")
+    repo: str = Field(..., description="레포지토리 이름")
     relevance_score: float = Field(..., description="사용자 쿼리와 출처의 관련 정도")
     html_url: str | None = Field(None, description="Github 원본 링크")
     text: str | None = Field(None, description="프론트엔드 표시용 본문 텍스트")
@@ -28,7 +29,8 @@ class BaseSource(BaseModel):
             "index": index,
             "is_cited": is_cited,
             "source_type": doc.source_type,
-            "source": doc.source,
+            "owner": doc.owner,
+            "repo": doc.repo,
             "relevance_score": doc.relevance_score or 0.0,
             "html_url": doc.html_url,
             "text": doc.text or getattr(doc, "body", "")
@@ -50,7 +52,8 @@ class BaseSource(BaseModel):
                     title=doc.title,
                     pr_number=doc.pr_number,
                     state=doc.state,
-                    created_at=doc.created_at
+                    created_at=doc.created_at,
+                    author=doc.author
                 )
         
         elif doc.source_type == SourceType.ISSUE:
@@ -70,6 +73,7 @@ class PullRequestSource(BaseSource):
     pr_number: int = Field(..., description="PR 번호")
     state: str = Field(..., description="PR 상태")
     created_at: int = Field(..., description="생성일")
+    author: str = Field(..., description="작성자")
 
 
 SourceResponse = Annotated[
@@ -101,12 +105,14 @@ class ChatResponse(BaseModel):
 
 # (Streaming) 중간 과정 응답
 class ChatStreamingResponse(BaseModel):
+    session_id: str = Field(..., description="PR 수동 선택 후 재개할 세션 ID")
     type: str = Field(..., description="payload 유형")
     node: str = Field(..., description="실행 중인 노드 이름")
     message: str = Field(..., description="payload")
     
 # (Streaming) 인터럽트 Server -> Client 
 class ChatStreamingInterruptResponse(BaseModel):
+    session_id: str = Field(..., description="PR 수동 선택 후 재개할 세션 ID")
     type: Literal["interrupt"] = Field(default="interrupt", description="HITL 인터럽트")
     node: str = Field(..., description="중단된 노드 이름")
     payload: Any = Field(..., description="인터럽트 데이터 (PR 후보 리스트)")
@@ -119,11 +125,13 @@ class ChatStreamingResumeRequest(BaseModel):
 
 # (Streaming) Keep-alive Ping
 class ChatStreamingKeepAliveResponse(BaseModel):
+    session_id: str = Field(..., description="PR 수동 선택 후 재개할 세션 ID")
     type: Literal["ping"] = Field(..., description="Keep-Alive 핑")
 
 
 # (Streaming) 최종 채팅 응답
 class ChatStreamingFinalResponse(ChatResponse):
+    session_id: str = Field(..., description="PR 수동 선택 후 재개할 세션 ID")
     type: Literal["result"] = Field(..., description="최종 payload 유형")
     node: Literal["generate", "chitchat"] = Field(
         ..., description="최종 답변 생성 노드 이름"

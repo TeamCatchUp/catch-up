@@ -6,6 +6,7 @@ from typing import AsyncGenerator, Any
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 from langfuse import observe
+from requests import session
 
 from app.rag.graph import get_compiled_graph
 from app.rag.models.dto import (
@@ -117,7 +118,10 @@ class ChatService:
                 # 각 노드에 진입할 때마다 반환
                 if kind == "on_chain_start" and name in NODE_STATUS_MAP:
                     yield ChatStreamingResponse(
-                        type="status", node=name, message=NODE_STATUS_MAP[name]
+                        session_id=session_id,
+                        type="status",
+                        node=name,
+                        message=NODE_STATUS_MAP[name]
                     ).model_dump()
 
                 # Keep-alive
@@ -129,7 +133,10 @@ class ChatService:
 
                     # 최소 1초 간격으로 ping을 보냄
                     if current_time - last_ping_time > 1.0:
-                        yield ChatStreamingKeepAliveResponse(type="ping").model_dump()
+                        yield ChatStreamingKeepAliveResponse(
+                                session_id=session_id,
+                                type="ping"
+                            ).model_dump()
 
                         last_ping_time = current_time
 
@@ -147,6 +154,7 @@ class ChatService:
                         sources = node_output.get("sources", [])
 
                         yield ChatStreamingFinalResponse(
+                            session_id=session_id,
                             type="result",
                             node=name,
                             answer=answer_text,
@@ -162,6 +170,7 @@ class ChatService:
                 logger.info(f"Session {session_id}: Interrupted at {snapshot.next}")
                 
                 yield ChatStreamingInterruptResponse(
+                    session_id=session_id,
                     type="interrupt",
                     node=list(snapshot.next)[0],
                     payload=interrupt_value,
