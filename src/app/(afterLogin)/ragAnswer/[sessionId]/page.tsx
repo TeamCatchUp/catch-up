@@ -39,17 +39,6 @@ const icon = [
   { name: 'Kebeb', icon: Kebeb },
 ];
 
-// const feedback = [
-//   { id: 1, content: '존재하지 않는 자료를 참고했어요' },
-//   { id: 2, content: '최신 내용이 반영되지 않았어요' },
-//   { id: 3, content: '답변의 출처가 없어요' },
-//   { id: 4, content: '중요한 정보가 누락되었어요' },
-//   { id: 5, content: '유용하지 않은 정보를 참고해요' },
-//   { id: 6, content: '내가 원하는 내용이 아니에요' },
-//   { id: 7, content: '답변이 너무 길어요' },
-//   { id: 8, content: '더 자세히...' },
-// ];
-
 export default function Page() {
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
@@ -67,6 +56,7 @@ export default function Page() {
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
 
+  const [newInput, setNewInput] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: string]: boolean }>({});
   const [isMultiLine, setIsMultiLine] = useState(false);
@@ -80,38 +70,8 @@ export default function Page() {
 
   const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
 
-  const [newInput, setNewInput] = useState('');
-
-  useEffect(() => {
-    if (showFeedback && scrollRef.current) {
-      const scrollEl = scrollRef.current;
-      const searchBarHeight = 100;
-      scrollEl.scrollTo({
-        top: scrollEl.scrollHeight - scrollEl.clientHeight + searchBarHeight,
-        behavior: 'smooth',
-      });
-    }
-  }, [showFeedback]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      const { scrollHeight, clientHeight } = scrollRef.current;
-      scrollRef.current.scrollTo({
-        top: scrollHeight - clientHeight,
-        behavior: 'smooth',
-      });
-    }
-  }, [chatData?.messages, isLoading]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(`chat_${sessionId}`);
-
-    if (saved) {
-      setChatData(JSON.parse(saved));
-    } else if (initialQuery) {
-      fetchFirstAnswer(initialQuery);
-    }
-  }, [sessionId]);
+  const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
+  const currentSources = lastAssistantMessage?.sources || [];
 
   const fetchFirstAnswer = async (query: string) => {
     setIsLoading(true);
@@ -267,8 +227,36 @@ export default function Page() {
 
   if (!chatData) return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
 
-  const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
-  const currentSources = lastAssistantMessage?.sources || [];
+  useEffect(() => {
+    if (showFeedback && scrollRef.current) {
+      const scrollEl = scrollRef.current;
+      const searchBarHeight = 100;
+      scrollEl.scrollTo({
+        top: scrollEl.scrollHeight - scrollEl.clientHeight + searchBarHeight,
+        behavior: 'smooth',
+      });
+    }
+  }, [showFeedback]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      const { scrollHeight, clientHeight } = scrollRef.current;
+      scrollRef.current.scrollTo({
+        top: scrollHeight - clientHeight,
+        behavior: 'smooth',
+      });
+    }
+  }, [chatData?.messages, isLoading]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(`chat_${sessionId}`);
+
+    if (saved) {
+      setChatData(JSON.parse(saved));
+    } else if (initialQuery) {
+      fetchFirstAnswer(initialQuery);
+    }
+  }, [sessionId]);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-white">
@@ -416,51 +404,6 @@ export default function Page() {
                       setFeedbackVisibleMap={setFeedbackVisibleMap}
                     />
                     {feedbackVisibleMap[msg.id] && (
-                      //   <div
-                      //     ref={feedbackRef}
-                      //     className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4"
-                      //   >
-                      //     {feedbackSubmittedMap[msg.id] ? (
-                      //       <div className="text-body-small flex items-center justify-center text-gray-50">
-                      //         피드백을 주셔서 감사합니다!
-                      //       </div>
-                      //     ) : (
-                      //       <>
-                      //         <div className="flex justify-between">
-                      //           <span className="text-body-small text-gray-50">
-                      //             답변이 마음에 들지 않은 이유가 무엇인가요?
-                      //           </span>
-                      //           <div
-                      //             onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [msg.id]: false }))}
-                      //             className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
-                      //           >
-                      //             <Cancel className="h-4.5 w-4.5 text-gray-50" />
-                      //           </div>
-                      //         </div>
-                      //         <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
-                      //           {feedback.map((feedbackItem, feedbackIdx) => {
-                      //             return (
-                      //               <button
-                      //                 key={feedbackIdx}
-                      //                 onClick={() => {
-                      //                   setFeedbackSubmittedMap((prev) => ({ ...prev, [msg.id]: true }));
-                      //                   setTimeout(() => {
-                      //                     setFeedbackVisibleMap((prev) => ({
-                      //                       ...prev,
-                      //                       [msg.id]: false,
-                      //                     }));
-                      //                   }, 3000);
-                      //                 }}
-                      //                 className="box-button-outline-gray border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1"
-                      //               >
-                      //                 {feedbackItem.content}
-                      //               </button>
-                      //             );
-                      //           })}
-                      //         </div>
-                      //       </>
-                      //     )}
-                      //   </div>
                       <FeedbackSection
                         messageIdx={msg.id}
                         feedbackVisibleMap={feedbackVisibleMap}

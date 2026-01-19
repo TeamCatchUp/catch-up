@@ -1,4 +1,6 @@
-import { useRef } from 'react';
+'use client';
+
+import { useRef, useEffect } from 'react';
 import Cancel from '/public/icons/icon/cancel.svg';
 
 const feedback = [
@@ -20,6 +22,20 @@ const FeedbackSection = ({
   setFeedbackSubmittedMap,
 }: FeedbackSectionProps) => {
   const feedbackRef = useRef<HTMLDivElement>(null);
+
+  if (!feedbackVisibleMap[messageIdx]) return null;
+
+  // 피드백 open 시 해당 요소로 하단 스크롤
+  useEffect(() => {
+    if (feedbackVisibleMap[messageIdx] && feedbackRef.current) {
+      setTimeout(() => {
+        feedbackRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        });
+      }, 100);
+    }
+  }, [feedbackVisibleMap[messageIdx]]);
 
   if (!feedbackVisibleMap[messageIdx]) return null;
 
