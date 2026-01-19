@@ -15,4 +15,14 @@ interface ErrorResponseProps {
   messageIdx: number;
   feedbackVisibleMap: { [key: number]: boolean };
   setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<{ [key: number]: boolean }>>;
+  feedbackSubmittedMap: { [key: string]: boolean };
+  setFeedbackSubmittedMap: React.Dispatch<React.SetStateAction<{ [key: string]: boolean }>>;
+}
+
+interface FeedbackSectionProps {
+  messageIdx: number | string;
+  feedbackVisibleMap: { [key: string]: boolean };
+  setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<{ [key: string]: boolean }>>;
+  feedbackSubmittedMap: { [key: string]: boolean };
+  setFeedbackSubmittedMap: React.Dispatch<React.SetStateAction<{ [key: string]: boolean }>>;
 }

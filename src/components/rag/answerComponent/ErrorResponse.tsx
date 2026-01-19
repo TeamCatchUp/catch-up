@@ -1,7 +1,15 @@
 import Error from '/public/icons/icon/error.svg';
-import AnswerActionButtons from './AnswerActionButtons';
+import AnswerActionButtons from '@/components/rag/answerComponent/AnswerActionButtons';
+import FeedbackSection from '@/components/rag/answerComponent/FeedbackSection';
 
-const ErrorResponse = ({ icons, messageIdx, feedbackVisibleMap, setFeedbackVisibleMap }: ErrorResponseProps) => {
+const ErrorResponse = ({
+  icons,
+  messageIdx,
+  feedbackVisibleMap,
+  setFeedbackVisibleMap,
+  feedbackSubmittedMap,
+  setFeedbackSubmittedMap,
+}: ErrorResponseProps) => {
   return (
     <div className="flex flex-col gap-8">
       <div className="bg-neutral-1 flex items-center gap-4 rounded-2xl px-5 py-3">
@@ -13,6 +21,14 @@ const ErrorResponse = ({ icons, messageIdx, feedbackVisibleMap, setFeedbackVisib
         messageIdx={messageIdx}
         feedbackVisibleMap={feedbackVisibleMap}
         setFeedbackVisibleMap={setFeedbackVisibleMap}
+      />
+
+      <FeedbackSection
+        messageIdx={messageIdx}
+        feedbackVisibleMap={feedbackVisibleMap}
+        setFeedbackVisibleMap={setFeedbackVisibleMap}
+        feedbackSubmittedMap={feedbackSubmittedMap}
+        setFeedbackSubmittedMap={setFeedbackSubmittedMap}
       />
     </div>
   );

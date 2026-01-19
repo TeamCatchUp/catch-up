@@ -15,7 +15,6 @@ import ArrowSend from '/public/icons/icon/arrow_send.svg';
 import Copy from '/public/icons/icon/copy.svg';
 import ThumbsDown from '/public/icons/icon/thumbs-down.svg';
 import Rotate from '/public/icons/icon/rotate.svg';
-import Cancel from '/public/icons/icon/cancel.svg';
 import Filter from '/public/icons/icon/filter-2.svg';
 import FilterComponent from '@/components/rag/answerComponent/Filter';
 import RagContentHeader from '@/components/rag/answerComponent/RagContentHeader';
@@ -25,6 +24,7 @@ import DetailedTasksComponent from '@/components/rag/rightComponent/detailedTask
 import { useParams, useSearchParams } from 'next/navigation';
 import { sendChatQuery } from 'src/util/sendChatQuery';
 import AnswerActionButtons from '@/components/rag/answerComponent/AnswerActionButtons';
+import FeedbackSection from '@/components/rag/answerComponent/FeedbackSection';
 import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
 import ErrorResponse from '@/components/rag/answerComponent/ErrorResponse';
 import EditMessageInput from '@/components/rag/EditMessageInput';
@@ -39,16 +39,16 @@ const icon = [
   { name: 'Kebeb', icon: Kebeb },
 ];
 
-const feedback = [
-  { id: 1, content: '존재하지 않는 자료를 참고했어요' },
-  { id: 2, content: '최신 내용이 반영되지 않았어요' },
-  { id: 3, content: '답변의 출처가 없어요' },
-  { id: 4, content: '중요한 정보가 누락되었어요' },
-  { id: 5, content: '유용하지 않은 정보를 참고해요' },
-  { id: 6, content: '내가 원하는 내용이 아니에요' },
-  { id: 7, content: '답변이 너무 길어요' },
-  { id: 8, content: '더 자세히...' },
-];
+// const feedback = [
+//   { id: 1, content: '존재하지 않는 자료를 참고했어요' },
+//   { id: 2, content: '최신 내용이 반영되지 않았어요' },
+//   { id: 3, content: '답변의 출처가 없어요' },
+//   { id: 4, content: '중요한 정보가 누락되었어요' },
+//   { id: 5, content: '유용하지 않은 정보를 참고해요' },
+//   { id: 6, content: '내가 원하는 내용이 아니에요' },
+//   { id: 7, content: '답변이 너무 길어요' },
+//   { id: 8, content: '더 자세히...' },
+// ];
 
 export default function Page() {
   const [isLoading, setIsLoading] = useState(false);
@@ -416,51 +416,58 @@ export default function Page() {
                       setFeedbackVisibleMap={setFeedbackVisibleMap}
                     />
                     {feedbackVisibleMap[msg.id] && (
-                      <div
-                        ref={feedbackRef}
-                        className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4"
-                      >
-                        {feedbackSubmittedMap[msg.id] ? (
-                          <div className="text-body-small flex items-center justify-center text-gray-50">
-                            피드백을 주셔서 감사합니다!
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex justify-between">
-                              <span className="text-body-small text-gray-50">
-                                답변이 마음에 들지 않은 이유가 무엇인가요?
-                              </span>
-                              <div
-                                onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [msg.id]: false }))}
-                                className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
-                              >
-                                <Cancel className="h-4.5 w-4.5 text-gray-50" />
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
-                              {feedback.map((feedbackItem, feedbackIdx) => {
-                                return (
-                                  <button
-                                    key={feedbackIdx}
-                                    onClick={() => {
-                                      setFeedbackSubmittedMap((prev) => ({ ...prev, [msg.id]: true }));
-                                      setTimeout(() => {
-                                        setFeedbackVisibleMap((prev) => ({
-                                          ...prev,
-                                          [msg.id]: false,
-                                        }));
-                                      }, 3000);
-                                    }}
-                                    className="box-button-outline-gray border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1"
-                                  >
-                                    {feedbackItem.content}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </>
-                        )}
-                      </div>
+                      //   <div
+                      //     ref={feedbackRef}
+                      //     className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4"
+                      //   >
+                      //     {feedbackSubmittedMap[msg.id] ? (
+                      //       <div className="text-body-small flex items-center justify-center text-gray-50">
+                      //         피드백을 주셔서 감사합니다!
+                      //       </div>
+                      //     ) : (
+                      //       <>
+                      //         <div className="flex justify-between">
+                      //           <span className="text-body-small text-gray-50">
+                      //             답변이 마음에 들지 않은 이유가 무엇인가요?
+                      //           </span>
+                      //           <div
+                      //             onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [msg.id]: false }))}
+                      //             className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
+                      //           >
+                      //             <Cancel className="h-4.5 w-4.5 text-gray-50" />
+                      //           </div>
+                      //         </div>
+                      //         <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
+                      //           {feedback.map((feedbackItem, feedbackIdx) => {
+                      //             return (
+                      //               <button
+                      //                 key={feedbackIdx}
+                      //                 onClick={() => {
+                      //                   setFeedbackSubmittedMap((prev) => ({ ...prev, [msg.id]: true }));
+                      //                   setTimeout(() => {
+                      //                     setFeedbackVisibleMap((prev) => ({
+                      //                       ...prev,
+                      //                       [msg.id]: false,
+                      //                     }));
+                      //                   }, 3000);
+                      //                 }}
+                      //                 className="box-button-outline-gray border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1"
+                      //               >
+                      //                 {feedbackItem.content}
+                      //               </button>
+                      //             );
+                      //           })}
+                      //         </div>
+                      //       </>
+                      //     )}
+                      //   </div>
+                      <FeedbackSection
+                        messageIdx={msg.id}
+                        feedbackVisibleMap={feedbackVisibleMap}
+                        setFeedbackVisibleMap={setFeedbackVisibleMap}
+                        feedbackSubmittedMap={feedbackSubmittedMap}
+                        setFeedbackSubmittedMap={setFeedbackSubmittedMap}
+                      />
                     )}
                   </div>
                 )}
@@ -480,6 +487,8 @@ export default function Page() {
                   messageIdx={chatData.messages.length}
                   feedbackVisibleMap={feedbackVisibleMap}
                   setFeedbackVisibleMap={setFeedbackVisibleMap}
+                  feedbackSubmittedMap={feedbackSubmittedMap}
+                  setFeedbackSubmittedMap={setFeedbackSubmittedMap}
                 />
               </div>
             )}
