@@ -102,9 +102,6 @@ export default function Page() {
     }
   }, [sessionId]);
 
-  const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
-  const currentSources = lastAssistantMessage?.sources || [];
-
   const fetchFirstAnswer = async (query: string) => {
     setIsLoading(true);
     const safeRepo = repo || '';
@@ -258,6 +255,9 @@ export default function Page() {
   };
 
   if (!chatData) return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
+
+  const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
+  const currentSources = lastAssistantMessage?.sources || [];
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-white">
