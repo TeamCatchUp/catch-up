@@ -12,6 +12,7 @@ import Divider from '/public/icons/icon/divider.svg';
 import DropDown from '/public/icons/icon/dropdown_down.svg';
 import ToggleOff from '/public/icons/icon/state=Off.svg';
 import ArrowSend from '/public/icons/icon/arrow_send.svg';
+import Stop from '/public/icons/icon/stop.svg';
 import Copy from '/public/icons/icon/copy.svg';
 import ThumbsDown from '/public/icons/icon/thumbs-down.svg';
 import Rotate from '/public/icons/icon/rotate.svg';
@@ -60,8 +61,8 @@ export default function Page() {
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: string]: boolean }>({});
   const [isMultiLine, setIsMultiLine] = useState(false);
   const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: string]: boolean }>({});
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isSpaceDropDownOpen, setIsSpaceDropDownOpen] = useState(false);
+  const [filterOpenMap, setFilterOpenMap] = useState<Record<string, boolean>>({});
+  const [spaceDropDownOpenMap, setSpaceDropDownOpenMap] = useState<Record<string, boolean>>();
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
@@ -70,6 +71,25 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
 
   const [newInput, setNewInput] = useState('');
+
+  // 임시용
+  // const test = '**bold**\n\n\n- bold\n\n\n1. 하이\n\n\n```코드```\n\n\n- [ ] checklist\n\n\n### 제목3\n\n\n# 제목1';
+
+  // 마크다운 문법 적용
+  const formatMarkdownString = (text: string) => {
+    return (
+      text
+        .replace(/\\n/g, '\n')
+        // 마크다운 문법 앞에 빈 줄 추가
+        .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2') // 헤딩
+        .replace(/([^\n])\n(\d+\.\s)/g, '$1\n\n$2') // 순서 목록
+        .replace(/([^\n])\n([-*+]\s)/g, '$1\n\n$2') // 순서 없는 목록
+        .replace(/([^\n])\n(-\s\[[x\s]\]\s)/g, '$1\n\n$2') // 체크박스
+        .replace(/([^\n])\n(```)/g, '$1\n\n$2') // 코드블록
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+    );
+  };
 
   useEffect(() => {
     if (showFeedback && scrollRef.current) {
@@ -100,6 +120,29 @@ export default function Page() {
     } else if (initialQuery) {
       fetchFirstAnswer(initialQuery);
     }
+
+    // // 테스트용: 강제로 mock 데이터 주입
+    // setChatData({
+    //   sessionId,
+    //   title: '테스트',
+    //   repo: '',
+    //   messages: [
+    //     {
+    //       id: crypto.randomUUID(),
+    //       role: 'user',
+    //       content: '테스트 질문',
+    //       timestamp: new Date().toISOString(),
+    //     },
+    //     {
+    //       id: crypto.randomUUID(),
+    //       role: 'assistant',
+    //       content: test, // mock 데이터
+    //       sources: [],
+    //       timestamp: new Date().toISOString(),
+    //     },
+    //   ],
+    // });
+    // setIsError(false); // 에러 상태 초기화
   }, [sessionId]);
 
   const fetchFirstAnswer = async (query: string) => {
@@ -303,17 +346,17 @@ export default function Page() {
                 ) : (
                   <div className="flex flex-col gap-2">
                     <div className={`mb-3 rounded-xl`}>
-                      {!isFilterOpen ? (
+                      {!filterOpenMap[msg.id] ? (
                         <div className="relative flex items-center gap-1">
                           <div className="group relative flex items-center gap-1">
                             <div
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setIsSpaceDropDownOpen((prev) => !prev);
+                                setSpaceDropDownOpenMap((prev) => ({ ...prev, [msg.id]: !prev?.[msg.id] }));
                               }}
                               className={clsx(
                                 'icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1',
-                                isSpaceDropDownOpen ? 'bg-neutral-3 rounded-lg' : 'icon-button-only-gray',
+                                spaceDropDownOpenMap?.[msg.id] ? 'bg-neutral-3 rounded-lg' : 'icon-button-only-gray',
                               )}
                             >
                               <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
@@ -322,7 +365,7 @@ export default function Page() {
                               <DropDown
                                 className={clsx(
                                   'text-gray-70 relative bottom-px h-4 w-4 shrink-0',
-                                  isSpaceDropDownOpen ? 'rotate-180' : 'bottom-px',
+                                  spaceDropDownOpenMap?.[msg.id] ? 'rotate-180' : 'bottom-px',
                                 )}
                               />
                             </div>
@@ -331,11 +374,11 @@ export default function Page() {
                             </div>
                           </div>
                           {/* TeamSpace 드롭다운 모달 */}
-                          {isSpaceDropDownOpen && (
+                          {spaceDropDownOpenMap?.[msg.id] && (
                             <div className="absolute top-10.5 z-100">
                               <TeamSpaceModal
                                 onClose={() => {
-                                  setIsSpaceDropDownOpen(false);
+                                  setSpaceDropDownOpenMap((prev) => ({ ...prev, [msg.id]: false }));
                                 }}
                               />
                             </div>
@@ -343,7 +386,10 @@ export default function Page() {
                           <Divider className="text-neutral-4 h-6 w-6 shrink-0" />
                           <div className="flex shrink-0 items-center gap-3">
                             <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
-                            <button onClick={() => setIsFilterOpen(true)} className="cursor-pointer">
+                            <button
+                              onClick={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: true }))}
+                              className="cursor-pointer"
+                            >
                               <ToggleOff />
                             </button>
                           </div>
@@ -355,11 +401,11 @@ export default function Page() {
                               <div
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setIsSpaceDropDownOpen((prev) => !prev);
+                                  setSpaceDropDownOpenMap((prev) => ({ ...prev, [msg.id]: !prev?.[msg.id] }));
                                 }}
                                 className={clsx(
                                   'flex cursor-pointer items-center gap-1 px-2 py-1',
-                                  isSpaceDropDownOpen ? 'bg-neutral-3 rounded-lg' : 'icon-button-only-gray',
+                                  spaceDropDownOpenMap?.[msg.id] ? 'bg-neutral-3 rounded-lg' : 'icon-button-only-gray',
                                 )}
                               >
                                 <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
@@ -368,7 +414,7 @@ export default function Page() {
                                 <DropDown
                                   className={clsx(
                                     'text-gray-70 relative h-4 w-4 shrink-0',
-                                    isSpaceDropDownOpen ? 'rotate-180 rounded-lg' : 'bottom-px',
+                                    spaceDropDownOpenMap?.[msg.id] ? 'rotate-180 rounded-lg' : 'bottom-px',
                                   )}
                                 />
                               </div>
@@ -377,35 +423,57 @@ export default function Page() {
                               </div>
                             </div>
                             {/* TeamSpace 드롭다운 모달 */}
-                            {isSpaceDropDownOpen && (
+                            {spaceDropDownOpenMap?.[msg.id] && (
                               <div className="absolute top-10.5 z-100">
                                 <TeamSpaceModal
                                   onClose={() => {
-                                    setIsSpaceDropDownOpen(false);
+                                    setSpaceDropDownOpenMap((prev) => ({ ...prev, [msg.id]: false }));
                                   }}
                                 />
                               </div>
                             )}
                           </div>
-                          <FilterComponent isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} />
+                          <div onClick={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}>
+                            <FilterComponent
+                              isOpen={filterOpenMap[msg.id]}
+                              onClose={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}
+                            />
+                          </div>
                         </div>
                       )}
                     </div>
-                    <div className="text-gray-80 prose prose-neutral max-w-none break-words">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content.replace(/\\n/g, '\n')}</ReactMarkdown>
-                    </div>
-                    <div className="text-body-small text-gray-30">
-                      질문과 연관된 {msg.sources?.length || 0}개의 핵심 자료를 선별했어요.
-                    </div>
 
-                    <AnswerActionButtons
-                      icons={icon}
-                      messageIdx={msg.id}
-                      feedbackVisibleMap={feedbackVisibleMap}
-                      setFeedbackVisibleMap={setFeedbackVisibleMap}
-                    />
-                    {feedbackVisibleMap[msg.id] && (
-                      <FeedbackSection
+                    {msg.content ? (
+                      <>
+                        <div className="text-gray-80 prose prose-neutral [&_li::marker]:text-gray-70 max-w-none break-words [&>ol]:list-decimal [&>ol]:pl-5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li:has(input[type='checkbox'])]:list-none [&>ul>li:has(input[type='checkbox'])]:pl-0">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {/* {formatMarkdownString(test)} */}
+                            {formatMarkdownString(msg.content)}
+                          </ReactMarkdown>
+                        </div>
+                        <div className="text-body-small text-gray-30">
+                          질문과 연관된 {msg.sources?.length || 0}개의 핵심 자료를 선별했어요.
+                        </div>
+
+                        <AnswerActionButtons
+                          icons={icon}
+                          messageIdx={msg.id}
+                          feedbackVisibleMap={feedbackVisibleMap}
+                          setFeedbackVisibleMap={setFeedbackVisibleMap}
+                        />
+                        {feedbackVisibleMap[msg.id] && (
+                          <FeedbackSection
+                            messageIdx={msg.id}
+                            feedbackVisibleMap={feedbackVisibleMap}
+                            setFeedbackVisibleMap={setFeedbackVisibleMap}
+                            feedbackSubmittedMap={feedbackSubmittedMap}
+                            setFeedbackSubmittedMap={setFeedbackSubmittedMap}
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <ErrorResponse
+                        icons={icon}
                         messageIdx={msg.id}
                         feedbackVisibleMap={feedbackVisibleMap}
                         setFeedbackVisibleMap={setFeedbackVisibleMap}
@@ -489,23 +557,29 @@ export default function Page() {
                 />
 
                 <div className="flex flex-shrink-0 items-center gap-3">
-                  {!newInput.trim() && (
+                  {!newInput.trim() && !isLoading && (
                     <div className="box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1">
                       <Filter className="relative top-0.5 h-4.5 w-4.5" />
                       <span className="text-body-xsmall text-gray-50">필터</span>
                     </div>
                   )}
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={isLoading || !newInput.trim()}
-                    className={`cursor-pointer rounded-full p-2 transition-colors ${
-                      newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border'
-                    }`}
-                  >
-                    <ArrowSend
-                      className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
-                    />
-                  </button>
+                  {isLoading ? (
+                    <button className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full">
+                      <Stop className="text-gray-70 h-6 w-6" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={isLoading || !newInput.trim()}
+                      className={`cursor-pointer rounded-full p-2 transition-colors ${
+                        newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border'
+                      }`}
+                    >
+                      <ArrowSend
+                        className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
+                      />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
