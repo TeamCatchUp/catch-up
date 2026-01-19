@@ -70,9 +70,6 @@ export default function Page() {
 
   const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
 
-  const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
-  const currentSources = lastAssistantMessage?.sources || [];
-
   const fetchFirstAnswer = async (query: string) => {
     setIsLoading(true);
     const safeRepo = repo || '';
@@ -257,6 +254,9 @@ export default function Page() {
       fetchFirstAnswer(initialQuery);
     }
   }, [sessionId]);
+
+  const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
+  const currentSources = lastAssistantMessage?.sources || [];
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-white">
