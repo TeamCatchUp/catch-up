@@ -56,7 +56,6 @@ export default function Page() {
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
 
-  const [newInput, setNewInput] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: string]: boolean }>({});
   const [isMultiLine, setIsMultiLine] = useState(false);
@@ -69,6 +68,42 @@ export default function Page() {
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
   const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
+
+  const [newInput, setNewInput] = useState('');
+
+  useEffect(() => {
+    if (showFeedback && scrollRef.current) {
+      const scrollEl = scrollRef.current;
+      const searchBarHeight = 100;
+      scrollEl.scrollTo({
+        top: scrollEl.scrollHeight - scrollEl.clientHeight + searchBarHeight,
+        behavior: 'smooth',
+      });
+    }
+  }, [showFeedback]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      const { scrollHeight, clientHeight } = scrollRef.current;
+      scrollRef.current.scrollTo({
+        top: scrollHeight - clientHeight,
+        behavior: 'smooth',
+      });
+    }
+  }, [chatData?.messages, isLoading]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(`chat_${sessionId}`);
+
+    if (saved) {
+      setChatData(JSON.parse(saved));
+    } else if (initialQuery) {
+      fetchFirstAnswer(initialQuery);
+    }
+  }, [sessionId]);
+
+  const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
+  const currentSources = lastAssistantMessage?.sources || [];
 
   const fetchFirstAnswer = async (query: string) => {
     setIsLoading(true);
@@ -223,40 +258,6 @@ export default function Page() {
   };
 
   if (!chatData) return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
-
-  useEffect(() => {
-    if (showFeedback && scrollRef.current) {
-      const scrollEl = scrollRef.current;
-      const searchBarHeight = 100;
-      scrollEl.scrollTo({
-        top: scrollEl.scrollHeight - scrollEl.clientHeight + searchBarHeight,
-        behavior: 'smooth',
-      });
-    }
-  }, [showFeedback]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      const { scrollHeight, clientHeight } = scrollRef.current;
-      scrollRef.current.scrollTo({
-        top: scrollHeight - clientHeight,
-        behavior: 'smooth',
-      });
-    }
-  }, [chatData?.messages, isLoading]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(`chat_${sessionId}`);
-
-    if (saved) {
-      setChatData(JSON.parse(saved));
-    } else if (initialQuery) {
-      fetchFirstAnswer(initialQuery);
-    }
-  }, [sessionId]);
-
-  const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
-  const currentSources = lastAssistantMessage?.sources || [];
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-white">
