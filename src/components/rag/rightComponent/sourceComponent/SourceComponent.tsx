@@ -67,6 +67,9 @@ const MOCK_SOURCES: ChatSource[] = [
 const SourceComponent = ({ sources, isLoading, isError }: Props) => {
   const [activeFilters, setActiveFilters] = useState<FilterType[]>([]);
 
+  // mock data 사용 (임의)
+  const displaySources = sources.length > 0 ? sources : MOCK_SOURCES;
+
   const toggleFilter = (type: FilterType) => {
     if (type === 'all') {
       setActiveFilters([]);
@@ -76,8 +79,12 @@ const SourceComponent = ({ sources, isLoading, isError }: Props) => {
     setActiveFilters((prev) => (prev.includes(type) ? prev.filter((v) => v !== type) : [...prev, type]));
   };
 
+  // const filteredSources =
+  //   activeFilters.length === 0 ? sources : sources.filter((source) => activeFilters.includes(source.sourceType));
   const filteredSources =
-    activeFilters.length === 0 ? sources : sources.filter((source) => activeFilters.includes(source.sourceType));
+    activeFilters.length === 0
+      ? displaySources
+      : displaySources.filter((source) => activeFilters.includes(source.sourceType));
 
   // 출처 number 렌더링
   const sourcesWithNum = filteredSources.filter((source) => source.count && source.count > 0);
