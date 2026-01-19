@@ -12,6 +12,7 @@ import Divider from '/public/icons/icon/divider.svg';
 import DropDown from '/public/icons/icon/dropdown_down.svg';
 import ToggleOff from '/public/icons/icon/state=Off.svg';
 import ArrowSend from '/public/icons/icon/arrow_send.svg';
+import Stop from '/public/icons/icon/stop.svg';
 import Copy from '/public/icons/icon/copy.svg';
 import ThumbsDown from '/public/icons/icon/thumbs-down.svg';
 import Rotate from '/public/icons/icon/rotate.svg';
@@ -556,23 +557,29 @@ export default function Page() {
                 />
 
                 <div className="flex flex-shrink-0 items-center gap-3">
-                  {!newInput.trim() && (
+                  {!newInput.trim() && !isLoading && (
                     <div className="box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1">
                       <Filter className="relative top-0.5 h-4.5 w-4.5" />
                       <span className="text-body-xsmall text-gray-50">필터</span>
                     </div>
                   )}
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={isLoading || !newInput.trim()}
-                    className={`cursor-pointer rounded-full p-2 transition-colors ${
-                      newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border'
-                    }`}
-                  >
-                    <ArrowSend
-                      className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
-                    />
-                  </button>
+                  {isLoading ? (
+                    <button className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full">
+                      <Stop className="text-gray-70 h-6 w-6" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={isLoading || !newInput.trim()}
+                      className={`cursor-pointer rounded-full p-2 transition-colors ${
+                        newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border'
+                      }`}
+                    >
+                      <ArrowSend
+                        className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
+                      />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
