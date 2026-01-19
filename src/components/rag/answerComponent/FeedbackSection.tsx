@@ -23,8 +23,6 @@ const FeedbackSection = ({
 }: FeedbackSectionProps) => {
   const feedbackRef = useRef<HTMLDivElement>(null);
 
-  if (!feedbackVisibleMap[messageIdx]) return null;
-
   // 피드백 open 시 해당 요소로 하단 스크롤
   useEffect(() => {
     if (feedbackVisibleMap[messageIdx] && feedbackRef.current) {
