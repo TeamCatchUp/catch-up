@@ -71,6 +71,25 @@ export default function Page() {
 
   const [newInput, setNewInput] = useState('');
 
+  // 임시용
+  // const test = '**bold**\n\n\n- bold\n\n\n1. 하이\n\n\n```코드```\n\n\n- [ ] checklist\n\n\n### 제목3\n\n\n# 제목1';
+
+  // 마크다운 문법 적용
+  const formatMarkdownString = (text: string) => {
+    return (
+      text
+        .replace(/\\n/g, '\n')
+        // 마크다운 문법 앞에 빈 줄 추가
+        .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2') // 헤딩
+        .replace(/([^\n])\n(\d+\.\s)/g, '$1\n\n$2') // 순서 목록
+        .replace(/([^\n])\n([-*+]\s)/g, '$1\n\n$2') // 순서 없는 목록
+        .replace(/([^\n])\n(-\s\[[x\s]\]\s)/g, '$1\n\n$2') // 체크박스
+        .replace(/([^\n])\n(```)/g, '$1\n\n$2') // 코드블록
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+    );
+  };
+
   useEffect(() => {
     if (showFeedback && scrollRef.current) {
       const scrollEl = scrollRef.current;
@@ -100,6 +119,29 @@ export default function Page() {
     } else if (initialQuery) {
       fetchFirstAnswer(initialQuery);
     }
+
+    // // 테스트용: 강제로 mock 데이터 주입
+    // setChatData({
+    //   sessionId,
+    //   title: '테스트',
+    //   repo: '',
+    //   messages: [
+    //     {
+    //       id: crypto.randomUUID(),
+    //       role: 'user',
+    //       content: '테스트 질문',
+    //       timestamp: new Date().toISOString(),
+    //     },
+    //     {
+    //       id: crypto.randomUUID(),
+    //       role: 'assistant',
+    //       content: test, // mock 데이터
+    //       sources: [],
+    //       timestamp: new Date().toISOString(),
+    //     },
+    //   ],
+    // });
+    // setIsError(false); // 에러 상태 초기화
   }, [sessionId]);
 
   const fetchFirstAnswer = async (query: string) => {
@@ -391,8 +433,12 @@ export default function Page() {
                         </div>
                       )}
                     </div>
-                    <div className="text-gray-80 prose prose-neutral max-w-none break-words">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content.replace(/\\n/g, '\n')}</ReactMarkdown>
+
+                    <div className="text-gray-80 prose prose-neutral [&_li::marker]:text-gray-70 max-w-none break-words [&>ol]:list-decimal [&>ol]:pl-5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li:has(input[type='checkbox'])]:list-none [&>ul>li:has(input[type='checkbox'])]:pl-0">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {/* {formatMarkdownString(test)} */}
+                        {formatMarkdownString(msg.content)}
+                      </ReactMarkdown>
                     </div>
                     <div className="text-body-small text-gray-30">
                       질문과 연관된 {msg.sources?.length || 0}개의 핵심 자료를 선별했어요.
