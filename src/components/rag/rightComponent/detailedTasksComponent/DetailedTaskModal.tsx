@@ -1,3 +1,5 @@
+'use client';
+
 import clsx from 'clsx';
 import { useState } from 'react';
 import DropDownDown from '/public/icons/icon/dropdown_down.svg';

@@ -1,3 +1,5 @@
+import 'use client';
+
 import clsx from 'clsx';
 import { useState } from 'react';
 import LoadingProfile from '/public/icons/icon/loading_profile.svg';

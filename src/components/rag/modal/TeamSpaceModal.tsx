@@ -1,3 +1,5 @@
+'use client';
+
 import { useRef } from 'react';
 import ArrowRight from '/public/icons/icon/arrow_right2.svg';
 import { useEscapeKey } from '@/hooks/useEscapeKey';

@@ -1,3 +1,5 @@
+'use client';
+
 import clsx from 'clsx';
 import { useRef, useState, useEffect } from 'react';
 import ArrowLeft from '/public/icons/icon/arrow_left2.svg';
