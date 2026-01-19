@@ -151,7 +151,7 @@ class LangChainMeiliRepository:
             )
 
             if req.get("filter"):
-                search_query["filter"] = req.get("filter")
+                search_query.filter = req.get("filter")
 
             multisearch_queries.append(search_query)
 
@@ -162,11 +162,11 @@ class LangChainMeiliRepository:
         for result_set in response:
             docs = []
             for hit in result_set.hits:
-                content = hit.get("text") or hit.get("content") or hit.get("body") or ""
+                content = hit.get("text") or hit.get("body") or ""
 
                 excluded_keys = [
                     "text",
-                    "content",
+                    "body",
                     "_vectors",
                     "_semantics",
                     "_formatted",

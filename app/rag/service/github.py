@@ -21,16 +21,16 @@ class GithubService:
         }
 
     async def get_pr_context(
-            self, owner: str, repo_name: str, pr_number: int
+            self, owner: str, repo: str, pr_number: int
     ) -> List[PRFileContext]:
 
         async with httpx.AsyncClient(headers=self.headers, timeout=20.0) as client:
             try:
-                base_path = f"{self.base_url}/{owner}/{repo_name}/pulls/{pr_number}"
+                base_path = f"{self.base_url}/{owner}/{repo}/pulls/{pr_number}"
                 files_url = f"{base_path}/files"
                 comments_url = f"{base_path}/comments"
 
-                logger.info(f"Fetching file context for PR {owner}/{repo_name}#{pr_number}")
+                logger.info(f"Fetching file context for PR {owner}/{repo}#{pr_number}")
 
                 # Diff와 Review를 병렬 조회
                 responses = await asyncio.gather(

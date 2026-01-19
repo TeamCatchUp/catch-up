@@ -244,12 +244,12 @@ async def retrieve_node(state: AgentState):
     search_results: list[list[Document]] = await meili_repo.multi_search(
         search_requests
     )
-
+    
     flat_docs: list[BaseSearchResult]= []
 
     for docs in search_results:
         for doc in docs:
-            source_type = doc.metadata.get("sourceType")  # TODO: sourceType -> source_type 통일
+            source_type = doc.metadata.get("source_type")  # TODO: sourceType -> source_type 통일
             try:
                 if source_type == SourceType.CODE:                   
                     flat_docs.append(CodeSearchResult.from_search_result_doc(doc))
@@ -341,7 +341,7 @@ async def manage_pr_context_node(state: AgentState):
             ]
         
     tasks = [
-        github_service.get_pr_context(pr.owner, pr.repo_name, pr.pr_number)
+        github_service.get_pr_context(pr.owner, pr.repo, pr.pr_number)
         for pr in target_prs
     ]
     

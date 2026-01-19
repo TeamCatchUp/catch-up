@@ -15,52 +15,70 @@ class SourceType(IntEnum):
 
 # 공통 필드
 class BaseSearchResult(BaseModel):
-    id: str = Field(description="고유 식별자")
-    source_type: SourceType = Field(
-        description="출처 유형(0: code, 1: pull request, 2: issue)"
-    )
-    source: str = Field(description="출처 이름")
+    id: str | int = Field(description="고유 식별자 (Code: UUID, PR: pr_number)")
+    source_type: SourceType = Field(description="출처 유형")
+    # source: str = Field(description="출처 이름(code: owner_repo_branch, pr: owner_repo)")\\
+    
+    owner: str = Field(default="", description="레포지토리 소유자")
+    repo: str = Field(description="레포지토리 이름")
+    
     text: str = Field(default="", description="문서 본문")
-    html_url: str = Field(default="", description="Github url")
+    html_url: str = Field(default="", description="출처 원본 url")
     relevance_score: Optional[float] = Field(None, description="Rerank 점수")
 
     @classmethod
     def _base_kwargs_from_doc(cls, doc: Document) -> dict:
+        
         metadata = doc.metadata
+        
+        doc_id = metadata.get("id")
+        if doc_id is None and metadata.get("pr_number"):
+            doc_id = metadata.get("pr_number")
+        
         return {
-            "id": metadata.get("id"),
-            "source_type": SourceType(metadata.get("sourceType")),  # 0 -> CODE
-            "source": metadata.get("source"),
+            "id": doc_id,
+            "source_type": SourceType(metadata.get("source_type")),
+            "owner": metadata.get("owner", ""),
+            "repo": metadata.get("repo", ""),
             "text": doc.page_content,
-            "html_url": metadata.get("html_url"),
+            "html_url": metadata.get("html_url", ""),
         }
     
     def to_context_text(self, index: int) -> str:
-        return f"[{index}] 출처: {self.source} | 유형: {self.source_type.name}\n내용:\n{self.text}"
+        """하위 클래스에서 오버라이딩"""
+        source_display = f"{self.owner}/{self.repo}"        
+        return f"[{index}] 출처: {source_display} | 유형: {self.source_type.name}\n내용:\n{self.text}"
 
 
 # Code
 class CodeSearchResult(BaseSearchResult):
-    file_path: str = Field(description="파일 경로")
+    branch: str = Field(default="main", description="브랜치 명")
+    file_path: str = Field("", description="파일 경로")
+    chunk_number: int = Field(default=0, description="청크 번호")
     category: str = Field(default="", description="파일 범주")
     language: str | None = Field(default="", description="프로그래밍 언어")
 
     @classmethod
     def from_search_result_doc(cls, doc: Document) -> "CodeSearchResult":
         metadata = doc.metadata
+        
+        raw_category: str = metadata.get("category", "")
+        
+        language = raw_category if not raw_category.startswith(".") else None
 
         return cls(
             # BaseSearchResult
             **BaseSearchResult._base_kwargs_from_doc(doc),
             # CodeSearchResult
             file_path=metadata.get("file_path", ""),
-            category=metadata.get("category", ""),
-            language=metadata.get("language", ""),
+            chunk_number=metadata.get("chunk_number", 0),            
+            category=raw_category,
+            language=metadata.get("language", language),
         )
     
     def to_context_text(self, index: int) -> str:
         return (
-            f"[{index}] 출처: {self.source} ({self.file_path}) | "
+            f"[{index}] 출처: {self.owner}/{self.repo} ({self.file_path}) | "
             f"언어: {self.language or 'N/A'}\n"
             f"코드 내용:\n{self.text}"
         )
@@ -68,30 +86,42 @@ class CodeSearchResult(BaseSearchResult):
 
 # Pull Request
 class PullRequestSearchResult(BaseSearchResult):
-    title: str = Field(default="")
-    body: str | None = Field(default=None)
-    commit_messages: list[str] = Field(default_factory=list)
-    changed_files: list[str] = Field(default_factory=list)
-    changed_files_count: int = Field(default=0)
+    # Core    
     pr_number: int = Field(default=0)
+    title: str = Field(default="")
     state: str = Field(default="open")
     author: str = Field(default="")
+    
+    # Branch
+    base_branch: str = Field(default="", description="타겟 브랜치")
+    head_branch: str = Field(default="", description="소스 브랜치")
+    
+    # Timestamps
     created_at: int = Field(default=0)
     updated_at: int = Field(default=0)
     merged_at: int | None = Field(default=None)
     closed_at: int | None = Field(default=None)
+    
+    # Content (본문)
+    body: str | None = Field(default=None)
+    commit_messages: list[str] = Field(default_factory=list)
+    
+    # File Changes
+    changed_files: list[str] = Field(default_factory=list)
     additions: int = Field(default=0)
-    deletions: int = Field(default=0)
+    deletions: int = Field(default=0)    
+
+    # Others
     labels: list[str] = Field(default_factory=list)
     milestone: str | None = Field(default=None)
-    repository_id: int = Field(
-        default=0, description="PostgreSQL에 저장된 Repository 식별자"
-    )
-    owner: str = Field(default="")
-    repo_name: str = Field(default="")
-    branch: str = Field(default="")
+    
+    # 런타임 Context
     file_context: list[PRFileContext] = Field(default_factory=list)
-
+    
+    @property
+    def branch(self) -> str:
+        return self.base_branch
+    
     @classmethod
     def from_search_result_doc(cls, doc: Document) -> "PullRequestSearchResult":
         metadata = doc.metadata
@@ -99,40 +129,50 @@ class PullRequestSearchResult(BaseSearchResult):
         return cls(
             # BaseSearchResult
             **BaseSearchResult._base_kwargs_from_doc(doc),
-            # PullRequestSearchResult
-            title=metadata.get("title", ""),
-            body=metadata.get("body", ""),
-            commit_messages=metadata.get("commit_messages", []),
-            changed_files=metadata.get("changed_files", []),
-            changed_files_count=metadata.get(
-                "changed_files_count",
-                len(metadata.get("changed_files", [])),
-            ),
+            
+            # PullRequestSearchResult Core
             pr_number=metadata.get("pr_number"),
+            title=metadata.get("title", ""),
             state=metadata.get("state"),
             author=metadata.get("author"),
+            
+            # Repository
+            base_branch=metadata.get("base_branch", ""),
+            head_branch=metadata.get("head_branch", ""),
+                        
+            # Timestamps
             created_at=metadata.get("created_at"),
             updated_at=metadata.get("updated_at"),
             merged_at=metadata.get("merged_at"),
             closed_at=metadata.get("closed_at"),
+            
+            # Content
+            body=metadata.get("body", ""),
+            commit_messages=metadata.get("commit_messages", []),
+            
+            # File Changes
+            changed_files=metadata.get("changed_files", []),
             additions=metadata.get("additions", 0),
             deletions=metadata.get("deletions", 0),
+            
+            # Metadata
             labels=metadata.get("labels", []),
             milestone=metadata.get("milestone"),
-            repository_id=metadata.get("repository_id"),
-            owner=metadata.get("owner"),
-            repo_name=metadata.get("repo_name"),
-            branch=metadata.get("branch"),
         )
     
     def to_context_text(self, index: int) -> str:
         header = (
-            f"[{index}] 출처: {self.source} (PR #{self.pr_number}) | "
+            f"[{index}] 출처: {self.owner}/{self.repo} (PR #{self.pr_number}) | "
             f"제목: {self.title} | 상태: {self.state}\n"
         )
         
         content = f"=== PR 본문/요약 ===\n{self.body}"
         
+        if self.commit_messages:
+            content += "\n=== 주요 커밋===\n" + "\n".join(f"- {msg}" for msg in self.commit_messages[:10])
+            if len(self.commit_messages) > 10:
+                content += f"\n... (외 {len(self.commit_messages)-10})"
+            
         if self.file_context:
             content += "\n=== 변경된 파일 상세 (Diff 포함) ===\n"
             for fc in self.file_context:

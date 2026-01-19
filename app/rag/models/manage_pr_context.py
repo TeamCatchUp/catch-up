@@ -3,10 +3,10 @@ from pydantic import BaseModel, Field
 from app.rag.models.retrieve import PullRequestSearchResult
 
 class PullRequestCandidate(BaseModel):
-    id: str = Field(default="")
+    id: int = Field(default="", description="pr_number")
     pr_number: int = Field(default=0)
     title: str = Field(default="")
-    repo_name: str = Field(default="")
+    repo: str = Field(default="")
     summary: str = Field(default="")
     owner: str = Field(default="")
     
@@ -19,7 +19,7 @@ class PullRequestCandidate(BaseModel):
             id = res.id,
             pr_number = res.pr_number,
             title = res.title,
-            repo_name = res.repo_name,
+            repo = res.repo,
             summary = res.body[:100] if res.body else "",
             owner=res.owner
         )
@@ -27,5 +27,5 @@ class PullRequestCandidate(BaseModel):
 
 class PullRequestUserSelected(BaseModel): 
     pr_number: int = Field(default=0)
-    repo_name: str = Field(default="")
+    repo: str = Field(default="")
     owner: str = Field(default="")
