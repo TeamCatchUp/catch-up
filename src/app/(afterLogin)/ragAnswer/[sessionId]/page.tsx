@@ -60,8 +60,8 @@ export default function Page() {
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: string]: boolean }>({});
   const [isMultiLine, setIsMultiLine] = useState(false);
   const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: string]: boolean }>({});
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isSpaceDropDownOpen, setIsSpaceDropDownOpen] = useState(false);
+  const [filterOpenMap, setFilterOpenMap] = useState<Record<string, boolean>>({});
+  const [spaceDropDownOpenMap, setSpaceDropDownOpenMap] = useState<Record<string, boolean>>();
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
@@ -345,17 +345,17 @@ export default function Page() {
                 ) : (
                   <div className="flex flex-col gap-2">
                     <div className={`mb-3 rounded-xl`}>
-                      {!isFilterOpen ? (
+                      {!filterOpenMap[msg.id] ? (
                         <div className="relative flex items-center gap-1">
                           <div className="group relative flex items-center gap-1">
                             <div
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setIsSpaceDropDownOpen((prev) => !prev);
+                                setSpaceDropDownOpenMap((prev) => ({ ...prev, [msg.id]: !prev?.[msg.id] }));
                               }}
                               className={clsx(
                                 'icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1',
-                                isSpaceDropDownOpen ? 'bg-neutral-3 rounded-lg' : 'icon-button-only-gray',
+                                spaceDropDownOpenMap?.[msg.id] ? 'bg-neutral-3 rounded-lg' : 'icon-button-only-gray',
                               )}
                             >
                               <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
@@ -364,7 +364,7 @@ export default function Page() {
                               <DropDown
                                 className={clsx(
                                   'text-gray-70 relative bottom-px h-4 w-4 shrink-0',
-                                  isSpaceDropDownOpen ? 'rotate-180' : 'bottom-px',
+                                  spaceDropDownOpenMap?.[msg.id] ? 'rotate-180' : 'bottom-px',
                                 )}
                               />
                             </div>
@@ -373,11 +373,11 @@ export default function Page() {
                             </div>
                           </div>
                           {/* TeamSpace 드롭다운 모달 */}
-                          {isSpaceDropDownOpen && (
+                          {spaceDropDownOpenMap?.[msg.id] && (
                             <div className="absolute top-10.5 z-100">
                               <TeamSpaceModal
                                 onClose={() => {
-                                  setIsSpaceDropDownOpen(false);
+                                  setSpaceDropDownOpenMap((prev) => ({ ...prev, [msg.id]: false }));
                                 }}
                               />
                             </div>
@@ -385,7 +385,10 @@ export default function Page() {
                           <Divider className="text-neutral-4 h-6 w-6 shrink-0" />
                           <div className="flex shrink-0 items-center gap-3">
                             <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
-                            <button onClick={() => setIsFilterOpen(true)} className="cursor-pointer">
+                            <button
+                              onClick={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: true }))}
+                              className="cursor-pointer"
+                            >
                               <ToggleOff />
                             </button>
                           </div>
@@ -397,11 +400,11 @@ export default function Page() {
                               <div
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setIsSpaceDropDownOpen((prev) => !prev);
+                                  setSpaceDropDownOpenMap((prev) => ({ ...prev, [msg.id]: !prev?.[msg.id] }));
                                 }}
                                 className={clsx(
                                   'flex cursor-pointer items-center gap-1 px-2 py-1',
-                                  isSpaceDropDownOpen ? 'bg-neutral-3 rounded-lg' : 'icon-button-only-gray',
+                                  spaceDropDownOpenMap?.[msg.id] ? 'bg-neutral-3 rounded-lg' : 'icon-button-only-gray',
                                 )}
                               >
                                 <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
@@ -410,7 +413,7 @@ export default function Page() {
                                 <DropDown
                                   className={clsx(
                                     'text-gray-70 relative h-4 w-4 shrink-0',
-                                    isSpaceDropDownOpen ? 'rotate-180 rounded-lg' : 'bottom-px',
+                                    spaceDropDownOpenMap?.[msg.id] ? 'rotate-180 rounded-lg' : 'bottom-px',
                                   )}
                                 />
                               </div>
@@ -419,39 +422,57 @@ export default function Page() {
                               </div>
                             </div>
                             {/* TeamSpace 드롭다운 모달 */}
-                            {isSpaceDropDownOpen && (
+                            {spaceDropDownOpenMap?.[msg.id] && (
                               <div className="absolute top-10.5 z-100">
                                 <TeamSpaceModal
                                   onClose={() => {
-                                    setIsSpaceDropDownOpen(false);
+                                    setSpaceDropDownOpenMap((prev) => ({ ...prev, [msg.id]: false }));
                                   }}
                                 />
                               </div>
                             )}
                           </div>
-                          <FilterComponent isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} />
+                          <div onClick={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}>
+                            <FilterComponent
+                              isOpen={filterOpenMap[msg.id]}
+                              onClose={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}
+                            />
+                          </div>
                         </div>
                       )}
                     </div>
 
-                    <div className="text-gray-80 prose prose-neutral [&_li::marker]:text-gray-70 max-w-none break-words [&>ol]:list-decimal [&>ol]:pl-5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li:has(input[type='checkbox'])]:list-none [&>ul>li:has(input[type='checkbox'])]:pl-0">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {/* {formatMarkdownString(test)} */}
-                        {formatMarkdownString(msg.content)}
-                      </ReactMarkdown>
-                    </div>
-                    <div className="text-body-small text-gray-30">
-                      질문과 연관된 {msg.sources?.length || 0}개의 핵심 자료를 선별했어요.
-                    </div>
+                    {msg.content ? (
+                      <>
+                        <div className="text-gray-80 prose prose-neutral [&_li::marker]:text-gray-70 max-w-none break-words [&>ol]:list-decimal [&>ol]:pl-5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li:has(input[type='checkbox'])]:list-none [&>ul>li:has(input[type='checkbox'])]:pl-0">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {/* {formatMarkdownString(test)} */}
+                            {formatMarkdownString(msg.content)}
+                          </ReactMarkdown>
+                        </div>
+                        <div className="text-body-small text-gray-30">
+                          질문과 연관된 {msg.sources?.length || 0}개의 핵심 자료를 선별했어요.
+                        </div>
 
-                    <AnswerActionButtons
-                      icons={icon}
-                      messageIdx={msg.id}
-                      feedbackVisibleMap={feedbackVisibleMap}
-                      setFeedbackVisibleMap={setFeedbackVisibleMap}
-                    />
-                    {feedbackVisibleMap[msg.id] && (
-                      <FeedbackSection
+                        <AnswerActionButtons
+                          icons={icon}
+                          messageIdx={msg.id}
+                          feedbackVisibleMap={feedbackVisibleMap}
+                          setFeedbackVisibleMap={setFeedbackVisibleMap}
+                        />
+                        {feedbackVisibleMap[msg.id] && (
+                          <FeedbackSection
+                            messageIdx={msg.id}
+                            feedbackVisibleMap={feedbackVisibleMap}
+                            setFeedbackVisibleMap={setFeedbackVisibleMap}
+                            feedbackSubmittedMap={feedbackSubmittedMap}
+                            setFeedbackSubmittedMap={setFeedbackSubmittedMap}
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <ErrorResponse
+                        icons={icon}
                         messageIdx={msg.id}
                         feedbackVisibleMap={feedbackVisibleMap}
                         setFeedbackVisibleMap={setFeedbackVisibleMap}
