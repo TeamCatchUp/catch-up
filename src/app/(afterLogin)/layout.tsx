@@ -1,24 +1,35 @@
 'use client';
 
+import { useAuth } from '@/api/auth';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SideNavBar from '@/components/common/sideNavBar/SideNavBar';
 
 export default function AfterLoginLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const [isAuth, setIsAuth] = useState(false);
+  // const router = useRouter();
+  // const [isAuth, setIsAuth] = useState(false);
 
-  useEffect(() => {
-    const token = localStorage.getItem('accessToken');
+  // useEffect(() => {
+  //   const token = localStorage.getItem('accessToken');
 
-    if (!token) {
-      router.replace('/login');
-    } else {
-      setIsAuth(true);
-    }
-  }, [router]);
+  //   if (!token) {
+  //     router.replace('/login');
+  //   } else {
+  //     setIsAuth(true);
+  //   }
+  // }, [router]);
 
-  if (!isAuth) return null;
+  // if (!isAuth) return null;
+
+  const { loading } = useAuth(); // 쿠키 기반 인증 체크
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-xl font-semibold">로딩 중...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full">
