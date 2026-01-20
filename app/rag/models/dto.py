@@ -69,6 +69,7 @@ class BaseSource(BaseModel):
             if isinstance(doc, JiraIssueSearchResult):
                 return JiraSource(
                     **base_data,
+                    issue_type_name=doc.issue_type_name,
                     summary=doc.summary,
                     project_name=doc.project_name,
                     issue_key=str(doc.id),
@@ -97,6 +98,7 @@ class PullRequestSource(BaseSource):
 # Jira 이슈 메타데이터
 class JiraSource(BaseSource):
     source_type: Literal[SourceType.JIRA_ISSUE] = SourceType.JIRA_ISSUE
+    issue_type_name: str = Field(..., description="이슈 타입 이름 (Story, Epic, ...)")
     summary: str = Field(..., description="이슈 제목")
     project_name: str = Field(..., description="프로젝트 명")
     issue_key: str = Field(..., description="이슈 키 (id)")
