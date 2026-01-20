@@ -297,9 +297,7 @@ async def rerank_node(state: AgentState):
         total_k=settings.CUSTOM_RERANK_TOTAL_K,  # 최종 10개
         min_guarantee=2  # 최소 2개 보장
     )
-    
-    logger.info(final_docs)
-    
+        
     return {"retrieved_docs": final_docs}
 
 
@@ -612,8 +610,6 @@ def _preprocess_documents(
     # LLM 제공용 context 연결
     full_context_text = "\n\n".join(context_text_list)
     
-    logger.info(full_context_text)
-
     return full_context_text, processed_sources
 
 
