@@ -23,7 +23,7 @@ const TopNavbar = () => {
 
   return (
     <nav aria-label="메인 네비게이션" className="border-neutral-3 sticky top-0 z-50 h-full w-full border-b bg-white">
-      <div className="flex justify-between px-10 py-2">
+      <div className="flex justify-between px-16 py-2">
         <div className="flex items-center justify-center">
           <Link href="/">
             <button className="text-gray-80 flex cursor-pointer gap-2">
@@ -39,13 +39,13 @@ const TopNavbar = () => {
               onClick={toggleShareModal}
               aria-expanded={isShareModalOpen}
               aria-controls="share-modal"
-              className={`text-body-small text-gray-70 cursor-pointer rounded-lg border px-2.5 py-1.5 transition-colors ${
+              className={`flex h-[38.5px] cursor-pointer items-center justify-center rounded-lg border px-2.5 py-1.5 text-center transition-colors ${
                 isShareModalOpen
                   ? 'border-neutral-4 bg-neutral-2 active:border-neutral-5 active:bg-neutral-3'
                   : 'border-neutral-3 active:border-neutral-5 active:bg-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 bg-white'
               } `}
             >
-              공유
+              <span className="text-body-small text-gray-70 relative top-px flex items-center">공유</span>
             </button>
             {/* 공유 모달 */}
             {isShareModalOpen && (

@@ -38,7 +38,7 @@ const LinkTool = () => {
         <h2 className="text-heading-large text-gray-80">협업 툴 연동하기</h2>
       </header>
 
-      <ul className="grid grid-cols-2 gap-2">
+      <ul className="grid grid-cols-2 gap-x-6 gap-y-4">
         {cardData.map((card, idx) => {
           const CardImg = card.image;
           return (

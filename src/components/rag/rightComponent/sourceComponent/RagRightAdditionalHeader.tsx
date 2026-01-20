@@ -27,7 +27,7 @@ const RagRightAdditionalHeader = ({ activeTab, onChange, sourceCount }: Props) =
               activeTab === 'detail' ? 'shadow-button border-neutral-3 bg-white' : 'bg-neutral-1',
             )}
           >
-            상세 업무
+            Jira 티켓
           </button>
         </div>
       </div>

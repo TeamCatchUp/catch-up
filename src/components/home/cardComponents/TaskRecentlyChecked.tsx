@@ -1,16 +1,18 @@
 import Storage from '/public/icons/icon/storage.svg';
 import ArrowRight from '/public/icons/icon/arrow_right2.svg';
 import Folder from '/public/icons/icon/home_card_folder.svg';
-import Depart from '/public/icons/icon/business_center_filled.svg';
-import Manager from '/public/icons/icon/person_filled.svg';
-import LoadingProfile from '/public/icons/icon/loading_profile.svg';
 import Source from '/public/icons/icon/assignment_filled.svg';
+import TaskManagePart from './TaskManagePart';
+
+interface TaskRecentlyCheckedProps {
+  onClickCard: (card: TaskRecentlyCheckedCard) => void;
+}
 
 const cardData = [
   {
-    title: '일본 시장 진출 리서치 인수인계 text text text text',
-    depart: '사업개발',
-    manager: '이진수',
+    title: '일본 시장 진출 리서치 인수인계 text text text texttext texttext text',
+    depart: '사업개발1',
+    manager: '이진수1',
     source: 'Wiki',
     sourceTitle: '한도 계산 API 리팩토링 현황 공유 및 배포 일정 text text',
     sourceDescription:
@@ -18,8 +20,8 @@ const cardData = [
   },
   {
     title: '일본 시장 진출 리서치 인수인계 text text text text',
-    depart: '사업개발',
-    manager: '이진수',
+    depart: '사업개발2',
+    manager: '이진수2',
     source: 'Wiki',
     sourceTitle: '한도 계산 API 리팩토링 현황 공유 및 배포 일정 text text',
     sourceDescription:
@@ -27,8 +29,8 @@ const cardData = [
   },
   {
     title: '일본 시장 진출 리서치 인수인계 text text text text',
-    depart: '사업개발',
-    manager: '이진수',
+    depart: '사업개발3',
+    manager: '이진수3',
     source: 'Wiki',
     sourceTitle: '한도 계산 API 리팩토링 현황 공유 및 배포 일정 text text',
     sourceDescription:
@@ -36,7 +38,11 @@ const cardData = [
   },
 ];
 
-const RecentlyChecked = () => {
+interface TaskRecentlyCheckedProps {
+  onClickCard: (card: TaskRecentlyCheckedCard) => void;
+}
+
+const TaskRecentlyChecked = ({ onClickCard }: TaskRecentlyCheckedProps) => {
   return (
     <section className="flex flex-col gap-3">
       <header className="flex items-center">
@@ -47,39 +53,19 @@ const RecentlyChecked = () => {
         <ArrowRight className="relative left-1 h-6 w-6 cursor-pointer p-0.5 text-gray-50" />
       </header>
 
-      <ul className="flex gap-4">
+      <ul className="flex gap-5">
         {cardData.map((card, idx) => {
           return (
             <li
               key={idx}
-              className="border-neutral-3 flex w-89.75 flex-col gap-3 rounded-2xl border bg-white px-5 py-4"
+              onClick={() => onClickCard(card)}
+              className="border-neutral-3 flex w-89.75 cursor-pointer flex-col gap-3 rounded-2xl border bg-white px-5 py-4"
             >
               <Folder className="relative right-1 h-10.5 w-15.5" />
 
               <h3 className="text-heading-medium text-gray-80 truncate">{card.title}</h3>
 
-              <div className="flex flex-col">
-                <div className="flex flex-col gap-1.25">
-                  <div className="flex gap-4">
-                    <div className="flex items-center gap-1.5">
-                      <Depart className="text-gray-20 h-4 w-4" />
-                      <span className="text-body-small text-gray-50">담당 부서</span>
-                    </div>
-                    <span className="text-body-small text-gray-70">{card.depart} 팀</span>
-                  </div>
-
-                  <div className="flex gap-7">
-                    <div className="flex items-center gap-1.5">
-                      <Manager className="text-gray-20 h-4 w-4" />
-                      <span className="text-body-small text-gray-50">담당자</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <LoadingProfile className="h-6.25 w-6.25" />
-                      <span className="text-body-small text-gray-70">{card.manager}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <TaskManagePart depart={card.depart} manager={card.manager} />
 
               <div className="border-neutral-2 w-79.25 border"></div>
 
@@ -99,4 +85,4 @@ const RecentlyChecked = () => {
   );
 };
 
-export default RecentlyChecked;
+export default TaskRecentlyChecked;
