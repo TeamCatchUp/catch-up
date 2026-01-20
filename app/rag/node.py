@@ -10,6 +10,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph.message import add_messages
 from langgraph.types import interrupt
+from numpy import full
 
 from app.core.config import settings
 from app.observability.langfuse_client import langfuse_handler
@@ -250,7 +251,7 @@ async def retrieve_node(state: AgentState):
 
     for docs in search_results:
         for doc in docs:
-            source_type = doc.metadata.get("source_type")  # TODO: sourceType -> source_type 통일
+            source_type = doc.metadata.get("source_type")
             try:
                 if source_type == SourceType.CODE:                   
                     flat_docs.append(CodeSearchResult.from_search_result_doc(doc))
@@ -260,6 +261,9 @@ async def retrieve_node(state: AgentState):
                     
                 elif source_type == SourceType.ISSUE:
                     flat_docs.append(IssueSearchResult.from_search_result_doc(doc))
+                
+                elif source_type == SourceType.JIRA_ISSUE:
+                    flat_docs.append(JiraIssueSearchResult.from_search_result_doc(doc))
             except Exception as e:
                 logger.warning(f"Failed to parse document {doc.metadata.get("id")}: {e}")            
 
@@ -285,7 +289,7 @@ async def rerank_node(state: AgentState):
         reranked_docs = await rerank_service.rerank(
             query=query,
             documents=retrieved_docs,
-            top_n=settings.COHERE_RERANK_TOP_N  # 50개 정도 넉넉히
+            top_n=len(retrieved_docs)
         )
         
     final_docs = select_diverse_top_k(
@@ -293,6 +297,8 @@ async def rerank_node(state: AgentState):
         total_k=settings.CUSTOM_RERANK_TOTAL_K,  # 최종 10개
         min_guarantee=2  # 최소 2개 보장
     )
+    
+    logger.info(final_docs)
     
     return {"retrieved_docs": final_docs}
 
@@ -406,6 +412,16 @@ async def generate_node(state: AgentState):
 
     messages = state["messages"]
     current_query = get_latest_query(messages)
+    
+    forced_query = (
+        f"{current_query}\n\n"
+        "---"
+        "**[답변 작성 시 절대 규칙]**\n"
+        "1. 문장 끝에 **출처 `[번호]`**를 붙이세요.\n"
+        "1-1. 단, 특정 클래스, 함수, 파일명을 언급할 때는 **그 단어 바로 뒤**에 인덱스를 붙이세요.\n"
+        "2. 특히 Jira 이슈는 내용이 짧더라도 작업의 증거이므로 반드시 인용해야 합니다.\n"
+        "3. 출처를 표기하지 않을 거면 차라리 그 문장을 쓰지 마세요."
+    )
 
     # agent state로부터 검색 결과 획득
     retrieved_docs: list[BaseSearchResult] = state.get("retrieved_docs", [])
@@ -442,7 +458,7 @@ async def generate_node(state: AgentState):
             input={
                 "history": trimmed_history,
                 "context": context_text,
-                "query": current_query,
+                "query": forced_query,
                 "role": state.get("role", "user"),
             },
             config={"callbacks": [langfuse_handler]},
@@ -573,7 +589,6 @@ def select_diverse_top_k(
     return selected_docs
     
 
-
 def _preprocess_documents(
     retrieved_docs: list[BaseSearchResult],
 ) -> tuple[str, list[dict[str, Any]]]:
@@ -595,6 +610,8 @@ def _preprocess_documents(
 
     # LLM 제공용 context 연결
     full_context_text = "\n\n".join(context_text_list)
+    
+    logger.info(full_context_text)
 
     return full_context_text, processed_sources
 

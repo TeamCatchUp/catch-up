@@ -179,7 +179,7 @@ class PullRequestSearchResult(BaseSearchResult):
             for fc in self.file_context:
                 content += (
                     f"파일: {fc.path} ({fc.status})"
-                    f"변경: +{fc.additions} / -{fc.deletions}"
+                    f"변경: +{fc.additions} / -{fc.deletions} "
                     f"Diff: \n{fc.patch}\n"
                     f"---\n"
                 )
@@ -218,12 +218,16 @@ class JiraIssueSearchResult(BaseSearchResult):
     def from_search_result_doc(cls, doc: Document) -> "JiraIssueSearchResult":
         metadata = doc.metadata
         
+        raw_text = doc.page_content or metadata.get("description", "")
+        if not raw_text.strip():
+            raw_text = metadata.get("summary", "")
+        
         base_data = {
             "id": metadata.get("id"), # 예: BJDD-72
             "source_type": SourceType.JIRA_ISSUE,
             "owner": metadata.get("project_key", ""), # Owner -> Project Key (임시)
             "repo": metadata.get("project_name", ""), # Repo -> Project Name (임시)
-            "text": doc.page_content or metadata.get("description", ""),
+            "text": raw_text,
             "html_url": metadata.get("self_url", ""), # self_url -> html_url (임시)
         }
 
@@ -246,11 +250,11 @@ class JiraIssueSearchResult(BaseSearchResult):
         )
 
     def to_context_text(self, index: int) -> str:
-        # LLM에게 제공할 프롬프트 컨텍스트 포맷
-        hierarchy = f" (Parent: {self.parent_key})" if self.parent_key else ""
         return (
-            f"[{index}] 출처: Jira {self.id}{hierarchy} | 제목: {self.summary}\n"
-            f"상태: {self.status_id} | 담당: {self.assignee_name}\n"
-            f"내용:\n{self.description}"
-        )
+            f"[{index}] 문서 타입: Jira Issue | 키: {self.id}\n"
+            f"제목: {self.summary}\n"
+            f"담당자: {self.assignee_name} | 상태: {self.status_id}\n"
+            f"내용 요약: 이 이슈는 '{self.project_name}' 프로젝트의 '{self.parent_summary or '최상위'}' 작업의 일환으로 진행되었습니다.\n"
+            f"상세 내용:\n{self.text}"
+)
 
