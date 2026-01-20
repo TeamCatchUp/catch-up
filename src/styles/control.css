@@ -1,0 +1,32 @@
+@import './color.css';
+@import './radius.css';
+
+@theme {
+  /* check-box 색 */
+  --color-gray-checkbox: #d9d9d9;
+}
+
+@layer utilities {
+  /* check-box */
+  /* .check-box {
+    @apply accent-gray-20 hover:accent-gray-30 rounded-full hover:bg-gray-checkbox ;
+  } */
+
+  /* drop-down (title, datepicker, state 공통 적용) */
+  .drop-down {
+    @apply border-neutral-3 hover:border-neutral-3 hover:bg-neutral-2 active:bg-neutral-3 active:border-neutral-4 rounded-lg border bg-white;
+  }
+
+  /* chips (selected는 따로 처리 필요) */
+  .chips-category-chip-no-border {
+    @apply text-normal-alternative hover:bg-neutral-2 active:bg-neutral-3 rounded-full bg-white;
+  }
+
+  .chips-category-chip-border {
+    @apply border-neutral-3 text-normal-alternative hover:bg-neutral-2 active:bg-neutral-3 hover:border-neutral-4 active:border-neutral-3 rounded-full border bg-white;
+  }
+
+  .chips-filter-chip {
+    @apply border-neutral-3 hover:bg-neutral-2 active:bg-neutral-3 rounded-lg border bg-white;
+  }
+}

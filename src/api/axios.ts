@@ -21,4 +21,28 @@ api.interceptors.request.use(
   },
 );
 
+// 개발용 임시
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const token = localStorage.getItem('accessToken');
+
+    // ✅ 로컬 개발에서만 로그인 우회
+    if (process.env.NODE_ENV === 'development' && token === 'dev-token') {
+      return Promise.resolve({
+        data: {
+          name: 'Dev User',
+          email: 'dev@local',
+        },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config: error.config,
+      });
+    }
+
+    return Promise.reject(error);
+  },
+);
+
 export default api;

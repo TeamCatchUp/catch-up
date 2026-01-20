@@ -36,7 +36,7 @@ const HowToUse = () => {
         <h2 className="text-heading-large text-gray-80">Catch Up을 활용하는 방법</h2>
       </header>
 
-      <ul className="flex gap-4">
+      <ul className="flex gap-5">
         {cardData.map((card, idx) => {
           const CardImg = card.image;
           return (

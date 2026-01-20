@@ -26,7 +26,7 @@ const ShareButtonModal = ({ onClose }: { onClose: () => void }) => {
       role="dialog"
       aria-modal="true"
       aria-labelledby="share-modal-title"
-      className="border-neutral-4 shadow-dropdown-menu flex h-123 w-95 flex-col gap-3 rounded-2xl border bg-white px-1.5 pt-3"
+      className="border-neutral-4 shadow-dropdown-menu flex h-102.5 w-85.5 flex-col gap-3 rounded-2xl border bg-white px-1.5 pt-3"
     >
       <header className="flex items-center justify-between gap-1.5 px-1">
         <label htmlFor="share-input" className="sr-only">
@@ -34,7 +34,7 @@ const ShareButtonModal = ({ onClose }: { onClose: () => void }) => {
         </label>
         <input
           id="share-input"
-          className="text-body-small placeholder-gray-30 focus:caret-blue-30 focus:bg-neutral-1 focus:border-blue-30 border-neutral-3 h-11.5 w-72.25 rounded-xl border p-3 transition-colors outline-none"
+          className="text-body-small placeholder-gray-30 focus:caret-blue-30 focus:bg-neutral-1 focus:border-blue-30 border-neutral-3 h-10 w-62.5 rounded-xl border p-3 transition-colors outline-none"
           placeholder="이메일 또는 그룹을 입력하세요."
         />
         <button className="text-body-medium h-10 cursor-pointer rounded-lg border bg-blue-50 px-4 py-1.5 whitespace-nowrap text-white">
