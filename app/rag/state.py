@@ -4,7 +4,7 @@ from typing import Annotated, Any, Literal, Optional, TypedDict
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph.message import add_messages
 
-from app.rag.models.manage_pr_context import PullRequestUserSelected
+from app.rag.models.dto import JiraSource
 from app.rag.models.plan import SearchQuery
 from app.rag.models.retrieve import BaseSearchResult
 
@@ -47,3 +47,4 @@ class AgentState(TypedDict):
     retrieved_docs: list[BaseSearchResult]  # 검색 결과
     grade_status: Literal["good", "bad", "max_retries"]
     sources: list[dict[str, Any]]  # generate_node가 생성하는 최종 출처 데이터
+    related_jira_issues: list[JiraSource]  # 사용자 쿼리와 관련 있는 Jira 이슈 목록

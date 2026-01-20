@@ -3,7 +3,13 @@ from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
-from app.rag.models.retrieve import BaseSearchResult, CodeSearchResult, PullRequestSearchResult, SourceType
+from app.rag.models.retrieve import (
+    BaseSearchResult,
+    CodeSearchResult,
+    PullRequestSearchResult,
+    JiraIssueSearchResult,
+    SourceType
+)
 from app.rag.models.manage_pr_context import PullRequestUserSelected
 
 # 각 Source별 필수 필드 정의
@@ -58,6 +64,20 @@ class BaseSource(BaseModel):
         
         elif doc.source_type == SourceType.ISSUE:
             pass
+        
+        elif doc.source_type == SourceType.JIRA_ISSUE:
+            if isinstance(doc, JiraIssueSearchResult):
+                return JiraSource(
+                    **base_data,
+                    issue_type_name=doc.issue_type_name,
+                    summary=doc.summary,
+                    project_name=doc.project_name,
+                    issue_key=str(doc.id),
+                    parent_key=doc.parent_key,
+                    parent_summary=doc.parent_summary,
+                    status_id=doc.status_id,
+                    assignee_name=doc.assignee_name
+                )
 
 # 코드 메타데이터
 class CodeSource(BaseSource):
@@ -75,9 +95,25 @@ class PullRequestSource(BaseSource):
     created_at: int = Field(..., description="생성일")
     author: str = Field(..., description="작성자")
 
+# Jira 이슈 메타데이터
+class JiraSource(BaseSource):
+    source_type: Literal[SourceType.JIRA_ISSUE] = SourceType.JIRA_ISSUE
+    issue_type_name: str = Field(..., description="이슈 타입 이름 (Story, Epic, ...)")
+    summary: str = Field(..., description="이슈 제목")
+    project_name: str = Field(..., description="프로젝트 명")
+    issue_key: str = Field(..., description="이슈 키 (id)")
+    
+    # UI 계층 표현을 위한 필드
+    parent_key: str | None = Field(None, description="부모 키")
+    parent_summary: str | None = Field(None, description="부모 제목")
+    
+    # 기타 메타데이터
+    status_id: int | None = None
+    assignee_name: str | None = None
+
 
 SourceResponse = Annotated[
-    Union[CodeSource, PullRequestSource],
+    Union[CodeSource, PullRequestSource, JiraSource],
     Field(discriminator="source_type")
 ]
 
@@ -135,4 +171,7 @@ class ChatStreamingFinalResponse(ChatResponse):
     type: Literal["result"] = Field(..., description="최종 payload 유형")
     node: Literal["generate", "chitchat"] = Field(
         ..., description="최종 답변 생성 노드 이름"
+    )
+    related_jira_issues: list[JiraSource] = Field(
+        default_factory=list, description="사용자 쿼리와 관련 있는 Jira 티켓 목록"
     )

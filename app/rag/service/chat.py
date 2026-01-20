@@ -8,14 +8,17 @@ from langgraph.types import Command
 from langfuse import observe
 from requests import session
 
+from app.rag.factory import get_vector_repository
 from app.rag.graph import get_compiled_graph
 from app.rag.models.dto import (
     ChatResponse,
     ChatStreamingFinalResponse,
     ChatStreamingKeepAliveResponse,
     ChatStreamingResponse,
-    ChatStreamingInterruptResponse
+    ChatStreamingInterruptResponse,
+    JiraSource
 )
+from app.rag.models.retrieve import JiraIssueSearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -144,21 +147,26 @@ class ChatService:
                 elif kind == "on_chain_end" and name in ("generate", "chitchat"):
                     end = time.perf_counter()
                     elapsed_time = end - start
-
+                    
                     # 최종 상태 획득
                     node_output = event["data"].get("output")
 
                     if node_output:
                         last_message = node_output["messages"][-1]
-                        answer_text = last_message.content
-                        sources = node_output.get("sources", [])
-
+                        answer_text = last_message.content  # 최종 답변
+                        sources = node_output.get("sources", [])  # 출처
+                        
+                        snapshot = await app.aget_state(config)
+                        current_state = snapshot.values
+                        related_jira_issues = current_state.get("related_jira_issues", [])  # 관련 Jira 이슈
+                        
                         yield ChatStreamingFinalResponse(
                             session_id=session_id,
                             type="result",
                             node=name,
                             answer=answer_text,
                             sources=sources,
+                            related_jira_issues=related_jira_issues,
                             process_time=elapsed_time,
                         ).model_dump()
                         
