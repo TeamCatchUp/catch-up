@@ -6,15 +6,9 @@ interface SourceResponse {
   language?: string;
 }
 
-interface ChatResponse {
-  sessionId: string;
-  answer: string;
-  sources: chatSoureResponse[];
-}
-
 interface ChatSource {
   id: number;
-  sourceType: ChatSourceResponse['sourceType'];
+  sourceType: SourceResponse['sourceType'];
   title: string;
   subtitle: string;
   content: string;
@@ -22,4 +16,77 @@ interface ChatSource {
   htmlUrl: string;
   // 임시
   count: number;
+}
+
+interface PRPayload {
+  prNumber: number;
+  title: string;
+  repoName: string;
+  summary: string;
+  owner: string;
+}
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  sources?: any[];
+  timestamp: string;
+}
+
+interface ChatData {
+  sessionId: string;
+  title: string;
+  repo: string;
+  messages: Message[];
+}
+
+// 채팅 요청 (/api/chat)
+interface ChatRequest {
+  query: string;
+  sessionId: string;
+  indexList: string[];
+}
+
+interface ChatResponse {
+  sessionId: string;
+  answer: string;
+  sources: SourceResponse[];
+}
+
+// 답변 생성 재개 요청 (/api/chat/resume)
+interface ResumeRequest {
+  sessionId: string;
+  userSelectedPullRequests: {
+    prNumber: number;
+    repoName: string;
+    owner: string;
+  }[];
+}
+
+interface ResumeResponse {
+  sessionId: string;
+  answer: string;
+  sources: SourceResponse[];
+}
+
+// SSE 연결 요청 (/api/notification/subscribe)
+interface RagNotificationData {
+  sessionId: string;
+  type: 'status' | 'interrupt' | 'result';
+  node: string;
+  message?: string;
+  payload?: any;
+  response?: {
+    sessionId: string;
+    answer: string;
+    sources: any[];
+  };
+}
+
+interface RagNotification {
+  target: 'CHAT';
+  type: 'RAG_IN_PROGRESS' | 'RAG_INTERRUPT' | 'RAG_DONE';
+  message: string | null;
+  data: RagNotificationData;
 }

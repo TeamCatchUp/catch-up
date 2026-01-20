@@ -23,7 +23,7 @@ import RagRightAdditionalHeader from '@/components/rag/rightComponent/sourceComp
 import SourceComponent from '@/components/rag/rightComponent/sourceComponent/SourceComponent';
 import DetailedTasksComponent from '@/components/rag/rightComponent/detailedTasksComponent/DetailedTasksComponent';
 import { useParams, useSearchParams } from 'next/navigation';
-import { sendChatQuery } from 'src/util/sendChatQuery';
+import { createSSEConection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
 import AnswerActionButtons from '@/components/rag/answerComponent/AnswerActionButtons';
 import FeedbackSection from '@/components/rag/answerComponent/FeedbackSection';
 import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
@@ -31,6 +31,7 @@ import ErrorResponse from '@/components/rag/answerComponent/ErrorResponse';
 import EditMessageInput from '@/components/rag/EditMessageInput';
 import ToolTip from '@/components/common/ToolTip';
 import TeamSpaceModal from '@/components/rag/modal/TeamSpaceModal';
+import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -41,8 +42,12 @@ const icon = [
 ];
 
 export default function Page() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
+  const [currentStep, setCurrentStep] = useState<RagStepKey | null>(null);
+  // const [hasGithubPR, setHasGithubPR] = useState(false);
+  const [prList, setPrList] = useState<PRPayload[]>([]);
+  const [showPRSelection, setShowPRSelection] = useState(false);
 
   const params = useParams();
   const searchParams = useSearchParams();
@@ -57,7 +62,7 @@ export default function Page() {
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
 
-  const [showFeedback, setShowFeedback] = useState(false);
+  // const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: string]: boolean }>({});
   const [isMultiLine, setIsMultiLine] = useState(false);
   const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: string]: boolean }>({});
@@ -65,15 +70,11 @@ export default function Page() {
   const [spaceDropDownOpenMap, setSpaceDropDownOpenMap] = useState<Record<string, boolean>>();
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const feedbackRef = useRef<HTMLDivElement>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
+  const sseRef = useRef<EventSource | null>(null);
 
   const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
-
   const [newInput, setNewInput] = useState('');
-
-  // 임시용
-  // const test = '**bold**\n\n\n- bold\n\n\n1. 하이\n\n\n```코드```\n\n\n- [ ] checklist\n\n\n### 제목3\n\n\n# 제목1';
 
   // 마크다운 문법 적용
   const formatMarkdownString = (text: string) => {
@@ -91,16 +92,91 @@ export default function Page() {
     );
   };
 
-  useEffect(() => {
-    if (showFeedback && scrollRef.current) {
-      const scrollEl = scrollRef.current;
-      const searchBarHeight = 100;
-      scrollEl.scrollTo({
-        top: scrollEl.scrollHeight - scrollEl.clientHeight + searchBarHeight,
-        behavior: 'smooth',
-      });
+  // SSE 메시지 핸들러
+  const handleSSEMessage = (notification: RagNotification) => {
+    console.log('SSE 메시지 수신: ', notification); // 테스트용
+
+    // sessionId 체크
+    if (notification.data.sessionId !== sessionId) return;
+
+    switch (notification.type) {
+      case 'RAG_IN_PROGRESS':
+        if (notification.data.type === 'status') {
+          setCurrentStep(notification.data.node as RagStepKey);
+        }
+        break;
+
+      case 'RAG_INTERRUPT':
+        if (notification.data.node === 'manage_pr_context' && notification.data.payload) {
+          setPrList(notification.data.payload);
+          setShowPRSelection(true);
+          setIsLoading(false);
+        }
+        break;
+
+      case 'RAG_DONE':
+        if (notification.data.response && chatData) {
+          const assistantMessage: Message = {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: notification.data.response.answer,
+            sources: notification.data.response.sources || [],
+            timestamp: new Date().toISOString(),
+          };
+
+          const finalData: ChatData = {
+            ...chatData,
+            messages: [...chatData.messages, assistantMessage],
+          };
+
+          setChatData(finalData);
+          localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
+          setIsLoading(false);
+          setShowPRSelection(false);
+          setCurrentStep(null);
+        }
+        break;
     }
-  }, [showFeedback]);
+  };
+
+  // SSE 연결 초기화
+  useEffect(() => {
+    const sse = createSSEConection(handleSSEMessage, (err) => {
+      console.error('SSE 에러: ', err);
+      setIsError(true);
+      setIsLoading(false);
+    });
+
+    sseRef.current = sse;
+
+    return () => {
+      if (sseRef.current) {
+        sseRef.current.close();
+      }
+    };
+  }, [sessionId, chatData]);
+
+  // 스크롤 자동 이동
+  // useEffect(() => {
+  //   if (showFeedback && scrollRef.current) {
+  //     const scrollEl = scrollRef.current;
+  //     const searchBarHeight = 100;
+  //     scrollEl.scrollTo({
+  //       top: scrollEl.scrollHeight - scrollEl.clientHeight + searchBarHeight,
+  //       behavior: 'smooth',
+  //     });
+  //   }
+  // }, [showFeedback]);
+
+  // useEffect(() => {
+  //   if (scrollRef.current) {
+  //     const { scrollHeight, clientHeight } = scrollRef.current;
+  //     scrollRef.current.scrollTo({
+  //       top: scrollHeight - clientHeight,
+  //       behavior: 'smooth',
+  //     });
+  //   }
+  // }, [chatData?.messages, isLoading]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -110,8 +186,9 @@ export default function Page() {
         behavior: 'smooth',
       });
     }
-  }, [chatData?.messages, isLoading]);
+  }, [chatData?.messages, isLoading, showPRSelection]);
 
+  // 초기 데이터 로드
   useEffect(() => {
     const saved = localStorage.getItem(`chat_${sessionId}`);
 
@@ -120,116 +197,181 @@ export default function Page() {
     } else if (initialQuery) {
       fetchFirstAnswer(initialQuery);
     }
-
-    // // 테스트용: 강제로 mock 데이터 주입
-    // setChatData({
-    //   sessionId,
-    //   title: '테스트',
-    //   repo: '',
-    //   messages: [
-    //     {
-    //       id: crypto.randomUUID(),
-    //       role: 'user',
-    //       content: '테스트 질문',
-    //       timestamp: new Date().toISOString(),
-    //     },
-    //     {
-    //       id: crypto.randomUUID(),
-    //       role: 'assistant',
-    //       content: test, // mock 데이터
-    //       sources: [],
-    //       timestamp: new Date().toISOString(),
-    //     },
-    //   ],
-    // });
-    // setIsError(false); // 에러 상태 초기화
   }, [sessionId]);
 
+  // const fetchFirstAnswer = async (query: string) => {
+  //   setIsLoading(true);
+  //   const safeRepo = repo || '';
+
+  //   const initialData = {
+  //     sessionId,
+  //     title: query,
+  //     repo: safeRepo,
+  //     messages: [{ id: crypto.randomUUID(), role: 'user', content: query, timestamp: new Date().toISOString() }],
+  //   };
+  //   setChatData(initialData);
+
+  //   try {
+  //     const result = await sendChatQuery(query, sessionId, safeRepo);
+
+  //     const finalData = {
+  //       ...initialData,
+  //       messages: [
+  //         ...initialData.messages,
+  //         {
+  //           id: crypto.randomUUID(),
+  //           role: 'assistant',
+  //           content: result.answer,
+  //           sources: result.sources || [],
+  //           timestamp: new Date().toISOString(),
+  //         },
+  //       ],
+  //     };
+  //     setChatData(finalData);
+  //     localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
+  //   } catch (error) {
+  //     console.error(error);
+  //     setIsError(true);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
   const fetchFirstAnswer = async (query: string) => {
     setIsLoading(true);
-    const safeRepo = repo || '';
+    setIsError(false);
+    setCurrentStep(null);
 
-    const initialData = {
+    const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : [];
+
+    const initialData: ChatData = {
       sessionId,
       title: query,
-      repo: safeRepo,
-      messages: [{ id: crypto.randomUUID(), role: 'user', content: query, timestamp: new Date().toISOString() }],
+      repo: repo || '',
+      messages: [
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: query,
+          timestamp: new Date().toISOString(),
+        },
+      ],
     };
+
     setChatData(initialData);
 
     try {
-      const result = await sendChatQuery(query, sessionId, safeRepo);
-
-      const finalData = {
-        ...initialData,
-        messages: [
-          ...initialData.messages,
-          {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: result.answer,
-            sources: result.sources || [],
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      };
-      setChatData(finalData);
-      localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
-    } catch (error) {
-      console.error(error);
+      await sendChatQuery(query, sessionId, indexList);
+    } catch (err) {
+      console.error(err);
       setIsError(true);
-    } finally {
       setIsLoading(false);
     }
   };
 
+  // const handleSendMessage = async () => {
+  //   if (!newInput.trim() || isLoading || !chatData) return;
+
+  //   const safeRepo = repo || chatData.repo || '';
+
+  //   const userMessage = {
+  //     id: crypto.randomUUID(),
+  //     role: 'user',
+  //     content: newInput,
+  //     timestamp: new Date().toISOString(),
+  //   };
+  //   const updatedData = {
+  //     ...chatData,
+  //     messages: [...(chatData.messages || []), userMessage],
+  //   };
+
+  //   setChatData(updatedData);
+  //   setNewInput('');
+  //   setIsLoading(true);
+  //   setIsMultiLine(false);
+
+  //   // textarea 높이 초기화
+  //   if (textAreaRef.current) {
+  //     textAreaRef.current.style.height = '26px';
+  //   }
+
+  //   try {
+  //     const result = await sendChatQuery(newInput, sessionId, safeRepo);
+
+  //     const assistantMessage = {
+  //       id: crypto.randomUUID(),
+  //       role: 'assistant',
+  //       content: result.answer,
+  //       sources: result.sources || [],
+  //       timestamp: new Date().toISOString(),
+  //     };
+
+  //     const finalData = {
+  //       ...updatedData,
+  //       messages: [...updatedData.messages, assistantMessage],
+  //     };
+
+  //     setChatData(finalData);
+  //     localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
+  //   } catch (error) {
+  //     setIsError(true);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
   const handleSendMessage = async () => {
     if (!newInput.trim() || isLoading || !chatData) return;
 
-    const safeRepo = repo || chatData.repo || '';
+    const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : [];
 
-    const userMessage = {
+    const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
       content: newInput,
       timestamp: new Date().toISOString(),
     };
-    const updatedData = {
+    const updatedData: ChatData = {
       ...chatData,
-      messages: [...(chatData.messages || []), userMessage],
+      messages: [...chatData.messages, userMessage],
     };
 
     setChatData(updatedData);
     setNewInput('');
     setIsLoading(true);
     setIsMultiLine(false);
+    setCurrentStep(null);
 
-    // textarea 높이 초기화
     if (textAreaRef.current) {
       textAreaRef.current.style.height = '26px';
     }
 
     try {
-      const result = await sendChatQuery(newInput, sessionId, safeRepo);
-
-      const assistantMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: result.answer,
-        sources: result.sources || [],
-        timestamp: new Date().toISOString(),
-      };
-
-      const finalData = {
-        ...updatedData,
-        messages: [...updatedData.messages, assistantMessage],
-      };
-
-      setChatData(finalData);
-      localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
-    } catch (error) {
+      await sendChatQuery(newInput, sessionId, indexList);
+    } catch (err) {
+      console.error(err);
       setIsError(true);
-    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePRContinue = async (selectedIds: number[]) => {
+    setShowPRSelection(false);
+    setIsLoading(true);
+    setCurrentStep(null);
+
+    const selectedPRs = selectedIds.map((id) => {
+      const pr = prList[id - 1];
+      return {
+        prNumber: pr.prNumber,
+        repoName: pr.repoName,
+        owner: pr.owner,
+      };
+    });
+
+    try {
+      await resumeChatQuery(sessionId, selectedPRs);
+    } catch (err) {
+      console.error(err);
+      setIsError(true);
       setIsLoading(false);
     }
   };
@@ -252,7 +394,7 @@ export default function Page() {
     const messageIndex = chatData.messages.findIndex((m: any) => m.id === messageId);
     if (messageIndex === -1) return;
 
-    // 수정된 메시지 이후의 모든 메시지 삭제
+    // 수정된 메시지 이후의 메시지 삭제
     const newMessages = chatData.messages.slice(0, messageIndex);
 
     const userMessage = {
@@ -270,29 +412,39 @@ export default function Page() {
     setChatData(updatedData);
     setEditingMessageId(null);
     setIsLoading(true);
+    setCurrentStep(null); // 추가
 
+    const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : []; // 추가
+
+    // try {
+    //   const safeRepo = repo || chatData.repo || '';
+    //   const result = await sendChatQuery(newContent, sessionId, safeRepo);
+
+    //   const assistantMessage = {
+    //     id: crypto.randomUUID(),
+    //     role: 'assistant',
+    //     content: result.answer,
+    //     sources: result.sources || [],
+    //     timestamp: new Date().toISOString(),
+    //   };
+
+    //   const finalData = {
+    //     ...updatedData,
+    //     messages: [...updatedData.messages, assistantMessage],
+    //   };
+
+    //   setChatData(finalData);
+    //   localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
+    // } catch (err) {
+    //   setIsError(true);
+    // } finally {
+    //   setIsLoading(false);
+    // }
     try {
-      const safeRepo = repo || chatData.repo || '';
-      const result = await sendChatQuery(newContent, sessionId, safeRepo);
-
-      const assistantMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: result.answer,
-        sources: result.sources || [],
-        timestamp: new Date().toISOString(),
-      };
-
-      const finalData = {
-        ...updatedData,
-        messages: [...updatedData.messages, assistantMessage],
-      };
-
-      setChatData(finalData);
-      localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
+      await sendChatQuery(newContent, sessionId, indexList);
     } catch (err) {
+      console.error(err);
       setIsError(true);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -486,12 +638,34 @@ export default function Page() {
               </div>
             ))}
 
-            {isLoading && !isError && (
-              <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10">
-                <RagAnswerSkeleton />
+            {/* <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10"> */}
+            {/* <RagAnswerSkeleton /> */}
+            {/* </div> */}
+            {/* {isLoading && !isError && (
+              <div className="mx-auto w-193.25">
+                <RagAnswerSkeleton
+                  currentStep={currentStep}
+                  hasGithubPR={hasGithubPR}
+                  setCurrentStep={setCurrentStep}
+                />
+              </div>
+            )} */}
+
+            {/* manage_pr_context */}
+            {showPRSelection && (
+              <div className="mx-auto w-193.25">
+                <GithubPRStepSkeleton onContinue={handlePRContinue} prList={prList} />
               </div>
             )}
 
+            {/* 로딩 스켈레톤 */}
+            {isLoading && !showPRSelection && (
+              <div className="mx-auto w-193.25">
+                <RagAnswerSkeleton currentStep={currentStep} hasGithubPR={false} setCurrentStep={setCurrentStep} />
+              </div>
+            )}
+
+            {/* 에러 화면 */}
             {!isLoading && isError && (
               <div className="mx-auto w-193.25 pb-10">
                 <ErrorResponse
@@ -565,7 +739,7 @@ export default function Page() {
                   )}
                   {isLoading ? (
                     <button className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full">
-                      <Stop className="text-gray-70 h-6 w-6" />
+                      <Stop className="text-gray-70 relative left-px h-6 w-6" />
                     </button>
                   ) : (
                     <button
