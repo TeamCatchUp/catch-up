@@ -41,7 +41,15 @@ const feedback = [
 ];
 
 export default function Page() {
+<<<<<<< Updated upstream
   const [isLoading, setIsLoading] = useState(false);
+=======
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [currentStep, setCurrentStep] = useState<RagStepKey | null>('router');
+  const [hasGithubPR, setHasGithubPR] = useState(false);
+
+>>>>>>> Stashed changes
   const params = useParams();
   const searchParams = useSearchParams();
   const sessionId = params.sessionId as string;
@@ -64,6 +72,45 @@ export default function Page() {
 
   const [newInput, setNewInput] = useState('');
 
+<<<<<<< Updated upstream
+=======
+  // 임시용
+  // const test = '**bold**\n\n\n- bold\n\n\n1. 하이\n\n\n```코드```\n\n\n- [ ] checklist\n\n\n### 제목3\n\n\n# 제목1';
+
+  // 마크다운 문법 적용
+  const formatMarkdownString = (text: string) => {
+    return (
+      text
+        .replace(/\\n/g, '\n')
+        // 마크다운 문법 앞에 빈 줄 추가
+        .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2') // 헤딩
+        .replace(/([^\n])\n(\d+\.\s)/g, '$1\n\n$2') // 순서 목록
+        .replace(/([^\n])\n([-*+]\s)/g, '$1\n\n$2') // 순서 없는 목록
+        .replace(/([^\n])\n(-\s\[[x\s]\]\s)/g, '$1\n\n$2') // 체크박스
+        .replace(/([^\n])\n(```)/g, '$1\n\n$2') // 코드블록
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+    );
+  };
+
+  // 로컬 테스트용 단계별 Skeleton
+  // useEffect(() => {
+  //   if (!isLoading) return;
+
+  //   setCurrentStep('router');
+  //   const timers = [
+  //     setTimeout(() => setCurrentStep('retrieve'), 500),
+  //     setTimeout(() => setCurrentStep('rerank'), 1000),
+  //     setTimeout(() => {
+  //       setHasGithubPR(true);
+  //       setCurrentStep('github_pr_mcp');
+  //     }, 1500),
+  //   ];
+
+  //   return () => timers.forEach(clearTimeout);
+  // }, [isLoading]);
+
+>>>>>>> Stashed changes
   useEffect(() => {
     if (showFeedback && scrollRef.current) {
       const scrollEl = scrollRef.current;
@@ -278,9 +325,22 @@ export default function Page() {
               </div>
             ))}
 
+<<<<<<< Updated upstream
             {isLoading && (
               <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10">
                 <RagAnswerSkeleton />
+=======
+            {/* <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10"> */}
+            {/* <RagAnswerSkeleton /> */}
+            {/* </div> */}
+            {isLoading && !isError && (
+              <div className="mx-auto w-193.25">
+                <RagAnswerSkeleton
+                  currentStep={currentStep}
+                  hasGithubPR={hasGithubPR}
+                  setCurrentStep={setCurrentStep}
+                />
+>>>>>>> Stashed changes
               </div>
             )}
           </div>
@@ -319,6 +379,7 @@ export default function Page() {
                     }
                   }}
                 />
+<<<<<<< Updated upstream
                 <button
                   onClick={handleSendMessage}
                   disabled={isLoading || !newInput.trim()}
@@ -330,6 +391,34 @@ export default function Page() {
                     className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
                   />
                 </button>
+=======
+
+                <div className="flex flex-shrink-0 items-center gap-3">
+                  {!newInput.trim() && !isLoading && (
+                    <div className="box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1">
+                      <Filter className="relative top-0.5 h-4.5 w-4.5" />
+                      <span className="text-body-xsmall text-gray-50">필터</span>
+                    </div>
+                  )}
+                  {isLoading ? (
+                    <button className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full">
+                      <Stop className="text-gray-70 relative left-px h-6 w-6" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={isLoading || !newInput.trim()}
+                      className={`cursor-pointer rounded-full p-2 transition-colors ${
+                        newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border'
+                      }`}
+                    >
+                      <ArrowSend
+                        className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
+                      />
+                    </button>
+                  )}
+                </div>
+>>>>>>> Stashed changes
               </div>
             </div>
           </div>

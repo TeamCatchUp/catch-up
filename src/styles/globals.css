@@ -28,6 +28,7 @@
       rgba(245, 246, 252, 0.6);
   }
 
+<<<<<<< Updated upstream
   .outline-gray {
     @apply hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3;
   }
@@ -37,6 +38,12 @@
   }
 
   .no-scrollbar::-webkit-scrollbar {
+=======
+  .bg-rag-github-pr-mcp {
+    background: linear-gradient(180deg, #fff 30.97%, #f7fbff 100%);
+  }
+  /* .no-scrollbar::-webkit-scrollbar {
+>>>>>>> Stashed changes
     display: none;
   }
   .no-scrollbar {
