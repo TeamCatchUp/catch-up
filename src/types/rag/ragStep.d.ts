@@ -1,1 +1,1 @@
-type RagStepKey = 'router' | 'retrieve' | 'rerank' | 'github_pr_mcp' | 'grade' | 'generate';
+type RagStepKey = 'router' | 'retrieve' | 'rerank' | 'manage_pr_context' | 'grade' | 'generate';

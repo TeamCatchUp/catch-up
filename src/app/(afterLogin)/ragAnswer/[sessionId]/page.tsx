@@ -103,7 +103,7 @@ export default function Page() {
       setTimeout(() => setCurrentStep('rerank'), 1000),
       setTimeout(() => {
         setHasGithubPR(true);
-        setCurrentStep('github_pr_mcp');
+        setCurrentStep('manage_pr_context');
       }, 1500),
     ];
 

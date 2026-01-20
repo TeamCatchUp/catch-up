@@ -117,7 +117,9 @@ const GithubPRStepSkeleton = ({ onContinue }: GithubPRStepSkeletonProps) => {
               onClick={() => onContinue(selectedIds)}
               className={clsx(
                 'flex h-9 w-24.75 gap-1 rounded-lg px-2.5 py-1.5 text-white',
-                isActive ? 'box-button-solid-primary cursor-pointer' : 'bg-blue-10',
+                isActive
+                  ? 'hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 cursor-pointer rounded-lg bg-blue-50'
+                  : 'bg-blue-10',
               )}
             >
               <span className="text-heading-small relative top-px">진행하기</span>

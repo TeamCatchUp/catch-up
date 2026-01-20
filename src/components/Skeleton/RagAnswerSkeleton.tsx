@@ -13,7 +13,7 @@ interface RagAnswerSkeletonProps {
 const RagAnswerSkeleton = ({ currentStep, hasGithubPR, setCurrentStep }: RagAnswerSkeletonProps) => {
   if (!currentStep) return null;
 
-  if (currentStep === 'github_pr_mcp') {
+  if (currentStep === 'manage_pr_context') {
     return (
       <GithubPRStepSkeleton
         onContinue={() => {

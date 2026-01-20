@@ -5,7 +5,7 @@ import GradeIcon from '/public/icons/icon/grade.svg';
 import GenerateIcon from '/public/icons/icon/generate.svg';
 
 export const RAG_UI_STEPS: Record<
-  Exclude<RagStepKey, 'github_pr_mcp'>,
+  Exclude<RagStepKey, 'manage_pr_context'>,
   {
     label: string;
     Icon: React.ComponentType<{ className?: string }>;
