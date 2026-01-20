@@ -612,8 +612,6 @@ def _preprocess_documents(
     # LLM 제공용 context 연결
     full_context_text = "\n\n".join(context_text_list)
     
-    logger.info(full_context_text)
-
     return full_context_text, processed_sources
 
 
