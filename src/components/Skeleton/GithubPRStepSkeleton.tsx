@@ -11,44 +11,45 @@ import ArrowForward from '/public/icons/icon/arrow_forward.svg';
 import Check from '/public/icons/icon/check.svg';
 
 // 더미 데이터
-const PR_LIST = [
-  {
-    id: 1,
-    title: 'PR 타이틀 text text text text text text text text text text text text text text text text text text text',
-    content:
-      '미리보기 text text text text text text text text text text text text text text text text text text text text text text text text',
-    repositoryName:
-      ' 레포지토리명 text text text text text text text text text text text text text text text text text text text text text text text text text text text text',
-    date: '2025.01.19',
-    author: '작성자',
-  },
-  {
-    id: 2,
-    title: 'PR 타이틀 text text text text text text text text text text text text text text text text text text text',
-    content:
-      '미리보기 text text text text text text text text text text text text text text text text text text text text text text text text',
-    repositoryName:
-      ' 레포지토리명 text text text text text text text text text text text text text text text text text text text text text text text text text text text text',
-    date: '2025.01.20',
-    author: '작성자2',
-  },
-  {
-    id: 3,
-    title: 'PR 타이틀 text text text text text text text text text text text text text text text text text text text',
-    content:
-      '미리보기 text text text text text text text text text text text text text text text text text text text text text text text text',
-    repositoryName:
-      ' 레포지토리명 text text text text text text text text text text text text text text text text text text text text text text text text text text text text',
-    date: '2025.01.19',
-    author: '작성자3',
-  },
-];
+// const PR_LIST = [
+//   {
+//     id: 1,
+//     title: 'PR 타이틀 text text text text text text text text text text text text text text text text text text text',
+//     content:
+//       '미리보기 text text text text text text text text text text text text text text text text text text text text text text text text',
+//     repoName:
+//       ' 레포지토리명 text text text text text text text text text text text text text text text text text text text text text text text text text text text text',
+//     date: '2025.01.19',
+//     author: '작성자',
+//   },
+//   {
+//     id: 2,
+//     title: 'PR 타이틀 text text text text text text text text text text text text text text text text text text text',
+//     content:
+//       '미리보기 text text text text text text text text text text text text text text text text text text text text text text text text',
+//     repoName:
+//       ' 레포지토리명 text text text text text text text text text text text text text text text text text text text text text text text text text text text text',
+//     date: '2025.01.20',
+//     author: '작성자2',
+//   },
+//   {
+//     id: 3,
+//     title: 'PR 타이틀 text text text text text text text text text text text text text text text text text text text',
+//     content:
+//       '미리보기 text text text text text text text text text text text text text text text text text text text text text text text text',
+//     repoName:
+//       ' 레포지토리명 text text text text text text text text text text text text text text text text text text text text text text text text text text text text',
+//     date: '2025.01.19',
+//     author: '작성자3',
+//   },
+// ];
 
 interface GithubPRStepSkeletonProps {
+  prList: PRPayload[];
   onContinue: (selectedIds: number[]) => void;
 }
 
-const GithubPRStepSkeleton = ({ onContinue }: GithubPRStepSkeletonProps) => {
+const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps) => {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -57,10 +58,10 @@ const GithubPRStepSkeleton = ({ onContinue }: GithubPRStepSkeletonProps) => {
   };
 
   const toggleAll = () => {
-    if (selectedIds.length === PR_LIST.length) {
+    if (selectedIds.length === prList.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(PR_LIST.map((pr) => pr.id));
+      setSelectedIds(prList.map((_, idx) => idx + 1));
     }
   };
 
@@ -82,7 +83,7 @@ const GithubPRStepSkeleton = ({ onContinue }: GithubPRStepSkeletonProps) => {
             <SearchData />
             <span className="text-heading-large text-gray-90">잠시만요! 정확한 답변을 위해 확인이 필요해요.</span>
             <button
-              // onClick={() => onContinue(selectedIds)}
+              // onClick={() => onContinue([])}
               className="text-button-primary-blue flex cursor-pointer items-center gap-0.5 px-1.5 py-1"
             >
               <span className="text-body-small text-blue-55">건너뛰기</span>
@@ -91,7 +92,7 @@ const GithubPRStepSkeleton = ({ onContinue }: GithubPRStepSkeletonProps) => {
           </div>
           <span className="text-body-small text-gray-70 flex items-center gap-1">
             <span>관련이 높은 자료가</span>
-            <span className="rounded-md2 bg-blue-5 px-1.5 py-0.5 text-blue-50">총 {PR_LIST.length}건</span>
+            <span className="rounded-md2 bg-blue-5 px-1.5 py-0.5 text-blue-50">총 {prList.length}건</span>
             <span>발견되었습니다. 가장 연관성 높은 항목을 선택해 주시면, 상세 내용을 분석해 드릴게요!</span>
           </span>
         </div>
@@ -128,15 +129,16 @@ const GithubPRStepSkeleton = ({ onContinue }: GithubPRStepSkeletonProps) => {
           </div>
           {/* 선택 리스트 */}
           <div className="flex w-180.75 flex-col gap-4">
-            {PR_LIST.map((pr, idx) => {
-              const isSelected = selectedIds.includes(pr.id);
+            {prList.map((pr, idx) => {
+              const id = idx + 1;
+              const isSelected = selectedIds.includes(id);
 
               return (
-                <div key={pr.id}>
+                <div key={id}>
                   <div className="flex h-28.75 w-full gap-6">
                     <div className="flex h-28.75 items-center">
                       <button
-                        onClick={() => toggleSelect(pr.id)}
+                        onClick={() => toggleSelect(id)}
                         className={clsx(
                           'flex h-8.5 w-8.5 cursor-pointer items-center justify-center rounded-lg border',
                           isSelected ? 'bg-blue-1 border-blue-45' : 'border-neutral-3 bg-neutral-1',
@@ -146,7 +148,7 @@ const GithubPRStepSkeleton = ({ onContinue }: GithubPRStepSkeletonProps) => {
                       </button>
                     </div>
                     <div
-                      onClick={() => toggleSelect(pr.id)}
+                      onClick={() => toggleSelect(id)}
                       className={clsx(
                         'flex h-28.75 w-166.25 cursor-pointer flex-col gap-1.5 rounded-2xl border bg-white px-5 py-4',
                         isSelected ? 'border-blue-30' : 'border-neutral-2',
@@ -155,34 +157,27 @@ const GithubPRStepSkeleton = ({ onContinue }: GithubPRStepSkeletonProps) => {
                       {/* 제목 */}
                       <div className="flex w-156 items-center gap-1.5">
                         <GithubIcon className="h-5.5 w-5.5" />
-                        <span className="text-body-medium text-gray-70 truncate">
-                          PR 타이틀 text text text text text text text text text text text text text text text text text
-                          text text
-                        </span>
+                        <span className="text-body-medium text-gray-70 truncate">{pr.title}</span>
                       </div>
                       {/* 설명 */}
                       <div className="flex w-156 items-center gap-1.5">
                         <span className="text-heading-small text-gray-80 flex-shrink-0">설명:</span>
                         <span className="text-body-small text-gray-70 max-w-147.25 truncate">
-                          미리보기 text text text text text text text text text text text text text text text text text
-                          text text text text text text text
+                          {pr.summary || '설명 없음'}
                         </span>
                       </div>
                       {/* 부가정보 */}
                       <div className="text-body-xsmall flex w-156 items-center gap-1.5 text-gray-50">
-                        <span className="max-w-95 truncate">
-                          레포지토리명 text text text text text text text text text text text text text text text text
-                          text text text text text text text text text text text text
-                        </span>
+                        <span className="max-w-95 truncate">{pr.repoName}</span>
                         <div className="bg-neutral-3 h-3.75 w-px" />
                         <span className="">2025.01.19</span>
                         <div className="bg-neutral-3 h-3.75 w-px" />
-                        <span className="">작성자</span>
+                        <span className="">{pr.owner}</span>
                       </div>
                     </div>
                   </div>
                   {/* divider */}
-                  {idx !== PR_LIST.length - 1 && <div className="bg-neutral-3 mt-4 h-px w-full" />}
+                  {idx !== prList.length - 1 && <div className="bg-neutral-3 mt-4 h-px w-full" />}
                 </div>
               );
             })}

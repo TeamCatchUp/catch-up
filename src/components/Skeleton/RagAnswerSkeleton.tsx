@@ -7,16 +7,28 @@ import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
 interface RagAnswerSkeletonProps {
   currentStep: RagStepKey | null;
   hasGithubPR: boolean;
+  prList?: PRPayload[];
   setCurrentStep: (step: RagStepKey | null) => void;
+  onPRContinue?: (selectedIds: number[]) => void;
 }
 
-const RagAnswerSkeleton = ({ currentStep, hasGithubPR, setCurrentStep }: RagAnswerSkeletonProps) => {
+const RagAnswerSkeleton = ({
+  currentStep,
+  hasGithubPR,
+  prList = [],
+  setCurrentStep,
+  onPRContinue,
+}: RagAnswerSkeletonProps) => {
   if (!currentStep) return null;
 
   if (currentStep === 'manage_pr_context') {
     return (
       <GithubPRStepSkeleton
-        onContinue={() => {
+        prList={prList}
+        onContinue={(selectedIds) => {
+          if (onPRContinue) {
+            onPRContinue(selectedIds);
+          }
           if (hasGithubPR) {
             setCurrentStep('grade');
           } else {

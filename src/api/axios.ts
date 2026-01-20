@@ -27,7 +27,7 @@ api.interceptors.response.use(
   async (error) => {
     const token = localStorage.getItem('accessToken');
 
-    // ✅ 로컬 개발에서만 로그인 우회
+    // 로컬 개발에서만 로그인 우회
     if (process.env.NODE_ENV === 'development' && token === 'dev-token') {
       return Promise.resolve({
         data: {
