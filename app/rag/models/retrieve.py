@@ -11,6 +11,7 @@ class SourceType(IntEnum):
     CODE = 0
     PULL_REQUEST = 1
     ISSUE = 2
+    JIRA_ISSUE = 3
 
 
 # 공통 필드
@@ -184,9 +185,72 @@ class PullRequestSearchResult(BaseSearchResult):
                 )
         return header + content
         
-
-
+        
 class IssueSearchResult(BaseSearchResult):
     @classmethod
     def from_search_result_doc(cls, doc: Document) -> "IssueSearchResult":
         pass
+
+
+class JiraIssueSearchResult(BaseSearchResult):
+    # Core Fields (Java의 JiraIssueDocument와 매핑)
+    summary: str = Field(..., description="이슈 요약(제목)")
+    description: str | None = Field(None, description="이슈 상세 내용")
+    
+    project_name: str = Field(default="", description="프로젝트 이름")
+    project_key: str = Field(default="", description="프로젝트 키")
+    
+    issue_type_name: str | None = Field(None, description="이슈 타입 (Task, Bug ...)")
+    status_id: int | None = Field(None, description="상태 ID")
+    priority_id: int | None = Field(None, description="우선순위 ID")
+    
+    assignee_name: str | None = Field(None, description="담당자")
+    reporter_name: str | None = Field(None, description="보고자")
+    
+    created_at: str | None = Field(None, description="생성일시")
+    resolution_date: str | None = Field(None, description="해결일시")
+    
+    # Hierarchy (계층 구조용)
+    parent_key: str | None = Field(None, description="부모 이슈 키 (Epic)")
+    parent_summary: str | None = Field(None, description="부모 이슈 제목")
+
+    @classmethod
+    def from_search_result_doc(cls, doc: Document) -> "JiraIssueSearchResult":
+        metadata = doc.metadata
+        
+        base_data = {
+            "id": metadata.get("id"), # 예: BJDD-72
+            "source_type": SourceType.JIRA_ISSUE,
+            "owner": metadata.get("project_key", ""), # Owner -> Project Key (임시)
+            "repo": metadata.get("project_name", ""), # Repo -> Project Name (임시)
+            "text": doc.page_content or metadata.get("description", ""),
+            "html_url": metadata.get("self_url", ""), # self_url -> html_url (임시)
+        }
+
+        return cls(
+            **base_data,
+            # Jira Specific
+            summary=metadata.get("summary", ""),
+            description=metadata.get("description"),
+            project_name=metadata.get("project_name", ""),
+            project_key=metadata.get("project_key", ""),
+            issue_type_name=metadata.get("issue_type_name"),
+            status_id=metadata.get("status_id"),
+            priority_id=metadata.get("priority_id"),
+            assignee_name=metadata.get("assignee_name"),
+            reporter_name=metadata.get("reporter_name"),
+            created_at=metadata.get("created_at"),
+            resolution_date=metadata.get("resolution_date"),
+            parent_key=metadata.get("parent_key"),
+            parent_summary=metadata.get("parent_summary"),
+        )
+
+    def to_context_text(self, index: int) -> str:
+        # LLM에게 제공할 프롬프트 컨텍스트 포맷
+        hierarchy = f" (Parent: {self.parent_key})" if self.parent_key else ""
+        return (
+            f"[{index}] 출처: Jira {self.id}{hierarchy} | 제목: {self.summary}\n"
+            f"상태: {self.status_id} | 담당: {self.assignee_name}\n"
+            f"내용:\n{self.description}"
+        )
+

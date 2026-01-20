@@ -14,6 +14,7 @@ from app.rag.node import (
     retrieve_node,
     rewrite_node,
     router_node,
+    search_related_jira_node,
 )
 from app.rag.state import AgentState
 
@@ -45,6 +46,7 @@ async def get_compiled_graph():
     workflow.add_node("manage_pr_context", manage_pr_context_node)
     workflow.add_node("grade", grade_node)
     workflow.add_node("generate", generate_node)
+    workflow.add_node("search_related_jira", search_related_jira_node)
 
     workflow.set_entry_point("router")
 
@@ -53,6 +55,9 @@ async def get_compiled_graph():
     )
     workflow.add_edge("chitchat", END)
 
+    workflow.add_edge("rewrite", "search_related_jira")
+    workflow.add_edge("search_related_jira", END)
+    
     workflow.add_edge("rewrite", "plan")
     workflow.add_edge("plan", "retrieve")
     workflow.add_edge("retrieve", "rerank")
