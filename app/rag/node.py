@@ -468,11 +468,12 @@ async def generate_node(state: AgentState):
     cited_indices = extract_citation(answer)
     logger.info(f"LLM이 인용한 문서 인덱스: {cited_indices}")
 
-    # 사용자에게 제공할 최종 source 정제
+    # 사용자에게 제공할 최종 source 정제.
     final_sources = _select_final_sources(
         processed_sources=processed_sources,
         cited_indices=cited_indices,
-        threshold=settings.RERANK_THRESHOLD,
+        target_k=8,
+        sanity_threshold=settings.FINAL_SOURCES_SANITY_THRESHOLD,
     )
 
     return {"messages": [AIMessage(content=answer)], "sources": final_sources}
@@ -617,7 +618,10 @@ def _preprocess_documents(
 
 
 def _select_final_sources(
-    processed_sources: list[BaseSource], cited_indices: set[int], threshold: float
+    processed_sources: list[BaseSource], 
+    cited_indices: set[int],
+    target_k: int = 5,
+    sanity_threshold: float = 0.01
 ) -> list[BaseSource]:
     """
     인용 여부, Threshold, Fallback 로직을 통해 최종 Source 리스트 선정 및 정렬
@@ -638,33 +642,30 @@ def _select_final_sources(
         logger.info(f"LLM이 인용한 문서: {len(final_sources)}개")
 
     # 점수 내림차순 정렬 (객체 자체 정렬)
-    sorted_by_score = sorted(
-        processed_sources, key=lambda x: x.relevance_score, reverse=True
+    sorted_candidates = sorted(
+        processed_sources, 
+        key=lambda x: x.relevance_score,
+        reverse=True
     )
 
-    # LLM이 언급하지 않았지만 threshold 기준으로 관련 있는 문서
-    cnt = 0
-    for doc in sorted_by_score:
-        idx = doc.index - 1  # 1-based -> 0-based 변환
-        if doc.relevance_score >= threshold:
-            if idx not in seen_indices:
-                final_sources.append(doc)
-                seen_indices.add(idx)
-                cnt += 1
-    logger.info(f"threshold를 통과한 문서: {cnt}개")
+    for doc in sorted_candidates:
+        if len(final_sources) >= target_k:
+            break
+        
+        idx = doc.index - 1
+        if idx in seen_indices:
+            continue
+        
+        if (doc.relevance_score or 0.0) < sanity_threshold:
+            continue
+        
+        final_sources.append(doc)
+        seen_indices.add(idx)
+        
+    logger.info(f"최종 선별된 문서 수: {len(final_sources)}개 (Target K: {target_k})")
 
-    # 인용도 없고 점수도 전부 낮은 경우에 top-3 (Fallback)
-    if not final_sources and processed_sources:
-        logger.info(
-            "Fallback: 인용 또는 Threshold 기반 답변 출처가 존재하지 않습니다. Top-3개의 문서를 출처에 포함합니다."
-        )
-        # 이미 점수순으로 정렬된 리스트 활용
-        for doc in sorted_by_score[:3]:
-            idx = doc.index
-            final_sources.append(doc)
-            seen_indices.add(idx)
-
-    # 인용된 것이 먼저 오고, 원본 인덱스 기준 오름차순 정렬
+    # 1순위: 인용 여부
+    # 2순위: Relevance Score 기준 내림차순
     final_sources.sort(key=lambda x: (not x.is_cited, x.index))
 
     return final_sources

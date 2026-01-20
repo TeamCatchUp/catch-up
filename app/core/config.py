@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     CUSTOM_RERANK_TOTAL_K: int
     OPENAI_EMBEDDING_MODEL: str
     OPENAI_CHAT_MODEL: str
+    FINAL_SOURCES_SANITY_THRESHOLD: float
 
     GITHUB_TOKEN: str
     GITHUB_BASE_URL: str
