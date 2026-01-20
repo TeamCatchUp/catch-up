@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
@@ -54,7 +54,7 @@ export default function Search() {
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const user = useUserStore((state) => state.user);
 
   useEscapeKey(() => {
@@ -87,6 +87,18 @@ export default function Search() {
 
   const hasText = inputValue.trim().length > 0;
 
+  useEffect(() => {
+    if (!inputRef.current) return;
+
+    const el = inputRef.current;
+    el.style.height = 'auto';
+
+    const lineHeight = 24; // text-body-medium 기준 (필요시 조정)
+    const maxHeight = lineHeight * 6;
+
+    el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px';
+  }, [inputValue]);
+
   return (
     <div className="flex flex-col items-center gap-4 self-stretch pt-16 pb-16">
       <div className="flex h-24 flex-col items-center justify-center gap-3">
@@ -104,18 +116,24 @@ export default function Search() {
         ref={containerRef}
         className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center gap-2.5 border border-solid bg-white ${isFocused ? 'h-125.5 max-h-135 min-h-92.5 rounded-[28px] p-3 px-4' : 'rounded-rounded h-auto p-3 px-4'} `}
       >
-        <div className="flex w-full items-center justify-between">
+        <div className="flex w-full items-end justify-between">
+          <div className="flex h-10 w-10 items-center justify-center p-1.5">
+            <IconAdd className="h-6 w-6" />
+          </div>
           <div className="flex flex-1 items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center p-1.5">
-              <IconAdd className="h-6 w-6" />
-            </div>
-            <input
+            <textarea
               ref={inputRef}
-              className="text-body-medium w-full outline-none"
+              rows={1}
+              className="text-body-medium mb-1.5 w-full resize-none outline-none"
               placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
               value={inputValue}
               onFocus={() => setIsFocused(true)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
               onChange={(e) => setInputValue(e.target.value)}
             />
           </div>
