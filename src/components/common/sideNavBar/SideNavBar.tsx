@@ -65,7 +65,7 @@ const SideNavBar = () => {
   const [isCatchModalOpen, setIsCatchModalOpen] = useState(false); // 캐치스턴트 모달 opened 여부
 
   const user = useUserStore((state) => state.user);
-  const setUser = useUserStore((state) => state.setUser);
+  // const setUser = useUserStore((state) => state.setUser);
 
   useEffect(() => {
     setIsOpen(!isRagAnswerPage);
@@ -76,18 +76,18 @@ const SideNavBar = () => {
     'border-transparent bg-white hover:bg-neutral-2 hover:border-neutral-2 active:bg-neutral-3 active:border active:border-neutral-3'; // hover, active
   const selectedClass = 'border-neutral-2 border bg-blue-1 hover:border-neutral-2 hover:bg-blue-5';
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await api.get('/api/me');
-        setUser(res.data);
-      } catch (err) {
-        console.error('유저 정보 조회 실패: ', err);
-      }
-    };
+  // useEffect(() => {
+  //   const fetchUser = async () => {
+  //     try {
+  //       const res = await api.get('/api/me');
+  //       setUser(res.data);
+  //     } catch (err) {
+  //       console.error('유저 정보 조회 실패: ', err);
+  //     }
+  //   };
 
-    fetchUser();
-  }, [setUser]);
+  //   fetchUser();
+  // }, [setUser]);
 
   return (
     <>
