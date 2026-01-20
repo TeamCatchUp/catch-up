@@ -7,17 +7,6 @@ function CallbackHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // useEffect(() => {
-  //   const token = searchParams.get('token');
-
-  //   if (token) {
-  //     localStorage.setItem('accessToken', token);
-
-  //     router.replace('/');
-  //   } else {
-  //     router.replace('/login');
-  //   }
-  // }, [router, searchParams]);
   useEffect(() => {
     const success = searchParams.get('success');
     const err = searchParams.get('error');

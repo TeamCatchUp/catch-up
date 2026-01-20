@@ -10,40 +10,6 @@ import Rotate from '/public/icons/icon/rotate.svg';
 import ArrowForward from '/public/icons/icon/arrow_forward.svg';
 import Check from '/public/icons/icon/check.svg';
 
-// 더미 데이터
-// const PR_LIST = [
-//   {
-//     id: 1,
-//     title: 'PR 타이틀 text text text text text text text text text text text text text text text text text text text',
-//     content:
-//       '미리보기 text text text text text text text text text text text text text text text text text text text text text text text text',
-//     repoName:
-//       ' 레포지토리명 text text text text text text text text text text text text text text text text text text text text text text text text text text text text',
-//     date: '2025.01.19',
-//     author: '작성자',
-//   },
-//   {
-//     id: 2,
-//     title: 'PR 타이틀 text text text text text text text text text text text text text text text text text text text',
-//     content:
-//       '미리보기 text text text text text text text text text text text text text text text text text text text text text text text text',
-//     repoName:
-//       ' 레포지토리명 text text text text text text text text text text text text text text text text text text text text text text text text text text text text',
-//     date: '2025.01.20',
-//     author: '작성자2',
-//   },
-//   {
-//     id: 3,
-//     title: 'PR 타이틀 text text text text text text text text text text text text text text text text text text text',
-//     content:
-//       '미리보기 text text text text text text text text text text text text text text text text text text text text text text text text',
-//     repoName:
-//       ' 레포지토리명 text text text text text text text text text text text text text text text text text text text text text text text text text text text text',
-//     date: '2025.01.19',
-//     author: '작성자3',
-//   },
-// ];
-
 interface GithubPRStepSkeletonProps {
   prList: PRPayload[];
   onContinue: (selectedIds: number[]) => void;
