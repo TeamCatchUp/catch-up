@@ -66,12 +66,12 @@ const GithubPRStepSkeleton = ({ onContinue }: GithubPRStepSkeletonProps) => {
 
   const isActive = selectedIds.length > 0;
 
-  //   useEffect(() => {
-  //     bottomRef.current?.scrollIntoView({
-  //       behavior: 'smooth',
-  //       block: 'nearest',
-  //     });
-  //   }, [selectedIds]);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+    });
+  }, [selectedIds]);
 
   return (
     <>
