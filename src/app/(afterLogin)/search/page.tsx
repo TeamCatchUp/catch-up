@@ -22,6 +22,9 @@ import { useOutsideClick } from '@/hooks/useOutsideClick';
 import DropdownModal from '@/components/modal/DropdownModal';
 import { useUserStore } from '@/store/userStore';
 import { RECOMMAND_QUESTIONS } from '@/constants/recommandQuestion';
+import { SearchOptionPopover } from '@/components/search/SearchOptionPopover';
+import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/components/search/OptionDummyData';
+import { OptionListPopover } from '@/components/search/OptionListPopover';
 
 export default function Search() {
   const router = useRouter();
@@ -35,6 +38,25 @@ export default function Search() {
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
 
   const currentSuggestions = selectedRepoId ? RECOMMAND_QUESTIONS[selectedRepoId] || [] : [];
+
+  const [openPopover, setOpenPopover] = useState<'person' | 'department' | 'project' | null>(null);
+
+  const [selectedSystems, setSelectedSystems] = useState<string[]>([]);
+  const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
+  const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
+
+  const toggleSystem = (val: string) =>
+    setSelectedSystems((prev) => (prev.includes(val) ? prev.filter((i) => i !== val) : [...prev, val]));
+
+  const togglePerson = (val: string) =>
+    setSelectedPeople((prev) => (prev.includes(val) ? prev.filter((i) => i !== val) : [...prev, val]));
+
+  const toggleDept = (val: string) =>
+    setSelectedDepts((prev) => (prev.includes(val) ? prev.filter((i) => i !== val) : [...prev, val]));
+
+  const toggleProject = (val: string) =>
+    setSelectedProjects((prev) => (prev.includes(val) ? prev.filter((i) => i !== val) : [...prev, val]));
 
   const handleSuggestionClick = (question: string) => {
     setInputValue(question);
@@ -53,6 +75,21 @@ export default function Search() {
     }
   };
 
+  const personLabel =
+    selectedPeople.length > 0
+      ? `담당자: ${selectedPeople[0]}${selectedPeople.length > 1 ? ` 외 ${selectedPeople.length - 1}명` : ''}`
+      : '담당자';
+
+  const deptLabel =
+    selectedDepts.length > 0
+      ? `부서: ${selectedDepts[0]}${selectedDepts.length > 1 ? ` 외 ${selectedDepts.length - 1}명` : ''}`
+      : '부서명';
+
+  const projectLabel =
+    selectedProjects.length > 0
+      ? `프로젝트: ${selectedProjects[0]}${selectedProjects.length > 1 ? ` 외 ${selectedProjects.length - 1}명` : ''}`
+      : '프로젝트';
+
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const user = useUserStore((state) => state.user);
@@ -63,6 +100,7 @@ export default function Search() {
   });
 
   useOutsideClick(containerRef, () => {
+    if (openPopover || isGithubModalOpen || hasText) return;
     setIsFocused(false);
     inputRef.current?.blur();
   });
@@ -93,7 +131,7 @@ export default function Search() {
     const el = inputRef.current;
     el.style.height = 'auto';
 
-    const lineHeight = 24; // text-body-medium 기준 (필요시 조정)
+    const lineHeight = 26;
     const maxHeight = lineHeight * 6;
 
     el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px';
@@ -117,13 +155,16 @@ export default function Search() {
         className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center gap-2.5 border border-solid bg-white ${isFocused ? 'h-125.5 max-h-135 min-h-92.5 rounded-[28px] p-3 px-4' : 'rounded-rounded h-auto p-3 px-4'} `}
       >
         <div className="flex w-full items-end justify-between">
-          <div className="flex h-10 w-10 items-center justify-center p-1.5">
+          <div className="mr-2 flex h-10 w-10 items-center justify-center p-1.5">
             <IconAdd className="h-6 w-6" />
           </div>
           <div className="flex flex-1 items-center gap-2">
             <textarea
               ref={inputRef}
               rows={1}
+              onBlur={() => {
+                if (hasText) setIsFocused(true);
+              }}
               className="text-body-medium mb-1.5 w-full resize-none outline-none"
               placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
               value={inputValue}
@@ -140,18 +181,15 @@ export default function Search() {
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className={`rounded-rounded flex items-center border border-solid p-2 ${hasText ? 'border-blue-50 bg-blue-50' : 'bg-neutral-1 border-neutral-2'}`}
+            className={`rounded-rounded ml-2 flex items-center border border-solid p-2 ${hasText ? 'border-blue-50 bg-blue-50' : 'bg-neutral-1 border-neutral-2'}`}
           >
             <IconArrowSend className={`${hasText ? 'brightness-0 invert' : ''} h-6 w-6`} />
           </button>
         </div>
 
         {isFocused && (
-          <div
-            onMouseDown={(e) => e.preventDefault()}
-            className="border-neutral-4 flex w-full flex-col gap-2.5 overflow-visible border-t pt-4"
-          >
-            <div className="flex items-center gap-1.5 self-stretch px-1.5 whitespace-nowrap">
+          <div className="border-neutral-4 flex w-full flex-col gap-2.5 overflow-visible border-t pt-4">
+            <div className="flex items-center gap-1.5 self-stretch overflow-x-scroll px-1.5 whitespace-nowrap">
               <div className="flex items-center gap-2">
                 <SearchOptionButton
                   Icon={IconJira}
@@ -196,27 +234,85 @@ export default function Search() {
               </div>
               <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
               <div className="flex items-center gap-2">
-                <SearchOptionButton
-                  Icon={IconPerson}
-                  label="담당자"
-                  selected={selectedOptions.includes('담당자')}
-                  onClick={() => toggleOption('담당자')}
-                />
-                <SearchOptionButton
-                  Icon={IconTag}
-                  label="부서명"
-                  selected={selectedOptions.includes('부서명')}
-                  onClick={() => toggleOption('부서명')}
-                />
-                <SearchOptionButton
-                  Icon={IconSpace}
-                  label="프로젝트"
-                  selected={selectedOptions.includes('프로젝트')}
-                  onClick={() => toggleOption('프로젝트')}
-                />
+                <SearchOptionPopover
+                  open={openPopover === 'person'}
+                  onOpenChange={(open) => {
+                    setOpenPopover(open ? 'person' : null);
+                    if (!open) inputRef.current?.focus();
+                  }}
+                  trigger={
+                    <SearchOptionButton
+                      Icon={IconPerson}
+                      label={personLabel}
+                      selected={selectedPeople.length > 0}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                      }}
+                      onClick={() => {
+                        setOpenPopover('person');
+                        inputRef.current?.focus();
+                      }}
+                    />
+                  }
+                >
+                  <OptionListPopover
+                    title="담당자 선택"
+                    options={PERSON_OPTIONS}
+                    selected={selectedPeople}
+                    onToggle={togglePerson}
+                    Icon={IconPerson}
+                  />
+                </SearchOptionPopover>
+                <SearchOptionPopover
+                  open={openPopover === 'department'}
+                  onOpenChange={(open) => {
+                    setOpenPopover(open ? 'department' : null);
+                    if (!open) inputRef.current?.focus();
+                  }}
+                  trigger={
+                    <SearchOptionButton
+                      Icon={IconTag}
+                      label={deptLabel}
+                      selected={selectedDepts.length > 0}
+                      onMouseDown={(e) => e.preventDefault()}
+                    />
+                  }
+                >
+                  <OptionListPopover
+                    title="부서"
+                    options={DEPARTMENT_OPTIONS}
+                    selected={selectedDepts}
+                    onToggle={toggleDept}
+                    Icon={IconTag}
+                  />
+                </SearchOptionPopover>
+
+                <SearchOptionPopover
+                  open={openPopover === 'project'}
+                  onOpenChange={(open) => {
+                    setOpenPopover(open ? 'project' : null);
+                    if (!open) inputRef.current?.focus();
+                  }}
+                  trigger={
+                    <SearchOptionButton
+                      Icon={IconSpace}
+                      label={projectLabel}
+                      selected={selectedProjects.length > 0}
+                      onMouseDown={(e) => e.preventDefault()}
+                    />
+                  }
+                >
+                  <OptionListPopover
+                    title="프로젝트"
+                    options={PROJECT_OPTIONS}
+                    selected={selectedProjects}
+                    onToggle={toggleProject}
+                    Icon={IconSpace}
+                  />
+                </SearchOptionPopover>
               </div>
               <div className="flex h-7 w-7 items-center justify-center gap-2.5 p-0.5">
-                <IconArrowRight />
+                <IconArrowRight className="h-5 w-5 shrink-0" />
               </div>
             </div>
             <div className="flex flex-[1_0_0] flex-col items-start gap-4 self-stretch">
