@@ -43,6 +43,10 @@ interface Props {
 }
 
 export default function RagAnswerSkeleton({ currentStep }: Props) {
+  if (currentStep === 'manage_pr_context') {
+    return null;
+  }
+
   const step = RAG_UI_STEPS[currentStep];
   if (!step) return null;
 

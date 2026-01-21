@@ -3,9 +3,9 @@ type RagStepKey =
   | 'rewrite'
   | 'plan'
   | 'retrieve'
-  | 'manage_pr_context'
   | 'rerank'
+  | 'manage_pr_context'
   | 'grade'
   | 'generate'
   | 'chitchat';
-type RagUIStepKey = 'router' | 'retrieve' | 'rerank' | 'grade' | 'generate';
+type RagUIStepKey = 'router' | 'retrieve' | 'rerank' | 'manage_pr_context' | 'grade' | 'generate';
