@@ -9,6 +9,21 @@ export const createSSEConection = (
     withCredentials: true,
   });
 
+  const safeParse = (event: MessageEvent) => {
+    try {
+      const notification: RagNotification = JSON.parse(event.data);
+      onMessage(notification);
+    } catch (err) {
+      console.error('SSE 메시지 파싱 에러:', err, 'raw:', event.data);
+    }
+  };
+
+  // 서버가 event:xxx 로 보내는 "named event"들을 반드시 addEventListener로 받아야 함
+  eventSource.addEventListener('CONNECT', safeParse as EventListener);
+  eventSource.addEventListener('RAG_IN_PROGRESS', safeParse as EventListener);
+  eventSource.addEventListener('RAG_INTERRUPT', safeParse as EventListener);
+  eventSource.addEventListener('RAG_DONE', safeParse as EventListener);
+
   eventSource.onmessage = (event) => {
     try {
       const notification: RagNotification = JSON.parse(event.data);
@@ -18,16 +33,20 @@ export const createSSEConection = (
     }
   };
 
-  eventSource.onerror = (event) => {
-    // console.error('SSE 연결 에러:', event);
-    // if (onError) {
-    //   onError(event);
-    // }
-    console.error('SSE error. readyState=', eventSource.readyState, event);
+  // eventSource.onerror = (event) => {
+  //   // console.error('SSE 연결 에러:', event);
+  //   // if (onError) {
+  //   //   onError(event);
+  //   // }
+  //   console.error('SSE error. readyState=', eventSource.readyState, event);
 
-    if (eventSource.readyState === EventSource.CLOSED) {
-      onError?.(event); // 진짜로 끊긴 경우에만
-    }
+  //   if (eventSource.readyState === EventSource.CLOSED) {
+  //     onError?.(event); // 진짜로 끊긴 경우에만
+  //   }
+  // };
+  eventSource.onerror = (event) => {
+    console.error('SSE 연결 에러:', event, 'readyState:', eventSource.readyState);
+    onError?.(event);
   };
 
   return eventSource;
