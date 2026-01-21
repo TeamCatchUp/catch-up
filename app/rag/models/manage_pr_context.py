@@ -9,6 +9,7 @@ class PullRequestCandidate(BaseModel):
     repo: str = Field(default="")
     summary: str = Field(default="")
     owner: str = Field(default="")
+    created_at: int = Field(default=0)
     
     @classmethod
     def from_search_result_doc(
@@ -21,7 +22,8 @@ class PullRequestCandidate(BaseModel):
             title = res.title,
             repo = res.repo,
             summary = res.body[:100] if res.body else "",
-            owner=res.owner
+            owner=res.owner,
+            created_at=res.created_at
         )
 
 
