@@ -192,6 +192,7 @@ export default function Page() {
 
   // 초기 데이터 로드
   useEffect(() => {
+    console.log('초기 데이터 로드 시작', { sessionId, initialQuery }); // test 용
     const saved = localStorage.getItem(`chat_${sessionId}`);
 
     if (saved) {
@@ -199,8 +200,10 @@ export default function Page() {
       setIsLoading(false); // 추가
     } else if (initialQuery) {
       fetchFirstAnswer(initialQuery);
+    } else {
+      console.log('초기 쿼리 없음'); // test 용
     }
-  }, [sessionId]);
+  }, [sessionId, initialQuery]); // , initialQuery 추가
 
   // const fetchFirstAnswer = async (query: string) => {
   //   setIsLoading(true);
@@ -263,9 +266,11 @@ export default function Page() {
     setChatData(initialData);
 
     try {
+      console.log('API 요청 시작'); // test
       await sendChatQuery(query, sessionId, indexList);
+      console.log('API 요청 완료'); // test
     } catch (err) {
-      console.error(err);
+      console.error('API 요청 실패: ', err);
       setIsError(true);
       setIsLoading(false);
     }
