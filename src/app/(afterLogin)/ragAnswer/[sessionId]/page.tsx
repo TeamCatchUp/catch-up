@@ -165,11 +165,11 @@ export default function Page() {
           return;
         }
 
-        if (Date.now() - start > 10000) {
+        if (Date.now() - start > 30000) {
           clearInterval(timer);
           reject(new Error('SSE connection timeout'));
         }
-      }, 50);
+      }, 100);
     });
   };
 
@@ -204,8 +204,8 @@ export default function Page() {
           if (data.node === 'retrieve') {
             console.warn('[SSE] retrieve 단계 진입 - 다음은 rerank여야 함');
             setTimeout(() => {
-              console.error('[SSE] ⚠️ retrieve 이후 5초간 이벤트 없음! 백엔드 확인 필요');
-            }, 5000);
+              console.error('[SSE] retrieve 이후 30초간 이벤트 없음! 백엔드 확인 필요');
+            }, 30000);
           }
 
           break;
@@ -327,7 +327,7 @@ export default function Page() {
   const fetchFirstAnswer = async (query: string) => {
     beginAnswerLoading();
 
-    const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : [];
+    const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
 
     const initialData: ChatData = {
       sessionId,
@@ -370,7 +370,7 @@ export default function Page() {
   const handleSendMessage = async () => {
     if (!newInput.trim() || isLoading || !chatData) return;
 
-    const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : [];
+    const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -457,7 +457,7 @@ export default function Page() {
 
     beginAnswerLoading();
 
-    const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : [];
+    const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
 
     try {
       await waitForSSEOpen();
