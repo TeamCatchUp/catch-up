@@ -41,22 +41,21 @@ const icon = [
   { name: 'Kebeb', icon: Kebeb },
 ];
 
-// node -> UI Step 매핑 (백 node가 더 많아도 UI는 5단계로 묶어서 보여주기)
-const NODE_TO_UI_STEP: Record<string, RagStepKey> = {
+const NODE_TO_UI_STEP: Record<string, RagUIStepKey | 'manage_pr_context'> = {
   router: 'router',
-  rewrite: 'router', // rewrite는 router 단계로 묶기 (원하면 별도 UI 만들 수도 있음)
-  plan: 'retrieve', // plan은 retrieve로 묶기
+  rewrite: 'router',
+  plan: 'retrieve',
   retrieve: 'retrieve',
   manage_pr_context: 'manage_pr_context',
   rerank: 'rerank',
   grade: 'grade',
   generate: 'generate',
+  chitchat: 'generate',
 };
-
 export default function Page() {
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
-  const [currentStep, setCurrentStep] = useState<RagStepKey | null>(null);
+  const [currentStep, setCurrentStep] = useState<RagUIStepKey | 'manage_pr_context' | null>(null);
   // const [hasGithubPR, setHasGithubPR] = useState(false);
   const [prList, setPrList] = useState<PRPayload[]>([]);
   const [showPRSelection, setShowPRSelection] = useState(false);
@@ -111,7 +110,7 @@ export default function Page() {
     setIsError(false);
     setShowPRSelection(false);
 
-    setCurrentStep('router' as RagStepKey);
+    setCurrentStep('router');
   };
 
   const waitForSSEOpen = async () => {
