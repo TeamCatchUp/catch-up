@@ -76,11 +76,11 @@ interface RagNotificationData {
   type: 'status' | 'interrupt' | 'result';
   node: string;
   message?: string;
-  payload?: any;
+  payload?: PRPayload[];
   response?: {
     sessionId: string;
     answer: string;
-    sources: any[];
+    sources: SourceResponse[];
   };
 }
 

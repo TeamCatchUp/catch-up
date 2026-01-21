@@ -98,6 +98,11 @@ export default function Page() {
 
     // sessionId 체크
     if (notification.data.sessionId !== sessionId) return;
+    console.log('session check', {
+      // test
+      fromServer: notification.data.sessionId,
+      fromURL: sessionId,
+    });
 
     switch (notification.type) {
       case 'RAG_IN_PROGRESS':
@@ -114,35 +119,64 @@ export default function Page() {
         }
         break;
 
-      case 'RAG_DONE':
-        if (notification.data.response && chatData) {
+      // case 'RAG_DONE':
+      //   if (notification.data.response && chatData) {
+      //     const assistantMessage: Message = {
+      //       id: crypto.randomUUID(),
+      //       role: 'assistant',
+      //       content: notification.data.response.answer,
+      //       sources: notification.data.response.sources || [],
+      //       timestamp: new Date().toISOString(),
+      //     };
+
+      //     const finalData: ChatData = {
+      //       ...chatData,
+      //       messages: [...chatData.messages, assistantMessage],
+      //     };
+
+      //     setChatData(finalData);
+      //     localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
+      //     setIsLoading(false);
+      //     setShowPRSelection(false);
+      //     setCurrentStep(null);
+      //   }
+      //   break;
+      case 'RAG_DONE': {
+        const response = notification.data.response;
+        if (!response) return;
+
+        setChatData((prev: ChatData | null) => {
+          if (!prev) return prev;
+
           const assistantMessage: Message = {
             id: crypto.randomUUID(),
             role: 'assistant',
-            content: notification.data.response.answer,
-            sources: notification.data.response.sources || [],
+            content: response.answer,
+            sources: response.sources || [],
             timestamp: new Date().toISOString(),
           };
 
           const finalData: ChatData = {
-            ...chatData,
-            messages: [...chatData.messages, assistantMessage],
+            ...prev,
+            messages: [...prev.messages, assistantMessage],
           };
 
-          setChatData(finalData);
           localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
-          setIsLoading(false);
-          setShowPRSelection(false);
-          setCurrentStep(null);
-        }
+          return finalData;
+        });
+
+        setIsLoading(false);
+        setShowPRSelection(false);
+        setCurrentStep(null);
         break;
+      }
     }
   };
 
   // SSE 연결 초기화
   useEffect(() => {
     console.log('SSE 연결 시작'); // test
-    if (!chatData) return;
+    // if (!chatData) return;
 
     const sse = createSSEConection(handleSSEMessage, (err) => {
       console.error('SSE 에러: ', err);
@@ -153,7 +187,7 @@ export default function Page() {
     sseRef.current = sse;
 
     return () => {
-      console.log('SSE 연겨 종료'); // test
+      console.log('SSE 연결 종료'); // test
       if (sseRef.current) {
         sseRef.current.close();
       }
