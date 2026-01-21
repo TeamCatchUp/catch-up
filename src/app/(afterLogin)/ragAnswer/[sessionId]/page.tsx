@@ -156,7 +156,7 @@ export default function Page() {
         sseRef.current.close();
       }
     };
-  }, [sessionId, chatData]);
+  }, [sessionId]);
 
   // 스크롤 자동 이동
   // useEffect(() => {
