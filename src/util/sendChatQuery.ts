@@ -19,9 +19,14 @@ export const createSSEConection = (
   };
 
   eventSource.onerror = (event) => {
-    console.error('SSE 연결 에러:', event);
-    if (onError) {
-      onError(event);
+    // console.error('SSE 연결 에러:', event);
+    // if (onError) {
+    //   onError(event);
+    // }
+    console.error('SSE error. readyState=', eventSource.readyState, event);
+
+    if (eventSource.readyState === EventSource.CLOSED) {
+      onError?.(event); // 진짜로 끊긴 경우에만
     }
   };
 

@@ -92,6 +92,15 @@ export default function Page() {
     );
   };
 
+  // 로딩 시작 -> currentStep 기본값 박아둠
+  const beginAnswerLoading = () => {
+    setIsLoading(true);
+    setIsError(false);
+    setShowPRSelection(false);
+
+    setCurrentStep('router' as RagStepKey);
+  };
+
   // SSE 메시지 핸들러
   const handleSSEMessage = (notification: RagNotification) => {
     console.log('SSE 메시지 수신: ', notification); // 테스트용
@@ -179,9 +188,19 @@ export default function Page() {
     // if (!chatData) return;
 
     const sse = createSSEConection(handleSSEMessage, (err) => {
-      console.error('SSE 에러: ', err);
-      // setIsError(true);
-      setIsLoading(false);
+      //   console.error('SSE 에러: ', err);
+      //   // setIsError(true);
+      //   setIsLoading(false);
+      // });
+      const es = sseRef.current;
+      console.error('SSE 에러: ', err, 'readyState:', es?.readyState);
+
+      // ✅ 진짜로 끊긴 경우(CLOSED=2)만 로딩을 끔
+      if (es?.readyState === EventSource.CLOSED) {
+        setIsLoading(false);
+        // setIsError(true);  // 원하면 여기 켜도 됨
+      }
+      // CONNECTING(0)이면 재연결 중일 수 있으니 로딩은 유지
     });
 
     sseRef.current = sse;
@@ -279,9 +298,10 @@ export default function Page() {
   //   }
   // };
   const fetchFirstAnswer = async (query: string) => {
-    setIsLoading(true);
-    setIsError(false);
-    setCurrentStep(null);
+    // setIsLoading(true);
+    // setIsError(false);
+    // setCurrentStep(null);
+    beginAnswerLoading();
 
     const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : [];
 
@@ -380,9 +400,10 @@ export default function Page() {
 
     setChatData(updatedData);
     setNewInput('');
-    setIsLoading(true);
+    beginAnswerLoading();
+    // setIsLoading(true);
     setIsMultiLine(false);
-    setCurrentStep(null);
+    // setCurrentStep(null);
 
     if (textAreaRef.current) {
       textAreaRef.current.style.height = '26px';
@@ -399,8 +420,9 @@ export default function Page() {
 
   const handlePRContinue = async (selectedIds: number[]) => {
     setShowPRSelection(false);
-    setIsLoading(true);
-    setCurrentStep(null);
+    beginAnswerLoading();
+    // setIsLoading(true);
+    // setCurrentStep(null);
 
     const selectedPRs = selectedIds.map((id) => {
       const pr = prList[id - 1];
@@ -455,8 +477,9 @@ export default function Page() {
 
     setChatData(updatedData);
     setEditingMessageId(null);
-    setIsLoading(true);
-    setCurrentStep(null); // 추가
+    // setIsLoading(true);
+    // setCurrentStep(null); // 추가
+    beginAnswerLoading();
 
     const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : []; // 추가
 

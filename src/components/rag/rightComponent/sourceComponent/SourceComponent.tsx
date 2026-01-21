@@ -109,20 +109,18 @@ const SourceComponent = ({ sources, isLoading, isError }: Props) => {
               category.type === 'all' ? activeFilters.length === 0 : activeFilters.includes(category.type);
 
             return (
-              <div className="flex gap-1.5">
-                <button
-                  key={category.id}
-                  onClick={() => toggleFilter(category.type)}
-                  className={clsx(
-                    'text-body-small flex h-full shrink-0 cursor-pointer items-center justify-center rounded-full px-3 leading-none whitespace-nowrap transition',
-                    isActive
-                      ? 'border border-black bg-black text-white'
-                      : 'border-neutral-3 text-gray-70 hover:bg-neutral-1 border bg-white',
-                  )}
-                >
-                  {category.category}
-                </button>
-              </div>
+              <button
+                key={category.id}
+                onClick={() => toggleFilter(category.type)}
+                className={clsx(
+                  'text-body-small flex h-full shrink-0 cursor-pointer items-center justify-center rounded-full px-3 leading-none whitespace-nowrap transition',
+                  isActive
+                    ? 'border border-black bg-black text-white'
+                    : 'border-neutral-3 text-gray-70 hover:bg-neutral-1 border bg-white',
+                )}
+              >
+                {category.category}
+              </button>
             );
           })}
         </div>
