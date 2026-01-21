@@ -30,13 +30,13 @@
       linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 55%, rgba(241, 244, 250, 0.5) 100%),
       rgba(245, 246, 252, 0.6);
   }
-  /* .no-scrollbar::-webkit-scrollbar {
+  .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
-  } */
+  }
 
   /* .scroll-x-hover:hover::-webkit-scrollbar {
     height: 10px;
