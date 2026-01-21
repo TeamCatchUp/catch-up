@@ -42,14 +42,9 @@ interface Props {
   currentStep: RagUIStepKey;
 }
 
-// export default function RagAnswerSkeleton({ currentStep }: Props) {
-//   const step = RAG_UI_STEPS[currentStep];
-//   if (!step) return null;
+export default function RagAnswerSkeleton({ currentStep }: Props) {
+  const step = RAG_UI_STEPS[currentStep];
+  if (!step) return null;
 
-//   return <RagStepSkeleton stepKey={currentStep} label={step.label} Icon={step.Icon} />;
-// }
-
-// 임시 (복구)
-export default function RagAnswerSkeleton() {
-  return <div>답변 로딩 중..(임시)</div>;
+  return <RagStepSkeleton stepKey={currentStep} label={step.label} Icon={step.Icon} />;
 }
