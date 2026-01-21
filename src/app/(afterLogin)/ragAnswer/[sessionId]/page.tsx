@@ -141,6 +141,7 @@ export default function Page() {
 
   // SSE 연결 초기화
   useEffect(() => {
+    console.log('SSE 연결 시작'); // test
     if (!chatData) return;
 
     const sse = createSSEConection(handleSSEMessage, (err) => {
@@ -152,6 +153,7 @@ export default function Page() {
     sseRef.current = sse;
 
     return () => {
+      console.log('SSE 연겨 종료'); // test
       if (sseRef.current) {
         sseRef.current.close();
       }
