@@ -7,6 +7,11 @@ interface SearchOptionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonE
   selected?: boolean;
 }
 
+interface DisabledButtonProps {
+  Icon: React.FC<React.SVGProps<SVGSVGElement>>;
+  label: string;
+}
+
 export const SearchOptionButton = forwardRef<HTMLButtonElement, SearchOptionButtonProps>(
   ({ Icon, label, selected = false, onClick, className, ...props }, ref) => {
     return (
@@ -31,3 +36,15 @@ export const SearchOptionButton = forwardRef<HTMLButtonElement, SearchOptionButt
 );
 
 SearchOptionButton.displayName = 'SearchOptionButton';
+
+export const SearchOptionDisabledButton = ({ label, Icon }: DisabledButtonProps) => {
+  return (
+    <button
+      disabled
+      className="border-neutral-3 bg-neutral-1 flex h-9 max-w-40 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-lg border border-solid px-2 py-1.5"
+    >
+      <Icon className="text-gray-30 shrink-0" />
+      <div className="text-body-small truncate whitespace-nowrap text-gray-50">{label}</div>
+    </button>
+  );
+};

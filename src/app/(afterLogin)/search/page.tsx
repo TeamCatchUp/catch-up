@@ -13,9 +13,10 @@ import IconPerson from '@/public/icons/icon/person.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import IconSpace from '@/public/icons/icon/space.svg';
 import IconArrowRight from '@/public/icons/icon/arrow_right2.svg';
+import IconLock from '@/public/icons/icon/lock_filled.svg';
 
 import { FilterChip } from '@/components/UI/SearchFilter';
-import { SearchOptionButton } from '@/components/UI/SearchOptionButton';
+import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/UI/SearchOptionButton';
 import { SearchSuggestion } from '@/components/UI/SearchSuggestion';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { useOutsideClick } from '@/hooks/useOutsideClick';
@@ -197,12 +198,6 @@ export default function Search() {
                   selected={selectedOptions.includes('Jira')}
                   onClick={() => toggleOption('Jira')}
                 />
-                <SearchOptionButton
-                  Icon={IconWiki}
-                  label="Wiki"
-                  selected={selectedOptions.includes('Wiki')}
-                  onClick={() => toggleOption('Wiki')}
-                />
                 <div className="relative">
                   <SearchOptionButton
                     Icon={IconGithub}
@@ -225,12 +220,8 @@ export default function Search() {
                     </div>
                   )}
                 </div>
-                <SearchOptionButton
-                  Icon={IconSlack}
-                  label="Slack"
-                  selected={selectedOptions.includes('Slack')}
-                  onClick={() => toggleOption('Slack')}
-                />
+                <SearchOptionDisabledButton Icon={IconLock} label="Wiki" />
+                <SearchOptionDisabledButton Icon={IconLock} label="Slack" />
               </div>
               <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
               <div className="flex items-center gap-2">
