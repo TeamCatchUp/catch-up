@@ -141,9 +141,11 @@ export default function Page() {
 
   // SSE 연결 초기화
   useEffect(() => {
+    if (!chatData) return;
+
     const sse = createSSEConection(handleSSEMessage, (err) => {
       console.error('SSE 에러: ', err);
-      setIsError(true);
+      // setIsError(true);
       setIsLoading(false);
     });
 
@@ -194,6 +196,7 @@ export default function Page() {
 
     if (saved) {
       setChatData(JSON.parse(saved));
+      setIsLoading(false); // 추가
     } else if (initialQuery) {
       fetchFirstAnswer(initialQuery);
     }
