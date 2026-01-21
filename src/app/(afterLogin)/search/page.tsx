@@ -14,6 +14,8 @@ import IconTag from '@/public/icons/icon/tag.svg';
 import IconSpace from '@/public/icons/icon/space.svg';
 import IconArrowRight from '@/public/icons/icon/arrow_right2.svg';
 import IconLock from '@/public/icons/icon/lock_filled.svg';
+import IconCloseSmall from '@/public/icons/icon/cancel_small.svg';
+import IconReset from '@/public/icons/icon/reset.svg';
 
 import { FilterChip } from '@/components/UI/SearchFilter';
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/UI/SearchOptionButton';
@@ -110,6 +112,30 @@ export default function Search() {
     setSelectedOptions((prev) => (prev.includes(label) ? prev.filter((item) => item !== label) : [...prev, label]));
   };
 
+  const allSelectedChips = [
+    ...selectedPeople.map((name) => ({
+      id: name,
+      name,
+      category: 'person',
+      Icon: IconPerson,
+      onRemove: () => togglePerson(name),
+    })),
+    ...selectedDepts.map((name) => ({
+      id: name,
+      name,
+      category: 'dept',
+      Icon: IconTag,
+      onRemove: () => toggleDept(name),
+    })),
+    ...selectedProjects.map((name) => ({
+      id: name,
+      name,
+      category: 'project',
+      Icon: IconSpace,
+      onRemove: () => toggleProject(name),
+    })),
+  ];
+
   const handleSubmit = () => {
     if (!inputValue.trim()) return;
 
@@ -122,6 +148,15 @@ export default function Search() {
     const newSessionId = crypto.randomUUID();
     const githubQuery = selectedRepoId ? `&repo=${selectedRepoId}` : '';
     router.push(`/ragAnswer/${newSessionId}?q=${encodeURIComponent(inputValue)}${githubQuery}`);
+  };
+
+  const handleResetAll = () => {
+    setSelectedSystems([]);
+    setSelectedPeople([]);
+    setSelectedDepts([]);
+    setSelectedProjects([]);
+    setSelectedRepoId(null);
+    setSelectedOptions((prev) => prev.filter((opt) => opt === 'Github' && !selectedRepoId));
   };
 
   const hasText = inputValue.trim().length > 0;
@@ -306,6 +341,49 @@ export default function Search() {
                 <IconArrowRight className="h-5 w-5 shrink-0" />
               </div>
             </div>
+            {allSelectedChips.length > 0 && (
+              <div className="bg-neutral-1 border-neutral-2 flex w-full flex-col gap-2 rounded-xl border p-2">
+                <div className="flex w-full items-center justify-between px-1 pb-1">
+                  <div className="text-body-xsmall text-nomal-alternative">
+                    선택 항목 &nbsp;{allSelectedChips.length}
+                  </div>
+                  <button
+                    onClick={handleResetAll}
+                    className="rounded-rounded bg-neutral-3 flex items-center justify-center p-0.5"
+                  >
+                    <IconReset className="h-4.5 w-4.5" />
+                  </button>
+                </div>
+
+                <div className="no-scrollbar flex w-full gap-1.5 overflow-x-auto whitespace-nowrap">
+                  {allSelectedChips.map((chip) => {
+                    const ChipIcon = chip.Icon;
+                    return (
+                      <div
+                        key={`${chip.category}-${chip.id}`}
+                        className="border-neutral-5 rounded-rounded flex h-[37px] shrink-0 items-center gap-1 border bg-white p-1.5"
+                      >
+                        <div className="border-neutral-3 bg-neutral-1 rounded-rounded flex h-6.25 w-6.25 shrink-0 items-center justify-center border">
+                          <ChipIcon className="text-gray-70 h-4 w-4" />
+                        </div>
+
+                        <span className="text-body-small text-gray-80 ml-0.5 max-w-30 truncate">{chip.name}</span>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            chip.onRemove();
+                          }}
+                          className="hover:text-blue-80 ml-0.5 transition-colors"
+                        >
+                          <IconCloseSmall className="h-5 w-5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div className="flex flex-[1_0_0] flex-col items-start gap-4 self-stretch">
               {selectedRepoId && currentSuggestions.length > 0 && (
                 <div className="border-neutral-1 flex flex-[1_0_0] flex-col items-start gap-4 self-stretch border-t pt-4">
