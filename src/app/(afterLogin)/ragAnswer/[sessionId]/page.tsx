@@ -79,7 +79,7 @@ export default function Page() {
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: string]: boolean }>({});
   const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: string]: boolean }>({});
   const [filterOpenMap, setFilterOpenMap] = useState<Record<string, boolean>>({});
-  const [spaceDropDownOpenMap, setSpaceDropDownOpenMap] = useState<Record<string, boolean>>();
+  const [spaceDropDownOpenMap, setSpaceDropDownOpenMap] = useState<Record<string, boolean>>({});
 
   const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
   const [newInput, setNewInput] = useState('');
@@ -628,7 +628,7 @@ export default function Page() {
             {/* 로딩 스켈레톤 */}
             {isLoading && !showPRSelection && (
               <div className="mx-auto w-193.25">
-                <RagAnswerSkeleton currentStep={currentStep} setCurrentStep={setCurrentStep} />
+                <RagAnswerSkeleton currentStep={(currentStep as RagUIStepKey) ?? 'router'} />
               </div>
             )}
 
