@@ -85,8 +85,8 @@ interface RagNotificationData {
 }
 
 interface RagNotification {
-  target: 'CHAT';
-  type: 'RAG_IN_PROGRESS' | 'RAG_INTERRUPT' | 'RAG_DONE';
+  target: 'CHAT' | 'MESSAGE';
+  type: 'CONNECT' | 'RAG_IN_PROGRESS' | 'RAG_INTERRUPT' | 'RAG_DONE';
   message: string | null;
-  data: RagNotificationData;
+  data: RagNotificationData | null;
 }

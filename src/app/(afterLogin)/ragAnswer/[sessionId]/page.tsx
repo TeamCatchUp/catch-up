@@ -41,6 +41,18 @@ const icon = [
   { name: 'Kebeb', icon: Kebeb },
 ];
 
+// node -> UI Step 매핑 (백 node가 더 많아도 UI는 5단계로 묶어서 보여주기)
+const NODE_TO_UI_STEP: Record<string, RagStepKey> = {
+  router: 'router',
+  rewrite: 'router', // rewrite는 router 단계로 묶기 (원하면 별도 UI 만들 수도 있음)
+  plan: 'retrieve', // plan은 retrieve로 묶기
+  retrieve: 'retrieve',
+  manage_pr_context: 'manage_pr_context',
+  rerank: 'rerank',
+  grade: 'grade',
+  generate: 'generate',
+};
+
 export default function Page() {
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
@@ -48,6 +60,7 @@ export default function Page() {
   // const [hasGithubPR, setHasGithubPR] = useState(false);
   const [prList, setPrList] = useState<PRPayload[]>([]);
   const [showPRSelection, setShowPRSelection] = useState(false);
+  const [sseReady, setSseReady] = useState(false);
 
   const params = useParams();
   const searchParams = useSearchParams();
@@ -101,8 +114,56 @@ export default function Page() {
     setCurrentStep('router' as RagStepKey);
   };
 
+  const waitForSSEOpen = async () => {
+    // 이미 open이면 바로 통과
+    if (sseRef.current?.readyState === EventSource.OPEN) return;
+
+    // sseReady state가 true면 통과 (onopen에서 세팅됨)
+    if (sseReady) return;
+
+    // 최대 10초만 기다림
+    await new Promise<void>((resolve, reject) => {
+      const start = Date.now();
+      const timer = setInterval(() => {
+        const rs = sseRef.current?.readyState;
+
+        if (rs === EventSource.OPEN) {
+          clearInterval(timer);
+          resolve();
+          return;
+        }
+
+        if (Date.now() - start > 10000) {
+          clearInterval(timer);
+          reject(new Error('SSE not opened in time'));
+        }
+      }, 50);
+    });
+  };
+
   // SSE 메시지 핸들러
   const handleSSEMessage = (notification: RagNotification) => {
+    // ✅ CONNECT는 data=null이 정상 → 무조건 무시
+    if (notification.type === 'CONNECT') {
+      console.log('[SSE] CONNECT ignored', notification);
+      return;
+    }
+
+    // ✅ 0) data가 null인 이벤트(CONNECT 등)는 무시
+    if (!notification?.data) {
+      console.log('[SSE] ignore: no data', notification);
+      return;
+    }
+
+    // ✅ 1) sessionId가 없으면 무시 (방어)
+    if (!notification.data.sessionId) {
+      console.log('[SSE] ignore: no sessionId', notification);
+      return;
+    }
+
+    // ✅ 2) 이 페이지 sessionId랑 다른 이벤트는 무시
+    if (notification.data.sessionId !== sessionId) return;
+
     console.log('SSE 메시지 수신: ', notification); // 테스트용
     console.log('[SSE]', {
       eventType: notification.type,
@@ -126,8 +187,11 @@ export default function Page() {
     switch (notification.type) {
       case 'RAG_IN_PROGRESS':
         if (notification.data.type === 'status') {
-          console.log('[STEP]', 'setCurrentStep ->', notification.data.node);
-          setCurrentStep(notification.data.node as RagStepKey);
+          const rawNode = notification.data.node;
+          const mappedStep = NODE_TO_UI_STEP[rawNode] ?? 'router';
+
+          console.log('[STEP]', 'rawNode ->', rawNode, '| mappedStep ->', mappedStep);
+          setCurrentStep(mappedStep);
         }
         break;
 
@@ -139,28 +203,6 @@ export default function Page() {
         }
         break;
 
-      // case 'RAG_DONE':
-      //   if (notification.data.response && chatData) {
-      //     const assistantMessage: Message = {
-      //       id: crypto.randomUUID(),
-      //       role: 'assistant',
-      //       content: notification.data.response.answer,
-      //       sources: notification.data.response.sources || [],
-      //       timestamp: new Date().toISOString(),
-      //     };
-
-      //     const finalData: ChatData = {
-      //       ...chatData,
-      //       messages: [...chatData.messages, assistantMessage],
-      //     };
-
-      //     setChatData(finalData);
-      //     localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
-      //     setIsLoading(false);
-      //     setShowPRSelection(false);
-      //     setCurrentStep(null);
-      //   }
-      //   break;
       case 'RAG_DONE': {
         const response = notification.data.response;
         if (!response) return;
@@ -195,56 +237,35 @@ export default function Page() {
 
   // SSE 연결 초기화
   useEffect(() => {
-    console.log('SSE 연결 시작'); // test
-    // if (!chatData) return;
+    console.log('SSE 연결 시작');
 
-    const sse = createSSEConection(handleSSEMessage, (err) => {
-      //   console.error('SSE 에러: ', err);
-      //   // setIsError(true);
-      //   setIsLoading(false);
-      // });
-      const es = sseRef.current;
-      console.error('SSE 에러: ', err, 'readyState:', es?.readyState);
+    setSseReady(false); // ✅ sessionId 바뀌면 다시 false
 
-      // ✅ 진짜로 끊긴 경우(CLOSED=2)만 로딩을 끔
-      if (es?.readyState === EventSource.CLOSED) {
-        setIsLoading(false);
-        // setIsError(true);  // 원하면 여기 켜도 됨
-      }
-      // CONNECTING(0)이면 재연결 중일 수 있으니 로딩은 유지
-    });
+    const sse = createSSEConection(
+      handleSSEMessage,
+      (err) => {
+        const es = sseRef.current;
+        console.error('SSE 에러: ', err, 'readyState:', es?.readyState);
+
+        if (es?.readyState === EventSource.CLOSED) {
+          setIsLoading(false);
+        }
+      },
+      () => {
+        // ✅ SSE OPEN 됐을 때
+        setSseReady(true);
+      },
+    );
 
     sseRef.current = sse;
 
     return () => {
-      console.log('SSE 연결 종료'); // test
-      if (sseRef.current) {
-        sseRef.current.close();
-      }
+      console.log('SSE 연결 종료');
+      sseRef.current?.close();
+      sseRef.current = null;
+      setSseReady(false);
     };
   }, [sessionId]);
-
-  // 스크롤 자동 이동
-  // useEffect(() => {
-  //   if (showFeedback && scrollRef.current) {
-  //     const scrollEl = scrollRef.current;
-  //     const searchBarHeight = 100;
-  //     scrollEl.scrollTo({
-  //       top: scrollEl.scrollHeight - scrollEl.clientHeight + searchBarHeight,
-  //       behavior: 'smooth',
-  //     });
-  //   }
-  // }, [showFeedback]);
-
-  // useEffect(() => {
-  //   if (scrollRef.current) {
-  //     const { scrollHeight, clientHeight } = scrollRef.current;
-  //     scrollRef.current.scrollTo({
-  //       top: scrollHeight - clientHeight,
-  //       behavior: 'smooth',
-  //     });
-  //   }
-  // }, [chatData?.messages, isLoading]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -271,47 +292,7 @@ export default function Page() {
     }
   }, [sessionId, initialQuery]); // , initialQuery 추가
 
-  // const fetchFirstAnswer = async (query: string) => {
-  //   setIsLoading(true);
-  //   const safeRepo = repo || '';
-
-  //   const initialData = {
-  //     sessionId,
-  //     title: query,
-  //     repo: safeRepo,
-  //     messages: [{ id: crypto.randomUUID(), role: 'user', content: query, timestamp: new Date().toISOString() }],
-  //   };
-  //   setChatData(initialData);
-
-  //   try {
-  //     const result = await sendChatQuery(query, sessionId, safeRepo);
-
-  //     const finalData = {
-  //       ...initialData,
-  //       messages: [
-  //         ...initialData.messages,
-  //         {
-  //           id: crypto.randomUUID(),
-  //           role: 'assistant',
-  //           content: result.answer,
-  //           sources: result.sources || [],
-  //           timestamp: new Date().toISOString(),
-  //         },
-  //       ],
-  //     };
-  //     setChatData(finalData);
-  //     localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
-  //   } catch (error) {
-  //     console.error(error);
-  //     setIsError(true);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
   const fetchFirstAnswer = async (query: string) => {
-    // setIsLoading(true);
-    // setIsError(false);
-    // setCurrentStep(null);
     beginAnswerLoading();
 
     const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : [];
@@ -333,9 +314,10 @@ export default function Page() {
     setChatData(initialData);
 
     try {
-      console.log('API 요청 시작'); // test
+      await waitForSSEOpen();
+      console.log('API 요청 시작');
       await sendChatQuery(query, sessionId, indexList);
-      console.log('API 요청 완료'); // test
+      console.log('API 요청 완료');
     } catch (err) {
       console.error('API 요청 실패: ', err);
       setIsError(true);
@@ -343,56 +325,6 @@ export default function Page() {
     }
   };
 
-  // const handleSendMessage = async () => {
-  //   if (!newInput.trim() || isLoading || !chatData) return;
-
-  //   const safeRepo = repo || chatData.repo || '';
-
-  //   const userMessage = {
-  //     id: crypto.randomUUID(),
-  //     role: 'user',
-  //     content: newInput,
-  //     timestamp: new Date().toISOString(),
-  //   };
-  //   const updatedData = {
-  //     ...chatData,
-  //     messages: [...(chatData.messages || []), userMessage],
-  //   };
-
-  //   setChatData(updatedData);
-  //   setNewInput('');
-  //   setIsLoading(true);
-  //   setIsMultiLine(false);
-
-  //   // textarea 높이 초기화
-  //   if (textAreaRef.current) {
-  //     textAreaRef.current.style.height = '26px';
-  //   }
-
-  //   try {
-  //     const result = await sendChatQuery(newInput, sessionId, safeRepo);
-
-  //     const assistantMessage = {
-  //       id: crypto.randomUUID(),
-  //       role: 'assistant',
-  //       content: result.answer,
-  //       sources: result.sources || [],
-  //       timestamp: new Date().toISOString(),
-  //     };
-
-  //     const finalData = {
-  //       ...updatedData,
-  //       messages: [...updatedData.messages, assistantMessage],
-  //     };
-
-  //     setChatData(finalData);
-  //     localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
-  //   } catch (error) {
-  //     setIsError(true);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
   const handleSendMessage = async () => {
     if (!newInput.trim() || isLoading || !chatData) return;
 
@@ -412,15 +344,14 @@ export default function Page() {
     setChatData(updatedData);
     setNewInput('');
     beginAnswerLoading();
-    // setIsLoading(true);
     setIsMultiLine(false);
-    // setCurrentStep(null);
 
     if (textAreaRef.current) {
       textAreaRef.current.style.height = '26px';
     }
 
     try {
+      await waitForSSEOpen();
       await sendChatQuery(newInput, sessionId, indexList);
     } catch (err) {
       console.error(err);
@@ -432,8 +363,6 @@ export default function Page() {
   const handlePRContinue = async (selectedIds: number[]) => {
     setShowPRSelection(false);
     beginAnswerLoading();
-    // setIsLoading(true);
-    // setCurrentStep(null);
 
     const selectedPRs = selectedIds.map((id) => {
       const pr = prList[id - 1];
@@ -445,6 +374,7 @@ export default function Page() {
     });
 
     try {
+      await waitForSSEOpen();
       await resumeChatQuery(sessionId, selectedPRs);
     } catch (err) {
       console.error(err);
@@ -488,37 +418,12 @@ export default function Page() {
 
     setChatData(updatedData);
     setEditingMessageId(null);
-    // setIsLoading(true);
-    // setCurrentStep(null); // 추가
     beginAnswerLoading();
 
     const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : []; // 추가
 
-    // try {
-    //   const safeRepo = repo || chatData.repo || '';
-    //   const result = await sendChatQuery(newContent, sessionId, safeRepo);
-
-    //   const assistantMessage = {
-    //     id: crypto.randomUUID(),
-    //     role: 'assistant',
-    //     content: result.answer,
-    //     sources: result.sources || [],
-    //     timestamp: new Date().toISOString(),
-    //   };
-
-    //   const finalData = {
-    //     ...updatedData,
-    //     messages: [...updatedData.messages, assistantMessage],
-    //   };
-
-    //   setChatData(finalData);
-    //   localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
-    // } catch (err) {
-    //   setIsError(true);
-    // } finally {
-    //   setIsLoading(false);
-    // }
     try {
+      await waitForSSEOpen();
       await sendChatQuery(newContent, sessionId, indexList);
     } catch (err) {
       console.error(err);

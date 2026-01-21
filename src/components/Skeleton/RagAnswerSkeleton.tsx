@@ -26,14 +26,15 @@ const RagAnswerSkeleton = ({
       <GithubPRStepSkeleton
         prList={prList}
         onContinue={(selectedIds) => {
-          if (onPRContinue) {
-            onPRContinue(selectedIds);
-          }
-          if (hasGithubPR) {
-            setCurrentStep('grade');
-          } else {
-            setCurrentStep('generate');
-          }
+          onPRContinue?.(selectedIds);
+          // if (onPRContinue) {
+          //   onPRContinue(selectedIds);
+          // }
+          // if (hasGithubPR) {
+          //   setCurrentStep('rerank');
+          // } else {
+          //   setCurrentStep('generate');
+          // }
         }}
       />
     );
