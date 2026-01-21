@@ -10,11 +10,34 @@ export const createSSEConection = (
   });
 
   const safeParse = (event: MessageEvent) => {
+    const raw = event.data;
+
+    if (raw == null) return;
+
+    const text = typeof raw === 'string' ? raw.trim() : raw;
+    if (typeof text === 'string') {
+      if (!text) return;
+      if (text === ':') return;
+      if (text.startsWith(':')) return;
+    }
+
+    // try {
+    //   const notification: RagNotification = JSON.parse(event.data);
+    //   onMessage(notification);
+    // } catch (err) {
+    //   console.error('SSE 메시지 파싱 에러:', err, 'raw:', event.data);
+    // }
+    // 2) JSON만 파싱 시도
     try {
-      const notification: RagNotification = JSON.parse(event.data);
+      const notification: RagNotification = typeof text === 'string' ? JSON.parse(text) : (text as RagNotification);
+
+      // 3) 혹시 서버가 "data":null 같은 CONNECT를 보내면 필드 체크
+      if (!notification || typeof notification !== 'object') return;
+
       onMessage(notification);
     } catch (err) {
-      console.error('SSE 메시지 파싱 에러:', err, 'raw:', event.data);
+      // ✅ 진짜 문제인지 확인하려면 raw를 같이 로그
+      console.error('SSE 메시지 파싱 에러:', err, 'raw:', raw, 'eventType:', event.type);
     }
   };
 
