@@ -171,6 +171,8 @@ export default function Page() {
 
   // SSE 메시지 핸들러
   const handleSSEMessage = (notification: RagNotification) => {
+    console.log('SSE 수신:', notification.type, notification.data);
+
     // CONNECT 등 data=null 이벤트는 무시
     if (!notification?.data) return;
     if (notification.data.sessionId !== sessionId) return;
@@ -206,6 +208,7 @@ export default function Page() {
 
     switch (notification.type) {
       case 'RAG_IN_PROGRESS': {
+        console.log('IN_PROGRESS:', notification.data.node);
         if (notification.data.type !== 'status') return;
 
         const rawNode = notification.data.node;
@@ -216,6 +219,7 @@ export default function Page() {
       }
 
       case 'RAG_INTERRUPT': {
+        console.log('INTERRUPT:', notification.data.node);
         if (notification.data.node !== 'manage_pr_context') return;
         if (!notification.data.payload) return;
 
@@ -226,8 +230,12 @@ export default function Page() {
       }
 
       case 'RAG_DONE': {
+        console.log('DONE:', notification.data.response);
         const response = notification.data.response;
-        if (!response) return;
+        if (!response) {
+          console.error('DONE이지만 response 없음!');
+          return;
+        }
 
         appendAssistantAnswer(response.answer, response.sources || []);
         break;
@@ -322,7 +330,6 @@ export default function Page() {
       const res = await sendChatQuery(query, sessionId, indexList);
 
       // HTTP 응답이 바로 answer를 주면 화면 업데이트 (fallback)
-      if (res?.answer) appendAssistantAnswer(res.answer, res.sources || []);
     } catch (err) {
       setIsError(true);
       setIsLoading(false);
@@ -354,7 +361,7 @@ export default function Page() {
       await waitForSSEOpen();
       const res = await sendChatQuery(newInput, sessionId, indexList);
 
-      if (res?.answer) appendAssistantAnswer(res.answer, res.sources || []);
+      // if (res?.answer) appendAssistantAnswer(res.answer, res.sources || []);
     } catch (err) {
       setIsError(true);
       setIsLoading(false);
@@ -378,7 +385,7 @@ export default function Page() {
       await waitForSSEOpen();
       const res = await resumeChatQuery(sessionId, selectedPRs);
 
-      if (res?.answer) appendAssistantAnswer(res.answer, res.sources || []);
+      // if (res?.answer) appendAssistantAnswer(res.answer, res.sources || []);
     } catch (err) {
       setIsError(true);
       setIsLoading(false);
@@ -397,7 +404,6 @@ export default function Page() {
   };
 
   // 수정 완료 핸들러
-
   const handleSubmitEdit = async (messageId: string, newContent: string) => {
     if (!chatData) return;
 
@@ -425,7 +431,7 @@ export default function Page() {
       const res = await sendChatQuery(newContent, sessionId, indexList);
 
       // HTTP fallback
-      if (res?.answer) appendAssistantAnswer(res.answer, res.sources || []);
+      // if (res?.answer) appendAssistantAnswer(res.answer, res.sources || []);
     } catch {
       setIsError(true);
       setIsLoading(false);
