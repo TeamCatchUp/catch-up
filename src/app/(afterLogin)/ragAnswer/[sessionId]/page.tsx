@@ -1752,7 +1752,7 @@ export default function Page() {
   const fetchFirstAnswer = async (query: string) => {
     beginAnswerLoading();
 
-    const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : [];
+    const indexList = repo ? [`${repo}`] : [];
 
     const initialData: ChatData = {
       sessionId,
@@ -1783,7 +1783,7 @@ export default function Page() {
   const handleSendMessage = async () => {
     if (!newInput.trim() || isLoading || !chatData) return;
 
-    const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : [];
+    const indexList = repo ? [`${repo}`] : [];
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -1870,7 +1870,7 @@ export default function Page() {
 
     beginAnswerLoading();
 
-    const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : [];
+    const indexList = repo ? [`${repo}`] : [];
 
     try {
       await waitForSSEOpen();
