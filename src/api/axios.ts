@@ -14,37 +14,6 @@ api.interceptors.response.use(
   async (err) => {
     const originalRequest = err.config;
 
-    // 개발 환경에서 dev-token으로 로그인 우회
-    if (process.env.NODE_ENV === 'development') {
-      const devToken = localStorage.getItem('accessToken');
-
-      if (devToken === 'dev-token') {
-        // /api/user/me 요청인 경우 mock 유저 정보 반환
-        if (originalRequest.url?.includes('/api/user/me')) {
-          return Promise.resolve({
-            data: {
-              id: 'dev-user-123',
-              name: 'Dev User',
-              email: 'dev@local.com',
-            },
-            status: 200,
-            statusText: 'OK',
-            headers: {},
-            config: originalRequest,
-          });
-        }
-
-        // 다른 API 요청도 성공으로 처리
-        return Promise.resolve({
-          data: {},
-          status: 200,
-          statusText: 'OK',
-          headers: {},
-          config: originalRequest,
-        });
-      }
-    }
-
     // refresh 요청 자체가 실패한 경우 무한 루프 방지
     if (originalRequest.url?.includes('/api/auth/refresh')) {
       if (typeof window !== 'undefined') {

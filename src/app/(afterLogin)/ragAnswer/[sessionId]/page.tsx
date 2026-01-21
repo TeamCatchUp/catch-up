@@ -42,7 +42,7 @@ const icon = [
 ];
 
 export default function Page() {
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
   const [currentStep, setCurrentStep] = useState<RagStepKey | null>(null);
   // const [hasGithubPR, setHasGithubPR] = useState(false);
