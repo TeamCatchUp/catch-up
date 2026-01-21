@@ -9,6 +9,7 @@ import Settings from '/public/icons/icon/settings.svg';
 import Logout from '/public/icons/icon/logout.svg';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { useOutsideClick } from '@/hooks/useOutsideClick';
+import { logout } from '@/api/auth';
 
 interface UserModalProps {
   onClose: () => void;
@@ -22,6 +23,11 @@ const UserModal = ({ onClose, userName, userEmail }: UserModalProps) => {
 
   useEscapeKey(onClose);
   useOutsideClick(modalRef, onClose);
+
+  const handleLogout = async () => {
+    onClose(); // 모달 close
+    await logout();
+  };
 
   return (
     <div
@@ -76,7 +82,7 @@ const UserModal = ({ onClose, userName, userEmail }: UserModalProps) => {
       {/* divider */}
       <div className="bg-neutral-3 flex h-px w-full items-center" />
       {/* 로그아웃 */}
-      <button className="icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2">
+      <button onClick={handleLogout} className="icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2">
         <Logout className="text-gray-70 h-6 w-6" />
         <span className="text-body-small text-gray-80">로그아웃</span>
       </button>
