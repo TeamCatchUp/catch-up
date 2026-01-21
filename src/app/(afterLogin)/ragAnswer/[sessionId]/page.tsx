@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
 import Add from '/public/icons/icon/add_small.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
@@ -17,13 +18,12 @@ import Copy from '/public/icons/icon/copy.svg';
 import ThumbsDown from '/public/icons/icon/thumbs-down.svg';
 import Rotate from '/public/icons/icon/rotate.svg';
 import Filter from '/public/icons/icon/filter-2.svg';
+
 import FilterComponent from '@/components/rag/answerComponent/Filter';
 import RagContentHeader from '@/components/rag/answerComponent/RagContentHeader';
 import RagRightAdditionalHeader from '@/components/rag/rightComponent/sourceComponent/RagRightAdditionalHeader';
 import SourceComponent from '@/components/rag/rightComponent/sourceComponent/SourceComponent';
 import DetailedTasksComponent from '@/components/rag/rightComponent/detailedTasksComponent/DetailedTasksComponent';
-import { useParams, useSearchParams } from 'next/navigation';
-import { createSSEConection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
 import AnswerActionButtons from '@/components/rag/answerComponent/AnswerActionButtons';
 import FeedbackSection from '@/components/rag/answerComponent/FeedbackSection';
 import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
@@ -33,6 +33,9 @@ import ToolTip from '@/components/common/ToolTip';
 import TeamSpaceModal from '@/components/rag/modal/TeamSpaceModal';
 import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
 
+import { useParams, useSearchParams } from 'next/navigation';
+import { createSSEConection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
+
 const icon = [
   { name: 'Copy', icon: Copy },
   { name: 'Share', icon: Share },
@@ -41,6 +44,7 @@ const icon = [
   { name: 'Kebeb', icon: Kebeb },
 ];
 
+// 백 노드 -> UI 단계 매핑
 const NODE_TO_UI_STEP: Record<string, RagUIStepKey | 'manage_pr_context'> = {
   router: 'router',
   rewrite: 'router',
@@ -52,41 +56,43 @@ const NODE_TO_UI_STEP: Record<string, RagUIStepKey | 'manage_pr_context'> = {
   generate: 'generate',
   chitchat: 'generate',
 };
-export default function Page() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [isError, setIsError] = useState(false);
-  const [currentStep, setCurrentStep] = useState<RagUIStepKey | 'manage_pr_context' | null>(null);
-  // const [hasGithubPR, setHasGithubPR] = useState(false);
-  const [prList, setPrList] = useState<PRPayload[]>([]);
-  const [showPRSelection, setShowPRSelection] = useState(false);
-  const [sseReady, setSseReady] = useState(false);
 
+export default function Page() {
   const params = useParams();
   const searchParams = useSearchParams();
+
   const sessionId = params.sessionId as string;
   const repo = searchParams.get('repo');
-  const [chatData, setChatData] = useState<any>(null);
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-
   const initialQuery = searchParams.get('q');
 
-  const today = new Date();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
+  const [chatData, setChatData] = useState<any>(null);
 
-  // const [showFeedback, setShowFeedback] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
+
+  const [currentStep, setCurrentStep] = useState<RagUIStepKey | 'manage_pr_context' | null>(null);
+  const [prList, setPrList] = useState<PRPayload[]>([]);
+  const [showPRSelection, setShowPRSelection] = useState(false);
+
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: string]: boolean }>({});
-  const [isMultiLine, setIsMultiLine] = useState(false);
   const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: string]: boolean }>({});
   const [filterOpenMap, setFilterOpenMap] = useState<Record<string, boolean>>({});
   const [spaceDropDownOpenMap, setSpaceDropDownOpenMap] = useState<Record<string, boolean>>();
 
+  const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
+  const [newInput, setNewInput] = useState('');
+  const [isMultiLine, setIsMultiLine] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const sseRef = useRef<EventSource | null>(null);
+  const [sseReady, setSseReady] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
-  const [newInput, setNewInput] = useState('');
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
 
   // 마크다운 문법 적용
   const formatMarkdownString = (text: string) => {
@@ -109,18 +115,41 @@ export default function Page() {
     setIsLoading(true);
     setIsError(false);
     setShowPRSelection(false);
-
     setCurrentStep('router');
+  };
+
+  const appendAssistantAnswer = (answer: string, sources: SourceResponse[] = []) => {
+    setChatData((prev: ChatData | null) => {
+      if (!prev) return prev;
+
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: answer,
+        sources,
+        timestamp: new Date().toISOString(),
+      };
+
+      const finalData: ChatData = {
+        ...prev,
+        messages: [...prev.messages, assistantMessage],
+      };
+
+      localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
+      return finalData;
+    });
+
+    setIsLoading(false);
+    setShowPRSelection(false);
+    setCurrentStep(null);
   };
 
   const waitForSSEOpen = async () => {
     // 이미 open이면 바로 통과
     if (sseRef.current?.readyState === EventSource.OPEN) return;
-
     // sseReady state가 true면 통과 (onopen에서 세팅됨)
     if (sseReady) return;
 
-    // 최대 10초만 기다림
     await new Promise<void>((resolve, reject) => {
       const start = Date.now();
       const timer = setInterval(() => {
@@ -142,17 +171,9 @@ export default function Page() {
 
   // SSE 메시지 핸들러
   const handleSSEMessage = (notification: RagNotification) => {
-    // ✅ CONNECT는 data=null이 정상 → 무조건 무시
-    if (notification.type === 'CONNECT') {
-      console.log('[SSE] CONNECT ignored', notification);
-      return;
-    }
-
-    // ✅ 0) data가 null인 이벤트(CONNECT 등)는 무시
-    if (!notification?.data) {
-      console.log('[SSE] ignore: no data', notification);
-      return;
-    }
+    // CONNECT 등 data=null 이벤트는 무시
+    if (!notification?.data) return;
+    if (notification.data.sessionId !== sessionId) return;
 
     // ✅ 1) sessionId가 없으면 무시 (방어)
     if (!notification.data.sessionId) {
@@ -184,88 +205,63 @@ export default function Page() {
     });
 
     switch (notification.type) {
-      case 'RAG_IN_PROGRESS':
-        if (notification.data.type === 'status') {
-          const rawNode = notification.data.node;
-          const mappedStep = NODE_TO_UI_STEP[rawNode] ?? 'router';
+      case 'RAG_IN_PROGRESS': {
+        if (notification.data.type !== 'status') return;
 
-          console.log('[STEP]', 'rawNode ->', rawNode, '| mappedStep ->', mappedStep);
-          setCurrentStep(mappedStep);
-        }
-        break;
+        const rawNode = notification.data.node;
+        const mappedStep = NODE_TO_UI_STEP[rawNode] ?? 'router';
 
-      case 'RAG_INTERRUPT':
-        if (notification.data.node === 'manage_pr_context' && notification.data.payload) {
-          setPrList(notification.data.payload);
-          setShowPRSelection(true);
-          setIsLoading(false);
-        }
+        setCurrentStep(mappedStep);
         break;
+      }
+
+      case 'RAG_INTERRUPT': {
+        if (notification.data.node !== 'manage_pr_context') return;
+        if (!notification.data.payload) return;
+
+        setPrList(notification.data.payload);
+        setShowPRSelection(true);
+        setIsLoading(false);
+        break;
+      }
 
       case 'RAG_DONE': {
         const response = notification.data.response;
         if (!response) return;
 
-        setChatData((prev: ChatData | null) => {
-          if (!prev) return prev;
-
-          const assistantMessage: Message = {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: response.answer,
-            sources: response.sources || [],
-            timestamp: new Date().toISOString(),
-          };
-
-          const finalData: ChatData = {
-            ...prev,
-            messages: [...prev.messages, assistantMessage],
-          };
-
-          localStorage.setItem(`chat_${sessionId}`, JSON.stringify(finalData));
-          return finalData;
-        });
-
-        setIsLoading(false);
-        setShowPRSelection(false);
-        setCurrentStep(null);
+        appendAssistantAnswer(response.answer, response.sources || []);
         break;
       }
+
+      default:
+        break;
     }
   };
 
   // SSE 연결 초기화
   useEffect(() => {
-    console.log('SSE 연결 시작');
-
-    setSseReady(false); // ✅ sessionId 바뀌면 다시 false
+    setSseReady(false);
 
     const sse = createSSEConection(
       handleSSEMessage,
-      (err) => {
-        const es = sseRef.current;
-        console.error('SSE 에러: ', err, 'readyState:', es?.readyState);
-
-        if (es?.readyState === EventSource.CLOSED) {
+      () => {
+        if (sseRef.current?.readyState === EventSource.CLOSED) {
           setIsLoading(false);
         }
       },
-      () => {
-        // ✅ SSE OPEN 됐을 때
-        setSseReady(true);
-      },
+      () => setSseReady(true),
     );
 
     sseRef.current = sse;
 
     return () => {
-      console.log('SSE 연결 종료');
       sseRef.current?.close();
       sseRef.current = null;
       setSseReady(false);
     };
   }, [sessionId]);
 
+  // 자동 하단 스크롤
   useEffect(() => {
     if (scrollRef.current) {
       const { scrollHeight, clientHeight } = scrollRef.current;
@@ -278,18 +274,27 @@ export default function Page() {
 
   // 초기 데이터 로드
   useEffect(() => {
-    console.log('초기 데이터 로드 시작', { sessionId, initialQuery }); // test 용
     const saved = localStorage.getItem(`chat_${sessionId}`);
 
     if (saved) {
       setChatData(JSON.parse(saved));
-      setIsLoading(false); // 추가
-    } else if (initialQuery) {
-      fetchFirstAnswer(initialQuery);
-    } else {
-      console.log('초기 쿼리 없음'); // test 용
+      setIsLoading(false);
+      return;
     }
-  }, [sessionId, initialQuery]); // , initialQuery 추가
+
+    if (initialQuery) {
+      fetchFirstAnswer(initialQuery);
+      return;
+    }
+
+    // 아무것도 없으면 기본 구조라도 세팅 (빈 채팅 방)
+    setChatData({
+      sessionId,
+      title: '',
+      repo: repo || '',
+      messages: [],
+    });
+  }, [sessionId, initialQuery, repo]);
 
   const fetchFirstAnswer = async (query: string) => {
     beginAnswerLoading();
@@ -314,11 +319,11 @@ export default function Page() {
 
     try {
       await waitForSSEOpen();
-      console.log('API 요청 시작');
-      await sendChatQuery(query, sessionId, indexList);
-      console.log('API 요청 완료');
+      const res = await sendChatQuery(query, sessionId, indexList);
+
+      // HTTP 응답이 바로 answer를 주면 화면 업데이트 (fallback)
+      if (res?.answer) appendAssistantAnswer(res.answer, res.sources || []);
     } catch (err) {
-      console.error('API 요청 실패: ', err);
       setIsError(true);
       setIsLoading(false);
     }
@@ -335,25 +340,22 @@ export default function Page() {
       content: newInput,
       timestamp: new Date().toISOString(),
     };
-    const updatedData: ChatData = {
-      ...chatData,
-      messages: [...chatData.messages, userMessage],
-    };
 
-    setChatData(updatedData);
+    const updated: ChatData = { ...chatData, messages: [...chatData.messages, userMessage] };
+    setChatData(updated);
+
     setNewInput('');
-    beginAnswerLoading();
     setIsMultiLine(false);
+    if (textAreaRef.current) textAreaRef.current.style.height = '26px';
 
-    if (textAreaRef.current) {
-      textAreaRef.current.style.height = '26px';
-    }
+    beginAnswerLoading();
 
     try {
       await waitForSSEOpen();
-      await sendChatQuery(newInput, sessionId, indexList);
+      const res = await sendChatQuery(newInput, sessionId, indexList);
+
+      if (res?.answer) appendAssistantAnswer(res.answer, res.sources || []);
     } catch (err) {
-      console.error(err);
       setIsError(true);
       setIsLoading(false);
     }
@@ -363,20 +365,21 @@ export default function Page() {
     setShowPRSelection(false);
     beginAnswerLoading();
 
-    const selectedPRs = selectedIds.map((id) => {
-      const pr = prList[id - 1];
-      return {
-        prNumber: pr.prNumber,
-        repoName: pr.repoName,
-        owner: pr.owner,
-      };
-    });
+    const selectedPRs = selectedIds
+      .map((id) => prList.find((p) => p.prNumber === id) ?? null)
+      .filter(Boolean)
+      .map((pr) => ({
+        prNumber: (pr as PRPayload).prNumber,
+        repoName: (pr as PRPayload).repoName,
+        owner: (pr as PRPayload).owner,
+      }));
 
     try {
       await waitForSSEOpen();
-      await resumeChatQuery(sessionId, selectedPRs);
+      const res = await resumeChatQuery(sessionId, selectedPRs);
+
+      if (res?.answer) appendAssistantAnswer(res.answer, res.sources || []);
     } catch (err) {
-      console.error(err);
       setIsError(true);
       setIsLoading(false);
     }
@@ -394,38 +397,36 @@ export default function Page() {
   };
 
   // 수정 완료 핸들러
+
   const handleSubmitEdit = async (messageId: string, newContent: string) => {
     if (!chatData) return;
 
-    const messageIndex = chatData.messages.findIndex((m: any) => m.id === messageId);
-    if (messageIndex === -1) return;
+    const idx = chatData.messages.findIndex((m: any) => m.id === messageId);
+    if (idx === -1) return;
 
-    // 수정된 메시지 이후의 메시지 삭제
-    const newMessages = chatData.messages.slice(0, messageIndex);
-
-    const userMessage = {
+    const trimmed = chatData.messages.slice(0, idx);
+    const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
       content: newContent,
-      timeStamp: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
     };
 
-    const updatedData = {
-      ...chatData,
-      messages: [...newMessages, userMessage],
-    };
-
-    setChatData(updatedData);
+    const updated: ChatData = { ...chatData, messages: [...trimmed, userMessage] };
+    setChatData(updated);
     setEditingMessageId(null);
+
     beginAnswerLoading();
 
-    const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : []; // 추가
+    const indexList = repo ? [`${repo}_code`, `${repo}_pr`, `${repo}_jira_issue`] : [];
 
     try {
       await waitForSSEOpen();
-      await sendChatQuery(newContent, sessionId, indexList);
-    } catch (err) {
-      console.error(err);
+      const res = await sendChatQuery(newContent, sessionId, indexList);
+
+      // HTTP fallback
+      if (res?.answer) appendAssistantAnswer(res.answer, res.sources || []);
+    } catch {
       setIsError(true);
       setIsLoading(false);
     }
@@ -580,10 +581,7 @@ export default function Page() {
                     {msg.content ? (
                       <>
                         <div className="text-gray-80 prose prose-neutral [&_li::marker]:text-gray-70 max-w-none break-words [&>ol]:list-decimal [&>ol]:pl-5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li:has(input[type='checkbox'])]:list-none [&>ul>li:has(input[type='checkbox'])]:pl-0">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {/* {formatMarkdownString(test)} */}
-                            {formatMarkdownString(msg.content)}
-                          </ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatMarkdownString(msg.content)}</ReactMarkdown>
                         </div>
                         <div className="text-body-small text-gray-30">
                           질문과 연관된 {msg.sources?.length || 0}개의 핵심 자료를 선별했어요.
@@ -620,19 +618,6 @@ export default function Page() {
               </div>
             ))}
 
-            {/* <div className="text-gray-40 mx-auto w-193.25 animate-pulse pb-10"> */}
-            {/* <RagAnswerSkeleton /> */}
-            {/* </div> */}
-            {/* {isLoading && !isError && (
-              <div className="mx-auto w-193.25">
-                <RagAnswerSkeleton
-                  currentStep={currentStep}
-                  hasGithubPR={hasGithubPR}
-                  setCurrentStep={setCurrentStep}
-                />
-              </div>
-            )} */}
-
             {/* manage_pr_context */}
             {showPRSelection && (
               <div className="mx-auto w-193.25">
@@ -643,7 +628,7 @@ export default function Page() {
             {/* 로딩 스켈레톤 */}
             {isLoading && !showPRSelection && (
               <div className="mx-auto w-193.25">
-                <RagAnswerSkeleton currentStep={currentStep} hasGithubPR={false} setCurrentStep={setCurrentStep} />
+                <RagAnswerSkeleton currentStep={currentStep} setCurrentStep={setCurrentStep} />
               </div>
             )}
 
@@ -664,22 +649,6 @@ export default function Page() {
 
           <div className="w-full flex-none bg-white px-24 pt-4 pb-8">
             <div className="mx-auto w-193.25">
-              {/* <div className="no-scrollbar flex justify-start gap-2.5 overflow-x-auto">
-                {[
-                  '임직원이 가장 많이 물어보는 질문',
-                  '프로젝트 검색하기',
-                  '최근 변경사항 요약',
-                  '이 업무 한 줄 요약',
-                ].map((item, index) => (
-                  <button
-                    key={index}
-                    className="border-blue-30 bg-blue-1 text-body-small hover:bg-blue-5 active:border-blue-45 text-blue-55 cursor-pointer rounded-full border px-3 py-1.5 whitespace-nowrap"
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div> */}
-
               {/* 검색 입력창 */}
               <div
                 className={clsx(
