@@ -782,13 +782,14 @@ const icon = [
 ];
 
 // 백엔드 노드 -> UI 단계 매핑
-const NODE_TO_UI_STEP: Record<string, RagUIStepKey> = {
+// manage_pr_context는 null 처리 (별도 상태로 관리)
+const NODE_TO_UI_STEP: Record<string, RagUIStepKey | null> = {
   router: 'router',
-  rewrite: 'router',
-  plan: 'retrieve',
+  rewrite: 'router', // UI에서는 router로 표시
+  plan: 'retrieve', // retrieve 준비 단계
   retrieve: 'retrieve',
-  manage_pr_context: 'manage_pr_context',
   rerank: 'rerank',
+  manage_pr_context: null, // INTERRUPT로 별도 처리
   grade: 'grade',
   generate: 'generate',
   chitchat: 'generate',
@@ -807,7 +808,9 @@ export default function Page() {
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
 
-  const [currentStep, setCurrentStep] = useState<RagUIStepKey | null>(null);
+  // currentStep은 RagUIStepKey만 관리
+  const [currentStep, setCurrentStep] = useState<RagUIStepKey>('router');
+  // PR 선택은 별도 상태로 관리
   const [prList, setPrList] = useState<PRPayload[]>([]);
   const [showPRSelection, setShowPRSelection] = useState(false);
 
@@ -833,18 +836,15 @@ export default function Page() {
 
   // 마크다운 문법 적용
   const formatMarkdownString = (text: string) => {
-    return (
-      text
-        .replace(/\\n/g, '\n')
-        // 마크다운 문법 앞에 빈 줄 추가
-        .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2') // 헤딩
-        .replace(/([^\n])\n(\d+\.\s)/g, '$1\n\n$2') // 순서 목록
-        .replace(/([^\n])\n([-*+]\s)/g, '$1\n\n$2') // 순서 없는 목록
-        .replace(/([^\n])\n(-\s\[[x\s]\]\s)/g, '$1\n\n$2') // 체크박스
-        .replace(/([^\n])\n(```)/g, '$1\n\n$2') // 코드블록
-        .replace(/\n{3,}/g, '\n\n')
-        .trim()
-    );
+    return text
+      .replace(/\\n/g, '\n')
+      .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2')
+      .replace(/([^\n])\n(\d+\.\s)/g, '$1\n\n$2')
+      .replace(/([^\n])\n([-*+]\s)/g, '$1\n\n$2')
+      .replace(/([^\n])\n(-\s\[[x\s]\]\s)/g, '$1\n\n$2')
+      .replace(/([^\n])\n(```)/g, '$1\n\n$2')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   };
 
   // 로딩 시작
@@ -855,9 +855,9 @@ export default function Page() {
     setCurrentStep('router');
   };
 
-  // 어시스턴트 답변 추가
+  // 답변 추가 및 로딩 종료
   const appendAssistantAnswer = (answer: string, sources: SourceResponse[] = []) => {
-    setChatData((prev: ChatData | null) => {
+    setChatData((prev) => {
       if (!prev) return prev;
 
       const assistantMessage: Message = {
@@ -879,20 +879,19 @@ export default function Page() {
 
     setIsLoading(false);
     setShowPRSelection(false);
-    setCurrentStep(null);
+    setCurrentStep('router');
   };
 
   // SSE 연결 대기
   const waitForSSEOpen = async () => {
-    if (sseRef.current?.readyState === EventSource.OPEN) return;
-    if (sseReady) return;
+    if (sseRef.current?.readyState === EventSource.OPEN || sseReady) {
+      return;
+    }
 
-    await new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       const start = Date.now();
       const timer = setInterval(() => {
-        const rs = sseRef.current?.readyState;
-
-        if (rs === EventSource.OPEN) {
+        if (sseRef.current?.readyState === EventSource.OPEN) {
           clearInterval(timer);
           resolve();
           return;
@@ -900,7 +899,7 @@ export default function Page() {
 
         if (Date.now() - start > 10000) {
           clearInterval(timer);
-          reject(new Error('SSE not opened in time'));
+          reject(new Error('SSE connection timeout'));
         }
       }, 50);
     });
@@ -908,40 +907,42 @@ export default function Page() {
 
   // SSE 메시지 핸들러
   const handleSSEMessage = (notification: RagNotification) => {
-    console.log('[SSE] 수신:', notification.type, notification);
-
-    // 1) data가 없거나 sessionId가 다르면 무시
+    // data가 없거나 sessionId가 다르면 무시
     if (!notification?.data || notification.data.sessionId !== sessionId) {
       return;
     }
 
     const { type, data } = notification;
 
+    console.log('[SSE]', {
+      type,
+      node: data.node,
+      dataType: data.type,
+      hasPayload: !!data.payload,
+      hasResponse: !!data.response,
+    });
+
     switch (type) {
       case 'RAG_IN_PROGRESS': {
-        // 진행 중 단계 업데이트
+        // 진행 상태 업데이트
         if (data.type !== 'status') return;
 
-        const rawNode = data.node;
-        const mappedStep = NODE_TO_UI_STEP[rawNode];
+        const mappedStep = NODE_TO_UI_STEP[data.node];
 
-        if (mappedStep) {
-          console.log(`[단계 업데이트] ${rawNode} → ${mappedStep}`);
-          setCurrentStep(mappedStep);
-        }
+        // manage_pr_context는 INTERRUPT로 별도 처리되므로 여기서는 무시
+        if (mappedStep === null) return;
+
+        setCurrentStep(mappedStep);
         break;
       }
 
       case 'RAG_INTERRUPT': {
-        // PR 선택 요청
-        if (data.node !== 'manage_pr_context') return;
-        if (!data.payload || !Array.isArray(data.payload)) return;
+        // PR 선택 필요 (manage_pr_context 단계)
+        if (data.node !== 'manage_pr_context' || !data.payload) return;
 
-        console.log('[PR 선택 요청]', data.payload.length, '개');
         setPrList(data.payload);
         setShowPRSelection(true);
-        setCurrentStep('manage_pr_context');
-        setIsLoading(false);
+        setIsLoading(false); // PR 선택 대기 중에는 로딩 해제
         break;
       }
 
@@ -949,11 +950,12 @@ export default function Page() {
         // 최종 답변 수신
         const response = data.response;
         if (!response) {
-          console.error('[RAG_DONE] response 없음');
+          console.error('[SSE] RAG_DONE but no response');
+          setIsError(true);
+          setIsLoading(false);
           return;
         }
 
-        console.log('[최종 답변 수신]', response.answer?.substring(0, 50));
         appendAssistantAnswer(response.answer, response.sources || []);
         break;
       }
@@ -965,19 +967,18 @@ export default function Page() {
 
   // SSE 연결 초기화
   useEffect(() => {
-    console.log('[SSE] 연결 초기화');
     setSseReady(false);
 
     const sse = createSSEConection(
       handleSSEMessage,
       (error) => {
-        console.error('[SSE] 에러:', error);
+        console.error('[SSE] Error:', error);
         if (sseRef.current?.readyState === EventSource.CLOSED) {
           setIsLoading(false);
         }
       },
       () => {
-        console.log('[SSE] 연결 성공');
+        console.log('[SSE] Connected');
         setSseReady(true);
       },
     );
@@ -985,7 +986,6 @@ export default function Page() {
     sseRef.current = sse;
 
     return () => {
-      console.log('[SSE] 연결 종료');
       sseRef.current?.close();
       sseRef.current = null;
       setSseReady(false);
@@ -1018,7 +1018,7 @@ export default function Page() {
       return;
     }
 
-    // 빈 채팅방
+    // 빈 채팅방 초기화
     setChatData({
       sessionId,
       title: '',
@@ -1052,15 +1052,15 @@ export default function Page() {
     try {
       await waitForSSEOpen();
       await sendChatQuery(query, sessionId, indexList);
-      console.log('[첫 질문] 전송 완료, SSE로 답변 대기 중');
+      // SSE로 답변을 받으므로 HTTP 응답은 무시
     } catch (err) {
-      console.error('[첫 질문] 전송 실패:', err);
+      console.error('[fetchFirstAnswer] Error:', err);
       setIsError(true);
       setIsLoading(false);
     }
   };
 
-  // 메시지 전송
+  // 새 메시지 전송
   const handleSendMessage = async () => {
     if (!newInput.trim() || isLoading || !chatData) return;
 
@@ -1073,10 +1073,12 @@ export default function Page() {
       timestamp: new Date().toISOString(),
     };
 
-    const updated: ChatData = { ...chatData, messages: [...chatData.messages, userMessage] };
+    const updated: ChatData = {
+      ...chatData,
+      messages: [...chatData.messages, userMessage],
+    };
     setChatData(updated);
 
-    const queryText = newInput;
     setNewInput('');
     setIsMultiLine(false);
     if (textAreaRef.current) textAreaRef.current.style.height = '26px';
@@ -1085,10 +1087,9 @@ export default function Page() {
 
     try {
       await waitForSSEOpen();
-      await sendChatQuery(queryText, sessionId, indexList);
-      console.log('[메시지] 전송 완료, SSE로 답변 대기 중');
+      await sendChatQuery(newInput, sessionId, indexList);
     } catch (err) {
-      console.error('[메시지] 전송 실패:', err);
+      console.error('[handleSendMessage] Error:', err);
       setIsError(true);
       setIsLoading(false);
     }
@@ -1096,33 +1097,30 @@ export default function Page() {
 
   // PR 선택 후 계속하기
   const handlePRContinue = async (selectedIds: number[]) => {
-    console.log('[PR 선택] 사용자가 선택:', selectedIds);
-
     setShowPRSelection(false);
-    setIsLoading(true);
-    setCurrentStep('grade'); // PR 선택 후 grade 단계로
+    beginAnswerLoading();
 
     const selectedPRs = selectedIds
-      .map((id) => prList.find((p) => p.prNumber === id) ?? null)
-      .filter(Boolean)
+      .map((id) => prList.find((p) => p.prNumber === id))
+      .filter((pr): pr is PRPayload => pr !== undefined)
       .map((pr) => ({
-        prNumber: (pr as PRPayload).prNumber,
-        repoName: (pr as PRPayload).repoName,
-        owner: (pr as PRPayload).owner,
+        prNumber: pr.prNumber,
+        repoName: pr.repoName,
+        owner: pr.owner,
       }));
 
     try {
       await waitForSSEOpen();
       await resumeChatQuery(sessionId, selectedPRs);
-      console.log('[PR 선택] resume 요청 완료, SSE로 답변 대기 중');
+      // 이후 grade -> generate 단계로 SSE를 통해 진행됨
     } catch (err) {
-      console.error('[PR 선택] resume 실패:', err);
+      console.error('[handlePRContinue] Error:', err);
       setIsError(true);
       setIsLoading(false);
     }
   };
 
-  // 검색어 입력창 style 제어
+  // 입력창 높이 조절
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNewInput(e.target.value);
 
@@ -1133,13 +1131,14 @@ export default function Page() {
     setIsMultiLine(e.target.scrollHeight > 26);
   };
 
-  // 수정 완료 핸들러
+  // 메시지 수정 제출
   const handleSubmitEdit = async (messageId: string, newContent: string) => {
     if (!chatData) return;
 
-    const idx = chatData.messages.findIndex((m: any) => m.id === messageId);
+    const idx = chatData.messages.findIndex((m) => m.id === messageId);
     if (idx === -1) return;
 
+    // 해당 메시지 이후 모두 제거하고 새 메시지 추가
     const trimmed = chatData.messages.slice(0, idx);
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -1148,7 +1147,10 @@ export default function Page() {
       timestamp: new Date().toISOString(),
     };
 
-    const updated: ChatData = { ...chatData, messages: [...trimmed, userMessage] };
+    const updated: ChatData = {
+      ...chatData,
+      messages: [...trimmed, userMessage],
+    };
     setChatData(updated);
     setEditingMessageId(null);
 
@@ -1159,15 +1161,16 @@ export default function Page() {
     try {
       await waitForSSEOpen();
       await sendChatQuery(newContent, sessionId, indexList);
-      console.log('[메시지 수정] 전송 완료, SSE로 답변 대기 중');
     } catch (err) {
-      console.error('[메시지 수정] 전송 실패:', err);
+      console.error('[handleSubmitEdit] Error:', err);
       setIsError(true);
       setIsLoading(false);
     }
   };
 
-  if (!chatData) return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
+  if (!chatData) {
+    return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
+  }
 
   const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
   const currentSources = lastAssistantMessage?.sources || [];
@@ -1182,6 +1185,7 @@ export default function Page() {
             ref={scrollRef}
             className="flex flex-1 flex-col items-center gap-8 overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
           >
+            {/* 날짜 구분선 */}
             <div className="flex w-192.75 items-center justify-center gap-4">
               <div className="border-neutral-4 flex-1 border-t" />
               <span className="text-body-xsmall px-1.5 py-1 text-gray-50">
@@ -1190,7 +1194,8 @@ export default function Page() {
               <div className="border-neutral-4 flex-1 border-t" />
             </div>
 
-            {chatData.messages.map((msg: any) => (
+            {/* 메시지 목록 */}
+            {chatData.messages.map((msg, index) => (
               <div key={msg.id} className="mx-auto flex w-193.25 flex-col gap-6">
                 {msg.role === 'user' ? (
                   <div className="flex flex-col gap-4">
@@ -1215,18 +1220,22 @@ export default function Page() {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    <div className={`mb-3 rounded-xl`}>
+                    {/* 팀스페이스 & 필터 */}
+                    <div className="mb-3 rounded-xl">
                       {!filterOpenMap[msg.id] ? (
                         <div className="relative flex items-center gap-1">
                           <div className="group relative flex items-center gap-1">
                             <div
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setSpaceDropDownOpenMap((prev) => ({ ...prev, [msg.id]: !prev?.[msg.id] }));
+                                setSpaceDropDownOpenMap((prev) => ({
+                                  ...prev,
+                                  [msg.id]: !prev?.[msg.id],
+                                }));
                               }}
                               className={clsx(
                                 'icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1',
-                                spaceDropDownOpenMap?.[msg.id] ? 'bg-neutral-3 rounded-lg' : 'icon-button-only-gray',
+                                spaceDropDownOpenMap?.[msg.id] && 'bg-neutral-3 rounded-lg',
                               )}
                             >
                               <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
@@ -1235,7 +1244,7 @@ export default function Page() {
                               <DropDown
                                 className={clsx(
                                   'text-gray-70 relative bottom-px h-4 w-4 shrink-0',
-                                  spaceDropDownOpenMap?.[msg.id] ? 'rotate-180' : 'bottom-px',
+                                  spaceDropDownOpenMap?.[msg.id] && 'rotate-180',
                                 )}
                               />
                             </div>
@@ -1243,7 +1252,7 @@ export default function Page() {
                               <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
                             </div>
                           </div>
-                          {/* TeamSpace 드롭다운 모달 */}
+
                           {spaceDropDownOpenMap?.[msg.id] && (
                             <div className="absolute top-10.5 z-100">
                               <TeamSpaceModal
@@ -1253,7 +1262,9 @@ export default function Page() {
                               />
                             </div>
                           )}
+
                           <Divider className="text-neutral-4 h-6 w-6 shrink-0" />
+
                           <div className="flex shrink-0 items-center gap-3">
                             <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
                             <button
@@ -1271,7 +1282,10 @@ export default function Page() {
                               <div
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setSpaceDropDownOpenMap((prev) => ({ ...prev, [msg.id]: !prev?.[msg.id] }));
+                                  setSpaceDropDownOpenMap((prev) => ({
+                                    ...prev,
+                                    [msg.id]: !prev?.[msg.id],
+                                  }));
                                 }}
                                 className={clsx(
                                   'flex cursor-pointer items-center gap-1 px-2 py-1',
@@ -1292,7 +1306,7 @@ export default function Page() {
                                 <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
                               </div>
                             </div>
-                            {/* TeamSpace 드롭다운 모달 */}
+
                             {spaceDropDownOpenMap?.[msg.id] && (
                               <div className="absolute top-10.5 z-100">
                                 <TeamSpaceModal
@@ -1303,6 +1317,7 @@ export default function Page() {
                               </div>
                             )}
                           </div>
+
                           <div onClick={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}>
                             <FilterComponent
                               isOpen={filterOpenMap[msg.id]}
@@ -1313,24 +1328,27 @@ export default function Page() {
                       )}
                     </div>
 
+                    {/* 답변 내용 */}
                     {msg.content ? (
                       <>
                         <div className="text-gray-80 prose prose-neutral [&_li::marker]:text-gray-70 max-w-none break-words [&>ol]:list-decimal [&>ol]:pl-5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li:has(input[type='checkbox'])]:list-none [&>ul>li:has(input[type='checkbox'])]:pl-0">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatMarkdownString(msg.content)}</ReactMarkdown>
                         </div>
+
                         <div className="text-body-small text-gray-30">
                           질문과 연관된 {msg.sources?.length || 0}개의 핵심 자료를 선별했어요.
                         </div>
 
                         <AnswerActionButtons
                           icons={icon}
-                          messageIdx={msg.id}
+                          messageIdx={index}
                           feedbackVisibleMap={feedbackVisibleMap}
                           setFeedbackVisibleMap={setFeedbackVisibleMap}
                         />
+
                         {feedbackVisibleMap[msg.id] && (
                           <FeedbackSection
-                            messageIdx={msg.id}
+                            messageIdx={index}
                             feedbackVisibleMap={feedbackVisibleMap}
                             setFeedbackVisibleMap={setFeedbackVisibleMap}
                             feedbackSubmittedMap={feedbackSubmittedMap}
@@ -1341,7 +1359,7 @@ export default function Page() {
                     ) : (
                       <ErrorResponse
                         icons={icon}
-                        messageIdx={msg.id}
+                        messageIdx={index}
                         feedbackVisibleMap={feedbackVisibleMap}
                         setFeedbackVisibleMap={setFeedbackVisibleMap}
                         feedbackSubmittedMap={feedbackSubmittedMap}
@@ -1353,15 +1371,15 @@ export default function Page() {
               </div>
             ))}
 
-            {/* PR 선택 UI - manage_pr_context 단계에서만 표시 */}
-            {showPRSelection && currentStep === 'manage_pr_context' && (
+            {/* PR 선택 화면 (manage_pr_context) */}
+            {showPRSelection && (
               <div className="mx-auto w-193.25">
                 <GithubPRStepSkeleton onContinue={handlePRContinue} prList={prList} />
               </div>
             )}
 
-            {/* 로딩 스켈레톤 - manage_pr_context 외 단계에서만 표시 */}
-            {isLoading && currentStep && currentStep !== 'manage_pr_context' && (
+            {/* 로딩 스켈레톤 */}
+            {isLoading && !showPRSelection && (
               <div className="mx-auto w-193.25">
                 <RagAnswerSkeleton currentStep={currentStep} />
               </div>
@@ -1382,9 +1400,9 @@ export default function Page() {
             )}
           </div>
 
+          {/* 입력 영역 */}
           <div className="w-full flex-none bg-white px-24 pt-4 pb-8">
             <div className="mx-auto w-193.25">
-              {/* 검색 입력창 */}
               <div
                 className={clsx(
                   'border-neutral-4 shadow-rag-bar flex gap-2 border bg-white px-3 py-2.5',
@@ -1423,6 +1441,7 @@ export default function Page() {
                       <span className="text-body-xsmall text-gray-50">필터</span>
                     </div>
                   )}
+
                   {isLoading ? (
                     <button className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full">
                       <Stop className="text-gray-70 relative left-px h-6 w-6" />
@@ -1447,6 +1466,7 @@ export default function Page() {
         </div>
       </div>
 
+      {/* 우측 사이드바 */}
       <div
         className={`border-neutral-3 flex flex-none flex-col border-l bg-white ${
           activeTab === 'source' ? 'w-101.25' : 'w-125'
