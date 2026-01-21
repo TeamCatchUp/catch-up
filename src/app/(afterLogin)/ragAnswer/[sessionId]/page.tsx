@@ -104,6 +104,16 @@ export default function Page() {
   // SSE 메시지 핸들러
   const handleSSEMessage = (notification: RagNotification) => {
     console.log('SSE 메시지 수신: ', notification); // 테스트용
+    console.log('[SSE]', {
+      eventType: notification.type,
+      dataType: notification.data?.type,
+      node: notification.data?.node,
+      msg: notification.data?.message,
+      sessionFromServer: notification.data?.sessionId,
+      sessionFromURL: sessionId,
+      hasResponse: !!notification.data?.response,
+      payloadLen: notification.data?.payload?.length,
+    });
 
     // sessionId 체크
     if (notification.data.sessionId !== sessionId) return;
@@ -116,6 +126,7 @@ export default function Page() {
     switch (notification.type) {
       case 'RAG_IN_PROGRESS':
         if (notification.data.type === 'status') {
+          console.log('[STEP]', 'setCurrentStep ->', notification.data.node);
           setCurrentStep(notification.data.node as RagStepKey);
         }
         break;
