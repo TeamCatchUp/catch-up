@@ -19,7 +19,7 @@ interface ChatSource {
   author: string;
   htmlUrl: string;
 
-  count?: number;
+  sourceIndex: number;
 }
 
 interface PRPayload {

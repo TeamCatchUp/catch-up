@@ -58,7 +58,7 @@ export const normalizeSources = (sources: BackendSource[]): ChatSource[] => {
         date,
         author,
         htmlUrl: s.htmlUrl ?? '',
-        count,
+        sourceIndex: s.index,
       };
     });
 };
