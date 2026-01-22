@@ -337,9 +337,9 @@ export default function Search() {
                   />
                 </SearchOptionPopover>
               </div>
-              <div className="flex h-7 w-7 items-center justify-center gap-2.5 p-0.5">
+              {/* <div className="flex h-7 w-7 items-center justify-center gap-2.5 p-0.5">
                 <IconArrowRight className="h-5 w-5 shrink-0" />
-              </div>
+              </div> */}
             </div>
             {allSelectedChips.length > 0 && (
               <div className="bg-neutral-1 border-neutral-2 flex w-full flex-col gap-2 rounded-xl border p-2">
@@ -363,12 +363,10 @@ export default function Search() {
                         key={`${chip.category}-${chip.id}`}
                         className="border-neutral-5 rounded-rounded flex h-[37px] shrink-0 items-center gap-1 border bg-white p-1.5"
                       >
-                        <div className="border-neutral-3 bg-neutral-1 rounded-rounded flex h-6.25 w-6.25 shrink-0 items-center justify-center border">
-                          <ChipIcon className="text-gray-70 h-4 w-4" />
+                        <div className="rounded-rounded flex h-6.25 w-6.25 shrink-0 items-center justify-center">
+                          <ChipIcon className="text-blue-10 h-4 w-4" />
                         </div>
-
                         <span className="text-body-small text-gray-80 ml-0.5 max-w-30 truncate">{chip.name}</span>
-
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -385,7 +383,7 @@ export default function Search() {
               </div>
             )}
             <div className="flex flex-[1_0_0] flex-col items-start gap-4 self-stretch">
-              {selectedRepoId && currentSuggestions.length > 0 && (
+              {/* {selectedRepoId && currentSuggestions.length > 0 && (
                 <div className="border-neutral-1 flex flex-[1_0_0] flex-col items-start gap-4 self-stretch border-t pt-4">
                   <SearchSuggestion
                     title="레포지토리 맞춤 질문"
@@ -393,7 +391,7 @@ export default function Search() {
                     onItemClick={(question) => setInputValue(question)}
                   />
                 </div>
-              )}
+              )} */}
             </div>
           </div>
         )}
