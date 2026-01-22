@@ -13,7 +13,6 @@ import { formatDate } from 'src/util/formatDate';
 
 interface GithubPRStepSkeletonProps {
   prList: PRPayload[];
-  // onContinue: (selectedIds: number[]) => void;
   onContinue: (selectedPrNumbers: number[]) => void;
   onRefetch?: () => void; // 다시 찾기
 }
@@ -31,11 +30,8 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
   };
 
   const toggleAll = () => {
-    if (selectedPrNumbers.length === prList.length) {
-      setSelectedPrNumbers([]);
-    } else {
-      setSelectedPrNumbers(allPrNumbers);
-    }
+    const isAllSelected = prList.every((pr) => selectedPrNumbers.includes(pr.prNumber));
+    setSelectedPrNumbers(isAllSelected ? [] : allPrNumbers);
   };
 
   const isActive = selectedPrNumbers.length > 0;
@@ -106,8 +102,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
           {/* 선택 리스트 */}
           <div className="flex w-180.75 flex-col gap-4">
             {prList.map((pr, idx) => {
-              const id = idx + 1;
-              const isSelected = selectedPrNumbers.includes(id);
+              const isSelected = selectedPrNumbers.includes(pr.prNumber);
 
               return (
                 <div key={`${pr.owner}/${pr.repoName}#${pr.prNumber}`}>

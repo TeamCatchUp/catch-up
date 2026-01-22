@@ -215,6 +215,8 @@ export default function Page() {
         case 'RAG_INTERRUPT': {
           if (data.node !== 'manage_pr_context' || !data.payload) return;
 
+          console.log('[SSE] RAG_INTERRUPT payload length:', data.payload.length);
+
           setPrList(data.payload);
           setShowPRSelection(true);
           setIsLoading(false);
@@ -436,6 +438,27 @@ export default function Page() {
       await resumeChatQuery(sessionId, selectedPRs);
     } catch (err) {
       console.error('[handlePRContinue] Error:', err);
+      setIsError(true);
+      setIsLoading(false);
+    }
+  };
+
+  const handlePRRefetch = async () => {
+    if (!chatData) return;
+
+    const lastUser = [...chatData.messages].reverse().find((m) => m.role === 'user');
+    const query = lastUser?.content?.trim();
+    if (!query) return;
+
+    console.log('[PR] refetch query:', query);
+
+    beginAnswerLoading(); // PR 화면 다시 닫고 로딩
+
+    try {
+      await waitForSSEOpen();
+      await sendChatQuery(query, sessionId, [...HARD_CODED_INDEX_LIST]);
+    } catch (err) {
+      console.error('[handlePRRefetch] Error: ', err);
       setIsError(true);
       setIsLoading(false);
     }
@@ -689,7 +712,7 @@ export default function Page() {
 
             {showPRSelection && (
               <div className="mx-auto w-193.25">
-                <GithubPRStepSkeleton onContinue={handlePRContinue} prList={prList} />
+                <GithubPRStepSkeleton onContinue={handlePRContinue} prList={prList} onRefetch={handlePRRefetch} />
               </div>
             )}
 
