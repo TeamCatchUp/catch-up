@@ -6,7 +6,7 @@ import DropDownDown from '/public/icons/icon/dropdown_down.svg';
 
 interface RelatedTasksSectionProps {
   type: 'task' | 'subtask';
-  currentTask: Task | undefined;
+  currentTask: JiraTask | undefined;
 }
 
 const RelatedTasksSection = ({ type, currentTask }: RelatedTasksSectionProps) => {

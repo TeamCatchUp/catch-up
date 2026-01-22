@@ -24,12 +24,12 @@ interface DetailedTaskModalProps {
   onClose: () => void;
   data: {
     type: 'task' | 'subtask';
-    taskId: number;
-    subId?: number;
+    taskId: string;
+    subId?: string;
   };
-  tasks: Task[];
-  checkedMap: Record<number, { checked: boolean; subtasks: Record<number, boolean> }>;
-  onToggleCheck: (taskId: number, subId?: number) => void;
+  tasks: JiraTask[];
+  checkedMap: Record<string, { checked: boolean; subtasks: Record<string, boolean> }>;
+  onToggleCheck: (taskId: string, subId?: string) => void;
   onPrev: () => void;
   onNext: () => void;
   disablePrev: boolean;
@@ -99,11 +99,12 @@ const DetailedTaskModal = ({
   };
 
   const handleCheckToggle = () => {
-    if (data.type === 'task') {
-      onToggleCheck(data.taskId);
-    } else {
-      onToggleCheck(data.taskId, data.subId);
-    }
+    // if (data.type === 'task') {
+    //   onToggleCheck(data.taskId);
+    // } else {
+    //   onToggleCheck(data.taskId, data.subId);
+    // }
+    onToggleCheck(data.taskId, data.type === 'subtask' ? data.subId : undefined);
   };
 
   return (

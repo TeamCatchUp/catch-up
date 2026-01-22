@@ -16,14 +16,14 @@ interface SelectionBarModalProps {
   onClose: () => void;
   onClearAll: () => void;
   selectedTasks: Array<{
-    taskId: number;
+    taskId: string;
     taskTitle: string;
     taskChecked: boolean;
-    subtasks: Array<{ id: number; title: string }>;
+    subtasks: Array<{ id: string; title: string }>;
   }>;
   totalCheckedCount: number;
-  onTaskToggle: (taskId: number) => void;
-  onSubtaskToggle: (taskId: number, subId: number) => void;
+  onTaskToggle: (taskId: string) => void;
+  onSubtaskToggle: (taskId: string, subId: string) => void;
 }
 
 const SelectionBarModal = ({
@@ -34,12 +34,12 @@ const SelectionBarModal = ({
   onTaskToggle,
   onSubtaskToggle,
 }: SelectionBarModalProps) => {
-  const [expandedTasks, setExpandedTasks] = useState<Record<number, boolean>>(
+  const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>(
     Object.fromEntries(selectedTasks.map((task) => [task.taskId, true])),
   );
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  const toggleTaskExpansion = (taskId: number) => {
+  const toggleTaskExpansion = (taskId: string) => {
     setExpandedTasks((prev) => ({ ...prev, [taskId]: !prev[taskId] }));
   };
 
