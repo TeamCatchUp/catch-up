@@ -231,6 +231,7 @@ export default function Page() {
             data.relatedJiraIssues?.[0]?.sourceType,
             typeof data.relatedJiraIssues?.[0]?.sourceType,
           );
+          console.log('[SSE RAW JSON]', JSON.stringify(notification));
           console.log('normalized tasks', normalizeRelatedJiraIssues(data.relatedJiraIssues ?? []));
 
           // 중복 처리 방지
