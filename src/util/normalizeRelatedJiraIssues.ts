@@ -1,7 +1,7 @@
 const safeSummary = (s?: string) => (s ?? '').trim();
 
 export const normalizeRelatedJiraIssues = (issues: BackendSource[] = []): JiraTask[] => {
-  const jiraOnly = (issues ?? []).filter((i) => i.sourceType === 3);
+  const jiraOnly = (issues ?? []).filter((i) => Number(i.sourceType === 3));
 
   // parentKey 有 (하위업무)
   const children = jiraOnly.filter((i) => !!i.parentKey);
