@@ -82,8 +82,11 @@ export default function Page() {
 
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: string]: boolean }>({});
-  const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: string]: boolean }>({});
+  // const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: string]: boolean }>({});
+  // const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: string]: boolean }>({});
+  const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<Record<string, boolean>>({});
+  const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<Record<string, boolean>>({});
+
   const [filterOpenMap, setFilterOpenMap] = useState<Record<string, boolean>>({});
   const [spaceDropDownOpenMap, setSpaceDropDownOpenMap] = useState<Record<string, boolean>>({});
 
@@ -680,14 +683,14 @@ export default function Page() {
 
                         <AnswerActionButtons
                           icons={icon}
-                          messageIdx={index}
+                          messageId={msg.id}
                           feedbackVisibleMap={feedbackVisibleMap}
                           setFeedbackVisibleMap={setFeedbackVisibleMap}
                         />
 
                         {feedbackVisibleMap[msg.id] && (
                           <FeedbackSection
-                            messageIdx={index}
+                            messageId={msg.id}
                             feedbackVisibleMap={feedbackVisibleMap}
                             setFeedbackVisibleMap={setFeedbackVisibleMap}
                             feedbackSubmittedMap={feedbackSubmittedMap}
@@ -698,7 +701,7 @@ export default function Page() {
                     ) : (
                       <ErrorResponse
                         icons={icon}
-                        messageIdx={index}
+                        messageId={`error_${sessionId}`}
                         feedbackVisibleMap={feedbackVisibleMap}
                         setFeedbackVisibleMap={setFeedbackVisibleMap}
                         feedbackSubmittedMap={feedbackSubmittedMap}
@@ -726,7 +729,7 @@ export default function Page() {
               <div className="mx-auto w-193.25 pb-10">
                 <ErrorResponse
                   icons={icon}
-                  messageIdx={chatData.messages.length}
+                  messageId={`error_${sessionId}`}
                   feedbackVisibleMap={feedbackVisibleMap}
                   setFeedbackVisibleMap={setFeedbackVisibleMap}
                   feedbackSubmittedMap={feedbackSubmittedMap}
