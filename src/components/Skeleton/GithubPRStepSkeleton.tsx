@@ -41,6 +41,15 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
     });
   }, [selectedIds]);
 
+  const handleContinue = () => {
+    // id -> prNumber로 변환하여 넘김
+    const selectedPrNumbers = selectedIds
+      .map((id) => prList[id - 1]?.prNumber)
+      .filter((v): v is number => typeof v === 'number');
+
+    onContinue(selectedPrNumbers);
+  };
+
   return (
     <>
       <div className="bg-rag-github-pr-mcp flex flex-col gap-8 rounded-3xl px-6 py-5">
@@ -50,7 +59,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
             <SearchData />
             <span className="text-heading-large text-gray-90">잠시만요! 정확한 답변을 위해 확인이 필요해요.</span>
             <button
-              // onClick={() => onContinue([])}
+              onClick={() => onContinue([])}
               className="text-button-primary-blue flex cursor-pointer items-center gap-0.5 px-1.5 py-1"
             >
               <span className="text-body-small text-blue-55">건너뛰기</span>
@@ -82,7 +91,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
             </div>
             <button
               disabled={!isActive}
-              onClick={() => onContinue(selectedIds)}
+              onClick={handleContinue}
               className={clsx(
                 'flex h-9 w-24.75 gap-1 rounded-lg px-2.5 py-1.5 text-white',
                 isActive
@@ -105,6 +114,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
                   <div className="flex h-28.75 w-full gap-6">
                     <div className="flex h-28.75 items-center">
                       <button
+                        // onClick={() => toggleSelect(pr.prNumber)}
                         onClick={() => toggleSelect(id)}
                         className={clsx(
                           'flex h-8.5 w-8.5 cursor-pointer items-center justify-center rounded-lg border',
@@ -115,6 +125,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
                       </button>
                     </div>
                     <div
+                      // onClick={() => toggleSelect(pr.prNumber)}
                       onClick={() => toggleSelect(id)}
                       className={clsx(
                         'flex h-28.75 w-166.25 cursor-pointer flex-col gap-1.5 rounded-2xl border bg-white px-5 py-4',

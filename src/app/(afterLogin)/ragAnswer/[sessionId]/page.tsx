@@ -419,7 +419,7 @@ export default function Page() {
     beginAnswerLoading();
 
     const selectedPRs = selectedIds
-      .map((id) => prList.find((p) => p.prNumber === id))
+      .map((prNumber) => prList.find((p) => p.prNumber === prNumber))
       .filter((pr): pr is PRPayload => pr !== undefined)
       .map((pr) => ({
         prNumber: pr.prNumber,
