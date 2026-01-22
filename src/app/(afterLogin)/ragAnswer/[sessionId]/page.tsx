@@ -59,6 +59,9 @@ const NODE_TO_UI_STEP: Record<string, RagUIStepKey | null> = {
   chitchat: 'generate',
 };
 
+// test 하드코딩
+const HARD_CODED_INDEX_LIST = ['CatchUp_BE_develop', 'CatchUp_BE_develop_pr', 'cu_jira_issue'] as const;
+
 export default function Page() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -336,7 +339,8 @@ export default function Page() {
   const fetchFirstAnswer = async (query: string) => {
     beginAnswerLoading();
 
-    const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
+    // const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
+    const indexList = [...HARD_CODED_INDEX_LIST];
 
     const initialData: ChatData = {
       sessionId,
@@ -378,7 +382,8 @@ export default function Page() {
   const handleSendMessage = async () => {
     if (!newInput.trim() || isLoading || !chatData) return;
 
-    const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
+    // const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
+    const indexList = [...HARD_CODED_INDEX_LIST];
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -465,7 +470,8 @@ export default function Page() {
 
     beginAnswerLoading();
 
-    const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
+    // const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
+    const indexList = [...HARD_CODED_INDEX_LIST];
 
     try {
       await waitForSSEOpen();
