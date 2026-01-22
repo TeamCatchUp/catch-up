@@ -24,6 +24,7 @@ interface PRPayload {
   repoName: string;
   summary: string;
   owner: string;
+  createdAt: number;
 }
 
 interface Message {

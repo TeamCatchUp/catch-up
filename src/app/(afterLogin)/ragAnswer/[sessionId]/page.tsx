@@ -200,14 +200,6 @@ export default function Page() {
           console.log('[SSE] Step update:', data.node, '->', mappedStep);
           setCurrentStep(mappedStep);
 
-          // // retrieve 단계에서 멈추는 문제 디버깅
-          // if (data.node === 'retrieve') {
-          //   console.warn('[SSE] retrieve 단계 진입 - 다음은 rerank여야 함');
-          //   setTimeout(() => {
-          //     console.error('[SSE] retrieve 이후 30초간 이벤트 없음! 백엔드 확인 필요');
-          //   }, 30000);
-          // }
-
           break;
         }
 
@@ -277,7 +269,7 @@ export default function Page() {
       () => {
         console.log('[SSE] 연결');
         setTimeout(() => setSseReady(true), 1000);
-        console.log('[SSE] 연결 1초 after');
+        // console.log('[SSE] 연결 1초 after');
       },
     );
 
@@ -290,31 +282,6 @@ export default function Page() {
       setSseReady(false);
     };
   }, [sessionId]);
-
-  //   const handleSSEMessageRef = useRef<((notification: RagNotification) => void) | null>(null);
-
-  // useEffect(() => {
-  //   handleSSEMessageRef.current = handleSSEMessage;
-  // }, [handleSSEMessage]);
-
-  // useEffect(() => {
-  //   if (sseRef.current?.readyState === EventSource.OPEN) {
-  //     return; // 이미 연결
-  //   }
-
-  //   const sse = createSSEConection(
-  //     (notification) => handleSSEMessageRef.current?.(notification),
-  //     onError,
-  //     onOpen
-  //   );
-
-  //   sseRef.current = sse;
-
-  //   return () => {
-  //     sseRef.current?.close();
-  //     sseRef.current = null;
-  //   };
-  // }, [sessionId]);
 
   // 자동 하단 스크롤
   useEffect(() => {
@@ -375,9 +342,8 @@ export default function Page() {
       await waitForSSEOpen();
       await sendChatQuery(query, sessionId, indexList);
 
-      // 30초 타임아웃 추가
+      // 30초 타임아웃
       const timeout = setTimeout(() => {
-        // console.error('[TIMEOUT] No RAG_DONE received within 30 seconds');
         if (isLoading) {
           setIsError(true);
           setIsLoading(false);
