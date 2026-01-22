@@ -9,6 +9,7 @@ import CheckCircle from '/public/icons/icon/check_circle.svg';
 import Rotate from '/public/icons/icon/rotate.svg';
 import ArrowForward from '/public/icons/icon/arrow_forward.svg';
 import Check from '/public/icons/icon/check.svg';
+import { formatDate } from 'src/util/formatDate';
 
 interface GithubPRStepSkeletonProps {
   prList: PRPayload[];
@@ -136,9 +137,9 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
                       <div className="text-body-xsmall flex w-156 items-center gap-1.5 text-gray-50">
                         <span className="max-w-95 truncate">{pr.repoName}</span>
                         <div className="bg-neutral-3 h-3.75 w-px" />
-                        <span className="">2025.01.19</span>
+                        <span>{formatDate(pr.createdAt)}</span>
                         <div className="bg-neutral-3 h-3.75 w-px" />
-                        <span className="">{pr.owner}</span>
+                        <span>{pr.owner}</span>
                       </div>
                     </div>
                   </div>

@@ -46,18 +46,3 @@ export const logout = async () => {
     console.error('로그아웃 실패:', err);
   }
 };
-
-// 서버 로그아웃 처리 안 됨 (500 에러)
-// import api from '@/api/axios';
-// import { useUserStore } from '@/store/userStore';
-
-// export const logout = async () => {
-//   try {
-//     await api.post('/api/auth/logout');
-//   } catch (err) {
-//     console.error('로그아웃 실패 (서버):', err);
-//   } finally {
-//     useUserStore.getState().clearUser();
-//     window.location.href = '/login';
-//   }
-// };

@@ -35,6 +35,7 @@ import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
 
 import { useParams, useSearchParams } from 'next/navigation';
 import { createSSEConection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
+import { normalizeSources } from '@/util/normalizeRagSources';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -116,7 +117,7 @@ export default function Page() {
   }, []);
 
   const appendAssistantAnswer = useCallback(
-    (answer: string, sources: SourceResponse[] = []) => {
+    (answer: string, sources: BackendSource[] = []) => {
       setChatData((prev) => {
         if (!prev) return prev;
 
@@ -127,11 +128,13 @@ export default function Page() {
           return prev;
         }
 
+        const uiSources = normalizeSources(sources);
+
         const assistantMessage: Message = {
           id: crypto.randomUUID(),
           role: 'assistant',
           content: answer,
-          sources,
+          sources: uiSources,
           timestamp: new Date().toISOString(),
         };
 
@@ -200,14 +203,6 @@ export default function Page() {
           console.log('[SSE] Step update:', data.node, '->', mappedStep);
           setCurrentStep(mappedStep);
 
-          // retrieve 단계에서 멈추는 문제 디버깅
-          if (data.node === 'retrieve') {
-            console.warn('[SSE] retrieve 단계 진입 - 다음은 rerank여야 함');
-            setTimeout(() => {
-              console.error('[SSE] retrieve 이후 30초간 이벤트 없음! 백엔드 확인 필요');
-            }, 30000);
-          }
-
           break;
         }
 
@@ -256,11 +251,11 @@ export default function Page() {
 
   // SSE 연결 초기화 - sessionId가 변경될 때만 재연결
   useEffect(() => {
-    console.log('[SSE] Initializing for session:', sessionId);
+    console.log('[SSE] 세션 초기 연결:', sessionId);
 
     // 이미 연결되어 있으면 스킵
     if (sseRef.current?.readyState === EventSource.OPEN) {
-      console.log('[SSE] Already connected, skipping');
+      console.log('[SSE] 이미 연결됨');
       return;
     }
 
@@ -275,20 +270,21 @@ export default function Page() {
         }
       },
       () => {
-        console.log('[SSE] Connected');
-        setSseReady(true);
+        console.log('[SSE] 연결');
+        setTimeout(() => setSseReady(true), 1000);
+        // console.log('[SSE] 연결 1초 after');
       },
     );
 
     sseRef.current = sse;
 
     return () => {
-      console.log('[SSE] Cleanup');
+      console.log('[SSE] 클린업');
       sseRef.current?.close();
       sseRef.current = null;
       setSseReady(false);
     };
-  }, [sessionId, handleSSEMessage]);
+  }, [sessionId]);
 
   // 자동 하단 스크롤
   useEffect(() => {
@@ -349,9 +345,8 @@ export default function Page() {
       await waitForSSEOpen();
       await sendChatQuery(query, sessionId, indexList);
 
-      // 30초 타임아웃 추가
+      // 30초 타임아웃
       const timeout = setTimeout(() => {
-        console.error('[TIMEOUT] No RAG_DONE received within 30 seconds');
         if (isLoading) {
           setIsError(true);
           setIsLoading(false);
