@@ -225,6 +225,13 @@ export default function Page() {
             sourcesCount: data.response?.sources?.length,
             alreadyProcessing: processingDoneRef.current,
           });
+          console.log('relatedJiraIssues len', data.relatedJiraIssues?.length);
+          console.log(
+            'sample sourceType',
+            data.relatedJiraIssues?.[0]?.sourceType,
+            typeof data.relatedJiraIssues?.[0]?.sourceType,
+          );
+          console.log('normalized tasks', normalizeRelatedJiraIssues(data.relatedJiraIssues ?? []));
 
           // 중복 처리 방지
           if (processingDoneRef.current) {
