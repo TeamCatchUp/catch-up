@@ -82,8 +82,6 @@ export default function Page() {
 
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  // const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: string]: boolean }>({});
-  // const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: string]: boolean }>({});
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<Record<string, boolean>>({});
   const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<Record<string, boolean>>({});
 
@@ -524,7 +522,7 @@ export default function Page() {
   const testContent = `
 \`\`\`java
 @Transactional
-public ClientChatResponse checkAndIncrementUsageLimit(Long memberId, UUID sessionId) {
+public ClientChatResponse checkAndIncrementUsageLimit(Long membermembermembermemberId, UUID sessionsessionsessionsessionsessionsessionId) {
     ChatUsageLimit usageLimit = chatUsageLimitRepository
         .findByMemberIdAndUsageDate(memberId, LocalDate.now())
         .orElse(null);
