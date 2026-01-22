@@ -60,7 +60,7 @@ const NODE_TO_UI_STEP: Record<string, RagUIStepKey | null> = {
 };
 
 // test 하드코딩
-const HARD_CODED_INDEX_LIST = ['CatchUp_BE_develop', 'CatchUp_BE_develop_pr', 'cu_jira_issue'] as const;
+const HARD_CODED_INDEX_LIST = ['CatchUp_BE_develop_code', 'CatchUp_BE_develop_pr', 'cu_jira_issue'] as const;
 
 export default function Page() {
   const params = useParams();
