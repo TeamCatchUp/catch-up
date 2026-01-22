@@ -314,7 +314,7 @@ export default function Page() {
         behavior: 'smooth',
       });
     }
-  }, [chatData?.messages, isLoading, showPRSelection, currentStep, filterOpenMap]);
+  }, [chatData?.messages, isLoading, showPRSelection, currentStep]);
 
   // 초기 데이터 로드
   useEffect(() => {
@@ -519,29 +519,6 @@ export default function Page() {
   const currentSources = lastAssistantMessage?.sources || [];
   const currentDetailedTasks = lastAssistantMessage?.detailedTasks || [];
 
-  const testContent = `
-\`\`\`java
-@Transactional
-public ClientChatResponse checkAndIncrementUsageLimit(Long membermembermembermemberId, UUID sessionsessionsessionsessionsessionsessionId) {
-    ChatUsageLimit usageLimit = chatUsageLimitRepository
-        .findByMemberIdAndUsageDate(memberId, LocalDate.now())
-        .orElse(null);
-
-    if (usageLimit != null && usageLimit.getUsageCount() >= DAILY_CHAT_LIMIT) {
-        return ClientChatResponse.of(sessionId, "일일 최대 채팅 횟수를 초과했습니다");
-    }
-
-    if (usageLimit == null) {
-        usageLimit = ChatUsageLimit.createNewUsage(memberId);
-    } else {
-        usageLimit.incrementUsageCount();
-    }
-
-    chatUsageLimitRepository.save(usageLimit);
-    return null;
-}
-\`\`\`
-`;
   return (
     <div className="flex h-screen w-full overflow-hidden bg-white">
       <div className="flex min-w-0 flex-1 flex-col">
@@ -701,8 +678,7 @@ public ClientChatResponse checkAndIncrementUsageLimit(Long membermembermembermem
                             '[&_pre]:bg-neutral-2 [&_pre]:rounded-xl [&_pre]:p-4',
                           )}
                         >
-                          {/* <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatMarkdownString(msg.content)}</ReactMarkdown> */}
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{testContent}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatMarkdownString(msg.content)}</ReactMarkdown>
                         </div>
 
                         <div className="text-body-small text-gray-30">
