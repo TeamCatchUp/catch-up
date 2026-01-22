@@ -36,6 +36,7 @@ import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
 import { useParams, useSearchParams } from 'next/navigation';
 import { createSSEConection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
 import { normalizeSources } from '@/util/normalizeRagSources';
+import { normalizeRelatedJiraIssues } from '@/util/normalizeRelatedJiraIssues';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -117,7 +118,7 @@ export default function Page() {
   }, []);
 
   const appendAssistantAnswer = useCallback(
-    (answer: string, sources: BackendSource[] = []) => {
+    (answer: string, sources: BackendSource[] = [], relatedJiraIssues: BackendSource[] = []) => {
       setChatData((prev) => {
         if (!prev) return prev;
 
@@ -129,12 +130,14 @@ export default function Page() {
         }
 
         const uiSources = normalizeSources(sources);
+        const detailedTasks = normalizeRelatedJiraIssues(relatedJiraIssues);
 
         const assistantMessage: Message = {
           id: crypto.randomUUID(),
           role: 'assistant',
           content: answer,
           sources: uiSources,
+          detailedTasks,
           timestamp: new Date().toISOString(),
         };
 
@@ -238,7 +241,9 @@ export default function Page() {
             return;
           }
 
-          appendAssistantAnswer(response.answer, response.sources || []);
+          const related = data.relatedJiraIssues ?? [];
+
+          appendAssistantAnswer(response.answer, response.sources || [], related);
           break;
         }
 
@@ -470,6 +475,7 @@ export default function Page() {
 
   const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
   const currentSources = lastAssistantMessage?.sources || [];
+  const currentDetailedTasks = lastAssistantMessage?.detailedTasks || [];
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-white">
@@ -764,7 +770,7 @@ export default function Page() {
           {activeTab === 'source' && (
             <SourceComponent sources={currentSources} isLoading={isLoading} isError={isError} />
           )}
-          {activeTab === 'detail' && <DetailedTasksComponent />}
+          {activeTab === 'detail' && <DetailedTasksComponent tasks={currentDetailedTasks} isLoading={isLoading} />}
         </div>
       </div>
     </div>

@@ -107,7 +107,7 @@ const SourceComponent = ({ sources, isLoading, isError }: Props) => {
         ) : (
           <div className="flex flex-col gap-2">
             {citedSources.map((source, idx) => (
-              <SourceCardsComponent key={source.id} source={source} showCount count={idx + 1} />
+              <SourceCardsComponent key={source.id} source={source} showCount count={source.sourceIndex} />
             ))}
 
             {/* divider */}

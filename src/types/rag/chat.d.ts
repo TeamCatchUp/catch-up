@@ -19,7 +19,7 @@ interface ChatSource {
   author: string;
   htmlUrl: string;
 
-  count?: number;
+  sourceIndex: number;
 }
 
 interface PRPayload {
@@ -36,6 +36,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   sources?: ChatSource[];
+  detailedTasks?: JiraTask[];
   timestamp: string;
 }
 
@@ -87,6 +88,7 @@ interface RagNotificationData {
     answer: string;
     sources: BackendSource[];
   };
+  relatedJiraIssues?: BackendSource[];
 }
 
 interface RagNotification {
@@ -94,4 +96,19 @@ interface RagNotification {
   type: 'CONNECT' | 'RAG_IN_PROGRESS' | 'RAG_INTERRUPT' | 'RAG_DONE';
   message: string | null;
   data: RagNotificationData | null;
+}
+
+interface JiraSubTask {
+  id: string;
+  title: string;
+  issueKey?: string;
+  htmlUrl?: string;
+}
+
+interface JiraTask {
+  id: string;
+  title: string;
+  parentKey?: string;
+  parentSummary?: string;
+  subtasks: JiraSubTask[];
 }
