@@ -7,15 +7,19 @@ interface SourceResponse {
 }
 
 interface ChatSource {
-  id: number;
-  sourceType: SourceResponse['sourceType'];
+  id: string;
+  // sourceType: SourceResponse['sourceType'];
+  sourceType: 'code' | 'pr' | 'github_issue' | 'jira';
+  isCited: boolean;
+
+  repo: string; // 아이콘 옆 문구
   title: string;
-  subtitle: string;
   content: string;
   date: string;
+  author: string;
   htmlUrl: string;
-  // 임시
-  count: number;
+
+  count?: number;
 }
 
 interface PRPayload {
@@ -31,7 +35,7 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  sources?: any[];
+  sources?: ChatSource[];
   timestamp: string;
 }
 
@@ -81,7 +85,7 @@ interface RagNotificationData {
   response?: {
     sessionId: string;
     answer: string;
-    sources: SourceResponse[];
+    sources: BackendSource[];
   };
 }
 

@@ -35,6 +35,7 @@ import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
 
 import { useParams, useSearchParams } from 'next/navigation';
 import { createSSEConection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
+import { normalizeSources } from '@/util/normalizeRagSources';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -116,7 +117,7 @@ export default function Page() {
   }, []);
 
   const appendAssistantAnswer = useCallback(
-    (answer: string, sources: SourceResponse[] = []) => {
+    (answer: string, sources: BackendSource[] = []) => {
       setChatData((prev) => {
         if (!prev) return prev;
 
@@ -127,11 +128,13 @@ export default function Page() {
           return prev;
         }
 
+        const uiSources = normalizeSources(sources);
+
         const assistantMessage: Message = {
           id: crypto.randomUUID(),
           role: 'assistant',
           content: answer,
-          sources,
+          sources: uiSources,
           timestamp: new Date().toISOString(),
         };
 

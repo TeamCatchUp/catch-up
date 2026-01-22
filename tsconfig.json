@@ -31,7 +31,8 @@
       "@/assets/*": ["src/assets/*"],
       "@/apis/*": ["src/apis/*"],
       "@/store/*": ["src/store/*"],
-      "@/api/*": ["src/api/*"]
+      "@/api/*": ["src/api/*"],
+      "@/util/*": ["src/util/*"]
     }
   },
   "include": [
