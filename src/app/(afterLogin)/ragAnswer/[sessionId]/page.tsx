@@ -414,11 +414,13 @@ export default function Page() {
     }
   };
 
-  const handlePRContinue = async (selectedIds: number[]) => {
+  const handlePRContinue = async (selectedPrNumbers: number[]) => {
+    console.log('[PR CONTINUE] selectedPrNumbers:', selectedPrNumbers);
+
     setShowPRSelection(false);
     beginAnswerLoading();
 
-    const selectedPRs = selectedIds
+    const selectedPRs = selectedPrNumbers
       .map((prNumber) => prList.find((p) => p.prNumber === prNumber))
       .filter((pr): pr is PRPayload => pr !== undefined)
       .map((pr) => ({
@@ -426,6 +428,8 @@ export default function Page() {
         repoName: pr.repoName,
         owner: pr.owner,
       }));
+
+    console.log('[PR CONTINUE] payload to /api/chat/resume:', selectedPRs);
 
     try {
       await waitForSSEOpen();

@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import GithubIcon from '/public/icons/logo/GitHub.svg';
 import SearchData from '/public/icons/icon/searchData.svg';
 import FastForward from '/public/icons/icon/fast_forward.svg';
@@ -13,42 +13,39 @@ import { formatDate } from 'src/util/formatDate';
 
 interface GithubPRStepSkeletonProps {
   prList: PRPayload[];
-  onContinue: (selectedIds: number[]) => void;
+  // onContinue: (selectedIds: number[]) => void;
+  onContinue: (selectedPrNumbers: number[]) => void;
+  onRefetch?: () => void; // 다시 찾기
 }
 
-const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps) => {
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSkeletonProps) => {
+  const [selectedPrNumbers, setSelectedPrNumbers] = useState<number[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const toggleSelect = (id: number) => {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
+  const allPrNumbers = useMemo(() => prList.map((pr) => pr.prNumber), [prList]);
+
+  const toggleSelect = (prNumber: number) => {
+    setSelectedPrNumbers((prev) =>
+      prev.includes(prNumber) ? prev.filter((v) => v !== prNumber) : [...prev, prNumber],
+    );
   };
 
   const toggleAll = () => {
-    if (selectedIds.length === prList.length) {
-      setSelectedIds([]);
+    if (selectedPrNumbers.length === prList.length) {
+      setSelectedPrNumbers([]);
     } else {
-      setSelectedIds(prList.map((_, idx) => idx + 1));
+      setSelectedPrNumbers(allPrNumbers);
     }
   };
 
-  const isActive = selectedIds.length > 0;
+  const isActive = selectedPrNumbers.length > 0;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
       behavior: 'smooth',
       block: 'nearest',
     });
-  }, [selectedIds]);
-
-  const handleContinue = () => {
-    // id -> prNumber로 변환하여 넘김
-    const selectedPrNumbers = selectedIds
-      .map((id) => prList[id - 1]?.prNumber)
-      .filter((v): v is number => typeof v === 'number');
-
-    onContinue(selectedPrNumbers);
-  };
+  }, [selectedPrNumbers]);
 
   return (
     <>
@@ -84,14 +81,17 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
                 <CheckCircle className="text-gray-70 relative bottom-px h-5 w-5 flex-shrink-0" />
                 <span className="text-body-xsmall text-gray-80 flex-shrink-0">전체 선택</span>
               </button>
-              <button className="icon-button-outline-gray flex h-7.5 cursor-pointer items-center gap-1 px-2 py-1">
+              <button
+                onClick={() => onRefetch?.()}
+                className="icon-button-outline-gray flex h-7.5 cursor-pointer items-center gap-1 px-2 py-1"
+              >
                 <Rotate className="text-gray-70 relative bottom-px h-5 w-5 flex-shrink-0" />
                 <span className="text-body-xsmall text-gray-80 flex-shrink-0">다시 찾기</span>
               </button>
             </div>
             <button
               disabled={!isActive}
-              onClick={handleContinue}
+              onClick={() => onContinue(selectedPrNumbers)}
               className={clsx(
                 'flex h-9 w-24.75 gap-1 rounded-lg px-2.5 py-1.5 text-white',
                 isActive
@@ -107,15 +107,14 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
           <div className="flex w-180.75 flex-col gap-4">
             {prList.map((pr, idx) => {
               const id = idx + 1;
-              const isSelected = selectedIds.includes(id);
+              const isSelected = selectedPrNumbers.includes(id);
 
               return (
-                <div key={id}>
+                <div key={`${pr.owner}/${pr.repoName}#${pr.prNumber}`}>
                   <div className="flex h-28.75 w-full gap-6">
                     <div className="flex h-28.75 items-center">
                       <button
-                        // onClick={() => toggleSelect(pr.prNumber)}
-                        onClick={() => toggleSelect(id)}
+                        onClick={() => toggleSelect(pr.prNumber)}
                         className={clsx(
                           'flex h-8.5 w-8.5 cursor-pointer items-center justify-center rounded-lg border',
                           isSelected ? 'bg-blue-1 border-blue-45' : 'border-neutral-3 bg-neutral-1',
@@ -125,8 +124,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
                       </button>
                     </div>
                     <div
-                      // onClick={() => toggleSelect(pr.prNumber)}
-                      onClick={() => toggleSelect(id)}
+                      onClick={() => toggleSelect(pr.prNumber)}
                       className={clsx(
                         'flex h-28.75 w-166.25 cursor-pointer flex-col gap-1.5 rounded-2xl border bg-white px-5 py-4',
                         isSelected ? 'border-blue-30' : 'border-neutral-2',
