@@ -30,8 +30,12 @@ const searchOptions = [
   },
 ];
 
-const DetailedTasksComponent = () => {
-  const [isLoading, setIsLoading] = useState(false);
+interface DetailedTasksComponentProps {
+  tasks: JiraTask[];
+  isLoading?: boolean;
+}
+
+const DetailedTasksComponent = ({ tasks, isLoading }: DetailedTasksComponentProps) => {
   const [selectedOptions, setSelectedOptions] = useState<Set<string>>(new Set());
 
   const toggleOption = (key: string) => {
@@ -75,7 +79,7 @@ const DetailedTasksComponent = () => {
       </div>
 
       <div className="flex flex-col gap-2">
-        {isLoading ? <RagDetailedTasksSkeleton /> : <DetailedTasksCardComponent />}
+        {isLoading ? <RagDetailedTasksSkeleton /> : <DetailedTasksCardComponent tasks={tasks} />}
       </div>
     </div>
   );

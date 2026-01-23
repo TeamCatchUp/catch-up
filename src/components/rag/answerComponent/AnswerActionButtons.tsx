@@ -2,7 +2,7 @@ import clsx from 'clsx';
 
 const AnswerActionButtons = ({
   icons,
-  messageIdx,
+  messageId,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
 }: AnswerActionButtonsProps) => {
@@ -10,24 +10,7 @@ const AnswerActionButtons = ({
     <div className="flex gap-1">
       {icons.map((item, i) => {
         const isThumbsDown = item.name === 'ThumbsDown';
-        // const activeClass = isThumbsDown && showFeedback ? 'bg-neutral-3 border-neutral-5' : '';
-        // return (
-        //   <button
-        //     key={i}
-        //     onClick={() => {
-        //       if (isThumbsDown) {
-        //         setFeedbackVisibleMap((prev) => ({
-        //           ...prev,
-        //           [idx]: !prev[idx],
-        //         }));
-        //       }
-        //     }}
-        //     className={`icon-button-only-gray cursor-pointer p-1.5 ${activeClass}`}
-        //   >
-        //     <item.icon className="h-6 w-6 text-gray-50" />
-        //   </button>
-        // );
-        const isActive = isThumbsDown && feedbackVisibleMap[messageIdx];
+        const isActive = isThumbsDown && feedbackVisibleMap[messageId];
 
         return (
           <button
@@ -36,7 +19,7 @@ const AnswerActionButtons = ({
               if (isThumbsDown) {
                 setFeedbackVisibleMap((prev) => ({
                   ...prev,
-                  [messageIdx]: !prev[messageIdx],
+                  [messageId]: !prev[messageId],
                 }));
               }
             }}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import HomeTopNavbar from '@/components/home/topNavbar/TopNavbar';
+import TopNavbar from '@/components/common/topNavbar/TopNavbar';
 import HowToUse from '@/components/home/cardComponents/HowToUse';
 import LinkTool from '@/components/home/cardComponents/LinkTool';
 import TaskRecentlyChecked from '@/components/home/cardComponents/TaskRecentlyChecked';
@@ -13,7 +13,7 @@ export default function Home() {
 
   return (
     <div className="bg-home-gradient flex flex-col">
-      <HomeTopNavbar />
+      <TopNavbar pageType="home" />
       <Search />
       <div className="flex flex-col items-center gap-16 px-16 pt-10 pb-30">
         <TaskRecentlyChecked onClickCard={setSelectedTask} />
