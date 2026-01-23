@@ -550,9 +550,18 @@ export default function Page() {
                     ) : (
                       <div className="group relative max-w-full">
                         <span className="text-heading-xlarge text-gray-70 mr-5">{msg.content}</span>
-                        <button
+                        {/* <button
                           onClick={() => setEditingMessageId(msg.id)}
                           className="border-neutral-3 box-button-outline-gray inline-flex translate-y-1 cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100"
+                        > */}
+                        <button
+                          onClick={() => setEditingMessageId(msg.id)}
+                          className={clsx(
+                            'border-neutral-3 box-button-outline-gray',
+                            'hidden',
+                            'group-hover:inline-flex',
+                            'translate-y-1 cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1',
+                          )}
                         >
                           <EditPencil className="text-gray-70 h-5 w-5" />
                           <span className="text-body-xsmall text-gray-80 whitespace-nowrap">수정하기</span>
