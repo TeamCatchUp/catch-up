@@ -78,7 +78,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
                 <span className="text-body-xsmall text-gray-80 flex-shrink-0">전체 선택</span>
               </button>
               <button
-                onClick={() => onRefetch?.()}
+                // onClick={() => onRefetch?.()}
                 className="icon-button-outline-gray flex h-7.5 cursor-pointer items-center gap-1 px-2 py-1"
               >
                 <Rotate className="text-gray-70 relative bottom-px h-5 w-5 flex-shrink-0" />
@@ -95,8 +95,8 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
                   : 'bg-blue-10',
               )}
             >
-              <span className="text-heading-small relative top-px">진행하기</span>
-              <ArrowForward className="h-6 w-6" />
+              <span className="text-heading-small relative top-px whitespace-nowrap">진행하기</span>
+              <ArrowForward className="h-6 w-6 shrink-0" />
             </button>
           </div>
           {/* 선택 리스트 */}
