@@ -10,7 +10,6 @@ import Task from '/public/icons/icon/task.svg';
 import Edit from '/public/icons/icon/edit_square.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import ToolTip from '@/components/common/ToolTip';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface SelectionBarModalProps {
   onClose: () => void;
@@ -110,8 +109,8 @@ const SelectionBarModal = ({
                           <span className="h-4 w-4">
                             <DropDownDown
                               className={clsx(
-                                'relative bottom-px flex text-blue-50 transition-transform',
-                                isExpanded && 'relative top-[0.5px] rotate-180',
+                                'flex text-blue-50 transition-transform',
+                                isExpanded ? 'relative bottom-px rotate-180' : 'relative bottom-0.5',
                               )}
                             />
                           </span>
