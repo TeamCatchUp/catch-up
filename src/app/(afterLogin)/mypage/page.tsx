@@ -54,8 +54,7 @@ const Page = () => {
           <div className="flex items-end gap-4">
             <Profile className="h-31 w-31 rounded-[28px] border-[4px] border-white" />
             <div className="flex flex-col">
-              {/* <span className="text-heading-xlarge text-gray-80">{user?.name ?? ''}</span> */}
-              <span className="text-heading-xlarge text-gray-80">팀원G</span>
+              <span className="text-heading-xlarge text-gray-80">{user?.name ?? ''}</span>
               <div className="flex gap-1 text-gray-50">
                 <span className="text-body-small">사업개발팀</span>
                 <span className="text-body-xsmall">ㆍ</span>
@@ -98,13 +97,11 @@ const Page = () => {
             <div className="text-body-small flex flex-col px-5">
               <div className="border-neutral-3 flex gap-6 border-b py-3">
                 <span className="text-gray-70">이름</span>
-                {/* <span className="text-gray-50">{user?.name ?? ''}</span> */}
-                <span className="text-gray-50">팀원G</span>
+                <span className="text-gray-50">{user?.name ?? ''}</span>
               </div>
               <div className="border-neutral-3 flex gap-6 border-b py-3">
                 <span className="text-gray-70">메일 / 사번</span>
-                {/* <span className="text-gray-50">{user?.email ?? ''}</span> */}
-                <span className="text-gray-50">teamlead@cathcup.im</span>
+                <span className="text-gray-50">{user?.email ?? ''}</span>
               </div>
               <div className="border-neutral-3 flex gap-6 border-b py-3">
                 <span className="text-gray-70">주민등록번호</span>
