@@ -9,38 +9,40 @@ import Connector from '/public/icons/icon/connector.svg';
 import LastConnector from '/public/icons/icon/last_connector.svg';
 import DetailedTaskModal from './DetailedTaskModal';
 import SelectionBarModal from './SelectionBarModal';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface DetailedTasksCardComponentProps {
   tasks: JiraTask[];
 }
 
 const createInitialCheckedMap = (tasks: JiraTask[]) => {
-  const map: Record<
-    string,
-    {
-      checked: boolean;
-      subtasks: Record<string, boolean>;
-    }
-  > = {};
-
+  const map: Record<string, { checked: boolean; subtasks: Record<string, boolean> }> = {};
   (tasks ?? []).forEach((task) => {
     map[task.id] = {
       checked: false,
       subtasks: Object.fromEntries(task.subtasks.map((sub) => [sub.id, false])),
     };
   });
-
   return map;
 };
+
+type ToggleOptions = { closeDetail?: boolean };
 
 const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) => {
   const [checkedMap, setCheckedMap] = useState(() => createInitialCheckedMap(tasks));
   const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
+  const [suppressAutoOpenSelectionBar, setSuppressAutoOpenSelectionBar] = useState(false);
+  const [selectionBarDismissed, setSelectionBarDismissed] = useState(false);
 
   // tasks가 바뀌면(새 답변) 체크맵 리셋
   useEffect(() => {
     setCheckedMap(createInitialCheckedMap(tasks));
     setOpenMap({});
+    setDetailModal(null);
+    setShowSelectionBar(false);
+    setIsSelectionBarCollapsed(false);
+    setSelectionBarDismissed(false);
+    setSuppressAutoOpenSelectionBar(false);
   }, [tasks]);
 
   // detail modal (업무 선택)
@@ -52,6 +54,9 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
 
   // selection bar 표시 여부
   const [showSelectionBar, setShowSelectionBar] = useState(false);
+  const [isSelectionBarCollapsed, setIsSelectionBarCollapsed] = useState(false);
+
+  const detailModalBottom = showSelectionBar ? 305 : 30;
 
   // checked tasks 개수
   const selectedTasks = useMemo(() => {
@@ -87,17 +92,18 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
 
   // selection bar 표시 여부
   useEffect(() => {
-    if (!detailModal) {
-      setShowSelectionBar(totalCheckedCount > 0);
-    }
-  }, [totalCheckedCount, detailModal]);
+    // bar 펼쳐진 상태 = 상세 업무 모달 동시 렌더링 0
+    setShowSelectionBar(totalCheckedCount > 0);
+    if (totalCheckedCount === 0) setIsSelectionBarCollapsed(false);
+  }, [totalCheckedCount]);
 
   // 상위 업무 (checkbox)
-  const toggleTask = useCallback((task: JiraTask) => {
+  const toggleTask = useCallback((task: JiraTask, opts?: ToggleOptions) => {
+    setSelectionBarDismissed(false);
+
     setCheckedMap((prev) => {
       const current = prev[task.id];
       const nextChecked = !current?.checked;
-
       return {
         ...prev,
         [task.id]: {
@@ -107,11 +113,13 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
       };
     });
 
-    setDetailModal(null);
+    if (opts?.closeDetail ?? true) setDetailModal(null);
   }, []);
 
   // 하위 업무 (checkbox)
-  const toggleSubTask = useCallback((task: JiraTask, subId: string) => {
+  const toggleSubTask = useCallback((task: JiraTask, subId: string, opts?: ToggleOptions) => {
+    setSelectionBarDismissed(false);
+
     setCheckedMap((prev) => {
       const taskState = prev[task.id];
       if (!taskState) return prev;
@@ -132,23 +140,23 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
       };
     });
 
-    setDetailModal(null);
+    if (opts?.closeDetail ?? true) setDetailModal(null);
   }, []);
 
   // selection bar에서 상위 업무 체크 해제 -> 해당 하위 업무도 해제
   const handleTaskToggleFromModal = (taskId: string) => {
     const task = tasks.find((t) => t.id === taskId);
-    if (task) {
-      toggleTask(task);
-    }
+    if (!task) return;
+
+    toggleTask(task, { closeDetail: false });
   };
 
   // SelectionBarModal에서 하위 업무 체크 해제
   const handleSubtaskToggleFromModal = (taskId: string, subId: string) => {
     const task = tasks.find((t) => t.id === taskId);
-    if (task) {
-      toggleSubTask(task, subId);
-    }
+    if (!task) return;
+
+    toggleSubTask(task, subId, { closeDetail: false });
   };
 
   // 상세 업무 모달에서 체크 제어 (DetailTaskModal)
@@ -156,42 +164,13 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
-    // setCheckedMap((prev) => {
-    //   if (subId !== undefined) {
-    //     // 하위 업무 체크
-    //     const taskState = prev[taskId];
-    //     const nextSubtasks = {
-    //       ...taskState.subtasks,
-    //       [subId]: !taskState.subtasks[subId],
-    //     };
-    //     const allChecked = Object.values(nextSubtasks).every(Boolean);
+    setSuppressAutoOpenSelectionBar(true);
 
-    //     return {
-    //       ...prev,
-    //       [taskId]: {
-    //         checked: allChecked,
-    //         subtasks: nextSubtasks,
-    //       },
-    //     };
-    //   } else {
-    //     // 상위 업무 체크
-    //     const current = prev[taskId];
-    //     const nextChecked = !current?.checked;
-
-    //     return {
-    //       ...prev,
-    //       [taskId]: {
-    //         checked: nextChecked,
-    //         subtasks: Object.fromEntries(task.subtasks.map((sub) => [sub.id, nextChecked])),
-    //       },
-    //     };
-    //   }
-    // });
     if (subId) {
-      toggleSubTask(task, subId);
+      toggleSubTask(task, subId, { closeDetail: false }); // 상세모달 유지
       return;
     }
-    toggleTask(task);
+    toggleTask(task, { closeDetail: false }); // 상세모달 유지
   };
 
   // 이동 가능한 전체 업무 목록 (업무 목록을 순서 리스트로 만듦) - 상세 업무 모달
@@ -235,17 +214,83 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
   };
 
   const handleDetailModalOpen = (type: 'task' | 'subtask', taskId: string, subId?: string) => {
-    setShowSelectionBar(false);
+    // setShowSelectionBar(false);
     setDetailModal((prev) =>
       prev?.type === type && prev.taskId === taskId && prev.subId === subId ? null : { type, taskId, subId },
     );
   };
 
-  const handleClearAll = () => {
+  const opneDetail = (payload: { type: 'task' | 'subtask'; taskId: string; subId?: string }) => {
+    setDetailModal((prev) =>
+      prev?.type === payload.type && prev.taskId === payload.taskId && prev.subId === payload.subId ? null : payload,
+    );
+  };
+
+  const handleClearAllFromSelectionBar = () => {
     setCheckedMap(createInitialCheckedMap(tasks));
     setShowSelectionBar(false);
-    setDetailModal(null);
+    setIsSelectionBarCollapsed(false);
+    setSelectionBarDismissed(false);
+    setSuppressAutoOpenSelectionBar(false); // 상세 업무 모달 유지
   };
+
+  const onEsc = useCallback(() => {
+    // 둘 다 열려있으면 둘 다 닫기
+    if (detailModal && showSelectionBar) {
+      setDetailModal(null);
+      setShowSelectionBar(false);
+      setIsSelectionBarCollapsed(false);
+      setSelectionBarDismissed(true);
+      setSuppressAutoOpenSelectionBar(false);
+      return;
+    }
+
+    // detail만 열려있으면 detail만 닫기
+    if (detailModal) {
+      setDetailModal(null);
+      setSuppressAutoOpenSelectionBar(false);
+      return;
+    }
+
+    // selection만 열려있으면 selection만 닫기
+    if (showSelectionBar) {
+      setShowSelectionBar(false);
+      setIsSelectionBarCollapsed(false);
+      setSelectionBarDismissed(true);
+      setSuppressAutoOpenSelectionBar(false);
+      return;
+    }
+  }, [detailModal, showSelectionBar]);
+
+  useEscapeKey(onEsc);
+
+  useEffect(() => {
+    // 선택이 없으면 완전 리셋
+    if (totalCheckedCount === 0) {
+      setShowSelectionBar(false);
+      setIsSelectionBarCollapsed(false);
+      setSelectionBarDismissed(false);
+      setSuppressAutoOpenSelectionBar(false);
+      return;
+    }
+
+    // 사용자가 esc로 닫아둔 상태면 자동 오픈 X
+    if (selectionBarDismissed) {
+      setShowSelectionBar(false);
+      return;
+    }
+
+    // 상세모달에서 체크한 직후에는 자동 오픈 X
+    if (detailModal && suppressAutoOpenSelectionBar) {
+      setShowSelectionBar(false);
+      return;
+    }
+
+    // 그 외 = 자동 오픈
+    setShowSelectionBar(true);
+  }, [totalCheckedCount, detailModal, suppressAutoOpenSelectionBar, selectionBarDismissed]);
+
+  const shouldHideSelectionBar = !!detailModal && isSelectionBarCollapsed;
 
   return (
     <div className="flex flex-col">
@@ -370,16 +415,22 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
           onNext={goNext}
           disablePrev={currentIndex <= 0}
           disableNext={currentIndex >= flatTaskList.length - 1}
+          bottomOffset={detailModalBottom}
         />
       )}
-      {showSelectionBar && (
+      {showSelectionBar && !shouldHideSelectionBar && (
         <SelectionBarModal
           onClose={() => setShowSelectionBar(false)}
-          onClearAll={handleClearAll}
+          onClearAll={handleClearAllFromSelectionBar}
           selectedTasks={selectedTasks}
           totalCheckedCount={totalCheckedCount}
           onTaskToggle={handleTaskToggleFromModal}
           onSubtaskToggle={handleSubtaskToggleFromModal}
+          isCollapsed={isSelectionBarCollapsed}
+          onToggleCollapse={() => setIsSelectionBarCollapsed((prev) => !prev)}
+          onOpenDetail={(payload) => {
+            setDetailModal(payload);
+          }}
         />
       )}
     </div>

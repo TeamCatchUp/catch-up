@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DropDownDown from '/public/icons/icon/dropdown_down.svg';
 import Kebab from '/public/icons/icon/kebab.svg';
 import Cancel from '/public/icons/icon/cancel.svg';
@@ -34,6 +34,8 @@ interface DetailedTaskModalProps {
   onNext: () => void;
   disablePrev: boolean;
   disableNext: boolean;
+
+  bottomOffset?: number;
 }
 
 type TabType = 'info' | 'files' | 'wiki' | 'url' | 'comments' | 'notion' | 'slack';
@@ -48,10 +50,11 @@ const DetailedTaskModal = ({
   onNext,
   disablePrev,
   disableNext,
+  bottomOffset = 30,
 }: DetailedTaskModalProps) => {
   const [activeTab, setActiveTab] = useState<TabType>('info');
 
-  useEscapeKey(onClose);
+  // useEscapeKey(onClose);
 
   const tabs = [
     { id: 'info' as TabType, label: 'Info', count: 0, locked: false },
@@ -108,7 +111,10 @@ const DetailedTaskModal = ({
   };
 
   return (
-    <div className="shadow-rag-bar border-neutral-4 absolute bottom-4 ml-8 flex h-145 w-108.75 flex-col rounded-2xl border bg-white p-5">
+    <div
+      className="shadow-rag-bar border-neutral-4 absolute bottom-4 ml-8 flex h-145 w-108.75 flex-col rounded-2xl border bg-white p-5"
+      style={{ bottom: bottomOffset }}
+    >
       {/* TopMenuBar */}
       <div className="flex justify-between">
         <div className="flex gap-1.5">
