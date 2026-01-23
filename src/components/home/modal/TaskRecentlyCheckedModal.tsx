@@ -126,10 +126,10 @@ const TaskRecentlyCheckedModal = ({ task, onClose }: TaskRecentlyCheckedModalPro
         <div className="flex flex-col gap-2.5">
           <span className="text-body-xsmall px-1.5 text-gray-50">관련 지라 티켓</span>
           <div className="flex gap-2.5">
-            <span className="bg-violet-5 text-body-small text-grat-70 flex rounded-full px-4 py-1.5">
+            <span className="bg-violet-5 text-body-small text-gray-70 flex rounded-full px-4 py-1.5">
               일본 시장 진출 리서치 범위 및 방향 정의
             </span>
-            <span className="bg-light-blue-5 text-body-small text-grat-70 flex rounded-full px-4 py-1.5">
+            <span className="bg-light-blue-5 text-body-small text-gray-70 flex rounded-full px-4 py-1.5">
               일본 진출 가설 검증 결과 정리
             </span>
           </div>

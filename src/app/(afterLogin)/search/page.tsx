@@ -28,6 +28,16 @@ import { RECOMMAND_QUESTIONS } from '@/constants/recommandQuestion';
 import { SearchOptionPopover } from '@/components/search/SearchOptionPopover';
 import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/components/search/OptionDummyData';
 import { OptionListPopover } from '@/components/search/OptionListPopover';
+import { JiraTicketList } from '@/components/UI/JiraTicketList';
+import { ReacentlySearchList } from '@/components/UI/RecetlySearchList';
+import { RECENT_SEARCH_DATA } from '@/constants/RecentlySearchData';
+
+const JIRA_DATA = [
+  { id: 'JIRA-101', label: '일본 시장 진출 리서치 범위 및 방향 정의' },
+  { id: 'JIRA-102', label: '일본 진출 가설 검증 결과 정리' },
+  { id: 'JIRA-103', label: '신규 기능 인터페이스 설계' },
+  { id: 'JIRA-104', label: '백엔드 API 최적화 작업' },
+];
 
 export default function Search() {
   const router = useRouter();
@@ -188,7 +198,7 @@ export default function Search() {
       </div>
       <div
         ref={containerRef}
-        className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center gap-2.5 border border-solid bg-white ${isFocused ? 'h-125.5 max-h-135 min-h-92.5 rounded-[28px] p-3 px-4' : 'rounded-rounded h-auto p-3 px-4'} `}
+        className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center gap-2.5 border border-solid bg-white ${isFocused ? 'h-125.5 max-h-135 min-h-92.5 overflow-hidden rounded-[28px] p-3' : 'rounded-rounded h-auto p-3'} `}
       >
         <div className="flex w-full items-end justify-between">
           <div className="mr-2 flex h-10 w-10 items-center justify-center p-1.5">
@@ -224,7 +234,7 @@ export default function Search() {
         </div>
 
         {isFocused && (
-          <div className="border-neutral-4 flex w-full flex-col gap-2.5 overflow-visible border-t pt-4">
+          <div className="border-neutral-4 flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden border-t pt-2">
             <div className="flex items-center gap-1.5 self-stretch overflow-x-scroll px-1.5 whitespace-nowrap">
               <div className="flex items-center gap-2">
                 <SearchOptionButton
@@ -241,7 +251,7 @@ export default function Search() {
                     onClick={handleGithubClick}
                   />
                   {isGithubModalOpen && (
-                    <div className="absolute top-full left-0 z-[100] mt-2">
+                    <div className="absolute top-full left-0 z-[100]">
                       <DropdownModal
                         onClose={() => setIsGithubModalOpen(false)}
                         onSelect={(id) => {
@@ -342,7 +352,7 @@ export default function Search() {
               </div> */}
             </div>
             {allSelectedChips.length > 0 && (
-              <div className="bg-neutral-1 border-neutral-2 flex w-full flex-col gap-2 rounded-xl border p-2">
+              <div className="bg-neutral-1 border-neutral-2 flex w-full shrink-0 flex-col gap-2 rounded-xl border p-2">
                 <div className="flex w-full items-center justify-between px-1 pb-1">
                   <div className="text-body-xsmall text-nomal-alternative">
                     선택 항목 &nbsp;{allSelectedChips.length}
@@ -382,8 +392,11 @@ export default function Search() {
                 </div>
               </div>
             )}
-            <div className="flex flex-[1_0_0] flex-col items-start gap-4 self-stretch">
-              {/* {selectedRepoId && currentSuggestions.length > 0 && (
+            <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-start gap-2 self-stretch overflow-y-auto pt-2">
+              <ReacentlySearchList title="최근 질문" querys={RECENT_SEARCH_DATA} />
+              <JiraTicketList tickets={JIRA_DATA} title="최근 확인한 지라 티켓" />
+            </div>
+            {/* {selectedRepoId && currentSuggestions.length > 0 && (
                 <div className="border-neutral-1 flex flex-[1_0_0] flex-col items-start gap-4 self-stretch border-t pt-4">
                   <SearchSuggestion
                     title="레포지토리 맞춤 질문"
@@ -392,7 +405,6 @@ export default function Search() {
                   />
                 </div>
               )} */}
-            </div>
           </div>
         )}
       </div>
