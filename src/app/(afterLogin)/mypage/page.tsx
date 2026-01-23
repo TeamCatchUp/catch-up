@@ -2,7 +2,7 @@
 
 import clsx from 'clsx';
 import { useState } from 'react';
-import Profile from '/public/icons/icon/Profile.svg';
+import Profile from '/public/icons/icon/profile.svg';
 import EditPencil from '/public/icons/icon/edit_pencil.svg';
 import TopNavbar from '@/components/common/topNavbar/TopNavbar';
 
