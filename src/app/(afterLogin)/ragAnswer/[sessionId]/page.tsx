@@ -59,6 +59,9 @@ const NODE_TO_UI_STEP: Record<string, RagUIStepKey | null> = {
   chitchat: 'generate',
 };
 
+// test 하드코딩
+const HARD_CODED_INDEX_LIST = ['CatchUp_BE_develop_code', 'CatchUp_BE_develop_pr', 'cu_jira_issue'] as const;
+
 export default function Page() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -79,8 +82,9 @@ export default function Page() {
 
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<{ [key: string]: boolean }>({});
-  const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<{ [key: string]: boolean }>({});
+  const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<Record<string, boolean>>({});
+  const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<Record<string, boolean>>({});
+
   const [filterOpenMap, setFilterOpenMap] = useState<Record<string, boolean>>({});
   const [spaceDropDownOpenMap, setSpaceDropDownOpenMap] = useState<Record<string, boolean>>({});
 
@@ -212,6 +216,8 @@ export default function Page() {
         case 'RAG_INTERRUPT': {
           if (data.node !== 'manage_pr_context' || !data.payload) return;
 
+          console.log('[SSE] RAG_INTERRUPT payload length:', data.payload.length);
+
           setPrList(data.payload);
           setShowPRSelection(true);
           setIsLoading(false);
@@ -225,6 +231,14 @@ export default function Page() {
             sourcesCount: data.response?.sources?.length,
             alreadyProcessing: processingDoneRef.current,
           });
+          console.log('relatedJiraIssues len', data.relatedJiraIssues?.length);
+          console.log(
+            'sample sourceType',
+            data.relatedJiraIssues?.[0]?.sourceType,
+            typeof data.relatedJiraIssues?.[0]?.sourceType,
+          );
+          console.log('[SSE RAW JSON]', JSON.stringify(notification));
+          console.log('normalized tasks', normalizeRelatedJiraIssues(data.relatedJiraIssues ?? []));
 
           // 중복 처리 방지
           if (processingDoneRef.current) {
@@ -300,7 +314,7 @@ export default function Page() {
         behavior: 'smooth',
       });
     }
-  }, [chatData?.messages, isLoading, showPRSelection]);
+  }, [chatData?.messages, isLoading, showPRSelection, currentStep]);
 
   // 초기 데이터 로드
   useEffect(() => {
@@ -328,7 +342,8 @@ export default function Page() {
   const fetchFirstAnswer = async (query: string) => {
     beginAnswerLoading();
 
-    const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
+    // const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
+    const indexList = [...HARD_CODED_INDEX_LIST];
 
     const initialData: ChatData = {
       sessionId,
@@ -370,7 +385,8 @@ export default function Page() {
   const handleSendMessage = async () => {
     if (!newInput.trim() || isLoading || !chatData) return;
 
-    const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
+    // const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
+    const indexList = [...HARD_CODED_INDEX_LIST];
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -401,12 +417,14 @@ export default function Page() {
     }
   };
 
-  const handlePRContinue = async (selectedIds: number[]) => {
+  const handlePRContinue = async (selectedPrNumbers: number[]) => {
+    console.log('[PR CONTINUE] selectedPrNumbers:', selectedPrNumbers);
+
     setShowPRSelection(false);
     beginAnswerLoading();
 
-    const selectedPRs = selectedIds
-      .map((id) => prList.find((p) => p.prNumber === id))
+    const selectedPRs = selectedPrNumbers
+      .map((prNumber) => prList.find((p) => p.prNumber === prNumber))
       .filter((pr): pr is PRPayload => pr !== undefined)
       .map((pr) => ({
         prNumber: pr.prNumber,
@@ -414,11 +432,34 @@ export default function Page() {
         owner: pr.owner,
       }));
 
+    console.log('[PR CONTINUE] payload to /api/chat/resume:', selectedPRs);
+
     try {
       await waitForSSEOpen();
       await resumeChatQuery(sessionId, selectedPRs);
     } catch (err) {
       console.error('[handlePRContinue] Error:', err);
+      setIsError(true);
+      setIsLoading(false);
+    }
+  };
+
+  const handlePRRefetch = async () => {
+    if (!chatData) return;
+
+    const lastUser = [...chatData.messages].reverse().find((m) => m.role === 'user');
+    const query = lastUser?.content?.trim();
+    if (!query) return;
+
+    console.log('[PR] refetch query:', query);
+
+    beginAnswerLoading(); // PR 화면 다시 닫고 로딩
+
+    try {
+      await waitForSSEOpen();
+      await sendChatQuery(query, sessionId, [...HARD_CODED_INDEX_LIST]);
+    } catch (err) {
+      console.error('[handlePRRefetch] Error: ', err);
       setIsError(true);
       setIsLoading(false);
     }
@@ -457,7 +498,8 @@ export default function Page() {
 
     beginAnswerLoading();
 
-    const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
+    // const indexList = repo ? [`${repo}`, `${repo}`, `${repo}`] : [];
+    const indexList = [...HARD_CODED_INDEX_LIST];
 
     try {
       await waitForSSEOpen();
@@ -510,7 +552,12 @@ export default function Page() {
                         <span className="text-heading-xlarge text-gray-70 mr-5">{msg.content}</span>
                         <button
                           onClick={() => setEditingMessageId(msg.id)}
-                          className="border-neutral-3 box-button-outline-gray inline-flex translate-y-1 cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100"
+                          className={clsx(
+                            'border-neutral-3 box-button-outline-gray',
+                            'hidden',
+                            'group-hover:inline-flex',
+                            'translate-y-1 cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1',
+                          )}
                         >
                           <EditPencil className="text-gray-70 h-5 w-5" />
                           <span className="text-body-xsmall text-gray-80 whitespace-nowrap">수정하기</span>
@@ -629,7 +676,13 @@ export default function Page() {
 
                     {msg.content ? (
                       <>
-                        <div className="text-gray-80 prose prose-neutral [&_li::marker]:text-gray-70 max-w-none break-words [&>ol]:list-decimal [&>ol]:pl-5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li:has(input[type='checkbox'])]:list-none [&>ul>li:has(input[type='checkbox'])]:pl-0">
+                        <div
+                          className={clsx(
+                            "text-gray-80 prose prose-neutral [&_li::marker]:text-gray-70 max-w-none break-words [&>ol]:list-decimal [&>ol]:pl-5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li:has(input[type='checkbox'])]:list-none [&>ul>li:has(input[type='checkbox'])]:pl-0",
+                            '[&_pre]:overflow-x-auto [&_pre]:break-words [&_pre]:whitespace-pre-wrap',
+                            '[&_pre]:bg-neutral-2 [&_pre]:rounded-xl [&_pre]:p-4',
+                          )}
+                        >
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatMarkdownString(msg.content)}</ReactMarkdown>
                         </div>
 
@@ -639,14 +692,14 @@ export default function Page() {
 
                         <AnswerActionButtons
                           icons={icon}
-                          messageIdx={index}
+                          messageId={msg.id}
                           feedbackVisibleMap={feedbackVisibleMap}
                           setFeedbackVisibleMap={setFeedbackVisibleMap}
                         />
 
                         {feedbackVisibleMap[msg.id] && (
                           <FeedbackSection
-                            messageIdx={index}
+                            messageId={msg.id}
                             feedbackVisibleMap={feedbackVisibleMap}
                             setFeedbackVisibleMap={setFeedbackVisibleMap}
                             feedbackSubmittedMap={feedbackSubmittedMap}
@@ -657,7 +710,7 @@ export default function Page() {
                     ) : (
                       <ErrorResponse
                         icons={icon}
-                        messageIdx={index}
+                        messageId={`error_${sessionId}`}
                         feedbackVisibleMap={feedbackVisibleMap}
                         setFeedbackVisibleMap={setFeedbackVisibleMap}
                         feedbackSubmittedMap={feedbackSubmittedMap}
@@ -671,7 +724,7 @@ export default function Page() {
 
             {showPRSelection && (
               <div className="mx-auto w-193.25">
-                <GithubPRStepSkeleton onContinue={handlePRContinue} prList={prList} />
+                <GithubPRStepSkeleton onContinue={handlePRContinue} prList={prList} onRefetch={handlePRRefetch} />
               </div>
             )}
 
@@ -685,7 +738,7 @@ export default function Page() {
               <div className="mx-auto w-193.25 pb-10">
                 <ErrorResponse
                   icons={icon}
-                  messageIdx={chatData.messages.length}
+                  messageId={`error_${sessionId}`}
                   feedbackVisibleMap={feedbackVisibleMap}
                   setFeedbackVisibleMap={setFeedbackVisibleMap}
                   feedbackSubmittedMap={feedbackSubmittedMap}

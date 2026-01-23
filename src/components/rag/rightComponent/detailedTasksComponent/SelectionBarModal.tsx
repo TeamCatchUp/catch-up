@@ -10,7 +10,6 @@ import Task from '/public/icons/icon/task.svg';
 import Edit from '/public/icons/icon/edit_square.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import ToolTip from '@/components/common/ToolTip';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface SelectionBarModalProps {
   onClose: () => void;
@@ -24,6 +23,10 @@ interface SelectionBarModalProps {
   totalCheckedCount: number;
   onTaskToggle: (taskId: string) => void;
   onSubtaskToggle: (taskId: string, subId: string) => void;
+
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+  onOpenDetail: (payload: { type: 'task' | 'subtask'; taskId: string; subId?: string }) => void;
 }
 
 const SelectionBarModal = ({
@@ -33,11 +36,13 @@ const SelectionBarModal = ({
   totalCheckedCount,
   onTaskToggle,
   onSubtaskToggle,
+  isCollapsed,
+  onToggleCollapse,
+  onOpenDetail,
 }: SelectionBarModalProps) => {
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>(
     Object.fromEntries(selectedTasks.map((task) => [task.taskId, true])),
   );
-  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const toggleTaskExpansion = (taskId: string) => {
     setExpandedTasks((prev) => ({ ...prev, [taskId]: !prev[taskId] }));
@@ -48,7 +53,7 @@ const SelectionBarModal = ({
     onClose();
   };
 
-  useEscapeKey(onClose);
+  // useEscapeKey(onClose);
 
   useEffect(() => {
     setExpandedTasks((prev) => {
@@ -68,7 +73,7 @@ const SelectionBarModal = ({
   }, [selectedTasks]);
 
   return (
-    <div className="pointer-events-none absolute bottom-3.5 flex flex-col gap-2">
+    <div className="pointer-events-none absolute bottom-8 flex flex-col gap-2">
       <div
         className={clsx(
           'border-neutral-5 shadow-selection-bar pointer-events-auto flex w-117 flex-col border bg-white',
@@ -104,16 +109,19 @@ const SelectionBarModal = ({
                           <span className="h-4 w-4">
                             <DropDownDown
                               className={clsx(
-                                'relative bottom-px flex text-blue-50 transition-transform',
-                                isExpanded && 'relative top-[0.5px] rotate-180',
+                                'flex text-blue-50 transition-transform',
+                                isExpanded ? 'relative bottom-px rotate-180' : 'relative bottom-0.5',
                               )}
                             />
                           </span>
                         </button>
                         <div className="flex items-center gap-0.5">
-                          <span className="hover:bg-neutral-3 text-body-xsmall text-gray-70 relative top-px hidden cursor-pointer items-center rounded-full px-1.5 py-1 group-hover:flex">
+                          <button
+                            onClick={() => onOpenDetail({ type: 'task', taskId: task.taskId })}
+                            className="hover:bg-neutral-3 text-body-xsmall text-gray-70 relative top-px hidden cursor-pointer items-center rounded-full px-1.5 py-1 group-hover:flex"
+                          >
                             상세보기
-                          </span>
+                          </button>
                           <button
                             onClick={() => onTaskToggle(task.taskId)}
                             className="flex h-6 w-6 cursor-pointer items-center"
@@ -147,9 +155,12 @@ const SelectionBarModal = ({
                             {subtask.title}
                           </span>
                           <div className="flex items-center gap-0.5">
-                            <span className="hover:bg-neutral-3 text-body-xsmall text-gray-70 hidden cursor-pointer items-center rounded-full px-1.5 py-1 group-hover:flex">
+                            <button
+                              onClick={() => onOpenDetail({ type: 'subtask', taskId: task.taskId, subId: subtask.id })}
+                              className="hover:bg-neutral-3 text-body-xsmall text-gray-70 hidden cursor-pointer items-center rounded-full px-1.5 py-1 group-hover:flex"
+                            >
                               상세보기
-                            </span>
+                            </button>
                             <button
                               onClick={() => onSubtaskToggle(task.taskId, subtask.id)}
                               className="flex h-6 w-6 cursor-pointer items-center"
@@ -170,10 +181,7 @@ const SelectionBarModal = ({
         {/* task 버튼 */}
         <div className={clsx('flex h-14 w-112 items-center justify-between', isCollapsed && 'relative bottom-px')}>
           <div className="flex items-center gap-1.5 pl-1">
-            <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="icon-button-only-gray flex h-4.5 w-4.5 cursor-pointer p-0.5"
-            >
+            <button onClick={onToggleCollapse} className="icon-button-only-gray flex h-4.5 w-4.5 cursor-pointer p-0.5">
               <DropDownDown
                 className={clsx('text-gray-70 transition-transform', !isCollapsed ? 'rotate-0' : 'rotate-180')}
               />

@@ -1,6 +1,9 @@
 @import 'tailwindcss';
 @import './font.css';
+@import './button.css';
 @import './color.css';
+@import './control.css';
+@import './font.css';
 @import './radius.css';
 @import './shadow.css';
 

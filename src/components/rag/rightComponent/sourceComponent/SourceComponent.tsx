@@ -98,7 +98,7 @@ const SourceComponent = ({ sources, isLoading, isError }: Props) => {
         </div>
       </div>
 
-      <div className="mt-1 flex flex-col gap-2">
+      <div className="mt-3 flex flex-col gap-2">
         {/* 출처 카드 컴포넌트 */}
         {isError ? (
           <ErrorSourceComponent />

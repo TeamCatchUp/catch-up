@@ -15,7 +15,7 @@ const feedback = [
 ];
 
 const FeedbackSection = ({
-  messageIdx,
+  messageId,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
   feedbackSubmittedMap,
@@ -25,7 +25,7 @@ const FeedbackSection = ({
 
   // 피드백 open 시 해당 요소로 하단 스크롤
   useEffect(() => {
-    if (feedbackVisibleMap[messageIdx] && feedbackRef.current) {
+    if (feedbackVisibleMap[messageId] && feedbackRef.current) {
       setTimeout(() => {
         feedbackRef.current?.scrollIntoView({
           behavior: 'smooth',
@@ -33,20 +33,20 @@ const FeedbackSection = ({
         });
       }, 100);
     }
-  }, [feedbackVisibleMap[messageIdx]]);
+  }, [feedbackVisibleMap[messageId]]);
 
-  if (!feedbackVisibleMap[messageIdx]) return null;
+  if (!feedbackVisibleMap[messageId]) return null;
 
   return (
     <div ref={feedbackRef} className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4">
-      {feedbackSubmittedMap[messageIdx] ? (
+      {feedbackSubmittedMap[messageId] ? (
         <div className="text-body-small flex items-center justify-center text-gray-50">피드백을 주셔서 감사합니다!</div>
       ) : (
         <>
           <div className="flex justify-between">
             <span className="text-body-small text-gray-50">답변이 마음에 들지 않은 이유가 무엇인가요?</span>
             <div
-              onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [messageIdx]: false }))}
+              onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }))}
               className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
             >
               <Cancel className="h-4.5 w-4.5 text-gray-50" />
@@ -58,11 +58,11 @@ const FeedbackSection = ({
                 <button
                   key={feedbackIdx}
                   onClick={() => {
-                    setFeedbackSubmittedMap((prev) => ({ ...prev, [messageIdx]: true }));
+                    setFeedbackSubmittedMap((prev) => ({ ...prev, [messageId]: true }));
                     setTimeout(() => {
                       setFeedbackVisibleMap((prev) => ({
                         ...prev,
-                        [messageIdx]: false,
+                        [messageId]: false,
                       }));
                     }, 3000);
                   }}

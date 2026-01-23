@@ -45,7 +45,7 @@ const SourceCardsComponent = ({ source, showCount = true, count }: Props) => {
       >
         {/* 제목 */}
         <div className="itmes-center flex gap-1.5">
-          <div className="bg-blue-5 flex items-center gap-1.5 rounded-full px-2 py-1">
+          <div className="bg-blue-5 relative right-px flex items-center gap-1.5 rounded-full px-2 py-1">
             <Icon className="h-4 w-4" />
             {showCount && <span className="text-body-xsmall text-gray-70 relative top-px">{count ?? 0}</span>}
           </div>
