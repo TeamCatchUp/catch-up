@@ -29,6 +29,8 @@ import { SearchOptionPopover } from '@/components/search/SearchOptionPopover';
 import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/components/search/OptionDummyData';
 import { OptionListPopover } from '@/components/search/OptionListPopover';
 import { JiraTicketList } from '@/components/UI/JiraTicketList';
+import { ReacentlySearchList } from '@/components/UI/RecetlySearchList';
+import { RECENT_SEARCH_DATA } from '@/constants/RecentlySearchData';
 
 const JIRA_DATA = [
   { id: 'JIRA-101', label: '일본 시장 진출 리서치 범위 및 방향 정의' },
@@ -391,6 +393,7 @@ export default function Search() {
               </div>
             )}
             <div className="flex flex-[1_0_0] flex-col items-start gap-4 self-stretch">
+              <ReacentlySearchList title="최근 질문" querys={RECENT_SEARCH_DATA} />
               <JiraTicketList tickets={JIRA_DATA} title="최근 확인한 지라 티켓" />
               {/* {selectedRepoId && currentSuggestions.length > 0 && (
                 <div className="border-neutral-1 flex flex-[1_0_0] flex-col items-start gap-4 self-stretch border-t pt-4">
