@@ -95,8 +95,8 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
                   : 'bg-blue-10',
               )}
             >
-              <span className="text-heading-small relative top-px">진행하기</span>
-              <ArrowForward className="h-6 w-6" />
+              <span className="text-heading-small relative top-px whitespace-nowrap">진행하기</span>
+              <ArrowForward className="h-6 w-6 shrink-0" />
             </button>
           </div>
           {/* 선택 리스트 */}

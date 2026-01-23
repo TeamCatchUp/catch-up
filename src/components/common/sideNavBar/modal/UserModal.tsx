@@ -2,6 +2,7 @@
 
 import clsx from 'clsx';
 import { useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import DefaultProfile from '/public/icons/icon/profile.svg';
 import Person from '/public/icons/icon/person.svg';
 import AdminPanelSettings from '/public/icons/icon/admin_panel_settings.svg';
@@ -18,6 +19,7 @@ interface UserModalProps {
 }
 
 const UserModal = ({ onClose, userName, userEmail }: UserModalProps) => {
+  const router = useRouter();
   const modalRef = useRef<HTMLDivElement>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
@@ -45,7 +47,13 @@ const UserModal = ({ onClose, userName, userEmail }: UserModalProps) => {
       {/* 메뉴 */}
       <div className="flex flex-col gap-2">
         <div className="flex flex-col gap-1">
-          <button className="icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2">
+          <button
+            onClick={() => {
+              onClose();
+              router.push('/mypage');
+            }}
+            className="icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2"
+          >
             <Person className="text-gray-70 h-6 w-6" />
             <span className="text-body-small text-gray-80">마이페이지</span>
           </button>
