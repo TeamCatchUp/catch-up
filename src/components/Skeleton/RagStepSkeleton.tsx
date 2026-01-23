@@ -11,7 +11,7 @@ const RagStepSkeleton = ({ stepKey, label, Icon }: RagStepSkeletonProps) => {
     <div className="flex flex-col gap-8">
       <div className="bg-blue-1 flex h-20 w-192.75 animate-pulse items-center gap-5 rounded-2xl p-5">
         <div className="border-blue-5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-white">
-          <Icon />
+          <Icon className="h-7 w-7" />
         </div>
         <span className="text-body-medium text-gray-50">{label}</span>
       </div>
