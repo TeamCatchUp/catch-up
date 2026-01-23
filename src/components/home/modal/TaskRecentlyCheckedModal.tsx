@@ -35,15 +35,19 @@ const TaskRecentlyCheckedModal = ({ task, onClose }: TaskRecentlyCheckedModalPro
             <span className="text-heading-large text-gray-80 max-w-109.75 truncate">{task.title}</span>
             <div className="flex gap-2">
               <button className="icon-button-only-gray group relative flex h-7.5 w-7.5 cursor-pointer items-center justify-center">
-                <EditSquare className="h-6 w-6" />
-                <ToolTip text="인수인계 시작하기" />
+                <EditSquare className="h-6 w-6 text-gray-50" />
+                <div className="absolute right-7.5 bottom-16.75">
+                  <ToolTip text="인수인계 시작하기" />
+                </div>
               </button>
               <button className="icon-button-only-gray group relative flex h-7.5 w-7.5 cursor-pointer items-center justify-center">
-                <Share className="h-6 w-6" />
-                <ToolTip text="자료 공유하기" />
+                <Share className="h-6 w-6 text-gray-50" />
+                <div className="absolute right-7.5 bottom-16.75">
+                  <ToolTip text="자료 공유하기" />
+                </div>
               </button>
               <button className="icon-button-only-gray flex h-7.5 w-7.5 cursor-pointer items-center justify-center">
-                <Cancel onClick={onClose} className="h-6 w-6" />
+                <Cancel onClick={onClose} className="h-6 w-6 text-gray-50" />
               </button>
             </div>
           </div>

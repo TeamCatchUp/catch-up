@@ -8,11 +8,13 @@ function CallbackHandler() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const token = searchParams.get('token');
+    const success = searchParams.get('success');
+    const err = searchParams.get('error');
 
-    if (token) {
-      localStorage.setItem('accessToken', token);
-
+    if (err) {
+      console.error('로그인 실패:', err);
+      router.replace('/login');
+    } else if (success === 'true' || !err) {
       router.replace('/');
     } else {
       router.replace('/login');

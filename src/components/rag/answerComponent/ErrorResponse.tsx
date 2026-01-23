@@ -4,7 +4,7 @@ import FeedbackSection from '@/components/rag/answerComponent/FeedbackSection';
 
 const ErrorResponse = ({
   icons,
-  messageIdx,
+  messageId,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
   feedbackSubmittedMap,
@@ -19,13 +19,13 @@ const ErrorResponse = ({
         </div>
         <AnswerActionButtons
           icons={icons}
-          messageIdx={messageIdx}
+          messageId={messageId}
           feedbackVisibleMap={feedbackVisibleMap}
           setFeedbackVisibleMap={setFeedbackVisibleMap}
         />
       </div>
       <FeedbackSection
-        messageIdx={messageIdx}
+        messageId={messageId}
         feedbackVisibleMap={feedbackVisibleMap}
         setFeedbackVisibleMap={setFeedbackVisibleMap}
         feedbackSubmittedMap={feedbackSubmittedMap}

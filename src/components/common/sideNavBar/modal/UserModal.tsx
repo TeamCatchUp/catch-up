@@ -2,6 +2,7 @@
 
 import clsx from 'clsx';
 import { useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import DefaultProfile from '/public/icons/icon/profile.svg';
 import Person from '/public/icons/icon/person.svg';
 import AdminPanelSettings from '/public/icons/icon/admin_panel_settings.svg';
@@ -9,6 +10,7 @@ import Settings from '/public/icons/icon/settings.svg';
 import Logout from '/public/icons/icon/logout.svg';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { useOutsideClick } from '@/hooks/useOutsideClick';
+import { logout } from '@/api/auth';
 
 interface UserModalProps {
   onClose: () => void;
@@ -17,11 +19,17 @@ interface UserModalProps {
 }
 
 const UserModal = ({ onClose, userName, userEmail }: UserModalProps) => {
+  const router = useRouter();
   const modalRef = useRef<HTMLDivElement>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEscapeKey(onClose);
   useOutsideClick(modalRef, onClose);
+
+  const handleLogout = async () => {
+    onClose(); // 모달 close
+    await logout();
+  };
 
   return (
     <div
@@ -39,7 +47,13 @@ const UserModal = ({ onClose, userName, userEmail }: UserModalProps) => {
       {/* 메뉴 */}
       <div className="flex flex-col gap-2">
         <div className="flex flex-col gap-1">
-          <button className="icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2">
+          <button
+            onClick={() => {
+              onClose();
+              router.push('/mypage');
+            }}
+            className="icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2"
+          >
             <Person className="text-gray-70 h-6 w-6" />
             <span className="text-body-small text-gray-80">마이페이지</span>
           </button>
@@ -76,7 +90,7 @@ const UserModal = ({ onClose, userName, userEmail }: UserModalProps) => {
       {/* divider */}
       <div className="bg-neutral-3 flex h-px w-full items-center" />
       {/* 로그아웃 */}
-      <button className="icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2">
+      <button onClick={handleLogout} className="icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2">
         <Logout className="text-gray-70 h-6 w-6" />
         <span className="text-body-small text-gray-80">로그아웃</span>
       </button>

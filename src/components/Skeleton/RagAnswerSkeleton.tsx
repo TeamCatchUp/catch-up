@@ -1,13 +1,19 @@
-const RagAnswerSkeleton = () => {
-  return (
-    <div className="flex animate-pulse flex-col gap-5">
-      <div className="bg-neutral-1 h-7.5 w-192.75 rounded-lg"></div>
-      <div className="bg-neutral-1 h-7.5 w-147.75 rounded-lg"></div>
-      <div className="bg-neutral-1 h-7.5 w-110.25 rounded-lg"></div>
-      <div className="bg-neutral-1 h-7.5 w-57.75 rounded-lg"></div>
-      <div className="bg-neutral-1 h-7.5 w-29.75 rounded-lg"></div>
-    </div>
-  );
-};
+'use client';
 
-export default RagAnswerSkeleton;
+import { RAG_UI_STEPS } from '@/constants/ragStep';
+import RagStepSkeleton from '@/components/Skeleton/RagStepSkeleton';
+
+interface Props {
+  currentStep: RagUIStepKey;
+}
+
+export default function RagAnswerSkeleton({ currentStep }: Props) {
+  if (currentStep === 'manage_pr_context') {
+    return null;
+  }
+
+  const step = RAG_UI_STEPS[currentStep];
+  if (!step) return null;
+
+  return <RagStepSkeleton stepKey={currentStep} label={step.label} Icon={step.Icon} />;
+}

@@ -3,13 +3,48 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Home from '/public/icons/icon/home.svg';
+import MyPage from '/public/icons/icon/person.svg';
+import Settings from '/public/icons/icon/admin_panel_settings.svg';
 import Kebeb_2 from '/public/icons/icon/kebeb 2.svg';
 import ShareButtonModal from './ShareButtonModal';
 import MoreButtonModal from './MoreButtonModal';
 
-const TopNavbar = () => {
+type PageType = 'home' | 'mypage' | 'settings';
+
+interface PageConfig {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  href: string;
+}
+
+const pageConfigs: Record<PageType, PageConfig> = {
+  home: {
+    icon: Home,
+    label: '홈',
+    href: '/',
+  },
+  mypage: {
+    icon: MyPage,
+    label: '마이페이지',
+    href: '/mypage',
+  },
+  settings: {
+    icon: Settings,
+    label: '권한 설정',
+    href: '/settings',
+  },
+};
+
+interface TopNavbarProps {
+  pageType: PageType;
+}
+
+const TopNavbar = ({ pageType }: TopNavbarProps) => {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isMoreModalOpen, setIsMoreModalOpen] = useState(false);
+
+  const config = pageConfigs[pageType];
+  const IconComponent = config.icon;
 
   const toggleShareModal = () => {
     setIsShareModalOpen((prev) => !prev);
@@ -25,14 +60,13 @@ const TopNavbar = () => {
     <nav aria-label="메인 네비게이션" className="border-neutral-3 sticky top-0 z-50 h-full w-full border-b bg-white">
       <div className="flex justify-between px-16 py-2">
         <div className="flex items-center justify-center">
-          <Link href="/">
+          <Link href={config.href}>
             <button className="text-gray-80 flex cursor-pointer gap-2">
-              <Home className="h-6 w-6" />
-              <span className="text-heading-medium relative top-[0.5px]">홈</span>
+              <IconComponent className="h-6 w-6" />
+              <span className="text-heading-medium relative top-[0.5px]">{config.label}</span>
             </button>
           </Link>
         </div>
-
         <ul className="flex items-center justify-center gap-2">
           <li className="relative">
             <button
@@ -54,7 +88,6 @@ const TopNavbar = () => {
               </div>
             )}
           </li>
-
           <li className="relative">
             <button
               aria-expanded={isMoreModalOpen}

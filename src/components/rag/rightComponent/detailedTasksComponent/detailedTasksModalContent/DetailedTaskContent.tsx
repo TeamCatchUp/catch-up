@@ -5,7 +5,7 @@ interface DetailedTaskContentProps {
   activeTab: string;
   renderContent: () => ReactNode;
   type: 'task' | 'subtask';
-  currentTask?: Task;
+  currentTask?: JiraTask;
 }
 
 const DetailedTaskContent = ({ activeTab, renderContent, type, currentTask }: DetailedTaskContentProps) => {
