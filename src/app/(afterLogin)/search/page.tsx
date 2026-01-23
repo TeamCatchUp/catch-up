@@ -28,6 +28,14 @@ import { RECOMMAND_QUESTIONS } from '@/constants/recommandQuestion';
 import { SearchOptionPopover } from '@/components/search/SearchOptionPopover';
 import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/components/search/OptionDummyData';
 import { OptionListPopover } from '@/components/search/OptionListPopover';
+import { JiraTicketList } from '@/components/UI/JiraTicketList';
+
+const JIRA_DATA = [
+  { id: 'JIRA-101', label: '일본 시장 진출 리서치 범위 및 방향 정의' },
+  { id: 'JIRA-102', label: '일본 진출 가설 검증 결과 정리' },
+  { id: 'JIRA-103', label: '신규 기능 인터페이스 설계' },
+  { id: 'JIRA-104', label: '백엔드 API 최적화 작업' },
+];
 
 export default function Search() {
   const router = useRouter();
@@ -383,6 +391,7 @@ export default function Search() {
               </div>
             )}
             <div className="flex flex-[1_0_0] flex-col items-start gap-4 self-stretch">
+              <JiraTicketList tickets={JIRA_DATA} title="최근 확인한 지라 티켓" />
               {/* {selectedRepoId && currentSuggestions.length > 0 && (
                 <div className="border-neutral-1 flex flex-[1_0_0] flex-col items-start gap-4 self-stretch border-t pt-4">
                   <SearchSuggestion
