@@ -5,37 +5,29 @@ import { useRouter } from 'next/navigation';
 import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconJira from '@/public/icons/logo/Jira.svg';
-import IconWiki from '@/public/icons/logo/Wiki.svg';
 import IconGithub from '@/public/icons/logo/GitHub.svg';
-import IconSlack from '@/public/icons/logo/Slack.svg';
 import IconDivider from '@/public/icons/icon/divider.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import IconSpace from '@/public/icons/icon/space.svg';
-import IconArrowRight from '@/public/icons/icon/arrow_right2.svg';
 import IconLock from '@/public/icons/icon/lock_filled.svg';
-import IconCloseSmall from '@/public/icons/icon/cancel_small.svg';
-import IconReset from '@/public/icons/icon/reset.svg';
+import IconFile from '@/public/icons/icon/file_filled.svg';
+import IconFolder from '@/public/icons/icon/folder_blue.svg';
 
-import { FilterChip } from '@/components/UI/SearchFilter';
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/UI/SearchOptionButton';
-import { SearchSuggestion } from '@/components/UI/SearchSuggestion';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { useOutsideClick } from '@/hooks/useOutsideClick';
-import DropdownModal from '@/components/modal/DropdownModal';
 import { useUserStore } from '@/store/userStore';
-import { RECOMMAND_QUESTIONS } from '@/constants/recommandQuestion';
 import { SearchOptionPopover } from '@/components/search/SearchOptionPopover';
 import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/components/search/OptionDummyData';
 import { OptionListPopover } from '@/components/search/OptionListPopover';
-import { JiraTicketList } from '@/components/UI/JiraTicketList';
-import { ReacentlySearchList } from '@/components/UI/RecetlySearchList';
-import { RECENT_SEARCH_DATA } from '@/constants/RecentlySearchData';
 
 import { GithubExplorer } from '@/components/search/GithubExplorer';
 import { DefaultSearchContent } from '@/components/search/DefaultSearchContent';
 import { SelectedFilterChips } from '@/components/search/SelectedFilterChips';
 import { GithubNode } from '@/constants/githubRepoData';
+import { JiraExplorer } from '@/components/search/JiraExplorer';
+import { JiraNode } from '@/constants/jiraData';
 
 export default function Search() {
   const router = useRouter();
@@ -57,8 +49,12 @@ export default function Search() {
 
   const [selectedGithubItems, setSelectedGithubItems] = useState<GithubNode[]>([]);
 
+  const [currentJiraProject, setCurrentJiraProject] = useState<any>(null);
+  const [selectedJiraItems, setSelectedJiraItems] = useState<any[]>([]);
+
   const hasText = inputValue.trim().length > 0;
   const isGithubMode = selectedOptions.includes('Github');
+  const isJiraMode = selectedOptions.includes('Jira');
 
   const togglePerson = (val: string) =>
     setSelectedPeople((p) => (p.includes(val) ? p.filter((i) => i !== val) : [...p, val]));
@@ -74,7 +70,17 @@ export default function Search() {
       return [...prev, item];
     });
   };
+  const toggleJiraItem = (item: JiraNode) => {
+    setSelectedJiraItems((prev) => {
+      const exists = prev.find((i) => i.id === item.id);
 
+      if (exists) {
+        return prev.filter((i) => i.id !== item.id);
+      } else {
+        return [...prev, item];
+      }
+    });
+  };
   const handleGithubClick = () => {
     if (isGithubMode) {
       setSelectedOptions((prev) => prev.filter((o) => o !== 'Github'));
@@ -106,7 +112,7 @@ export default function Search() {
     ...selectedGithubItems.map((item) => ({
       id: item.id,
       name: item.name,
-      Icon: item.type === 'repo' ? IconGithub : item.type === 'folder' ? IconSpace : IconTag,
+      Icon: item.type === 'repo' ? IconGithub : item.type === 'folder' ? IconFolder : IconFile,
       onRemove: () => toggleGithubItem(item),
     })),
   ];
@@ -120,7 +126,8 @@ export default function Search() {
     inputRef.current?.blur();
   });
   useOutsideClick(containerRef, () => {
-    if (openPopover || hasText) return;
+    if (hasText) return;
+    if (openPopover !== null) return;
     setIsFocused(false);
     inputRef.current?.blur();
   });
@@ -154,8 +161,12 @@ export default function Search() {
             <textarea
               ref={inputRef}
               rows={1}
-              onBlur={() => {
-                if (hasText) setIsFocused(true);
+              onBlur={(e) => {
+                if (containerRef.current?.contains(e.relatedTarget as Node)) {
+                  setIsFocused(true); // 다시 포커스 강제
+                  return;
+                }
+                if (!hasText) setIsFocused(false);
               }}
               className="text-body-medium mb-1.5 w-full resize-none outline-none"
               placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
@@ -288,6 +299,13 @@ export default function Search() {
                   onToggleItem={toggleGithubItem}
                   currentRepo={currentRepo}
                   onNavigate={setCurrentRepo}
+                />
+              ) : isJiraMode ? (
+                <JiraExplorer
+                  selectedItems={selectedJiraItems.map((i) => i.id)}
+                  onToggleItem={toggleJiraItem}
+                  currentProject={currentJiraProject}
+                  onNavigate={setCurrentJiraProject}
                 />
               ) : (
                 <DefaultSearchContent />

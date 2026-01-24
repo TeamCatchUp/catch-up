@@ -15,19 +15,6 @@ import IconConnectorLast from '@/public/icons/icon/connector_last.svg';
 
 import { GITHUB_MOCK_DATA, GithubNode } from '@/constants/githubRepoData';
 
-const ConnectorLine = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 14 47" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M1 0V47" stroke="#E5E5E5" strokeWidth="2" />
-    <path d="M1 23.5H14" stroke="#E5E5E5" strokeWidth="2" />
-  </svg>
-);
-const ConnectorLineLast = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 14 47" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M1 0V23.5" stroke="#E5E5E5" strokeWidth="2" />
-    <path d="M1 23.5H14" stroke="#E5E5E5" strokeWidth="2" />
-  </svg>
-);
-
 interface GithubExplorerProps {
   selectedItems: string[];
   onToggleItem: (item: GithubNode) => void;
@@ -45,7 +32,13 @@ export const GithubExplorer = ({ selectedItems, onToggleItem, currentRepo, onNav
   useEffect(() => {
     setActiveTab('file');
   }, [currentRepo]);
-
+  const getAllChildNodes = (node: GithubNode, nodes: GithubNode[] = []) => {
+    nodes.push(node);
+    if (node.children) {
+      node.children.forEach((child) => getAllChildNodes(child, nodes));
+    }
+    return nodes;
+  };
   const toggleExpand = (nodeId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -58,7 +51,25 @@ export const GithubExplorer = ({ selectedItems, onToggleItem, currentRepo, onNav
   const handleCheck = (item: GithubNode, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    onToggleItem(item);
+
+    const isFolder = item.type === 'folder' || item.type === 'repo';
+
+    if (isFolder && item.children) {
+      const allRelatedNodes = getAllChildNodes(item);
+      const isCurrentlySelected = selectedItems.includes(item.id);
+
+      // 폴더가 이미 선택됨 -> 전체 해제 / 선택 안됨 -> 전체 선택
+      allRelatedNodes.forEach((node) => {
+        const isNodeSelected = selectedItems.includes(node.id);
+        if (isCurrentlySelected) {
+          if (isNodeSelected) onToggleItem(node);
+        } else {
+          if (!isNodeSelected) onToggleItem(node);
+        }
+      });
+    } else {
+      onToggleItem(item);
+    }
   };
 
   const currentItems = currentRepo ? currentRepo.children || [] : GITHUB_MOCK_DATA;
@@ -70,14 +81,14 @@ export const GithubExplorer = ({ selectedItems, onToggleItem, currentRepo, onNav
     e.stopPropagation();
     if (activeTab !== 'file') return;
     filteredItems.forEach((item) => {
+      // 위에서 만든 재귀 로직을 타게 함으로써 하위까지 일괄 선택
       if (isAllSelected) {
-        if (selectedItems.includes(item.id)) onToggleItem(item);
+        if (selectedItems.includes(item.id)) handleCheck(item, e);
       } else {
-        if (!selectedItems.includes(item.id)) onToggleItem(item);
+        if (!selectedItems.includes(item.id)) handleCheck(item, e);
       }
     });
   };
-
   const renderItem = (node: GithubNode, depth: number = 0, isLastChild: boolean = false) => {
     const isExpanded = expandedNodes.has(node.id);
     const isSelected = selectedItems.includes(node.id);
@@ -88,7 +99,7 @@ export const GithubExplorer = ({ selectedItems, onToggleItem, currentRepo, onNav
     if (isFolder) TypeIcon = IconSpace;
     else if (isRepo) TypeIcon = IconGithub;
 
-    const Connector = isLastChild ? IconConnectorLast || ConnectorLineLast : IconConnector || ConnectorLine;
+    const Connector = isLastChild ? IconConnectorLast : IconConnector;
 
     if (isRepo) {
       return (
@@ -103,7 +114,6 @@ export const GithubExplorer = ({ selectedItems, onToggleItem, currentRepo, onNav
                 onClick={(e) => handleCheck(node, e)}
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  e.stopPropagation();
                 }}
                 className="shrink-0"
               >
@@ -147,6 +157,7 @@ export const GithubExplorer = ({ selectedItems, onToggleItem, currentRepo, onNav
               {isFolder ? (
                 <button
                   type="button"
+                  tabIndex={-1}
                   onClick={(e) => {
                     e.stopPropagation();
                     toggleExpand(node.id, e);
@@ -158,9 +169,9 @@ export const GithubExplorer = ({ selectedItems, onToggleItem, currentRepo, onNav
                   className="hover:bg-neutral-2 flex h-full w-full items-center justify-center rounded-lg"
                 >
                   {isExpanded ? (
-                    <IconArrowDown className="text-gray-70 h-5 w-5" />
+                    <IconArrowDown className="text-gray-70 pointer-events-none h-5 w-5" />
                   ) : (
-                    <IconArrowRight className="text-gray-70 h-5 w-5" />
+                    <IconArrowRight className="text-gray-70 pointer-events-none h-5 w-5" />
                   )}
                 </button>
               ) : (
