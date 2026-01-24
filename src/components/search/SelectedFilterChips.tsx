@@ -34,7 +34,7 @@ export const SelectedFilterChips = ({ chips, onReset }: SelectedFilterChipsProps
               className="border-neutral-5 rounded-rounded flex h-[37px] shrink-0 items-center gap-1 border bg-white p-1.5"
             >
               <div className="rounded-rounded flex h-6.25 w-6.25 shrink-0 items-center justify-center">
-                <ChipIcon className="text-blue-10 h-4 w-4" />
+                <ChipIcon className="text-blue-10" />
               </div>
               <span className="text-body-small text-gray-80 ml-0.5 max-w-30 truncate">{chip.name}</span>
               <button

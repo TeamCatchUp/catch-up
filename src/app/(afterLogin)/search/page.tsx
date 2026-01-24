@@ -13,6 +13,8 @@ import IconSpace from '@/public/icons/icon/space.svg';
 import IconLock from '@/public/icons/icon/lock_filled.svg';
 import IconFile from '@/public/icons/icon/file_filled.svg';
 import IconFolder from '@/public/icons/icon/folder_blue.svg';
+import IconJiraTicket from '@/public/icons/jira/Task.svg';
+import IconJiraSprint from '@/public/icons/jira/Epic.svg';
 
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/UI/SearchOptionButton';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
@@ -81,21 +83,33 @@ export default function Search() {
       }
     });
   };
-  const handleGithubClick = () => {
-    if (isGithubMode) {
-      setSelectedOptions((prev) => prev.filter((o) => o !== 'Github'));
-      setCurrentRepo(null); // 모드 종료시 레포 선택 초기화
-    } else {
-      setSelectedOptions((prev) => [...prev, 'Github']);
+  const handleJiraClick = () => {
+    setSelectedOptions((prev) => {
+      if (prev.includes('Jira')) {
+        setCurrentJiraProject(null);
+        return prev.filter((opt) => opt !== 'Jira');
+      }
       setIsFocused(true);
-    }
+      return [...prev.filter((opt) => opt !== 'Github'), 'Jira'];
+    });
   };
 
+  const handleGithubClick = () => {
+    setSelectedOptions((prev) => {
+      if (prev.includes('Github')) {
+        setCurrentRepo(null);
+        return prev.filter((opt) => opt !== 'Github');
+      }
+      setIsFocused(true);
+      return [...prev.filter((opt) => opt !== 'Jira'), 'Github'];
+    });
+  };
   const handleResetAll = () => {
     setSelectedPeople([]);
     setSelectedDepts([]);
     setSelectedProjects([]);
-    if (isGithubMode) handleGithubClick();
+    setSelectedGithubItems([]);
+    setSelectedJiraItems([]);
   };
 
   const handleSubmit = () => {
@@ -109,12 +123,35 @@ export default function Search() {
     ...selectedPeople.map((name) => ({ id: name, name, Icon: IconPerson, onRemove: () => togglePerson(name) })),
     ...selectedDepts.map((name) => ({ id: name, name, Icon: IconTag, onRemove: () => toggleDept(name) })),
     ...selectedProjects.map((name) => ({ id: name, name, Icon: IconSpace, onRemove: () => toggleProject(name) })),
-    ...selectedGithubItems.map((item) => ({
-      id: item.id,
-      name: item.name,
-      Icon: item.type === 'repo' ? IconGithub : item.type === 'folder' ? IconFolder : IconFile,
-      onRemove: () => toggleGithubItem(item),
-    })),
+    ...selectedGithubItems
+      .filter((item) => {
+        const isParentSelected = selectedGithubItems.some((potentialParent) => {
+          if (potentialParent.id === item.id) return false;
+          return potentialParent.children?.some((child: any) => child.id === item.id);
+        });
+        return !isParentSelected;
+      })
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        Icon: item.type === 'repo' ? IconGithub : item.type === 'folder' ? IconFolder : IconFile,
+        onRemove: () => toggleGithubItem(item),
+      })),
+
+    ...selectedJiraItems
+      .filter((item) => {
+        const isParentSelected = selectedJiraItems.some((potentialParent) => {
+          if (potentialParent.id === item.id) return false;
+          return potentialParent.children?.some((child: any) => child.id === item.id);
+        });
+        return !isParentSelected;
+      })
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        Icon: item.type === 'project' ? IconJira : item.type === 'board' ? IconJiraSprint : IconJiraTicket,
+        onRemove: () => toggleJiraItem(item),
+      })),
   ];
 
   const personLabel = selectedPeople.length > 0 ? `담당자: ${selectedPeople[0]} 외` : '담당자';
@@ -128,8 +165,8 @@ export default function Search() {
   useOutsideClick(containerRef, () => {
     if (hasText) return;
     if (openPopover !== null) return;
-    setIsFocused(false);
-    inputRef.current?.blur();
+    // setIsFocused(false);
+    // inputRef.current?.blur();
   });
 
   useEffect(() => {
@@ -199,9 +236,7 @@ export default function Search() {
                   Icon={IconJira}
                   label="Jira"
                   selected={selectedOptions.includes('Jira')}
-                  onClick={() =>
-                    setSelectedOptions((p) => (p.includes('Jira') ? p.filter((i) => i !== 'Jira') : [...p, 'Jira']))
-                  }
+                  onClick={handleJiraClick}
                 />
                 <SearchOptionButton
                   Icon={IconGithub}
