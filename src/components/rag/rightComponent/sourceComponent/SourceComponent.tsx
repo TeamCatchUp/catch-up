@@ -6,7 +6,7 @@ import Align from '/public/icons/icon/align.svg';
 import Divider from '/public/icons/icon/divider.svg';
 import AddCircle from '/public/icons/icon/add_circle.svg';
 import SourceCardsComponent from '@/components/rag/rightComponent/sourceComponent/SourceCardsComponent';
-import RagSourceSkeleton from '@/components/Skeleton/RagSourceSkeleton';
+import RagSourceSkeleton from '@/components/Skeleton/RagRightComponentSkeleton';
 import ErrorSourceComponent from './ErrorSourceComponent';
 
 interface Props {
@@ -63,10 +63,10 @@ const SourceComponent = ({ sources, isLoading, isError }: Props) => {
   const recommendedSources = filteredSources.filter((source) => !source.isCited);
 
   return (
-    <div className="flex w-101.25 flex-col gap-3 px-4 py-3">
+    <div className="flex w-full flex-col gap-3 px-4 py-3">
       {/* 필터링 */}
-      <div className="-mb-4 flex w-full overflow-x-auto">
-        <div className="flex h-9 min-w-max items-center gap-0.5">
+      <div className="-mb-4 flex overflow-x-auto">
+        <div className="flex h-9 items-center gap-0.5">
           {/* Align */}
           <button className="icon-button-only-gray flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg p-0.5">
             <Align className="block h-6 w-6 text-gray-50" />
@@ -103,10 +103,10 @@ const SourceComponent = ({ sources, isLoading, isError }: Props) => {
         {isError ? (
           <ErrorSourceComponent />
         ) : isLoading ? (
-          <RagSourceSkeleton />
+          <RagSourceSkeleton message={'출처를 분석하는 중입니다.'} />
         ) : (
           <div className="flex flex-col gap-2">
-            {citedSources.map((source, idx) => (
+            {citedSources.map((source) => (
               <SourceCardsComponent key={source.id} source={source} showCount count={source.sourceIndex} />
             ))}
 

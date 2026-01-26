@@ -1,6 +1,5 @@
 'use client';
 
-import clsx from 'clsx';
 import { useState } from 'react';
 import Align from '/public/icons/icon/align.svg';
 import Divider from '/public/icons/icon/divider.svg';
@@ -8,7 +7,7 @@ import Person from '/public/icons/icon/person.svg';
 import Tag from '/public/icons/icon/tag.svg';
 import Space from '/public/icons/icon/space.svg';
 import ArrowRight from '/public/icons/icon/arrow_right2.svg';
-import RagDetailedTasksSkeleton from '@/components/Skeleton/RagDetailedTasksSkeleton';
+import RagDetailedTasksSkeleton from '@/components/Skeleton/RagRightComponentSkeleton';
 import DetailedTasksCardComponent from './DetailedTasksCardComponent';
 import { SearchOptionButton } from '@/components/UI/SearchOptionButton';
 
@@ -79,7 +78,11 @@ const DetailedTasksComponent = ({ tasks, isLoading }: DetailedTasksComponentProp
       </div>
 
       <div className="flex flex-col gap-2">
-        {isLoading ? <RagDetailedTasksSkeleton /> : <DetailedTasksCardComponent tasks={tasks} />}
+        {isLoading ? (
+          <RagDetailedTasksSkeleton message={'관련 상세 업무를 분석하는 중입니다.'} />
+        ) : (
+          <DetailedTasksCardComponent tasks={tasks} />
+        )}
       </div>
     </div>
   );
