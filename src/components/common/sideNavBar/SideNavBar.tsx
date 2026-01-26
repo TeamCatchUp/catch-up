@@ -89,7 +89,12 @@ const SideNavBar = () => {
             onClick={() => router.push('/')}
             className={clsx('flex cursor-pointer items-center gap-2.5', isOpen ? 'px-1' : '')}
           >
-            <div className="group border-neutral-3 relative flex h-10 w-10 items-center rounded-xl border-[0.5px] px-1.25 py-1.5">
+            <div
+              className={clsx(
+                'group relative flex h-10 w-10 items-center px-1.25 py-1.5',
+                isOpen ? '' : 'border-neutral-3 rounded-xl border-[0.5px]',
+              )}
+            >
               <CatchupLogo className="relative left-px h-7.5 w-7" />
 
               {!isOpen && (
