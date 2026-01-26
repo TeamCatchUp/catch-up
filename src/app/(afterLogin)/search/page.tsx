@@ -5,213 +5,207 @@ import { useRouter } from 'next/navigation';
 import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconJira from '@/public/icons/logo/Jira.svg';
-import IconWiki from '@/public/icons/logo/Wiki.svg';
 import IconGithub from '@/public/icons/logo/GitHub.svg';
-import IconSlack from '@/public/icons/logo/Slack.svg';
 import IconDivider from '@/public/icons/icon/divider.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import IconSpace from '@/public/icons/icon/space.svg';
-import IconArrowRight from '@/public/icons/icon/arrow_right2.svg';
 import IconLock from '@/public/icons/icon/lock_filled.svg';
-import IconCloseSmall from '@/public/icons/icon/cancel_small.svg';
-import IconReset from '@/public/icons/icon/reset.svg';
+import IconFile from '@/public/icons/icon/file_filled.svg';
+import IconFolder from '@/public/icons/icon/folder_blue.svg';
+import IconJiraTicket from '@/public/icons/jira/Task.svg';
+import IconJiraSprint from '@/public/icons/jira/Epic.svg';
 
-import { FilterChip } from '@/components/UI/SearchFilter';
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/UI/SearchOptionButton';
-import { SearchSuggestion } from '@/components/UI/SearchSuggestion';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { useOutsideClick } from '@/hooks/useOutsideClick';
-import DropdownModal from '@/components/modal/DropdownModal';
 import { useUserStore } from '@/store/userStore';
-import { RECOMMAND_QUESTIONS } from '@/constants/recommandQuestion';
 import { SearchOptionPopover } from '@/components/search/SearchOptionPopover';
 import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/components/search/OptionDummyData';
 import { OptionListPopover } from '@/components/search/OptionListPopover';
-import { JiraTicketList } from '@/components/UI/JiraTicketList';
-import { ReacentlySearchList } from '@/components/UI/RecetlySearchList';
-import { RECENT_SEARCH_DATA } from '@/constants/RecentlySearchData';
 
-const JIRA_DATA = [
-  { id: 'JIRA-101', label: '일본 시장 진출 리서치 범위 및 방향 정의' },
-  { id: 'JIRA-102', label: '일본 진출 가설 검증 결과 정리' },
-  { id: 'JIRA-103', label: '신규 기능 인터페이스 설계' },
-  { id: 'JIRA-104', label: '백엔드 API 최적화 작업' },
-];
+import { GithubExplorer } from '@/components/search/GithubExplorer';
+import { DefaultSearchContent } from '@/components/search/DefaultSearchContent';
+import { SelectedFilterChips } from '@/components/search/SelectedFilterChips';
+import { GithubNode } from '@/constants/githubRepoData';
+import { JiraExplorer } from '@/components/search/JiraExplorer';
+import { JiraNode } from '@/constants/jiraData';
 
 export default function Search() {
   const router = useRouter();
+  const user = useUserStore((state) => state.user);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const [isGithubModalOpen, setIsGithubModalOpen] = useState(false);
-  const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
-
-  const currentSuggestions = selectedRepoId ? RECOMMAND_QUESTIONS[selectedRepoId] || [] : [];
 
   const [openPopover, setOpenPopover] = useState<'person' | 'department' | 'project' | null>(null);
-
-  const [selectedSystems, setSelectedSystems] = useState<string[]>([]);
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
 
-  const toggleSystem = (val: string) =>
-    setSelectedSystems((prev) => (prev.includes(val) ? prev.filter((i) => i !== val) : [...prev, val]));
+  const [currentRepo, setCurrentRepo] = useState<any>(null);
+
+  const [selectedGithubItems, setSelectedGithubItems] = useState<GithubNode[]>([]);
+
+  const [currentJiraProject, setCurrentJiraProject] = useState<any>(null);
+  const [selectedJiraItems, setSelectedJiraItems] = useState<any[]>([]);
+
+  const hasText = inputValue.trim().length > 0;
+  const isGithubMode = selectedOptions.includes('Github');
+  const isJiraMode = selectedOptions.includes('Jira');
 
   const togglePerson = (val: string) =>
-    setSelectedPeople((prev) => (prev.includes(val) ? prev.filter((i) => i !== val) : [...prev, val]));
-
+    setSelectedPeople((p) => (p.includes(val) ? p.filter((i) => i !== val) : [...p, val]));
   const toggleDept = (val: string) =>
-    setSelectedDepts((prev) => (prev.includes(val) ? prev.filter((i) => i !== val) : [...prev, val]));
-
+    setSelectedDepts((p) => (p.includes(val) ? p.filter((i) => i !== val) : [...p, val]));
   const toggleProject = (val: string) =>
-    setSelectedProjects((prev) => (prev.includes(val) ? prev.filter((i) => i !== val) : [...prev, val]));
+    setSelectedProjects((p) => (p.includes(val) ? p.filter((i) => i !== val) : [...p, val]));
 
-  const handleSuggestionClick = (question: string) => {
-    setInputValue(question);
-    inputRef.current?.focus();
+  const toggleGithubItem = (item: GithubNode) => {
+    setSelectedGithubItems((prev) => {
+      const exists = prev.find((i) => i.id === item.id);
+      if (exists) return prev.filter((i) => i.id !== item.id);
+      return [...prev, item];
+    });
   };
-  const gitToggleOption = (label: string) => {
-    setSelectedOptions((prev) => (prev.includes(label) ? prev.filter((item) => item !== label) : [...prev, label]));
+  const toggleJiraItem = (item: JiraNode) => {
+    setSelectedJiraItems((prev) => {
+      const exists = prev.find((i) => i.id === item.id);
+
+      if (exists) {
+        return prev.filter((i) => i.id !== item.id);
+      } else {
+        return [...prev, item];
+      }
+    });
+  };
+  const handleJiraClick = () => {
+    setSelectedOptions((prev) => {
+      if (prev.includes('Jira')) {
+        setCurrentJiraProject(null);
+        return prev.filter((opt) => opt !== 'Jira');
+      }
+      setIsFocused(true);
+      return [...prev.filter((opt) => opt !== 'Github'), 'Jira'];
+    });
   };
 
   const handleGithubClick = () => {
-    if (selectedOptions.includes('Github')) {
-      toggleOption('Github');
-      setSelectedRepoId(null);
-    } else {
-      setIsGithubModalOpen(true);
-    }
+    setSelectedOptions((prev) => {
+      if (prev.includes('Github')) {
+        setCurrentRepo(null);
+        return prev.filter((opt) => opt !== 'Github');
+      }
+      setIsFocused(true);
+      return [...prev.filter((opt) => opt !== 'Jira'), 'Github'];
+    });
+  };
+  const handleResetAll = () => {
+    setSelectedPeople([]);
+    setSelectedDepts([]);
+    setSelectedProjects([]);
+    setSelectedGithubItems([]);
+    setSelectedJiraItems([]);
   };
 
-  const personLabel =
-    selectedPeople.length > 0
-      ? `담당자: ${selectedPeople[0]}${selectedPeople.length > 1 ? ` 외 ${selectedPeople.length - 1}명` : ''}`
-      : '담당자';
+  const handleSubmit = () => {
+    if (!inputValue.trim()) return;
+    const repoQuery = currentRepo ? `&repo=${currentRepo.id}` : '';
+    const newSessionId = crypto.randomUUID();
+    router.push(`/ragAnswer/${newSessionId}?q=${encodeURIComponent(inputValue)}${repoQuery}`);
+  };
 
-  const deptLabel =
-    selectedDepts.length > 0
-      ? `부서: ${selectedDepts[0]}${selectedDepts.length > 1 ? ` 외 ${selectedDepts.length - 1}명` : ''}`
-      : '부서명';
+  const allSelectedChips = [
+    ...selectedPeople.map((name) => ({ id: name, name, Icon: IconPerson, onRemove: () => togglePerson(name) })),
+    ...selectedDepts.map((name) => ({ id: name, name, Icon: IconTag, onRemove: () => toggleDept(name) })),
+    ...selectedProjects.map((name) => ({ id: name, name, Icon: IconSpace, onRemove: () => toggleProject(name) })),
+    ...selectedGithubItems
+      .filter((item) => {
+        const isParentSelected = selectedGithubItems.some((potentialParent) => {
+          if (potentialParent.id === item.id) return false;
+          return potentialParent.children?.some((child: any) => child.id === item.id);
+        });
+        return !isParentSelected;
+      })
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        Icon: item.type === 'repo' ? IconGithub : item.type === 'folder' ? IconFolder : IconFile,
+        onRemove: () => toggleGithubItem(item),
+      })),
 
-  const projectLabel =
-    selectedProjects.length > 0
-      ? `프로젝트: ${selectedProjects[0]}${selectedProjects.length > 1 ? ` 외 ${selectedProjects.length - 1}명` : ''}`
-      : '프로젝트';
+    ...selectedJiraItems
+      .filter((item) => {
+        const isParentSelected = selectedJiraItems.some((potentialParent) => {
+          if (potentialParent.id === item.id) return false;
+          return potentialParent.children?.some((child: any) => child.id === item.id);
+        });
+        return !isParentSelected;
+      })
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        Icon: item.type === 'project' ? IconJira : item.type === 'board' ? IconJiraSprint : IconJiraTicket,
+        onRemove: () => toggleJiraItem(item),
+      })),
+  ];
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const user = useUserStore((state) => state.user);
+  const personLabel = selectedPeople.length > 0 ? `담당자: ${selectedPeople[0]} 외` : '담당자';
+  const deptLabel = selectedDepts.length > 0 ? `부서: ${selectedDepts[0]} 외` : '부서명';
+  const projectLabel = selectedProjects.length > 0 ? `프로젝트: ${selectedProjects[0]} 외` : '프로젝트';
 
   useEscapeKey(() => {
     setIsFocused(false);
     inputRef.current?.blur();
   });
-
   useOutsideClick(containerRef, () => {
-    if (openPopover || isGithubModalOpen || hasText) return;
-    setIsFocused(false);
-    inputRef.current?.blur();
+    if (hasText) return;
+    if (openPopover !== null) return;
+    // setIsFocused(false);
+    // inputRef.current?.blur();
   });
-
-  const toggleOption = (label: string) => {
-    setSelectedOptions((prev) => (prev.includes(label) ? prev.filter((item) => item !== label) : [...prev, label]));
-  };
-
-  const allSelectedChips = [
-    ...selectedPeople.map((name) => ({
-      id: name,
-      name,
-      category: 'person',
-      Icon: IconPerson,
-      onRemove: () => togglePerson(name),
-    })),
-    ...selectedDepts.map((name) => ({
-      id: name,
-      name,
-      category: 'dept',
-      Icon: IconTag,
-      onRemove: () => toggleDept(name),
-    })),
-    ...selectedProjects.map((name) => ({
-      id: name,
-      name,
-      category: 'project',
-      Icon: IconSpace,
-      onRemove: () => toggleProject(name),
-    })),
-  ];
-
-  const handleSubmit = () => {
-    if (!inputValue.trim()) return;
-
-    if (selectedOptions.includes('Github') && !selectedRepoId) {
-      alert('레포지토리를 선택해주세요.');
-      setIsGithubModalOpen(true);
-      return;
-    }
-
-    const newSessionId = crypto.randomUUID();
-    const githubQuery = selectedRepoId ? `&repo=${selectedRepoId}` : '';
-    router.push(`/ragAnswer/${newSessionId}?q=${encodeURIComponent(inputValue)}${githubQuery}`);
-  };
-
-  const handleResetAll = () => {
-    setSelectedSystems([]);
-    setSelectedPeople([]);
-    setSelectedDepts([]);
-    setSelectedProjects([]);
-    setSelectedRepoId(null);
-    setSelectedOptions((prev) => prev.filter((opt) => opt === 'Github' && !selectedRepoId));
-  };
-
-  const hasText = inputValue.trim().length > 0;
 
   useEffect(() => {
     if (!inputRef.current) return;
-
-    const el = inputRef.current;
-    el.style.height = 'auto';
-
-    const lineHeight = 26;
-    const maxHeight = lineHeight * 6;
-
-    el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px';
+    inputRef.current.style.height = 'auto';
+    inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 26 * 6) + 'px';
   }, [inputValue]);
 
   return (
     <div className="flex flex-col items-center gap-4 self-stretch pt-16 pb-16">
-      <div className="flex h-24 flex-col items-center justify-center gap-3">
-        <div className="text-display-xlarge text-nomal-normal">반갑습니다, {user?.name}님!</div>
-        <div className="text-heading-large text-nomal-alternative">
+      <div className="flex h-24 flex-col items-center justify-center gap-3 text-gray-50">
+        <div className="text-display-xlarge text-normal-normal">반갑습니다, {user?.name}님!</div>
+        <div className="text-heading-large text-normal-alternative">
           무엇을 도와드릴까요? 필요한 업무정보를 찾아보세요.
         </div>
       </div>
-      <div className="text-blue-55 text-body-small flex items-center gap-2.5">
-        {/* {['연차 신청 방법', '권한 신청 방법', '피그마 관련 내부 그라운드 룰', '데이터 요청 방법'].map((text) => (
-          <FilterChip key={text} label={text} />
-        ))} */}
-      </div>
+
       <div
         ref={containerRef}
-        className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center gap-2.5 border border-solid bg-white ${isFocused ? 'h-125.5 max-h-135 min-h-92.5 overflow-hidden rounded-[28px] p-3' : 'rounded-rounded h-auto p-3'} `}
+        className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center gap-1.5 border border-solid bg-white ${
+          isFocused ? 'h-125.5 max-h-135 min-h-92.5 overflow-hidden rounded-[28px] p-3' : 'rounded-rounded h-auto p-3'
+        }`}
       >
         <div className="flex w-full items-end justify-between">
-          <div className="mr-2 flex h-10 w-10 items-center justify-center p-1.5">
-            <IconAdd className="h-6 w-6" />
+          <div className="text-button-secondary-mono relative bottom-0.5 mr-2 flex h-10 w-10 cursor-pointer items-center justify-center p-1.5">
+            <IconAdd className="text-gray-70 h-7 w-7" />
           </div>
           <div className="flex flex-1 items-center gap-2">
             <textarea
               ref={inputRef}
               rows={1}
-              onBlur={() => {
-                if (hasText) setIsFocused(true);
+              onBlur={(e) => {
+                if (containerRef.current?.contains(e.relatedTarget as Node)) {
+                  setIsFocused(true); // 다시 포커스 강제
+                  return;
+                }
+                if (!hasText) setIsFocused(false);
               }}
-              className="text-body-medium mb-1.5 w-full resize-none outline-none"
+              className="text-body-medium mb-2.25 w-full resize-none outline-none"
               placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
               value={inputValue}
               onFocus={() => setIsFocused(true)}
@@ -226,68 +220,49 @@ export default function Search() {
           </div>
           <button
             onClick={handleSubmit}
-            disabled={loading}
-            className={`rounded-rounded ml-2 flex items-center border border-solid p-2 ${hasText ? 'border-blue-50 bg-blue-50' : 'bg-neutral-1 border-neutral-2'}`}
+            className={`rounded-rounded relative bottom-px ml-2 flex items-center border border-solid p-2 ${
+              hasText ? 'cursor-pointer border-blue-50 bg-blue-50' : 'bg-neutral-1 border-neutral-2'
+            }`}
           >
-            <IconArrowSend className={`${hasText ? 'brightness-0 invert' : ''} h-6 w-6`} />
+            <IconArrowSend className={`${hasText ? 'brightness-0 invert' : 'text-gray-30'} h-6 w-6`} />
           </button>
         </div>
 
         {isFocused && (
-          <div className="border-neutral-4 flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden border-t pt-2">
+          <div className="border-neutral-4 mt-1 flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden border-t pt-2">
             <div className="flex items-center gap-1.5 self-stretch overflow-x-scroll px-1.5 whitespace-nowrap">
               <div className="flex items-center gap-2">
                 <SearchOptionButton
                   Icon={IconJira}
                   label="Jira"
                   selected={selectedOptions.includes('Jira')}
-                  onClick={() => toggleOption('Jira')}
+                  onClick={handleJiraClick}
                 />
-                <div className="relative">
-                  <SearchOptionButton
-                    Icon={IconGithub}
-                    label={selectedRepoId ? 'Github' + ':' + selectedRepoId : 'Github'}
-                    selected={selectedOptions.includes('Github')}
-                    onClick={handleGithubClick}
-                  />
-                  {isGithubModalOpen && (
-                    <div className="absolute top-full left-0 z-[100]">
-                      <DropdownModal
-                        onClose={() => setIsGithubModalOpen(false)}
-                        onSelect={(id) => {
-                          setSelectedRepoId(id);
-                          if (!selectedOptions.includes('Github')) {
-                            gitToggleOption('Github');
-                          }
-                          setIsGithubModalOpen(false);
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
+                <SearchOptionButton
+                  Icon={IconGithub}
+                  label={currentRepo ? `Github: ${currentRepo.name}` : 'Github'}
+                  selected={isGithubMode}
+                  onClick={handleGithubClick}
+                />
                 <SearchOptionDisabledButton Icon={IconLock} label="Wiki" />
                 <SearchOptionDisabledButton Icon={IconLock} label="Slack" />
               </div>
               <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
+
               <div className="flex items-center gap-2">
                 <SearchOptionPopover
                   open={openPopover === 'person'}
-                  onOpenChange={(open) => {
-                    setOpenPopover(open ? 'person' : null);
-                    if (!open) inputRef.current?.focus();
+                  onOpenChange={(o) => {
+                    setOpenPopover(o ? 'person' : null);
+                    if (!o) inputRef.current?.focus();
                   }}
                   trigger={
                     <SearchOptionButton
                       Icon={IconPerson}
                       label={personLabel}
                       selected={selectedPeople.length > 0}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                      }}
-                      onClick={() => {
-                        setOpenPopover('person');
-                        inputRef.current?.focus();
-                      }}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setOpenPopover('person')}
                     />
                   }
                 >
@@ -299,11 +274,12 @@ export default function Search() {
                     Icon={IconPerson}
                   />
                 </SearchOptionPopover>
+
                 <SearchOptionPopover
                   open={openPopover === 'department'}
-                  onOpenChange={(open) => {
-                    setOpenPopover(open ? 'department' : null);
-                    if (!open) inputRef.current?.focus();
+                  onOpenChange={(o) => {
+                    setOpenPopover(o ? 'department' : null);
+                    if (!o) inputRef.current?.focus();
                   }}
                   trigger={
                     <SearchOptionButton
@@ -325,9 +301,9 @@ export default function Search() {
 
                 <SearchOptionPopover
                   open={openPopover === 'project'}
-                  onOpenChange={(open) => {
-                    setOpenPopover(open ? 'project' : null);
-                    if (!open) inputRef.current?.focus();
+                  onOpenChange={(o) => {
+                    setOpenPopover(o ? 'project' : null);
+                    if (!o) inputRef.current?.focus();
                   }}
                   trigger={
                     <SearchOptionButton
@@ -347,64 +323,29 @@ export default function Search() {
                   />
                 </SearchOptionPopover>
               </div>
-              {/* <div className="flex h-7 w-7 items-center justify-center gap-2.5 p-0.5">
-                <IconArrowRight className="h-5 w-5 shrink-0" />
-              </div> */}
             </div>
-            {allSelectedChips.length > 0 && (
-              <div className="bg-neutral-1 border-neutral-2 flex w-full shrink-0 flex-col gap-2 rounded-xl border p-2">
-                <div className="flex w-full items-center justify-between px-1 pb-1">
-                  <div className="text-body-xsmall text-nomal-alternative">
-                    선택 항목 &nbsp;{allSelectedChips.length}
-                  </div>
-                  <button
-                    onClick={handleResetAll}
-                    className="rounded-rounded bg-neutral-3 flex items-center justify-center p-0.5"
-                  >
-                    <IconReset className="h-4.5 w-4.5" />
-                  </button>
-                </div>
 
-                <div className="no-scrollbar flex w-full gap-1.5 overflow-x-auto whitespace-nowrap">
-                  {allSelectedChips.map((chip) => {
-                    const ChipIcon = chip.Icon;
-                    return (
-                      <div
-                        key={`${chip.category}-${chip.id}`}
-                        className="border-neutral-5 rounded-rounded flex h-[37px] shrink-0 items-center gap-1 border bg-white p-1.5"
-                      >
-                        <div className="rounded-rounded flex h-6.25 w-6.25 shrink-0 items-center justify-center">
-                          <ChipIcon className="text-blue-10 h-4 w-4" />
-                        </div>
-                        <span className="text-body-small text-gray-80 ml-0.5 max-w-30 truncate">{chip.name}</span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            chip.onRemove();
-                          }}
-                          className="hover:text-blue-80 ml-0.5 transition-colors"
-                        >
-                          <IconCloseSmall className="h-5 w-5" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            <SelectedFilterChips chips={allSelectedChips} onReset={handleResetAll} />
+
             <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-start gap-2 self-stretch overflow-y-auto pt-2">
-              <ReacentlySearchList title="최근 질문" querys={RECENT_SEARCH_DATA} />
-              <JiraTicketList tickets={JIRA_DATA} title="최근 확인한 지라 티켓" />
+              {isGithubMode ? (
+                <GithubExplorer
+                  selectedItems={selectedGithubItems.map((i) => i.id)}
+                  onToggleItem={toggleGithubItem}
+                  currentRepo={currentRepo}
+                  onNavigate={setCurrentRepo}
+                />
+              ) : isJiraMode ? (
+                <JiraExplorer
+                  selectedItems={selectedJiraItems.map((i) => i.id)}
+                  onToggleItem={toggleJiraItem}
+                  currentProject={currentJiraProject}
+                  onNavigate={setCurrentJiraProject}
+                />
+              ) : (
+                <DefaultSearchContent />
+              )}
             </div>
-            {/* {selectedRepoId && currentSuggestions.length > 0 && (
-                <div className="border-neutral-1 flex flex-[1_0_0] flex-col items-start gap-4 self-stretch border-t pt-4">
-                  <SearchSuggestion
-                    title="레포지토리 맞춤 질문"
-                    suggestions={currentSuggestions}
-                    onItemClick={(question) => setInputValue(question)}
-                  />
-                </div>
-              )} */}
           </div>
         )}
       </div>

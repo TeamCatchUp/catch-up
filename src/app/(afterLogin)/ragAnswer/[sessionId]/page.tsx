@@ -95,25 +95,30 @@ export default function Page() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const sseRef = useRef<EventSource | null>(null);
-  const [sseReady, setSseReady] = useState(false);
+  const sseReadyRef = useRef(false);
+  const mountedRef = useRef(true); // 컴포넌트 마운트 상태
+  const stoppedRef = useRef(false); // 로딩 중 질문 중지
 
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
 
   const formatMarkdownString = (text: string) => {
-    return text
-      .replace(/\\n/g, '\n')
-      .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2')
-      .replace(/([^\n])\n(\d+\.\s)/g, '$1\n\n$2')
-      .replace(/([^\n])\n([-*+]\s)/g, '$1\n\n$2')
-      .replace(/([^\n])\n(-\s\[[x\s]\]\s)/g, '$1\n\n$2')
-      .replace(/([^\n])\n(```)/g, '$1\n\n$2')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
+    return (
+      text
+        .replace(/\\n/g, '\n')
+        .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2')
+        .replace(/([^\n])\n(\d+\.\s)/g, '$1\n\n$2')
+        .replace(/([^\n])\n([-*+]\s)/g, '$1\n\n$2')
+        .replace(/([^\n])\n(-\s\[[x\s]\]\s)/g, '$1\n\n$2')
+        .replace(/([^\n])\n(```)/g, '$1\n\n$2')
+        // .replace(/\n{3,}/g, '\n\n')
+        .trim()
+    );
   };
 
   const beginAnswerLoading = useCallback(() => {
+    stoppedRef.current = false;
     setIsLoading(true);
     setIsError(false);
     setShowPRSelection(false);
@@ -161,44 +166,60 @@ export default function Page() {
     [sessionId],
   );
 
+  // SSE 연결 대기 로직 (새로고침 문제)
   const waitForSSEOpen = async () => {
-    if (sseRef.current?.readyState === EventSource.OPEN || sseReady) {
+    console.log('[waitForSSEOpen] 시작, readyState: ', sseRef.current?.readyState);
+
+    // SSE 연결되어 있음 -> 즉시 반환
+    if (sseRef.current?.readyState === EventSource.OPEN && sseReadyRef.current) {
+      console.log('[waitForSSEOpen] SSE 이미 연결됨');
+      // 추가 대기 시간 (백에서 SSE 연결 등록할 시간 확보)
+      await new Promise((resolve) => setTimeout(resolve, 10000));
       return;
     }
 
     return new Promise<void>((resolve, reject) => {
       const start = Date.now();
+      const checkInterval = 100;
+      const timeout = 10000;
+
       const timer = setInterval(() => {
-        if (sseRef.current?.readyState === EventSource.OPEN) {
+        const currentState = sseRef.current?.readyState;
+        const elapsed = Date.now() - start;
+
+        console.log(`[waitForSSEOpen] 체크 중 .. readyState: ${currentState}, elapsed: ${elapsed}ms`);
+
+        if (currentState === EventSource.OPEN && sseReadyRef.current) {
+          console.log('[waitForSSEOpen] 연결 완료!');
           clearInterval(timer);
-          resolve();
+          // 백에서 SSE 연결 등록할 시간 확보
+          setTimeout(() => {
+            console.log('[waitForSSEOpen] 추가 대기 완료, 준비됨');
+            resolve();
+          }, 10000);
           return;
         }
 
-        if (Date.now() - start > 30000) {
+        if (elapsed > timeout) {
+          console.error('[waitForSSEOpen] timeout');
           clearInterval(timer);
           reject(new Error('SSE connection timeout'));
+          return;
         }
-      }, 100);
+      }, checkInterval);
     });
   };
 
   // SSE 메시지 핸들러 - useCallback으로 메모이제이션
   const handleSSEMessage = useCallback(
     (notification: RagNotification) => {
+      if (stoppedRef.current) return; // 입력 중지 이후, 모든 SSE 무시
+
       if (!notification?.data || notification.data.sessionId !== sessionId) {
         return;
       }
 
       const { type, data } = notification;
-
-      console.log('[SSE] Event received:', {
-        type,
-        node: data.node,
-        dataType: data.type,
-        hasPayload: !!data.payload,
-        hasResponse: !!data.response,
-      });
 
       switch (type) {
         case 'RAG_IN_PROGRESS': {
@@ -231,18 +252,10 @@ export default function Page() {
             sourcesCount: data.response?.sources?.length,
             alreadyProcessing: processingDoneRef.current,
           });
-          console.log('relatedJiraIssues len', data.relatedJiraIssues?.length);
-          console.log(
-            'sample sourceType',
-            data.relatedJiraIssues?.[0]?.sourceType,
-            typeof data.relatedJiraIssues?.[0]?.sourceType,
-          );
-          console.log('[SSE RAW JSON]', JSON.stringify(notification));
-          console.log('normalized tasks', normalizeRelatedJiraIssues(data.relatedJiraIssues ?? []));
 
           // 중복 처리 방지
           if (processingDoneRef.current) {
-            console.warn('[SSE] RAG_DONE already processed, ignoring');
+            console.warn('[SSE] RAG_DONE already processed, 중복 무시');
             return;
           }
           processingDoneRef.current = true;
@@ -270,40 +283,57 @@ export default function Page() {
 
   // SSE 연결 초기화 - sessionId가 변경될 때만 재연결
   useEffect(() => {
+    mountedRef.current = true;
     console.log('[SSE] 세션 초기 연결:', sessionId);
 
-    // 이미 연결되어 있으면 스킵
-    if (sseRef.current?.readyState === EventSource.OPEN) {
-      console.log('[SSE] 이미 연결됨');
-      return;
+    // 기존 연결 존재 시 정리 (중복 요청 방지)
+    if (sseRef.current) {
+      console.log('[SSE] 기존 연결 정리');
+      sseRef.current.close();
+      sseRef.current = null;
+      sseReadyRef.current = false;
     }
 
-    setSseReady(false);
+    // 백엔드에서 연결 정리할 시간 확보
+    const setUpTimer = setTimeout(() => {
+      if (!mountedRef.current) return;
 
-    const sse = createSSEConection(
-      handleSSEMessage,
-      (error) => {
-        console.error('[SSE] Error:', error);
-        if (sseRef.current?.readyState === EventSource.CLOSED) {
-          setIsLoading(false);
-        }
-      },
-      () => {
-        console.log('[SSE] 연결');
-        setTimeout(() => setSseReady(true), 1000);
-        // console.log('[SSE] 연결 1초 after');
-      },
-    );
+      console.log('[SSE] 새 연결 시작');
 
-    sseRef.current = sse;
+      const sse = createSSEConection(
+        sessionId,
+        handleSSEMessage,
+        (err) => {
+          console.error('[SSE] error: ', err);
+          if (sseRef.current?.readyState === EventSource.CLOSED) {
+            setIsLoading(false);
+          }
+        },
+        () => {
+          console.log('[SSE] 연결');
+          setTimeout(() => {
+            if (mountedRef.current) {
+              sseReadyRef.current = true;
+              console.log('[SSE] ready');
+            }
+          }, 1000);
+        },
+      );
+
+      sseRef.current = sse;
+    }, 300);
 
     return () => {
       console.log('[SSE] 클린업');
-      sseRef.current?.close();
-      sseRef.current = null;
-      setSseReady(false);
+      clearTimeout(setUpTimer);
+      mountedRef.current = false;
+      if (sseRef.current) {
+        sseRef.current.close();
+        sseRef.current = null;
+      }
+      sseReadyRef.current = false;
     };
-  }, [sessionId]);
+  }, [sessionId, handleSSEMessage]);
 
   // 자동 하단 스크롤
   useEffect(() => {
@@ -320,17 +350,20 @@ export default function Page() {
   useEffect(() => {
     const saved = localStorage.getItem(`chat_${sessionId}`);
 
+    // localStorage에서 데이터 복원
     if (saved) {
       setChatData(JSON.parse(saved));
       setIsLoading(false);
       return;
     }
 
+    // initialQuery로 첫 질문 실행
     if (initialQuery) {
       fetchFirstAnswer(initialQuery);
       return;
     }
 
+    // 빈 채팅 데이터 생성
     setChatData({
       sessionId,
       title: '',
@@ -362,8 +395,11 @@ export default function Page() {
     setChatData(initialData);
 
     try {
+      console.log('[fetchFirstAnswer] SSE 연결 대기 시작');
       await waitForSSEOpen();
+      console.log('[fetchFirstAnswer] SSE 연결 오나료, 질문 전송');
       await sendChatQuery(query, sessionId, indexList);
+      console.log('[fetchFirstAnswer] 질문 전송 완료');
 
       // 30초 타임아웃
       const timeout = setTimeout(() => {
@@ -408,10 +444,23 @@ export default function Page() {
     beginAnswerLoading();
 
     try {
+      console.log('[handleSendMessage] SSE 연결 대기 시작');
       await waitForSSEOpen();
+      console.log('[handleSendMessage] SSE 연결 완료, 질문 전송');
       await sendChatQuery(newInput, sessionId, indexList);
-    } catch (err) {
+      console.log('[handleSendMessage] 질문 전송 완료');
+    } catch (err: any) {
       console.error('[handleSendMessage] Error:', err);
+
+      // SSE 연결 문제인 경우
+      if (err.message === 'SSE_NOT_CONNECTED') {
+        console.error('[handleSendMessage] 백엔드가 SSE 연결을 찾지 못했습니다');
+
+        // alert('새로고침이 필요합니다. 백엔드 서버와의 연결에 문제가 있습니다.');
+        // 페이지 새로고침 (임시 해결책)
+        // window.location.reload();
+      }
+
       setIsError(false);
       setIsLoading(false);
     }
@@ -511,6 +560,21 @@ export default function Page() {
     }
   };
 
+  const handleStop = useCallback(() => {
+    if (!isLoading) return;
+
+    stoppedRef.current = true; // 이후 SSE 무시
+    processingDoneRef.current = true; // RAG_DONE 중복 방지 플래그도 같이 close
+
+    setIsLoading(false);
+    setIsError(false);
+    setShowPRSelection(false);
+    setCurrentStep('router');
+
+    // 답변 : 빈 줄
+    appendAssistantAnswer('\n', [], []);
+  }, [isLoading, appendAssistantAnswer]);
+
   if (!chatData) {
     return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
   }
@@ -524,7 +588,7 @@ export default function Page() {
       <div className="flex min-w-0 flex-1 flex-col">
         <RagContentHeader />
 
-        <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r">
+        <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
           <div
             ref={scrollRef}
             className="flex flex-1 flex-col items-center gap-8 overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
@@ -537,7 +601,7 @@ export default function Page() {
               <div className="border-neutral-4 flex-1 border-t" />
             </div>
 
-            {chatData.messages.map((msg, index) => (
+            {chatData.messages.map((msg) => (
               <div key={msg.id} className="mx-auto flex w-193.25 flex-col gap-6">
                 {msg.role === 'user' ? (
                   <div className="flex flex-col gap-4">
@@ -664,7 +728,8 @@ export default function Page() {
                             )}
                           </div>
 
-                          <div onClick={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}>
+                          {/* <div onClick={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}> */}
+                          <div>
                             <FilterComponent
                               isOpen={filterOpenMap[msg.id]}
                               onClose={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}
@@ -790,8 +855,11 @@ export default function Page() {
                   )}
 
                   {isLoading ? (
-                    <button className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full">
-                      <Stop className="text-gray-70 relative left-px h-6 w-6" />
+                    <button
+                      onClick={handleStop}
+                      className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full"
+                    >
+                      <Stop className="text-gray-70 relative left-px h-6 w-6 cursor-pointer" />
                     </button>
                   ) : (
                     <button
@@ -813,11 +881,7 @@ export default function Page() {
         </div>
       </div>
 
-      <div
-        className={`border-neutral-3 flex flex-none flex-col border-l bg-white ${
-          activeTab === 'source' ? 'w-101.25' : 'w-125'
-        }`}
-      >
+      <div className={`border-neutral-3 flex w-115 flex-none flex-col border-l bg-white`}>
         <RagRightAdditionalHeader activeTab={activeTab} onChange={setActiveTab} sourceCount={currentSources.length} />
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'source' && (

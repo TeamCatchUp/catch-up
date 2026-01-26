@@ -10,6 +10,7 @@
 @layer base {
   ::-webkit-scrollbar {
     width: 0px;
+    height: 0px;
     background: transparent;
   }
 
@@ -21,6 +22,11 @@
 
     font-family: Pretendard, Arial, sans-serif;
     letter-spacing: var(--tracking-tight);
+  }
+
+  input,
+  textarea {
+    caret-color: #0054d1;
   }
 }
 

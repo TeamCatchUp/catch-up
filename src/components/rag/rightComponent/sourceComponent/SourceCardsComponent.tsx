@@ -37,6 +37,8 @@ const SourceCardsComponent = ({ source, showCount = true, count }: Props) => {
 
   const Icon = SOURCE_ICON_MAP[source.sourceType];
 
+  const dateText = source.date?.trim() ? source.date : '-';
+  const authorText = source.author?.trim() ? source.author : '-';
   return (
     <div className="flex flex-col gap-2">
       <div
@@ -54,14 +56,14 @@ const SourceCardsComponent = ({ source, showCount = true, count }: Props) => {
           </div>
         </div>
         {/* 소제목 */}
-        <div className="text-body-small text-gray-70 max-w-87 truncate">{source.title}</div>
+        <div className="text-heading-small text-gray-70 max-w-87 truncate">{source.title}</div>
         {/* 내용 */}
-        <div className="text-body-xsmall line-clamp-2 text-gray-50">{source.content}</div>
+        <div className="text-label-small line-clamp-2 text-gray-50">{source.content}</div>
         {/* 날짜 */}
         <div className="text-body-xsmall text-gray-30 flex items-center gap-1">
-          <span>{source.date}</span>
+          <span>{dateText}</span>
           <div className="bg-neutral-3 mx-2 h-3.75 w-px" />
-          <span>{source.author}</span>
+          <span>{authorText}</span>
         </div>
       </div>
     </div>

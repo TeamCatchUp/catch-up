@@ -17,7 +17,7 @@ const DetailedTaskContent = ({ activeTab, renderContent, type, currentTask }: De
       {activeTab !== 'comments' && (
         <div className="mt-6 flex flex-col gap-4">
           {/* divider */}
-          <div className="border-neutral-3 flex border" />
+          <div className="bg-neutral-3 flex h-px" />
           <RelatedTasksSection type={type} currentTask={currentTask} />
         </div>
       )}

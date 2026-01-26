@@ -83,7 +83,7 @@ const SelectionBarModal = ({
         {/* 상위 task 및 하위 업무들 */}
         {!isCollapsed && (
           <>
-            <div className="flex h-40 w-112 flex-col overflow-y-auto">
+            <div className="flex h-40 w-108.75 flex-col overflow-y-auto">
               {selectedTasks.map((task) => {
                 const isExpanded = expandedTasks[task.taskId];
                 const showParentTask = task.taskChecked;
@@ -92,7 +92,7 @@ const SelectionBarModal = ({
                   <div key={task.taskId} className="flex flex-col gap-0.5">
                     {/* 상위 task */}
                     {showParentTask && (
-                      <div className="group hover:bg-neutral-2 flex h-9 w-112 gap-3 rounded-lg p-1">
+                      <div className="group hover:bg-neutral-2 flex h-9 w-103 gap-3 rounded-lg p-1">
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                           <div className="h-4.5 w-4.5 shrink-0">
                             <Epic />
@@ -149,7 +149,7 @@ const SelectionBarModal = ({
                           <span
                             className={clsx(
                               'text-body-small text-gray-80 min-w-0 flex-1 truncate',
-                              showParentTask ? 'max-w-92' : 'w-95.5',
+                              showParentTask ? 'max-w-88.75' : 'w-92.25',
                             )}
                           >
                             {subtask.title}
