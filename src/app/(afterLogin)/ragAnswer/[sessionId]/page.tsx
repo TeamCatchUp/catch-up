@@ -338,6 +338,7 @@ export default function Page() {
     }
 
     const sse = createSSEConection(
+      sessionId, // 추가
       handleSSEMessage,
       (error) => {
         console.error('[SSE] Error:', error);
