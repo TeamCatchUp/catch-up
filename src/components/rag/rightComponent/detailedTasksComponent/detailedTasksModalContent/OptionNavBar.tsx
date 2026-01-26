@@ -83,14 +83,13 @@ const OptionalNavbar = ({ tabs, activeTab, onChange }: TaskDetailTabsProps) => {
                 </span>
               )
             )}
+            <div className="bg-neutral-3 absolute right-0 bottom-1.5 left-0 h-px" />
             {activeTab === tab.id && !tab.locked && (
-              <div className="bg-blue-45 absolute right-0 bottom-1.75 left-0 z-50 h-0.5" />
+              <div className="bg-blue-45 absolute right-0 bottom-1.5 left-0 z-50 h-0.5" />
             )}
           </button>
         ))}
       </div>
-
-      <div className="bg-neutral-3 absolute right-0 bottom-1.5 left-0 h-px" />
 
       {/* < 버튼 */}
       {hovered && canScrollLeft && (
