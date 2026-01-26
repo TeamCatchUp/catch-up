@@ -103,25 +103,29 @@ const FeedbackSection = ({
             })}
           </div>
 
-          {/* 더 자세히 모달 */}
-          <div className="text-body-medium border-blue-30 mt-4 flex h-22.25 w-184.75 flex-col rounded-2xl border bg-white px-3 py-2.5">
-            <textarea
-              placeholder="자세한 피드백을 남겨주세요."
-              value={detailText}
-              onChange={(e) => setDetailText(e.target.value)}
-              className="text-gray-80 placeholder:text-gray-30 resize-none outline-none"
-            />
-            <button
-              disabled={!detailText.trim()}
-              onClick={submitFeedback}
-              className={clsx(
-                'text-body-small capsule-button-solid-primary h-9 w-12.5 self-end px-3 py-1.5',
-                detailText.trim() ? 'cursor-pointer' : '',
-              )}
-            >
-              제출
-            </button>
-          </div>
+          {isDetailOpen && (
+            <>
+              {/* 더 자세히 모달 */}
+              <div className="text-body-medium border-blue-30 mt-2.5 flex h-22.25 w-184.75 flex-col rounded-2xl border bg-white px-3 py-2.5">
+                <textarea
+                  placeholder="자세한 피드백을 남겨주세요."
+                  value={detailText}
+                  onChange={(e) => setDetailText(e.target.value)}
+                  className="text-gray-80 placeholder:text-gray-30 resize-none outline-none"
+                />
+                <button
+                  disabled={!detailText.trim()}
+                  onClick={submitFeedback}
+                  className={clsx(
+                    'text-body-small capsule-button-solid-primary h-9 w-12.5 self-end px-3 py-1.5',
+                    detailText.trim() ? 'cursor-pointer' : '',
+                  )}
+                >
+                  제출
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
