@@ -133,18 +133,19 @@ const SideNavBar = () => {
         {isOpen && (
           <button
             onClick={() => {
-              setIsTeamDropDownModalOpen((prev) => !prev);
               setIsTeamDropDownModalOpen(false);
+              setIsTeamDropDownModalOpen((prev) => !prev);
             }}
             className={clsx(
-              'group/teamspace border-neutral-3 flex flex-col justify-center gap-1.5 rounded-xl! border px-2.5 py-2',
+              'group/teamspace border-neutral-3 flex cursor-pointer flex-col justify-center gap-1.5 rounded-xl! border px-2.5 py-2',
               isTeamSpaceMoreModalOpen || isTeamDropDownModalOpen ? 'bg-neutral-2' : 'hover:bg-neutral-2 bg-white',
             )}
           >
             <span className="flex items-center justify-between">
               <span className="text-body-xsmall text-gray-50">팀스페이스</span>
               <Dropdown
-                onClick={() => {
+                onClick={(e: React.MouseEvent<SVGSVGElement>) => {
+                  e.stopPropagation();
                   setIsTeamDropDownModalOpen(!isTeamDropDownModalOpen);
                   setIsTeamSpaceMoreModalOpen(false);
                 }}
@@ -178,7 +179,8 @@ const SideNavBar = () => {
                 </div>
                 <div className="group absolute top-0 right-0">
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setIsTeamSpaceMoreModalOpen(!isTeamSpaceMoreModalOpen);
                       setIsTeamDropDownModalOpen(false);
                     }}
@@ -232,7 +234,8 @@ const SideNavBar = () => {
                 </div>
               </div>
               <div
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   setIsTeamDropDownModalOpen(!isTeamDropDownModalOpen);
                 }}
                 className="h-4 w-4"
