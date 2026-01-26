@@ -95,22 +95,26 @@ export default function Page() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const sseRef = useRef<EventSource | null>(null);
-  const [sseReady, setSseReady] = useState(false);
+  // const [sseReady, setSseReady] = useState(false);
+  const sseReadyRef = useRef(false); // 추가
+  const mountedRef = useRef(true); // 컴포넌트 마운트 상태 (추가)
 
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
 
   const formatMarkdownString = (text: string) => {
-    return text
-      .replace(/\\n/g, '\n')
-      .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2')
-      .replace(/([^\n])\n(\d+\.\s)/g, '$1\n\n$2')
-      .replace(/([^\n])\n([-*+]\s)/g, '$1\n\n$2')
-      .replace(/([^\n])\n(-\s\[[x\s]\]\s)/g, '$1\n\n$2')
-      .replace(/([^\n])\n(```)/g, '$1\n\n$2')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
+    return (
+      text
+        .replace(/\\n/g, '\n')
+        .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2')
+        .replace(/([^\n])\n(\d+\.\s)/g, '$1\n\n$2')
+        .replace(/([^\n])\n([-*+]\s)/g, '$1\n\n$2')
+        .replace(/([^\n])\n(-\s\[[x\s]\]\s)/g, '$1\n\n$2')
+        .replace(/([^\n])\n(```)/g, '$1\n\n$2')
+        // .replace(/\n{3,}/g, '\n\n')
+        .trim()
+    );
   };
 
   const beginAnswerLoading = useCallback(() => {
@@ -161,25 +165,61 @@ export default function Page() {
     [sessionId],
   );
 
+  // const waitForSSEOpen = async () => {
+  //   if (sseRef.current?.readyState === EventSource.OPEN || sseReady) {
+  //     return;
+  //   }
+
+  //   return new Promise<void>((resolve, reject) => {
+  //     const start = Date.now();
+  //     const timer = setInterval(() => {
+  //       if (sseRef.current?.readyState === EventSource.OPEN) {
+  //         clearInterval(timer);
+  //         resolve();
+  //         return;
+  //       }
+
+  //       if (Date.now() - start > 30000) {
+  //         clearInterval(timer);
+  //         reject(new Error('SSE connection timeout'));
+  //       }
+  //     }, 100);
+  //   });
+  // };
+  // SSE 연결 대기 로직 (새로고침 문제)
   const waitForSSEOpen = async () => {
-    if (sseRef.current?.readyState === EventSource.OPEN || sseReady) {
-      return;
+    console.log('[waitForSSEOpen] 시작, readyState: ', sseRef.current?.readyState);
+
+    // SSE 연결되어 있음 -> 즉시 반환
+    if (sseRef.current?.readyState === EventSource.OPEN && sseReadyRef.current) {
+      console.log('[waitForSSEOpen] SSE 이미 연결됨');
     }
 
     return new Promise<void>((resolve, reject) => {
       const start = Date.now();
+      const checkInterval = 100;
+      const timeout = 10000;
+
       const timer = setInterval(() => {
-        if (sseRef.current?.readyState === EventSource.OPEN) {
+        const currentState = sseRef.current?.readyState;
+        const elapsed = Date.now() - start;
+
+        console.log(`[waitForSSEOpen] 체크 중 .. readyState: ${currentState}, elapsed: ${elapsed}ms`);
+
+        if (currentState === EventSource.OPEN && sseReadyRef.current) {
+          console.log('[waitForSSEOpen] 연결 완료!');
           clearInterval(timer);
           resolve();
           return;
         }
 
-        if (Date.now() - start > 30000) {
+        if (elapsed > timeout) {
+          console.error('[waitForSSEOpen] timeout');
           clearInterval(timer);
           reject(new Error('SSE connection timeout'));
+          return;
         }
-      }, 100);
+      }, checkInterval);
     });
   };
 
@@ -192,13 +232,13 @@ export default function Page() {
 
       const { type, data } = notification;
 
-      console.log('[SSE] Event received:', {
-        type,
-        node: data.node,
-        dataType: data.type,
-        hasPayload: !!data.payload,
-        hasResponse: !!data.response,
-      });
+      // console.log('[SSE] Event received:', {
+      //   type,
+      //   node: data.node,
+      //   dataType: data.type,
+      //   hasPayload: !!data.payload,
+      //   hasResponse: !!data.response,
+      // });
 
       switch (type) {
         case 'RAG_IN_PROGRESS': {
@@ -231,18 +271,18 @@ export default function Page() {
             sourcesCount: data.response?.sources?.length,
             alreadyProcessing: processingDoneRef.current,
           });
-          console.log('relatedJiraIssues len', data.relatedJiraIssues?.length);
-          console.log(
-            'sample sourceType',
-            data.relatedJiraIssues?.[0]?.sourceType,
-            typeof data.relatedJiraIssues?.[0]?.sourceType,
-          );
-          console.log('[SSE RAW JSON]', JSON.stringify(notification));
-          console.log('normalized tasks', normalizeRelatedJiraIssues(data.relatedJiraIssues ?? []));
+          // console.log('relatedJiraIssues len', data.relatedJiraIssues?.length);
+          // console.log(
+          //   'sample sourceType',
+          //   data.relatedJiraIssues?.[0]?.sourceType,
+          //   typeof data.relatedJiraIssues?.[0]?.sourceType,
+          // );
+          // console.log('[SSE RAW JSON]', JSON.stringify(notification));
+          // console.log('normalized tasks', normalizeRelatedJiraIssues(data.relatedJiraIssues ?? []));
 
           // 중복 처리 방지
           if (processingDoneRef.current) {
-            console.warn('[SSE] RAG_DONE already processed, ignoring');
+            console.warn('[SSE] RAG_DONE already processed, 중복 무시');
             return;
           }
           processingDoneRef.current = true;
@@ -270,15 +310,24 @@ export default function Page() {
 
   // SSE 연결 초기화 - sessionId가 변경될 때만 재연결
   useEffect(() => {
+    mountedRef.current = true; // 추가
     console.log('[SSE] 세션 초기 연결:', sessionId);
 
     // 이미 연결되어 있으면 스킵
-    if (sseRef.current?.readyState === EventSource.OPEN) {
-      console.log('[SSE] 이미 연결됨');
-      return;
-    }
+    // if (sseRef.current?.readyState === EventSource.OPEN) {
+    //   console.log('[SSE] 이미 연결됨');
+    //   return;
+    // }
 
-    setSseReady(false);
+    // setSseReady(false);
+
+    // 기존 연결 존재 시 정리 (중복 요청 방지)
+    if (sseRef.current) {
+      console.log('[SSE] 기존 연결 정리');
+      sseRef.current.close();
+      sseRef.current = null;
+      sseReadyRef.current = false;
+    }
 
     const sse = createSSEConection(
       handleSSEMessage,
@@ -290,8 +339,14 @@ export default function Page() {
       },
       () => {
         console.log('[SSE] 연결');
-        setTimeout(() => setSseReady(true), 1000);
-        // console.log('[SSE] 연결 1초 after');
+        // setTimeout(() => setSseReady(true), 1000);
+        // 연결 안정화를 위한 delay
+        setTimeout(() => {
+          if (mountedRef.current) {
+            sseReadyRef.current = true;
+            console.log('[SSE] Ready 상태로 변경');
+          }
+        }, 500);
       },
     );
 
@@ -299,11 +354,14 @@ export default function Page() {
 
     return () => {
       console.log('[SSE] 클린업');
+      mountedRef.current = false; // 추가
       sseRef.current?.close();
       sseRef.current = null;
-      setSseReady(false);
+      // setSseReady(false);
+      sseReadyRef.current = false; // 추가
     };
-  }, [sessionId]);
+    // }, [sessionId]);
+  }, [sessionId, handleSSEMessage]);
 
   // 자동 하단 스크롤
   useEffect(() => {
@@ -320,17 +378,20 @@ export default function Page() {
   useEffect(() => {
     const saved = localStorage.getItem(`chat_${sessionId}`);
 
+    // localStorage에서 데이터 복원
     if (saved) {
       setChatData(JSON.parse(saved));
       setIsLoading(false);
       return;
     }
 
+    // initialQuery로 첫 질문 실행
     if (initialQuery) {
       fetchFirstAnswer(initialQuery);
       return;
     }
 
+    // 빈 채팅 데이터 생성
     setChatData({
       sessionId,
       title: '',
@@ -362,8 +423,11 @@ export default function Page() {
     setChatData(initialData);
 
     try {
+      console.log('[fetchFirstAnswer] SSE 연결 대기 시작');
       await waitForSSEOpen();
+      console.log('[fetchFirstAnswer] SSE 연결 오나료, 질문 전송');
       await sendChatQuery(query, sessionId, indexList);
+      console.log('[fetchFirstAnswer] 질문 전송 완료');
 
       // 30초 타임아웃
       const timeout = setTimeout(() => {
@@ -408,8 +472,11 @@ export default function Page() {
     beginAnswerLoading();
 
     try {
+      console.log('[handleSendMessage] SSE 연결 대기 시작');
       await waitForSSEOpen();
+      console.log('[handleSendMessage] SSE 연결 완료, 질문 전송');
       await sendChatQuery(newInput, sessionId, indexList);
+      console.log('[handleSendMessage] 질문 전송 완료');
     } catch (err) {
       console.error('[handleSendMessage] Error:', err);
       setIsError(false);
@@ -537,7 +604,7 @@ export default function Page() {
               <div className="border-neutral-4 flex-1 border-t" />
             </div>
 
-            {chatData.messages.map((msg, index) => (
+            {chatData.messages.map((msg) => (
               <div key={msg.id} className="mx-auto flex w-193.25 flex-col gap-6">
                 {msg.role === 'user' ? (
                   <div className="flex flex-col gap-4">
