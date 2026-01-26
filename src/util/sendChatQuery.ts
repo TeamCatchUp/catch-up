@@ -91,6 +91,12 @@ export const sendChatQuery = async (
   try {
     const response = await api.post('/api/chat', requestBody);
     console.log('[sendChatQuery] 응답 받음: ', response.data);
+
+    // "SSE 연결이 필요합니다" 응답 체크
+    if (response.data.answer === 'SSE 연결이 필요합니다.') {
+      console.error('[sendChatQuery] SSE 연결 없음 - 백엔드가 SSE를 찾지 못함');
+      throw new Error('SSE_NOT_CONNECTED');
+    }
     return response.data;
   } catch (err) {
     console.error('[sendChatQuery] 에러: ', err);

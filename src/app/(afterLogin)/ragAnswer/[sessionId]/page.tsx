@@ -486,8 +486,18 @@ export default function Page() {
       console.log('[handleSendMessage] SSE 연결 완료, 질문 전송');
       await sendChatQuery(newInput, sessionId, indexList);
       console.log('[handleSendMessage] 질문 전송 완료');
-    } catch (err) {
+    } catch (err: any) {
       console.error('[handleSendMessage] Error:', err);
+
+      // SSE 연결 문제인 경우
+      if (err.message === 'SSE_NOT_CONNECTED') {
+        console.error('[handleSendMessage] 백엔드가 SSE 연결을 찾지 못했습니다');
+
+        // alert('새로고침이 필요합니다. 백엔드 서버와의 연결에 문제가 있습니다.');
+        // 페이지 새로고침 (임시 해결책)
+        // window.location.reload();
+      }
+
       setIsError(false);
       setIsLoading(false);
     }
