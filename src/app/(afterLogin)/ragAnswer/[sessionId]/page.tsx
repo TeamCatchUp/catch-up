@@ -37,7 +37,6 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { createSSEConection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
 import { normalizeSources } from '@/util/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/util/normalizeRelatedJiraIssues';
-import { clear } from 'console';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -96,9 +95,9 @@ export default function Page() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const sseRef = useRef<EventSource | null>(null);
-  // const [sseReady, setSseReady] = useState(false);
-  const sseReadyRef = useRef(false); // 추가
-  const mountedRef = useRef(true); // 컴포넌트 마운트 상태 (추가)
+  const sseReadyRef = useRef(false);
+  const mountedRef = useRef(true); // 컴포넌트 마운트 상태
+  const stoppedRef = useRef(false); // 로딩 중 질문 중지
 
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -119,6 +118,7 @@ export default function Page() {
   };
 
   const beginAnswerLoading = useCallback(() => {
+    stoppedRef.current = false;
     setIsLoading(true);
     setIsError(false);
     setShowPRSelection(false);
@@ -166,27 +166,6 @@ export default function Page() {
     [sessionId],
   );
 
-  // const waitForSSEOpen = async () => {
-  //   if (sseRef.current?.readyState === EventSource.OPEN || sseReady) {
-  //     return;
-  //   }
-
-  //   return new Promise<void>((resolve, reject) => {
-  //     const start = Date.now();
-  //     const timer = setInterval(() => {
-  //       if (sseRef.current?.readyState === EventSource.OPEN) {
-  //         clearInterval(timer);
-  //         resolve();
-  //         return;
-  //       }
-
-  //       if (Date.now() - start > 30000) {
-  //         clearInterval(timer);
-  //         reject(new Error('SSE connection timeout'));
-  //       }
-  //     }, 100);
-  //   });
-  // };
   // SSE 연결 대기 로직 (새로고침 문제)
   const waitForSSEOpen = async () => {
     console.log('[waitForSSEOpen] 시작, readyState: ', sseRef.current?.readyState);
@@ -213,7 +192,6 @@ export default function Page() {
         if (currentState === EventSource.OPEN && sseReadyRef.current) {
           console.log('[waitForSSEOpen] 연결 완료!');
           clearInterval(timer);
-          // resolve();
           // 백에서 SSE 연결 등록할 시간 확보
           setTimeout(() => {
             console.log('[waitForSSEOpen] 추가 대기 완료, 준비됨');
@@ -235,19 +213,13 @@ export default function Page() {
   // SSE 메시지 핸들러 - useCallback으로 메모이제이션
   const handleSSEMessage = useCallback(
     (notification: RagNotification) => {
+      if (stoppedRef.current) return; // 입력 중지 이후, 모든 SSE 무시
+
       if (!notification?.data || notification.data.sessionId !== sessionId) {
         return;
       }
 
       const { type, data } = notification;
-
-      // console.log('[SSE] Event received:', {
-      //   type,
-      //   node: data.node,
-      //   dataType: data.type,
-      //   hasPayload: !!data.payload,
-      //   hasResponse: !!data.response,
-      // });
 
       switch (type) {
         case 'RAG_IN_PROGRESS': {
@@ -280,14 +252,6 @@ export default function Page() {
             sourcesCount: data.response?.sources?.length,
             alreadyProcessing: processingDoneRef.current,
           });
-          // console.log('relatedJiraIssues len', data.relatedJiraIssues?.length);
-          // console.log(
-          //   'sample sourceType',
-          //   data.relatedJiraIssues?.[0]?.sourceType,
-          //   typeof data.relatedJiraIssues?.[0]?.sourceType,
-          // );
-          // console.log('[SSE RAW JSON]', JSON.stringify(notification));
-          // console.log('normalized tasks', normalizeRelatedJiraIssues(data.relatedJiraIssues ?? []));
 
           // 중복 처리 방지
           if (processingDoneRef.current) {
@@ -319,16 +283,8 @@ export default function Page() {
 
   // SSE 연결 초기화 - sessionId가 변경될 때만 재연결
   useEffect(() => {
-    mountedRef.current = true; // 추가
+    mountedRef.current = true;
     console.log('[SSE] 세션 초기 연결:', sessionId);
-
-    // 이미 연결되어 있으면 스킵
-    // if (sseRef.current?.readyState === EventSource.OPEN) {
-    //   console.log('[SSE] 이미 연결됨');
-    //   return;
-    // }
-
-    // setSseReady(false);
 
     // 기존 연결 존재 시 정리 (중복 요청 방지)
     if (sseRef.current) {
@@ -338,7 +294,7 @@ export default function Page() {
       sseReadyRef.current = false;
     }
 
-    // 백엔드에서 연결 정리할 시간 확보 // 추가
+    // 백엔드에서 연결 정리할 시간 확보
     const setUpTimer = setTimeout(() => {
       if (!mountedRef.current) return;
 
@@ -377,18 +333,6 @@ export default function Page() {
       }
       sseReadyRef.current = false;
     };
-
-    // sseRef.current = sse;
-
-    // return () => {
-    //   console.log('[SSE] 클린업');
-    //   mountedRef.current = false; // 추가
-    //   sseRef.current?.close();
-    //   sseRef.current = null;
-    //   // setSseReady(false);
-    //   sseReadyRef.current = false; // 추가
-    // };
-    // // }, [sessionId]);
   }, [sessionId, handleSSEMessage]);
 
   // 자동 하단 스크롤
@@ -615,6 +559,21 @@ export default function Page() {
       setIsLoading(false);
     }
   };
+
+  const handleStop = useCallback(() => {
+    if (!isLoading) return;
+
+    stoppedRef.current = true; // 이후 SSE 무시
+    processingDoneRef.current = true; // RAG_DONE 중복 방지 플래그도 같이 close
+
+    setIsLoading(false);
+    setIsError(false);
+    setShowPRSelection(false);
+    setCurrentStep('router');
+
+    // 답변 : 빈 줄
+    appendAssistantAnswer('\n', [], []);
+  }, [isLoading, appendAssistantAnswer]);
 
   if (!chatData) {
     return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
@@ -896,7 +855,10 @@ export default function Page() {
                   )}
 
                   {isLoading ? (
-                    <button className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full">
+                    <button
+                      onClick={handleStop}
+                      className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full"
+                    >
                       <Stop className="text-gray-70 relative left-px h-6 w-6" />
                     </button>
                   ) : (
