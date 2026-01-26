@@ -57,7 +57,7 @@ const queryItems = [
 const SideNavBar = () => {
   const pathname = usePathname();
   const router = useRouter();
-  const isRagAnswerPage = pathname === '/ragAnswer';
+  const isRagAnswerPage = pathname.startsWith('/ragAnswer');
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage); // SNB opened 여부
   const [isTeamSpaceMoreModalOpen, setIsTeamSpaceMoreModalOpen] = useState(false); // 팀스페이스 더보기 버튼 모달 opened 여부
   const [isTeamDropDownModalOpen, setIsTeamDropDownModalOpen] = useState(false); // 팀스페이스 드롭다운 버튼 모달 opened 여부
