@@ -6,7 +6,7 @@ interface RagDetailedTasksSkeletonProps {
 
 const RagRightComponentSkeleton = ({ message }: RagDetailedTasksSkeletonProps) => {
   return (
-    <div className="relative left-1 mt-3 flex w-105 flex-col items-center justify-center gap-5 px-2">
+    <div className="relative left-1 mt-2 flex w-105 flex-col items-center justify-center gap-5 px-2">
       <div className="bg-blue-1 flex w-105 animate-pulse flex-col items-center justify-center gap-5 rounded-2xl p-5">
         <SourceFile className="h-23 w-28.75" />
         <span className="text-body-small text-gray-30 whitespace-nowrap">{message}</span>

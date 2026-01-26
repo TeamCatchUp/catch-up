@@ -92,7 +92,7 @@ const SelectionBarModal = ({
                   <div key={task.taskId} className="flex flex-col gap-0.5">
                     {/* 상위 task */}
                     {showParentTask && (
-                      <div className="group hover:bg-neutral-2 flex h-9 w-103 gap-3 rounded-lg p-1">
+                      <div className="group hover:bg-neutral-2 flex h-9 w-103.75 gap-3 rounded-lg p-1">
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                           <div className="h-4.5 w-4.5 shrink-0">
                             <Epic />
@@ -175,11 +175,11 @@ const SelectionBarModal = ({
               })}
             </div>
             {/* divider */}
-            <div className="bg-neutral-2 relative right-2.5 mb-0.5 h-px w-116.25" />
+            <div className="bg-neutral-2 relative right-2.5 mb-0.5 h-px w-103.75" />
           </>
         )}
         {/* task 버튼 */}
-        <div className={clsx('flex h-14 w-112 items-center justify-between', isCollapsed && 'relative bottom-px')}>
+        <div className={clsx('flex h-14 w-101.25 items-center justify-between', isCollapsed && 'relative bottom-px')}>
           <div className="flex items-center gap-1.5 pl-1">
             <button onClick={onToggleCollapse} className="icon-button-only-gray flex h-4.5 w-4.5 cursor-pointer p-0.5">
               <DropDownDown
@@ -209,7 +209,7 @@ const SelectionBarModal = ({
           </div>
         </div>
       </div>
-      <div className="group pointer-events-auto relative left-55 w-9">
+      <div className="group pointer-events-auto relative left-53 w-9">
         <button
           onClick={handleClearAll}
           className="text-button-secondary-mono shadow-button border-neutral-3 pointer-events-auto flex h-9 w-9 cursor-pointer items-center justify-center border p-1.5"
