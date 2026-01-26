@@ -52,7 +52,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
             <SearchData />
             <span className="text-heading-large text-gray-90">잠시만요! 정확한 답변을 위해 확인이 필요해요.</span>
             <button
-              onClick={() => onContinue([])}
+              // onClick={() => onContinue([])}
               className="text-button-primary-blue flex cursor-pointer items-center gap-0.5 px-1.5 py-1"
             >
               <span className="text-body-small text-blue-55">건너뛰기</span>

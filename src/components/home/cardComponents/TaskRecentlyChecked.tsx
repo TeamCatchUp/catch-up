@@ -67,7 +67,7 @@ const TaskRecentlyChecked = ({ onClickCard }: TaskRecentlyCheckedProps) => {
 
               <TaskManagePart depart={card.depart} manager={card.manager} />
 
-              <div className="border-neutral-2 w-79.25 border"></div>
+              <div className="bg-neutral-2 h-px w-79.25"></div>
 
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-1.5">

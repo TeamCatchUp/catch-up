@@ -57,7 +57,7 @@ const OptionalNavbar = ({ tabs, activeTab, onChange }: TaskDetailTabsProps) => {
             onClick={() => !tab.locked && onChange(tab.id)}
             className={clsx(
               'relative flex shrink-0 items-center justify-center gap-1.5',
-              tab.locked ? 'cursor-not-allowed' : 'cursor-pointer',
+              tab.locked ? '' : 'cursor-pointer',
             )}
           >
             <span
@@ -84,11 +84,14 @@ const OptionalNavbar = ({ tabs, activeTab, onChange }: TaskDetailTabsProps) => {
               )
             )}
             {activeTab === tab.id && !tab.locked && (
-              <div className="bg-blue-45 absolute right-0 bottom-1.75 left-0 z-50 h-0.5 translate-y-1.5" />
+              // <div className="bg-blue-45 absolute right-0 bottom-1.75 left-0 z-50 h-0.5 translate-y-1.5" />
+              <div className="bg-blue-45 absolute right-0 bottom-1.75 left-0 z-50 h-0.5" />
             )}
           </button>
         ))}
       </div>
+
+      <div className="bg-neutral-3 absolute right-0 bottom-1.75 left-0 h-px" />
 
       {/* < 버튼 */}
       {hovered && canScrollLeft && (
@@ -109,12 +112,9 @@ const OptionalNavbar = ({ tabs, activeTab, onChange }: TaskDetailTabsProps) => {
         </button>
       )}
 
-      <span className="bg-neutral-3 relative bottom-2.75 flex h-px" />
+      {/* <span className="bg-neutral-3 relative bottom-2.75 flex h-px" /> */}
     </div>
   );
 };
-
-{
-}
 
 export default OptionalNavbar;
