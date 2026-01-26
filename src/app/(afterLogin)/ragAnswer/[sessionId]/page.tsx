@@ -194,7 +194,7 @@ export default function Page() {
     if (sseRef.current?.readyState === EventSource.OPEN && sseReadyRef.current) {
       console.log('[waitForSSEOpen] SSE 이미 연결됨');
       // 추가 대기 시간 (백에서 SSE 연결 등록할 시간 확보)
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await new Promise((resolve) => setTimeout(resolve, 10000));
       return;
     }
 
@@ -217,7 +217,7 @@ export default function Page() {
           setTimeout(() => {
             console.log('[waitForSSEOpen] 추가 대기 완료, 준비됨');
             resolve();
-          }, 3000);
+          }, 10000);
           return;
         }
 
@@ -338,7 +338,7 @@ export default function Page() {
     }
 
     const sse = createSSEConection(
-      sessionId, // 추가
+      // sessionId, // 추가
       handleSSEMessage,
       (error) => {
         console.error('[SSE] Error:', error);
