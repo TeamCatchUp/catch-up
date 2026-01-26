@@ -177,9 +177,9 @@ export default function Search() {
 
   return (
     <div className="flex flex-col items-center gap-4 self-stretch pt-16 pb-16">
-      <div className="flex h-24 flex-col items-center justify-center gap-3">
-        <div className="text-display-xlarge text-nomal-normal">반갑습니다, {user?.name}님!</div>
-        <div className="text-heading-large text-nomal-alternative">
+      <div className="flex h-24 flex-col items-center justify-center gap-3 text-gray-50">
+        <div className="text-display-xlarge text-normal-normal">반갑습니다, {user?.name}님!</div>
+        <div className="text-heading-large text-normal-alternative">
           무엇을 도와드릴까요? 필요한 업무정보를 찾아보세요.
         </div>
       </div>
