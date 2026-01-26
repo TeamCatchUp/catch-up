@@ -131,7 +131,11 @@ const SideNavBar = () => {
 
         {/* 팀스페이스 */}
         {isOpen && (
-          <div
+          <button
+            onClick={() => {
+              setIsTeamDropDownModalOpen((prev) => !prev);
+              setIsTeamDropDownModalOpen(false);
+            }}
             className={clsx(
               'group/teamspace border-neutral-3 flex flex-col justify-center gap-1.5 rounded-xl! border px-2.5 py-2',
               isTeamSpaceMoreModalOpen || isTeamDropDownModalOpen ? 'bg-neutral-2' : 'hover:bg-neutral-2 bg-white',
@@ -204,7 +208,7 @@ const SideNavBar = () => {
                 <TeamSpaceDropDownModal onClose={() => setIsTeamDropDownModalOpen(false)} />
               </div>
             )}
-          </div>
+          </button>
         )}
         {!isOpen && (
           <div
