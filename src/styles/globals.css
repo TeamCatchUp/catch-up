@@ -23,6 +23,11 @@
     font-family: Pretendard, Arial, sans-serif;
     letter-spacing: var(--tracking-tight);
   }
+
+  input,
+  textarea {
+    caret-color: #0054d1;
+  }
 }
 
 @layer utilities {
