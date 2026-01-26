@@ -63,14 +63,14 @@ const OptionalNavbar = ({ tabs, activeTab, onChange }: TaskDetailTabsProps) => {
             <span
               className={clsx(
                 'text-heading-small relative',
-                tab.locked ? 'text-gray-50' : activeTab === tab.id ? 'text-blue-55' : 'text-gray-50',
+                tab.locked ? 'text-gray-30' : activeTab === tab.id ? 'text-blue-55' : 'text-gray-50',
               )}
             >
               {tab.label}
             </span>
 
             {tab.locked ? (
-              <Lock className="h-3.5 w-3.5 text-gray-50" />
+              <Lock className="relative bottom-px h-3.5 w-3.5 text-gray-50" />
             ) : (
               tab.count > 0 && (
                 <span
