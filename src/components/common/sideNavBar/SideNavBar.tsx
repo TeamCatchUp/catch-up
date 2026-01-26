@@ -138,8 +138,15 @@ const SideNavBar = () => {
         {isOpen && (
           <button
             onClick={() => {
-              setIsTeamDropDownModalOpen(false);
+              setIsTeamSpaceMoreModalOpen(false);
               setIsTeamDropDownModalOpen((prev) => !prev);
+            }}
+            onMouseEnter={() => {
+              setIsTeamSpaceMoreModalOpen(false);
+              setIsTeamDropDownModalOpen(true);
+            }}
+            onMouseLeave={() => {
+              setIsTeamDropDownModalOpen(false);
             }}
             className={clsx(
               'group/teamspace border-neutral-3 flex cursor-pointer flex-col justify-center gap-1.5 rounded-xl! border px-2.5 py-2',
@@ -151,8 +158,8 @@ const SideNavBar = () => {
               <Dropdown
                 onClick={(e: React.MouseEvent<SVGSVGElement>) => {
                   e.stopPropagation();
-                  setIsTeamDropDownModalOpen(!isTeamDropDownModalOpen);
                   setIsTeamSpaceMoreModalOpen(false);
+                  setIsTeamDropDownModalOpen(!isTeamDropDownModalOpen);
                 }}
                 className={clsx(
                   'h-4 w-4 cursor-pointer rounded-full text-gray-50 transition-opacity',
@@ -219,6 +226,17 @@ const SideNavBar = () => {
         )}
         {!isOpen && (
           <div
+            onClick={() => {
+              setIsTeamSpaceMoreModalOpen(false);
+              setIsTeamDropDownModalOpen((prev) => !prev);
+            }}
+            onMouseEnter={() => {
+              setIsTeamSpaceMoreModalOpen(false);
+              setIsTeamDropDownModalOpen(true);
+            }}
+            onMouseLeave={() => {
+              setIsTeamDropDownModalOpen(false);
+            }}
             className={clsx(
               'group border-neutral-3 shadow-blue-bottom flex h-10 w-14.5 cursor-pointer items-center justify-center rounded-xl border p-1.5',
               isTeamDropDownModalOpen ? 'bg-neutral-2' : 'hover:bg-neutral-2 bg-white',
