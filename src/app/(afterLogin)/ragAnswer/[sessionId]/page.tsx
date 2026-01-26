@@ -769,7 +769,8 @@ export default function Page() {
                             )}
                           </div>
 
-                          <div onClick={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}>
+                          {/* <div onClick={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}> */}
+                          <div>
                             <FilterComponent
                               isOpen={filterOpenMap[msg.id]}
                               onClose={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}
