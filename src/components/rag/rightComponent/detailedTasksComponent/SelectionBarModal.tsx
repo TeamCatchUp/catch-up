@@ -149,7 +149,7 @@ const SelectionBarModal = ({
                           <span
                             className={clsx(
                               'text-body-small text-gray-80 min-w-0 flex-1 truncate',
-                              showParentTask ? 'max-w-88.75' : 'w-92.25',
+                              showParentTask ? 'max-w-80.75' : 'w-87.25',
                             )}
                           >
                             {subtask.title}
