@@ -37,6 +37,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { createSSEConection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
 import { normalizeSources } from '@/util/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/util/normalizeRelatedJiraIssues';
+import { clear } from 'console';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -337,39 +338,57 @@ export default function Page() {
       sseReadyRef.current = false;
     }
 
-    const sse = createSSEConection(
-      // sessionId, // 추가
-      handleSSEMessage,
-      (error) => {
-        console.error('[SSE] Error:', error);
-        if (sseRef.current?.readyState === EventSource.CLOSED) {
-          setIsLoading(false);
-        }
-      },
-      () => {
-        console.log('[SSE] 연결');
-        // setTimeout(() => setSseReady(true), 1000);
-        // 연결 안정화를 위한 delay
-        setTimeout(() => {
-          if (mountedRef.current) {
-            sseReadyRef.current = true;
-            console.log('[SSE] Ready 상태로 변경');
-          }
-        }, 500);
-      },
-    );
+    // 백엔드에서 연결 정리할 시간 확보 // 추가
+    const setUpTimer = setTimeout(() => {
+      if (!mountedRef.current) return;
 
-    sseRef.current = sse;
+      console.log('[SSE] 새 연결 시작');
+
+      const sse = createSSEConection(
+        sessionId,
+        handleSSEMessage,
+        (err) => {
+          console.error('[SSE] error: ', err);
+          if (sseRef.current?.readyState === EventSource.CLOSED) {
+            setIsLoading(false);
+          }
+        },
+        () => {
+          console.log('[SSE] 연결');
+          setTimeout(() => {
+            if (mountedRef.current) {
+              sseReadyRef.current = true;
+              console.log('[SSE] ready');
+            }
+          }, 1000);
+        },
+      );
+
+      sseRef.current = sse;
+    }, 300);
 
     return () => {
       console.log('[SSE] 클린업');
-      mountedRef.current = false; // 추가
-      sseRef.current?.close();
-      sseRef.current = null;
-      // setSseReady(false);
-      sseReadyRef.current = false; // 추가
+      clearTimeout(setUpTimer);
+      mountedRef.current = false;
+      if (sseRef.current) {
+        sseRef.current.close();
+        sseRef.current = null;
+      }
+      sseReadyRef.current = false;
     };
-    // }, [sessionId]);
+
+    // sseRef.current = sse;
+
+    // return () => {
+    //   console.log('[SSE] 클린업');
+    //   mountedRef.current = false; // 추가
+    //   sseRef.current?.close();
+    //   sseRef.current = null;
+    //   // setSseReady(false);
+    //   sseReadyRef.current = false; // 추가
+    // };
+    // // }, [sessionId]);
   }, [sessionId, handleSSEMessage]);
 
   // 자동 하단 스크롤

@@ -3,7 +3,7 @@ import api from 'src/api/axios';
 
 // SSE 연결 생성
 export const createSSEConection = (
-  // sessionId: string, // 추가
+  sessionId: string, // 추가
   onMessage: (notification: RagNotification) => void,
   onError?: (error: Event) => void,
   onOpen?: () => void,
