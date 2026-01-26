@@ -75,14 +75,6 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
 
       const checkedSubtasks = (task.subtasks ?? []).filter((sub) => taskState.subtasks[sub.id]);
 
-      //   if (checkedSubtasks.length > 0) {
-      //     result.push({
-      //       taskId: task.id,
-      //       taskTitle: task.title,
-      //       taskChecked: taskState.checked,
-      //       subtasks: checkedSubtasks.map((s) => ({ id: s.id, title: s.title })),
-      //     });
-      //   }
       if (taskState.checked || checkedSubtasks.length > 0) {
         result.push({
           taskId: task.id,
@@ -95,9 +87,6 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
     return result;
   }, [tasks, checkedMap]);
 
-  // const totalCheckedCount = useMemo(() => {
-  //   return selectedTasks.reduce((sum, task) => sum + task.subtasks.length, 0);
-  // }, [selectedTasks]);
   const totalCheckedCount = useMemo(() => {
     return selectedTasks.reduce((sum, t) => {
       const parentCount = t.taskChecked && t.subtasks.length === 0 ? 1 : 0;
