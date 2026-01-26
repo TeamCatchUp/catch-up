@@ -82,9 +82,6 @@ const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
   return (
     <div
       ref={modalRef}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="more-modal-title"
       className="border-neutral-4 shadow-dropdown-menu flex h-92 w-63 flex-col gap-3 rounded-2xl border bg-white px-1.5 py-3"
     >
       <section className="border-neutral-3 px-1.5">
@@ -166,7 +163,6 @@ const MoreButtonModal = ({ onClose }: { onClose: () => void }) => {
 
         <button
           onClick={handleGetAlertClick}
-          aria-pressed={selectedButton === 'alert'}
           className={`flex h-10 cursor-pointer justify-between rounded-lg p-2 transition-colors ${selectedButton === 'alert' ? 'bg-neutral-2' : 'hover:bg-neutral-2'}`}
         >
           <div className="flex cursor-pointer items-center gap-2.5">
