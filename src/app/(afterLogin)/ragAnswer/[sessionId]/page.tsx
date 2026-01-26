@@ -193,6 +193,9 @@ export default function Page() {
     // SSE 연결되어 있음 -> 즉시 반환
     if (sseRef.current?.readyState === EventSource.OPEN && sseReadyRef.current) {
       console.log('[waitForSSEOpen] SSE 이미 연결됨');
+      // 추가 대기 시간 (백에서 SSE 연결 등록할 시간 확보)
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      return;
     }
 
     return new Promise<void>((resolve, reject) => {
@@ -209,7 +212,12 @@ export default function Page() {
         if (currentState === EventSource.OPEN && sseReadyRef.current) {
           console.log('[waitForSSEOpen] 연결 완료!');
           clearInterval(timer);
-          resolve();
+          // resolve();
+          // 백에서 SSE 연결 등록할 시간 확보
+          setTimeout(() => {
+            console.log('[waitForSSEOpen] 추가 대기 완료, 준비됨');
+            resolve();
+          }, 1000);
           return;
         }
 
