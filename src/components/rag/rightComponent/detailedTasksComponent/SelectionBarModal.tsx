@@ -76,7 +76,7 @@ const SelectionBarModal = ({
     <div className="pointer-events-none absolute bottom-8 flex flex-col gap-2">
       <div
         className={clsx(
-          'border-neutral-5 shadow-selection-bar pointer-events-auto flex w-117 flex-col border bg-white',
+          'border-neutral-5 shadow-selection-bar pointer-events-auto flex w-108.75 flex-col border bg-white',
           isCollapsed ? 'h-14 items-center rounded-full p-2.5' : 'h-54.5 rounded-xl p-2.5 pb-0',
         )}
       >
@@ -149,7 +149,7 @@ const SelectionBarModal = ({
                           <span
                             className={clsx(
                               'text-body-small text-gray-80 min-w-0 flex-1 truncate',
-                              showParentTask ? 'max-w-80.75' : 'w-87.25',
+                              showParentTask ? 'max-w-80.75' : 'w-89.25',
                             )}
                           >
                             {subtask.title}
