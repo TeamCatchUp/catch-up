@@ -52,42 +52,44 @@ const OptionalNavbar = ({ tabs, activeTab, onChange }: TaskDetailTabsProps) => {
       {/* option bar */}
       <div ref={scrollRef} onScroll={checkScroll} className="mt-3.5 flex h-12 gap-5 overflow-x-auto">
         {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => !tab.locked && onChange(tab.id)}
-            className={clsx(
-              'relative flex shrink-0 items-center justify-center gap-1.5',
-              tab.locked ? '' : 'cursor-pointer',
-            )}
-          >
-            <span
+          <>
+            <button
+              key={tab.id}
+              onClick={() => !tab.locked && onChange(tab.id)}
               className={clsx(
-                'text-heading-small relative',
-                tab.locked ? 'text-gray-30' : activeTab === tab.id ? 'text-blue-55' : 'text-gray-50',
+                'relative flex shrink-0 items-center justify-center gap-1.5',
+                tab.locked ? '' : 'cursor-pointer',
               )}
             >
-              {tab.label}
-            </span>
+              <span
+                className={clsx(
+                  'text-heading-small relative',
+                  tab.locked ? 'text-gray-30' : activeTab === tab.id ? 'text-blue-55' : 'text-gray-50',
+                )}
+              >
+                {tab.label}
+              </span>
 
-            {tab.locked ? (
-              <Lock className="relative bottom-px h-3.5 w-3.5 text-gray-50" />
-            ) : (
-              tab.count > 0 && (
-                <span
-                  className={clsx(
-                    'text-body-xsmall rounded-md2 flex h-5 w-5 items-center justify-center text-center',
-                    activeTab === tab.id ? 'bg-blue-50 text-white' : 'bg-neutral-3 text-gray-50',
-                  )}
-                >
-                  {tab.count}
-                </span>
-              )
-            )}
-            {activeTab === tab.id && !tab.locked && (
-              <div className="bg-blue-45 absolute right-0 bottom-1.5 left-0 z-50 h-0.5" />
-            )}
+              {tab.locked ? (
+                <Lock className="relative bottom-px h-3.5 w-3.5 text-gray-50" />
+              ) : (
+                tab.count > 0 && (
+                  <span
+                    className={clsx(
+                      'text-body-xsmall rounded-md2 flex h-5 w-5 items-center justify-center text-center',
+                      activeTab === tab.id ? 'bg-blue-50 text-white' : 'bg-neutral-3 text-gray-50',
+                    )}
+                  >
+                    {tab.count}
+                  </span>
+                )
+              )}
+              {activeTab === tab.id && !tab.locked && (
+                <div className="bg-blue-45 absolute right-0 bottom-1.5 left-0 z-50 h-0.5" />
+              )}
+            </button>
             <div className="bg-neutral-3 absolute right-0 bottom-1.5 left-0 h-px" />
-          </button>
+          </>
         ))}
       </div>
 
