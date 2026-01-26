@@ -37,7 +37,6 @@ const FeedbackSection = ({
       setTimeout(() => {
         feedbackRef.current?.scrollIntoView({
           behavior: 'smooth',
-          // block: 'nearest',
           block: 'end',
         });
       }, 100);
