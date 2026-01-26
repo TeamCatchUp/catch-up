@@ -859,7 +859,7 @@ export default function Page() {
                       onClick={handleStop}
                       className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full"
                     >
-                      <Stop className="text-gray-70 relative left-px h-6 w-6" />
+                      <Stop className="text-gray-70 relative left-px h-6 w-6 cursor-pointer" />
                     </button>
                   ) : (
                     <button

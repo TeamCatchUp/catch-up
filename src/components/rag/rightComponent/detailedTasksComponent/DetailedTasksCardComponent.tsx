@@ -15,6 +15,13 @@ interface DetailedTasksCardComponentProps {
   tasks: JiraTask[];
 }
 
+type SelectedTask = {
+  taskId: string;
+  taskTitle: string;
+  taskChecked: boolean;
+  subtasks: Array<{ id: string; title: string }>;
+};
+
 const createInitialCheckedMap = (tasks: JiraTask[]) => {
   const map: Record<string, { checked: boolean; subtasks: Record<string, boolean> }> = {};
   (tasks ?? []).forEach((task) => {
@@ -59,13 +66,8 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
   const detailModalBottom = showSelectionBar ? 305 : 30;
 
   // checked tasks 개수
-  const selectedTasks = useMemo(() => {
-    const result: Array<{
-      taskId: string;
-      taskTitle: string;
-      taskChecked: boolean; // 상위 업무 체크 여부
-      subtasks: Array<{ id: string; title: string }>;
-    }> = [];
+  const selectedTasks = useMemo<SelectedTask[]>(() => {
+    const result: SelectedTask[] = [];
 
     (tasks ?? []).forEach((task) => {
       const taskState = checkedMap[task.id];
@@ -73,7 +75,15 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
 
       const checkedSubtasks = (task.subtasks ?? []).filter((sub) => taskState.subtasks[sub.id]);
 
-      if (checkedSubtasks.length > 0) {
+      //   if (checkedSubtasks.length > 0) {
+      //     result.push({
+      //       taskId: task.id,
+      //       taskTitle: task.title,
+      //       taskChecked: taskState.checked,
+      //       subtasks: checkedSubtasks.map((s) => ({ id: s.id, title: s.title })),
+      //     });
+      //   }
+      if (taskState.checked || checkedSubtasks.length > 0) {
         result.push({
           taskId: task.id,
           taskTitle: task.title,
@@ -82,12 +92,17 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
         });
       }
     });
-
     return result;
   }, [tasks, checkedMap]);
 
+  // const totalCheckedCount = useMemo(() => {
+  //   return selectedTasks.reduce((sum, task) => sum + task.subtasks.length, 0);
+  // }, [selectedTasks]);
   const totalCheckedCount = useMemo(() => {
-    return selectedTasks.reduce((sum, task) => sum + task.subtasks.length, 0);
+    return selectedTasks.reduce((sum, t) => {
+      const parentCount = t.taskChecked && t.subtasks.length === 0 ? 1 : 0;
+      return sum + t.subtasks.length + parentCount;
+    }, 0);
   }, [selectedTasks]);
 
   // selection bar 표시 여부
