@@ -46,7 +46,7 @@ export const GITHUB_MOCK_DATA: GithubNode[] = [
     isPublic: true,
     lastEdited: '3일전',
     children: [
-      { id: 'folder-2', name: 'src', type: 'folder', isPublic: true, lastEdited: '3일전', children: [] },
+      { id: 'folder-23', name: 'src', type: 'folder', isPublic: true, lastEdited: '3일전', children: [] },
       { id: 'file-8', name: 'Dockerfile', type: 'file', isPublic: true, lastEdited: '3일전' },
     ],
   },
@@ -57,7 +57,7 @@ export const GITHUB_MOCK_DATA: GithubNode[] = [
     isPublic: true,
     lastEdited: '3일전',
     children: [
-      { id: 'folder-2', name: 'src', type: 'folder', isPublic: true, lastEdited: '3일전', children: [] },
+      { id: 'folder-12', name: 'src', type: 'folder', isPublic: true, lastEdited: '3일전', children: [] },
       { id: 'file-7', name: 'Dockerfile', type: 'file', isPublic: true, lastEdited: '3일전' },
     ],
   },
