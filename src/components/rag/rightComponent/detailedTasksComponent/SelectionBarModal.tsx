@@ -100,23 +100,25 @@ const SelectionBarModal = ({
                           <span className="text-body-small text-gray-80 max-w-87.25 min-w-0 flex-1 truncate">
                             {task.taskTitle}
                           </span>
+
+                          <button
+                            onClick={() => toggleTaskExpansion(task.taskId)}
+                            className="flex shrink-0 cursor-pointer items-center gap-0.5"
+                          >
+                            <span className="text-body-xsmall text-blue-55 flex items-center">
+                              {task.subtasks.length}
+                            </span>
+                            <span className="h-4 w-4">
+                              <DropDownDown
+                                className={clsx(
+                                  'flex text-blue-50 transition-transform',
+                                  isExpanded ? 'relative bottom-px rotate-180' : 'relative bottom-0.5',
+                                )}
+                              />
+                            </span>
+                          </button>
                         </div>
-                        <button
-                          onClick={() => toggleTaskExpansion(task.taskId)}
-                          className="flex cursor-pointer items-center gap-0.5"
-                        >
-                          <span className="text-body-xsmall text-blue-55 flex items-center">
-                            {task.subtasks.length}
-                          </span>
-                          <span className="h-4 w-4">
-                            <DropDownDown
-                              className={clsx(
-                                'flex text-blue-50 transition-transform',
-                                isExpanded ? 'relative bottom-px rotate-180' : 'relative bottom-0.5',
-                              )}
-                            />
-                          </span>
-                        </button>
+
                         <div className="flex items-center gap-0.5">
                           <button
                             onClick={() => onOpenDetail({ type: 'task', taskId: task.taskId })}
