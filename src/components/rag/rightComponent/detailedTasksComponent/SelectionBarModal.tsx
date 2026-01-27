@@ -136,7 +136,7 @@ const SelectionBarModal = ({
                       task.subtasks.map((subtask) => (
                         <div
                           key={subtask.id}
-                          className="group hover:bg-neutral-2 flex h-9 items-center gap-1 rounded-lg p-1 transition-all duration-200"
+                          className="group hover:bg-neutral-2 flex h-9 w-103.75 items-center gap-1 rounded-lg p-1 transition-all duration-200"
                         >
                           {showParentTask && (
                             <div className="h-4.5 w-4.5">
@@ -194,17 +194,17 @@ const SelectionBarModal = ({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <button className="capsule-button-outline-blue flex cursor-pointer gap-1.5 px-3 py-1.5">
+            <button className="capsule-button-outline-blue flex w-38.75 cursor-pointer gap-1.5 px-3 py-1.5">
               <div className="relative top-px flex h-5 w-5 items-center">
                 <Edit className="text-blue-50" />
               </div>
-              <span className="text-blue-55 text-body-small">인수인계 시작하기</span>
+              <span className="text-blue-55 text-body-small whitespace-nowrap">인수인계 시작하기</span>
             </button>
-            <button className="capsule-button-solid-primary flex cursor-pointer gap-1.5 px-3 py-1.5">
+            <button className="capsule-button-solid-primary flex w-25.75 cursor-pointer gap-1.5 px-3 py-1.5">
               <div className="relative top-px flex h-5 w-5 items-center">
-                <Share className="" />
+                <Share />
               </div>
-              <span className="text-body-small">자료 공유</span>
+              <span className="text-body-small whitespace-nowrap">자료 공유</span>
             </button>
           </div>
         </div>
