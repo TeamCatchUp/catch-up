@@ -136,7 +136,7 @@ const SideNavBar = () => {
 
         {/* 팀스페이스 */}
         {isOpen && (
-          <button
+          <div
             onClick={() => {
               setIsTeamSpaceMoreModalOpen(false);
               setIsTeamDropDownModalOpen((prev) => !prev);
@@ -222,7 +222,7 @@ const SideNavBar = () => {
                 <TeamSpaceDropDownModal onClose={() => setIsTeamDropDownModalOpen(false)} />
               </div>
             )}
-          </button>
+          </div>
         )}
         {!isOpen && (
           <div
