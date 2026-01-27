@@ -156,7 +156,7 @@ export default function Search() {
       .map((item) => ({
         id: item.id,
         name: item.name,
-        Icon: item.type === 'repo' ? IconGithub : item.type === 'folder' ? IconFolder : IconFile,
+        Icon: item.type === 'repo' ? IconGithub : item.type === 'tree' ? IconFolder : IconFile,
         onRemove: () => toggleGithubItem(item),
       })),
 
