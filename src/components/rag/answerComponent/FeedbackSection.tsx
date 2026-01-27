@@ -3,7 +3,6 @@
 import clsx from 'clsx';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Cancel from '/public/icons/icon/cancel.svg';
-import { request } from 'node_modules/axios/index.cjs';
 
 const feedback = [
   { id: 1, content: '존재하지 않는 자료를 참고했어요' },
@@ -34,7 +33,7 @@ const FeedbackSection = ({
   const [detailText, setDetailText] = useState('');
   const [showThanks, setShowThanks] = useState(false);
 
-  // textarea 자동 높이 조절 함수
+  // textarea 자동 높이 조절
   const resizeTextarea = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -47,6 +46,7 @@ const FeedbackSection = ({
     el.style.overflowY = el.scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
   }, []);
 
+  // text 변경 시 resize
   useEffect(() => {
     if (!isDetailOpen) return;
     resizeTextarea();
@@ -93,8 +93,6 @@ const FeedbackSection = ({
 
   const submitFeedback = useCallback(() => {
     setFeedbackSubmittedMap((prev) => ({ ...prev, [messageId]: true }));
-
-    // setShowThanks(true);
 
     setTimeout(() => {
       setShowThanks(false);
@@ -159,7 +157,7 @@ const FeedbackSection = ({
       {isDetailOpen && (
         <div
           ref={detailRef}
-          className="text-body-medium border-blue-30 flex h-22.25 w-184.75 flex-col rounded-2xl border bg-white px-3 py-2.5"
+          className="text-body-medium border-blue-30 flex w-184.75 flex-col rounded-2xl border bg-white px-3 py-2.5"
         >
           <textarea
             ref={textareaRef}
@@ -183,7 +181,7 @@ const FeedbackSection = ({
             disabled={!detailText.trim()}
             onClick={submitFeedback}
             className={clsx(
-              'text-body-small capsule-button-solid-primary h-9 w-12.5 self-end px-3 py-1.5',
+              'text-body-small capsule-button-solid-primary h-9 w-12.5 items-end self-end px-3 py-1.5',
               detailText.trim() ? 'cursor-pointer' : '',
             )}
           >
