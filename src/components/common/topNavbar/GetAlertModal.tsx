@@ -16,12 +16,19 @@ const GetAlertModal = ({ alerts, onToggle }: Props) => {
           <li key={item} className="flex items-center justify-between p-2">
             <span className="text-body-small text-gray-80">{item}</span>
             <button
-              onClick={() =>
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                (e.nativeEvent as any).stopImmediatePropagation?.();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                (e.nativeEvent as any).stopImmediatePropagation?.();
+
                 onToggle((prev: any) => ({
                   ...prev,
                   [item]: !prev[item],
-                }))
-              }
+                }));
+              }}
               className="relative bottom-px flex cursor-pointer transition-colors"
             >
               {alerts[item] ? <ToggleOn className="h-6 w-9" /> : <ToggleOff className="h-6 w-9.5" />}

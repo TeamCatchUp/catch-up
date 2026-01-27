@@ -104,17 +104,17 @@ export default function Page() {
   const day = String(today.getDate()).padStart(2, '0');
 
   const formatMarkdownString = (text: string) => {
-    return (
-      text
-        .replace(/\\n/g, '\n')
-        .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2')
-        .replace(/([^\n])\n(\d+\.\s)/g, '$1\n\n$2')
-        .replace(/([^\n])\n([-*+]\s)/g, '$1\n\n$2')
-        .replace(/([^\n])\n(-\s\[[x\s]\]\s)/g, '$1\n\n$2')
-        .replace(/([^\n])\n(```)/g, '$1\n\n$2')
-        // .replace(/\n{3,}/g, '\n\n')
-        .trim()
+    if (!text) return '';
+
+    const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\\n/g, '\n');
+
+    // 블록 문법 시작(헤딩/리스트/체크박스/코드펜스/인용/테이블) 앞에 빈 줄 보정
+    const withSpacing = normalized.replace(
+      /([^\n])\n(?=(#{1,6}\s|(\d+)\.\s|[-*+]\s|-\s\[[xX\s]\]\s|```|>\s|\|))/g,
+      '$1\n\n',
     );
+
+    return withSpacing.trimEnd();
   };
 
   const beginAnswerLoading = useCallback(() => {
@@ -741,7 +741,7 @@ export default function Page() {
 
                     {msg.content ? (
                       <>
-                        <div
+                        {/* <div
                           className={clsx(
                             "text-gray-80 prose prose-neutral [&_li::marker]:text-gray-70 max-w-none break-words [&>ol]:list-decimal [&>ol]:pl-5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li:has(input[type='checkbox'])]:list-none [&>ul>li:has(input[type='checkbox'])]:pl-0",
                             '[&_pre]:overflow-x-auto [&_pre]:break-words [&_pre]:whitespace-pre-wrap',
@@ -749,6 +749,20 @@ export default function Page() {
                           )}
                         >
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatMarkdownString(msg.content)}</ReactMarkdown>
+                        </div> */}
+                        <div className="markdown-body max-w-none break-words">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              table: ({ children, ...props }) => (
+                                <div className="table-wrapper">
+                                  <table {...props}>{children}</table>
+                                </div>
+                              ),
+                            }}
+                          >
+                            {formatMarkdownString(msg.content)}
+                          </ReactMarkdown>
                         </div>
 
                         <div className="text-body-small text-gray-30">

@@ -20,11 +20,18 @@ interface GithubExplorerProps {
   onToggleItem: (item: GithubNode) => void;
   currentRepo: GithubNode | null;
   onNavigate: (repo: GithubNode | null) => void;
+  onClickBack: () => void;
 }
 
 type TabType = 'file' | 'PR' | 'Issue';
 
-export const GithubExplorer = ({ selectedItems, onToggleItem, currentRepo, onNavigate }: GithubExplorerProps) => {
+export const GithubExplorer = ({
+  selectedItems,
+  onToggleItem,
+  currentRepo,
+  onNavigate,
+  onClickBack,
+}: GithubExplorerProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<TabType>('file');
@@ -53,27 +60,41 @@ export const GithubExplorer = ({ selectedItems, onToggleItem, currentRepo, onNav
     e.preventDefault();
 
     const isFolder = item.type === 'folder' || item.type === 'repo';
+    const isCurrentlySelected = selectedItems.includes(item.id);
 
     if (isFolder && item.children) {
-      const allRelatedNodes = getAllChildNodes(item);
-      const isCurrentlySelected = selectedItems.includes(item.id);
-
-      // 폴더가 이미 선택됨 -> 전체 해제 / 선택 안됨 -> 전체 선택
-      allRelatedNodes.forEach((node) => {
-        const isNodeSelected = selectedItems.includes(node.id);
-        if (isCurrentlySelected) {
-          if (isNodeSelected) onToggleItem(node);
-        } else {
-          if (!isNodeSelected) onToggleItem(node);
-        }
-      });
+      if (isCurrentlySelected) {
+        onToggleItem(item);
+      } else {
+        const allRelatedNodes = getAllChildNodes(item);
+        allRelatedNodes.forEach((node) => {
+          if (!selectedItems.includes(node.id)) {
+            onToggleItem(node);
+          }
+        });
+      }
     } else {
       onToggleItem(item);
     }
   };
+  const getAllNodesFlat = (nodes: GithubNode[], result: GithubNode[] = []) => {
+    nodes.forEach((node) => {
+      result.push(node);
+      if (node.children) {
+        getAllNodesFlat(node.children, result);
+      }
+    });
+    return result;
+  };
 
   const currentItems = currentRepo ? currentRepo.children || [] : GITHUB_MOCK_DATA;
-  const filteredItems = currentItems.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  const filteredItems = searchQuery
+    ? getAllNodesFlat(currentItems).filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : currentItems;
+
+  const allNodes = getAllNodesFlat(currentItems);
+
   const isAllSelected = filteredItems.length > 0 && filteredItems.every((item) => selectedItems.includes(item.id));
 
   const handleSelectAll = (e: React.MouseEvent) => {
@@ -81,7 +102,6 @@ export const GithubExplorer = ({ selectedItems, onToggleItem, currentRepo, onNav
     e.stopPropagation();
     if (activeTab !== 'file') return;
     filteredItems.forEach((item) => {
-      // 위에서 만든 재귀 로직을 타게 함으로써 하위까지 일괄 선택
       if (isAllSelected) {
         if (selectedItems.includes(item.id)) handleCheck(item, e);
       } else {
@@ -94,7 +114,7 @@ export const GithubExplorer = ({ selectedItems, onToggleItem, currentRepo, onNav
     const isSelected = selectedItems.includes(node.id);
     const isFolder = node.type === 'folder';
     const isRepo = node.type === 'repo';
-
+    const isSearching = searchQuery.length > 0;
     let TypeIcon = IconTag;
     if (isFolder) TypeIcon = IconSpace;
     else if (isRepo) TypeIcon = IconGithub;
@@ -234,10 +254,10 @@ export const GithubExplorer = ({ selectedItems, onToggleItem, currentRepo, onNav
                 setSearchQuery('');
               }}
             >
-              <IconBack className="text-gray-9 h-5 w-5" />
+              <IconBack className="text-gray-90 h-5 w-5" />
             </button>
           ) : (
-            <div className="w-7"></div>
+            <div className=""></div>
           )}
           <div className="text-body-medium text-gray-80 truncate select-none">
             {currentRepo ? (
@@ -248,7 +268,17 @@ export const GithubExplorer = ({ selectedItems, onToggleItem, currentRepo, onNav
                 {currentRepo.name}
               </div>
             ) : (
-              'Github 내 Repository'
+              <div className="flex items-center justify-center gap-2.5">
+                <button
+                  type="button"
+                  className="hover:bg-neutral-3 flex h-7 w-7 items-center justify-center rounded-full p-0.5"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => onClickBack()}
+                >
+                  <IconBack className="text-gray-90 h-5 w-5" />
+                </button>
+                <div>Github 내 Repository</div>
+              </div>
             )}
           </div>
           {!currentRepo && (

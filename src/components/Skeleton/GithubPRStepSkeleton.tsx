@@ -39,7 +39,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
       behavior: 'smooth',
-      block: 'nearest',
+      block: 'end',
     });
   }, [selectedPrNumbers]);
 
