@@ -15,7 +15,7 @@ import Home from '/public/icons/icon/home.svg';
 import AI from '/public/icons/icon/ai.svg';
 import Dashboard from '/public/icons/icon/dashboard.svg';
 import Mail from '/public/icons/icon/inbox.svg';
-import DefaultProfile from '/public/icons/icon/default_profile.svg';
+import Profile from '/public/icons/icon/profile.svg';
 import UnfoldMore from '/public/icons/icon/unfold_more.svg';
 import ArrowLeft from '/public/icons/icon/arrow_left.svg';
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
@@ -385,12 +385,12 @@ const SideNavBar = () => {
           <div
             onClick={() => setIsUserModalOpen(!isUserModalOpen)}
             className={clsx(
-              'icon-button-only-gray flex h-13.5 cursor-pointer items-center rounded-lg',
-              isOpen ? 'w-56.25 justify-between px-1.5 py-1' : 'justify-center',
+              'flex h-13.5 cursor-pointer items-center rounded-lg',
+              isOpen ? 'icon-button-only-gray w-56.25 justify-between px-1.5 py-1' : 'justify-center',
             )}
           >
             <div className={clsx('flex gap-4', isOpen ? 'mt-auto' : '')}>
-              <DefaultProfile className="h-10 w-10" />
+              <Profile className="border-neutral-2 h-10 w-10 rounded-xl border-[0.5px]" />
               {isOpen && (
                 <div className="relative top-px max-w-31">
                   <div className="text-heading-small text-gray-80 truncate">{user?.name ?? '이름없음'}</div>

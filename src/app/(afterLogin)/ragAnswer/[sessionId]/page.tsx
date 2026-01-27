@@ -248,7 +248,7 @@ export default function Page() {
         case 'RAG_DONE': {
           console.log('[SSE] RAG_DONE received:', {
             hasResponse: !!data.response,
-            answer: data.response?.answer?.substring(0, 50),
+            answer: data.response?.answer,
             sourcesCount: data.response?.sources?.length,
             alreadyProcessing: processingDoneRef.current,
           });
