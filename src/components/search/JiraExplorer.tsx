@@ -20,9 +20,16 @@ interface JiraExplorerProps {
   onToggleItem: (item: JiraNode) => void;
   currentProject: JiraNode | null;
   onNavigate: (project: JiraNode | null) => void;
+  onClickBack: () => void;
 }
 
-export const JiraExplorer = ({ selectedItems, onToggleItem, currentProject, onNavigate }: JiraExplorerProps) => {
+export const JiraExplorer = ({
+  selectedItems,
+  onToggleItem,
+  currentProject,
+  onNavigate,
+  onClickBack,
+}: JiraExplorerProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
@@ -40,27 +47,23 @@ export const JiraExplorer = ({ selectedItems, onToggleItem, currentProject, onNa
     e.preventDefault();
 
     const isExpandable = item.type === 'project' || item.type === 'board';
+    const isCurrentlySelected = selectedItems.includes(item.id);
 
     if (isExpandable && item.children) {
-      const allRelatedNodes = getAllChildNodes(item);
-      const isCurrentlySelected = selectedItems.includes(item.id);
-
-      allRelatedNodes.forEach((node) => {
-        const isNodeSelected = selectedItems.includes(node.id);
-        if (isCurrentlySelected) {
-          if (isNodeSelected) onToggleItem(node);
-        } else {
-          if (!isNodeSelected) onToggleItem(node);
-        }
-      });
+      if (isCurrentlySelected) {
+        onToggleItem(item);
+      } else {
+        const allRelatedNodes = getAllChildNodes(item);
+        allRelatedNodes.forEach((node) => {
+          if (!selectedItems.includes(node.id)) {
+            onToggleItem(node);
+          }
+        });
+      }
     } else {
       onToggleItem(item);
     }
   };
-  const currentItems = currentProject ? currentProject.children || [] : JIRA_MOCK_DATA;
-  const filteredItems = currentItems.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  const isAllSelected = filteredItems.length > 0 && filteredItems.every((item) => selectedItems.includes(item.id));
-
   const getAllChildNodes = (node: JiraNode, nodes: JiraNode[] = []) => {
     nodes.push(node);
     if (node.children) {
@@ -68,6 +71,22 @@ export const JiraExplorer = ({ selectedItems, onToggleItem, currentProject, onNa
     }
     return nodes;
   };
+
+  const getAllNodesFlat = (nodes: JiraNode[], result: JiraNode[] = []) => {
+    nodes.forEach((node) => {
+      result.push(node);
+      if (node.children) {
+        getAllNodesFlat(node.children, result);
+      }
+    });
+    return result;
+  };
+  const currentItems = currentProject ? currentProject.children || [] : JIRA_MOCK_DATA;
+  const filteredItems = searchQuery
+    ? getAllNodesFlat(currentItems).filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : currentItems;
+
+  const isAllSelected = filteredItems.length > 0 && filteredItems.every((item) => selectedItems.includes(item.id));
 
   const handleSelectAll = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -127,7 +146,7 @@ export const JiraExplorer = ({ selectedItems, onToggleItem, currentProject, onNa
               </div>
               <div
                 className="hover:bg-neutral-2 flex h-9 w-9 items-center justify-center rounded-lg p-1.5"
-                onMouseDown={(e) => e.preventDefault()} // 화살표 클릭 시 포커스 유지
+                onMouseDown={(e) => e.preventDefault()}
               >
                 <IconArrowRight className="text-gray-70 h-6 w-6 shrink-0" />
               </div>
@@ -143,7 +162,7 @@ export const JiraExplorer = ({ selectedItems, onToggleItem, currentProject, onNa
       <div key={node.id} className="flex flex-col">
         <div
           className="hover:bg-neutral-1 flex h-10 shrink-0 cursor-pointer items-center justify-between gap-2.5 self-stretch rounded-xl bg-white py-1 pr-2"
-          onMouseDown={(e) => e.preventDefault()} // 행 클릭 시 포커스 유지
+          onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => {
             if (isExpandable) toggleExpand(node.id, e);
             else handleCheck(node, e);
@@ -156,7 +175,7 @@ export const JiraExplorer = ({ selectedItems, onToggleItem, currentProject, onNa
                   type="button"
                   onClick={(e) => toggleExpand(node.id, e)}
                   onMouseDown={(e) => {
-                    e.preventDefault(); // 화살표 클릭 시 모달 닫힘 방지 ★핵심
+                    e.preventDefault();
                     e.stopPropagation();
                   }}
                   className="hover:bg-neutral-2 flex h-full w-full items-center justify-center rounded-lg"
@@ -182,7 +201,7 @@ export const JiraExplorer = ({ selectedItems, onToggleItem, currentProject, onNa
                 type="button"
                 onClick={(e) => handleCheck(node, e)}
                 onMouseDown={(e) => {
-                  e.preventDefault(); // 체크박스 클릭 시 모달 닫힘 방지 ★핵심
+                  e.preventDefault();
                   e.stopPropagation();
                 }}
                 className="shrink-0"
@@ -221,7 +240,7 @@ export const JiraExplorer = ({ selectedItems, onToggleItem, currentProject, onNa
               type="button"
               className="hover:bg-neutral-3 flex h-7 w-7 items-center justify-center rounded-full p-0.5"
               onMouseDown={(e) => {
-                e.preventDefault(); // 뒤로가기 클릭 시 모달 닫힘 방지
+                e.preventDefault();
                 e.stopPropagation();
               }}
               onClick={() => {
@@ -232,16 +251,30 @@ export const JiraExplorer = ({ selectedItems, onToggleItem, currentProject, onNa
               <IconBack className="text-gray-9 h-5 w-5" />
             </button>
           ) : (
-            <div className="w-7"></div>
+            <div className=""></div>
           )}
           <div className="text-body-medium text-gray-80 truncate select-none">
-            {currentProject ? currentProject.name : 'Jira 프로젝트'}
+            {currentProject ? (
+              currentProject.name
+            ) : (
+              <div className="flex items-center justify-center gap-2.5">
+                <button
+                  type="button"
+                  className="hover:bg-neutral-3 flex h-7 w-7 items-center justify-center rounded-full p-0.5"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => onClickBack()}
+                >
+                  <IconBack className="text-gray-90 h-5 w-5" />
+                </button>
+                <div>Jira 프로젝트</div>{' '}
+              </div>
+            )}
           </div>
           <button
             type="button"
             className="hover:bg-neutral-1 ml-1 flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5"
             onMouseDown={(e) => {
-              e.preventDefault(); // 전체선택 클릭 시 모달 닫힘 방지
+              e.preventDefault();
               e.stopPropagation();
             }}
             onClick={handleSelectAll}
