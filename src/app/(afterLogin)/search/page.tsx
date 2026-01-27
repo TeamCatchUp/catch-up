@@ -65,11 +65,32 @@ export default function Search() {
   const toggleProject = (val: string) =>
     setSelectedProjects((p) => (p.includes(val) ? p.filter((i) => i !== val) : [...p, val]));
 
+  const getAllChildIds = (node: GithubNode, ids: string[] = []) => {
+    ids.push(node.id);
+    if (node.children) {
+      node.children.forEach((child) => getAllChildIds(child, ids));
+    }
+    return ids;
+  };
+
+  const getAllJiraChildIds = (node: JiraNode, ids: string[] = []) => {
+    ids.push(node.id);
+    if (node.children) {
+      node.children.forEach((child) => getAllJiraChildIds(child, ids));
+    }
+    return ids;
+  };
+
   const toggleGithubItem = (item: GithubNode) => {
     setSelectedGithubItems((prev) => {
       const exists = prev.find((i) => i.id === item.id);
-      if (exists) return prev.filter((i) => i.id !== item.id);
-      return [...prev, item];
+
+      if (exists) {
+        const idsToRemove = getAllChildIds(item);
+        return prev.filter((i) => !idsToRemove.includes(i.id));
+      } else {
+        return [...prev, item];
+      }
     });
   };
   const toggleJiraItem = (item: JiraNode) => {
@@ -77,7 +98,8 @@ export default function Search() {
       const exists = prev.find((i) => i.id === item.id);
 
       if (exists) {
-        return prev.filter((i) => i.id !== item.id);
+        const idsToRemove = getAllJiraChildIds(item);
+        return prev.filter((i) => !idsToRemove.includes(i.id));
       } else {
         return [...prev, item];
       }
@@ -157,6 +179,8 @@ export default function Search() {
   const personLabel = selectedPeople.length > 0 ? `담당자: ${selectedPeople[0]} 외` : '담당자';
   const deptLabel = selectedDepts.length > 0 ? `부서: ${selectedDepts[0]} 외` : '부서명';
   const projectLabel = selectedProjects.length > 0 ? `프로젝트: ${selectedProjects[0]} 외` : '프로젝트';
+  const gitLabel = selectedGithubItems.length > 0 ? `Github: ${selectedGithubItems[0].name} 외` : `Github`;
+  const jiraLabel = selectedJiraItems.length > 0 ? `Jira: ${selectedJiraItems[0].name} 외` : 'Jira';
 
   useEscapeKey(() => {
     setIsFocused(false);
@@ -165,8 +189,8 @@ export default function Search() {
   useOutsideClick(containerRef, () => {
     if (hasText) return;
     if (openPopover !== null) return;
-    // setIsFocused(false);
-    // inputRef.current?.blur();
+    setIsFocused(false);
+    inputRef.current?.blur();
   });
 
   useEffect(() => {
@@ -234,14 +258,14 @@ export default function Search() {
               <div className="flex items-center gap-2">
                 <SearchOptionButton
                   Icon={IconJira}
-                  label="Jira"
-                  selected={selectedOptions.includes('Jira')}
+                  label={jiraLabel}
+                  selected={selectedJiraItems.length > 0}
                   onClick={handleJiraClick}
                 />
                 <SearchOptionButton
                   Icon={IconGithub}
-                  label={currentRepo ? `Github: ${currentRepo.name}` : 'Github'}
-                  selected={isGithubMode}
+                  label={gitLabel}
+                  selected={selectedGithubItems.length > 0}
                   onClick={handleGithubClick}
                 />
                 <SearchOptionDisabledButton Icon={IconLock} label="Wiki" />
@@ -334,6 +358,7 @@ export default function Search() {
                   onToggleItem={toggleGithubItem}
                   currentRepo={currentRepo}
                   onNavigate={setCurrentRepo}
+                  onClickBack={handleGithubClick}
                 />
               ) : isJiraMode ? (
                 <JiraExplorer
@@ -341,6 +366,7 @@ export default function Search() {
                   onToggleItem={toggleJiraItem}
                   currentProject={currentJiraProject}
                   onNavigate={setCurrentJiraProject}
+                  onClickBack={handleJiraClick}
                 />
               ) : (
                 <DefaultSearchContent />
