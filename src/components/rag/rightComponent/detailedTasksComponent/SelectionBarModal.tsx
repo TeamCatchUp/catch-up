@@ -151,7 +151,7 @@ const SelectionBarModal = ({
                           <span
                             className={clsx(
                               'text-body-small text-gray-80 min-w-0 flex-1 truncate',
-                              showParentTask ? 'max-w-81' : 'w-89.25',
+                              showParentTask ? 'max-w-82' : 'w-89.25',
                             )}
                           >
                             {subtask.title}
@@ -195,7 +195,7 @@ const SelectionBarModal = ({
               </div>
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="ml-1.5 flex items-center gap-2">
             <button className="capsule-button-outline-blue flex w-38.75 cursor-pointer gap-1.5 px-3 py-1.5">
               <div className="relative top-px flex h-5 w-5 items-center">
                 <Edit className="text-blue-50" />
