@@ -3,6 +3,7 @@
 import clsx from 'clsx';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Cancel from '/public/icons/icon/cancel.svg';
+import { request } from 'node_modules/axios/index.cjs';
 
 const feedback = [
   { id: 1, content: '존재하지 않는 자료를 참고했어요' },
@@ -16,6 +17,7 @@ const feedback = [
 ];
 
 const DETAIL_ID = 8;
+const TEXTAREA_MAX_HEIGHT = 114;
 
 const FeedbackSection = ({
   messageId,
@@ -26,10 +28,29 @@ const FeedbackSection = ({
 }: FeedbackSectionProps) => {
   const feedbackRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailText, setDetailText] = useState('');
   const [showThanks, setShowThanks] = useState(false);
+
+  // textarea 자동 높이 조절 함수
+  const resizeTextarea = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    el.style.height = 'auto';
+    const next = Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT);
+    el.style.height = `${next}px`;
+
+    // max 넘어가면 내부 스크롤
+    el.style.overflowY = el.scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
+  }, []);
+
+  useEffect(() => {
+    if (!isDetailOpen) return;
+    resizeTextarea();
+  }, [detailText, isDetailOpen, resizeTextarea]);
 
   // 피드백 open 시 해당 요소로 하단 스크롤
   useEffect(() => {
@@ -122,8 +143,10 @@ const FeedbackSection = ({
                 submitFeedback();
               }}
               className={clsx(
-                'box-button-outline-gray text-xsmall text-gray-80 cursor-pointer rounded-lg px-2 py-1',
-                feedbackItem.id === DETAIL_ID && isDetailOpen ? 'bg-neutral-3 border-neutral-5' : '',
+                'text-xsmall text-gray-80 cursor-pointer rounded-lg px-2 py-1',
+                feedbackItem.id === DETAIL_ID && isDetailOpen
+                  ? 'bg-neutral-3 border-neutral-5'
+                  : 'box-button-outline-gray',
               )}
             >
               {feedbackItem.content}
@@ -139,16 +162,22 @@ const FeedbackSection = ({
           className="text-body-medium border-blue-30 flex h-22.25 w-184.75 flex-col rounded-2xl border bg-white px-3 py-2.5"
         >
           <textarea
+            ref={textareaRef}
             placeholder="자세한 피드백을 남겨주세요."
             value={detailText}
-            onChange={(e) => setDetailText(e.target.value)}
+            onChange={(e) => {
+              setDetailText(e.target.value);
+              requestAnimationFrame(resizeTextarea);
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 if (detailText.trim()) submitFeedback();
               }
             }}
-            className="text-gray-80 placeholder:text-gray-30 resize-none outline-none"
+            className="text-gray-80 placeholder:text-gray-30 resize-none overflow-y-hidden outline-none"
+            style={{ maxHeight: `${TEXTAREA_MAX_HEIGHT}px` }}
+            rows={1}
           />
           <button
             disabled={!detailText.trim()}
