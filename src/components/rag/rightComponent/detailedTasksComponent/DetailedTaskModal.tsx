@@ -104,7 +104,7 @@ const DetailedTaskModal = ({
 
   return (
     <div
-      className="shadow-rag-bar border-neutral-4 absolute bottom-4 ml-8 flex h-145 w-108.75 flex-col rounded-2xl border bg-white p-5"
+      className="shadow-rag-bar border-neutral-4 absolute bottom-4 ml-4 flex h-145 w-108.75 flex-col rounded-2xl border bg-white p-5"
       style={{ bottom: bottomOffset }}
     >
       {/* TopMenuBar */}
