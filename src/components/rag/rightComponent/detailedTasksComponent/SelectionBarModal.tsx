@@ -97,7 +97,9 @@ const SelectionBarModal = ({
                           <div className="h-4.5 w-4.5 shrink-0">
                             <Epic />
                           </div>
-                          <span className="text-body-small text-gray-80 min-w-0 flex-1 truncate">{task.taskTitle}</span>
+                          <span className="text-body-small text-gray-80 max-w-87.25 min-w-0 flex-1 truncate">
+                            {task.taskTitle}
+                          </span>
                         </div>
                         <button
                           onClick={() => toggleTaskExpansion(task.taskId)}
@@ -149,7 +151,7 @@ const SelectionBarModal = ({
                           <span
                             className={clsx(
                               'text-body-small text-gray-80 min-w-0 flex-1 truncate',
-                              showParentTask ? 'max-w-80.75' : 'w-89.25',
+                              showParentTask ? 'max-w-81' : 'w-89.25',
                             )}
                           >
                             {subtask.title}
