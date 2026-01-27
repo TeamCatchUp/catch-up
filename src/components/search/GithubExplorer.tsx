@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import IconGithub from '@/public/icons/logo/GitHub.svg';
 import IconSpace from '@/public/icons/icon/folder_filled.svg';
 import IconTag from '@/public/icons/icon/file_filled.svg';
@@ -13,7 +13,8 @@ import IconCheckOff from '@/public/icons/icon/checkbox_unchecked.svg';
 import IconConnector from '@/public/icons/icon/connector.svg';
 import IconConnectorLast from '@/public/icons/icon/connector_last.svg';
 
-import { GITHUB_MOCK_DATA, GithubNode } from '@/constants/githubRepoData';
+import { GithubNode } from '@/constants/githubRepoData';
+import { useGithubExplorer } from '@/hooks/useGithubExplorer';
 
 interface GithubExplorerProps {
   selectedItems: string[];
@@ -25,6 +26,17 @@ interface GithubExplorerProps {
 
 type TabType = 'file' | 'PR' | 'Issue';
 
+const getSearchableNodes = (items: any[]): any[] => {
+  let result: any[] = [];
+  items.forEach((item) => {
+    result.push(item);
+    if (item.children && item.children.length > 0) {
+      result = result.concat(getSearchableNodes(item.children));
+    }
+  });
+  return result;
+};
+
 export const GithubExplorer = ({
   selectedItems,
   onToggleItem,
@@ -32,9 +44,26 @@ export const GithubExplorer = ({
   onNavigate,
   onClickBack,
 }: GithubExplorerProps) => {
+  const { repositories, fileStructure, setFileStructure, isLoading, loadFileStructure } = useGithubExplorer(onNavigate);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<TabType>('file');
+
+  const handleRepoClick = (node: any) => {
+    if (node.type === 'repo') {
+      loadFileStructure(node);
+    }
+  };
+
+  const handleGoBack = () => {
+    if (fileStructure) {
+      setFileStructure(null);
+      onNavigate(null);
+    } else {
+      onClickBack();
+    }
+  };
 
   useEffect(() => {
     setActiveTab('file');
@@ -46,6 +75,7 @@ export const GithubExplorer = ({
     }
     return nodes;
   };
+
   const toggleExpand = (nodeId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -59,7 +89,7 @@ export const GithubExplorer = ({
     e.stopPropagation();
     e.preventDefault();
 
-    const isFolder = item.type === 'folder' || item.type === 'repo';
+    const isFolder = item.type === 'tree' || item.type === 'repo';
     const isCurrentlySelected = selectedItems.includes(item.id);
 
     if (isFolder && item.children) {
@@ -86,12 +116,22 @@ export const GithubExplorer = ({
     });
     return result;
   };
+  const currentItems = useMemo(() => {
+    if (currentRepo) {
+      return fileStructure ? fileStructure.children || [] : [];
+    }
+    return repositories;
+  }, [currentRepo, fileStructure, repositories]);
 
-  const currentItems = currentRepo ? currentRepo.children || [] : GITHUB_MOCK_DATA;
+  const filteredItems = useMemo<GithubNode[]>(() => {
+    if (!searchQuery) return currentItems;
 
-  const filteredItems = searchQuery
-    ? getAllNodesFlat(currentItems).filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : currentItems;
+    const searchLower = searchQuery.toLowerCase();
+
+    const allFlatNodes = getSearchableNodes(currentItems);
+
+    return allFlatNodes.filter((item) => item.name?.toLowerCase().includes(searchLower));
+  }, [searchQuery, currentItems]);
 
   const allNodes = getAllNodesFlat(currentItems);
 
@@ -112,7 +152,7 @@ export const GithubExplorer = ({
   const renderItem = (node: GithubNode, depth: number = 0, isLastChild: boolean = false) => {
     const isExpanded = expandedNodes.has(node.id);
     const isSelected = selectedItems.includes(node.id);
-    const isFolder = node.type === 'folder';
+    const isFolder = node.type === 'tree';
     const isRepo = node.type === 'repo';
     const isSearching = searchQuery.length > 0;
     let TypeIcon = IconTag;
@@ -123,7 +163,7 @@ export const GithubExplorer = ({
 
     if (isRepo) {
       return (
-        <div key={node.id} className="flex flex-col">
+        <div key={node.id} className="flex flex-col" onClick={() => handleRepoClick(node)}>
           <div
             className="hover:bg-neutral-1 flex h-10 shrink-0 cursor-pointer items-center justify-between gap-2.5 self-stretch rounded-xl bg-white py-1"
             onMouseDown={(e) => e.preventDefault()}
@@ -273,7 +313,7 @@ export const GithubExplorer = ({
                   type="button"
                   className="hover:bg-neutral-3 flex h-7 w-7 items-center justify-center rounded-full p-0.5"
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => onClickBack()}
+                  onClick={handleGoBack}
                 >
                   <IconBack className="text-gray-90 h-5 w-5" />
                 </button>
@@ -296,7 +336,7 @@ export const GithubExplorer = ({
             </button>
           )}
         </div>
-        <div className="border-neutral-5 flex h-9 w-[273px] items-center gap-1 rounded-xl border bg-white px-2.5 py-1.5">
+        <div className="border-neutral-5 flex h-9 w-68.25 items-center gap-1 rounded-xl border bg-white px-2.5 py-1.5">
           <IconSearch className="h-5 w-5 shrink-0 text-gray-50" />
           <input
             className="text-body-small placeholder:text-gray-40 w-full truncate outline-none"
@@ -348,11 +388,17 @@ export const GithubExplorer = ({
         </div>
       )}
       <div className="flex flex-col gap-1.5 self-stretch overflow-y-auto px-1 pb-4">
-        {!currentRepo || activeTab === 'file' ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="text-body-small text-gray-40">파일 목록을 불러오는 중...</div>
+          </div>
+        ) : !currentRepo || activeTab === 'file' ? (
           filteredItems.length > 0 ? (
             filteredItems.map((node, index) => renderItem(node, 0, index === filteredItems.length - 1))
           ) : (
-            <div className="text-body-small text-gray-40 py-10 text-center">검색 결과가 없습니다.</div>
+            <div className="text-body-small text-gray-40 py-10 text-center">
+              {searchQuery ? '검색 결과가 없습니다.' : '표시할 항목이 없습니다.'}
+            </div>
           )
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 py-10">
