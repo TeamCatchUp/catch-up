@@ -48,4 +48,19 @@
   .bg-rag-github-pr-mcp {
     background: linear-gradient(180deg, #fff 30.97%, #f7fbff 100%);
   }
+
+  /* markdown-body 內에서는 스크롤바 복구 */
+  .markdown-body *::-webkit-scrollbar {
+    display: block;
+    height: 8px;
+  }
+
+  .markdown-body *::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+  }
+
+  .markdown-body *::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }

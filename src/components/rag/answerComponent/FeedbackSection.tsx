@@ -181,11 +181,11 @@ const FeedbackSection = ({
             disabled={!detailText.trim()}
             onClick={submitFeedback}
             className={clsx(
-              'text-body-small capsule-button-solid-primary h-9 w-12.5 items-end self-end px-3 py-1.5',
+              'capsule-button-solid-primary h-9 w-12.5 items-end self-end px-3 py-1.5',
               detailText.trim() ? 'cursor-pointer' : '',
             )}
           >
-            제출
+            <span className="text-body-small relative top-px">제출</span>
           </button>
         </div>
       )}

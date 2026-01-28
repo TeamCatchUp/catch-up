@@ -106,25 +106,6 @@
     padding-left: 36px;
   }
 
-  /* ---------------- 체크박스 ( - [ ] ) ----------------
-  /* react-markdown+remarkGfm => <li class="task-list-item"><input type="checkbox" .../> ... */
-  /* .markdown-body .task-list-item {
-    list-style: none;
-    padding-left: 0;
-    margin-left: -20px;
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .markdown-body .task-list-item input[type='checkbox'].md-checkbox {
-    margin-top: 4px; 
-    width: 16px;
-    height: 16px;
-    accent-color: #1e2124; 
-    flex: 0 0 auto;
-  }  */
-
   /* ------------- 인용/강조블록 ------------- */
   .markdown-body blockquote {
     margin: 24px 0;
@@ -154,6 +135,7 @@
   /* ------------- 테이블 ------------- */
   .markdown-body .table-wrapper {
     overflow-x: auto;
+    width: 100%;
   }
 
   .markdown-body table {
