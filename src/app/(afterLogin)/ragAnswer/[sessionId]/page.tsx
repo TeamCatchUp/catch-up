@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 
 import Add from '/public/icons/icon/add_small.svg';
 import Share from '/public/icons/icon/share_2.svg';
@@ -32,12 +33,12 @@ import EditMessageInput from '@/components/rag/EditMessageInput';
 import ToolTip from '@/components/common/ToolTip';
 import TeamSpaceModal from '@/components/rag/modal/TeamSpaceModal';
 import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
+import { MarkDownComponents } from '@/components/rag/answerComponent/MarkDownComponents';
 
 import { useParams, useSearchParams } from 'next/navigation';
 import { createSSEConnection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
 import { normalizeSources } from '@/util/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/util/normalizeRelatedJiraIssues';
-import { resume } from 'react-dom/server';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -75,7 +76,6 @@ export default function Page() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
-  // const processingDoneRef = useRef(false); // RAG_DONE 중복 방지
 
   const [currentStep, setCurrentStep] = useState<RagUIStepKey>('router');
   const [prList, setPrList] = useState<PRPayload[]>([]);
@@ -105,7 +105,11 @@ export default function Page() {
   const formatMarkdownString = (text: string) => {
     if (!text) return '';
 
-    const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\\n/g, '\n');
+    // \r\n, \r을 \n으로 통일
+    let normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\\n/g, '\n');
+
+    // strong 안의 백틱 코드 앞/뒤에 바로 글자가 오는 경우 띄어쓰기 추가 (**`code`**글자 -> **`code`** 글자)
+    normalized = normalized.replace(/(\*\*`[^`]+`\*\*)([^\s*])/g, '$1 $2');
 
     // 블록 문법 시작(헤딩/리스트/체크박스/코드펜스/인용/테이블) 앞에 빈 줄 보정
     const withSpacing = normalized.replace(
@@ -132,6 +136,16 @@ export default function Page() {
     setShowPRSelection(false);
     setCurrentStep('router');
   }, []);
+
+  // content='' (error response) -> new 쿼리 생성 시 질문 기록만 남김
+  const stripTrailingErrorAssistant = (messages: Message[]) => {
+    const last = messages[messages.length - 1];
+
+    if (last?.role === 'assistant' && (last.content ?? '') === '') {
+      return messages.slice(0, -1);
+    }
+    return messages;
+  };
 
   const appendAssistantAnswer = useCallback(
     (answer: string, sources: BackendSource[] = [], relatedJiraIssues: BackendSource[] = []) => {
@@ -205,6 +219,10 @@ export default function Page() {
           setPrList(data.payload);
           setShowPRSelection(true);
           setIsLoading(false);
+
+          // 백에서 연결 정리
+          console.log('[SSE] RAG_INTERRUPT - 연결 종료');
+          closeSSEConnection();
           break;
         }
 
@@ -257,7 +275,7 @@ export default function Page() {
             closeSSEConnection();
             reject(new Error('SSE connection timeout'));
           }
-        }, 3000);
+        }, 30000);
 
         // SSE 연결
         const sse = createSSEConnection(
@@ -319,7 +337,35 @@ export default function Page() {
 
     // localStorage에서 데이터 복원
     if (saved) {
-      setChatData(JSON.parse(saved));
+      const parsedData: ChatData = JSON.parse(saved);
+
+      // 마지막 메시지가 user = 답변 받지 못한 상태 (답변 에러) - 쿼리 자동 재전송 X
+      const lastMessage = parsedData.messages[parsedData.messages.length - 1];
+
+      if (lastMessage?.role === 'user') {
+        const errorData: ChatData = {
+          ...parsedData,
+          messages: [
+            ...parsedData.messages,
+            {
+              id: crypto.randomUUID(),
+              role: 'assistant',
+              content: '', // 빈 content = ErrorResponse 컴포넌트 렌더링
+              sources: [],
+              detailedTasks: [],
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        };
+
+        setChatData(errorData);
+        localStorage.setItem(`chat_${sessionId}`, JSON.stringify(errorData));
+        setIsLoading(false);
+        return;
+      }
+
+      // 정상적으로 완료된 대화 복원
+      setChatData(parsedData);
       setIsLoading(false);
       return;
     }
@@ -383,11 +429,15 @@ export default function Page() {
       timestamp: new Date().toISOString(),
     };
 
+    // 직전 ErrorResponse(빈 assistant) 제거하고 append
+    const cleanedMessages = stripTrailingErrorAssistant(chatData.messages);
+
     const updated: ChatData = {
       ...chatData,
       messages: [...chatData.messages, userMessage],
     };
     setChatData(updated);
+    localStorage.setItem(`chat_${sessionId}`, JSON.stringify(updated));
 
     const queryToSend = newInput;
     setNewInput('');
@@ -409,7 +459,7 @@ export default function Page() {
     console.log('[PR CONTINUE] selectedPrNumbers:', selectedPrNumbers);
 
     setShowPRSelection(false);
-    setIsLoading(true); // SSE 연결 유지
+    beginAnswerLoading(); // SSE 연결은 RAG_INTERRUPT에서 이미 종료된 상태
 
     const selectedPRs = selectedPrNumbers
       .map((prNumber) => prList.find((p) => p.prNumber === prNumber))
@@ -423,14 +473,13 @@ export default function Page() {
     console.log('[PR CONTINUE] payload to /api/chat/resume:', selectedPRs);
 
     try {
-      // SSE 연결 유지, resume에 요청 전송
-      await resumeChatQuery(sessionId, selectedPRs);
-      console.log('[handlePRContinue] Resume 요청 완료');
+      // 새로운 SSE 연결 생성 후 resume 요청
+      console.log('[handlePRContinue] 새로운 SSE 연결 -> resume 요청');
+      await connectSSEAndSendQuery('', [], true, selectedPRs);
     } catch (err) {
       console.error('[handlePRContinue] Error:', err);
       setIsError(true);
       setIsLoading(false);
-      closeSSEConnection(); // 에러 -> 연결 종료
     }
   };
 
@@ -444,10 +493,9 @@ export default function Page() {
 
     console.log('[PR] refetch query:', query);
 
-    beginAnswerLoading(); // PR 화면 다시 닫고 로딩
     // 기존 SSE 연결 종료 후 새로 시작
-    // closeSSEConnection();
-    // beginAnswerLoading();
+    closeSSEConnection();
+    beginAnswerLoading();
 
     try {
       await connectSSEAndSendQuery(query, [...HARD_CODED_INDEX_LIST]);
@@ -475,6 +523,8 @@ export default function Page() {
     if (idx === -1) return;
 
     const trimmed = chatData.messages.slice(0, idx);
+    const cleanedTrimmed = stripTrailingErrorAssistant(trimmed);
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -679,7 +729,6 @@ export default function Page() {
                             )}
                           </div>
 
-                          {/* <div onClick={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}> */}
                           <div>
                             <FilterComponent
                               isOpen={filterOpenMap[msg.id]}
@@ -692,25 +741,13 @@ export default function Page() {
 
                     {msg.content ? (
                       <>
-                        {/* <div
-                          className={clsx(
-                            "text-gray-80 prose prose-neutral [&_li::marker]:text-gray-70 max-w-none break-words [&>ol]:list-decimal [&>ol]:pl-5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li:has(input[type='checkbox'])]:list-none [&>ul>li:has(input[type='checkbox'])]:pl-0",
-                            '[&_pre]:overflow-x-auto [&_pre]:break-words [&_pre]:whitespace-pre-wrap',
-                            '[&_pre]:bg-neutral-2 [&_pre]:rounded-xl [&_pre]:p-4',
-                          )}
-                        >
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatMarkdownString(msg.content)}</ReactMarkdown>
-                        </div> */}
-                        <div className="markdown-body max-w-none break-words">
+                        <div className="markdown-body max-w-192.75 p-10 break-words">
                           <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              table: ({ children, ...props }) => (
-                                <div className="table-wrapper">
-                                  <table {...props}>{children}</table>
-                                </div>
-                              ),
-                            }}
+                            remarkPlugins={[
+                              remarkGfm,
+                              remarkBreaks, // 문제 5 해결: \n을 <br/>로 변환
+                            ]}
+                            components={MarkDownComponents}
                           >
                             {formatMarkdownString(msg.content)}
                           </ReactMarkdown>
@@ -858,3 +895,137 @@ export default function Page() {
     </div>
   );
 }
+
+/* 마크다운 문법 적용 예시 */
+// import ReactMarkdown from 'react-markdown';
+// import remarkGfm from 'remark-gfm';
+// import remarkBreaks from 'remark-breaks';
+// import { MarkDownComponents } from '@/components/rag/answerComponent/MarkDownComponents';
+
+// const mockMD = `
+// # h1 제목
+
+// - 가나다abc \`단독 인라인코드\` \`단어+인라인코드\`랑
+// - **\`strong 인라인코드\`** **\`strong 단어+인라인코드\`**랑
+// - **\`여기서안되네\`**
+
+// > 인용문1
+// > blockquoteblockquo한글한글한글teblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockqublockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockqublockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquote
+
+// ### 주요 지표 분석 (ul)
+// - 브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
+//   - 브랜드 지수는 평균 대비 +22% 높게 나타났습니다. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
+
+// ### 주요 지표 분석 (ol)
+// -브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
+//   -브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
+
+// **strong** strong **strong**아
+// - 링크: [naver](https://naver.com)
+// - 링크에 \`inline\`도 섞기: [\`/api/chat/resume\` 문서](https://example.com/api-docs)
+
+// ## 리스트 (ul / ol / 중첩)
+
+// - ul 1번
+// - ul 2번
+//   - ul 2-1 (중첩)
+//   - ul 2-2 (중첩)
+//     - ul 2-2-1 (더 중첩)
+// - ul 3번
+
+// 1. ol 1번
+// 2. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
+//    1. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
+//    2. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
+// 3. ol 3번
+
+// ## 코드블럭 (pre > code)
+
+// \`\`\`ts
+// type RagNotification = {
+//   target: 'CHAT';
+//   type: 'RAG_IN_PROGRESS' | 'RAG_INTERRUPT' | 'RAG_DONE';
+//   message: string | null;
+//   data: {
+//     sessionId: string;
+//     type: 'status' | 'interrupt' | 'result' | 'interrupt' | 'result'  | 'interrupt' | 'result' | 'interrupt' | 'result' | 'interrupt' | 'result' | 'interrupt' | 'result';
+//     node: string;
+//     payload?: unknown;
+//     response?: {
+//       answer: string;
+//       sources?: Array<{ sourceType: number; title: string }>;
+//     };
+//   };
+// };
+
+// function demoInlineVsBlock() {
+//   const endpoint = '/api/notification/subscribe';
+//   console.log('SSE endpoint:', endpoint);
+// }
+// \`\`\`
+
+// \`\`\`bash
+// # curl example
+// curl -N -H "Accept:text/event-streamAccept:text/event-streamAccept:text/event-stream" "https://example.com/api/notification/subscribe"
+// \`\`\`
+
+// \`\`\`bash
+// # curl example
+// curl -N -H "Accep"
+// \`\`\`
+
+// ## H2: 테이블 (table)
+
+// | 항목 | 설명 | 예시 |
+// |---|---|---|
+// | sessionId | 세션 식별자 | \`746a8ca1-19d6-4d35-b80e-401f97ecbda8\` |
+// | node | RAG 단계 | \`router\`, \`retrieve\`, \`rerank\`, \`generate\` |
+// | type | 이벤트 타입 | \`RAG_IN_PROGRESS\`, \`RAG_DONE\` |
+
+// ## H2: 이미지 (img)
+
+// ![테스트 이미지](https://picsum.photos/800/450)
+
+// ## H2: 마무리
+
+// 인라인 코드 \`final_check=true\` 와 **굵게 표시**! **굵게 표시**
+
+// 줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문
+
+// 바줄본문 검사검사 본문본문
+// 꿈줄본문 검사검사 본문본문
+// `;
+
+// export default function Mail() {
+//   const formatMarkdownString = (text: string) => {
+//     if (!text) return '';
+
+//     // \r\n, \r을 \n으로 통일
+//     let normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\\n/g, '\n');
+
+//     // **`code`**글자 형태를 **`code`** 글자로 변환 (띄어쓰기 추가)
+//     // strong 안의 백틱 코드 뒤에 바로 글자가 오는 경우 띄어쓰기 추가
+//     normalized = normalized.replace(/(\*\*`[^`]+`\*\*)([^\s*])/g, '$1 $2');
+
+//     // 블록 문법 시작(헤딩/리스트/체크박스/코드펜스/인용/테이블) 앞에 빈 줄 보정
+//     const withSpacing = normalized.replace(
+//       /([^\n])\n(?=(#{1,6}\s|(\d+)\.\s|[-*+]\s|-\s\[[xX\s]\]\s|```|>\s|\|))/g,
+//       '$1\n\n',
+//     );
+
+//     return withSpacing.trimEnd();
+//   };
+//   return (
+//     <div className="markdown-body max-w-192.75 p-10 break-words">
+//       <ReactMarkdown
+//         remarkPlugins={[
+//           remarkGfm,
+//           remarkBreaks, // 문제 5 해결: \n을 <br/>로 변환
+//         ]}
+//         components={MarkDownComponents}
+//       >
+//         {formatMarkdownString(mockMD)}
+//       </ReactMarkdown>
+//     </div>
+//   );
+// }

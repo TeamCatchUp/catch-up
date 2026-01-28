@@ -10,42 +10,9 @@ import { useUserStore } from '@/store/userStore';
 
 const Page = () => {
   const { user } = useUserStore();
-  const [activeTab, setActiveTab] = useState<'profile' | 'tool' | 'history'>('profile');
 
   return (
     <div className="flex flex-col">
-      {/* TopNavbar */}
-      <TopNavbar pageType="mypage" />
-      {/* profile Navbar */}
-      <div className="text-heading-large flex gap-6 bg-white pt-5 pl-16">
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={clsx(
-            'cursor-pointer',
-            activeTab === 'profile' ? 'border-gray-80 text-gray-80 border-b-[2px]' : 'text-gray-30',
-          )}
-        >
-          프로필
-        </button>
-        <button
-          onClick={() => setActiveTab('tool')}
-          className={clsx(
-            'cursor-pointer',
-            activeTab === 'tool' ? 'border-gray-80 text-gray-80 border-b-[2px]' : 'text-gray-30',
-          )}
-        >
-          협업툴 연동
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          className={clsx(
-            'cursor-pointer',
-            activeTab === 'history' ? 'border-gray-80 text-gray-80 border-b-[2px]' : 'text-gray-30',
-          )}
-        >
-          질문 히스토리
-        </button>
-      </div>
       {/* 배경 */}
       <div className="bg-neutral-1 h-60 w-full" />
       <div className="mx-auto -mt-15.5 flex w-268 flex-col items-center">
