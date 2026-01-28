@@ -741,7 +741,7 @@ export default function Page() {
 
                     {msg.content ? (
                       <>
-                        <div className="markdown-body max-w-192.75 p-10 break-words">
+                        <div className="markdown-body max-w-192.75 break-words">
                           <ReactMarkdown
                             remarkPlugins={[
                               remarkGfm,
