@@ -37,7 +37,6 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { createSSEConnection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
 import { normalizeSources } from '@/util/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/util/normalizeRelatedJiraIssues';
-import { resume } from 'react-dom/server';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -63,6 +62,111 @@ const NODE_TO_UI_STEP: Record<string, RagUIStepKey | null> = {
 // test 하드코딩
 const HARD_CODED_INDEX_LIST = ['CatchUp_BE_develop_code', 'CatchUp_BE_develop_pr', 'cu_jira_issue'] as const;
 
+const mockMD = `
+# H1: h1 제목
+
+- 배포 후 \`401 Unauthorized\`가 발생하면 토큰 갱신/로그아웃 정책을 확인하세요.
+- SSE 연결은 브라우저 새로고침 시 끊기므로 \`Last-Event-ID\` 또는 재연결 로직이 필요합니다.
+- 표(table)와 코드블럭(pre/code) 스타일을 함께 확인합니다.
+
+> 인용문(blockquote) 예시입니다.  
+> 두 줄 이상도 잘 보이는지 확인해요.
+
+---
+
+## H2: 핵심 체크리스트 (체크박스)
+
+- [ ] 서버 헬스 체크 \`/health\` 확인
+- [x] 배포 버전 태그 확인 (\`v1.2.3\`)
+- [ ] SSE 구독 endpoint 연결 확인 (\`/api/notification/subscribe\`)
+  - [ ] withCredentials / CORS 설정 확인
+  - [x] 서버에서 sessionId 매칭 확인
+
+---
+
+## H2: H3 + 문단 + 인라인 코드
+
+### H3: 인라인 코드 샘플
+
+문단(p) 샘플입니다. 인라인 코드는 \`GET /api/chat/query\` 처럼 보입니다.  
+또 다른 인라인 코드는 \`sessionId=746a8ca1-...\` 그리고 \`NODE_TO_UI_STEP["generate"]\` 입니다.
+
+문단 내 **강조 텍스트**도 섞어봅니다. 그리고 링크도 넣어볼게요:  
+- 일반 링크: [Jira 바로가기](https://example.com/jira)
+- 링크에 \`inline\`도 섞기: [\`/api/chat/resume\` 문서](https://example.com/api-docs)
+
+---
+
+## H2: 리스트 (ul / ol / 중첩)
+
+- ul 1번
+- ul 2번
+  - ul 2-1 (중첩)
+  - ul 2-2 (중첩)
+    - ul 2-2-1 (더 중첩)
+- ul 3번 (여기엔 \`inline code\` 포함)
+
+1. ol 1번
+2. ol 2번
+   1. ol 2-1 (중첩)
+   2. ol 2-2 (중첩)
+3. ol 3번 (**강조 포함**)
+
+---
+
+## H2: 코드블럭 (pre > code)
+
+\`\`\`ts
+type RagNotification = {
+  target: 'CHAT';
+  type: 'RAG_IN_PROGRESS' | 'RAG_INTERRUPT' | 'RAG_DONE';
+  message: string | null;
+  data: {
+    sessionId: string;
+    type: 'status' | 'interrupt' | 'result';
+    node: string;
+    payload?: unknown;
+    response?: {
+      answer: string;
+      sources?: Array<{ sourceType: number; title: string }>;
+    };
+  };
+};
+
+function demoInlineVsBlock() {
+  const endpoint = '/api/notification/subscribe';
+  console.log('SSE endpoint:', endpoint);
+}
+\`\`\`
+
+\`\`\`bash
+# curl example
+curl -N -H "Accept:text/event-stream" "https://example.com/api/notification/subscribe"
+\`\`\`
+
+---
+
+## H2: 테이블 (table)
+
+| 항목 | 설명 | 예시 |
+|---|---|---|
+| sessionId | 세션 식별자 | \`746a8ca1-19d6-4d35-b80e-401f97ecbda8\` |
+| node | RAG 단계 | \`router\`, \`retrieve\`, \`rerank\`, \`generate\` |
+| type | 이벤트 타입 | \`RAG_IN_PROGRESS\`, \`RAG_DONE\` |
+
+---
+
+## H2: 이미지 (img)
+
+![테스트 이미지](https://picsum.photos/800/450)
+
+---
+
+## H2: 마무리
+
+인라인 코드 \`final_check=true\` 와 **굵게 표시**! **굵게 표시**
+`;
+
 export default function Page() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -75,7 +179,6 @@ export default function Page() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
-  // const processingDoneRef = useRef(false); // RAG_DONE 중복 방지
 
   const [currentStep, setCurrentStep] = useState<RagUIStepKey>('router');
   const [prList, setPrList] = useState<PRPayload[]>([]);
@@ -679,7 +782,6 @@ export default function Page() {
                             )}
                           </div>
 
-                          {/* <div onClick={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}> */}
                           <div>
                             <FilterComponent
                               isOpen={filterOpenMap[msg.id]}
@@ -712,7 +814,8 @@ export default function Page() {
                               ),
                             }}
                           >
-                            {formatMarkdownString(msg.content)}
+                            {/* {formatMarkdownString(msg.content)} */}
+                            {mockMD}
                           </ReactMarkdown>
                         </div>
 
