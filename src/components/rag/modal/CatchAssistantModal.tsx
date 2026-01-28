@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AI from '/public/icons/icon/ai.svg';
 import Add from '/public/icons/icon/add_small.svg';
@@ -9,14 +9,56 @@ import Close from '/public/icons/icon/cancel.svg';
 import Chat from '/public/icons/icon/chat.svg';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { useOutsideClick } from '@/hooks/useOutsideClick';
+import { SearchHistory } from '@/components/UI/mypage/history/SearchHistory';
+import { searchService } from '@/api/search';
 
 interface CatchAssistantModalProps {
   onClose: () => void;
+}
+interface SearchQuery {
+  query: string;
+  sessionId: string;
+  date: string;
+  rawDate: Date;
 }
 
 const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const [recentQueries, setRecentQueries] = useState<SearchQuery[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDefaultData = async () => {
+      try {
+        setIsLoading(true);
+
+        const [queriesRes] = await Promise.all([searchService.getRecentQueries()]);
+
+        if (queriesRes.content) {
+          const mappedQueries = queriesRes.content.map((item: any) => ({
+            query: item.query,
+            sessionId: item.sessionId,
+            date: new Date(item.createdAt)
+              .toLocaleDateString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+              })
+              .replace(/\s/g, '')
+              .replace(/\.$/, ''),
+            rawDate: new Date(item.createdAt),
+          }));
+          setRecentQueries(mappedQueries);
+        }
+      } catch (err) {
+        console.error('데이터 로드 실패:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchDefaultData();
+  }, []);
 
   useEscapeKey(onClose);
   useOutsideClick(modalRef, onClose);
@@ -58,98 +100,11 @@ const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
       <div className="bg-neutral-3 relative right-3 h-px w-189.25" />
 
       {/* 질문 목록 */}
-      <div className="flex flex-col gap-3 overflow-y-auto px-2 pb-4">
-        {/* 오늘 */}
-        <div className="flex flex-col gap-2.5">
-          <span className="text-body-xsmall text-gray-50">오늘</span>
-          <div className="flex flex-col gap-1">
-            <button className="text-button-secondary-mono flex cursor-pointer items-center gap-2 rounded-xl! py-1">
-              <div className="border-neutral-3 bg-neutral-1 flex h-8 w-8 items-center justify-center rounded-full border p-1.5">
-                <Chat className="h-5 w-5 text-gray-50" />
-              </div>
-              <span className="text-body-small text-gray-80 max-w-149 truncate">
-                일본 시장 진출 전체 진행 상황 요약 text text text text text text text text text text text text text text
-              </span>
-              <span className="text-body-xsmall text-gray-30">2025.12.14</span>
-            </button>
-            <button className="text-button-secondary-mono flex cursor-pointer items-center gap-2 rounded-xl! py-1">
-              <div className="border-neutral-3 bg-neutral-1 flex h-8 w-8 items-center justify-center rounded-full border p-1.5">
-                <Chat className="h-5 w-5 text-gray-50" />
-              </div>
-              <span className="text-body-small text-gray-80 max-w-149 truncate">
-                일본 시장 진출 전체 진행 상황 요약 text text text text text text text text text text text text text text
-              </span>
-              <span className="text-body-xsmall text-gray-30">2025.12.14</span>
-            </button>
-          </div>
-        </div>
-        {/* 최근 7일 */}
-        <div className="flex flex-col gap-2.5">
-          <span className="text-body-xsmall text-gray-50">최근 7일</span>
-          <div className="flex flex-col gap-1">
-            <button className="text-button-secondary-mono flex cursor-pointer items-center gap-2 rounded-xl! py-1">
-              <div className="border-neutral-3 bg-neutral-1 flex h-8 w-8 items-center justify-center rounded-full border p-1.5">
-                <Chat className="h-5 w-5 text-gray-50" />
-              </div>
-              <span className="text-body-small text-gray-80 max-w-149 truncate">
-                일본 시장 진출 전체 진행 상황 요약 text text text text text text text text text text text text text text
-              </span>
-              <span className="text-body-xsmall text-gray-30">2025.12.14</span>
-            </button>
-            <button className="text-button-secondary-mono flex cursor-pointer items-center gap-2 rounded-xl! py-1">
-              <div className="border-neutral-3 bg-neutral-1 flex h-8 w-8 items-center justify-center rounded-full border p-1.5">
-                <Chat className="h-5 w-5 text-gray-50" />
-              </div>
-              <span className="text-body-small text-gray-80 max-w-149 truncate">
-                일본 시장 진출 전체 진행 상황 요약 text text text text text text text text text text text text text text
-              </span>
-              <span className="text-body-xsmall text-gray-30">2025.12.14</span>
-            </button>
-            <button className="text-button-secondary-mono flex cursor-pointer items-center gap-2 rounded-xl! py-1">
-              <div className="border-neutral-3 bg-neutral-1 flex h-8 w-8 items-center justify-center rounded-full border p-1.5">
-                <Chat className="h-5 w-5 text-gray-50" />
-              </div>
-              <span className="text-body-small text-gray-80 max-w-149 truncate">
-                일본 시장 진출 전체 진행 상황 요약 text text text text text text text text text text text text text text
-              </span>
-              <span className="text-body-xsmall text-gray-30">2025.12.14</span>
-            </button>
-            <button className="text-button-secondary-mono flex cursor-pointer items-center gap-2 rounded-xl! py-1">
-              <div className="border-neutral-3 bg-neutral-1 flex h-8 w-8 items-center justify-center rounded-full border p-1.5">
-                <Chat className="h-5 w-5 text-gray-50" />
-              </div>
-              <span className="text-body-small text-gray-80 max-w-149 truncate">
-                일본 시장 진출 전체 진행 상황 요약 text text text text text text text text text text text text text text
-              </span>
-              <span className="text-body-xsmall text-gray-30">2025.12.14</span>
-            </button>
-          </div>
-        </div>
-        {/* 이전 */}
-        <div className="flex flex-col gap-2.5">
-          <span className="text-body-xsmall text-gray-50">이전</span>
-          <div className="flex flex-col gap-1">
-            <button className="text-button-secondary-mono flex cursor-pointer items-center gap-2 rounded-xl! py-1">
-              <div className="border-neutral-3 bg-neutral-1 flex h-8 w-8 items-center justify-center rounded-full border p-1.5">
-                <Chat className="h-5 w-5 text-gray-50" />
-              </div>
-              <span className="text-body-small text-gray-80 max-w-149 truncate">
-                일본 시장 진출 전체 진행 상황 요약 text text text text text text text text text text text text text text
-              </span>
-              <span className="text-body-xsmall text-gray-30">2025.12.14</span>
-            </button>
-            <button className="text-button-secondary-mono flex cursor-pointer items-center gap-2 rounded-xl! py-1">
-              <div className="border-neutral-3 bg-neutral-1 flex h-8 w-8 items-center justify-center rounded-full border p-1.5">
-                <Chat className="h-5 w-5 text-gray-50" />
-              </div>
-              <span className="text-body-small text-gray-80 max-w-149 truncate">
-                일본 시장 진출 전체 진행 상황 요약 text text text text text text text text text text text text text text
-              </span>
-              <span className="text-body-xsmall text-gray-30">2025.12.14</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      {isLoading ? (
+        <div className="text-gray-40 p-5">데이터를 불러오는 중입니다...</div>
+      ) : (
+        <SearchHistory querys={recentQueries} isModal="true" />
+      )}
     </div>
   );
 };
