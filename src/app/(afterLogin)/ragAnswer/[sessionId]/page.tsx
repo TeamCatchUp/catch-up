@@ -34,9 +34,11 @@ import TeamSpaceModal from '@/components/rag/modal/TeamSpaceModal';
 import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
 
 import { useParams, useSearchParams } from 'next/navigation';
-import { createSSEConection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
+import { createSSEConnection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
 import { normalizeSources } from '@/util/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/util/normalizeRelatedJiraIssues';
+import { clear } from 'console';
+import { connect } from 'http2';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -74,7 +76,7 @@ export default function Page() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
-  const processingDoneRef = useRef(false); // RAG_DONE 중복 방지
+  // const processingDoneRef = useRef(false); // RAG_DONE 중복 방지
 
   const [currentStep, setCurrentStep] = useState<RagUIStepKey>('router');
   const [prList, setPrList] = useState<PRPayload[]>([]);
@@ -95,8 +97,8 @@ export default function Page() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const sseRef = useRef<EventSource | null>(null);
-  const sseReadyRef = useRef(false);
-  const mountedRef = useRef(true); // 컴포넌트 마운트 상태
+  // const sseReadyRef = useRef(false);
+  // const mountedRef = useRef(true); // 컴포넌트 마운트 상태
   const stoppedRef = useRef(false); // 로딩 중 질문 중지
 
   const today = new Date();
@@ -117,13 +119,22 @@ export default function Page() {
     return withSpacing.trimEnd();
   };
 
+  // SSE 연결 종료 함수
+  const closeSSEConnection = useCallback(() => {
+    if (sseRef.current) {
+      console.log('[closeSSEConnection] 연결 종료');
+      sseRef.current.close();
+      sseRef.current = null;
+    }
+  }, []);
+
   const beginAnswerLoading = useCallback(() => {
     stoppedRef.current = false;
     setIsLoading(true);
     setIsError(false);
     setShowPRSelection(false);
     setCurrentStep('router');
-    processingDoneRef.current = false; // RAG_DONE 플래그 초기화
+    // processingDoneRef.current = false; // RAG_DONE 플래그 초기화
   }, []);
 
   const appendAssistantAnswer = useCallback(
@@ -166,54 +177,54 @@ export default function Page() {
     [sessionId],
   );
 
-  // SSE 연결 대기 로직 (새로고침 문제)
-  const waitForSSEOpen = async () => {
-    console.log('[waitForSSEOpen] 시작, readyState: ', sseRef.current?.readyState);
+  // // SSE 연결 대기 로직 (새로고침 문제)
+  // const waitForSSEOpen = async () => {
+  //   console.log('[waitForSSEOpen] 시작, readyState: ', sseRef.current?.readyState);
 
-    // SSE 연결되어 있음 -> 즉시 반환
-    if (sseRef.current?.readyState === EventSource.OPEN && sseReadyRef.current) {
-      console.log('[waitForSSEOpen] SSE 이미 연결됨');
-      // 추가 대기 시간 (백에서 SSE 연결 등록할 시간 확보)
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-      return;
-    }
+  //   // SSE 연결되어 있음 -> 즉시 반환
+  //   if (sseRef.current?.readyState === EventSource.OPEN && sseReadyRef.current) {
+  //     console.log('[waitForSSEOpen] SSE 이미 연결됨');
+  //     // 추가 대기 시간 (백에서 SSE 연결 등록할 시간 확보)
+  //     await new Promise((resolve) => setTimeout(resolve, 10000));
+  //     return;
+  //   }
 
-    return new Promise<void>((resolve, reject) => {
-      const start = Date.now();
-      const checkInterval = 100;
-      const timeout = 10000;
+  //   return new Promise<void>((resolve, reject) => {
+  //     const start = Date.now();
+  //     const checkInterval = 100;
+  //     const timeout = 10000;
 
-      const timer = setInterval(() => {
-        const currentState = sseRef.current?.readyState;
-        const elapsed = Date.now() - start;
+  //     const timer = setInterval(() => {
+  //       const currentState = sseRef.current?.readyState;
+  //       const elapsed = Date.now() - start;
 
-        console.log(`[waitForSSEOpen] 체크 중 .. readyState: ${currentState}, elapsed: ${elapsed}ms`);
+  //       console.log(`[waitForSSEOpen] 체크 중 .. readyState: ${currentState}, elapsed: ${elapsed}ms`);
 
-        if (currentState === EventSource.OPEN && sseReadyRef.current) {
-          console.log('[waitForSSEOpen] 연결 완료!');
-          clearInterval(timer);
-          // 백에서 SSE 연결 등록할 시간 확보
-          setTimeout(() => {
-            console.log('[waitForSSEOpen] 추가 대기 완료, 준비됨');
-            resolve();
-          }, 10000);
-          return;
-        }
+  //       if (currentState === EventSource.OPEN && sseReadyRef.current) {
+  //         console.log('[waitForSSEOpen] 연결 완료!');
+  //         clearInterval(timer);
+  //         // 백에서 SSE 연결 등록할 시간 확보
+  //         setTimeout(() => {
+  //           console.log('[waitForSSEOpen] 추가 대기 완료, 준비됨');
+  //           resolve();
+  //         }, 10000);
+  //         return;
+  //       }
 
-        if (elapsed > timeout) {
-          console.error('[waitForSSEOpen] timeout');
-          clearInterval(timer);
-          reject(new Error('SSE connection timeout'));
-          return;
-        }
-      }, checkInterval);
-    });
-  };
+  //       if (elapsed > timeout) {
+  //         console.error('[waitForSSEOpen] timeout');
+  //         clearInterval(timer);
+  //         reject(new Error('SSE connection timeout'));
+  //         return;
+  //       }
+  //     }, checkInterval);
+  //   });
+  // };
 
   // SSE 메시지 핸들러 - useCallback으로 메모이제이션
   const handleSSEMessage = useCallback(
     (notification: RagNotification) => {
-      if (stoppedRef.current) return; // 입력 중지 이후, 모든 SSE 무시
+      if (stoppedRef.current) return; // 입력 중지 이후 모든 SSE 무시
 
       if (!notification?.data || notification.data.sessionId !== sessionId) {
         return;
@@ -250,27 +261,30 @@ export default function Page() {
             hasResponse: !!data.response,
             answer: data.response?.answer,
             sourcesCount: data.response?.sources?.length,
-            alreadyProcessing: processingDoneRef.current,
+            // alreadyProcessing: processingDoneRef.current,
           });
 
-          // 중복 처리 방지
-          if (processingDoneRef.current) {
-            console.warn('[SSE] RAG_DONE already processed, 중복 무시');
-            return;
-          }
-          processingDoneRef.current = true;
+          // // 중복 처리 방지
+          // if (processingDoneRef.current) {
+          //   console.warn('[SSE] RAG_DONE already processed, 중복 무시');
+          //   return;
+          // }
+          // processingDoneRef.current = true;
 
           const response = data.response;
           if (!response) {
             console.error('[SSE] RAG_DONE but no response');
             setIsError(true);
             setIsLoading(false);
+            closeSSEConnection(); // 연결 종료 추가 (.close())
             return;
           }
 
           const related = data.relatedJiraIssues ?? [];
 
           appendAssistantAnswer(response.answer, response.sources || [], related);
+
+          closeSSEConnection();
           break;
         }
 
@@ -278,62 +292,125 @@ export default function Page() {
           break;
       }
     },
-    [sessionId, appendAssistantAnswer],
+    [sessionId, appendAssistantAnswer, closeSSEConnection],
   );
 
-  // SSE 연결 초기화 - sessionId가 변경될 때만 재연결
-  useEffect(() => {
-    mountedRef.current = true;
-    console.log('[SSE] 세션 초기 연결:', sessionId);
+  // SSE 연결 생성 및 채팅 요청 함수 (1질문 1연결)
+  const connectSSEAndSendQuery = useCallback(
+    async (query: string, indexList: string[], isResume: boolean = false, resumePayload?: any) => {
+      return new Promise<void>((resolve, reject) => {
+        console.log('[connectSSEAndSendQuery] SSE 연결 시작');
 
-    // 기존 연결 존재 시 정리 (중복 요청 방지)
-    if (sseRef.current) {
-      console.log('[SSE] 기존 연결 정리');
-      sseRef.current.close();
-      sseRef.current = null;
-      sseReadyRef.current = false;
-    }
+        // 기존 연결 정리
+        closeSSEConnection();
 
-    // 백엔드에서 연결 정리할 시간 확보
-    const setUpTimer = setTimeout(() => {
-      if (!mountedRef.current) return;
+        let sseConnected = false;
+        let chatRequestSent = false;
 
-      console.log('[SSE] 새 연결 시작');
-
-      const sse = createSSEConection(
-        sessionId,
-        handleSSEMessage,
-        (err) => {
-          console.error('[SSE] error: ', err);
-          if (sseRef.current?.readyState === EventSource.CLOSED) {
-            setIsLoading(false);
+        const timeout = setTimeout(() => {
+          if (!chatRequestSent) {
+            console.error('[connectSSEAndSendQuery] 타임아웃 - 30초 내 응답 없음');
+            closeSSEConnection();
+            reject(new Error('SSE connection timeout'));
           }
-        },
-        () => {
-          console.log('[SSE] 연결');
-          setTimeout(() => {
-            if (mountedRef.current) {
-              sseReadyRef.current = true;
-              console.log('[SSE] ready');
+        }, 3000);
+
+        // SSE 연결
+        const sse = createSSEConnection(
+          sessionId,
+          handleSSEMessage,
+          (err) => {
+            console.error('[connectSSEAndSendQuery] error:', err);
+            if (!chatRequestSent) {
+              clearTimeout(timeout);
+              closeSSEConnection();
+              reject(err);
             }
-          }, 1000);
-        },
-      );
+          },
+          async () => {
+            console.log('[connectSSEAndSendQuery] 연결 완료 (onOpen)');
+            sseConnected = true;
 
-      sseRef.current = sse;
-    }, 300);
+            // 연결 완료 후 즉시 send 채팅 요청
+            try {
+              if (isResume) {
+                console.log('[connectSSEAndSendQuery] Resume 요청 전송');
+                await resumeChatQuery(sessionId, resumePayload);
+              } else {
+                console.log('[connectSSEAndSendQuery[ 채팅 요청 전송:', query);
+                await sendChatQuery(query, sessionId, indexList);
+              }
+              chatRequestSent = true;
+              console.log('[connectSSEAndSendQuery] 채팅 요청 완료');
+              resolve();
+            } catch (err) {
+              console.error('[connectSSEAndSendQuery] 채팅 요청 실패:', err);
+              clearTimeout(timeout);
+              closeSSEConnection();
+              reject(err);
+            }
+          },
+        );
 
-    return () => {
-      console.log('[SSE] 클린업');
-      clearTimeout(setUpTimer);
-      mountedRef.current = false;
-      if (sseRef.current) {
-        sseRef.current.close();
-        sseRef.current = null;
-      }
-      sseReadyRef.current = false;
-    };
-  }, [sessionId, handleSSEMessage]);
+        sseRef.current = sse;
+      });
+    },
+    [sessionId, handleSSEMessage, closeSSEConnection],
+  );
+
+  // // SSE 연결 초기화 - sessionId가 변경될 때만 재연결
+  // useEffect(() => {
+  //   mountedRef.current = true;
+  //   console.log('[SSE] 세션 초기 연결:', sessionId);
+
+  //   // 기존 연결 존재 시 정리 (중복 요청 방지)
+  //   if (sseRef.current) {
+  //     console.log('[SSE] 기존 연결 정리');
+  //     sseRef.current.close();
+  //     sseRef.current = null;
+  //     sseReadyRef.current = false;
+  //   }
+
+  //   // 백엔드에서 연결 정리할 시간 확보
+  //   const setUpTimer = setTimeout(() => {
+  //     if (!mountedRef.current) return;
+
+  //     console.log('[SSE] 새 연결 시작');
+
+  //     const sse = createSSEConection(
+  //       sessionId,
+  //       handleSSEMessage,
+  //       (err) => {
+  //         console.error('[SSE] error: ', err);
+  //         if (sseRef.current?.readyState === EventSource.CLOSED) {
+  //           setIsLoading(false);
+  //         }
+  //       },
+  //       () => {
+  //         console.log('[SSE] 연결');
+  //         setTimeout(() => {
+  //           if (mountedRef.current) {
+  //             sseReadyRef.current = true;
+  //             console.log('[SSE] ready');
+  //           }
+  //         }, 1000);
+  //       },
+  //     );
+
+  //     sseRef.current = sse;
+  //   }, 300);
+
+  //   return () => {
+  //     console.log('[SSE] 클린업');
+  //     clearTimeout(setUpTimer);
+  //     mountedRef.current = false;
+  //     if (sseRef.current) {
+  //       sseRef.current.close();
+  //       sseRef.current = null;
+  //     }
+  //     sseReadyRef.current = false;
+  //   };
+  // }, [sessionId, handleSSEMessage]);
 
   // 자동 하단 스크롤
   useEffect(() => {
@@ -395,22 +472,23 @@ export default function Page() {
     setChatData(initialData);
 
     try {
-      console.log('[fetchFirstAnswer] SSE 연결 대기 시작');
-      await waitForSSEOpen();
-      console.log('[fetchFirstAnswer] SSE 연결 오나료, 질문 전송');
-      await sendChatQuery(query, sessionId, indexList);
-      console.log('[fetchFirstAnswer] 질문 전송 완료');
+      // console.log('[fetchFirstAnswer] SSE 연결 대기 시작');
+      // await waitForSSEOpen();
+      // console.log('[fetchFirstAnswer] SSE 연결 완료, 질문 전송');
+      // await sendChatQuery(query, sessionId, indexList);
+      // console.log('[fetchFirstAnswer] 질문 전송 완료');
 
-      // 30초 타임아웃
-      const timeout = setTimeout(() => {
-        if (isLoading) {
-          setIsError(true);
-          setIsLoading(false);
-        }
-      }, 30000);
+      // // 30초 타임아웃
+      // const timeout = setTimeout(() => {
+      //   if (isLoading) {
+      //     setIsError(true);
+      //     setIsLoading(false);
+      //   }
+      // }, 30000);
 
-      // cleanup은 RAG_DONE에서 처리
-      return () => clearTimeout(timeout);
+      // // cleanup은 RAG_DONE에서 처리
+      // return () => clearTimeout(timeout);
+      await connectSSEAndSendQuery(query, indexList);
     } catch (err) {
       console.error('[fetchFirstAnswer] Error:', err);
       setIsError(true);
@@ -437,6 +515,7 @@ export default function Page() {
     };
     setChatData(updated);
 
+    const queryToSend = newInput;
     setNewInput('');
     setIsMultiLine(false);
     if (textAreaRef.current) textAreaRef.current.style.height = '26px';
@@ -444,24 +523,15 @@ export default function Page() {
     beginAnswerLoading();
 
     try {
-      console.log('[handleSendMessage] SSE 연결 대기 시작');
-      await waitForSSEOpen();
-      console.log('[handleSendMessage] SSE 연결 완료, 질문 전송');
-      await sendChatQuery(newInput, sessionId, indexList);
-      console.log('[handleSendMessage] 질문 전송 완료');
+      // console.log('[handleSendMessage] SSE 연결 대기 시작');
+      // await waitForSSEOpen();
+      // console.log('[handleSendMessage] SSE 연결 완료, 질문 전송');
+      // await sendChatQuery(newInput, sessionId, indexList);
+      // console.log('[handleSendMessage] 질문 전송 완료');
+      await connectSSEAndSendQuery(queryToSend, indexList);
     } catch (err: any) {
       console.error('[handleSendMessage] Error:', err);
-
-      // SSE 연결 문제인 경우
-      if (err.message === 'SSE_NOT_CONNECTED') {
-        console.error('[handleSendMessage] 백엔드가 SSE 연결을 찾지 못했습니다');
-
-        // alert('새로고침이 필요합니다. 백엔드 서버와의 연결에 문제가 있습니다.');
-        // 페이지 새로고침 (임시 해결책)
-        // window.location.reload();
-      }
-
-      setIsError(false);
+      setIsError(true);
       setIsLoading(false);
     }
   };
@@ -484,8 +554,9 @@ export default function Page() {
     console.log('[PR CONTINUE] payload to /api/chat/resume:', selectedPRs);
 
     try {
-      await waitForSSEOpen();
-      await resumeChatQuery(sessionId, selectedPRs);
+      // await waitForSSEOpen();
+      // await resumeChatQuery(sessionId, selectedPRs);
+      await connectSSEAndSendQuery('', [], true, selectedPRs);
     } catch (err) {
       console.error('[handlePRContinue] Error:', err);
       setIsError(true);
@@ -505,8 +576,9 @@ export default function Page() {
     beginAnswerLoading(); // PR 화면 다시 닫고 로딩
 
     try {
-      await waitForSSEOpen();
-      await sendChatQuery(query, sessionId, [...HARD_CODED_INDEX_LIST]);
+      // await waitForSSEOpen();
+      // await sendChatQuery(query, sessionId, [...HARD_CODED_INDEX_LIST]);
+      await connectSSEAndSendQuery(query, [...HARD_CODED_INDEX_LIST]);
     } catch (err) {
       console.error('[handlePRRefetch] Error: ', err);
       setIsError(true);
@@ -551,8 +623,9 @@ export default function Page() {
     const indexList = [...HARD_CODED_INDEX_LIST];
 
     try {
-      await waitForSSEOpen();
-      await sendChatQuery(newContent, sessionId, indexList);
+      // await waitForSSEOpen();
+      // await sendChatQuery(newContent, sessionId, indexList);
+      await connectSSEAndSendQuery(newContent, indexList);
     } catch (err) {
       console.error('[handleSubmitEdit] Error:', err);
       setIsError(true);
@@ -564,16 +637,25 @@ export default function Page() {
     if (!isLoading) return;
 
     stoppedRef.current = true; // 이후 SSE 무시
-    processingDoneRef.current = true; // RAG_DONE 중복 방지 플래그도 같이 close
+    // processingDoneRef.current = true; // RAG_DONE 중복 방지 플래그도 같이 close
 
     setIsLoading(false);
     setIsError(false);
     setShowPRSelection(false);
     setCurrentStep('router');
 
+    closeSSEConnection();
+
     // 답변 : 빈 줄
     appendAssistantAnswer('\n', [], []);
-  }, [isLoading, appendAssistantAnswer]);
+  }, [isLoading, appendAssistantAnswer, closeSSEConnection]);
+
+  // 컴포넌트 언마운트 시 SSE 연결 정리
+  useEffect(() => {
+    return () => {
+      closeSSEConnection();
+    };
+  }, [closeSSEConnection]);
 
   if (!chatData) {
     return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
