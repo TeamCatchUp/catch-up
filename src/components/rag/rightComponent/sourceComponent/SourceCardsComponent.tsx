@@ -1,4 +1,4 @@
-// import clsx from 'clsx';
+import clsx from 'clsx';
 // import File from '/public/icons/icon/file.svg';
 // import Wiki from '/public/icons/logo/Wiki.svg';
 // import Link from '/public/icons/icon/link.svg';
@@ -47,7 +47,12 @@ const SourceCardsComponent = ({ source, showCount = true, count }: Props) => {
       >
         {/* 제목 */}
         <div className="itmes-center flex gap-1.5">
-          <div className="bg-blue-5 relative right-px flex items-center gap-1.5 rounded-full px-2 py-1">
+          <div
+            className={clsx(
+              'relative right-px flex items-center gap-1.5 rounded-full px-2 py-1',
+              source.sourceType === 'jira' ? 'bg-green-10' : 'bg-blue-5',
+            )}
+          >
             <Icon className="h-4 w-4" />
             {showCount && <span className="text-body-xsmall text-gray-70 relative top-px">{count ?? 0}</span>}
           </div>
