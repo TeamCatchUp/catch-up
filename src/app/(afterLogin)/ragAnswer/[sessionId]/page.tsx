@@ -321,7 +321,36 @@ export default function Page() {
 
     // localStorage에서 데이터 복원
     if (saved) {
-      setChatData(JSON.parse(saved));
+      // setChatData(JSON.parse(saved));
+      const parsedData: ChatData = JSON.parse(saved);
+
+      // 마지막 메시지가 user = 답변 받지 못한 상태 (답변 에러) - 쿼리 자동 재전송 X
+      const lastMessage = parsedData.messages[parsedData.messages.length - 1];
+
+      if (lastMessage?.role === 'user') {
+        const errorData: ChatData = {
+          ...parsedData,
+          messages: [
+            ...parsedData.messages,
+            {
+              id: crypto.randomUUID(),
+              role: 'assistant',
+              content: '', // 빈 content = ErrorResponse 컴포넌트 렌더링
+              sources: [],
+              detailedTasks: [],
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        };
+
+        setChatData(errorData);
+        localStorage.setItem(`chat_${sessionId}`, JSON.stringify(errorData));
+        setIsLoading(false);
+        return;
+      }
+
+      // 정상적으로 완료된 대화 복원
+      setChatData(parsedData);
       setIsLoading(false);
       return;
     }
