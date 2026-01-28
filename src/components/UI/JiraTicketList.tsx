@@ -19,8 +19,6 @@ export function JiraTicketList({ tickets, title }: JiraTicketListProps) {
     return BG_COLORS[index % BG_COLORS.length];
   };
 
-  // 데이터가 없을 때 아예 컴포넌트를 숨기고 싶다면 기존처럼 null을 유지하고,
-  // 안내 문구를 보여주고 싶다면 아래의 렌더링 로직을 따릅니다.
 
   return (
     <div className="flex w-full flex-col gap-2.5">
@@ -41,7 +39,6 @@ export function JiraTicketList({ tickets, title }: JiraTicketListProps) {
           ))}
         </div>
       ) : (
-        /* 티켓이 없을 때 보여줄 UI (Empty State) */
         <div className="border-neutral-2 flex w-full items-center justify-center rounded-xl border border-dashed py-4">
           <span className="text-body-xsmall text-gray-30">최근 확인한 티켓이 없습니다.</span>
         </div>
