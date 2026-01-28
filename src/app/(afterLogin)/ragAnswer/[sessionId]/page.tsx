@@ -33,7 +33,7 @@ import EditMessageInput from '@/components/rag/EditMessageInput';
 import ToolTip from '@/components/common/ToolTip';
 import TeamSpaceModal from '@/components/rag/modal/TeamSpaceModal';
 import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
-import { MarkDownComponents } from '@/components/rag/answerComponent/MarkDownComponents';
+import { MarkDownComponents } from '@/components/rag/answerComponent/markdown/MarkDownComponents';
 
 import { useParams, useSearchParams } from 'next/navigation';
 import { createSSEConnection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
@@ -102,6 +102,7 @@ export default function Page() {
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
 
+  // MD -> string
   const formatMarkdownString = (text: string) => {
     if (!text) return '';
 
@@ -118,6 +119,24 @@ export default function Page() {
     );
 
     return withSpacing.trimEnd();
+  };
+
+  // MD 렌더 전 토큰 치환 (for 출처 연계)
+  const renderWithBadges = (text: string): React.ReactNode => {
+    const parts = text.split(/(\[\d+\])/g);
+
+    return parts.map((part, i) => {
+      const match = part.match(/^\[(\d+)\]$/);
+      if (match) {
+        const num = match[1];
+        return (
+          <span key={i} className="">
+            {num}
+          </span>
+        );
+      }
+      return part;
+    });
   };
 
   // SSE 연결 종료 함수
@@ -745,9 +764,9 @@ export default function Page() {
                           <ReactMarkdown
                             remarkPlugins={[
                               remarkGfm,
-                              remarkBreaks, // 문제 5 해결: \n을 <br/>로 변환
+                              remarkBreaks, // \n을 <br/>로 변환
                             ]}
-                            components={MarkDownComponents}
+                            components={MarkDownComponents(msg.sources)}
                           >
                             {formatMarkdownString(msg.content)}
                           </ReactMarkdown>

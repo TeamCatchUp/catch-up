@@ -1,6 +1,7 @@
 import type { Components } from 'react-markdown';
+import { renderWithBadges } from './renderWithBadges';
 
-export const MarkDownComponents: Components = {
+export const MarkDownComponents = (sources?: ChatSource[]): Components => ({
   table: ({ node, ...props }) => (
     <div className="table-wrapper">
       <table {...props} />
@@ -40,4 +41,10 @@ export const MarkDownComponents: Components = {
   p: ({ node, children, ...props }) => {
     return <p {...props}>{children}</p>;
   },
-};
+
+  // text 노드에서 [n] 치환
+  text: ({ children }) => {
+    const value = typeof children === 'string' ? children : String(children ?? '');
+    return <>{renderWithBadges(value, sources)}</>;
+  },
+});
