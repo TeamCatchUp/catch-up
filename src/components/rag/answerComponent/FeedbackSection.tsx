@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import clsx from 'clsx';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Cancel from '/public/icons/icon/cancel.svg';
 
 const feedback = [
@@ -14,6 +15,9 @@ const feedback = [
   { id: 8, content: '더 자세히...' },
 ];
 
+const DETAIL_ID = 8;
+const TEXTAREA_MAX_HEIGHT = 114;
+
 const FeedbackSection = ({
   messageId,
   feedbackVisibleMap,
@@ -22,6 +26,31 @@ const FeedbackSection = ({
   setFeedbackSubmittedMap,
 }: FeedbackSectionProps) => {
   const feedbackRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [detailText, setDetailText] = useState('');
+  const [showThanks, setShowThanks] = useState(false);
+
+  // textarea 자동 높이 조절
+  const resizeTextarea = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    el.style.height = 'auto';
+    const next = Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT);
+    el.style.height = `${next}px`;
+
+    // max 넘어가면 내부 스크롤
+    el.style.overflowY = el.scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
+  }, []);
+
+  // text 변경 시 resize
+  useEffect(() => {
+    if (!isDetailOpen) return;
+    resizeTextarea();
+  }, [detailText, isDetailOpen, resizeTextarea]);
 
   // 피드백 open 시 해당 요소로 하단 스크롤
   useEffect(() => {
@@ -29,51 +58,136 @@ const FeedbackSection = ({
       setTimeout(() => {
         feedbackRef.current?.scrollIntoView({
           behavior: 'smooth',
-          block: 'nearest',
+          block: 'end',
         });
       }, 100);
     }
   }, [feedbackVisibleMap[messageId]]);
 
+  // 더 자세히 모달 open 시 해당 요소로 하단 스크롤
+  useEffect(() => {
+    if (isDetailOpen && detailRef.current) {
+      setTimeout(() => {
+        detailRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'end',
+        });
+      }, 100);
+    }
+  }, [isDetailOpen]);
+
+  // feedbackSection 닫히면 detail 입력 초기화
+  useEffect(() => {
+    if (!feedbackVisibleMap[messageId]) {
+      setIsDetailOpen(false);
+      setDetailText('');
+      setShowThanks(false);
+    }
+  }, [feedbackVisibleMap[messageId], messageId]);
+
+  const closeSection = useCallback(() => {
+    setIsDetailOpen(false);
+    setDetailText('');
+    setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
+  }, [messageId, setFeedbackVisibleMap]);
+
+  const submitFeedback = useCallback(() => {
+    setFeedbackSubmittedMap((prev) => ({ ...prev, [messageId]: true }));
+
+    setTimeout(() => {
+      setShowThanks(false);
+      setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
+    }, 3000);
+  }, [messageId, setFeedbackSubmittedMap, setFeedbackVisibleMap]);
+
   if (!feedbackVisibleMap[messageId]) return null;
+
+  const hasSubmitted = !!feedbackSubmittedMap[messageId];
+
+  // 이미 피드백 제출 / 방금 제출 -> 감사 UI
+  if (hasSubmitted || showThanks) {
+    return (
+      <div ref={feedbackRef} className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4">
+        <div className="text-body-small flex items-center justify-center text-gray-50">피드백을 주셔서 감사합니다!</div>
+      </div>
+    );
+  }
 
   return (
     <div ref={feedbackRef} className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4">
-      {feedbackSubmittedMap[messageId] ? (
-        <div className="text-body-small flex items-center justify-center text-gray-50">피드백을 주셔서 감사합니다!</div>
-      ) : (
-        <>
-          <div className="flex justify-between">
-            <span className="text-body-small text-gray-50">답변이 마음에 들지 않은 이유가 무엇인가요?</span>
-            <div
-              onClick={() => setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }))}
-              className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
+      <div className="flex justify-between">
+        <span className="text-body-small text-gray-50">답변이 마음에 들지 않은 이유가 무엇인가요?</span>
+        <div
+          onClick={closeSection}
+          className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
+        >
+          <Cancel className="h-4.5 w-4.5 text-gray-50" />
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
+        {feedback.map((feedbackItem) => {
+          return (
+            <button
+              key={feedbackItem.id}
+              onClick={() => {
+                if (feedbackItem.id === DETAIL_ID) {
+                  setIsDetailOpen((prev) => {
+                    const next = !prev;
+                    if (!next) setDetailText(''); // 닫히면 입력 초기화
+                    return next;
+                  });
+                  return;
+                }
+                submitFeedback();
+              }}
+              className={clsx(
+                'text-xsmall text-gray-80 cursor-pointer rounded-lg px-2 py-1',
+                feedbackItem.id === DETAIL_ID && isDetailOpen
+                  ? 'bg-neutral-3 border-neutral-5'
+                  : 'box-button-outline-gray',
+              )}
             >
-              <Cancel className="h-4.5 w-4.5 text-gray-50" />
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
-            {feedback.map((feedbackItem, feedbackIdx) => {
-              return (
-                <button
-                  key={feedbackIdx}
-                  onClick={() => {
-                    setFeedbackSubmittedMap((prev) => ({ ...prev, [messageId]: true }));
-                    setTimeout(() => {
-                      setFeedbackVisibleMap((prev) => ({
-                        ...prev,
-                        [messageId]: false,
-                      }));
-                    }, 3000);
-                  }}
-                  className="box-button-outline-gray border-neutral-3 text-xsmall text-gray-80 cursor-pointer rounded-lg border px-2 py-1"
-                >
-                  {feedbackItem.content}
-                </button>
-              );
-            })}
-          </div>
-        </>
+              {feedbackItem.content}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 더 자세히 모달 */}
+      {isDetailOpen && (
+        <div
+          ref={detailRef}
+          className="text-body-medium border-blue-30 flex w-184.75 flex-col rounded-2xl border bg-white px-3 py-2.5"
+        >
+          <textarea
+            ref={textareaRef}
+            placeholder="자세한 피드백을 남겨주세요."
+            value={detailText}
+            onChange={(e) => {
+              setDetailText(e.target.value);
+              requestAnimationFrame(resizeTextarea);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (detailText.trim()) submitFeedback();
+              }
+            }}
+            className="text-gray-80 placeholder:text-gray-30 resize-none overflow-y-hidden outline-none"
+            style={{ maxHeight: `${TEXTAREA_MAX_HEIGHT}px` }}
+            rows={1}
+          />
+          <button
+            disabled={!detailText.trim()}
+            onClick={submitFeedback}
+            className={clsx(
+              'capsule-button-solid-primary h-9 w-12.5 items-end self-end px-3 py-1.5',
+              detailText.trim() ? 'cursor-pointer' : '',
+            )}
+          >
+            <span className="text-body-small relative top-px">제출</span>
+          </button>
+        </div>
       )}
     </div>
   );

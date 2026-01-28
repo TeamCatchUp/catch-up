@@ -156,7 +156,7 @@ export default function Search() {
       .map((item) => ({
         id: item.id,
         name: item.name,
-        Icon: item.type === 'repo' ? IconGithub : item.type === 'folder' ? IconFolder : IconFile,
+        Icon: item.type === 'repo' ? IconGithub : item.type === 'tree' ? IconFolder : IconFile,
         onRemove: () => toggleGithubItem(item),
       })),
 
@@ -201,9 +201,9 @@ export default function Search() {
 
   return (
     <div className="flex flex-col items-center gap-4 self-stretch pt-16 pb-16">
-      <div className="flex h-24 flex-col items-center justify-center gap-3">
-        <div className="text-display-xlarge text-nomal-normal">반갑습니다, {user?.name}님!</div>
-        <div className="text-heading-large text-nomal-alternative">
+      <div className="flex h-24 flex-col items-center justify-center gap-3 text-gray-50">
+        <div className="text-display-xlarge text-normal-normal">반갑습니다, {user?.name}님!</div>
+        <div className="text-heading-large text-normal-alternative">
           무엇을 도와드릴까요? 필요한 업무정보를 찾아보세요.
         </div>
       </div>
@@ -215,8 +215,8 @@ export default function Search() {
         }`}
       >
         <div className="flex w-full items-end justify-between">
-          <div className="mr-2 flex h-10 w-10 items-center justify-center p-1.5">
-            <IconAdd className="h-6 w-6" />
+          <div className="text-button-secondary-mono relative bottom-0.5 mr-2 flex h-10 w-10 cursor-pointer items-center justify-center p-1.5">
+            <IconAdd className="text-gray-70 h-7 w-7" />
           </div>
           <div className="flex flex-1 items-center gap-2">
             <textarea
@@ -229,7 +229,7 @@ export default function Search() {
                 }
                 if (!hasText) setIsFocused(false);
               }}
-              className="text-body-medium mb-1.5 w-full resize-none outline-none"
+              className="text-body-medium mb-2.25 w-full resize-none outline-none"
               placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
               value={inputValue}
               onFocus={() => setIsFocused(true)}
@@ -244,16 +244,16 @@ export default function Search() {
           </div>
           <button
             onClick={handleSubmit}
-            className={`rounded-rounded ml-2 flex items-center border border-solid p-2 ${
-              hasText ? 'border-blue-50 bg-blue-50' : 'bg-neutral-1 border-neutral-2'
+            className={`rounded-rounded relative bottom-px ml-2 flex items-center border border-solid p-2 ${
+              hasText ? 'cursor-pointer border-blue-50 bg-blue-50' : 'bg-neutral-1 border-neutral-2'
             }`}
           >
-            <IconArrowSend className={`${hasText ? 'brightness-0 invert' : ''} h-6 w-6`} />
+            <IconArrowSend className={`${hasText ? 'brightness-0 invert' : 'text-gray-30'} h-6 w-6`} />
           </button>
         </div>
 
         {isFocused && (
-          <div className="border-neutral-4 flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden border-t pt-2">
+          <div className="border-neutral-4 mt-1 flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden border-t pt-2">
             <div className="flex items-center gap-1.5 self-stretch overflow-x-scroll px-1.5 whitespace-nowrap">
               <div className="flex items-center gap-2">
                 <SearchOptionButton

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import AI from '/public/icons/icon/ai.svg';
 import Add from '/public/icons/icon/add_small.svg';
 import Search from '/public/icons/icon/search.svg';
@@ -15,8 +16,15 @@ interface CatchAssistantModalProps {
 
 const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
   const modalRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
   useEscapeKey(onClose);
   useOutsideClick(modalRef, onClose);
+
+  const handleNewQuestion = () => {
+    const newSessionId = crypto.randomUUID();
+    router.push(`/ragAnswer/${newSessionId}`);
+  };
 
   return (
     <div
@@ -30,7 +38,10 @@ const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
           <span className="text-heading-large text-gray-70">캐치스턴트 히스토리</span>
         </div>
         <div className="flex gap-1.5">
-          <button className="capsule-button-outline-blue flex cursor-pointer items-center gap-1.5 px-3 py-1.5">
+          <button
+            onClick={handleNewQuestion}
+            className="capsule-button-outline-blue flex cursor-pointer items-center gap-1.5 px-3 py-1.5"
+          >
             <Add className="h-5 w-5 text-blue-50" />
             <span className="text-body-small text-blue-55 relative top-px">새 업무 질문</span>
           </button>

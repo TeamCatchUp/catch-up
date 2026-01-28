@@ -1,26 +1,9 @@
 'use client';
 
 import { useAuth } from '@/api/auth';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import SideNavBar from '@/components/common/sideNavBar/SideNavBar';
 
 export default function AfterLoginLayout({ children }: { children: React.ReactNode }) {
-  // const router = useRouter();
-  // const [isAuth, setIsAuth] = useState(false);
-
-  // useEffect(() => {
-  //   const token = localStorage.getItem('accessToken');
-
-  //   if (!token) {
-  //     router.replace('/login');
-  //   } else {
-  //     setIsAuth(true);
-  //   }
-  // }, [router]);
-
-  // if (!isAuth) return null;
-
   const { loading } = useAuth(); // 쿠키 기반 인증 체크
 
   if (loading) {

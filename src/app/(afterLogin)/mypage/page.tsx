@@ -71,48 +71,48 @@ const Page = () => {
         <div className="flex flex-col gap-8">
           {/* 역할 정보 */}
           <div className="flex w-268 flex-col gap-1 px-16">
-            <div className="bg-neutral-1 w-268 rounded-md px-5 py-1.5">
+            <div className="bg-neutral-1 rounded-md px-5 py-1.5">
               <span className="text-heading-small text-gray-70">역할 정보</span>
             </div>
             <div className="text-body-small flex flex-col px-5">
               <div className="border-neutral-3 flex gap-6 border-b py-3">
-                <span className="text-gray-70">조직 / 직책</span>
+                <span className="text-gray-70 w-20">조직 / 직책</span>
                 <span className="text-gray-50">사업개발팀</span>
               </div>
               <div className="border-neutral-3 flex gap-6 border-b py-3">
-                <span className="text-gray-70">직무 / 직군</span>
+                <span className="text-gray-70 w-20">직무 / 직군</span>
                 <span className="text-gray-50">user@example.com</span>
               </div>
               <div className="border-neutral-3 flex gap-6 border-b py-3">
-                <span className="text-gray-70">직위</span>
+                <span className="text-gray-70 w-20">직위</span>
                 <span className="text-gray-50">tech</span>
               </div>
             </div>
           </div>
           {/* 기본 정보 */}
           <div className="flex w-268 flex-col gap-1 px-16">
-            <div className="bg-neutral-1 w-268 rounded-md px-5 py-1.5">
+            <div className="bg-neutral-1 rounded-md px-5 py-1.5">
               <span className="text-heading-small text-gray-70">기본 정보</span>
             </div>
             <div className="text-body-small flex flex-col px-5">
               <div className="border-neutral-3 flex gap-6 border-b py-3">
-                <span className="text-gray-70">이름</span>
+                <span className="text-gray-70 w-20">이름</span>
                 <span className="text-gray-50">{user?.name ?? ''}</span>
               </div>
               <div className="border-neutral-3 flex gap-6 border-b py-3">
-                <span className="text-gray-70">메일 / 사번</span>
+                <span className="text-gray-70 w-20">메일 / 사번</span>
                 <span className="text-gray-50">{user?.email ?? ''}</span>
               </div>
               <div className="border-neutral-3 flex gap-6 border-b py-3">
-                <span className="text-gray-70">주민등록번호</span>
+                <span className="text-gray-70 w-20">주민등록번호</span>
                 <span className="text-gray-50">020731-432343</span>
               </div>
               <div className="border-neutral-3 flex gap-6 border-b py-3">
-                <span className="text-gray-70">연락처</span>
+                <span className="text-gray-70 w-20">연락처</span>
                 <span className="text-gray-50">+82-10-2958-5214</span>
               </div>
               <div className="border-neutral-3 flex gap-6 border-b py-3">
-                <span className="text-gray-70">주소</span>
+                <span className="text-gray-70 w-20">주소</span>
                 <span className="text-gray-50">서울시 마포구 독막로</span>
               </div>
             </div>
