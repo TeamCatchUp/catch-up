@@ -34,7 +34,7 @@ import TeamSpaceModal from '@/components/rag/modal/TeamSpaceModal';
 import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
 
 import { useParams, useSearchParams } from 'next/navigation';
-import { createSSEConection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
+import { createSSEConnection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
 import { normalizeSources } from '@/util/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/util/normalizeRelatedJiraIssues';
 
@@ -74,7 +74,6 @@ export default function Page() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
-  const processingDoneRef = useRef(false); // RAG_DONE 중복 방지
 
   const [currentStep, setCurrentStep] = useState<RagUIStepKey>('router');
   const [prList, setPrList] = useState<PRPayload[]>([]);
@@ -95,31 +94,52 @@ export default function Page() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const sseRef = useRef<EventSource | null>(null);
-  const [sseReady, setSseReady] = useState(false);
+  const stoppedRef = useRef(false); // 로딩 중 질문 중지
 
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
 
   const formatMarkdownString = (text: string) => {
-    return text
-      .replace(/\\n/g, '\n')
-      .replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2')
-      .replace(/([^\n])\n(\d+\.\s)/g, '$1\n\n$2')
-      .replace(/([^\n])\n([-*+]\s)/g, '$1\n\n$2')
-      .replace(/([^\n])\n(-\s\[[x\s]\]\s)/g, '$1\n\n$2')
-      .replace(/([^\n])\n(```)/g, '$1\n\n$2')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
+    if (!text) return '';
+
+    const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\\n/g, '\n');
+
+    // 블록 문법 시작(헤딩/리스트/체크박스/코드펜스/인용/테이블) 앞에 빈 줄 보정
+    const withSpacing = normalized.replace(
+      /([^\n])\n(?=(#{1,6}\s|(\d+)\.\s|[-*+]\s|-\s\[[xX\s]\]\s|```|>\s|\|))/g,
+      '$1\n\n',
+    );
+
+    return withSpacing.trimEnd();
   };
 
+  // SSE 연결 종료 함수
+  const closeSSEConnection = useCallback(() => {
+    if (sseRef.current) {
+      console.log('[closeSSEConnection] 연결 종료');
+      sseRef.current.close();
+      sseRef.current = null;
+    }
+  }, []);
+
   const beginAnswerLoading = useCallback(() => {
+    stoppedRef.current = false;
     setIsLoading(true);
     setIsError(false);
     setShowPRSelection(false);
     setCurrentStep('router');
-    processingDoneRef.current = false; // RAG_DONE 플래그 초기화
   }, []);
+
+  // content='' (error response) -> new 쿼리 생성 시 질문 기록만 남김
+  const stripTrailingErrorAssistant = (messages: Message[]) => {
+    const last = messages[messages.length - 1];
+
+    if (last?.role === 'assistant' && (last.content ?? '') === '') {
+      return messages.slice(0, -1);
+    }
+    return messages;
+  };
 
   const appendAssistantAnswer = useCallback(
     (answer: string, sources: BackendSource[] = [], relatedJiraIssues: BackendSource[] = []) => {
@@ -161,44 +181,16 @@ export default function Page() {
     [sessionId],
   );
 
-  const waitForSSEOpen = async () => {
-    if (sseRef.current?.readyState === EventSource.OPEN || sseReady) {
-      return;
-    }
-
-    return new Promise<void>((resolve, reject) => {
-      const start = Date.now();
-      const timer = setInterval(() => {
-        if (sseRef.current?.readyState === EventSource.OPEN) {
-          clearInterval(timer);
-          resolve();
-          return;
-        }
-
-        if (Date.now() - start > 30000) {
-          clearInterval(timer);
-          reject(new Error('SSE connection timeout'));
-        }
-      }, 100);
-    });
-  };
-
   // SSE 메시지 핸들러 - useCallback으로 메모이제이션
   const handleSSEMessage = useCallback(
     (notification: RagNotification) => {
+      if (stoppedRef.current) return; // 입력 중지 이후 모든 SSE 무시
+
       if (!notification?.data || notification.data.sessionId !== sessionId) {
         return;
       }
 
       const { type, data } = notification;
-
-      console.log('[SSE] Event received:', {
-        type,
-        node: data.node,
-        dataType: data.type,
-        hasPayload: !!data.payload,
-        hasResponse: !!data.response,
-      });
 
       switch (type) {
         case 'RAG_IN_PROGRESS': {
@@ -221,43 +213,34 @@ export default function Page() {
           setPrList(data.payload);
           setShowPRSelection(true);
           setIsLoading(false);
+
+          // 백에서 연결 정리
+          console.log('[SSE] RAG_INTERRUPT - 연결 종료');
+          closeSSEConnection();
           break;
         }
 
         case 'RAG_DONE': {
           console.log('[SSE] RAG_DONE received:', {
             hasResponse: !!data.response,
-            answer: data.response?.answer?.substring(0, 50),
+            answer: data.response?.answer,
             sourcesCount: data.response?.sources?.length,
-            alreadyProcessing: processingDoneRef.current,
           });
-          console.log('relatedJiraIssues len', data.relatedJiraIssues?.length);
-          console.log(
-            'sample sourceType',
-            data.relatedJiraIssues?.[0]?.sourceType,
-            typeof data.relatedJiraIssues?.[0]?.sourceType,
-          );
-          console.log('[SSE RAW JSON]', JSON.stringify(notification));
-          console.log('normalized tasks', normalizeRelatedJiraIssues(data.relatedJiraIssues ?? []));
-
-          // 중복 처리 방지
-          if (processingDoneRef.current) {
-            console.warn('[SSE] RAG_DONE already processed, ignoring');
-            return;
-          }
-          processingDoneRef.current = true;
 
           const response = data.response;
           if (!response) {
             console.error('[SSE] RAG_DONE but no response');
             setIsError(true);
             setIsLoading(false);
+            closeSSEConnection();
             return;
           }
 
           const related = data.relatedJiraIssues ?? [];
 
           appendAssistantAnswer(response.answer, response.sources || [], related);
+
+          closeSSEConnection();
           break;
         }
 
@@ -265,45 +248,71 @@ export default function Page() {
           break;
       }
     },
-    [sessionId, appendAssistantAnswer],
+    [sessionId, appendAssistantAnswer, closeSSEConnection],
   );
 
-  // SSE 연결 초기화 - sessionId가 변경될 때만 재연결
-  useEffect(() => {
-    console.log('[SSE] 세션 초기 연결:', sessionId);
+  // SSE 연결 생성 및 채팅 요청 함수 (1질문 1연결)
+  const connectSSEAndSendQuery = useCallback(
+    async (query: string, indexList: string[], isResume: boolean = false, resumePayload?: any) => {
+      return new Promise<void>((resolve, reject) => {
+        console.log('[connectSSEAndSendQuery] SSE 연결 시작');
 
-    // 이미 연결되어 있으면 스킵
-    if (sseRef.current?.readyState === EventSource.OPEN) {
-      console.log('[SSE] 이미 연결됨');
-      return;
-    }
+        // 기존 연결 정리
+        closeSSEConnection();
 
-    setSseReady(false);
+        let sseConnected = false;
+        let chatRequestSent = false;
 
-    const sse = createSSEConection(
-      handleSSEMessage,
-      (error) => {
-        console.error('[SSE] Error:', error);
-        if (sseRef.current?.readyState === EventSource.CLOSED) {
-          setIsLoading(false);
-        }
-      },
-      () => {
-        console.log('[SSE] 연결');
-        setTimeout(() => setSseReady(true), 1000);
-        // console.log('[SSE] 연결 1초 after');
-      },
-    );
+        const timeout = setTimeout(() => {
+          if (!chatRequestSent) {
+            console.error('[connectSSEAndSendQuery] 타임아웃 - 30초 내 응답 없음');
+            closeSSEConnection();
+            reject(new Error('SSE connection timeout'));
+          }
+        }, 30000);
 
-    sseRef.current = sse;
+        // SSE 연결
+        const sse = createSSEConnection(
+          sessionId,
+          handleSSEMessage,
+          (err) => {
+            console.error('[connectSSEAndSendQuery] error:', err);
+            if (!chatRequestSent) {
+              clearTimeout(timeout);
+              closeSSEConnection();
+              reject(err);
+            }
+          },
+          async () => {
+            console.log('[connectSSEAndSendQuery] 연결 완료 (onOpen)');
+            sseConnected = true;
 
-    return () => {
-      console.log('[SSE] 클린업');
-      sseRef.current?.close();
-      sseRef.current = null;
-      setSseReady(false);
-    };
-  }, [sessionId]);
+            // 연결 완료 후 즉시 send 채팅 요청
+            try {
+              if (isResume) {
+                console.log('[connectSSEAndSendQuery] Resume 요청 전송');
+                await resumeChatQuery(sessionId, resumePayload);
+              } else {
+                console.log('[connectSSEAndSendQuery[ 채팅 요청 전송:', query);
+                await sendChatQuery(query, sessionId, indexList);
+              }
+              chatRequestSent = true;
+              console.log('[connectSSEAndSendQuery] 채팅 요청 완료');
+              resolve();
+            } catch (err) {
+              console.error('[connectSSEAndSendQuery] 채팅 요청 실패:', err);
+              clearTimeout(timeout);
+              closeSSEConnection();
+              reject(err);
+            }
+          },
+        );
+
+        sseRef.current = sse;
+      });
+    },
+    [sessionId, handleSSEMessage, closeSSEConnection],
+  );
 
   // 자동 하단 스크롤
   useEffect(() => {
@@ -320,17 +329,48 @@ export default function Page() {
   useEffect(() => {
     const saved = localStorage.getItem(`chat_${sessionId}`);
 
+    // localStorage에서 데이터 복원
     if (saved) {
-      setChatData(JSON.parse(saved));
+      const parsedData: ChatData = JSON.parse(saved);
+
+      // 마지막 메시지가 user = 답변 받지 못한 상태 (답변 에러) - 쿼리 자동 재전송 X
+      const lastMessage = parsedData.messages[parsedData.messages.length - 1];
+
+      if (lastMessage?.role === 'user') {
+        const errorData: ChatData = {
+          ...parsedData,
+          messages: [
+            ...parsedData.messages,
+            {
+              id: crypto.randomUUID(),
+              role: 'assistant',
+              content: '', // 빈 content = ErrorResponse 컴포넌트 렌더링
+              sources: [],
+              detailedTasks: [],
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        };
+
+        setChatData(errorData);
+        localStorage.setItem(`chat_${sessionId}`, JSON.stringify(errorData));
+        setIsLoading(false);
+        return;
+      }
+
+      // 정상적으로 완료된 대화 복원
+      setChatData(parsedData);
       setIsLoading(false);
       return;
     }
 
+    // initialQuery로 첫 질문 실행
     if (initialQuery) {
       fetchFirstAnswer(initialQuery);
       return;
     }
 
+    // 빈 채팅 데이터 생성
     setChatData({
       sessionId,
       title: '',
@@ -362,19 +402,7 @@ export default function Page() {
     setChatData(initialData);
 
     try {
-      await waitForSSEOpen();
-      await sendChatQuery(query, sessionId, indexList);
-
-      // 30초 타임아웃
-      const timeout = setTimeout(() => {
-        if (isLoading) {
-          setIsError(true);
-          setIsLoading(false);
-        }
-      }, 30000);
-
-      // cleanup은 RAG_DONE에서 처리
-      return () => clearTimeout(timeout);
+      await connectSSEAndSendQuery(query, indexList);
     } catch (err) {
       console.error('[fetchFirstAnswer] Error:', err);
       setIsError(true);
@@ -395,12 +423,17 @@ export default function Page() {
       timestamp: new Date().toISOString(),
     };
 
+    // 직전 ErrorResponse(빈 assistant) 제거하고 append
+    const cleanedMessages = stripTrailingErrorAssistant(chatData.messages);
+
     const updated: ChatData = {
       ...chatData,
       messages: [...chatData.messages, userMessage],
     };
     setChatData(updated);
+    localStorage.setItem(`chat_${sessionId}`, JSON.stringify(updated));
 
+    const queryToSend = newInput;
     setNewInput('');
     setIsMultiLine(false);
     if (textAreaRef.current) textAreaRef.current.style.height = '26px';
@@ -408,11 +441,10 @@ export default function Page() {
     beginAnswerLoading();
 
     try {
-      await waitForSSEOpen();
-      await sendChatQuery(newInput, sessionId, indexList);
-    } catch (err) {
+      await connectSSEAndSendQuery(queryToSend, indexList);
+    } catch (err: any) {
       console.error('[handleSendMessage] Error:', err);
-      setIsError(false);
+      setIsError(true);
       setIsLoading(false);
     }
   };
@@ -421,7 +453,7 @@ export default function Page() {
     console.log('[PR CONTINUE] selectedPrNumbers:', selectedPrNumbers);
 
     setShowPRSelection(false);
-    beginAnswerLoading();
+    beginAnswerLoading(); // SSE 연결은 RAG_INTERRUPT에서 이미 종료된 상태
 
     const selectedPRs = selectedPrNumbers
       .map((prNumber) => prList.find((p) => p.prNumber === prNumber))
@@ -435,8 +467,9 @@ export default function Page() {
     console.log('[PR CONTINUE] payload to /api/chat/resume:', selectedPRs);
 
     try {
-      await waitForSSEOpen();
-      await resumeChatQuery(sessionId, selectedPRs);
+      // 새로운 SSE 연결 생성 후 resume 요청
+      console.log('[handlePRContinue] 새로운 SSE 연결 -> resume 요청');
+      await connectSSEAndSendQuery('', [], true, selectedPRs);
     } catch (err) {
       console.error('[handlePRContinue] Error:', err);
       setIsError(true);
@@ -444,6 +477,7 @@ export default function Page() {
     }
   };
 
+  // 다시 찾기 기능 아직 로직 X
   const handlePRRefetch = async () => {
     if (!chatData) return;
 
@@ -453,11 +487,12 @@ export default function Page() {
 
     console.log('[PR] refetch query:', query);
 
-    beginAnswerLoading(); // PR 화면 다시 닫고 로딩
+    // 기존 SSE 연결 종료 후 새로 시작
+    closeSSEConnection();
+    beginAnswerLoading();
 
     try {
-      await waitForSSEOpen();
-      await sendChatQuery(query, sessionId, [...HARD_CODED_INDEX_LIST]);
+      await connectSSEAndSendQuery(query, [...HARD_CODED_INDEX_LIST]);
     } catch (err) {
       console.error('[handlePRRefetch] Error: ', err);
       setIsError(true);
@@ -482,6 +517,8 @@ export default function Page() {
     if (idx === -1) return;
 
     const trimmed = chatData.messages.slice(0, idx);
+    const cleanedTrimmed = stripTrailingErrorAssistant(trimmed);
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -502,14 +539,36 @@ export default function Page() {
     const indexList = [...HARD_CODED_INDEX_LIST];
 
     try {
-      await waitForSSEOpen();
-      await sendChatQuery(newContent, sessionId, indexList);
+      await connectSSEAndSendQuery(newContent, indexList);
     } catch (err) {
       console.error('[handleSubmitEdit] Error:', err);
       setIsError(true);
       setIsLoading(false);
     }
   };
+
+  const handleStop = useCallback(() => {
+    if (!isLoading) return;
+
+    stoppedRef.current = true; // 이후 SSE 무시
+
+    setIsLoading(false);
+    setIsError(false);
+    setShowPRSelection(false);
+    setCurrentStep('router');
+
+    closeSSEConnection();
+
+    // 답변 : 빈 줄
+    appendAssistantAnswer('\n', [], []);
+  }, [isLoading, appendAssistantAnswer, closeSSEConnection]);
+
+  // 컴포넌트 언마운트 시 SSE 연결 정리
+  useEffect(() => {
+    return () => {
+      closeSSEConnection();
+    };
+  }, [closeSSEConnection]);
 
   if (!chatData) {
     return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
@@ -524,7 +583,7 @@ export default function Page() {
       <div className="flex min-w-0 flex-1 flex-col">
         <RagContentHeader />
 
-        <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r">
+        <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
           <div
             ref={scrollRef}
             className="flex flex-1 flex-col items-center gap-8 overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
@@ -537,7 +596,7 @@ export default function Page() {
               <div className="border-neutral-4 flex-1 border-t" />
             </div>
 
-            {chatData.messages.map((msg, index) => (
+            {chatData.messages.map((msg) => (
               <div key={msg.id} className="mx-auto flex w-193.25 flex-col gap-6">
                 {msg.role === 'user' ? (
                   <div className="flex flex-col gap-4">
@@ -664,7 +723,7 @@ export default function Page() {
                             )}
                           </div>
 
-                          <div onClick={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}>
+                          <div>
                             <FilterComponent
                               isOpen={filterOpenMap[msg.id]}
                               onClose={() => setFilterOpenMap((prev) => ({ ...prev, [msg.id]: false }))}
@@ -676,7 +735,7 @@ export default function Page() {
 
                     {msg.content ? (
                       <>
-                        <div
+                        {/* <div
                           className={clsx(
                             "text-gray-80 prose prose-neutral [&_li::marker]:text-gray-70 max-w-none break-words [&>ol]:list-decimal [&>ol]:pl-5 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li:has(input[type='checkbox'])]:list-none [&>ul>li:has(input[type='checkbox'])]:pl-0",
                             '[&_pre]:overflow-x-auto [&_pre]:break-words [&_pre]:whitespace-pre-wrap',
@@ -684,6 +743,20 @@ export default function Page() {
                           )}
                         >
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatMarkdownString(msg.content)}</ReactMarkdown>
+                        </div> */}
+                        <div className="markdown-body max-w-none break-words">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              table: ({ children, ...props }) => (
+                                <div className="table-wrapper">
+                                  <table {...props}>{children}</table>
+                                </div>
+                              ),
+                            }}
+                          >
+                            {formatMarkdownString(msg.content)}
+                          </ReactMarkdown>
                         </div>
 
                         <div className="text-body-small text-gray-30">
@@ -790,8 +863,11 @@ export default function Page() {
                   )}
 
                   {isLoading ? (
-                    <button className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full">
-                      <Stop className="text-gray-70 relative left-px h-6 w-6" />
+                    <button
+                      onClick={handleStop}
+                      className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full"
+                    >
+                      <Stop className="text-gray-70 relative left-px h-6 w-6 cursor-pointer" />
                     </button>
                   ) : (
                     <button
@@ -813,11 +889,7 @@ export default function Page() {
         </div>
       </div>
 
-      <div
-        className={`border-neutral-3 flex flex-none flex-col border-l bg-white ${
-          activeTab === 'source' ? 'w-101.25' : 'w-125'
-        }`}
-      >
+      <div className={`border-neutral-3 flex w-115 flex-none flex-col border-l bg-white`}>
         <RagRightAdditionalHeader activeTab={activeTab} onChange={setActiveTab} sourceCount={currentSources.length} />
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'source' && (

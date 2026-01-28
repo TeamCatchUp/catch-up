@@ -1,15 +1,19 @@
 import api from 'src/api/axios';
 
 // SSE 연결 생성
-export const createSSEConection = (
+export const createSSEConnection = (
+  sessionId: string,
   onMessage: (notification: RagNotification) => void,
   onError?: (error: Event) => void,
   onOpen?: () => void,
 ): EventSource => {
-  const eventSource = new EventSource('https://0-0-0-0.example.io/api/notification/subscribe', {
+  const url = 'https://0-0-0-0.example.io/api/notification/subscribe';
+
+  const eventSource = new EventSource(url, {
     withCredentials: true,
   });
 
+  // 연결 성공
   eventSource.onopen = () => {
     console.log('[SSE] onopen');
     onOpen?.();
@@ -43,6 +47,11 @@ export const createSSEConection = (
       return;
     }
 
+    // CONNECT 이벤트 로깅 (추가)
+    if ((parsed as any).type === 'CONNECT') {
+      console.log('[SSE] CONNECT event received: ', parsed);
+    }
+
     // 3) onMessage 처리 에러 분리
     try {
       onMessage(parsed as RagNotification);
@@ -72,9 +81,23 @@ export const sendChatQuery = async (
   sessionId: string,
   indexList: string[],
 ): Promise<ChatResponse> => {
+  console.log('[sendChatQuery] 요청 전송: ', { queryText, sessionId, indexList });
   const requestBody = { query: queryText, sessionId, indexList };
-  const response = await api.post('/api/chat', requestBody);
-  return response.data;
+
+  try {
+    const response = await api.post('/api/chat', requestBody);
+    console.log('[sendChatQuery] 응답 받음: ', response.data);
+
+    // "SSE 연결이 필요합니다" 응답 체크
+    if (response.data.answer === 'SSE 연결이 필요합니다.') {
+      console.error('[sendChatQuery] SSE 연결 없음');
+      throw new Error('SSE_NOT_CONNECTED');
+    }
+    return response.data;
+  } catch (err) {
+    console.error('[sendChatQuery] 에러: ', err);
+    throw err;
+  }
 };
 
 // 답변 생성 재개 요청
@@ -83,6 +106,13 @@ export const resumeChatQuery = async (
   userSelectedPullRequests: { prNumber: number; repoName: string; owner: string }[],
 ): Promise<ChatResponse> => {
   const request: ResumeRequest = { sessionId, userSelectedPullRequests };
-  const response = await api.post('/api/chat/resume', request);
-  return response.data;
+
+  try {
+    const response = await api.post('/api/chat/resume', request);
+    console.log('[resumeChatQuery] 응답 받음:', response.data);
+    return response.data;
+  } catch (err) {
+    console.error('[resumeChatQuery] 에러:', err);
+    throw err;
+  }
 };

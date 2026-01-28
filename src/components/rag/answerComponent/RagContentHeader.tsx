@@ -2,6 +2,7 @@
 
 import clsx from 'clsx';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import AI from '/public/icons/icon/ai.svg';
 import ArrowRight2 from '/public/icons/icon/arrow_right2.svg';
 import Add from '/public/icons/icon/add_small.svg';
@@ -13,10 +14,21 @@ import QuestionsListModal from '@/components/rag/modal/QuestionsListInSessionMod
 const RagHeader = () => {
   const [isCatchModalOpen, setIsCatchModalOpen] = useState(false);
   const [isQuestionsListOpen, setIsQuestionsListOpen] = useState(false);
+  const router = useRouter();
+
+  const handleNewQuestion = () => {
+    // new 세션 ID 생성
+    const newSessionId = crypto.randomUUID();
+
+    router.push(`/ragAnswer/${newSessionId}`);
+
+    setIsCatchModalOpen(false);
+    setIsCatchModalOpen(false);
+  };
 
   return (
     <>
-      <div className="border-r-neutral-3 border-b-neutral-3 sticky top-0 z-100 flex min-w-240.75 justify-between border-r border-b bg-white px-16 py-2">
+      <div className="border-r-neutral-3 border-b-neutral-3 border-r-0.5 sticky top-0 z-100 flex min-w-240.75 justify-between border-b bg-white px-16 py-2">
         {/* 좌측 메뉴 */}
         <div className="relative flex items-center">
           <button
@@ -56,6 +68,7 @@ const RagHeader = () => {
         {/* 우측 메뉴 */}
         <div className="flex items-center gap-1.5">
           <button
+            onClick={handleNewQuestion}
             className={`border-neutral-3 box-button-outline-gray flex w-29.75 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5`}
           >
             <Add className="text-gray-70 flex h-5 w-5" />

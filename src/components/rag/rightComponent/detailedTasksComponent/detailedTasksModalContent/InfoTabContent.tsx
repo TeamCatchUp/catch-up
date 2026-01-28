@@ -20,7 +20,7 @@ const InfoTabContent = () => {
         </div>
         <button className="box-button-outline-gray flex h-9 w-49.25 cursor-pointer items-center justify-between px-2.5 py-1.5">
           <div className="flex gap-3">
-            <Menu className="text-gray-70 h-5 w-5" />
+            <Menu className="text-gray-70 relative top-px h-5 w-5" />
             <span className="text-body-small text-gray-90">높음</span>
           </div>
           <UnfoldMore className="text-gray-30 h-5.5 w-5.5" />

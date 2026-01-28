@@ -15,7 +15,7 @@ import Home from '/public/icons/icon/home.svg';
 import AI from '/public/icons/icon/ai.svg';
 import Dashboard from '/public/icons/icon/dashboard.svg';
 import Mail from '/public/icons/icon/inbox.svg';
-import DefaultProfile from '/public/icons/icon/default_profile.svg';
+import Profile from '/public/icons/icon/profile.svg';
 import UnfoldMore from '/public/icons/icon/unfold_more.svg';
 import ArrowLeft from '/public/icons/icon/arrow_left.svg';
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
@@ -57,7 +57,7 @@ const queryItems = [
 const SideNavBar = () => {
   const pathname = usePathname();
   const router = useRouter();
-  const isRagAnswerPage = pathname === '/ragAnswer';
+  const isRagAnswerPage = pathname.startsWith('/ragAnswer');
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage); // SNB opened 여부
   const [isTeamSpaceMoreModalOpen, setIsTeamSpaceMoreModalOpen] = useState(false); // 팀스페이스 더보기 버튼 모달 opened 여부
   const [isTeamDropDownModalOpen, setIsTeamDropDownModalOpen] = useState(false); // 팀스페이스 드롭다운 버튼 모달 opened 여부
@@ -89,7 +89,12 @@ const SideNavBar = () => {
             onClick={() => router.push('/')}
             className={clsx('flex cursor-pointer items-center gap-2.5', isOpen ? 'px-1' : '')}
           >
-            <div className="group border-neutral-3 relative flex h-10 w-10 items-center rounded-xl border-[0.5px] px-1.25 py-1.5">
+            <div
+              className={clsx(
+                'group relative flex h-10 w-10 items-center px-1.25 py-1.5',
+                isOpen ? '' : 'border-neutral-3 rounded-xl border-[0.5px]',
+              )}
+            >
               <CatchupLogo className="relative left-px h-7.5 w-7" />
 
               {!isOpen && (
@@ -132,17 +137,29 @@ const SideNavBar = () => {
         {/* 팀스페이스 */}
         {isOpen && (
           <div
+            onClick={() => {
+              setIsTeamSpaceMoreModalOpen(false);
+              setIsTeamDropDownModalOpen((prev) => !prev);
+            }}
+            onMouseEnter={() => {
+              setIsTeamSpaceMoreModalOpen(false);
+              setIsTeamDropDownModalOpen(true);
+            }}
+            onMouseLeave={() => {
+              setIsTeamDropDownModalOpen(false);
+            }}
             className={clsx(
-              'group/teamspace border-neutral-3 flex flex-col justify-center gap-1.5 rounded-xl! border px-2.5 py-2',
+              'group/teamspace border-neutral-3 flex cursor-pointer flex-col justify-center gap-1.5 rounded-xl! border px-2.5 py-2',
               isTeamSpaceMoreModalOpen || isTeamDropDownModalOpen ? 'bg-neutral-2' : 'hover:bg-neutral-2 bg-white',
             )}
           >
             <span className="flex items-center justify-between">
               <span className="text-body-xsmall text-gray-50">팀스페이스</span>
               <Dropdown
-                onClick={() => {
-                  setIsTeamDropDownModalOpen(!isTeamDropDownModalOpen);
+                onClick={(e: React.MouseEvent<SVGSVGElement>) => {
+                  e.stopPropagation();
                   setIsTeamSpaceMoreModalOpen(false);
+                  setIsTeamDropDownModalOpen(!isTeamDropDownModalOpen);
                 }}
                 className={clsx(
                   'h-4 w-4 cursor-pointer rounded-full text-gray-50 transition-opacity',
@@ -174,7 +191,8 @@ const SideNavBar = () => {
                 </div>
                 <div className="group absolute top-0 right-0">
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setIsTeamSpaceMoreModalOpen(!isTeamSpaceMoreModalOpen);
                       setIsTeamDropDownModalOpen(false);
                     }}
@@ -208,6 +226,17 @@ const SideNavBar = () => {
         )}
         {!isOpen && (
           <div
+            onClick={() => {
+              setIsTeamSpaceMoreModalOpen(false);
+              setIsTeamDropDownModalOpen((prev) => !prev);
+            }}
+            onMouseEnter={() => {
+              setIsTeamSpaceMoreModalOpen(false);
+              setIsTeamDropDownModalOpen(true);
+            }}
+            onMouseLeave={() => {
+              setIsTeamDropDownModalOpen(false);
+            }}
             className={clsx(
               'group border-neutral-3 shadow-blue-bottom flex h-10 w-14.5 cursor-pointer items-center justify-center rounded-xl border p-1.5',
               isTeamDropDownModalOpen ? 'bg-neutral-2' : 'hover:bg-neutral-2 bg-white',
@@ -228,7 +257,8 @@ const SideNavBar = () => {
                 </div>
               </div>
               <div
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   setIsTeamDropDownModalOpen(!isTeamDropDownModalOpen);
                 }}
                 className="h-4 w-4"
@@ -355,12 +385,12 @@ const SideNavBar = () => {
           <div
             onClick={() => setIsUserModalOpen(!isUserModalOpen)}
             className={clsx(
-              'icon-button-only-gray flex h-13.5 cursor-pointer items-center rounded-lg',
-              isOpen ? 'w-56.25 justify-between px-1.5 py-1' : 'justify-center',
+              'flex h-13.5 cursor-pointer items-center rounded-lg',
+              isOpen ? 'icon-button-only-gray w-56.25 justify-between px-1.5 py-1' : 'justify-center',
             )}
           >
             <div className={clsx('flex gap-4', isOpen ? 'mt-auto' : '')}>
-              <DefaultProfile className="h-10 w-10" />
+              <Profile className="border-neutral-2 h-10 w-10 rounded-xl border-[0.5px]" />
               {isOpen && (
                 <div className="relative top-px max-w-31">
                   <div className="text-heading-small text-gray-80 truncate">{user?.name ?? '이름없음'}</div>

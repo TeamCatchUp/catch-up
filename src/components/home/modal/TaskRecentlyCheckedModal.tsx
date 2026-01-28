@@ -103,7 +103,7 @@ const TaskRecentlyCheckedModal = ({ task, onClose }: TaskRecentlyCheckedModalPro
           </div>
 
           {/* 관련 파일 */}
-          <div className="relative flex max-w-145.75 flex-col gap-2.5">
+          <div className="relative mt-2 flex max-w-145.75 flex-col gap-2.5">
             <div className="text-body-xsmall px-1.5 text-gray-50">관련 파일</div>
             <div className="flex flex-wrap gap-2.5">
               <div className="capsule-button-outline-mono flex cursor-pointer items-center gap-1.5 px-3 py-1.5">

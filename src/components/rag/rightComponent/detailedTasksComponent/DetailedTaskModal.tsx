@@ -8,17 +8,14 @@ import Cancel from '/public/icons/icon/cancel.svg';
 import Check from '/public/icons/icon/check.svg';
 import Edit from '/public/icons/icon/edit_square.svg';
 import Share from '/public/icons/icon/share_2.svg';
-import Lock from '/public/icons/icon/lock_filled.svg';
 import InfoTabContent from './detailedTasksModalContent/InfoTabContent';
 import FilesTabContent from './detailedTasksModalContent/FilesTabContent';
 import WikiTabContent from './detailedTasksModalContent/WikiTabContent';
 import URLTabContent from './detailedTasksModalContent/URLTabContent';
 import CommentsTabContent from './detailedTasksModalContent/CommentsTabContent';
 import NoDataContent from './detailedTasksModalContent/NoDataContent';
-import RelatedTasksSection from './detailedTasksModalContent/RelatedTasksSection';
 import OptionNavBar from './detailedTasksModalContent/OptionNavBar';
 import DetailedTaskContent from './detailedTasksModalContent/DetailedTaskContent';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface DetailedTaskModalProps {
   onClose: () => void;
@@ -102,17 +99,12 @@ const DetailedTaskModal = ({
   };
 
   const handleCheckToggle = () => {
-    // if (data.type === 'task') {
-    //   onToggleCheck(data.taskId);
-    // } else {
-    //   onToggleCheck(data.taskId, data.subId);
-    // }
     onToggleCheck(data.taskId, data.type === 'subtask' ? data.subId : undefined);
   };
 
   return (
     <div
-      className="shadow-rag-bar border-neutral-4 absolute bottom-4 ml-8 flex h-145 w-108.75 flex-col rounded-2xl border bg-white p-5"
+      className="shadow-rag-bar border-neutral-4 absolute bottom-4 flex h-145 w-108.75 flex-col rounded-2xl border bg-white p-5"
       style={{ bottom: bottomOffset }}
     >
       {/* TopMenuBar */}

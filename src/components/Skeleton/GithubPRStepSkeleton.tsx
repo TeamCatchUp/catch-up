@@ -9,7 +9,7 @@ import CheckCircle from '/public/icons/icon/check_circle.svg';
 import Rotate from '/public/icons/icon/rotate.svg';
 import ArrowForward from '/public/icons/icon/arrow_forward.svg';
 import Check from '/public/icons/icon/check.svg';
-import { formatDate } from 'src/util/formatDate';
+import { formatDate } from '@/util/formatDate';
 
 interface GithubPRStepSkeletonProps {
   prList: PRPayload[];
@@ -39,9 +39,9 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
       behavior: 'smooth',
-      block: 'nearest',
+      block: 'end',
     });
-  }, [selectedPrNumbers]);
+  }, []);
 
   return (
     <>
