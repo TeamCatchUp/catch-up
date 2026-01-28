@@ -41,7 +41,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
       behavior: 'smooth',
       block: 'end',
     });
-  }, [selectedPrNumbers]);
+  }, []);
 
   return (
     <>
