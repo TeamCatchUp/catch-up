@@ -10,4 +10,9 @@ export const searchService = {
     const res = await api.get('/api/jira/issues');
     return res.data;
   },
+
+  getRecentChatromms: async () => {
+    const res = await api.get('/api/chatrooms');
+    return res.data;
+  },
 };
