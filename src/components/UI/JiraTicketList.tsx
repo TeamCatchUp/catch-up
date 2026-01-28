@@ -19,25 +19,30 @@ export function JiraTicketList({ tickets, title }: JiraTicketListProps) {
     return BG_COLORS[index % BG_COLORS.length];
   };
 
-  if (tickets.length === 0) return null;
 
   return (
     <div className="flex w-full flex-col gap-2.5">
       <span className="text-body-xsmall px-1.5 font-medium text-gray-50">{title}</span>
 
-      <div className="no-scrollbar flex w-full items-center gap-2.5 overflow-x-auto pb-1 whitespace-nowrap">
-        {tickets.map((ticket, idx) => (
-          <span
-            key={ticket.id}
-            className={clsx(
-              'text-body-small text-gray-70 flex shrink-0 cursor-default items-center rounded-full px-4 py-1.5 transition-all hover:brightness-95',
-              getTicketColor(idx),
-            )}
-          >
-            {ticket.label}
-          </span>
-        ))}
-      </div>
+      {tickets.length > 0 ? (
+        <div className="no-scrollbar flex w-full items-center gap-2.5 overflow-x-auto pb-1 whitespace-nowrap">
+          {tickets.map((ticket, idx) => (
+            <span
+              key={ticket.id}
+              className={clsx(
+                'text-body-small text-gray-70 flex shrink-0 cursor-pointer items-center rounded-full px-4 py-1.5 transition-all hover:brightness-95',
+                getTicketColor(idx),
+              )}
+            >
+              {ticket.label}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="border-neutral-2 flex w-full items-center justify-center rounded-xl border border-dashed py-4">
+          <span className="text-body-xsmall text-gray-30">최근 확인한 티켓이 없습니다.</span>
+        </div>
+      )}
     </div>
   );
 }
