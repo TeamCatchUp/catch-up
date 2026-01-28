@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconJira from '@/public/icons/logo/Jira.svg';
@@ -199,14 +199,27 @@ export default function Search() {
     inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 26 * 6) + 'px';
   }, [inputValue]);
 
+  const pathname = usePathname();
+
+  const isSearchPage = pathname === '/search';
+
   return (
-    <div className="flex flex-col items-center gap-4 self-stretch pt-16 pb-16">
-      <div className="flex h-24 flex-col items-center justify-center gap-3 text-gray-50">
-        <div className="text-display-xlarge text-normal-normal">반갑습니다, {user?.name}님!</div>
-        <div className="text-heading-large text-normal-alternative">
-          무엇을 도와드릴까요? 필요한 업무정보를 찾아보세요.
+    <div className="flex flex-col items-center gap-4 self-stretch pt-18 pb-18">
+      {isSearchPage ? (
+        <div className="flex h-24 flex-col items-center justify-center gap-3 text-gray-50">
+          <div className="text-display-xlarge text-normal-normal">찾지 말고, 물어보세요.</div>
+          <div className="text-heading-large text-normal-alternative">
+            Jira, GitHub, Wiki... 흩어진 정보를 모아 한 번에 알려드려요.
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex h-24 flex-col items-center justify-center gap-3 text-gray-50">
+          <div className="text-display-xlarge text-normal-normal">반갑습니다, {user?.name}님!</div>
+          <div className="text-heading-large text-normal-alternative">
+            무엇을 도와드릴까요? 필요한 업무정보를 찾아보세요.
+          </div>
+        </div>
+      )}
 
       <div
         ref={containerRef}
