@@ -814,8 +814,8 @@ export default function Page() {
                               ),
                             }}
                           >
-                            {/* {formatMarkdownString(msg.content)} */}
-                            {mockMD}
+                            {formatMarkdownString(msg.content)}
+                            {/* {mockMD} */}
                           </ReactMarkdown>
                         </div>
 
