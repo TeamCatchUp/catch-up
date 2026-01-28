@@ -1,19 +1,18 @@
 'use client';
 
-import { JiraTicketList } from '@/components/UI/JiraTicketList';
-import { ReacentlySearchList } from '@/components/UI/RecetlySearchList';
-import { useEffect, useState } from 'react';
 import { searchService } from '@/api/search';
+import { SearchHistory } from '@/components/UI/mypage/history/SearchHistory';
+import { useEffect, useState } from 'react';
 
 interface SearchQuery {
   query: string;
   sessionId: string;
   date: string;
+  rawDate: Date;
 }
 
-export const DefaultSearchContent = () => {
+export default function HistoryPage() {
   const [recentQueries, setRecentQueries] = useState<SearchQuery[]>([]);
-  const [jiraTickets, setJiraTickets] = useState<{ id: string; label: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -21,10 +20,7 @@ export const DefaultSearchContent = () => {
       try {
         setIsLoading(true);
 
-        const [queriesRes, jiraRes] = await Promise.all([
-          searchService.getRecentQueries(),
-          searchService.getRecentJiraTickets(),
-        ]);
+        const [queriesRes] = await Promise.all([searchService.getRecentQueries()]);
 
         if (queriesRes.content) {
           const mappedQueries = queriesRes.content.map((item: any) => ({
@@ -32,27 +28,22 @@ export const DefaultSearchContent = () => {
             sessionId: item.sessionId,
             date: new Date(item.createdAt)
               .toLocaleDateString('ko-KR', {
+                year: 'numeric',
                 month: '2-digit',
                 day: '2-digit',
               })
-              .replace(/\. /g, '.')
-              .slice(0, 5),
+              .replace(/\s/g, '')
+              .replace(/\.$/, ''),
+            rawDate: new Date(item.createdAt),
           }));
           setRecentQueries(mappedQueries);
         }
-
-        const mappedTickets = jiraRes.map((ticket: any) => ({
-          id: ticket.issueKey, // JIRA-101 형태
-          label: ticket.summary, // 티켓 제목
-        }));
-        setJiraTickets(mappedTickets);
       } catch (err) {
         console.error('데이터 로드 실패:', err);
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchDefaultData();
   }, []);
 
@@ -61,9 +52,8 @@ export const DefaultSearchContent = () => {
   }
 
   return (
-    <>
-      <ReacentlySearchList title="최근 질문" querys={recentQueries} />
-      <JiraTicketList tickets={jiraTickets} title="최근 확인한 지라 티켓" />
-    </>
+    <div className="mx-16 mt-6 mb-25">
+      <SearchHistory querys={recentQueries} />
+    </div>
   );
-};
+}
