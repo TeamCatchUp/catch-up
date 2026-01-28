@@ -131,6 +131,16 @@ export default function Page() {
     setCurrentStep('router');
   }, []);
 
+  // content='' (error response) -> new 쿼리 생성 시 질문 기록만 남김
+  const stripTrailingErrorAssistant = (messages: Message[]) => {
+    const last = messages[messages.length - 1];
+
+    if (last?.role === 'assistant' && (last.content ?? '') === '') {
+      return messages.slice(0, -1);
+    }
+    return messages;
+  };
+
   const appendAssistantAnswer = useCallback(
     (answer: string, sources: BackendSource[] = [], relatedJiraIssues: BackendSource[] = []) => {
       setChatData((prev) => {
@@ -321,7 +331,6 @@ export default function Page() {
 
     // localStorage에서 데이터 복원
     if (saved) {
-      // setChatData(JSON.parse(saved));
       const parsedData: ChatData = JSON.parse(saved);
 
       // 마지막 메시지가 user = 답변 받지 못한 상태 (답변 에러) - 쿼리 자동 재전송 X
@@ -414,11 +423,15 @@ export default function Page() {
       timestamp: new Date().toISOString(),
     };
 
+    // 직전 ErrorResponse(빈 assistant) 제거하고 append
+    const cleanedMessages = stripTrailingErrorAssistant(chatData.messages);
+
     const updated: ChatData = {
       ...chatData,
       messages: [...chatData.messages, userMessage],
     };
     setChatData(updated);
+    localStorage.setItem(`chat_${sessionId}`, JSON.stringify(updated));
 
     const queryToSend = newInput;
     setNewInput('');
@@ -504,6 +517,8 @@ export default function Page() {
     if (idx === -1) return;
 
     const trimmed = chatData.messages.slice(0, idx);
+    const cleanedTrimmed = stripTrailingErrorAssistant(trimmed);
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
