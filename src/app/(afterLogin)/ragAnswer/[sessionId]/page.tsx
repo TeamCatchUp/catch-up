@@ -32,6 +32,7 @@ import EditMessageInput from '@/components/rag/EditMessageInput';
 import ToolTip from '@/components/common/ToolTip';
 import TeamSpaceModal from '@/components/rag/modal/TeamSpaceModal';
 import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
+import { MarkDownComponents } from '@/components/rag/answerComponent/MarkDownComponents';
 
 import { useParams, useSearchParams } from 'next/navigation';
 import { createSSEConnection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
@@ -746,7 +747,7 @@ export default function Page() {
                         </div> */}
                         <div className="markdown-body max-w-none break-words">
                           <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
+                            remarkPlugins={[[remarkGfm, { breaks: true }]]}
                             components={{
                               table: ({ children, ...props }) => (
                                 <div className="table-wrapper">
