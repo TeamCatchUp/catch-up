@@ -16,3 +16,10 @@ export const searchService = {
     return res.data;
   },
 };
+
+export const nowChatroomService = {
+  getAllQueries: async (sessionId: string) => {
+    const res = await api.get(`/api/chatrooms/${sessionId}/queries`);
+    return res.data;
+  },
+};
