@@ -26,6 +26,13 @@ import TeamSpaceDropDownModal from '@/components/common/sideNavBar/modal/TeamSpa
 import UserModal from '@/components/common/sideNavBar/modal/UserModal';
 import CatchAssistantModal from '@/components/rag/modal/CatchAssistantModal';
 import api from '@/api/axios';
+import { searchService } from '@/api/search';
+import Link from 'next/link';
+
+interface ChatRoomQuery {
+  title: string;
+  sessionId: string;
+}
 
 const navItems = [
   { name: '홈', href: '/', Icon: Home, tooltipOpen: '최근 업무 보기', tooltipClosed: '홈' },
@@ -46,14 +53,6 @@ const navItems = [
   { name: '수신함', href: '/mail', Icon: Mail, tooltipOpen: '멘션 및 알림 보기', tooltipClosed: '수신함' },
 ];
 
-// 내 질문 목록 더미데이터
-const queryItems = [
-  { id: 1, content: '연동 테스트 중단 리스크' },
-  { id: 2, content: 'A사 API 명세 버전 이슈' },
-  { id: 3, content: 'SSO 토큰 만료 해결 여부' },
-  { id: 4, content: 'A사 API 연동 오류 원인 정리' },
-];
-
 const SideNavBar = () => {
   const pathname = usePathname();
   const router = useRouter();
@@ -64,11 +63,35 @@ const SideNavBar = () => {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false); // 유저 모달 opened 여부
   const [isCatchModalOpen, setIsCatchModalOpen] = useState(false); // 캐치스턴트 모달 opened 여부
 
+  const [recentChatrooms, setRecentChatrooms] = useState<ChatRoomQuery[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   const user = useUserStore((state) => state.user);
 
   useEffect(() => {
     setIsOpen(!isRagAnswerPage);
   }, [isRagAnswerPage]);
+
+  useEffect(() => {
+    const fetchDefaultData = async () => {
+      try {
+        setIsLoading(true);
+        const [chatroomRes] = await Promise.all([searchService.getRecentChatromms()]);
+        if (chatroomRes.content) {
+          const mappedChatrooms = chatroomRes.content.map((item: any) => ({
+            title: item.title,
+            sessionId: item.sessionId,
+          }));
+          setRecentChatrooms(mappedChatrooms);
+        }
+      } catch (err) {
+        console.error('데이터 로드 실패:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchDefaultData();
+  }, []);
 
   // SNB item (메뉴 상태별 스타일 CSS)
   const defaultClass =
@@ -360,19 +383,20 @@ const SideNavBar = () => {
               )}
             </button>
             <div className="mt-2 flex flex-col overflow-y-auto">
-              {queryItems.map((query) => {
+              {recentChatrooms.map((chatroom) => {
                 return (
-                  <button
-                    key={query.id}
+                  <Link
+                    href={`/ragAnswer/${chatroom.sessionId}`}
+                    key={chatroom.sessionId}
                     // , isActive ? selectedClass : defaultClass
                     className={clsx('group flex cursor-pointer rounded-lg py-2')}
                   >
                     {/* , isActive ? 'text-blue-55' : 'text-gray-80' */}
-                    <span className={clsx('text-body-small truncate px-2.5')}>{query.content}</span>
+                    <span className={clsx('text-body-small truncate px-2.5')}>{chatroom.title}</span>
                     <span className="mr-2.5 ml-auto flex h-5 w-5 items-center opacity-0 transition-opacity group-hover:opacity-100">
                       <Kebeb className="text-gray-50" />
                     </span>
-                  </button>
+                  </Link>
                 );
               })}
             </div>

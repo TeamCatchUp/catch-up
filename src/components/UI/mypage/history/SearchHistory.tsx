@@ -12,9 +12,10 @@ interface SearchQuery {
 
 interface RecentlySearchProps {
   querys: SearchQuery[];
+  isModal?: boolean;
 }
 
-export function SearchHistory({ querys }: RecentlySearchProps) {
+export function SearchHistory({ querys, isModal = false }: RecentlySearchProps) {
   if (!querys || querys.length === 0) {
     return (
       <div className="flex w-full items-center justify-center rounded-xl py-4">
@@ -79,8 +80,7 @@ export function SearchHistory({ querys }: RecentlySearchProps) {
               </Link>
             ))}
           </div>
-
-          {idx < visibleSections.length - 1 && <hr className="border-neutral-4 my-6 w-full border-t" />}
+          {!isModal && idx < visibleSections.length - 1 && <hr className="border-neutral-4 my-6 w-full border-t" />}
         </div>
       ))}
     </div>
