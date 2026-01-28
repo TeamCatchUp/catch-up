@@ -16,7 +16,17 @@ interface RecentlySearchProps {
 
 export function ReacentlySearchList({ title, querys }: RecentlySearchProps) {
   const displayedQuerys = querys.slice(0, 3);
-  if (!displayedQuerys || displayedQuerys.length === 0) return null;
+  if (!displayedQuerys || displayedQuerys.length === 0)
+    return (
+      <div className="flex w-full flex-col gap-2.5">
+        <span className="text-body-xsmall px-1.5 font-medium text-gray-50">{title}</span>
+        <div className="flex flex-col gap-1">
+          <div className="border-neutral-2 flex w-full items-center justify-center rounded-xl border border-dashed py-4">
+            <span className="text-body-xsmall text-gray-30">최근 검색기록이 없습니다.</span>
+          </div>
+        </div>
+      </div>
+    );
   return (
     <div className="flex w-full flex-col gap-2.5">
       <span className="text-body-xsmall px-1.5 font-medium text-gray-50">{title}</span>
