@@ -98,16 +98,17 @@ const FeedbackSection = ({
 
   // 피드백 제출 완 -> 자동 감사 UI
   useEffect(() => {
-    if (!feedbackVisibleMap[messageId]) return;
+    if (hasFeedback && feedbackVisibleMap[messageId]) {
+      setShowThanks(true);
 
-    if (hasFeedback) {
       const timer = setTimeout(() => {
-        setShowThanks(true);
+        setShowThanks(false);
+        setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
       }, THANKS_MESSAGE_DURATION);
 
       return () => clearTimeout(timer);
     }
-  }, [hasFeedback, feedbackVisibleMap, messageId]);
+  }, [hasFeedback, feedbackVisibleMap[messageId], messageId, setFeedbackVisibleMap]);
 
   const closeSection = useCallback(() => {
     setIsDetailOpen(false);
