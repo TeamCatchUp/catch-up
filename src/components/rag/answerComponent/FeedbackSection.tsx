@@ -102,14 +102,6 @@ const FeedbackSection = ({
     }, 3000);
   }, [messageId, setFeedbackVisibleMap]);
 
-  // const submitFeedback = useCallback(() => {
-  //   setFeedbackSubmittedMap((prev) => ({ ...prev, [messageId]: true }));
-
-  //   setTimeout(() => {
-  //     setShowThanks(false);
-  //     setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
-  //   }, 3000);
-  // }, [messageId, setFeedbackSubmittedMap, setFeedbackVisibleMap]);
   const submitFeedback = useCallback(
     async (selectedContent?: string) => {
       if (!chatHistoryId) {
@@ -132,6 +124,12 @@ const FeedbackSection = ({
 
       try {
         setIsSubmitting(true);
+
+        console.log('[submitFeedback] send', {
+          chatHistoryId,
+          tags,
+          detail,
+        });
 
         await sendFeedbackQuery({
           chatHistoryId,
