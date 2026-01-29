@@ -484,7 +484,7 @@ export default function Page() {
     if (textAreaRef.current) textAreaRef.current.style.height = '26px';
 
     // 새 쿼리 전송 -> 새 페이지로 이동 (animation)
-    setSlideDirection('down');
+    setSlideDirection('up');
     setTimeout(() => {
       const newPageIndex = Math.floor(updated.messages.length / 2);
       setCurrentPage(newPageIndex);
@@ -615,10 +615,13 @@ export default function Page() {
     appendAssistantAnswer('\n', [], []);
   }, [isLoading, appendAssistantAnswer, closeSSEConnection]);
 
+  // 스크롤 쓰로틀링을 위한 ref
+  const isScrolling = useRef(false);
+
   // 외부 스크롤로 페이지 전환
   const handleWheel = useCallback(
     (e: WheelEvent) => {
-      if (isLoading) return;
+      if (isLoading || isScrolling.current) return;
 
       // 답변 영역 내부 스크롤 중이면 페이지 전환 방지
       if (answerScrollRef.current) {
@@ -637,20 +640,33 @@ export default function Page() {
       }
 
       // 페이지 전환
+      // 스크롤 방향: 위로 올리면(deltaY < 0) 다음/최신 질문, 아래로 내리면(deltaY > 0) 이전 질문
+      // 다음 질문
       if (e.deltaY > 0 && currentPage < qaPairs.length - 1) {
         e.preventDefault();
-        setSlideDirection('down');
+        isScrolling.current = true;
+        setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
         setTimeout(() => {
           setCurrentPage((prev) => prev + 1);
           setSlideDirection(null);
+          isScrolling.current = false;
         }, 300);
-      } else if (e.deltaY < 0 && currentPage > 0) {
+      }
+      // 아래로 스크롤 (이전 질문으로)
+      else if (e.deltaY < 0 && currentPage > 0) {
         e.preventDefault();
-        setSlideDirection('up');
+        isScrolling.current = true;
+        setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
         setTimeout(() => {
           setCurrentPage((prev) => prev - 1);
           setSlideDirection(null);
+          isScrolling.current = false;
         }, 300);
+      }
+
+      // 경계 조건: 최신 질문에서 위로 스크롤 시도 또는 첫 질문에서 아래로 스크롤 시도
+      else if ((e.deltaY < 0 && currentPage >= qaPairs.length - 1) || (e.deltaY > 0 && currentPage <= 0)) {
+        e.preventDefault(); // 스크롤 이벤트 무시
       }
     },
     [currentPage, qaPairs.length, isLoading],
@@ -1229,10 +1245,14 @@ export default function Page() {
                   <button
                     key={idx}
                     onClick={() => {
-                      setSlideDirection(idx > currentPage ? 'down' : 'up');
+                      if (isScrolling.current || idx === currentPage) return;
+                      isScrolling.current = true;
+                      // 다음 페이지(더 큰 인덱스)로 가면 up, 이전 페이지로 가면 down
+                      setSlideDirection(idx > currentPage ? 'up' : 'down');
                       setTimeout(() => {
                         setCurrentPage(idx);
                         setSlideDirection(null);
+                        isScrolling.current = false;
                       }, 300);
                     }}
                     className={clsx(
