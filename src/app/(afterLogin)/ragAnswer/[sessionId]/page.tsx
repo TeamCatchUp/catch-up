@@ -754,7 +754,7 @@ export default function Page() {
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
           <div
             ref={scrollRef}
-            className="flex flex-1 flex-col items-center gap-8 overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
+            className="mb-8 flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
           >
             <div className="flex w-192.75 items-center justify-center gap-4">
               <div className="border-neutral-4 flex-1 border-t" />

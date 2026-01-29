@@ -34,6 +34,13 @@ interface ChatRoomQuery {
   sessionId: string;
 }
 
+const TEAM_SPACES = [
+  { id: 'fe', name: 'Catch Up | FE' },
+  { id: 'be', name: 'Catch Up | BE' },
+  { id: 'pm', name: 'Catch Up | 기획' },
+  { id: 'design', name: 'Catch Up | Design' },
+] as const;
+
 const navItems = [
   { name: '홈', href: '/', Icon: Home, tooltipOpen: '최근 업무 보기', tooltipClosed: '홈' },
   {
@@ -67,6 +74,9 @@ const SideNavBar = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const user = useUserStore((state) => state.user);
+
+  const [selectedTeamSpaceId, setSelectedTeamSpaceId] = useState<string>(TEAM_SPACES[0].id);
+  const selectedTeamSpace = TEAM_SPACES.find((t) => t.id === selectedTeamSpaceId) ?? TEAM_SPACES[0];
 
   useEffect(() => {
     setIsOpen(!isRagAnswerPage);
@@ -210,7 +220,7 @@ const SideNavBar = () => {
                       : 'text-body-small text-gray-80 relative top-px left-1 max-w-42 truncate group-hover/teamspace:max-w-36',
                   )}
                 >
-                  팀스페이스 text text text text
+                  {selectedTeamSpace.name}
                 </div>
                 <div className="group absolute top-0 right-0">
                   <button
@@ -242,7 +252,14 @@ const SideNavBar = () => {
             )}
             {isTeamDropDownModalOpen && (
               <div className="absolute top-17.5 left-58.5 z-100">
-                <TeamSpaceDropDownModal onClose={() => setIsTeamDropDownModalOpen(false)} />
+                <TeamSpaceDropDownModal
+                  onClose={() => setIsTeamDropDownModalOpen(false)}
+                  teamSpaces={[...TEAM_SPACES]}
+                  selectedId={selectedTeamSpaceId}
+                  onSelect={(team) => {
+                    setSelectedTeamSpaceId(team.id);
+                  }}
+                />
               </div>
             )}
           </div>
@@ -291,7 +308,14 @@ const SideNavBar = () => {
             </div>
             {isTeamDropDownModalOpen && (
               <div className="absolute top-20 left-17 z-100">
-                <TeamSpaceDropDownModal onClose={() => setIsTeamDropDownModalOpen(false)} />
+                <TeamSpaceDropDownModal
+                  onClose={() => setIsTeamDropDownModalOpen(false)}
+                  teamSpaces={[...TEAM_SPACES]}
+                  selectedId={selectedTeamSpaceId}
+                  onSelect={(team) => {
+                    setSelectedTeamSpaceId(team.id);
+                  }}
+                />
               </div>
             )}
           </div>
