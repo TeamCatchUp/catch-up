@@ -615,27 +615,35 @@ export default function Page() {
         return;
       }
 
-      // 답변 영역이 스크롤 가능한 경우만 내부 스크롤 체크
+      // 답변 영역 스크롤 체크
       if (answerScrollRef.current) {
         const { scrollTop, scrollHeight, clientHeight } = answerScrollRef.current;
         const isScrollable = scrollHeight > clientHeight;
 
-        // 스크롤 가능 + 답변 영역 내부에서 발생한 이벤트면 페이지 전환 차단
-        if (isScrollable && answerScrollRef.current.contains(e.target as Node)) {
-          const isAtTop = scrollTop <= 1;
-          const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
+        // 스크롤 가능한 경우
+        if (isScrollable) {
+          // 답변 영역 내부에서 발생한 이벤트인지 체크
+          const isInsideAnswer = answerScrollRef.current.contains(e.target as Node);
 
-          // 스크롤이 최상단/최하단이 아니면 페이지 전환 방지
-          if (e.deltaY > 0 && !isAtBottom) return;
-          if (e.deltaY < 0 && !isAtTop) return;
+          if (isInsideAnswer) {
+            // 스크롤 경계 체크 (여유를 5px로 증가)
+            const isAtTop = scrollTop <= 5;
+            const isAtBottom = scrollTop + clientHeight >= scrollHeight - 5;
+
+            // 경계가 아니면 페이지 전환 차단
+            if (e.deltaY > 0 && !isAtBottom) return;
+            if (e.deltaY < 0 && !isAtTop) return;
+          }
         }
       }
 
-      // 페이지 전환
-      // 스크롤 방향: 위로 올리면(deltaY < 0) 다음/최신 질문, 아래로 내리면(deltaY > 0) 이전 질문
+      // 페이지 전환 (스크롤 방향: 위로 올리면(deltaY < 0) 다음/최신 질문, 아래로 내리면(deltaY > 0) 이전 질문)
       // 다음 질문
       if (e.deltaY > 0 && currentPage < qaPairs.length - 1) {
         e.preventDefault();
+        e.stopPropagation();
+
+        // 즉시 잠금
         isScrolling.current = true;
 
         // 기존 타임아웃 클리어
@@ -644,20 +652,32 @@ export default function Page() {
         }
 
         setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
+        // setTimeout(() => {
+        //   setCurrentPage((prev) => Math.min(prev + 1, qaPairs.length - 1));
+        //   setSlideDirection(null);
+
+        //   // 스크롤 잠금 해제
+        //   scrollTimeout.current = setTimeout(() => {
+        //     isScrolling.current = false;
+        //   }, 500);
+        // }, 300);
         setTimeout(() => {
           setCurrentPage((prev) => Math.min(prev + 1, qaPairs.length - 1));
           setSlideDirection(null);
-
-          // 스크롤 잠금 해제 (1초 후)
-          scrollTimeout.current = setTimeout(() => {
-            isScrolling.current = false;
-          }, 500);
         }, 300);
+
+        // 800ms 후 잠금 해제
+        scrollTimeout.current = setTimeout(() => {
+          isScrolling.current = false;
+        }, 800);
       }
 
       // 아래로 스크롤 (이전 질문으로)
       else if (e.deltaY < 0 && currentPage > 0) {
         e.preventDefault();
+        e.stopPropagation();
+
+        // 즉시 잠금
         isScrolling.current = true;
 
         // 기존 타임아웃 클리어
@@ -666,15 +686,24 @@ export default function Page() {
         }
 
         setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
+        // setTimeout(() => {
+        //   setCurrentPage((prev) => Math.max(prev - 1, 0));
+        //   setSlideDirection(null);
+
+        //   // 스크롤 잠금 해제
+        //   scrollTimeout.current = setTimeout(() => {
+        //     isScrolling.current = false;
+        //   }, 500);
+        // }, 300);
         setTimeout(() => {
           setCurrentPage((prev) => Math.max(prev - 1, 0));
           setSlideDirection(null);
-
-          // 스크롤 잠금 해제 (1초 후)
-          scrollTimeout.current = setTimeout(() => {
-            isScrolling.current = false;
-          }, 500);
         }, 300);
+
+        // 800ms 후 잠금 해제
+        scrollTimeout.current = setTimeout(() => {
+          isScrolling.current = false;
+        }, 800);
       }
     },
     [currentPage, qaPairs.length, isLoading],
