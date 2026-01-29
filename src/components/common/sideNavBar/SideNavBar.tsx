@@ -34,6 +34,13 @@ interface ChatRoomQuery {
   sessionId: string;
 }
 
+const TEAM_SPACES = [
+  { id: 'fe', name: 'Catch Up | FE' },
+  { id: 'be', name: 'Catch Up | BE' },
+  { id: 'pm', name: 'Catch Up | 기획' },
+  { id: 'design', name: 'Catch Up | Design' },
+] as const;
+
 const navItems = [
   { name: '홈', href: '/', Icon: Home, tooltipOpen: '최근 업무 보기', tooltipClosed: '홈' },
   {
@@ -43,14 +50,14 @@ const navItems = [
     tooltipOpen: '사내 지식 물어보기',
     tooltipClosed: '캐치스턴트 AI',
   },
-  {
-    name: '업무 대시보드',
-    href: '/stacks',
-    Icon: Dashboard,
-    tooltipOpen: '나의 업무 이력 확인하기',
-    tooltipClosed: '내 업무 관리',
-  },
-  { name: '수신함', href: '/mail', Icon: Mail, tooltipOpen: '멘션 및 알림 보기', tooltipClosed: '수신함' },
+  // {
+  //   name: '업무 대시보드',
+  //   href: '/stacks',
+  //   Icon: Dashboard,
+  //   tooltipOpen: '나의 업무 이력 확인하기',
+  //   tooltipClosed: '내 업무 관리',
+  // },
+  // { name: '수신함', href: '/mail', Icon: Mail, tooltipOpen: '멘션 및 알림 보기', tooltipClosed: '수신함' },
 ];
 
 const SideNavBar = () => {
@@ -68,6 +75,9 @@ const SideNavBar = () => {
 
   const user = useUserStore((state) => state.user);
 
+  const [selectedTeamSpaceId, setSelectedTeamSpaceId] = useState<string>(TEAM_SPACES[0].id);
+  const selectedTeamSpace = TEAM_SPACES.find((t) => t.id === selectedTeamSpaceId) ?? TEAM_SPACES[0];
+
   useEffect(() => {
     setIsOpen(!isRagAnswerPage);
   }, [isRagAnswerPage]);
@@ -76,7 +86,7 @@ const SideNavBar = () => {
     const fetchDefaultData = async () => {
       try {
         setIsLoading(true);
-        const [chatroomRes] = await Promise.all([searchService.getRecentChatromms()]);
+        const [chatroomRes] = await Promise.all([searchService.getRecentChatrooms()]);
         if (chatroomRes.content) {
           const mappedChatrooms = chatroomRes.content.map((item: any) => ({
             title: item.title,
@@ -91,6 +101,10 @@ const SideNavBar = () => {
       }
     };
     fetchDefaultData();
+    const handleRefresh = () => fetchDefaultData();
+
+    window.addEventListener('refresh_sidebar', handleRefresh);
+    return () => window.removeEventListener('refresh_sidebar', handleRefresh);
   }, []);
 
   // SNB item (메뉴 상태별 스타일 CSS)
@@ -210,7 +224,7 @@ const SideNavBar = () => {
                       : 'text-body-small text-gray-80 relative top-px left-1 max-w-42 truncate group-hover/teamspace:max-w-36',
                   )}
                 >
-                  팀스페이스 text text text text
+                  {selectedTeamSpace.name}
                 </div>
                 <div className="group absolute top-0 right-0">
                   <button
@@ -242,7 +256,14 @@ const SideNavBar = () => {
             )}
             {isTeamDropDownModalOpen && (
               <div className="absolute top-17.5 left-58.5 z-100">
-                <TeamSpaceDropDownModal onClose={() => setIsTeamDropDownModalOpen(false)} />
+                <TeamSpaceDropDownModal
+                  onClose={() => setIsTeamDropDownModalOpen(false)}
+                  teamSpaces={[...TEAM_SPACES]}
+                  selectedId={selectedTeamSpaceId}
+                  onSelect={(team) => {
+                    setSelectedTeamSpaceId(team.id);
+                  }}
+                />
               </div>
             )}
           </div>
@@ -273,7 +294,7 @@ const SideNavBar = () => {
                     isTeamDropDownModalOpen ? 'bg-neutral-3' : 'bg-neutral-2 group-hover:bg-neutral-3',
                   )}
                 >
-                  팀
+                  {selectedTeamSpace.name.trim().charAt(0)}
                 </div>
                 <div className="absolute bottom-4.75 left-4.5">
                   <Necessary className="h-2 w-2" />
@@ -291,7 +312,14 @@ const SideNavBar = () => {
             </div>
             {isTeamDropDownModalOpen && (
               <div className="absolute top-20 left-17 z-100">
-                <TeamSpaceDropDownModal onClose={() => setIsTeamDropDownModalOpen(false)} />
+                <TeamSpaceDropDownModal
+                  onClose={() => setIsTeamDropDownModalOpen(false)}
+                  teamSpaces={[...TEAM_SPACES]}
+                  selectedId={selectedTeamSpaceId}
+                  onSelect={(team) => {
+                    setSelectedTeamSpaceId(team.id);
+                  }}
+                />
               </div>
             )}
           </div>
@@ -304,8 +332,6 @@ const SideNavBar = () => {
 
             const handleClick = () => {
               if (item.href === '/search') {
-                const newSessionId = crypto.randomUUID();
-                // router.push(`/ragAnswer/${newSessionId}`);
                 router.push(`/search`);
               } else {
                 router.push(item.href);
@@ -370,28 +396,31 @@ const SideNavBar = () => {
           <div className="flex min-h-0 flex-1 flex-col">
             <button onClick={() => setIsCatchModalOpen(true)} className="h-7 w-fit cursor-pointer items-center">
               {!isCatchModalOpen ? (
-                <div className="text-button-secondary-mono flex px-2.5 py-1">
+                <div className="text-button-secondary-mono flex items-center px-2.5 py-1">
                   <span className="text-body-xsmall text-gray-70">내 질문</span>
-                  <ArrowRight className="h-5 w-5 text-gray-50" />
+                  <ArrowRight className="relative bottom-px h-5 w-5 text-gray-50" />
                 </div>
               ) : (
                 <span className="bg-neutral-4 flex items-center gap-1 rounded-full px-1.5 py-1">
-                  <ArrowLeft className="text-gray-70 h-5 w-5" />
-                  <span className="text-body-xsmall text-gray-70 relative top-px">더보기</span>
-                  <ArrowRight className="text-gray-70 h-5 w-5" />
+                  <ArrowLeft className="text-gray-70 relative bottom-px h-5 w-5" />
+                  <span className="text-body-xsmall text-gray-70">더보기</span>
+                  <ArrowRight className="text-gray-70 relative bottom-px h-5 w-5" />
                 </span>
               )}
             </button>
-            <div className="mt-2 flex flex-col overflow-y-auto">
+            <div className="mt-2 flex flex-col-reverse overflow-y-auto">
               {recentChatrooms.map((chatroom) => {
+                const isActive = pathname === `/ragAnswer/${chatroom.sessionId}`;
+
                 return (
                   <Link
                     href={`/ragAnswer/${chatroom.sessionId}`}
                     key={chatroom.sessionId}
-                    // , isActive ? selectedClass : defaultClass
-                    className={clsx('group flex cursor-pointer rounded-lg py-2')}
+                    className={clsx(
+                      'group flex cursor-pointer rounded-lg py-2',
+                      isActive ? selectedClass : defaultClass,
+                    )}
                   >
-                    {/* , isActive ? 'text-blue-55' : 'text-gray-80' */}
                     <span className={clsx('text-body-small truncate px-2.5')}>{chatroom.title}</span>
                     <span className="mr-2.5 ml-auto flex h-5 w-5 items-center opacity-0 transition-opacity group-hover:opacity-100">
                       <Kebeb className="text-gray-50" />

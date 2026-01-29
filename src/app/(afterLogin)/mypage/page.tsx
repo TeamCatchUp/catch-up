@@ -48,7 +48,7 @@ const Page = () => {
               </div>
               <div className="border-neutral-3 flex gap-6 border-b py-3">
                 <span className="text-gray-70 w-20">직무 / 직군</span>
-                <span className="text-gray-50">user@example.com</span>
+                <span className="text-gray-50">PM</span>
               </div>
               <div className="border-neutral-3 flex gap-6 border-b py-3">
                 <span className="text-gray-70 w-20">직위</span>

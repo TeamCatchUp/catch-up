@@ -103,7 +103,9 @@ const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
       {isLoading ? (
         <div className="text-gray-40 p-5">데이터를 불러오는 중입니다...</div>
       ) : (
-        <SearchHistory querys={recentQueries} isModal={true} />
+        <div className="overflow-y-scroll">
+          <SearchHistory querys={recentQueries} isModal={true} />
+        </div>
       )}
     </div>
   );

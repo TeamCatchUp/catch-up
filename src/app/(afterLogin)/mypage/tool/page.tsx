@@ -1,3 +1,5 @@
+'use client';
+
 import IconJira from '@/public/icons/logo/Jira28.svg';
 import IconAT from '@/public/icons/logo/atlassian.svg';
 import IconRotate from '@/public/icons/icon/rotate.svg';
@@ -8,8 +10,8 @@ import ImgAPItoken1 from '@/public/image/apitoken1.jpg';
 import Image from 'next/image';
 export default function ToolPage() {
   return (
-    <div className="flex items-start gap-6 self-stretch px-16 pt-6">
-      <div className="flex flex-col items-start gap-3">
+    <div className="flex items-start gap-6 self-stretch px-16 pt-6 pb-30">
+      <div className="flex cursor-pointer flex-col items-start gap-3">
         <div className="border-blue-30 bg-whit flex w-[325px] items-center gap-5 rounded-xl border-2 p-4">
           <div className="border-0.5 border-neutral-5 flex h-10.5 w-10.5 shrink-0 flex-col justify-center gap-2.5 rounded-xl px-4 py-[5px]">
             <IconJira />
@@ -27,7 +29,7 @@ export default function ToolPage() {
               <div className="text-heading-medium text-gray-80">API Key</div>
             </div>
             <div className="flex items-center gap-2.5">
-              <button className="text-gray-70 text-body-small box-button-outline-gray flex h-9 min-w-9 items-center justify-center gap-1.5 px-2.5 py-1.5">
+              <button className="text-gray-70 text-body-small box-button-outline-gray flex h-9 min-w-9 cursor-pointer items-center justify-center gap-1.5 px-2.5 py-1.5">
                 <IconRotate className="h-5 w-5" />
                 <div>동기화하기</div>
               </button>
@@ -45,11 +47,11 @@ export default function ToolPage() {
               <div className="flex h-7 items-center gap-12 self-stretch">
                 <div className="text-body-small text-gray-70 flex items-start gap-2">API Key</div>
                 <div className="bg-alpha-black-10 h-5 flex-[1_0_0] rounded-md"></div>
-                <button className="box-button-outline-gray px-1.5 py-1">수정</button>
+                <button className="box-button-outline-gray cursor-pointer px-1.5 py-1">수정</button>
               </div>
               <div className="flex items-center justify-between self-stretch">
                 <div className="text-body-small text-gray-70 flex items-start gap-2">보안 관련 설명</div>
-                <button className="box-button-outline-gray px-1.5 py-1">원문보기</button>
+                <button className="box-button-outline-gray cursor-pointer px-1.5 py-1">원문보기</button>
               </div>
             </div>
           </div>
@@ -70,7 +72,10 @@ export default function ToolPage() {
                   먼저 Atlassian 계정 관리 페이지에 접속하여 로그인합니다.
                 </div>
               </div>
-              <div className="border-neutral-4 flex flex-col items-start gap-2.5 rounded-xl border px-3 py-2">
+              <div
+                onClick={() => window.open('https://id.atlassian.com/manage-profile/profile-and-visibility', '_blank')}
+                className="box-button-outline-gray !border-neutral-4 flex cursor-pointer flex-col items-start gap-2.5 rounded-xl border px-3 py-2"
+              >
                 <div className="flex items-center gap-4">
                   <IconAT />
                   <div className="flex w-[334px] flex-col items-start">
