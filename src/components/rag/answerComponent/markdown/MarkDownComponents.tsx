@@ -51,9 +51,19 @@
 // MarkdownComponents.tsx
 import type { Components } from 'react-markdown';
 import { renderWithBadges } from './renderWithBadges';
+import React from 'react';
+
+const processChildren = (children: any, sources?: ChatSource[]) => {
+  return React.Children.map(children, (child) => {
+    if (typeof child === 'string') {
+      return renderWithBadges(child, sources);
+    }
+    return child;
+  });
+};
 
 export const MarkDownComponents = (sources?: ChatSource[]): Components => {
-  console.log('🎨 MarkDownComponents initialized with sources:', sources);
+  console.log('MarkDownComponents initialized with sources:', sources);
 
   return {
     table: ({ node, ...props }) => (
@@ -68,7 +78,8 @@ export const MarkDownComponents = (sources?: ChatSource[]): Components => {
       if (!isCodeBlock) {
         return (
           <code className={className} {...props}>
-            {children}
+            {/* {children} */}
+            {processChildren(children, sources)}
           </code>
         );
       }
@@ -83,21 +94,39 @@ export const MarkDownComponents = (sources?: ChatSource[]): Components => {
     strong: ({ node, children, ...props }) => {
       return (
         <strong {...props} style={{ fontWeight: 600 }}>
-          {children}
+          {/* {children} */}
+          {processChildren(children, sources)}
         </strong>
       );
     },
 
     p: ({ node, children, ...props }) => {
-      return <p {...props}>{children}</p>;
+      // return <p {...props}>{children}</p>;
+      return <p {...props}>{processChildren(children, sources)}</p>;
     },
 
-    text: ({ children }) => {
-      const value = typeof children === 'string' ? children : String(children ?? '');
-      console.log('📄 Text node:', { value, sourcesAvailable: !!sources });
-      const result = renderWithBadges(value, sources);
-      console.log('✅ Text node result:', result);
-      return <>{result}</>;
+    // text: ({ children }) => {
+    //   const value = typeof children === 'string' ? children : String(children ?? '');
+    //   console.log('Text node:', { value, sourcesAvailable: !!sources });
+    //   const result = renderWithBadges(value, sources);
+    //   console.log('Text node result:', result);
+    //   return <>{result}</>;
+    // },
+
+    li: ({ node, children, ...props }) => {
+      return <li {...props}>{processChildren(children, sources)}</li>;
+    },
+
+    h1: ({ node, children, ...props }) => {
+      return <h1 {...props}>{processChildren(children, sources)}</h1>;
+    },
+
+    h2: ({ node, children, ...props }) => {
+      return <h2 {...props}>{processChildren(children, sources)}</h2>;
+    },
+
+    h3: ({ node, children, ...props }) => {
+      return <h3 {...props}>{processChildren(children, sources)}</h3>;
     },
   };
 };
