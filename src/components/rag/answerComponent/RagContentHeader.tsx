@@ -11,7 +11,11 @@ import Kebeb from '/public/icons/icon/kebeb 2.svg';
 import CatchAssistantModal from '@/components/rag/modal/CatchAssistantModal';
 import QuestionsListModal from '@/components/rag/modal/QuestionsListInSessionModal';
 
-const RagHeader = () => {
+interface RagHeaderProps {
+  title: string;
+}
+
+const RagHeader = ({ title }: RagHeaderProps) => {
   const [isCatchModalOpen, setIsCatchModalOpen] = useState(false);
   const [isQuestionsListOpen, setIsQuestionsListOpen] = useState(false);
   const router = useRouter();
@@ -55,7 +59,7 @@ const RagHeader = () => {
               isQuestionsListOpen && 'bg-neutral-3 rounded-xl',
             )}
           >
-            현재페이지현재페이지현재페이지
+            {title}
           </button>
           {/* 대화 내 질문 목록 모달 */}
           {isQuestionsListOpen && (

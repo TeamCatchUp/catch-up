@@ -414,7 +414,6 @@ export default function Page() {
     };
 
     setChatData(initialData);
-
     try {
       await connectSSEAndSendQuery(query, indexList);
     } catch (err) {
@@ -595,7 +594,7 @@ export default function Page() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-white">
       <div className="flex min-w-0 flex-1 flex-col">
-        <RagContentHeader />
+        <RagContentHeader title={chatData.title} />
 
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
           <div
