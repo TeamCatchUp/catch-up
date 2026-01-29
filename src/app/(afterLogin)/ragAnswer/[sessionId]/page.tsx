@@ -2,6 +2,7 @@
 
 import clsx from 'clsx';
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -35,8 +36,7 @@ import TeamSpaceModal from '@/components/rag/modal/TeamSpaceModal';
 import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
 import { MarkDownComponents } from '@/components/rag/answerComponent/markdown/MarkDownComponents';
 
-import { useParams, useSearchParams } from 'next/navigation';
-import { createSSEConnection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
+import { createSSEConnection, sendChatQuery, resumeChatQuery } from '@/util/sendChatQuery';
 import { normalizeSources } from '@/util/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/util/normalizeRelatedJiraIssues';
 
@@ -121,24 +121,6 @@ export default function Page() {
     return withSpacing.trimEnd();
   };
 
-  // MD 렌더 전 토큰 치환 (for 출처 연계)
-  const renderWithBadges = (text: string): React.ReactNode => {
-    const parts = text.split(/(\[\d+\])/g);
-
-    return parts.map((part, i) => {
-      const match = part.match(/^\[(\d+)\]$/);
-      if (match) {
-        const num = match[1];
-        return (
-          <span key={i} className="">
-            {num}
-          </span>
-        );
-      }
-      return part;
-    });
-  };
-
   // SSE 연결 종료 함수
   const closeSSEConnection = useCallback(() => {
     if (sseRef.current) {
@@ -167,7 +149,12 @@ export default function Page() {
   };
 
   const appendAssistantAnswer = useCallback(
-    (answer: string, sources: BackendSource[] = [], relatedJiraIssues: BackendSource[] = []) => {
+    (
+      answer: string,
+      sources: BackendSource[] = [],
+      relatedJiraIssues: BackendSource[] = [],
+      chatHistoryId?: string,
+    ) => {
       setChatData((prev) => {
         if (!prev) return prev;
 
@@ -188,6 +175,7 @@ export default function Page() {
           sources: uiSources,
           detailedTasks,
           timestamp: new Date().toISOString(),
+          chatHistoryId,
         };
 
         const finalData: ChatData = {
@@ -250,6 +238,7 @@ export default function Page() {
             hasResponse: !!data.response,
             answer: data.response?.answer,
             sourcesCount: data.response?.sources?.length,
+            chatHistoryId: data.response?.chatHistoryId,
           });
 
           const response = data.response;
@@ -263,7 +252,7 @@ export default function Page() {
 
           const related = data.relatedJiraIssues ?? [];
 
-          appendAssistantAnswer(response.answer, response.sources || [], related);
+          appendAssistantAnswer(response.answer, response.sources || [], related, response.chatHistoryId);
 
           closeSSEConnection();
           break;
@@ -786,6 +775,7 @@ export default function Page() {
                         {feedbackVisibleMap[msg.id] && (
                           <FeedbackSection
                             messageId={msg.id}
+                            chatHistoryId={msg.chatHistoryId}
                             feedbackVisibleMap={feedbackVisibleMap}
                             setFeedbackVisibleMap={setFeedbackVisibleMap}
                             feedbackSubmittedMap={feedbackSubmittedMap}

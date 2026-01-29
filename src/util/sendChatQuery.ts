@@ -1,4 +1,4 @@
-import api from 'src/api/axios';
+import api from '@/api/axios';
 
 // SSE 연결 생성
 export const createSSEConnection = (
