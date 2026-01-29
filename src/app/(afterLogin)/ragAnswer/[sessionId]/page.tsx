@@ -615,26 +615,9 @@ export default function Page() {
         return;
       }
 
-      // 답변 영역 스크롤 체크
-      if (answerScrollRef.current) {
-        const { scrollTop, scrollHeight, clientHeight } = answerScrollRef.current;
-        const isScrollable = scrollHeight > clientHeight;
-
-        // 스크롤 가능한 경우
-        if (isScrollable) {
-          // 답변 영역 내부에서 발생한 이벤트인지 체크
-          const isInsideAnswer = answerScrollRef.current.contains(e.target as Node);
-
-          if (isInsideAnswer) {
-            // 스크롤 경계 체크 (여유를 5px로 증가)
-            const isAtTop = scrollTop <= 5;
-            const isAtBottom = scrollTop + clientHeight >= scrollHeight - 5;
-
-            // 경계가 아니면 페이지 전환 차단
-            if (e.deltaY > 0 && !isAtBottom) return;
-            if (e.deltaY < 0 && !isAtTop) return;
-          }
-        }
+      // 답변 영역 내부에서 발생한 스크롤이면 무조건 페이지 전환 차단
+      if (answerScrollRef.current && answerScrollRef.current.contains(e.target as Node)) {
+        return;
       }
 
       // 페이지 전환 (스크롤 방향: 위로 올리면(deltaY < 0) 다음/최신 질문, 아래로 내리면(deltaY > 0) 이전 질문)
@@ -652,24 +635,15 @@ export default function Page() {
         }
 
         setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
-        // setTimeout(() => {
-        //   setCurrentPage((prev) => Math.min(prev + 1, qaPairs.length - 1));
-        //   setSlideDirection(null);
-
-        //   // 스크롤 잠금 해제
-        //   scrollTimeout.current = setTimeout(() => {
-        //     isScrolling.current = false;
-        //   }, 500);
-        // }, 300);
         setTimeout(() => {
           setCurrentPage((prev) => Math.min(prev + 1, qaPairs.length - 1));
           setSlideDirection(null);
         }, 300);
 
-        // 800ms 후 잠금 해제
+        // 1초 후 잠금 해제
         scrollTimeout.current = setTimeout(() => {
           isScrolling.current = false;
-        }, 800);
+        }, 1000);
       }
 
       // 아래로 스크롤 (이전 질문으로)
@@ -700,10 +674,10 @@ export default function Page() {
           setSlideDirection(null);
         }, 300);
 
-        // 800ms 후 잠금 해제
+        // 1초 후 잠금 해제
         scrollTimeout.current = setTimeout(() => {
           isScrolling.current = false;
-        }, 800);
+        }, 1000);
       }
     },
     [currentPage, qaPairs.length, isLoading],
