@@ -39,6 +39,7 @@ interface Message {
   sources?: ChatSource[];
   detailedTasks?: JiraTask[];
   timestamp: string;
+  hasFeeedback?: boolean;
 }
 
 interface ChatData {

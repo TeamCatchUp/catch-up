@@ -23,11 +23,9 @@ const THANKS_MESSAGE_DURATION = 3000;
 const FeedbackSection = ({
   messageId,
   chatHistoryId,
-  feedbackId,
+  hasFeedback,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
-  feedbackSubmittedMap,
-  setFeedbackSubmittedMap,
 }: FeedbackSectionProps) => {
   const feedbackRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
@@ -91,26 +89,12 @@ const FeedbackSection = ({
     }
   }, [feedbackVisibleMap[messageId], messageId]);
 
-  // feedbackId가 있으면 (이미 제출된 피드백) 자동으로 감사 메시지 표시 후 닫기
+  // 피드백 제출 완 -> 자동 감사 UI
   useEffect(() => {
-    if (feedbackId && feedbackVisibleMap[messageId] && !feedbackSubmittedMap[messageId]) {
-      setFeedbackSubmittedMap((prev) => ({ ...prev, [messageId]: true }));
+    if (hasFeedback && feedbackVisibleMap[messageId]) {
       setShowThanks(true);
-
-      // 3초 후 자동으로 닫기
-      setTimeout(() => {
-        setShowThanks(false);
-        setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
-      }, THANKS_MESSAGE_DURATION);
     }
-  }, [
-    feedbackId,
-    feedbackVisibleMap[messageId],
-    messageId,
-    feedbackSubmittedMap,
-    setFeedbackSubmittedMap,
-    setFeedbackVisibleMap,
-  ]);
+  }, [hasFeedback, feedbackVisibleMap[messageId]]);
 
   const closeSection = useCallback(() => {
     setIsDetailOpen(false);
@@ -129,7 +113,6 @@ const FeedbackSection = ({
     async (selectedContent?: string) => {
       if (!chatHistoryId) {
         console.warn('[feedback] chatHistoryId missing');
-        setFeedbackSubmittedMap((prev) => ({ ...prev, [messageId]: true }));
         setShowThanks(true);
         afterSuccessClose();
         return;
@@ -160,7 +143,6 @@ const FeedbackSection = ({
           detail,
         });
 
-        setFeedbackSubmittedMap((prev) => ({ ...prev, [messageId]: true }));
         setShowThanks(true);
         afterSuccessClose();
       } catch (e) {
@@ -170,15 +152,13 @@ const FeedbackSection = ({
         setIsSubmitting(false);
       }
     },
-    [chatHistoryId, detailText, isDetailOpen, isSubmitting, messageId, setFeedbackSubmittedMap, afterSuccessClose],
+    [chatHistoryId, detailText, isDetailOpen, isSubmitting, afterSuccessClose],
   );
 
   if (!feedbackVisibleMap[messageId]) return null;
 
-  const hasSubmitted = !!feedbackSubmittedMap[messageId];
-
   // 이미 피드백 제출 / 방금 제출 -> 감사 UI
-  if (hasSubmitted || showThanks) {
+  if (hasFeedback || showThanks) {
     return (
       <div ref={feedbackRef} className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4">
         <div className="text-body-small flex items-center justify-center text-gray-50">피드백을 주셔서 감사합니다!</div>
@@ -259,7 +239,7 @@ const FeedbackSection = ({
               detailText.trim() ? 'cursor-pointer' : '',
             )}
           >
-            <span className="text-body-small relative top-px">제출</span>
+            <span className="text-body-small">제출</span>
           </button>
         </div>
       )}
