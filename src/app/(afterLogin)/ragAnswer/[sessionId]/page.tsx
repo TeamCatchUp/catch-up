@@ -654,7 +654,7 @@ export default function Page() {
       // 페이지 전환
       // 스크롤 방향: 위로 올리면(deltaY < 0) 다음/최신 질문, 아래로 내리면(deltaY > 0) 이전 질문
       // 다음 질문
-      if (e.deltaY > 0 && currentPage < qaPairs.length - 1) {
+      if (e.deltaY < 0 && currentPage < qaPairs.length - 1) {
         e.preventDefault();
         isScrolling.current = true;
 
