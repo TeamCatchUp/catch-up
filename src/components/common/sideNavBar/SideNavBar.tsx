@@ -290,7 +290,7 @@ const SideNavBar = () => {
                     isTeamDropDownModalOpen ? 'bg-neutral-3' : 'bg-neutral-2 group-hover:bg-neutral-3',
                   )}
                 >
-                  팀
+                  {selectedTeamSpace.name.trim().charAt(0)}
                 </div>
                 <div className="absolute bottom-4.75 left-4.5">
                   <Necessary className="h-2 w-2" />
