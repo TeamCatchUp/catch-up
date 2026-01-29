@@ -635,21 +635,26 @@ export default function Page() {
         return;
       }
 
-      // 답변 영역 내부 스크롤 중이면 페이지 전환 방지
-      if (answerScrollRef.current) {
-        const { scrollTop, scrollHeight, clientHeight } = answerScrollRef.current;
-        const isScrollable = scrollHeight > clientHeight;
-
-        if (isScrollable) {
-          const isAtTop = scrollTop <= 1; // 오차 범위 허용
-          const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
-
-          // 위로 스크롤 시도 & 스크롤 최상단이 아니면 페이지 전환 방지
-          if (e.deltaY < 0 && !isAtTop) return;
-          // 아래로 스크롤 시도 & 스크롤 최하단이 아니면 페이지 전환 방지
-          if (e.deltaY > 0 && !isAtBottom) return;
-        }
+      // 답변 영역 내부에서 발생한 스크롤이면 페이지 전환 차단
+      if (answerScrollRef.current && answerScrollRef.current.contains(e.target as Node)) {
+        return;
       }
+
+      // // 답변 영역 내부 스크롤 중이면 페이지 전환 방지
+      // if (answerScrollRef.current) {
+      //   const { scrollTop, scrollHeight, clientHeight } = answerScrollRef.current;
+      //   const isScrollable = scrollHeight > clientHeight;
+
+      //   if (isScrollable) {
+      //     const isAtTop = scrollTop <= 1; // 오차 범위 허용
+      //     const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+      //     // 위로 스크롤 시도 & 스크롤 최상단이 아니면 페이지 전환 방지
+      //     if (e.deltaY < 0 && !isAtTop) return;
+      //     // 아래로 스크롤 시도 & 스크롤 최하단이 아니면 페이지 전환 방지
+      //     if (e.deltaY > 0 && !isAtBottom) return;
+      //   }
+      // }
 
       // 페이지 전환
       // 스크롤 방향: 위로 올리면(deltaY < 0) 다음/최신 질문, 아래로 내리면(deltaY > 0) 이전 질문
