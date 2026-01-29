@@ -36,11 +36,11 @@ const FeedbackSection = ({
   const [detailText, setDetailText] = useState('');
   const [showThanks, setShowThanks] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [localHasFeedback, setLocalHasFeeback] = useState(hasFeedback);
+  const [localHasFeedback, setLocalHasFeedback] = useState(hasFeedback);
 
   // hasFeedback prop 변경 되면 로컬 상태도 업데이트
   useEffect(() => {
-    setLocalHasFeeback(hasFeedback);
+    setLocalHasFeedback(hasFeedback);
   }, [hasFeedback]);
 
   // textarea 자동 높이 조절
@@ -98,10 +98,16 @@ const FeedbackSection = ({
 
   // 피드백 제출 완 -> 자동 감사 UI
   useEffect(() => {
-    if (hasFeedback && feedbackVisibleMap[messageId]) {
-      setShowThanks(true);
+    if (!feedbackVisibleMap[messageId]) return;
+
+    if (hasFeedback) {
+      const timer = setTimeout(() => {
+        setShowThanks(true);
+      }, THANKS_MESSAGE_DURATION);
+
+      return () => clearTimeout(timer);
     }
-  }, [hasFeedback, feedbackVisibleMap[messageId]]);
+  }, [hasFeedback, feedbackVisibleMap, messageId]);
 
   const closeSection = useCallback(() => {
     setIsDetailOpen(false);
@@ -120,7 +126,7 @@ const FeedbackSection = ({
     async (selectedContent?: string) => {
       if (!chatHistoryId) {
         console.warn('[feedback] chatHistoryId missing');
-        setLocalHasFeeback(true);
+        setLocalHasFeedback(true);
         setShowThanks(true);
         afterSuccessClose();
         return;
@@ -151,18 +157,32 @@ const FeedbackSection = ({
           detail,
         });
 
-        setLocalHasFeeback(true);
-        setShowThanks(true);
+        setLocalHasFeedback(true);
 
         // 부모 컴포넌트에 알림
         if (onFeedbackSubmitted) {
           onFeedbackSubmitted(messageId);
         }
 
+        setShowThanks(true);
         afterSuccessClose();
       } catch (e) {
         console.error('[feedback] submit failed', e);
-        // 실패 시 유지 (사용자가 다시 누를 수 있게)
+        // 실패 시에도 이미 제출된 경우라면 감사 메시지 표시
+        const error = e as any;
+        if (error?.response?.status === 500) {
+          // 500 에러 = 이미 제출된 피드백
+          console.warn('[feedback] Already submitted, showing thanks message');
+          setLocalHasFeedback(true);
+
+          if (onFeedbackSubmitted) {
+            onFeedbackSubmitted(messageId);
+          }
+
+          setShowThanks(true);
+          afterSuccessClose();
+        }
+        // 그 외 에러는 사용자가 다시 시도할 수 있도록 유지
       } finally {
         setIsSubmitting(false);
       }
