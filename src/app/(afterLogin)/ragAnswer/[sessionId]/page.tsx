@@ -969,16 +969,16 @@ export default function Page() {
                               setFeedbackVisibleMap={setFeedbackVisibleMap}
                             />
 
-                            {feedbackVisibleMap[currentQA.answer.id] && (
-                              <FeedbackSection
-                                messageId={currentQA.answer.id}
-                                chatHistoryId={currentQA.answer.chatHistoryId}
-                                hasFeedback={currentQA.answer.hasFeedback}
-                                feedbackVisibleMap={feedbackVisibleMap}
-                                setFeedbackVisibleMap={setFeedbackVisibleMap}
-                                onFeedbackSubmitted={handleFeedbackSubmitted}
-                              />
-                            )}
+                            {/* {feedbackVisibleMap[currentQA.answer.id] && ( */}
+                            <FeedbackSection
+                              messageId={currentQA.answer.id}
+                              chatHistoryId={currentQA.answer.chatHistoryId}
+                              hasFeedback={currentQA.answer.hasFeedback}
+                              feedbackVisibleMap={feedbackVisibleMap}
+                              setFeedbackVisibleMap={setFeedbackVisibleMap}
+                              onFeedbackSubmitted={handleFeedbackSubmitted}
+                            />
+                            {/* )} */}
                           </>
                         ) : (
                           <ErrorResponse
