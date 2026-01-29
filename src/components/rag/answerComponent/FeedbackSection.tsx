@@ -18,10 +18,12 @@ const feedback = [
 
 const DETAIL_ID = 8;
 const TEXTAREA_MAX_HEIGHT = 114;
+const THANKS_MESSAGE_DURATION = 3000;
 
 const FeedbackSection = ({
   messageId,
   chatHistoryId,
+  feedbackId,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
   feedbackSubmittedMap,
@@ -89,6 +91,27 @@ const FeedbackSection = ({
     }
   }, [feedbackVisibleMap[messageId], messageId]);
 
+  // feedbackId가 있으면 (이미 제출된 피드백) 자동으로 감사 메시지 표시 후 닫기
+  useEffect(() => {
+    if (feedbackId && feedbackVisibleMap[messageId] && !feedbackSubmittedMap[messageId]) {
+      setFeedbackSubmittedMap((prev) => ({ ...prev, [messageId]: true }));
+      setShowThanks(true);
+
+      // 3초 후 자동으로 닫기
+      setTimeout(() => {
+        setShowThanks(false);
+        setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
+      }, THANKS_MESSAGE_DURATION);
+    }
+  }, [
+    feedbackId,
+    feedbackVisibleMap[messageId],
+    messageId,
+    feedbackSubmittedMap,
+    setFeedbackSubmittedMap,
+    setFeedbackVisibleMap,
+  ]);
+
   const closeSection = useCallback(() => {
     setIsDetailOpen(false);
     setDetailText('');
@@ -99,7 +122,7 @@ const FeedbackSection = ({
     setTimeout(() => {
       setShowThanks(false);
       setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
-    }, 3000);
+    }, THANKS_MESSAGE_DURATION);
   }, [messageId, setFeedbackVisibleMap]);
 
   const submitFeedback = useCallback(
@@ -142,12 +165,12 @@ const FeedbackSection = ({
         afterSuccessClose();
       } catch (e) {
         console.error('[feedback] submit failed', e);
-        // 실패 시는 유지 (사용자가 다시 누를 수 있게)
+        // 실패 시 유지 (사용자가 다시 누를 수 있게)
       } finally {
         setIsSubmitting(false);
       }
     },
-    [chatHistoryId, detailText, isSubmitting, messageId, setFeedbackSubmittedMap, afterSuccessClose],
+    [chatHistoryId, detailText, isDetailOpen, isSubmitting, messageId, setFeedbackSubmittedMap, afterSuccessClose],
   );
 
   if (!feedbackVisibleMap[messageId]) return null;
@@ -229,7 +252,7 @@ const FeedbackSection = ({
             rows={1}
           />
           <button
-            disabled={!detailText.trim()}
+            disabled={!detailText.trim() || isSubmitting}
             onClick={() => submitFeedback()}
             className={clsx(
               'capsule-button-solid-primary h-9 w-12.5 items-end self-end px-3 py-1.5',

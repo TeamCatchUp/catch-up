@@ -22,6 +22,7 @@ interface ErrorResponseProps {
 interface FeedbackSectionProps {
   messageId: string;
   chatHistoryId?: string;
+  feedbackId?: string;
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   feedbackSubmittedMap: Record<string, boolean>;
