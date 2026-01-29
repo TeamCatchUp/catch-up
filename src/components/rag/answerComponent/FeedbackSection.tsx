@@ -115,24 +115,22 @@ const FeedbackSection = ({
     setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
   }, [messageId, setFeedbackVisibleMap]);
 
-  const afterSuccessClose = useCallback(() => {
-    setTimeout(() => {
-      setShowThanks(false);
-      setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
-    }, THANKS_MESSAGE_DURATION);
-  }, [messageId, setFeedbackVisibleMap]);
-
   const submitFeedback = useCallback(
     async (selectedContent?: string) => {
       if (!chatHistoryId) {
         console.warn('[feedback] chatHistoryId missing');
         setLocalHasFeedback(true);
         setShowThanks(true);
-        afterSuccessClose();
+
+        setTimeout(() => {
+          setShowThanks(false);
+          setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
+        }, THANKS_MESSAGE_DURATION);
+
         return;
       }
 
-      if (isSubmitting) return;
+      if (isSubmitting || localHasFeedback) return;
 
       const isDetail = isDetailOpen;
 
@@ -165,7 +163,11 @@ const FeedbackSection = ({
         }
 
         setShowThanks(true);
-        afterSuccessClose();
+
+        setTimeout(() => {
+          setShowThanks(false);
+          setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
+        }, THANKS_MESSAGE_DURATION);
       } catch (e) {
         console.error('[feedback] submit failed', e);
         // 실패 시에도 이미 제출된 경우라면 감사 메시지 표시
@@ -180,14 +182,27 @@ const FeedbackSection = ({
           }
 
           setShowThanks(true);
-          afterSuccessClose();
+
+          setTimeout(() => {
+            setShowThanks(false);
+            setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
+          }, THANKS_MESSAGE_DURATION);
         }
         // 그 외 에러는 사용자가 다시 시도할 수 있도록 유지
       } finally {
         setIsSubmitting(false);
       }
     },
-    [chatHistoryId, detailText, isDetailOpen, isSubmitting, afterSuccessClose, onFeedbackSubmitted, messageId],
+    [
+      chatHistoryId,
+      detailText,
+      isDetailOpen,
+      isSubmitting,
+      localHasFeedback,
+      onFeedbackSubmitted,
+      messageId,
+      setFeedbackVisibleMap,
+    ],
   );
 
   if (!feedbackVisibleMap[messageId]) return null;

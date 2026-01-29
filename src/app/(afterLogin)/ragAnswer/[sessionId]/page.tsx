@@ -361,11 +361,17 @@ export default function Page() {
     }
   }, [qaPairs.length, currentPage]);
 
+  // 페이지 전환 시 모든 피드백 섹션 닫기
+  useEffect(() => {
+    setFeedbackVisibleMap({});
+  }, [currentPage]);
+
   // 답변 영역 스크롤 초기화 (답변 변경 시)
   useEffect(() => {
     if (answerScrollRef.current) {
       answerScrollRef.current.scrollTop = 0;
     }
+    setFeedbackVisibleMap({});
   }, [currentPage]);
 
   // 초기 데이터 로드
