@@ -6,7 +6,7 @@ const SourceBadge = ({ n, sourceType }: { n: string; sourceType: SourceType }) =
   return (
     <span
       className={clsx(
-        'mx-px h-6 w-6.5 items-center justify-center rounded-full px-2 py-1 whitespace-nowrap',
+        'mr-px h-6 w-6.5 items-center justify-center rounded-full px-2 py-1 whitespace-nowrap',
         sourceType === 'jira' ? 'bg-green-10' : 'bg-blue-5',
       )}
     >
