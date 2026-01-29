@@ -699,6 +699,30 @@ export default function Page() {
     [currentPage, qaPairs.length, isLoading],
   );
 
+  // 피드백 제출 후 Message의 hasFeedback 업데이트
+  const handleFeedbackSubmitted = useCallback(
+    (messageId: string) => {
+      setChatData((prev) => {
+        if (!prev) return prev;
+
+        const updatedMessages = prev.messages.map((msg) =>
+          msg.id === messageId ? { ...msg, hasFeedback: true } : msg,
+        );
+
+        const updatedData: ChatData = {
+          ...prev,
+          messages: updatedMessages,
+        };
+
+        // localStorage에도 저장
+        localStorage.setItem(`chat_${sessionId}`, JSON.stringify(updatedData));
+
+        return updatedData;
+      });
+    },
+    [sessionId],
+  );
+
   useEffect(() => {
     const container = scrollRef.current;
     if (container) {

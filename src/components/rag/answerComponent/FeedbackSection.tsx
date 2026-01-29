@@ -26,6 +26,7 @@ const FeedbackSection = ({
   hasFeedback,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
+  onFeedbackSubmitted,
 }: FeedbackSectionProps) => {
   const feedbackRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
@@ -35,6 +36,12 @@ const FeedbackSection = ({
   const [detailText, setDetailText] = useState('');
   const [showThanks, setShowThanks] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [localHasFeedback, setLocalHasFeeback] = useState(hasFeedback);
+
+  // hasFeedback prop 변경 되면 로컬 상태도 업데이트
+  useEffect(() => {
+    setLocalHasFeeback(hasFeedback);
+  }, [hasFeedback]);
 
   // textarea 자동 높이 조절
   const resizeTextarea = useCallback(() => {
@@ -113,6 +120,7 @@ const FeedbackSection = ({
     async (selectedContent?: string) => {
       if (!chatHistoryId) {
         console.warn('[feedback] chatHistoryId missing');
+        setLocalHasFeeback(true);
         setShowThanks(true);
         afterSuccessClose();
         return;
@@ -143,7 +151,14 @@ const FeedbackSection = ({
           detail,
         });
 
+        setLocalHasFeeback(true);
         setShowThanks(true);
+
+        // 부모 컴포넌트에 알림
+        if (onFeedbackSubmitted) {
+          onFeedbackSubmitted(messageId);
+        }
+
         afterSuccessClose();
       } catch (e) {
         console.error('[feedback] submit failed', e);
@@ -152,13 +167,13 @@ const FeedbackSection = ({
         setIsSubmitting(false);
       }
     },
-    [chatHistoryId, detailText, isDetailOpen, isSubmitting, afterSuccessClose],
+    [chatHistoryId, detailText, isDetailOpen, isSubmitting, afterSuccessClose, onFeedbackSubmitted, messageId],
   );
 
   if (!feedbackVisibleMap[messageId]) return null;
 
   // 이미 피드백 제출 / 방금 제출 -> 감사 UI
-  if (hasFeedback || showThanks) {
+  if (localHasFeedback || showThanks) {
     return (
       <div ref={feedbackRef} className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4">
         <div className="text-body-small flex items-center justify-center text-gray-50">피드백을 주셔서 감사합니다!</div>
