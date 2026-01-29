@@ -955,6 +955,7 @@ export default function Page() {
                                 hasFeedback={currentQA.answer.hasFeedback}
                                 feedbackVisibleMap={feedbackVisibleMap}
                                 setFeedbackVisibleMap={setFeedbackVisibleMap}
+                                onFeedbackSubmitted={handleFeedbackSubmitted}
                               />
                             )}
                           </>
