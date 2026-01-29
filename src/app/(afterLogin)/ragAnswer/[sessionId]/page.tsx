@@ -650,7 +650,7 @@ export default function Page() {
           // 스크롤 잠금 해제 (1초 후)
           scrollTimeout.current = setTimeout(() => {
             isScrolling.current = false;
-          }, 1000);
+          }, 500);
         }, 300);
       }
 
@@ -672,7 +672,7 @@ export default function Page() {
           // 스크롤 잠금 해제 (1초 후)
           scrollTimeout.current = setTimeout(() => {
             isScrolling.current = false;
-          }, 1000);
+          }, 500);
         }, 300);
       }
     },
