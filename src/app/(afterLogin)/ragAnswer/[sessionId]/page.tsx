@@ -166,16 +166,6 @@ export default function Page() {
     setCurrentStep('router');
   }, []);
 
-  // content='' (error response) -> new 쿼리 생성 시 질문 기록만 남김
-  // const stripTrailingErrorAssistant = (messages: Message[]) => {
-  //   const last = messages[messages.length - 1];
-
-  //   if (last?.role === 'assistant' && (last.content ?? '') === '') {
-  //     return messages.slice(0, -1);
-  //   }
-  //   return messages;
-  // };
-
   const appendAssistantAnswer = useCallback(
     (
       answer: string,
@@ -355,17 +345,6 @@ export default function Page() {
     },
     [sessionId, handleSSEMessage, closeSSEConnection],
   );
-
-  // 자동 하단 스크롤
-  // useEffect(() => {
-  //   if (scrollRef.current) {
-  //     const { scrollHeight, clientHeight } = scrollRef.current;
-  //     scrollRef.current.scrollTo({
-  //       top: scrollHeight - clientHeight,
-  //       behavior: 'smooth',
-  //     });
-  //   }
-  // }, [chatData?.messages, isLoading, showPRSelection, currentStep]);
 
   // currentPage 유효성 검증 (qaPairs 길이 변경 시)
   useEffect(() => {
@@ -635,26 +614,6 @@ export default function Page() {
         return;
       }
 
-      // // 답변 영역 내부에서 발생한 스크롤이면 페이지 전환 차단
-      // if (answerScrollRef.current && answerScrollRef.current.contains(e.target as Node)) {
-      //   return;
-      // }
-
-      // // 답변 영역 내부 스크롤 중이면 페이지 전환 방지
-      // if (answerScrollRef.current) {
-      //   const { scrollTop, scrollHeight, clientHeight } = answerScrollRef.current;
-      //   const isScrollable = scrollHeight > clientHeight;
-
-      //   if (isScrollable) {
-      //     const isAtTop = scrollTop <= 1; // 오차 범위 허용
-      //     const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
-
-      //     // 위로 스크롤 시도 & 스크롤 최상단이 아니면 페이지 전환 방지
-      //     if (e.deltaY < 0 && !isAtTop) return;
-      //     // 아래로 스크롤 시도 & 스크롤 최하단이 아니면 페이지 전환 방지
-      //     if (e.deltaY > 0 && !isAtBottom) return;
-      //   }
-      // }
       // 답변 영역이 스크롤 가능한 경우만 내부 스크롤 체크
       if (answerScrollRef.current) {
         const { scrollTop, scrollHeight, clientHeight } = answerScrollRef.current;
@@ -742,9 +701,11 @@ export default function Page() {
     return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
   }
 
-  const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
-  const currentSources = lastAssistantMessage?.sources || [];
-  const currentDetailedTasks = lastAssistantMessage?.detailedTasks || [];
+  // const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
+  // const currentSources = lastAssistantMessage?.sources || [];
+  // const currentDetailedTasks = lastAssistantMessage?.detailedTasks || [];
+  const currentSources = currentQA?.answer?.sources || [];
+  const currentDetailedTasks = currentQA?.answer?.detailedTasks || [];
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-white">
@@ -756,8 +717,7 @@ export default function Page() {
             ref={scrollRef}
             className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
           >
-            {/* mb-8 위에 데모데이용으로 지움 */}
-            <div className="flex w-192.75 items-center justify-center gap-4">
+            <div className="mb-8 flex w-192.75 items-center justify-center gap-4">
               <div className="border-neutral-4 flex-1 border-t" />
               <span className="text-body-xsmall px-1.5 py-1 text-gray-50">
                 {month}.{day}
@@ -786,18 +746,21 @@ export default function Page() {
                     ) : (
                       <div className="group relative max-w-full">
                         <span className="text-heading-xlarge text-gray-70 mr-5">{currentQA.question.content}</span>
-                        <button
-                          onClick={() => setEditingMessageId(currentQA.question.id)}
-                          className={clsx(
-                            'border-neutral-3 box-button-outline-gray',
-                            'hidden',
-                            'group-hover:inline-flex',
-                            'translate-y-1 cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1',
-                          )}
-                        >
-                          <EditPencil className="text-gray-70 h-5 w-5" />
-                          <span className="text-body-xsmall text-gray-80 whitespace-nowrap">수정하기</span>
-                        </button>
+                        {/* 마지막 질문(페이지)일 때만 수정 버튼 표시 */}
+                        {currentPage === qaPairs.length - 1 && (
+                          <button
+                            onClick={() => setEditingMessageId(currentQA.question.id)}
+                            className={clsx(
+                              'border-neutral-3 box-button-outline-gray',
+                              'hidden',
+                              'group-hover:inline-flex',
+                              'translate-y-1 cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1',
+                            )}
+                          >
+                            <EditPencil className="text-gray-70 h-5 w-5" />
+                            <span className="text-body-xsmall text-gray-80 whitespace-nowrap">수정하기</span>
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
