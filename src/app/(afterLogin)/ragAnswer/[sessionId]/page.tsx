@@ -641,7 +641,7 @@ export default function Page() {
         const isScrollable = scrollHeight > clientHeight;
 
         if (isScrollable) {
-          const isAtTop = scrollTop === 0;
+          const isAtTop = scrollTop <= 1; // 오차 범위 허용
           const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
 
           // 위로 스크롤 시도 & 스크롤 최상단이 아니면 페이지 전환 방지
@@ -697,10 +697,10 @@ export default function Page() {
         }, 300);
       }
 
-      // 경계 조건: 최신 질문에서 위로 스크롤 시도 또는 첫 질문에서 아래로 스크롤 시도
-      else if ((e.deltaY < 0 && currentPage >= qaPairs.length - 1) || (e.deltaY > 0 && currentPage <= 0)) {
-        e.preventDefault(); // 스크롤 이벤트 무시
-      }
+      // // 경계 조건: 최신 질문에서 위로 스크롤 시도 또는 첫 질문에서 아래로 스크롤 시도
+      // else if ((e.deltaY < 0 && currentPage >= qaPairs.length - 1) || (e.deltaY > 0 && currentPage <= 0)) {
+      //   e.preventDefault(); // 스크롤 이벤트 무시
+      // }
     },
     [currentPage, qaPairs.length, isLoading],
   );
