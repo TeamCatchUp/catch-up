@@ -750,12 +750,13 @@ export default function Page() {
     <div className="flex h-screen w-full overflow-hidden bg-white">
       <div className="flex min-w-0 flex-1 flex-col">
         <RagContentHeader title={chatData.title} />
-
+        {/* 여기 gap도 */}
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
           <div
             ref={scrollRef}
-            className="mb-8 flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
+            className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
           >
+            {/* mb-8 위에 데모데이용으로 지움 */}
             <div className="flex w-192.75 items-center justify-center gap-4">
               <div className="border-neutral-4 flex-1 border-t" />
               <span className="text-body-xsmall px-1.5 py-1 text-gray-50">
@@ -995,7 +996,7 @@ export default function Page() {
 
             {/* 페이지 인디케이터 */}
             {qaPairs.length > 1 && (
-              <div className="mt-7 flex items-center gap-2">
+              <div className="mt-10 flex items-center gap-2">
                 {qaPairs.map((_, idx) => (
                   <button
                     key={idx}
