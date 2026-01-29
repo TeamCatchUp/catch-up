@@ -279,7 +279,7 @@ const FeedbackSection = ({
         className={clsx(
           'border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4',
           'transition-all duration-200 ease-out will-change-[transform,opacity]',
-          entered ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
+          entered ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0',
         )}
       >
         <div className="text-body-small flex items-center justify-center text-gray-50">피드백을 주셔서 감사합니다!</div>
