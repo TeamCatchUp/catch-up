@@ -110,17 +110,27 @@ const FeedbackSection = ({
     }
   }, [feedbackVisibleMap[messageId]]);
 
-  // 더 자세히 모달 open 시 해당 요소로 하단 스크롤
+  // // 더 자세히 모달 open 시 해당 요소로 하단 스크롤
+  // useEffect(() => {
+  //   if (isDetailOpen && detailRef.current) {
+  //     setTimeout(() => {
+  //       detailRef.current?.scrollIntoView({
+  //         behavior: 'smooth',
+  //         block: 'end',
+  //       });
+  //     }, 100);
+  //   }
+  // }, [isDetailOpen]);
   useEffect(() => {
-    if (isDetailOpen && detailRef.current) {
+    if (detailMounted && detailEntered && detailRef.current) {
       setTimeout(() => {
         detailRef.current?.scrollIntoView({
           behavior: 'smooth',
           block: 'end',
         });
-      }, 100);
+      }, DETAIL_ANIM_MS + 50); // 애니메이션 완료(200ms) 후 스크롤
     }
-  }, [isDetailOpen]);
+  }, [detailMounted, detailEntered]);
 
   // feedbackSection 닫히면 detail 입력 초기화
   useEffect(() => {
