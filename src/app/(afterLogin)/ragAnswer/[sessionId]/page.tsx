@@ -84,7 +84,6 @@ export default function Page() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<Record<string, boolean>>({});
-  const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<Record<string, boolean>>({});
 
   const [filterOpenMap, setFilterOpenMap] = useState<Record<string, boolean>>({});
   const [spaceDropDownOpenMap, setSpaceDropDownOpenMap] = useState<Record<string, boolean>>({});
@@ -172,6 +171,7 @@ export default function Page() {
       sources: BackendSource[] = [],
       relatedJiraIssues: BackendSource[] = [],
       chatHistoryId?: string,
+      hasFeedback?: boolean,
     ) => {
       setChatData((prev) => {
         if (!prev) return prev;
@@ -194,6 +194,7 @@ export default function Page() {
           detailedTasks,
           timestamp: new Date().toISOString(),
           chatHistoryId,
+          hasFeedback,
         };
 
         const finalData: ChatData = {
@@ -271,7 +272,13 @@ export default function Page() {
 
           const related = data.relatedJiraIssues ?? [];
 
-          appendAssistantAnswer(response.answer, response.sources || [], related, response.chatHistoryId);
+          appendAssistantAnswer(
+            response.answer,
+            response.sources || [],
+            related,
+            response.chatHistoryId,
+            response.hasFeedback,
+          );
 
           closeSSEConnection();
           break;
@@ -921,10 +928,9 @@ export default function Page() {
                               <FeedbackSection
                                 messageId={currentQA.answer.id}
                                 chatHistoryId={currentQA.answer.chatHistoryId}
+                                hasFeedback={currentQA.answer.hasFeedback}
                                 feedbackVisibleMap={feedbackVisibleMap}
                                 setFeedbackVisibleMap={setFeedbackVisibleMap}
-                                feedbackSubmittedMap={feedbackSubmittedMap}
-                                setFeedbackSubmittedMap={setFeedbackSubmittedMap}
                               />
                             )}
                           </>
@@ -932,10 +938,9 @@ export default function Page() {
                           <ErrorResponse
                             icons={icon}
                             messageId={`error_${sessionId}`}
+                            hasFeedback={currentQA.answer.hasFeedback}
                             feedbackVisibleMap={feedbackVisibleMap}
                             setFeedbackVisibleMap={setFeedbackVisibleMap}
-                            feedbackSubmittedMap={feedbackSubmittedMap}
-                            setFeedbackSubmittedMap={setFeedbackSubmittedMap}
                           />
                         )}
                       </div>
@@ -956,8 +961,6 @@ export default function Page() {
                             messageId={`error_${sessionId}`}
                             feedbackVisibleMap={feedbackVisibleMap}
                             setFeedbackVisibleMap={setFeedbackVisibleMap}
-                            feedbackSubmittedMap={feedbackSubmittedMap}
-                            setFeedbackSubmittedMap={setFeedbackSubmittedMap}
                           />
                         ) : null}
                       </>
