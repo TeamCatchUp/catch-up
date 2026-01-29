@@ -994,8 +994,8 @@ export default function Page() {
             </div>
 
             {/* 페이지 인디케이터 */}
-            {/* {qaPairs.length > 1 && (
-              <div className="mt-4 flex items-center gap-2">
+            {qaPairs.length > 1 && (
+              <div className="mt-7 flex items-center gap-2">
                 {qaPairs.map((_, idx) => (
                   <button
                     key={idx}
@@ -1027,7 +1027,7 @@ export default function Page() {
                   />
                 ))}
               </div>
-            )} */}
+            )}
           </div>
 
           {/* 입력창 */}
