@@ -93,7 +93,11 @@ export default function Page() {
   const [newInput, setNewInput] = useState('');
   const [isMultiLine, setIsMultiLine] = useState(false);
 
+  const [currentPage, setCurrentPage] = useState(0); // 현재 보고 있는 질문 인덱스 (pagination 상태)
+  const [slideDirection, setSlideDirection] = useState<'down' | 'up' | null>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
+  const answerScrollRef = useRef<HTMLDivElement>(null); // 답변 영역 스크롤
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const sseRef = useRef<EventSource | null>(null);
   const stoppedRef = useRef(false); // 로딩 중 질문 중지
@@ -101,6 +105,30 @@ export default function Page() {
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
+
+  // 질문/답변 쌍 (user + assistant 하나의 페이지)
+  const getQAPairs = () => {
+    if (!chatData?.messages) return [];
+
+    const pairs: Array<{ question: Message; answer?: Message; index: number }> = [];
+
+    for (let i = 0; i < chatData.messages.length; i++) {
+      const msg = chatData.messages[i];
+      if (msg.role === 'user') {
+        const nextMsg = chatData.messages[i + 1];
+        pairs.push({
+          question: msg,
+          answer: nextMsg?.role === 'assistant' ? nextMsg : undefined,
+          index: pairs.length,
+        });
+      }
+    }
+
+    return pairs;
+  };
+
+  const qaPairs = getQAPairs();
+  const currentQA = qaPairs[currentPage];
 
   // MD -> string
   const formatMarkdownString = (text: string) => {
@@ -329,15 +357,22 @@ export default function Page() {
   );
 
   // 자동 하단 스크롤
+  // useEffect(() => {
+  //   if (scrollRef.current) {
+  //     const { scrollHeight, clientHeight } = scrollRef.current;
+  //     scrollRef.current.scrollTo({
+  //       top: scrollHeight - clientHeight,
+  //       behavior: 'smooth',
+  //     });
+  //   }
+  // }, [chatData?.messages, isLoading, showPRSelection, currentStep]);
+
+  // 답변 영역 스크롤 초기화 (답변 변경 시)
   useEffect(() => {
-    if (scrollRef.current) {
-      const { scrollHeight, clientHeight } = scrollRef.current;
-      scrollRef.current.scrollTo({
-        top: scrollHeight - clientHeight,
-        behavior: 'smooth',
-      });
+    if (answerScrollRef.current) {
+      answerScrollRef.current.scrollTop = 0;
     }
-  }, [chatData?.messages, isLoading, showPRSelection, currentStep]);
+  }, [currentPage]);
 
   // 초기 데이터 로드
   useEffect(() => {
@@ -436,9 +471,6 @@ export default function Page() {
       timestamp: new Date().toISOString(),
     };
 
-    // 직전 ErrorResponse(빈 assistant) 제거하고 append
-    const cleanedMessages = stripTrailingErrorAssistant(chatData.messages);
-
     const updated: ChatData = {
       ...chatData,
       messages: [...chatData.messages, userMessage],
@@ -450,6 +482,14 @@ export default function Page() {
     setNewInput('');
     setIsMultiLine(false);
     if (textAreaRef.current) textAreaRef.current.style.height = '26px';
+
+    // 새 쿼리 전송 -> 새 페이지로 이동 (animation)
+    setSlideDirection('down');
+    setTimeout(() => {
+      const newPageIndex = Math.floor(updated.messages.length / 2);
+      setCurrentPage(newPageIndex);
+      setSlideDirection(null);
+    }, 300);
 
     beginAnswerLoading();
 
@@ -530,7 +570,6 @@ export default function Page() {
     if (idx === -1) return;
 
     const trimmed = chatData.messages.slice(0, idx);
-    const cleanedTrimmed = stripTrailingErrorAssistant(trimmed);
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -576,6 +615,55 @@ export default function Page() {
     appendAssistantAnswer('\n', [], []);
   }, [isLoading, appendAssistantAnswer, closeSSEConnection]);
 
+  // 외부 스크롤로 페이지 전환
+  const handleWheel = useCallback(
+    (e: WheelEvent) => {
+      if (isLoading) return;
+
+      // 답변 영역 내부 스크롤 중이면 페이지 전환 방지
+      if (answerScrollRef.current) {
+        const { scrollTop, scrollHeight, clientHeight } = answerScrollRef.current;
+        const isScrollable = scrollHeight > clientHeight;
+
+        if (isScrollable) {
+          const isAtTop = scrollTop === 0;
+          const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+          // 위로 스크롤 시도 & 스크롤 최상단이 아니면 페이지 전환 방지
+          if (e.deltaY < 0 && !isAtTop) return;
+          // 아래로 스크롤 시도 & 스크롤 최하단이 아니면 페이지 전환 방지
+          if (e.deltaY > 0 && !isAtBottom) return;
+        }
+      }
+
+      // 페이지 전환
+      if (e.deltaY > 0 && currentPage < qaPairs.length - 1) {
+        e.preventDefault();
+        setSlideDirection('down');
+        setTimeout(() => {
+          setCurrentPage((prev) => prev + 1);
+          setSlideDirection(null);
+        }, 300);
+      } else if (e.deltaY < 0 && currentPage > 0) {
+        e.preventDefault();
+        setSlideDirection('up');
+        setTimeout(() => {
+          setCurrentPage((prev) => prev - 1);
+          setSlideDirection(null);
+        }, 300);
+      }
+    },
+    [currentPage, qaPairs.length, isLoading],
+  );
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (container) {
+      container.addEventListener('wheel', handleWheel, { passive: false });
+      return () => container.removeEventListener('wheel', handleWheel);
+    }
+  }, [handleWheel]);
+
   // 컴포넌트 언마운트 시 SSE 연결 정리
   useEffect(() => {
     return () => {
@@ -609,7 +697,8 @@ export default function Page() {
               <div className="border-neutral-4 flex-1 border-t" />
             </div>
 
-            {chatData.messages.map((msg) => (
+            {/* 질문/답변 컨테이너 (애니메이션) */}
+            {/* {chatData.messages.map((msg) => (
               <div key={msg.id} className="mx-auto flex w-193.25 flex-col gap-6">
                 {msg.role === 'user' ? (
                   <div className="flex flex-col gap-4">
@@ -902,138 +991,339 @@ export default function Page() {
       </div>
     </div>
   );
+} */}
+            <div
+              className={`mx-auto w-193.25 flex-1 overflow-hidden transition-all duration-300 ${
+                slideDirection === 'down'
+                  ? 'translate-y-full opacity-0'
+                  : slideDirection === 'up'
+                    ? '-translate-y-full opacity-0'
+                    : 'translate-y-0 opacity-100'
+              }`}
+            >
+              {currentQA && (
+                <div className="flex h-full flex-col gap-6">
+                  {/* 질문 영역 (고정) */}
+                  <div className="flex-none">
+                    {editingMessageId === currentQA.question.id ? (
+                      <EditMessageInput
+                        initialContent={currentQA.question.content}
+                        onCancel={() => setEditingMessageId(null)}
+                        onSubmit={(newContent) => handleSubmitEdit(currentQA.question.id, newContent)}
+                      />
+                    ) : (
+                      <div className="group relative max-w-full">
+                        <span className="text-heading-xlarge text-gray-70 mr-5">{currentQA.question.content}</span>
+                        <button
+                          onClick={() => setEditingMessageId(currentQA.question.id)}
+                          className={clsx(
+                            'border-neutral-3 box-button-outline-gray',
+                            'hidden',
+                            'group-hover:inline-flex',
+                            'translate-y-1 cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1',
+                          )}
+                        >
+                          <EditPencil className="text-gray-70 h-5 w-5" />
+                          <span className="text-body-xsmall text-gray-80 whitespace-nowrap">수정하기</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 답변 영역 (스크롤 가능) */}
+                  <div ref={answerScrollRef} className="flex-1 overflow-y-auto">
+                    {currentQA.answer ? (
+                      <div className="flex flex-col gap-2">
+                        {/* 필터 및 스페이스 드롭다운 */}
+                        <div className="mb-3 rounded-xl">
+                          {!filterOpenMap[currentQA.answer.id] ? (
+                            <div className="relative flex items-center gap-1">
+                              <div className="group relative flex items-center gap-1">
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSpaceDropDownOpenMap((prev) => ({
+                                      ...prev,
+                                      [currentQA.answer!.id]: !prev?.[currentQA.answer!.id],
+                                    }));
+                                  }}
+                                  className={clsx(
+                                    'icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1',
+                                    spaceDropDownOpenMap?.[currentQA.answer!.id] && 'bg-neutral-3 rounded-lg',
+                                  )}
+                                >
+                                  <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
+                                    스페이스명 text text text
+                                  </div>
+                                  <DropDown
+                                    className={clsx(
+                                      'text-gray-70 relative bottom-px h-4 w-4 shrink-0',
+                                      spaceDropDownOpenMap?.[currentQA.answer!.id] && 'rotate-180',
+                                    )}
+                                  />
+                                </div>
+                                <div className="absolute bottom-12.5 left-23.75">
+                                  <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
+                                </div>
+                              </div>
+
+                              {spaceDropDownOpenMap?.[currentQA.answer!.id] && (
+                                <div className="absolute top-10.5 z-100">
+                                  <TeamSpaceModal
+                                    onClose={() => {
+                                      setSpaceDropDownOpenMap((prev) => ({ ...prev, [currentQA.answer!.id]: false }));
+                                    }}
+                                  />
+                                </div>
+                              )}
+
+                              <Divider className="text-neutral-4 h-6 w-6 shrink-0" />
+
+                              <div className="flex shrink-0 items-center gap-3">
+                                <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
+                                <button
+                                  onClick={() =>
+                                    setFilterOpenMap((prev) => ({ ...prev, [currentQA.answer!.id]: true }))
+                                  }
+                                  className="cursor-pointer"
+                                >
+                                  <ToggleOff />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              <div className="relative flex gap-1">
+                                <div className="group relative w-fit gap-1">
+                                  <div
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSpaceDropDownOpenMap((prev) => ({
+                                        ...prev,
+                                        [currentQA.answer!.id]: !prev?.[currentQA.answer!.id],
+                                      }));
+                                    }}
+                                    className={clsx(
+                                      'flex cursor-pointer items-center gap-1 px-2 py-1',
+                                      spaceDropDownOpenMap?.[currentQA.answer!.id]
+                                        ? 'bg-neutral-3 rounded-lg'
+                                        : 'icon-button-only-gray',
+                                    )}
+                                  >
+                                    <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
+                                      스페이스명 text text text
+                                    </div>
+                                    <DropDown
+                                      className={clsx(
+                                        'text-gray-70 relative h-4 w-4 shrink-0',
+                                        spaceDropDownOpenMap?.[currentQA.answer!.id]
+                                          ? 'rotate-180 rounded-lg'
+                                          : 'bottom-px',
+                                      )}
+                                    />
+                                  </div>
+                                  <div className="absolute bottom-12.5 left-23.75">
+                                    <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
+                                  </div>
+                                </div>
+
+                                {spaceDropDownOpenMap?.[currentQA.answer!.id] && (
+                                  <div className="absolute top-10.5 z-100">
+                                    <TeamSpaceModal
+                                      onClose={() => {
+                                        setSpaceDropDownOpenMap((prev) => ({ ...prev, [currentQA.answer!.id]: false }));
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+
+                              <div>
+                                <FilterComponent
+                                  isOpen={filterOpenMap[currentQA.answer!.id]}
+                                  onClose={() =>
+                                    setFilterOpenMap((prev) => ({ ...prev, [currentQA.answer!.id]: false }))
+                                  }
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {currentQA.answer.content ? (
+                          <>
+                            <div className="markdown-body max-w-192.75 break-words">
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm, remarkBreaks]}
+                                components={MarkDownComponents(currentQA.answer.sources)}
+                              >
+                                {formatMarkdownString(currentQA.answer.content)}
+                              </ReactMarkdown>
+                            </div>
+
+                            <div className="text-body-small text-gray-30">
+                              질문과 연관된 {currentQA.answer.sources?.length || 0}개의 핵심 자료를 선별했어요.
+                            </div>
+
+                            <AnswerActionButtons
+                              icons={icon}
+                              messageId={currentQA.answer.id}
+                              feedbackVisibleMap={feedbackVisibleMap}
+                              setFeedbackVisibleMap={setFeedbackVisibleMap}
+                            />
+
+                            {feedbackVisibleMap[currentQA.answer.id] && (
+                              <FeedbackSection
+                                messageId={currentQA.answer.id}
+                                chatHistoryId={currentQA.answer.chatHistoryId}
+                                feedbackVisibleMap={feedbackVisibleMap}
+                                setFeedbackVisibleMap={setFeedbackVisibleMap}
+                                feedbackSubmittedMap={feedbackSubmittedMap}
+                                setFeedbackSubmittedMap={setFeedbackSubmittedMap}
+                              />
+                            )}
+                          </>
+                        ) : (
+                          <ErrorResponse
+                            icons={icon}
+                            messageId={`error_${sessionId}`}
+                            feedbackVisibleMap={feedbackVisibleMap}
+                            setFeedbackVisibleMap={setFeedbackVisibleMap}
+                            feedbackSubmittedMap={feedbackSubmittedMap}
+                            setFeedbackSubmittedMap={setFeedbackSubmittedMap}
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      // 답변 로딩 중
+                      <>
+                        {showPRSelection ? (
+                          <GithubPRStepSkeleton
+                            onContinue={handlePRContinue}
+                            prList={prList}
+                            onRefetch={handlePRRefetch}
+                          />
+                        ) : isLoading ? (
+                          <RagAnswerSkeleton currentStep={currentStep} />
+                        ) : isError ? (
+                          <ErrorResponse
+                            icons={icon}
+                            messageId={`error_${sessionId}`}
+                            feedbackVisibleMap={feedbackVisibleMap}
+                            setFeedbackVisibleMap={setFeedbackVisibleMap}
+                            feedbackSubmittedMap={feedbackSubmittedMap}
+                            setFeedbackSubmittedMap={setFeedbackSubmittedMap}
+                          />
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 페이지 인디케이터 */}
+            {qaPairs.length > 1 && (
+              <div className="mt-4 flex items-center gap-2">
+                {qaPairs.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setSlideDirection(idx > currentPage ? 'down' : 'up');
+                      setTimeout(() => {
+                        setCurrentPage(idx);
+                        setSlideDirection(null);
+                      }, 300);
+                    }}
+                    className={clsx(
+                      'h-2 w-2 rounded-full transition-all',
+                      currentPage === idx ? 'w-6 bg-blue-50' : 'bg-gray-30',
+                    )}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 입력창 */}
+          <div className="w-full flex-none bg-white px-24 pt-4 pb-8">
+            <div className="mx-auto w-193.25">
+              <div
+                className={clsx(
+                  'border-neutral-4 shadow-rag-bar flex gap-2 border bg-white px-3 py-2.5',
+                  isMultiLine ? 'items-end rounded-3xl' : 'items-center rounded-full',
+                )}
+              >
+                <div className="group relative flex-shrink-0">
+                  <button className="icon-button-only-gray cursor-pointer rounded-full! p-1.5">
+                    <Add className="text-gray-70 h-7 w-7" />
+                  </button>
+                  <div className="relative top-0.5 right-10">
+                    <ToolTip text={'파일 추가 및 기타'} />
+                  </div>
+                </div>
+
+                <textarea
+                  ref={textAreaRef}
+                  placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
+                  value={newInput}
+                  onChange={handleInputChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  rows={1}
+                  className="text-body-medium placeholder:text-gray-30 flex-1 resize-none overflow-y-auto pr-2.5 outline-none"
+                  style={{ height: '26px', maxHeight: '156px' }}
+                />
+
+                <div className="flex flex-shrink-0 items-center gap-3">
+                  {!newInput.trim() && !isLoading && (
+                    <div className="box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1">
+                      <Filter className="relative top-0.5 h-4.5 w-4.5" />
+                      <span className="text-body-xsmall text-gray-50">필터</span>
+                    </div>
+                  )}
+
+                  {isLoading ? (
+                    <button
+                      onClick={handleStop}
+                      className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full"
+                    >
+                      <Stop className="text-gray-70 relative left-px h-6 w-6 cursor-pointer" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={isLoading || !newInput.trim()}
+                      className={`cursor-pointer rounded-full p-2 transition-colors ${
+                        newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border'
+                      }`}
+                    >
+                      <ArrowSend
+                        className={`h-6 w-6 cursor-pointer ${newInput.trim() ? 'brightness-0 invert' : 'text-gray-30'}`}
+                      />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 우측 사이드바 */}
+      <div className={`border-neutral-3 flex w-115 flex-none flex-col border-l bg-white`}>
+        <RagRightAdditionalHeader activeTab={activeTab} onChange={setActiveTab} sourceCount={currentSources.length} />
+        <div className="flex-1 overflow-y-auto">
+          {activeTab === 'source' && (
+            <SourceComponent sources={currentSources} isLoading={isLoading} isError={isError} />
+          )}
+          {activeTab === 'detail' && <DetailedTasksComponent tasks={currentDetailedTasks} isLoading={isLoading} />}
+        </div>
+      </div>
+    </div>
+  );
 }
-
-/* 마크다운 문법 적용 예시 */
-// import ReactMarkdown from 'react-markdown';
-// import remarkGfm from 'remark-gfm';
-// import remarkBreaks from 'remark-breaks';
-// import { MarkDownComponents } from '@/components/rag/answerComponent/MarkDownComponents';
-
-// const mockMD = `
-// # h1 제목
-
-// - 가나다abc \`단독 인라인코드\` \`단어+인라인코드\`랑
-// - **\`strong 인라인코드\`** **\`strong 단어+인라인코드\`**랑
-// - **\`여기서안되네\`**
-
-// > 인용문1
-// > blockquoteblockquo한글한글한글teblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockqublockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockqublockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquoteblockquote
-
-// ### 주요 지표 분석 (ul)
-// - 브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
-//   - 브랜드 지수는 평균 대비 +22% 높게 나타났습니다. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
-
-// ### 주요 지표 분석 (ol)
-// -브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
-//   -브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
-
-// **strong** strong **strong**아
-// - 링크: [naver](https://naver.com)
-// - 링크에 \`inline\`도 섞기: [\`/api/chat/resume\` 문서](https://example.com/api-docs)
-
-// ## 리스트 (ul / ol / 중첩)
-
-// - ul 1번
-// - ul 2번
-//   - ul 2-1 (중첩)
-//   - ul 2-2 (중첩)
-//     - ul 2-2-1 (더 중첩)
-// - ul 3번
-
-// 1. ol 1번
-// 2. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
-//    1. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
-//    2. 브랜드 지수는 평균 대비 +22% 높게 나타났습니다.
-// 3. ol 3번
-
-// ## 코드블럭 (pre > code)
-
-// \`\`\`ts
-// type RagNotification = {
-//   target: 'CHAT';
-//   type: 'RAG_IN_PROGRESS' | 'RAG_INTERRUPT' | 'RAG_DONE';
-//   message: string | null;
-//   data: {
-//     sessionId: string;
-//     type: 'status' | 'interrupt' | 'result' | 'interrupt' | 'result'  | 'interrupt' | 'result' | 'interrupt' | 'result' | 'interrupt' | 'result' | 'interrupt' | 'result';
-//     node: string;
-//     payload?: unknown;
-//     response?: {
-//       answer: string;
-//       sources?: Array<{ sourceType: number; title: string }>;
-//     };
-//   };
-// };
-
-// function demoInlineVsBlock() {
-//   const endpoint = '/api/notification/subscribe';
-//   console.log('SSE endpoint:', endpoint);
-// }
-// \`\`\`
-
-// \`\`\`bash
-// # curl example
-// curl -N -H "Accept:text/event-streamAccept:text/event-streamAccept:text/event-stream" "https://example.com/api/notification/subscribe"
-// \`\`\`
-
-// \`\`\`bash
-// # curl example
-// curl -N -H "Accep"
-// \`\`\`
-
-// ## H2: 테이블 (table)
-
-// | 항목 | 설명 | 예시 |
-// |---|---|---|
-// | sessionId | 세션 식별자 | \`746a8ca1-19d6-4d35-b80e-401f97ecbda8\` |
-// | node | RAG 단계 | \`router\`, \`retrieve\`, \`rerank\`, \`generate\` |
-// | type | 이벤트 타입 | \`RAG_IN_PROGRESS\`, \`RAG_DONE\` |
-
-// ## H2: 이미지 (img)
-
-// ![테스트 이미지](https://picsum.photos/800/450)
-
-// ## H2: 마무리
-
-// 인라인 코드 \`final_check=true\` 와 **굵게 표시**! **굵게 표시**
-
-// 줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문줄본문 검사검사 본문본문
-
-// 바줄본문 검사검사 본문본문
-// 꿈줄본문 검사검사 본문본문
-// `;
-
-// export default function Mail() {
-//   const formatMarkdownString = (text: string) => {
-//     if (!text) return '';
-
-//     // \r\n, \r을 \n으로 통일
-//     let normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\\n/g, '\n');
-
-//     // **`code`**글자 형태를 **`code`** 글자로 변환 (띄어쓰기 추가)
-//     // strong 안의 백틱 코드 뒤에 바로 글자가 오는 경우 띄어쓰기 추가
-//     normalized = normalized.replace(/(\*\*`[^`]+`\*\*)([^\s*])/g, '$1 $2');
-
-//     // 블록 문법 시작(헤딩/리스트/체크박스/코드펜스/인용/테이블) 앞에 빈 줄 보정
-//     const withSpacing = normalized.replace(
-//       /([^\n])\n(?=(#{1,6}\s|(\d+)\.\s|[-*+]\s|-\s\[[xX\s]\]\s|```|>\s|\|))/g,
-//       '$1\n\n',
-//     );
-
-//     return withSpacing.trimEnd();
-//   };
-//   return (
-//     <div className="markdown-body max-w-192.75 p-10 break-words">
-//       <ReactMarkdown
-//         remarkPlugins={[
-//           remarkGfm,
-//           remarkBreaks, // 문제 5 해결: \n을 <br/>로 변환
-//         ]}
-//         components={MarkDownComponents}
-//       >
-//         {formatMarkdownString(mockMD)}
-//       </ReactMarkdown>
-//     </div>
-//   );
-// }
