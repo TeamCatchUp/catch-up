@@ -332,8 +332,6 @@ const SideNavBar = () => {
 
             const handleClick = () => {
               if (item.href === '/search') {
-                const newSessionId = crypto.randomUUID();
-                // router.push(`/ragAnswer/${newSessionId}`);
                 router.push(`/search`);
               } else {
                 router.push(item.href);
@@ -416,10 +414,11 @@ const SideNavBar = () => {
                   <Link
                     href={`/ragAnswer/${chatroom.sessionId}`}
                     key={chatroom.sessionId}
-                    // , isActive ? selectedClass : defaultClass
-                    className={clsx('group flex cursor-pointer rounded-lg py-2')}
+                    className={clsx(
+                      'group flex cursor-pointer rounded-lg py-2',
+                      //  isActive ? selectedClass : defaultClass,
+                    )}
                   >
-                    {/* , isActive ? 'text-blue-55' : 'text-gray-80' */}
                     <span className={clsx('text-body-small truncate px-2.5')}>{chatroom.title}</span>
                     <span className="mr-2.5 ml-auto flex h-5 w-5 items-center opacity-0 transition-opacity group-hover:opacity-100">
                       <Kebeb className="text-gray-50" />

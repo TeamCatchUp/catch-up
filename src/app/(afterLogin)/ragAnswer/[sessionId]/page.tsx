@@ -612,12 +612,30 @@ export default function Page() {
       // 로딩 중이거나 이미 스크롤 중이면 무시
       if (isLoading || isScrolling.current) {
         e.preventDefault();
+        e.stopPropagation();
         return;
       }
 
-      // 답변 영역 내부에서 발생한 스크롤이면 무조건 페이지 전환 차단
-      if (answerScrollRef.current && answerScrollRef.current.contains(e.target as Node)) {
-        return;
+      // 답변 영역 스크롤 체크
+      if (answerScrollRef.current) {
+        const { scrollTop, scrollHeight, clientHeight } = answerScrollRef.current;
+        const isScrollable = scrollHeight > clientHeight;
+
+        // 스크롤 가능한 경우
+        if (isScrollable) {
+          // 답변 영역 내부에서 발생한 이벤트인지 체크
+          const isInsideAnswer = answerScrollRef.current.contains(e.target as Node);
+
+          if (isInsideAnswer) {
+            // 스크롤 경계 체크 (여유 10px)
+            const isAtTop = scrollTop <= 10;
+            const isAtBottom = scrollTop + clientHeight >= scrollHeight - 10;
+
+            // 경계가 아니면 페이지 전환 차단
+            if (e.deltaY > 0 && !isAtBottom) return;
+            if (e.deltaY < 0 && !isAtTop) return;
+          }
+        }
       }
 
       // 페이지 전환 (스크롤 방향: 위로 올리면(deltaY < 0) 다음/최신 질문, 아래로 내리면(deltaY > 0) 이전 질문)
@@ -660,15 +678,6 @@ export default function Page() {
         }
 
         setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
-        // setTimeout(() => {
-        //   setCurrentPage((prev) => Math.max(prev - 1, 0));
-        //   setSlideDirection(null);
-
-        //   // 스크롤 잠금 해제
-        //   scrollTimeout.current = setTimeout(() => {
-        //     isScrolling.current = false;
-        //   }, 500);
-        // }, 300);
         setTimeout(() => {
           setCurrentPage((prev) => Math.max(prev - 1, 0));
           setSlideDirection(null);
@@ -705,9 +714,6 @@ export default function Page() {
     return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
   }
 
-  // const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
-  // const currentSources = lastAssistantMessage?.sources || [];
-  // const currentDetailedTasks = lastAssistantMessage?.detailedTasks || [];
   const currentSources = currentQA?.answer?.sources || [];
   const currentDetailedTasks = currentQA?.answer?.detailedTasks || [];
 
