@@ -33,6 +33,7 @@ interface PRPayload {
 
 interface Message {
   id: string;
+  chatHistoryId?: string;
   role: 'user' | 'assistant';
   content: string;
   sources?: ChatSource[];
@@ -87,6 +88,7 @@ interface RagNotificationData {
     sessionId: string;
     answer: string;
     sources: BackendSource[];
+    chatHistoryId: string;
   };
   relatedJiraIssues?: BackendSource[];
 }

@@ -2,6 +2,7 @@
 
 import clsx from 'clsx';
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -33,10 +34,9 @@ import EditMessageInput from '@/components/rag/EditMessageInput';
 import ToolTip from '@/components/common/ToolTip';
 import TeamSpaceModal from '@/components/rag/modal/TeamSpaceModal';
 import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
-import { MarkDownComponents } from '@/components/rag/answerComponent/MarkDownComponents';
+import { MarkDownComponents } from '@/components/rag/answerComponent/markdown/MarkDownComponents';
 
-import { useParams, useSearchParams } from 'next/navigation';
-import { createSSEConnection, sendChatQuery, resumeChatQuery } from 'src/util/sendChatQuery';
+import { createSSEConnection, sendChatQuery, resumeChatQuery } from '@/util/sendChatQuery';
 import { normalizeSources } from '@/util/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/util/normalizeRelatedJiraIssues';
 
@@ -102,6 +102,7 @@ export default function Page() {
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
 
+  // MD -> string
   const formatMarkdownString = (text: string) => {
     if (!text) return '';
 
@@ -148,7 +149,12 @@ export default function Page() {
   };
 
   const appendAssistantAnswer = useCallback(
-    (answer: string, sources: BackendSource[] = [], relatedJiraIssues: BackendSource[] = []) => {
+    (
+      answer: string,
+      sources: BackendSource[] = [],
+      relatedJiraIssues: BackendSource[] = [],
+      chatHistoryId?: string,
+    ) => {
       setChatData((prev) => {
         if (!prev) return prev;
 
@@ -169,6 +175,7 @@ export default function Page() {
           sources: uiSources,
           detailedTasks,
           timestamp: new Date().toISOString(),
+          chatHistoryId,
         };
 
         const finalData: ChatData = {
@@ -231,6 +238,7 @@ export default function Page() {
             hasResponse: !!data.response,
             answer: data.response?.answer,
             sourcesCount: data.response?.sources?.length,
+            chatHistoryId: data.response?.chatHistoryId,
           });
 
           const response = data.response;
@@ -244,7 +252,7 @@ export default function Page() {
 
           const related = data.relatedJiraIssues ?? [];
 
-          appendAssistantAnswer(response.answer, response.sources || [], related);
+          appendAssistantAnswer(response.answer, response.sources || [], related, response.chatHistoryId);
 
           closeSSEConnection();
           break;
@@ -745,9 +753,9 @@ export default function Page() {
                           <ReactMarkdown
                             remarkPlugins={[
                               remarkGfm,
-                              remarkBreaks, // 문제 5 해결: \n을 <br/>로 변환
+                              remarkBreaks, // \n을 <br/>로 변환
                             ]}
-                            components={MarkDownComponents}
+                            components={MarkDownComponents(msg.sources)}
                           >
                             {formatMarkdownString(msg.content)}
                           </ReactMarkdown>
@@ -767,6 +775,7 @@ export default function Page() {
                         {feedbackVisibleMap[msg.id] && (
                           <FeedbackSection
                             messageId={msg.id}
+                            chatHistoryId={msg.chatHistoryId}
                             feedbackVisibleMap={feedbackVisibleMap}
                             setFeedbackVisibleMap={setFeedbackVisibleMap}
                             feedbackSubmittedMap={feedbackSubmittedMap}

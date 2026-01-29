@@ -3,6 +3,7 @@
 import clsx from 'clsx';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Cancel from '/public/icons/icon/cancel.svg';
+import { sendFeedbackQuery } from '@/api/feedback';
 
 const feedback = [
   { id: 1, content: '존재하지 않는 자료를 참고했어요' },
@@ -20,6 +21,7 @@ const TEXTAREA_MAX_HEIGHT = 114;
 
 const FeedbackSection = ({
   messageId,
+  chatHistoryId,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
   feedbackSubmittedMap,
@@ -32,6 +34,7 @@ const FeedbackSection = ({
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailText, setDetailText] = useState('');
   const [showThanks, setShowThanks] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // textarea 자동 높이 조절
   const resizeTextarea = useCallback(() => {
@@ -82,6 +85,7 @@ const FeedbackSection = ({
       setIsDetailOpen(false);
       setDetailText('');
       setShowThanks(false);
+      setIsSubmitting(false);
     }
   }, [feedbackVisibleMap[messageId], messageId]);
 
@@ -91,14 +95,60 @@ const FeedbackSection = ({
     setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
   }, [messageId, setFeedbackVisibleMap]);
 
-  const submitFeedback = useCallback(() => {
-    setFeedbackSubmittedMap((prev) => ({ ...prev, [messageId]: true }));
-
+  const afterSuccessClose = useCallback(() => {
     setTimeout(() => {
       setShowThanks(false);
       setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
     }, 3000);
-  }, [messageId, setFeedbackSubmittedMap, setFeedbackVisibleMap]);
+  }, [messageId, setFeedbackVisibleMap]);
+
+  const submitFeedback = useCallback(
+    async (selectedContent?: string) => {
+      if (!chatHistoryId) {
+        console.warn('[feedback] chatHistoryId missing');
+        setFeedbackSubmittedMap((prev) => ({ ...prev, [messageId]: true }));
+        setShowThanks(true);
+        afterSuccessClose();
+        return;
+      }
+
+      if (isSubmitting) return;
+
+      const isDetail = isDetailOpen;
+
+      const tags = selectedContent ? [selectedContent] : [];
+      const detail = isDetail ? detailText.trim() : '';
+
+      // detail 모드인데 비어있으면 제출 막기
+      if (isDetail && !detail) return;
+
+      try {
+        setIsSubmitting(true);
+
+        console.log('[submitFeedback] send', {
+          chatHistoryId,
+          tags,
+          detail,
+        });
+
+        await sendFeedbackQuery({
+          chatHistoryId,
+          tags,
+          detail,
+        });
+
+        setFeedbackSubmittedMap((prev) => ({ ...prev, [messageId]: true }));
+        setShowThanks(true);
+        afterSuccessClose();
+      } catch (e) {
+        console.error('[feedback] submit failed', e);
+        // 실패 시는 유지 (사용자가 다시 누를 수 있게)
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [chatHistoryId, detailText, isSubmitting, messageId, setFeedbackSubmittedMap, afterSuccessClose],
+  );
 
   if (!feedbackVisibleMap[messageId]) return null;
 
@@ -129,6 +179,7 @@ const FeedbackSection = ({
           return (
             <button
               key={feedbackItem.id}
+              disabled={isSubmitting}
               onClick={() => {
                 if (feedbackItem.id === DETAIL_ID) {
                   setIsDetailOpen((prev) => {
@@ -138,7 +189,7 @@ const FeedbackSection = ({
                   });
                   return;
                 }
-                submitFeedback();
+                submitFeedback(feedbackItem.content);
               }}
               className={clsx(
                 'text-xsmall text-gray-80 cursor-pointer rounded-lg px-2 py-1',
@@ -170,7 +221,7 @@ const FeedbackSection = ({
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (detailText.trim()) submitFeedback();
+                submitFeedback();
               }
             }}
             className="text-gray-80 placeholder:text-gray-30 resize-none overflow-y-hidden outline-none"
@@ -179,7 +230,7 @@ const FeedbackSection = ({
           />
           <button
             disabled={!detailText.trim()}
-            onClick={submitFeedback}
+            onClick={() => submitFeedback()}
             className={clsx(
               'capsule-button-solid-primary h-9 w-12.5 items-end self-end px-3 py-1.5',
               detailText.trim() ? 'cursor-pointer' : '',

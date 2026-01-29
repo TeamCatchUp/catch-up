@@ -6,8 +6,6 @@ interface IconItem {
 interface AnswerActionButtonsProps {
   icons: IconItem[];
   messageId: string;
-  // feedbackVisibleMap: { [key: number]: boolean };
-  // setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<{ [key: number]: boolean }>>;
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
 }
@@ -15,10 +13,6 @@ interface AnswerActionButtonsProps {
 interface ErrorResponseProps {
   icons: IconItem[];
   messageId: string;
-  // feedbackVisibleMap: { [key: number]: boolean };
-  // setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<{ [key: number]: boolean }>>;
-  // feedbackSubmittedMap: { [key: string]: boolean };
-  // setFeedbackSubmittedMap: React.Dispatch<React.SetStateAction<{ [key: string]: boolean }>>;
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   feedbackSubmittedMap: Record<string, boolean>;
@@ -27,10 +21,7 @@ interface ErrorResponseProps {
 
 interface FeedbackSectionProps {
   messageId: string;
-  // feedbackVisibleMap: { [key: string]: boolean };
-  // setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<{ [key: string]: boolean }>>;
-  // feedbackSubmittedMap: { [key: string]: boolean };
-  // setFeedbackSubmittedMap: React.Dispatch<React.SetStateAction<{ [key: string]: boolean }>>;
+  chatHistoryId?: string;
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   feedbackSubmittedMap: Record<string, boolean>;
