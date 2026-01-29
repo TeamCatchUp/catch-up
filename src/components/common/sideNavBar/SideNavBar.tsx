@@ -43,14 +43,14 @@ const navItems = [
     tooltipOpen: '사내 지식 물어보기',
     tooltipClosed: '캐치스턴트 AI',
   },
-  {
-    name: '업무 대시보드',
-    href: '/stacks',
-    Icon: Dashboard,
-    tooltipOpen: '나의 업무 이력 확인하기',
-    tooltipClosed: '내 업무 관리',
-  },
-  { name: '수신함', href: '/mail', Icon: Mail, tooltipOpen: '멘션 및 알림 보기', tooltipClosed: '수신함' },
+  // {
+  //   name: '업무 대시보드',
+  //   href: '/stacks',
+  //   Icon: Dashboard,
+  //   tooltipOpen: '나의 업무 이력 확인하기',
+  //   tooltipClosed: '내 업무 관리',
+  // },
+  // { name: '수신함', href: '/mail', Icon: Mail, tooltipOpen: '멘션 및 알림 보기', tooltipClosed: '수신함' },
 ];
 
 const SideNavBar = () => {
