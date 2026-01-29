@@ -1,5 +1,6 @@
 'use client';
 
+import clsx from 'clsx';
 import ToggleOn from '/public/icons/icon/state=On.svg';
 import ToggleOff from '/public/icons/icon/state=Off.svg';
 
@@ -32,6 +33,18 @@ const GetAlertModal = ({ alerts, onToggle }: Props) => {
               className="relative bottom-px flex cursor-pointer transition-colors"
             >
               {alerts[item] ? <ToggleOn className="h-6 w-9" /> : <ToggleOff className="h-6 w-9.5" />}
+              {/* className={clsx(
+                'relative h-6 w-10 cursor-pointer rounded-full transition-colors duration-200 ease-out',
+                alerts[item] ? 'bg-blue-50' : 'bg-neutral-3',
+              )}
+            >
+              <span
+                className={clsx(
+                  'absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm',
+                  'transition-transform duration-200 ease-out will-change-transform',
+                  alerts[item] ? 'translate-x-4' : 'translate-x-0',
+                )}
+              /> */}
             </button>
           </li>
         ))}

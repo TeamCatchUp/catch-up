@@ -78,9 +78,29 @@ const SideNavBar = () => {
   const [selectedTeamSpaceId, setSelectedTeamSpaceId] = useState<string>(TEAM_SPACES[0].id);
   const selectedTeamSpace = TEAM_SPACES.find((t) => t.id === selectedTeamSpaceId) ?? TEAM_SPACES[0];
 
+  // 닫힘 애니메이션 동안 open 컨텐츠 잠깐 유지
+  const [showOpenContent, setShowOpenContent] = useState(isOpen);
+
   useEffect(() => {
     setIsOpen(!isRagAnswerPage);
   }, [isRagAnswerPage]);
+
+  // 닫을 때 열린 모달/드롭다운들 정리 + showOpenContent 타이밍
+  useEffect(() => {
+    if (isOpen) {
+      setShowOpenContent(true);
+      return;
+    }
+
+    // 닫히는 순간: hover로 떠있는 것들 정리
+    setIsTeamSpaceMoreModalOpen(false);
+    setIsTeamDropDownModalOpen(false);
+    setIsUserModalOpen(false);
+
+    // 닫힘 애니메이션(내용 fade) 시간 후 open-only 컨텐츠 언마운트
+    const t = setTimeout(() => setShowOpenContent(false), 200);
+    return () => clearTimeout(t);
+  }, [isOpen]);
 
   useEffect(() => {
     const fetchDefaultData = async () => {
@@ -117,6 +137,7 @@ const SideNavBar = () => {
       <nav
         className={clsx(
           'border-neutral-3 flex h-screen flex-col gap-5 border-r bg-white',
+          'transition-[width,padding] duration-300 ease-out will-change-[width,padding]',
           isOpen ? 'w-60.25 px-2 py-2.5' : 'w-18 items-center px-3 py-5',
         )}
       >
@@ -154,7 +175,13 @@ const SideNavBar = () => {
             </div>
 
             {isOpen && (
-              <div className="relative top-0.5 flex items-center">
+              <div
+                className={clsx(
+                  'relative top-0.5 flex items-center',
+                  'transition-all duration-200 ease-out',
+                  isOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-2 opacity-0',
+                )}
+              >
                 <CatchupLogoLetter />
               </div>
             )}
