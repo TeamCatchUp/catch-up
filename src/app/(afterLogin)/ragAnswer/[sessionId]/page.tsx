@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -92,7 +92,15 @@ export default function Page() {
   const [newInput, setNewInput] = useState('');
   const [isMultiLine, setIsMultiLine] = useState(false);
 
-  const [currentPage, setCurrentPage] = useState(0); // 현재 보고 있는 질문 인덱스 (pagination 상태)
+  // const [currentPage, setCurrentPage] = useState(0); // 현재 보고 있는 질문 인덱스 (pagination 상태)
+  // 세션별 저장 키 안정적으로 고정 (새로고침해도 페이지 유지)
+  const PAGE_KEY = useMemo(() => `chat_${sessionId}_currentPage`, [sessionId]);
+  const [currentPage, setCurrentPage] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0;
+    const saved = localStorage.getItem(`chat_${sessionId}_currentPage`);
+    const n = saved ? Number(saved) : 0;
+    return Number.isFinite(n) ? n : 0;
+  });
   const [slideDirection, setSlideDirection] = useState<'down' | 'up' | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -147,6 +155,12 @@ export default function Page() {
 
     return withSpacing.trimEnd();
   };
+
+  // currentPage 바뀔 때마다 저장
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(PAGE_KEY, String(currentPage));
+  }, [PAGE_KEY, currentPage]);
 
   // SSE 연결 종료 함수
   const closeSSEConnection = useCallback(() => {
@@ -485,6 +499,7 @@ export default function Page() {
 
     // 새 쿼리 전송 -> 새 페이지로 이동 (animation)
     setSlideDirection('up');
+
     setTimeout(() => {
       const newPageIndex = Math.floor(updated.messages.length / 2);
       setCurrentPage(newPageIndex);
