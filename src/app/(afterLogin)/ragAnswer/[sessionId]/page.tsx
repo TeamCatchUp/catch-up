@@ -167,14 +167,14 @@ export default function Page() {
   }, []);
 
   // content='' (error response) -> new 쿼리 생성 시 질문 기록만 남김
-  const stripTrailingErrorAssistant = (messages: Message[]) => {
-    const last = messages[messages.length - 1];
+  // const stripTrailingErrorAssistant = (messages: Message[]) => {
+  //   const last = messages[messages.length - 1];
 
-    if (last?.role === 'assistant' && (last.content ?? '') === '') {
-      return messages.slice(0, -1);
-    }
-    return messages;
-  };
+  //   if (last?.role === 'assistant' && (last.content ?? '') === '') {
+  //     return messages.slice(0, -1);
+  //   }
+  //   return messages;
+  // };
 
   const appendAssistantAnswer = useCallback(
     (
@@ -366,6 +366,13 @@ export default function Page() {
   //     });
   //   }
   // }, [chatData?.messages, isLoading, showPRSelection, currentStep]);
+
+  // currentPage 유효성 검증 (qaPairs 길이 변경 시)
+  useEffect(() => {
+    if (qaPairs.length > 0 && currentPage >= qaPairs.length) {
+      setCurrentPage(qaPairs.length - 1);
+    }
+  }, [qaPairs.length, currentPage]);
 
   // 답변 영역 스크롤 초기화 (답변 변경 시)
   useEffect(() => {
@@ -615,13 +622,18 @@ export default function Page() {
     appendAssistantAnswer('\n', [], []);
   }, [isLoading, appendAssistantAnswer, closeSSEConnection]);
 
-  // 스크롤 쓰로틀링을 위한 ref
+  // 스크롤 debounce를 위한 ref
   const isScrolling = useRef(false);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // 외부 스크롤로 페이지 전환
   const handleWheel = useCallback(
     (e: WheelEvent) => {
-      if (isLoading || isScrolling.current) return;
+      // 로딩 중이거나 이미 스크롤 중이면 무시
+      if (isLoading || isScrolling.current) {
+        e.preventDefault();
+        return;
+      }
 
       // 답변 영역 내부 스크롤 중이면 페이지 전환 방지
       if (answerScrollRef.current) {
@@ -645,22 +657,43 @@ export default function Page() {
       if (e.deltaY > 0 && currentPage < qaPairs.length - 1) {
         e.preventDefault();
         isScrolling.current = true;
+
+        // 기존 타임아웃 클리어
+        if (scrollTimeout.current) {
+          clearTimeout(scrollTimeout.current);
+        }
+
         setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
         setTimeout(() => {
-          setCurrentPage((prev) => prev + 1);
+          setCurrentPage((prev) => Math.min(prev + 1, qaPairs.length - 1));
           setSlideDirection(null);
-          isScrolling.current = false;
+
+          // 스크롤 잠금 해제 (1초 후)
+          scrollTimeout.current = setTimeout(() => {
+            isScrolling.current = false;
+          }, 1000);
         }, 300);
       }
+
       // 아래로 스크롤 (이전 질문으로)
-      else if (e.deltaY < 0 && currentPage > 0) {
+      else if (e.deltaY > 0 && currentPage > 0) {
         e.preventDefault();
         isScrolling.current = true;
+
+        // 기존 타임아웃 클리어
+        if (scrollTimeout.current) {
+          clearTimeout(scrollTimeout.current);
+        }
+
         setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
         setTimeout(() => {
-          setCurrentPage((prev) => prev - 1);
+          setCurrentPage((prev) => Math.max(prev - 1, 0));
           setSlideDirection(null);
-          isScrolling.current = false;
+
+          // 스크롤 잠금 해제 (1초 후)
+          scrollTimeout.current = setTimeout(() => {
+            isScrolling.current = false;
+          }, 1000);
         }, 300);
       }
 
@@ -684,6 +717,9 @@ export default function Page() {
   useEffect(() => {
     return () => {
       closeSSEConnection();
+      if (scrollTimeout.current) {
+        clearTimeout(scrollTimeout.current);
+      }
     };
   }, [closeSSEConnection]);
 
@@ -1247,14 +1283,24 @@ export default function Page() {
                     onClick={() => {
                       if (isScrolling.current || idx === currentPage) return;
                       isScrolling.current = true;
+
+                      // 기존 타임아웃 클리어
+                      if (scrollTimeout.current) {
+                        clearTimeout(scrollTimeout.current);
+                      }
+
                       // 다음 페이지(더 큰 인덱스)로 가면 up, 이전 페이지로 가면 down
                       setSlideDirection(idx > currentPage ? 'up' : 'down');
                       setTimeout(() => {
                         setCurrentPage(idx);
                         setSlideDirection(null);
-                        isScrolling.current = false;
+                        // 스크롤 잠금 해제
+                        scrollTimeout.current = setTimeout(() => {
+                          isScrolling.current = false;
+                        }, 1000);
                       }, 300);
                     }}
+                    disabled={isLoading}
                     className={clsx(
                       'h-2 w-2 rounded-full transition-all',
                       currentPage === idx ? 'w-6 bg-blue-50' : 'bg-gray-30',
