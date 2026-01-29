@@ -92,7 +92,6 @@ export default function Page() {
   const [newInput, setNewInput] = useState('');
   const [isMultiLine, setIsMultiLine] = useState(false);
 
-  // const [currentPage, setCurrentPage] = useState(0); // 현재 보고 있는 질문 인덱스 (pagination 상태)
   // 세션별 저장 키 안정적으로 고정 (새로고침해도 페이지 유지)
   const PAGE_KEY = useMemo(() => `chat_${sessionId}_currentPage`, [sessionId]);
   const [currentPage, setCurrentPage] = useState<number>(() => {
