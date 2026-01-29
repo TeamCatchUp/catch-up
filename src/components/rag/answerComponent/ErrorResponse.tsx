@@ -7,8 +7,7 @@ const ErrorResponse = ({
   messageId,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
-  feedbackSubmittedMap,
-  setFeedbackSubmittedMap,
+  hasFeedback,
 }: ErrorResponseProps) => {
   return (
     <div className="flex flex-col gap-3">
@@ -28,8 +27,7 @@ const ErrorResponse = ({
         messageId={messageId}
         feedbackVisibleMap={feedbackVisibleMap}
         setFeedbackVisibleMap={setFeedbackVisibleMap}
-        feedbackSubmittedMap={feedbackSubmittedMap}
-        setFeedbackSubmittedMap={setFeedbackSubmittedMap}
+        hasFeedback={hasFeedback}
       />
     </div>
   );

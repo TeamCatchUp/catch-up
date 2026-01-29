@@ -16,8 +16,6 @@ interface ErrorResponseProps {
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   hasFeedback?: boolean;
-  // feedbackSubmittedMap: Record<string, boolean>;
-  // setFeedbackSubmittedMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
 }
 
 interface FeedbackSectionProps {
@@ -26,6 +24,4 @@ interface FeedbackSectionProps {
   hasFeedback?: boolean;
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
-  // feedbackSubmittedMap: Record<string, boolean>;
-  // setFeedbackSubmittedMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
 }
