@@ -234,6 +234,7 @@ export default function Page() {
         }
 
         case 'RAG_DONE': {
+          window.dispatchEvent(new Event('refresh_sidebar'));
           console.log('[SSE] RAG_DONE received:', {
             hasResponse: !!data.response,
             answer: data.response?.answer,

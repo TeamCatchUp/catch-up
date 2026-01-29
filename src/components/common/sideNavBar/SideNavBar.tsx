@@ -91,6 +91,10 @@ const SideNavBar = () => {
       }
     };
     fetchDefaultData();
+    const handleRefresh = () => fetchDefaultData();
+
+    window.addEventListener('refresh_sidebar', handleRefresh);
+    return () => window.removeEventListener('refresh_sidebar', handleRefresh);
   }, []);
 
   // SNB item (메뉴 상태별 스타일 CSS)
@@ -382,7 +386,7 @@ const SideNavBar = () => {
                 </span>
               )}
             </button>
-            <div className="mt-2 flex flex-col overflow-y-auto">
+            <div className="mt-2 flex flex-col-reverse overflow-y-auto">
               {recentChatrooms.map((chatroom) => {
                 return (
                   <Link
