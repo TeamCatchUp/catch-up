@@ -25,19 +25,19 @@ const TeamSpaceDropDownModal = ({ onClose }: TeamSpaceDropDownModalProps) => {
       <div className="flex w-59.5 flex-col gap-1">
         <div className="icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2">
           <ArrowRight className="text-gray-70 h-6 w-6" />
-          <span className="text-body-small text-gray-80">팀스페이스 text text text text</span>
+          <span className="text-body-small text-gray-80">Catch Up | FE</span>
         </div>
         <div className="icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2">
           <ArrowRight className="text-gray-70 h-6 w-6" />
-          <span className="text-body-small text-gray-80">팀스페이스 text text text text</span>
+          <span className="text-body-small text-gray-80">Catch Up | BE</span>
         </div>
         <div className="icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2">
           <ArrowRight className="text-gray-70 h-6 w-6" />
-          <span className="text-body-small text-gray-80">팀스페이스 text text text text</span>
+          <span className="text-body-small text-gray-80">Catch Up | 기획</span>
         </div>
         <div className="icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2">
           <ArrowRight className="text-gray-70 h-6 w-6" />
-          <span className="text-body-small text-gray-80">팀스페이스 text text text text</span>
+          <span className="text-body-small text-gray-80">Catch Up | Design</span>
         </div>
       </div>
       {/* divider */}
