@@ -30,10 +30,10 @@ const GetAlertModal = ({ alerts, onToggle }: Props) => {
                   [item]: !prev[item],
                 }));
               }}
-              className="relative bottom-px flex cursor-pointer transition-colors"
-            >
-              {alerts[item] ? <ToggleOn className="h-6 w-9" /> : <ToggleOff className="h-6 w-9.5" />}
-              {/* className={clsx(
+              //   className="relative bottom-px flex cursor-pointer transition-colors"
+              // >
+              //   {alerts[item] ? <ToggleOn className="h-6 w-9" /> : <ToggleOff className="h-6 w-9.5" />}
+              className={clsx(
                 'relative h-6 w-10 cursor-pointer rounded-full transition-colors duration-200 ease-out',
                 alerts[item] ? 'bg-blue-50' : 'bg-neutral-3',
               )}
@@ -44,7 +44,7 @@ const GetAlertModal = ({ alerts, onToggle }: Props) => {
                   'transition-transform duration-200 ease-out will-change-transform',
                   alerts[item] ? 'translate-x-4' : 'translate-x-0',
                 )}
-              /> */}
+              />
             </button>
           </li>
         ))}
