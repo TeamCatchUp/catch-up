@@ -311,8 +311,19 @@ export default function Search() {
                     Icon={IconPerson}
                   />
                 </SearchOptionPopover>
-
-                <SearchOptionPopover
+                <SearchOptionButton
+                  Icon={IconTag}
+                  label={deptLabel}
+                  selected={selectedDepts.length > 0}
+                  onMouseDown={(e) => e.preventDefault()}
+                />
+                <SearchOptionButton
+                  Icon={IconSpace}
+                  label={projectLabel}
+                  selected={selectedProjects.length > 0}
+                  onMouseDown={(e) => e.preventDefault()}
+                />
+                {/* <SearchOptionPopover
                   open={openPopover === 'department'}
                   onOpenChange={(o) => {
                     setOpenPopover(o ? 'department' : null);
@@ -358,7 +369,7 @@ export default function Search() {
                     onToggle={toggleProject}
                     Icon={IconSpace}
                   />
-                </SearchOptionPopover>
+                </SearchOptionPopover> */}
               </div>
             </div>
 
