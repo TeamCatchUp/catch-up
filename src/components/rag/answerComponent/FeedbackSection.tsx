@@ -19,6 +19,9 @@ const feedback = [
 const DETAIL_ID = 8;
 const TEXTAREA_MAX_HEIGHT = 114;
 const THANKS_MESSAGE_DURATION = 3000;
+// 애니메이션 지속 시간 (tailwind duration과 맞춤)
+const SECTION_ANIM_MS = 200;
+const DETAIL_ANIM_MS = 200;
 
 const FeedbackSection = ({
   messageId,
@@ -38,11 +41,44 @@ const FeedbackSection = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localHasFeedback, setLocalHasFeedback] = useState(hasFeedback);
 
+  // 애니메이션을 위한 상태 (마운트 유지)
+  const isVisible = !!feedbackVisibleMap[messageId];
+  const [mounted, setMounted] = useState(isVisible); // 렌더 유지용
+  const [entered, setEntered] = useState(false); // 트랜지션 상태
+  // detail panel 닫힐 때 애니메이션 (마운트 유지)
+  const [detailMounted, setDetailMounted] = useState(false);
+  const [detailEntered, setDetailEntered] = useState(false);
+
   // hasFeedback prop 변경 되면 로컬 상태도 업데이트
   useEffect(() => {
     setLocalHasFeedback(hasFeedback);
   }, [hasFeedback]);
 
+  // FeedbackSection 열고/닫을 때 마운트 & enter 제어
+  useEffect(() => {
+    if (isVisible) {
+      setMounted(true);
+      // 다음 프레임에 enter 켜야 transition이 먹음
+      requestAnimationFrame(() => setEntered(true));
+      return;
+    }
+
+    // 닫기: enter 끄고 애니메이션 끝난 뒤 언마운트
+    setEntered(false);
+
+    // 닫힐 때 detail도 같이 정리(애니메이션 포함)
+    setDetailEntered(false);
+    const t = setTimeout(() => {
+      setMounted(false);
+      setDetailMounted(false);
+      setIsDetailOpen(false);
+      setDetailText('');
+      setShowThanks(false);
+      setIsSubmitting(false);
+    }, SECTION_ANIM_MS);
+
+    return () => clearTimeout(t);
+  }, [isVisible]);
   // textarea 자동 높이 조절
   const resizeTextarea = useCallback(() => {
     const el = textareaRef.current;
@@ -95,6 +131,22 @@ const FeedbackSection = ({
       setIsSubmitting(false);
     }
   }, [feedbackVisibleMap[messageId], messageId]);
+
+  // detail panel 열고/닫을 때 마운트/enter 제어
+  useEffect(() => {
+    if (isDetailOpen) {
+      setDetailMounted(true);
+      requestAnimationFrame(() => setDetailEntered(true));
+      return;
+    }
+
+    setDetailEntered(false);
+    const t = setTimeout(() => {
+      setDetailMounted(false);
+      setDetailText('');
+    }, DETAIL_ANIM_MS);
+    return () => clearTimeout(t);
+  }, [isDetailOpen]);
 
   // 피드백 제출 완 -> 자동 감사 UI
   useEffect(() => {
@@ -211,7 +263,15 @@ const FeedbackSection = ({
   // 이미 피드백 제출 / 방금 제출 -> 감사 UI
   if (localHasFeedback || showThanks) {
     return (
-      <div ref={feedbackRef} className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4">
+      // <div ref={feedbackRef} className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4">
+      <div
+        ref={feedbackRef}
+        className={clsx(
+          'border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4',
+          'transition-all duration-200 ease-out will-change-[transform,opacity]',
+          entered ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
+        )}
+      >
         <div className="text-body-small flex items-center justify-center text-gray-50">피드백을 주셔서 감사합니다!</div>
       </div>
     );
@@ -259,10 +319,19 @@ const FeedbackSection = ({
       </div>
 
       {/* 더 자세히 모달 */}
-      {isDetailOpen && (
+      {/* {isDetailOpen && (
         <div
           ref={detailRef}
           className="text-body-medium border-blue-30 flex w-184.75 flex-col rounded-2xl border bg-white px-3 py-2.5"
+        > */}
+      {detailMounted && (
+        <div
+          ref={detailRef}
+          className={clsx(
+            'text-body-medium border-blue-30 flex w-184.75 flex-col rounded-2xl border bg-white px-3 py-2.5',
+            'transition-all duration-200 ease-out will-change-[transform,opacity]',
+            detailEntered ? 'translate-y-0 scale-100 opacity-100' : '-translate-y-1 scale-[0.99] opacity-0',
+          )}
         >
           <textarea
             ref={textareaRef}

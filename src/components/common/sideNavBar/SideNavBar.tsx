@@ -503,7 +503,6 @@ const SideNavBar = () => {
           )}
         </div>
       </nav>
-      {/* {isCatchModalOpen && <CatchAssistantModal onClose={() => setIsCatchModalOpen(false)} />} */}
       {isCatchModalOpen && (
         <div className="fixed inset-0 z-100 flex items-center justify-center">
           {/* 배경 오버레이 */}
