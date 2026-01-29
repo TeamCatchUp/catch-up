@@ -4,14 +4,14 @@ export type SourceType = 'jira' | 'github';
 
 const SourceBadge = ({ n, sourceType }: { n: string; sourceType: SourceType }) => {
   return (
-    <div
+    <span
       className={clsx(
-        'mr-px h-6 w-6.5 items-center justify-center rounded-full px-2 py-1 whitespace-nowrap',
+        'mr-px inline-flex h-6 w-6.5 items-center justify-center rounded-full whitespace-nowrap',
         sourceType === 'jira' ? 'bg-green-10' : 'bg-blue-5',
       )}
     >
       <span className="text-body-xsmall text-gray-80 relative bottom-px">{n}</span>
-    </div>
+    </span>
   );
 };
 
