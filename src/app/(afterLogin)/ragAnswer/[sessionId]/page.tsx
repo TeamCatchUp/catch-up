@@ -764,8 +764,8 @@ export default function Page() {
   //   [currentPage, qaPairs.length, isLoading],
   // );
   const WHEEL_THRESHOLD = 100; // 민감도 (트랙패드면 60~100, 마우스휠이면 100~200)
-  const WHEEL_LOCK_MS = 650; // 한 번 이동 후 잠금 시간
-  const WHEEL_RESET_MS = 120; // 휠 입력 끊기면 누적 리셋
+  const WHEEL_LOCK_MS = 700; // 한 번 이동 후 잠금 시간
+  const WHEEL_RESET_MS = 140; // 휠 입력 끊기면 누적 리셋
 
   const handleWheel = useCallback(
     (e: WheelEvent) => {
@@ -802,24 +802,50 @@ export default function Page() {
       const dir = wheelAccumRef.current > 0 ? 1 : -1;
       wheelAccumRef.current = 0;
 
-      // 범위 체크
-      const next = currentPage + dir;
-      if (next < 0 || next > qaPairs.length - 1) return;
+      //   // 범위 체크
+      //   const next = currentPage + dir;
+      //   if (next < 0 || next > qaPairs.length - 1) return;
 
-      // 이동 잠금
+      //   // 이동 잠금
+      //   wheelLockRef.current = true;
+      //   setSlideDirection(dir > 0 ? 'up' : 'down');
+
+      //   setTimeout(() => {
+      //     setCurrentPage(next);
+      //     setSlideDirection(null);
+      //   }, 300);
+
+      //   setTimeout(() => {
+      //     wheelLockRef.current = false;
+      //   }, WHEEL_LOCK_MS);
+      // },
+      // [currentPage, qaPairs.length, isLoading],
+      // 여기서부터 "딱 1번만" 이동되도록 잠금 걸고,
+      // next 계산은 functional update로 확정
       wheelLockRef.current = true;
       setSlideDirection(dir > 0 ? 'up' : 'down');
 
-      setTimeout(() => {
-        setCurrentPage(next);
-        setSlideDirection(null);
-      }, 300);
+      setCurrentPage((prev) => {
+        const next = prev + dir;
+        if (next < 0 || next > qaPairs.length - 1) {
+          // 범위 밖이면 잠금 해제
+          wheelLockRef.current = false;
+          setSlideDirection(null);
+          return prev;
+        }
 
-      setTimeout(() => {
-        wheelLockRef.current = false;
-      }, WHEEL_LOCK_MS);
+        // 애니메이션 종료 후 방향 초기화
+        setTimeout(() => setSlideDirection(null), 300);
+
+        // 잠금 해제는 약간 더 늦게
+        setTimeout(() => {
+          wheelLockRef.current = false;
+        }, WHEEL_LOCK_MS);
+
+        return next;
+      });
     },
-    [currentPage, qaPairs.length, isLoading],
+    [isLoading, qaPairs.length],
   );
 
   // 피드백 제출 후 Message의 hasFeedback 업데이트
