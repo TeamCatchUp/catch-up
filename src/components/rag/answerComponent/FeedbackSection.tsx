@@ -128,7 +128,24 @@ const FeedbackSection = ({
           behavior: 'smooth',
           block: 'end',
         });
-      }, DETAIL_ANIM_MS + 50); // 애니메이션 완료(200ms) 후 스크롤
+
+        // 추가 여유 공간 확보
+        setTimeout(() => {
+          if (detailRef.current) {
+            const rect = detailRef.current.getBoundingClientRect();
+            const viewportHeight = window.innerHeight;
+            const bottomGap = viewportHeight - rect.bottom;
+
+            // 하단 여유 공간이 100px 미만이면 추가 스크롤
+            if (bottomGap < 100) {
+              window.scrollBy({
+                top: 100 - bottomGap,
+                behavior: 'smooth',
+              });
+            }
+          }
+        }, 100);
+      }, DETAIL_ANIM_MS + 50);
     }
   }, [detailMounted, detailEntered]);
 
