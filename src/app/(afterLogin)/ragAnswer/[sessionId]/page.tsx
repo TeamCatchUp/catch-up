@@ -688,28 +688,6 @@ export default function Page() {
         return;
       }
 
-      // // 답변 영역 스크롤 체크
-      // if (answerScrollRef.current) {
-      //   const { scrollTop, scrollHeight, clientHeight } = answerScrollRef.current;
-      //   const isScrollable = scrollHeight > clientHeight;
-
-      //   // 스크롤 가능한 경우
-      //   if (isScrollable) {
-      //     // 답변 영역 내부에서 발생한 이벤트인지 체크
-      //     const isInsideAnswer = answerScrollRef.current.contains(e.target as Node);
-
-      //     if (isInsideAnswer) {
-      //       // 스크롤 경계 체크 (여유 10px)
-      //       const isAtTop = scrollTop <= 10;
-      //       const isAtBottom = scrollTop + clientHeight >= scrollHeight - 10;
-
-      //       // 경계가 아니면 페이지 전환 차단
-      //       if (e.deltaY > 0 && !isAtBottom) return;
-      //       if (e.deltaY < 0 && !isAtTop) return;
-      //     }
-      //   }
-      // }
-
       // 답변 영역 또는 피드백 버튼 영역 내부에서 발생한 이벤트는 페이지 전환 차단
       const isInsideAnswer = answerScrollRef.current && answerScrollRef.current.contains(e.target as Node);
       const isInsideFeedback = feedbackRef.current && feedbackRef.current.contains(e.target as Node);
@@ -720,8 +698,6 @@ export default function Page() {
       }
 
       if (isScrolling.current) {
-        // e.preventDefault();
-        // e.stopPropagation();
         return;
       }
 
@@ -737,20 +713,13 @@ export default function Page() {
         // 즉시 잠금
         isScrolling.current = true;
 
-        // // 기존 타임아웃 클리어
-        // if (scrollTimeout.current) {
-        //   clearTimeout(scrollTimeout.current);
-        // }
-
         setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
         setTimeout(() => {
-          // setCurrentPage((prev) => Math.min(prev + 1, qaPairs.length - 1));
           setCurrentPage((prev) => prev + 1);
           setSlideDirection(null);
         }, 300);
 
         // 애니메이션 완료 후 잠금 해제 (300ms 애니메이션 + 여유 200ms)
-        // scrollTimeout.current = setTimeout(() => {
         setTimeout(() => {
           isScrolling.current = false;
         }, 800);
@@ -763,76 +732,18 @@ export default function Page() {
         // 즉시 잠금
         isScrolling.current = true;
 
-        // // 기존 타임아웃 클리어
-        // if (scrollTimeout.current) {
-        //   clearTimeout(scrollTimeout.current);
-        // }
-
         setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
         setTimeout(() => {
-          // setCurrentPage((prev) => Math.max(prev - 1, 0));
           setCurrentPage((prev) => prev - 1);
           setSlideDirection(null);
         }, 300);
 
         // 애니메이션 완료 후 잠금 해제 (300ms 애니메이션 + 여유 200ms)
-        // scrollTimeout.current = setTimeout(() => {
         setTimeout(() => {
           isScrolling.current = false;
         }, 800);
       }
     },
-    //   // 페이지 전환 (스크롤 방향: 위로 올리면(deltaY < 0) 다음/최신 질문, 아래로 내리면(deltaY > 0) 이전 질문)
-    //   // 다음 질문
-    //   if (e.deltaY > 0 && currentPage < qaPairs.length - 1) {
-    //     e.preventDefault();
-    //     e.stopPropagation();
-
-    //     // 즉시 잠금
-    //     isScrolling.current = true;
-
-    //     // 기존 타임아웃 클리어
-    //     if (scrollTimeout.current) {
-    //       clearTimeout(scrollTimeout.current);
-    //     }
-
-    //     setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
-    //     setTimeout(() => {
-    //       setCurrentPage((prev) => Math.min(prev + 1, qaPairs.length - 1));
-    //       setSlideDirection(null);
-    //     }, 300);
-
-    //     // 1.2초 후 잠금 해제
-    //     scrollTimeout.current = setTimeout(() => {
-    //       isScrolling.current = false;
-    //     }, 1200);
-    //   }
-
-    //   // 아래로 스크롤 (이전 질문으로)
-    //   else if (e.deltaY < 0 && currentPage > 0) {
-    //     e.preventDefault();
-    //     e.stopPropagation();
-
-    //     // 즉시 잠금
-    //     isScrolling.current = true;
-
-    //     // 기존 타임아웃 클리어
-    //     if (scrollTimeout.current) {
-    //       clearTimeout(scrollTimeout.current);
-    //     }
-
-    //     setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
-    //     setTimeout(() => {
-    //       setCurrentPage((prev) => Math.max(prev - 1, 0));
-    //       setSlideDirection(null);
-    //     }, 300);
-
-    //     // 1.2초 후 잠금 해제
-    //     scrollTimeout.current = setTimeout(() => {
-    //       isScrolling.current = false;
-    //     }, 1200);
-    //   }
-    // },
     [currentPage, qaPairs.length, isLoading],
   );
 
@@ -1140,25 +1051,6 @@ export default function Page() {
                   <button
                     key={idx}
                     onClick={() => {
-                      //   if (isScrolling.current || idx === currentPage) return;
-                      //   isScrolling.current = true;
-
-                      //   // 기존 타임아웃 클리어
-                      //   if (scrollTimeout.current) {
-                      //     clearTimeout(scrollTimeout.current);
-                      //   }
-
-                      //   // 다음 페이지(더 큰 인덱스)로 가면 up, 이전 페이지로 가면 down
-                      //   setSlideDirection(idx > currentPage ? 'up' : 'down');
-                      //   setTimeout(() => {
-                      //     setCurrentPage(idx);
-                      //     setSlideDirection(null);
-                      //     // 스크롤 잠금 해제
-                      //     scrollTimeout.current = setTimeout(() => {
-                      //       isScrolling.current = false;
-                      //     }, 1000);
-                      //   }, 300);
-                      // }}
                       // 같은 페이지 클릭 또는 로딩 중이면 무시
                       if (idx === currentPage || isLoading) return;
 

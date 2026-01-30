@@ -47,7 +47,7 @@ const TeamSpaceModal = ({ onClose, teamSpaces, selectedId, onSelect }: TeamSpace
               onClose();
             }}
             className={clsx(
-              'icon-button-only-gray flex w-55 cursor-pointer items-center gap-2.5 rounded-lg p-2',
+              'icon-button-only-gray flex w-59.5 cursor-pointer items-center gap-2.5 rounded-lg p-2',
               isSelected && 'bg-neutral-3',
             )}
           >
