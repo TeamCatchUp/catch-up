@@ -6,7 +6,6 @@ import ToggleOn from '/public/icons/icon/state=On.svg';
 // import Delete from '/public/icons/icon/delete_2.svg';
 // import Reset from '/public/icons/icon/reset.svg';
 // import ArrowSend from '/public/icons/icon/arrow_send.svg';
-import ToggleSwitch from '@/components/common/ToggleSwitch';
 
 const filter = [
   { id: 1, name: '모든 날짜' },
@@ -40,12 +39,9 @@ const Filter = ({ isOpen, onClose }: FilterComponentsProps) => {
     <div className="border-neutral-3 flex h-full flex-col justify-center gap-2.5 rounded-xl border p-4">
       <div className="flex justify-between">
         <span className="text-body-xsmall text-gray-50">기간 선택</span>
-        <ToggleSwitch
-          checked={isOpen}
-          onChange={(next) => {
-            if (!next) onClose();
-          }}
-        />
+        <button onClick={onClose} className="cursor-pointer">
+          <ToggleOn />
+        </button>
       </div>
       <div className="flex h-8.75 items-center gap-1.5">
         {filter.map((item) => {

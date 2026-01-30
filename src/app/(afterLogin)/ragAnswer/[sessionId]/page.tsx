@@ -32,7 +32,6 @@ import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
 import ErrorResponse from '@/components/rag/answerComponent/ErrorResponse';
 import EditMessageInput from '@/components/rag/EditMessageInput';
 import ToolTip from '@/components/common/ToolTip';
-import ToggleSwitch from '@/components/common/ToggleSwitch';
 import TeamSpaceModal from '@/components/rag/modal/TeamSpaceModal';
 import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
 import { MarkDownComponents } from '@/components/rag/answerComponent/markdown/MarkDownComponents';
@@ -726,7 +725,7 @@ export default function Page() {
         isScrolling.current = true;
 
         //  1.2~1.6초 정도 wheel 완전 차단 (관성 끝날 때까지)
-        wheelBlockUntilRef.current = performance.now() + 1400;
+        wheelBlockUntilRef.current = performance.now() + 1300;
 
         setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
         setTimeout(() => {
@@ -737,7 +736,7 @@ export default function Page() {
         // 애니메이션 완료 후 잠금 해제
         setTimeout(() => {
           isScrolling.current = false;
-        }, 1400);
+        }, 1300);
       }
       // 이전 페이지로 (스크롤 업)
       else if (scrollingUp && currentPage > 0) {
@@ -746,7 +745,7 @@ export default function Page() {
 
         // 즉시 잠금
         isScrolling.current = true;
-        wheelBlockUntilRef.current = performance.now() + 1400;
+        wheelBlockUntilRef.current = performance.now() + 1100;
 
         setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
         setTimeout(() => {
@@ -757,7 +756,7 @@ export default function Page() {
         // 애니메이션 완료 후 잠금 해제
         setTimeout(() => {
           isScrolling.current = false;
-        }, 1400);
+        }, 1100);
       }
     },
     [currentPage, qaPairs.length, isLoading],
@@ -813,11 +812,13 @@ export default function Page() {
   const currentDetailedTasks = currentQA?.answer?.detailedTasks || [];
 
   return (
-    <div className="flex h-screen w-full overflow-hidden">
+    // <div className="flex h-screen w-full overflow-hidden">
+    <div className="flex h-screen w-full">
       <div className="flex min-w-0 flex-1 flex-col">
         <RagContentHeader title={chatData.title} onSelectQuestion={goToQuestion} />
         {/* 여기 gap도 */}
-        <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
+        {/* <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0"> */}
+        <div className="border-neutral-3 relative flex flex-1 flex-col border-r-0">
           <div
             ref={scrollRef}
             className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
@@ -829,8 +830,17 @@ export default function Page() {
               </span>
               <div className="border-neutral-4 flex-1 border-t" />
             </div>
-            <div
+            {/* <div
               className={`mx-auto w-193.25 flex-1 overflow-hidden transition-all duration-300 ${
+                slideDirection === 'down'
+                  ? 'translate-y-full opacity-0'
+                  : slideDirection === 'up'
+                    ? '-translate-y-full opacity-0'
+                    : 'translate-y-0 opacity-100'
+              }`}
+            > */}
+            <div
+              className={`mx-auto w-193.25 flex-1 transition-all duration-300 ${
                 slideDirection === 'down'
                   ? 'translate-y-full opacity-0'
                   : slideDirection === 'up'
@@ -921,16 +931,14 @@ export default function Page() {
 
                               <div className="flex shrink-0 items-center gap-3">
                                 <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
-                                <ToggleSwitch
-                                  checked={!!filterOpenMap[currentQA.answer!.id]}
-                                  onChange={(next) =>
-                                    setFilterOpenMap((prev) => ({
-                                      ...prev,
-                                      [currentQA.answer!.id]: next,
-                                    }))
+                                <button
+                                  onClick={() =>
+                                    setFilterOpenMap((prev) => ({ ...prev, [currentQA.answer!.id]: true }))
                                   }
-                                  aria-label="답변 세부 필터 토글"
-                                />
+                                  className="cursor-pointer"
+                                >
+                                  <ToggleOff />
+                                </button>
                               </div>
                             </div>
                           ) : (
