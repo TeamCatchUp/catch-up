@@ -65,7 +65,8 @@ const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
 
   const handleNewQuestion = () => {
     const newSessionId = crypto.randomUUID();
-    router.push(`/ragAnswer/${newSessionId}`);
+    // router.push(`/ragAnswer/${newSessionId}`);
+    router.push(`/search`);
   };
 
   return (
