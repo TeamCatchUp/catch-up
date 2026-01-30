@@ -87,12 +87,14 @@ const SideNavBar = () => {
       try {
         setIsLoading(true);
         const [chatroomRes] = await Promise.all([searchService.getRecentChatromms()]);
+
         if (chatroomRes.content) {
           const mappedChatrooms = chatroomRes.content.map((item: any) => ({
             title: item.title,
             sessionId: item.sessionId,
           }));
-          setRecentChatrooms(mappedChatrooms);
+
+          setRecentChatrooms(mappedChatrooms.reverse());
         }
       } catch (err) {
         console.error('데이터 로드 실패:', err);
@@ -100,6 +102,7 @@ const SideNavBar = () => {
         setIsLoading(false);
       }
     };
+
     fetchDefaultData();
     const handleRefresh = () => fetchDefaultData();
 
@@ -410,7 +413,7 @@ const SideNavBar = () => {
                 </span>
               )}
             </button>
-            <div className="mt-2 flex flex-col-reverse overflow-y-auto">
+            <div className="mt-2 flex flex-col overflow-y-auto">
               {recentChatrooms.map((chatroom) => {
                 return (
                   <Link
