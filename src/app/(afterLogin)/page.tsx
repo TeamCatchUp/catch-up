@@ -26,7 +26,7 @@ export default function Home() {
       <TopNavbar pageType="home" />
       <Search />
       <div className="flex flex-col items-center gap-16 px-16 pt-10 pb-30">
-        <TaskRecentlyChecked onClickCard={setSelectedTask} />
+        {/* <TaskRecentlyChecked onClickCard={setSelectedTask} /> */}
         <HowToUse />
         <LinkTool />
       </div>
