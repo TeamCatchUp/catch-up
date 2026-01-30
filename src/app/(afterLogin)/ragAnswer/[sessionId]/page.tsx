@@ -692,9 +692,12 @@ export default function Page() {
         return;
       }
 
-      // 페이지 전환 (스크롤 방향: 위로 올리면(deltaY < 0) 다음/최신 질문, 아래로 내리면(deltaY > 0) 이전 질문)
-      // 다음 질문
-      if (e.deltaY > 0 && currentPage < qaPairs.length - 1) {
+      // 스크롤 방향 감지 (deltaY의 부호만 확인)
+      const scrollingDown = e.deltaY > 0;
+      const scrollingUp = e.deltaY < 0;
+
+      // 다음 페이지로 (스크롤 다운)
+      if (scrollingDown && currentPage < qaPairs.length - 1) {
         e.preventDefault();
         e.stopPropagation();
 
@@ -712,14 +715,13 @@ export default function Page() {
           setSlideDirection(null);
         }, 300);
 
-        // 1초 후 잠금 해제
+        // 애니메이션 완료 후 잠금 해제 (300ms 애니메이션 + 여유 200ms)
         scrollTimeout.current = setTimeout(() => {
           isScrolling.current = false;
-        }, 1200);
+        }, 500);
       }
-
-      // 아래로 스크롤 (이전 질문으로)
-      else if (e.deltaY < 0 && currentPage > 0) {
+      // 이전 페이지로 (스크롤 업)
+      else if (scrollingUp && currentPage > 0) {
         e.preventDefault();
         e.stopPropagation();
 
@@ -737,12 +739,63 @@ export default function Page() {
           setSlideDirection(null);
         }, 300);
 
-        // 1초 후 잠금 해제
+        // 애니메이션 완료 후 잠금 해제 (300ms 애니메이션 + 여유 200ms)
         scrollTimeout.current = setTimeout(() => {
           isScrolling.current = false;
-        }, 1000);
+        }, 500);
       }
     },
+    //   // 페이지 전환 (스크롤 방향: 위로 올리면(deltaY < 0) 다음/최신 질문, 아래로 내리면(deltaY > 0) 이전 질문)
+    //   // 다음 질문
+    //   if (e.deltaY > 0 && currentPage < qaPairs.length - 1) {
+    //     e.preventDefault();
+    //     e.stopPropagation();
+
+    //     // 즉시 잠금
+    //     isScrolling.current = true;
+
+    //     // 기존 타임아웃 클리어
+    //     if (scrollTimeout.current) {
+    //       clearTimeout(scrollTimeout.current);
+    //     }
+
+    //     setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
+    //     setTimeout(() => {
+    //       setCurrentPage((prev) => Math.min(prev + 1, qaPairs.length - 1));
+    //       setSlideDirection(null);
+    //     }, 300);
+
+    //     // 1.2초 후 잠금 해제
+    //     scrollTimeout.current = setTimeout(() => {
+    //       isScrolling.current = false;
+    //     }, 1200);
+    //   }
+
+    //   // 아래로 스크롤 (이전 질문으로)
+    //   else if (e.deltaY < 0 && currentPage > 0) {
+    //     e.preventDefault();
+    //     e.stopPropagation();
+
+    //     // 즉시 잠금
+    //     isScrolling.current = true;
+
+    //     // 기존 타임아웃 클리어
+    //     if (scrollTimeout.current) {
+    //       clearTimeout(scrollTimeout.current);
+    //     }
+
+    //     setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
+    //     setTimeout(() => {
+    //       setCurrentPage((prev) => Math.max(prev - 1, 0));
+    //       setSlideDirection(null);
+    //     }, 300);
+
+    //     // 1.2초 후 잠금 해제
+    //     scrollTimeout.current = setTimeout(() => {
+    //       isScrolling.current = false;
+    //     }, 1200);
+    //   }
+    // },
     [currentPage, qaPairs.length, isLoading],
   );
 
