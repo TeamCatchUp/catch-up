@@ -119,6 +119,7 @@ export default function Page() {
   const sseRef = useRef<EventSource | null>(null);
   const stoppedRef = useRef(false); // 로딩 중 질문 중지
   const feedbackRef = useRef<HTMLDivElement>(null); // 피드백 버튼 영역
+  const wheelBlockUntilRef = useRef(0);
 
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -697,7 +698,17 @@ export default function Page() {
         return;
       }
 
+      // 관성 wheel 차단용 쿨다운
+      const now = performance.now();
+      if (now < wheelBlockUntilRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
       if (isScrolling.current) {
+        e.preventDefault();
+        e.stopPropagation();
         return;
       }
 
@@ -713,16 +724,19 @@ export default function Page() {
         // 즉시 잠금
         isScrolling.current = true;
 
+        //  1.2~1.6초 정도 wheel 완전 차단 (관성 끝날 때까지)
+        wheelBlockUntilRef.current = performance.now() + 1400;
+
         setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
         setTimeout(() => {
           setCurrentPage((prev) => prev + 1);
           setSlideDirection(null);
         }, 300);
 
-        // 애니메이션 완료 후 잠금 해제 (300ms 애니메이션 + 여유 200ms)
+        // 애니메이션 완료 후 잠금 해제
         setTimeout(() => {
           isScrolling.current = false;
-        }, 800);
+        }, 1400);
       }
       // 이전 페이지로 (스크롤 업)
       else if (scrollingUp && currentPage > 0) {
@@ -731,6 +745,7 @@ export default function Page() {
 
         // 즉시 잠금
         isScrolling.current = true;
+        wheelBlockUntilRef.current = performance.now() + 1400;
 
         setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
         setTimeout(() => {
@@ -738,10 +753,10 @@ export default function Page() {
           setSlideDirection(null);
         }, 300);
 
-        // 애니메이션 완료 후 잠금 해제 (300ms 애니메이션 + 여유 200ms)
+        // 애니메이션 완료 후 잠금 해제
         setTimeout(() => {
           isScrolling.current = false;
-        }, 800);
+        }, 1400);
       }
     },
     [currentPage, qaPairs.length, isLoading],
