@@ -681,90 +681,8 @@ export default function Page() {
   const isScrolling = useRef(false);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // // 외부 스크롤로 페이지 전환
-  // const handleWheel = useCallback(
-  //   (e: WheelEvent) => {
-  //     // 로딩 중이거나 이미 스크롤 중이면 무시
-  //     if (isLoading) {
-  //       e.preventDefault();
-  //       e.stopPropagation();
-  //       return;
-  //     }
-
-  //     // 답변 영역 또는 피드백 버튼 영역 내부에서 발생한 이벤트는 페이지 전환 차단
-  //     const isInsideAnswer = answerScrollRef.current && answerScrollRef.current.contains(e.target as Node);
-  //     const isInsideFeedback = feedbackRef.current && feedbackRef.current.contains(e.target as Node);
-
-  //     if (isInsideAnswer || isInsideFeedback) {
-  //       // 답변 영역과 피드백 영역에서는 페이지 전환 완전 차단
-  //       return;
-  //     }
-
-  //     // 관성 wheel 차단용 쿨다운
-  //     const now = performance.now();
-  //     if (now < wheelBlockUntilRef.current) {
-  //       e.preventDefault();
-  //       e.stopPropagation();
-  //       return;
-  //     }
-
-  //     if (isScrolling.current) {
-  //       e.preventDefault();
-  //       e.stopPropagation();
-  //       return;
-  //     }
-
-  //     // 스크롤 방향 감지 (deltaY의 부호만 확인)
-  //     const scrollingDown = e.deltaY > 0;
-  //     const scrollingUp = e.deltaY < 0;
-
-  //     // 다음 페이지로 (스크롤 다운)
-  //     if (scrollingDown && currentPage < qaPairs.length - 1) {
-  //       e.preventDefault();
-  //       e.stopPropagation();
-
-  //       // 즉시 잠금
-  //       isScrolling.current = true;
-
-  //       //  1.2~1.6초 정도 wheel 완전 차단 (관성 끝날 때까지)
-  //       wheelBlockUntilRef.current = performance.now() + 1300;
-
-  //       setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
-  //       setTimeout(() => {
-  //         setCurrentPage((prev) => prev + 1);
-  //         setSlideDirection(null);
-  //       }, 300);
-
-  //       // 애니메이션 완료 후 잠금 해제
-  //       setTimeout(() => {
-  //         isScrolling.current = false;
-  //       }, 1300);
-  //     }
-  //     // 이전 페이지로 (스크롤 업)
-  //     else if (scrollingUp && currentPage > 0) {
-  //       e.preventDefault();
-  //       e.stopPropagation();
-
-  //       // 즉시 잠금
-  //       isScrolling.current = true;
-  //       wheelBlockUntilRef.current = performance.now() + 1300;
-
-  //       setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
-  //       setTimeout(() => {
-  //         setCurrentPage((prev) => prev - 1);
-  //         setSlideDirection(null);
-  //       }, 300);
-
-  //       // 애니메이션 완료 후 잠금 해제
-  //       setTimeout(() => {
-  //         isScrolling.current = false;
-  //       }, 1300);
-  //     }
-  //   },
-  //   [currentPage, qaPairs.length, isLoading],
-  // );
-  const WHEEL_THRESHOLD = 150; // 민감도 (트랙패드면 60~100, 마우스휠이면 100~200) 100
-  const WHEEL_LOCK_MS = 1000; // 한 번 이동 후 잠금 시간 700
+  const WHEEL_THRESHOLD = 150; // 민감도 (트랙패드면 60~100, 마우스휠이면 100~200)
+  const WHEEL_LOCK_MS = 1000; // 한 번 이동 후 잠금 시간
   const WHEEL_RESET_MS = 140; // 휠 입력 끊기면 누적 리셋
 
   const handleWheel = useCallback(
@@ -802,24 +720,6 @@ export default function Page() {
       const dir = wheelAccumRef.current > 0 ? 1 : -1;
       wheelAccumRef.current = 0;
 
-      //   // 범위 체크
-      //   const next = currentPage + dir;
-      //   if (next < 0 || next > qaPairs.length - 1) return;
-
-      //   // 이동 잠금
-      //   wheelLockRef.current = true;
-      //   setSlideDirection(dir > 0 ? 'up' : 'down');
-
-      //   setTimeout(() => {
-      //     setCurrentPage(next);
-      //     setSlideDirection(null);
-      //   }, 300);
-
-      //   setTimeout(() => {
-      //     wheelLockRef.current = false;
-      //   }, WHEEL_LOCK_MS);
-      // },
-      // [currentPage, qaPairs.length, isLoading],
       // 여기서부터 "딱 1번만" 이동되도록 잠금 걸고,
       // next 계산은 functional update로 확정
       wheelLockRef.current = true;
