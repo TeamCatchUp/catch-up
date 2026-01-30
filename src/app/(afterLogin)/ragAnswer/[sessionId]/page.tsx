@@ -909,7 +909,9 @@ export default function Page() {
                                     )}
                                   />
                                 </div>
-                                <div className="absolute bottom-12.5 left-23.75 z-100">
+                                {/* 데모 시연용으로 임시로 위치 변경 */}
+                                {/* <div className="absolute bottom-12.5 left-23.75 z-100"> */}
+                                <div className="absolute bottom-9.5 left-23.75 z-100">
                                   <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
                                 </div>
                               </div>
@@ -961,7 +963,7 @@ export default function Page() {
                                     )}
                                   >
                                     <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
-                                      스페이스명 text text text
+                                      {selectedTeamSpace.name}
                                     </div>
                                     <DropDown
                                       className={clsx(
@@ -972,7 +974,9 @@ export default function Page() {
                                       )}
                                     />
                                   </div>
-                                  <div className="absolute bottom-12.5 left-23.75">
+                                  {/* 데모 시연용으로 임시로 위치 변경 */}
+                                  {/* <div className="absolute bottom-12.5 left-23.75 z-100"> */}
+                                  <div className="absolute bottom-9.5 left-23.75">
                                     <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
                                   </div>
                                 </div>
