@@ -64,8 +64,8 @@ const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
   useOutsideClick(modalRef, onClose);
 
   const handleNewQuestion = () => {
-    const newSessionId = crypto.randomUUID();
-    router.push(`/ragAnswer/${newSessionId}`);
+onClose(); 
+    router.push('/search');
   };
 
   return (
@@ -104,7 +104,7 @@ const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
         <div className="text-gray-40 p-5">데이터를 불러오는 중입니다...</div>
       ) : (
         <div className="overflow-y-scroll">
-          <SearchHistory querys={recentQueries} isModal={true} />
+          <SearchHistory querys={recentQueries} isModal={true} onItemClick={onClose}/>
         </div>
       )}
     </div>
