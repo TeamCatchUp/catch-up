@@ -32,6 +32,7 @@ import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
 import ErrorResponse from '@/components/rag/answerComponent/ErrorResponse';
 import EditMessageInput from '@/components/rag/EditMessageInput';
 import ToolTip from '@/components/common/ToolTip';
+import ToggleSwitch from '@/components/common/ToggleSwitch';
 import TeamSpaceModal from '@/components/rag/modal/TeamSpaceModal';
 import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
 import { MarkDownComponents } from '@/components/rag/answerComponent/markdown/MarkDownComponents';
@@ -920,14 +921,16 @@ export default function Page() {
 
                               <div className="flex shrink-0 items-center gap-3">
                                 <span className="text-body-xsmall text-gray-50">답변 세부 필터</span>
-                                <button
-                                  onClick={() =>
-                                    setFilterOpenMap((prev) => ({ ...prev, [currentQA.answer!.id]: true }))
+                                <ToggleSwitch
+                                  checked={!!filterOpenMap[currentQA.answer!.id]}
+                                  onChange={(next) =>
+                                    setFilterOpenMap((prev) => ({
+                                      ...prev,
+                                      [currentQA.answer!.id]: next,
+                                    }))
                                   }
-                                  className="cursor-pointer"
-                                >
-                                  <ToggleOff />
-                                </button>
+                                  aria-label="답변 세부 필터 토글"
+                                />
                               </div>
                             </div>
                           ) : (
