@@ -797,7 +797,7 @@ export default function Page() {
   const currentDetailedTasks = currentQA?.answer?.detailedTasks || [];
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-white">
+    <div className="flex h-screen w-full overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col">
         <RagContentHeader title={chatData.title} onSelectQuestion={goToQuestion} />
         {/* 여기 gap도 */}
@@ -883,7 +883,7 @@ export default function Page() {
                                     )}
                                   />
                                 </div>
-                                <div className="absolute bottom-12.5 left-23.75 z-9999">
+                                <div className="absolute bottom-12.5 left-23.75 z-100">
                                   <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
                                 </div>
                               </div>
