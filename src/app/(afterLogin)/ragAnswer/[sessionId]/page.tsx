@@ -39,6 +39,26 @@ import { MarkDownComponents } from '@/components/rag/answerComponent/markdown/Ma
 import { createSSEConnection, sendChatQuery, resumeChatQuery } from '@/util/sendChatQuery';
 import { normalizeSources } from '@/util/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/util/normalizeRelatedJiraIssues';
+import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/UI/SearchOptionButton';
+import { SearchOptionPopover } from '@/components/search/SearchOptionPopover';
+import { OptionListPopover } from '@/components/search/OptionListPopover';
+import { PERSON_OPTIONS } from '@/components/search/OptionDummyData';
+import { GithubNode } from '@/constants/githubRepoData';
+import { JiraNode } from '@/constants/jiraData';
+import IconJira from '@/public/icons/logo/Jira.svg';
+import IconGithub from '@/public/icons/logo/GitHub.svg';
+import IconDivider from '@/public/icons/icon/divider.svg';
+import IconPerson from '@/public/icons/icon/person.svg';
+import IconTag from '@/public/icons/icon/tag.svg';
+import IconSpace from '@/public/icons/icon/space.svg';
+import IconLock from '@/public/icons/icon/lock_filled.svg';
+import IconFile from '@/public/icons/icon/file_filled.svg';
+import IconFolder from '@/public/icons/icon/folder_blue.svg';
+import IconJiraTicket from '@/public/icons/jira/Task.svg';
+import IconJiraSprint from '@/public/icons/jira/Epic.svg';
+import { GithubExplorer } from '@/components/search/GithubExplorer';
+import { JiraExplorer } from '@/components/search/JiraExplorer';
+import { SelectedFilterChips } from '@/components/search/SelectedFilterChips';
 
 const icon = [
   { name: 'Copy', icon: Copy },
@@ -124,17 +144,6 @@ export default function Page() {
   const wheelResetTimerRef = useRef<NodeJS.Timeout | null>(null);
   const wheelEndTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const today = new Date();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-
-  const toggleSpaceDropdown = useCallback((answerId: string) => {
-    setSpaceDropDownOpenMap((prev) => {
-      const nextOpen = !prev?.[answerId];
-      return nextOpen ? { [answerId]: true } : {};
-    });
-  }, []);
-
   const closeSpaceDropdown = useCallback((answerId: string) => {
     setSpaceDropDownOpenMap((prev) => {
       if (!prev?.[answerId]) return prev;
@@ -144,6 +153,147 @@ export default function Page() {
     });
   }, []);
 
+  const toggleSpaceDropdown = useCallback((answerId: string) => {
+    setSpaceDropDownOpenMap((prev) => {
+      const nextOpen = !prev?.[answerId];
+      return nextOpen ? { [answerId]: true } : {};
+    });
+  }, []);
+
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+  const toggleFilter = () => {
+    setIsFilterOpen((prev) => !prev);
+  };
+
+  const [openPopover, setOpenPopover] = useState<'person' | 'department' | 'project' | null>(null);
+  const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
+  const [selectedGithubItems, setSelectedGithubItems] = useState<GithubNode[]>([]);
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const [currentJiraProject, setCurrentJiraProject] = useState<any>(null);
+  const [selectedJiraItems, setSelectedJiraItems] = useState<any[]>([]);
+  const [currentRepo, setCurrentRepo] = useState<any>(null);
+
+  const isGithubMode = selectedOptions.includes('Github');
+  const isJiraMode = selectedOptions.includes('Jira');
+
+  const [activeExplorer, setActiveExplorer] = useState<'github' | 'jira' | null>(null);
+
+  const handleGithubClick = () => {
+    setActiveExplorer((prev) => (prev === 'github' ? null : 'github'));
+  };
+
+  const handleJiraClick = () => {
+    setActiveExplorer((prev) => (prev === 'jira' ? null : 'jira'));
+  };
+  const togglePerson = (val: string) =>
+    setSelectedPeople((p) => (p.includes(val) ? p.filter((i) => i !== val) : [...p, val]));
+
+  const getAllChildIds = (node: GithubNode, ids: string[] = []) => {
+    ids.push(node.id);
+    if (node.children) {
+      node.children.forEach((child) => getAllChildIds(child, ids));
+    }
+    return ids;
+  };
+
+  const getAllJiraChildIds = (node: JiraNode, ids: string[] = []) => {
+    ids.push(node.id);
+    if (node.children) {
+      node.children.forEach((child) => getAllJiraChildIds(child, ids));
+    }
+    return ids;
+  };
+
+  const toggleGithubItem = (item: GithubNode) => {
+    setSelectedGithubItems((prev) => {
+      const exists = prev.find((i) => i.id === item.id);
+
+      if (exists) {
+        const idsToRemove = getAllChildIds(item);
+        return prev.filter((i) => !idsToRemove.includes(i.id));
+      } else {
+        return [...prev, item];
+      }
+    });
+  };
+  const toggleJiraItem = (item: JiraNode) => {
+    setSelectedJiraItems((prev) => {
+      const exists = prev.find((i) => i.id === item.id);
+
+      if (exists) {
+        const idsToRemove = getAllJiraChildIds(item);
+        return prev.filter((i) => !idsToRemove.includes(i.id));
+      } else {
+        return [...prev, item];
+      }
+    });
+  };
+  // const handleJiraClick = () => {
+  //   setSelectedOptions((prev) => {
+  //     if (prev.includes('Jira')) {
+  //       setCurrentJiraProject(null);
+  //       return prev.filter((opt) => opt !== 'Jira');
+  //     }
+  //     return [...prev.filter((opt) => opt !== 'Github'), 'Jira'];
+  //   });
+  // };
+
+  // const handleGithubClick = () => {
+  //   setSelectedOptions((prev) => {
+  //     if (prev.includes('Github')) {
+  //       setCurrentRepo(null);
+  //       return prev.filter((opt) => opt !== 'Github');
+  //     }
+  //     return [...prev.filter((opt) => opt !== 'Jira'), 'Github'];
+  //   });
+  // };
+  const handleResetAll = () => {
+    setSelectedPeople([]);
+    setSelectedGithubItems([]);
+    setSelectedJiraItems([]);
+  };
+
+  const allSelectedChips = [
+    ...selectedPeople.map((name) => ({ id: name, name, Icon: IconPerson, onRemove: () => togglePerson(name) })),
+    ...selectedGithubItems
+      .filter((item) => {
+        const isParentSelected = selectedGithubItems.some((potentialParent) => {
+          if (potentialParent.id === item.id) return false;
+          return potentialParent.children?.some((child: any) => child.id === item.id);
+        });
+        return !isParentSelected;
+      })
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        Icon: item.type === 'repo' ? IconGithub : item.type === 'tree' ? IconFolder : IconFile,
+        onRemove: () => toggleGithubItem(item),
+      })),
+
+    ...selectedJiraItems
+      .filter((item) => {
+        const isParentSelected = selectedJiraItems.some((potentialParent) => {
+          if (potentialParent.id === item.id) return false;
+          return potentialParent.children?.some((child: any) => child.id === item.id);
+        });
+        return !isParentSelected;
+      })
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        Icon: item.type === 'project' ? IconJira : item.type === 'board' ? IconJiraSprint : IconJiraTicket,
+        onRemove: () => toggleJiraItem(item),
+      })),
+  ];
+
+  const personLabel = selectedPeople.length > 0 ? `담당자: ${selectedPeople[0]} 외` : '담당자';
+  const gitLabel = selectedGithubItems.length > 0 ? `Github: ${selectedGithubItems[0].name} 외` : `Github`;
+  const jiraLabel = selectedJiraItems.length > 0 ? `Jira: ${selectedJiraItems[0].name} 외` : 'Jira';
   // 질문/답변 쌍 (user + assistant 하나의 페이지)
   const getQAPairs = () => {
     if (!chatData?.messages) return [];
@@ -1131,6 +1281,91 @@ export default function Page() {
             <div className="mx-auto w-193.25">
               <div
                 className={clsx(
+                  'border-neutral-2 mb-3 w-160 overflow-hidden rounded-2xl border bg-white',
+                  activeExplorer ? 'shadow-dropdown-menu h-95 opacity-100' : 'max-h-0 border-none opacity-0',
+                )}
+              >
+                <div className="h-80 overflow-y-auto p-4">
+                  <SelectedFilterChips chips={allSelectedChips} onReset={handleResetAll} />
+                  {activeExplorer === 'github' ? (
+                    <GithubExplorer
+                      selectedItems={selectedGithubItems.map((i) => i.id)}
+                      onToggleItem={toggleGithubItem}
+                      currentRepo={currentRepo}
+                      onNavigate={setCurrentRepo}
+                      onClickBack={handleGithubClick} // 뒤로가기 시 닫힘
+                    />
+                  ) : activeExplorer === 'jira' ? (
+                    <JiraExplorer
+                      selectedItems={selectedJiraItems.map((i) => i.id)}
+                      onToggleItem={toggleJiraItem}
+                      currentProject={currentJiraProject}
+                      onNavigate={setCurrentJiraProject}
+                      onClickBack={handleJiraClick}
+                    />
+                  ) : null}
+                </div>
+              </div>
+              <div
+                className={clsx(
+                  'overflow-hidden transition-all duration-300 ease-in-out',
+                  isFilterOpen ? 'mb-3 max-h-40 opacity-100' : 'mb-0 max-h-0 opacity-0',
+                )}
+              >
+                <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto rounded-2xl p-2 whitespace-nowrap">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 self-stretch overflow-x-scroll px-1.5 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <SearchOptionButton
+                          Icon={IconJira}
+                          label={jiraLabel}
+                          selected={selectedJiraItems.length > 0}
+                          onClick={handleJiraClick}
+                        />
+                        <SearchOptionButton
+                          Icon={IconGithub}
+                          label={gitLabel}
+                          selected={selectedGithubItems.length > 0}
+                          onClick={handleGithubClick}
+                        />
+                        <SearchOptionDisabledButton Icon={IconLock} label="Wiki" />
+                        <SearchOptionDisabledButton Icon={IconLock} label="Slack" />
+                      </div>
+                      <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
+
+                      <div className="flex items-center gap-2">
+                        <SearchOptionPopover
+                          open={openPopover === 'person'}
+                          onOpenChange={(o) => {
+                            setOpenPopover(o ? 'person' : null);
+                          }}
+                          trigger={
+                            <SearchOptionButton
+                              Icon={IconPerson}
+                              label={personLabel}
+                              selected={selectedPeople.length > 0}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => setOpenPopover('person')}
+                            />
+                          }
+                        >
+                          <OptionListPopover
+                            title="담당자 선택"
+                            options={PERSON_OPTIONS}
+                            selected={selectedPeople}
+                            onToggle={togglePerson}
+                            Icon={IconPerson}
+                          />
+                        </SearchOptionPopover>
+                        <SearchOptionButton Icon={IconTag} label="부서" onMouseDown={(e) => e.preventDefault()} />
+                        <SearchOptionButton Icon={IconSpace} label="프로젝트" onMouseDown={(e) => e.preventDefault()} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div
+                className={clsx(
                   'border-neutral-4 shadow-rag-bar flex gap-2 border bg-white px-3 py-2.5',
                   isMultiLine ? 'items-end rounded-3xl' : 'items-center rounded-full',
                 )}
@@ -1162,7 +1397,13 @@ export default function Page() {
 
                 <div className="flex flex-shrink-0 items-center gap-3">
                   {!newInput.trim() && !isLoading && (
-                    <div className="box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1">
+                    <div
+                      onClick={toggleFilter} // 클릭 핸들러 추가
+                      className={`box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1 ${
+                        isFilterOpen ? 'bg-blue-5 border-blue-20' : '' // 열렸을 때 강조하고 싶다면 추가
+                      }`}
+                    >
+                      {' '}
                       <Filter className="relative top-0.5 h-4.5 w-4.5" />
                       <span className="text-body-xsmall text-gray-50">필터</span>
                     </div>

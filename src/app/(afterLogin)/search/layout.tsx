@@ -1,10 +1,10 @@
-'use client'; 
+'use client';
 
 import { useState } from 'react';
 import TopNavbar from '@/components/common/topNavbar/TopNavbar';
 import IconLightbulb from '@/public/icons/icon/lightbulb.svg';
-import Jira from '@/public/image/catchstantJira1.jpg';
-import Git from '@/public/image/catchstantGit1.jpg';
+import Jira from '@/public/image/AIJIRA1.png';
+import Git from '@/public/image/aiGit.png';
 import Image from 'next/image';
 import { GithubGuideCard, JiraGuideCard } from '@/components/UI/AIGuideUI';
 
