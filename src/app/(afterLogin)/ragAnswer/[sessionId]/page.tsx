@@ -136,6 +136,23 @@ export default function Page() {
   const qaPairs = getQAPairs();
   const currentQA = qaPairs[currentPage];
 
+  const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
+
+  const goToQuestion = useCallback(
+    (query: string) => {
+      const target = normalize(query);
+      const idx = qaPairs.findIndex((p) => normalize(p.question.content) === target);
+      if (idx === -1) return;
+
+      setSlideDirection(idx > currentPage ? 'up' : 'down');
+      setTimeout(() => {
+        setCurrentPage(idx);
+        setSlideDirection(null);
+      }, 300);
+    },
+    [qaPairs, currentPage],
+  );
+
   // MD -> string
   const formatMarkdownString = (text: string) => {
     if (!text) return '';
@@ -637,7 +654,7 @@ export default function Page() {
   const handleWheel = useCallback(
     (e: WheelEvent) => {
       // 로딩 중이거나 이미 스크롤 중이면 무시
-      if (isLoading || isScrolling.current) {
+      if (isLoading) {
         e.preventDefault();
         e.stopPropagation();
         return;
@@ -771,7 +788,7 @@ export default function Page() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-white">
       <div className="flex min-w-0 flex-1 flex-col">
-        <RagContentHeader title={chatData.title} />
+        <RagContentHeader title={chatData.title} onSelectQuestion={goToQuestion} />
         {/* 여기 gap도 */}
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
           <div

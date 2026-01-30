@@ -9,6 +9,7 @@ import { nowChatroomService } from '@/api/search';
 
 interface QuestionsListInSessionModalProps {
   onClose: () => void;
+  onSelect: (query: string) => void;
 }
 
 // 인터페이스 정의 수정
@@ -16,7 +17,7 @@ interface ChatQuery {
   query: string;
 }
 
-const QuestionsListInSessionModal = ({ onClose }: QuestionsListInSessionModalProps) => {
+const QuestionsListInSessionModal = ({ onClose, onSelect }: QuestionsListInSessionModalProps) => {
   const params = useParams();
   const sessionId = params.sessionId as string; // URL 구조가 /ragAnswer/[sessionId] 인 경우
 
@@ -78,6 +79,7 @@ const QuestionsListInSessionModal = ({ onClose }: QuestionsListInSessionModalPro
                 className="hover:bg-neutral-1 rounded-md2 flex h-10 w-full cursor-pointer items-center px-2.5 py-1 transition-colors"
                 onClick={() => {
                   /* 필요한 경우 해당 질문 위치로 스크롤 등 액션 추가 */
+                  onSelect(item.query);
                   onClose();
                 }}
               >
