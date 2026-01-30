@@ -141,6 +141,22 @@ export default function Page() {
   const feedbackRef = useRef<HTMLDivElement>(null); // 피드백 버튼 영역
   const wheelBlockUntilRef = useRef(0);
 
+  const closeSpaceDropdown = useCallback((answerId: string) => {
+    setSpaceDropDownOpenMap((prev) => {
+      if (!prev?.[answerId]) return prev;
+      const copied = { ...prev };
+      delete copied[answerId];
+      return copied;
+    });
+  }, []);
+
+  const toggleSpaceDropdown = useCallback((answerId: string) => {
+    setSpaceDropDownOpenMap((prev) => {
+      const nextOpen = !prev?.[answerId];
+      return nextOpen ? { [answerId]: true } : {};
+    });
+  }, []);
+
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');

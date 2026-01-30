@@ -245,7 +245,7 @@ export default function Search() {
               //   if (!hasText) setIsFocused(false);
               // }}
               className="text-body-medium mb-2.25 w-full resize-none outline-none"
-              placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
+              placeholder="업무와 관련해 궁금한 무엇이든 물어보세요!"
               value={inputValue}
               onFocus={() => setIsFocused(true)}
               onKeyDown={(e) => {
