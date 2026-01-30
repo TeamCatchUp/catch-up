@@ -1102,23 +1102,42 @@ export default function Page() {
                   <button
                     key={idx}
                     onClick={() => {
-                      if (isScrolling.current || idx === currentPage) return;
-                      isScrolling.current = true;
+                      //   if (isScrolling.current || idx === currentPage) return;
+                      //   isScrolling.current = true;
 
+                      //   // 기존 타임아웃 클리어
+                      //   if (scrollTimeout.current) {
+                      //     clearTimeout(scrollTimeout.current);
+                      //   }
+
+                      //   // 다음 페이지(더 큰 인덱스)로 가면 up, 이전 페이지로 가면 down
+                      //   setSlideDirection(idx > currentPage ? 'up' : 'down');
+                      //   setTimeout(() => {
+                      //     setCurrentPage(idx);
+                      //     setSlideDirection(null);
+                      //     // 스크롤 잠금 해제
+                      //     scrollTimeout.current = setTimeout(() => {
+                      //       isScrolling.current = false;
+                      //     }, 1000);
+                      //   }, 300);
+                      // }}
+                      // 같은 페이지 클릭 또는 로딩 중이면 무시
+                      if (idx === currentPage || isLoading) return;
+
+                      // 인디케이터 클릭 시에는 스크롤 잠금 무시하고 즉시 이동
                       // 기존 타임아웃 클리어
                       if (scrollTimeout.current) {
                         clearTimeout(scrollTimeout.current);
                       }
+
+                      // 스크롤 잠금 해제
+                      isScrolling.current = false;
 
                       // 다음 페이지(더 큰 인덱스)로 가면 up, 이전 페이지로 가면 down
                       setSlideDirection(idx > currentPage ? 'up' : 'down');
                       setTimeout(() => {
                         setCurrentPage(idx);
                         setSlideDirection(null);
-                        // 스크롤 잠금 해제
-                        scrollTimeout.current = setTimeout(() => {
-                          isScrolling.current = false;
-                        }, 1000);
                       }, 300);
                     }}
                     disabled={isLoading}
