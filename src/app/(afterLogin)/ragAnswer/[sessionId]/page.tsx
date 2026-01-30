@@ -107,6 +107,7 @@ export default function Page() {
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const sseRef = useRef<EventSource | null>(null);
   const stoppedRef = useRef(false); // 로딩 중 질문 중지
+  const feedbackRef = useRef<HTMLDivElement>(null); // 피드백 버튼 영역
 
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -660,26 +661,35 @@ export default function Page() {
         return;
       }
 
-      // 답변 영역 스크롤 체크
-      if (answerScrollRef.current) {
-        const { scrollTop, scrollHeight, clientHeight } = answerScrollRef.current;
-        const isScrollable = scrollHeight > clientHeight;
+      // // 답변 영역 스크롤 체크
+      // if (answerScrollRef.current) {
+      //   const { scrollTop, scrollHeight, clientHeight } = answerScrollRef.current;
+      //   const isScrollable = scrollHeight > clientHeight;
 
-        // 스크롤 가능한 경우
-        if (isScrollable) {
-          // 답변 영역 내부에서 발생한 이벤트인지 체크
-          const isInsideAnswer = answerScrollRef.current.contains(e.target as Node);
+      //   // 스크롤 가능한 경우
+      //   if (isScrollable) {
+      //     // 답변 영역 내부에서 발생한 이벤트인지 체크
+      //     const isInsideAnswer = answerScrollRef.current.contains(e.target as Node);
 
-          if (isInsideAnswer) {
-            // 스크롤 경계 체크 (여유 10px)
-            const isAtTop = scrollTop <= 10;
-            const isAtBottom = scrollTop + clientHeight >= scrollHeight - 10;
+      //     if (isInsideAnswer) {
+      //       // 스크롤 경계 체크 (여유 10px)
+      //       const isAtTop = scrollTop <= 10;
+      //       const isAtBottom = scrollTop + clientHeight >= scrollHeight - 10;
 
-            // 경계가 아니면 페이지 전환 차단
-            if (e.deltaY > 0 && !isAtBottom) return;
-            if (e.deltaY < 0 && !isAtTop) return;
-          }
-        }
+      //       // 경계가 아니면 페이지 전환 차단
+      //       if (e.deltaY > 0 && !isAtBottom) return;
+      //       if (e.deltaY < 0 && !isAtTop) return;
+      //     }
+      //   }
+      // }
+
+      // 답변 영역 또는 피드백 버튼 영역 내부에서 발생한 이벤트는 페이지 전환 차단
+      const isInsideAnswer = answerScrollRef.current && answerScrollRef.current.contains(e.target as Node);
+      const isInsideFeedback = feedbackRef.current && feedbackRef.current.contains(e.target as Node);
+
+      if (isInsideAnswer || isInsideFeedback) {
+        // 답변 영역과 피드백 영역에서는 페이지 전환 완전 차단
+        return;
       }
 
       // 페이지 전환 (스크롤 방향: 위로 올리면(deltaY < 0) 다음/최신 질문, 아래로 내리면(deltaY > 0) 이전 질문)
@@ -705,7 +715,7 @@ export default function Page() {
         // 1초 후 잠금 해제
         scrollTimeout.current = setTimeout(() => {
           isScrolling.current = false;
-        }, 1000);
+        }, 1200);
       }
 
       // 아래로 스크롤 (이전 질문으로)
@@ -985,16 +995,16 @@ export default function Page() {
                               setFeedbackVisibleMap={setFeedbackVisibleMap}
                             />
 
-                            {/* {feedbackVisibleMap[currentQA.answer.id] && ( */}
-                            <FeedbackSection
-                              messageId={currentQA.answer.id}
-                              chatHistoryId={currentQA.answer.chatHistoryId}
-                              hasFeedback={currentQA.answer.hasFeedback}
-                              feedbackVisibleMap={feedbackVisibleMap}
-                              setFeedbackVisibleMap={setFeedbackVisibleMap}
-                              onFeedbackSubmitted={handleFeedbackSubmitted}
-                            />
-                            {/* )} */}
+                            <div ref={feedbackRef}>
+                              <FeedbackSection
+                                messageId={currentQA.answer.id}
+                                chatHistoryId={currentQA.answer.chatHistoryId}
+                                hasFeedback={currentQA.answer.hasFeedback}
+                                feedbackVisibleMap={feedbackVisibleMap}
+                                setFeedbackVisibleMap={setFeedbackVisibleMap}
+                                onFeedbackSubmitted={handleFeedbackSubmitted}
+                              />
+                            </div>
                           </>
                         ) : (
                           <ErrorResponse
