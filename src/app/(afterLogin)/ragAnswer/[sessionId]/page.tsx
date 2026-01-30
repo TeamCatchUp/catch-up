@@ -166,10 +166,16 @@ export default function Page() {
 
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  const toggleFilter = () => {
-    setIsFilterOpen((prev) => !prev);
-  };
-
+ const toggleFilter = () => {
+  setIsFilterOpen((prev) => {
+    const nextState = !prev;
+    if (!nextState) {
+      setActiveExplorer(null);
+    }
+    
+    return nextState;
+  });
+};
   const [openPopover, setOpenPopover] = useState<'person' | 'department' | 'project' | null>(null);
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [selectedGithubItems, setSelectedGithubItems] = useState<GithubNode[]>([]);
@@ -1280,7 +1286,7 @@ export default function Page() {
             <div className="mx-auto w-193.25">
               <div
                 className={clsx(
-                  'border-neutral-2 mb-3 w-160 overflow-hidden rounded-2xl border bg-white',
+                  'border-neutral-2 mb-3 w-160 overflow-hidden rounded-2xl border bg-transparent',
                   activeExplorer ? 'shadow-dropdown-menu h-95 opacity-100' : 'max-h-0 border-none opacity-0',
                 )}
               >
@@ -1384,7 +1390,7 @@ export default function Page() {
                   value={newInput}
                   onChange={handleInputChange}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                       e.preventDefault();
                       handleSendMessage();
                     }
