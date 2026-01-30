@@ -1,7 +1,7 @@
 import IconX from '@/public/icons/icon/TextfiledDelete.svg';
 import IconHelp from '@/public/icons/icon/helpWhite.svg';
-import JiraGuide from '@/public/image/JiraGuidepng.png';
-import GitGuide from '@/public/image/gitGuidepng.png';
+import JiraGuide from '@/public/image/jiraGuidJpg.jpg';
+import GitGuide from '@/public/image/gitGuidejpg.jpg';
 import Image from 'next/image';
 
 interface GuideCardProps {
@@ -31,7 +31,7 @@ export function JiraGuideCard({ onClose }: GuideCardProps) {
           </div>
         </div>
       </div>
-      <Image src={JiraGuide} alt="Guide" />
+      <Image src={JiraGuide} alt="Guide" className="w-full" />
     </div>
   );
 }
@@ -60,7 +60,7 @@ export function GithubGuideCard({ onClose }: GuideCardProps) {
           </div>
         </div>
       </div>
-      <Image src={GitGuide} alt="Guide" />
+      <Image src={GitGuide} alt="Guide" className="w-full" />
     </div>
   );
 }
