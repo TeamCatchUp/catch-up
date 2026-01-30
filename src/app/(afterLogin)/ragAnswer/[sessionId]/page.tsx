@@ -681,9 +681,24 @@ export default function Page() {
   const isScrolling = useRef(false);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  const WHEEL_THRESHOLD = 60; // 민감도 (트랙패드면 60~100, 마우스휠이면 100~200) 150
-  const WHEEL_LOCK_MS = 1000; // 한 번 이동 후 잠금 시간
+  const WHEEL_THRESHOLD = 120; // 민감도 (트랙패드면 60~100, 마우스휠이면 100~200)
+  const WHEEL_LOCK_MS = 900; // 한 번 이동 후 잠금 시간
   const WHEEL_RESET_MS = 140; // 휠 입력 끊기면 누적 리셋
+
+  const normalizeDeltaY = (e: WheelEvent) => {
+    // deltaMode: 0=pixel, 1=line, 2=page
+    // line/page는 픽셀로 환산해서 통일
+    let dy = e.deltaY;
+
+    if (e.deltaMode === 1)
+      dy *= 16; // line -> px (대충 16px)
+    else if (e.deltaMode === 2) dy *= 800; // page -> px (대충 한 화면)
+
+    // 트랙패드에서 가끔 너무 큰 spike가 들어오면 1번에 2페이지 넘어갈 수 있어서 클램프
+    dy = Math.max(-200, Math.min(200, dy));
+
+    return dy;
+  };
 
   const handleWheel = useCallback(
     (e: WheelEvent) => {
@@ -706,6 +721,9 @@ export default function Page() {
 
       // 누적 델타 쌓기
       wheelAccumRef.current += e.deltaY;
+
+      const dy = normalizeDeltaY(e);
+      wheelAccumRef.current += dy;
 
       // 휠이 잠깐 멈추면 누적 리셋 (하나의 gesture 구분)
       if (wheelResetTimerRef.current) clearTimeout(wheelResetTimerRef.current);
