@@ -186,13 +186,15 @@ export default function Search() {
     setIsFocused(false);
     inputRef.current?.blur();
   });
+  const isAnyPopoverOpen = openPopover !== null;
+
   useOutsideClick(containerRef, () => {
+    console.log(openPopover);
     if (hasText) return;
-    if (openPopover !== null) return;
+    if (isAnyPopoverOpen) return;
     setIsFocused(false);
     inputRef.current?.blur();
   });
-
   useEffect(() => {
     if (!inputRef.current) return;
     inputRef.current.style.height = 'auto';
@@ -235,13 +237,13 @@ export default function Search() {
             <textarea
               ref={inputRef}
               rows={1}
-              onBlur={(e) => {
-                if (containerRef.current?.contains(e.relatedTarget as Node)) {
-                  setIsFocused(true); // 다시 포커스 강제
-                  return;
-                }
-                if (!hasText) setIsFocused(false);
-              }}
+              // onBlur={(e) => {
+              //   if (containerRef.current?.contains(e.relatedTarget as Node)) {
+              //     setIsFocused(true); // 다시 포커스 강제
+              //     return;
+              //   }
+              //   if (!hasText) setIsFocused(false);
+              // }}
               className="text-body-medium mb-2.25 w-full resize-none outline-none"
               placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
               value={inputValue}
