@@ -693,8 +693,8 @@ export default function Page() {
       }
 
       if (isScrolling.current) {
-        e.preventDefault();
-        e.stopPropagation();
+        // e.preventDefault();
+        // e.stopPropagation();
         return;
       }
 
@@ -717,7 +717,8 @@ export default function Page() {
 
         setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
         setTimeout(() => {
-          setCurrentPage((prev) => Math.min(prev + 1, qaPairs.length - 1));
+          // setCurrentPage((prev) => Math.min(prev + 1, qaPairs.length - 1));
+          setCurrentPage((prev) => prev + 1);
           setSlideDirection(null);
         }, 300);
 
@@ -725,7 +726,7 @@ export default function Page() {
         // scrollTimeout.current = setTimeout(() => {
         setTimeout(() => {
           isScrolling.current = false;
-        }, 500);
+        }, 800);
       }
       // 이전 페이지로 (스크롤 업)
       else if (scrollingUp && currentPage > 0) {
@@ -742,7 +743,8 @@ export default function Page() {
 
         setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
         setTimeout(() => {
-          setCurrentPage((prev) => Math.max(prev - 1, 0));
+          // setCurrentPage((prev) => Math.max(prev - 1, 0));
+          setCurrentPage((prev) => prev - 1);
           setSlideDirection(null);
         }, 300);
 
@@ -750,7 +752,7 @@ export default function Page() {
         // scrollTimeout.current = setTimeout(() => {
         setTimeout(() => {
           isScrolling.current = false;
-        }, 500);
+        }, 800);
       }
     },
     //   // 페이지 전환 (스크롤 방향: 위로 올리면(deltaY < 0) 다음/최신 질문, 아래로 내리면(deltaY > 0) 이전 질문)
