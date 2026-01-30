@@ -883,7 +883,7 @@ export default function Page() {
                                     )}
                                   />
                                 </div>
-                                <div className="absolute bottom-12.5 left-23.75 z-100">
+                                <div className="absolute bottom-12.5 left-23.75 z-9999">
                                   <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
                                 </div>
                               </div>
