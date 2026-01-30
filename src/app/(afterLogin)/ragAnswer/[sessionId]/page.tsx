@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -81,6 +81,15 @@ const NODE_TO_UI_STEP: Record<string, RagUIStepKey | null> = {
   chitchat: 'generate',
 };
 
+const TEAM_SPACES = [
+  { id: 'fe', name: 'Catch Up | FE' },
+  { id: 'be', name: 'Catch Up | BE' },
+  { id: 'pm', name: 'Catch Up | 기획' },
+  { id: 'design', name: 'Catch Up | Design' },
+] as const;
+
+type TeamSpace = (typeof TEAM_SPACES)[number];
+
 // test 하드코딩
 const HARD_CODED_INDEX_LIST = ['CatchUp_BE_develop_code', 'CatchUp_BE_develop_pr', 'cu_jira_issue'] as const;
 
@@ -104,16 +113,24 @@ export default function Page() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<Record<string, boolean>>({});
-  const [feedbackSubmittedMap, setFeedbackSubmittedMap] = useState<Record<string, boolean>>({});
 
   const [filterOpenMap, setFilterOpenMap] = useState<Record<string, boolean>>({});
   const [spaceDropDownOpenMap, setSpaceDropDownOpenMap] = useState<Record<string, boolean>>({});
+  const [selectedTeamSpaceId, setSelectedTeamSpaceId] = useState<string>(TEAM_SPACES[0].id);
+  const selectedTeamSpace = TEAM_SPACES.find((t) => t.id === selectedTeamSpaceId) ?? TEAM_SPACES[0];
 
   const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
   const [newInput, setNewInput] = useState('');
   const [isMultiLine, setIsMultiLine] = useState(false);
 
-  const [currentPage, setCurrentPage] = useState(0); // 현재 보고 있는 질문 인덱스 (pagination 상태)
+  // 세션별 저장 키 안정적으로 고정 (새로고침해도 페이지 유지)
+  const PAGE_KEY = useMemo(() => `chat_${sessionId}_currentPage`, [sessionId]);
+  const [currentPage, setCurrentPage] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0;
+    const saved = localStorage.getItem(`chat_${sessionId}_currentPage`);
+    const n = saved ? Number(saved) : 0;
+    return Number.isFinite(n) ? n : 0;
+  });
   const [slideDirection, setSlideDirection] = useState<'down' | 'up' | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -121,6 +138,8 @@ export default function Page() {
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const sseRef = useRef<EventSource | null>(null);
   const stoppedRef = useRef(false); // 로딩 중 질문 중지
+  const feedbackRef = useRef<HTMLDivElement>(null); // 피드백 버튼 영역
+  const wheelBlockUntilRef = useRef(0);
 
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -280,6 +299,23 @@ export default function Page() {
   const qaPairs = getQAPairs();
   const currentQA = qaPairs[currentPage];
 
+  const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
+
+  const goToQuestion = useCallback(
+    (query: string) => {
+      const target = normalize(query);
+      const idx = qaPairs.findIndex((p) => normalize(p.question.content) === target);
+      if (idx === -1) return;
+
+      setSlideDirection(idx > currentPage ? 'up' : 'down');
+      setTimeout(() => {
+        setCurrentPage(idx);
+        setSlideDirection(null);
+      }, 300);
+    },
+    [qaPairs, currentPage],
+  );
+
   // MD -> string
   const formatMarkdownString = (text: string) => {
     if (!text) return '';
@@ -298,6 +334,12 @@ export default function Page() {
 
     return withSpacing.trimEnd();
   };
+
+  // currentPage 바뀔 때마다 저장
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(PAGE_KEY, String(currentPage));
+  }, [PAGE_KEY, currentPage]);
 
   // SSE 연결 종료 함수
   const closeSSEConnection = useCallback(() => {
@@ -322,6 +364,7 @@ export default function Page() {
       sources: BackendSource[] = [],
       relatedJiraIssues: BackendSource[] = [],
       chatHistoryId?: string,
+      hasFeedback?: boolean,
     ) => {
       setChatData((prev) => {
         if (!prev) return prev;
@@ -344,6 +387,7 @@ export default function Page() {
           detailedTasks,
           timestamp: new Date().toISOString(),
           chatHistoryId,
+          hasFeedback,
         };
 
         const finalData: ChatData = {
@@ -421,7 +465,13 @@ export default function Page() {
 
           const related = data.relatedJiraIssues ?? [];
 
-          appendAssistantAnswer(response.answer, response.sources || [], related, response.chatHistoryId);
+          appendAssistantAnswer(
+            response.answer,
+            response.sources || [],
+            related,
+            response.chatHistoryId,
+            response.hasFeedback,
+          );
 
           closeSSEConnection();
           break;
@@ -504,11 +554,17 @@ export default function Page() {
     }
   }, [qaPairs.length, currentPage]);
 
+  // 페이지 전환 시 모든 피드백 섹션 닫기
+  useEffect(() => {
+    setFeedbackVisibleMap({});
+  }, [currentPage]);
+
   // 답변 영역 스크롤 초기화 (답변 변경 시)
   useEffect(() => {
     if (answerScrollRef.current) {
       answerScrollRef.current.scrollTop = 0;
     }
+    setFeedbackVisibleMap({});
   }, [currentPage]);
 
   // 초기 데이터 로드
@@ -622,6 +678,7 @@ export default function Page() {
 
     // 새 쿼리 전송 -> 새 페이지로 이동 (animation)
     setSlideDirection('up');
+
     setTimeout(() => {
       const newPageIndex = Math.floor(updated.messages.length / 2);
       setCurrentPage(newPageIndex);
@@ -760,74 +817,107 @@ export default function Page() {
   const handleWheel = useCallback(
     (e: WheelEvent) => {
       // 로딩 중이거나 이미 스크롤 중이면 무시
-      if (isLoading || isScrolling.current) {
+      if (isLoading) {
         e.preventDefault();
+        e.stopPropagation();
         return;
       }
 
-      // 답변 영역이 스크롤 가능한 경우만 내부 스크롤 체크
-      if (answerScrollRef.current) {
-        const { scrollTop, scrollHeight, clientHeight } = answerScrollRef.current;
-        const isScrollable = scrollHeight > clientHeight;
+      // 답변 영역 또는 피드백 버튼 영역 내부에서 발생한 이벤트는 페이지 전환 차단
+      const isInsideAnswer = answerScrollRef.current && answerScrollRef.current.contains(e.target as Node);
+      const isInsideFeedback = feedbackRef.current && feedbackRef.current.contains(e.target as Node);
 
-        // 스크롤 가능 + 답변 영역 내부에서 발생한 이벤트면 페이지 전환 차단
-        if (isScrollable && answerScrollRef.current.contains(e.target as Node)) {
-          const isAtTop = scrollTop <= 1;
-          const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
-
-          // 스크롤이 최상단/최하단이 아니면 페이지 전환 방지
-          if (e.deltaY > 0 && !isAtBottom) return;
-          if (e.deltaY < 0 && !isAtTop) return;
-        }
+      if (isInsideAnswer || isInsideFeedback) {
+        // 답변 영역과 피드백 영역에서는 페이지 전환 완전 차단
+        return;
       }
 
-      // 페이지 전환
-      // 스크롤 방향: 위로 올리면(deltaY < 0) 다음/최신 질문, 아래로 내리면(deltaY > 0) 이전 질문
-      // 다음 질문
-      if (e.deltaY > 0 && currentPage < qaPairs.length - 1) {
+      // 관성 wheel 차단용 쿨다운
+      const now = performance.now();
+      if (now < wheelBlockUntilRef.current) {
         e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      if (isScrolling.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      // 스크롤 방향 감지 (deltaY의 부호만 확인)
+      const scrollingDown = e.deltaY > 0;
+      const scrollingUp = e.deltaY < 0;
+
+      // 다음 페이지로 (스크롤 다운)
+      if (scrollingDown && currentPage < qaPairs.length - 1) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // 즉시 잠금
         isScrolling.current = true;
 
-        // 기존 타임아웃 클리어
-        if (scrollTimeout.current) {
-          clearTimeout(scrollTimeout.current);
-        }
+        //  1.2~1.6초 정도 wheel 완전 차단 (관성 끝날 때까지)
+        wheelBlockUntilRef.current = performance.now() + 1300;
 
         setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
         setTimeout(() => {
-          setCurrentPage((prev) => Math.min(prev + 1, qaPairs.length - 1));
+          setCurrentPage((prev) => prev + 1);
           setSlideDirection(null);
-
-          // 스크롤 잠금 해제 (1초 후)
-          scrollTimeout.current = setTimeout(() => {
-            isScrolling.current = false;
-          }, 1000);
         }, 300);
+
+        // 애니메이션 완료 후 잠금 해제
+        setTimeout(() => {
+          isScrolling.current = false;
+        }, 1300);
       }
-
-      // 아래로 스크롤 (이전 질문으로)
-      else if (e.deltaY < 0 && currentPage > 0) {
+      // 이전 페이지로 (스크롤 업)
+      else if (scrollingUp && currentPage > 0) {
         e.preventDefault();
-        isScrolling.current = true;
+        e.stopPropagation();
 
-        // 기존 타임아웃 클리어
-        if (scrollTimeout.current) {
-          clearTimeout(scrollTimeout.current);
-        }
+        // 즉시 잠금
+        isScrolling.current = true;
+        wheelBlockUntilRef.current = performance.now() + 1300;
 
         setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
         setTimeout(() => {
-          setCurrentPage((prev) => Math.max(prev - 1, 0));
+          setCurrentPage((prev) => prev - 1);
           setSlideDirection(null);
-
-          // 스크롤 잠금 해제 (1초 후)
-          scrollTimeout.current = setTimeout(() => {
-            isScrolling.current = false;
-          }, 1000);
         }, 300);
+
+        // 애니메이션 완료 후 잠금 해제
+        setTimeout(() => {
+          isScrolling.current = false;
+        }, 1300);
       }
     },
     [currentPage, qaPairs.length, isLoading],
+  );
+
+  // 피드백 제출 후 Message의 hasFeedback 업데이트
+  const handleFeedbackSubmitted = useCallback(
+    (messageId: string) => {
+      setChatData((prev) => {
+        if (!prev) return prev;
+
+        const updatedMessages = prev.messages.map((msg) =>
+          msg.id === messageId ? { ...msg, hasFeedback: true } : msg,
+        );
+
+        const updatedData: ChatData = {
+          ...prev,
+          messages: updatedMessages,
+        };
+
+        // localStorage에도 저장
+        localStorage.setItem(`chat_${sessionId}`, JSON.stringify(updatedData));
+
+        return updatedData;
+      });
+    },
+    [sessionId],
   );
 
   useEffect(() => {
@@ -852,18 +942,17 @@ export default function Page() {
     return <div className="p-10 text-center">대화 내용을 불러오는 중...</div>;
   }
 
-  // const lastAssistantMessage = [...chatData.messages].reverse().find((m) => m.role === 'assistant');
-  // const currentSources = lastAssistantMessage?.sources || [];
-  // const currentDetailedTasks = lastAssistantMessage?.detailedTasks || [];
   const currentSources = currentQA?.answer?.sources || [];
   const currentDetailedTasks = currentQA?.answer?.detailedTasks || [];
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-white">
+    // <div className="flex h-screen w-full overflow-hidden">
+    <div className="flex h-screen w-full">
       <div className="flex min-w-0 flex-1 flex-col">
-        <RagContentHeader title={chatData.title} />
+        <RagContentHeader title={chatData.title} onSelectQuestion={goToQuestion} />
         {/* 여기 gap도 */}
-        <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
+        {/* <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0"> */}
+        <div className="border-neutral-3 relative flex flex-1 flex-col border-r-0">
           <div
             ref={scrollRef}
             className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
@@ -884,6 +973,15 @@ export default function Page() {
                     : 'translate-y-0 opacity-100'
               }`}
             >
+              {/* <div
+              className={`mx-auto w-193.25 flex-1 transition-all duration-300 ${
+                slideDirection === 'down'
+                  ? 'translate-y-full opacity-0'
+                  : slideDirection === 'up'
+                    ? '-translate-y-full opacity-0'
+                    : 'translate-y-0 opacity-100'
+              }`}
+            > */}
               {currentQA && (
                 <div className="flex h-full flex-col gap-6">
                   {/* 질문 영역 (고정) */}
@@ -928,10 +1026,7 @@ export default function Page() {
                                 <div
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setSpaceDropDownOpenMap((prev) => ({
-                                      ...prev,
-                                      [currentQA.answer!.id]: !prev?.[currentQA.answer!.id],
-                                    }));
+                                    toggleSpaceDropdown(currentQA.answer!.id);
                                   }}
                                   className={clsx(
                                     'icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1',
@@ -939,7 +1034,7 @@ export default function Page() {
                                   )}
                                 >
                                   <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
-                                    스페이스명 text text text
+                                    {selectedTeamSpace.name}
                                   </div>
                                   <DropDown
                                     className={clsx(
@@ -948,7 +1043,7 @@ export default function Page() {
                                     )}
                                   />
                                 </div>
-                                <div className="absolute bottom-12.5 left-23.75">
+                                <div className="absolute bottom-12.5 left-23.75 z-100">
                                   <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
                                 </div>
                               </div>
@@ -959,6 +1054,9 @@ export default function Page() {
                                     onClose={() => {
                                       setSpaceDropDownOpenMap((prev) => ({ ...prev, [currentQA.answer!.id]: false }));
                                     }}
+                                    teamSpaces={[...TEAM_SPACES]}
+                                    selectedId={selectedTeamSpaceId}
+                                    onSelect={(team) => setSelectedTeamSpaceId(team.id)}
                                   />
                                 </div>
                               )}
@@ -1016,9 +1114,10 @@ export default function Page() {
                                 {spaceDropDownOpenMap?.[currentQA.answer!.id] && (
                                   <div className="absolute top-10.5 z-100">
                                     <TeamSpaceModal
-                                      onClose={() => {
-                                        setSpaceDropDownOpenMap((prev) => ({ ...prev, [currentQA.answer!.id]: false }));
-                                      }}
+                                      onClose={() => closeSpaceDropdown(currentQA.answer!.id)}
+                                      teamSpaces={[...TEAM_SPACES]}
+                                      selectedId={selectedTeamSpaceId}
+                                      onSelect={(team) => setSelectedTeamSpaceId(team.id)}
                                     />
                                   </div>
                                 )}
@@ -1058,25 +1157,24 @@ export default function Page() {
                               setFeedbackVisibleMap={setFeedbackVisibleMap}
                             />
 
-                            {feedbackVisibleMap[currentQA.answer.id] && (
+                            <div ref={feedbackRef}>
                               <FeedbackSection
                                 messageId={currentQA.answer.id}
                                 chatHistoryId={currentQA.answer.chatHistoryId}
+                                hasFeedback={currentQA.answer.hasFeedback}
                                 feedbackVisibleMap={feedbackVisibleMap}
                                 setFeedbackVisibleMap={setFeedbackVisibleMap}
-                                feedbackSubmittedMap={feedbackSubmittedMap}
-                                setFeedbackSubmittedMap={setFeedbackSubmittedMap}
+                                onFeedbackSubmitted={handleFeedbackSubmitted}
                               />
-                            )}
+                            </div>
                           </>
                         ) : (
                           <ErrorResponse
                             icons={icon}
                             messageId={`error_${sessionId}`}
+                            hasFeedback={currentQA.answer.hasFeedback}
                             feedbackVisibleMap={feedbackVisibleMap}
                             setFeedbackVisibleMap={setFeedbackVisibleMap}
-                            feedbackSubmittedMap={feedbackSubmittedMap}
-                            setFeedbackSubmittedMap={setFeedbackSubmittedMap}
                           />
                         )}
                       </div>
@@ -1097,8 +1195,6 @@ export default function Page() {
                             messageId={`error_${sessionId}`}
                             feedbackVisibleMap={feedbackVisibleMap}
                             setFeedbackVisibleMap={setFeedbackVisibleMap}
-                            feedbackSubmittedMap={feedbackSubmittedMap}
-                            setFeedbackSubmittedMap={setFeedbackSubmittedMap}
                           />
                         ) : null}
                       </>
@@ -1115,23 +1211,23 @@ export default function Page() {
                   <button
                     key={idx}
                     onClick={() => {
-                      if (isScrolling.current || idx === currentPage) return;
-                      isScrolling.current = true;
+                      // 같은 페이지 클릭 또는 로딩 중이면 무시
+                      if (idx === currentPage || isLoading) return;
 
+                      // 인디케이터 클릭 시에는 스크롤 잠금 무시하고 즉시 이동
                       // 기존 타임아웃 클리어
                       if (scrollTimeout.current) {
                         clearTimeout(scrollTimeout.current);
                       }
+
+                      // 스크롤 잠금 해제
+                      isScrolling.current = false;
 
                       // 다음 페이지(더 큰 인덱스)로 가면 up, 이전 페이지로 가면 down
                       setSlideDirection(idx > currentPage ? 'up' : 'down');
                       setTimeout(() => {
                         setCurrentPage(idx);
                         setSlideDirection(null);
-                        // 스크롤 잠금 해제
-                        scrollTimeout.current = setTimeout(() => {
-                          isScrolling.current = false;
-                        }, 1000);
                       }, 300);
                     }}
                     disabled={isLoading}

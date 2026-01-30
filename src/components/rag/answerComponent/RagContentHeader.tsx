@@ -13,9 +13,10 @@ import QuestionsListModal from '@/components/rag/modal/QuestionsListInSessionMod
 
 interface RagHeaderProps {
   title: string;
+  onSelectQuestion: (query: string) => void;
 }
 
-const RagHeader = ({ title }: RagHeaderProps) => {
+const RagHeader = ({ title, onSelectQuestion }: RagHeaderProps) => {
   const [isCatchModalOpen, setIsCatchModalOpen] = useState(false);
   const [isQuestionsListOpen, setIsQuestionsListOpen] = useState(false);
   const router = useRouter();
@@ -24,7 +25,8 @@ const RagHeader = ({ title }: RagHeaderProps) => {
     // new 세션 ID 생성
     const newSessionId = crypto.randomUUID();
 
-    router.push(`/ragAnswer/${newSessionId}`);
+    // router.push(`/ragAnswer/${newSessionId}`);
+    router.push(`/search`);
 
     setIsCatchModalOpen(false);
     setIsCatchModalOpen(false);
@@ -64,7 +66,13 @@ const RagHeader = ({ title }: RagHeaderProps) => {
           {/* 대화 내 질문 목록 모달 */}
           {isQuestionsListOpen && (
             <div className="absolute top-8.5 left-35">
-              <QuestionsListModal onClose={() => setIsQuestionsListOpen(false)} />
+              <QuestionsListModal
+                onClose={() => setIsQuestionsListOpen(false)}
+                onSelect={(query) => {
+                  onSelectQuestion(query);
+                  setIsQuestionsListOpen(false);
+                }}
+              />
             </div>
           )}
         </div>

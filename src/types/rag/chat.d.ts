@@ -39,6 +39,7 @@ interface Message {
   sources?: ChatSource[];
   detailedTasks?: JiraTask[];
   timestamp: string;
+  hasFeedback?: boolean;
 }
 
 interface ChatData {
@@ -89,6 +90,7 @@ interface RagNotificationData {
     answer: string;
     sources: BackendSource[];
     chatHistoryId: string;
+    hasFeedback?: boolean;
   };
   relatedJiraIssues?: BackendSource[];
 }

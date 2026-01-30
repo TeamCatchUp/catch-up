@@ -10,7 +10,7 @@ const SourceBadge = ({ n, sourceType }: { n: string; sourceType: SourceType }) =
         sourceType === 'jira' ? 'bg-green-10' : 'bg-blue-5',
       )}
     >
-      <span className="text-body-xsmall text-gray-80">{n}</span>
+      <span className="text-body-xsmall text-gray-80 relative top-[0.5px]">{n}</span>
     </span>
   );
 };

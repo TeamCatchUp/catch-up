@@ -5,8 +5,9 @@ interface ChatFeedbackRequest {
 }
 
 interface ChatFeedbackResponse {
-  feedbackId: string;
-  chatHistoryId: string;
+  messageId: string;
+  chatHistoryId?: string;
+  hasFeedback?: boolean;
   tags: string[];
   detail: string;
   createdAt: string;

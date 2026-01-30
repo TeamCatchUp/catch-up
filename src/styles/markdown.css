@@ -191,6 +191,17 @@
     list-style-type: decimal;
   }
 
+  /* 중첩 상하 마진 */
+  .markdown-body ul > li + li,
+  .markdown-body ol > li + li {
+    margin-top: 12px;
+  }
+
+  .markdown-body li > ul > li + li,
+  .markdown-body li > ol > li + li {
+    margin-top: 6px;
+  }
+
   /* 줄바꿈 현상 방지 */
   .markdown-body li > p {
     display: inline;

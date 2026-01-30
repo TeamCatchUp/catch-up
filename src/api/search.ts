@@ -11,7 +11,7 @@ export const searchService = {
     return res.data;
   },
 
-  getRecentChatromms: async () => {
+  getRecentChatrooms: async () => {
     const res = await api.get('/api/chatrooms');
     return res.data;
   },

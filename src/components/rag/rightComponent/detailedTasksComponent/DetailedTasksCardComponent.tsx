@@ -409,33 +409,37 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
       })}
 
       {detailModal && (
-        <DetailedTaskModal
-          onClose={() => setDetailModal(null)}
-          data={detailModal}
-          tasks={tasks}
-          checkedMap={checkedMap}
-          onToggleCheck={handleCheckToggleFromModal}
-          onPrev={goPrev}
-          onNext={goNext}
-          disablePrev={currentIndex <= 0}
-          disableNext={currentIndex >= flatTaskList.length - 1}
-          bottomOffset={detailModalBottom}
-        />
+        <div className="transition-opacity duration-150">
+          <DetailedTaskModal
+            onClose={() => setDetailModal(null)}
+            data={detailModal}
+            tasks={tasks}
+            checkedMap={checkedMap}
+            onToggleCheck={handleCheckToggleFromModal}
+            onPrev={goPrev}
+            onNext={goNext}
+            disablePrev={currentIndex <= 0}
+            disableNext={currentIndex >= flatTaskList.length - 1}
+            bottomOffset={detailModalBottom}
+          />
+        </div>
       )}
       {showSelectionBar && !shouldHideSelectionBar && (
-        <SelectionBarModal
-          onClose={() => setShowSelectionBar(false)}
-          onClearAll={handleClearAllFromSelectionBar}
-          selectedTasks={selectedTasks}
-          totalCheckedCount={totalCheckedCount}
-          onTaskToggle={handleTaskToggleFromModal}
-          onSubtaskToggle={handleSubtaskToggleFromModal}
-          isCollapsed={isSelectionBarCollapsed}
-          onToggleCollapse={() => setIsSelectionBarCollapsed((prev) => !prev)}
-          onOpenDetail={(payload) => {
-            setDetailModal(payload);
-          }}
-        />
+        <div className="transition-all duration-200">
+          <SelectionBarModal
+            onClose={() => setShowSelectionBar(false)}
+            onClearAll={handleClearAllFromSelectionBar}
+            selectedTasks={selectedTasks}
+            totalCheckedCount={totalCheckedCount}
+            onTaskToggle={handleTaskToggleFromModal}
+            onSubtaskToggle={handleSubtaskToggleFromModal}
+            isCollapsed={isSelectionBarCollapsed}
+            onToggleCollapse={() => setIsSelectionBarCollapsed((prev) => !prev)}
+            onOpenDetail={(payload) => {
+              setDetailModal(payload);
+            }}
+          />
+        </div>
       )}
     </div>
   );

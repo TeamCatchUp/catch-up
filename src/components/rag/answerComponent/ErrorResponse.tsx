@@ -7,8 +7,8 @@ const ErrorResponse = ({
   messageId,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
-  feedbackSubmittedMap,
-  setFeedbackSubmittedMap,
+  hasFeedback,
+  onFeedbackSubmitted,
 }: ErrorResponseProps) => {
   return (
     <div className="flex flex-col gap-3">
@@ -24,13 +24,16 @@ const ErrorResponse = ({
           setFeedbackVisibleMap={setFeedbackVisibleMap}
         />
       </div>
-      <FeedbackSection
-        messageId={messageId}
-        feedbackVisibleMap={feedbackVisibleMap}
-        setFeedbackVisibleMap={setFeedbackVisibleMap}
-        feedbackSubmittedMap={feedbackSubmittedMap}
-        setFeedbackSubmittedMap={setFeedbackSubmittedMap}
-      />
+      {feedbackVisibleMap[messageId] && (
+        <FeedbackSection
+          messageId={messageId}
+          chatHistoryId={undefined}
+          hasFeedback={hasFeedback}
+          feedbackVisibleMap={feedbackVisibleMap}
+          setFeedbackVisibleMap={setFeedbackVisibleMap}
+          onFeedbackSubmitted={onFeedbackSubmitted}
+        />
+      )}
     </div>
   );
 };
