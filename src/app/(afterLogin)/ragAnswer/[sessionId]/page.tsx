@@ -745,7 +745,7 @@ export default function Page() {
 
         // 즉시 잠금
         isScrolling.current = true;
-        wheelBlockUntilRef.current = performance.now() + 1100;
+        wheelBlockUntilRef.current = performance.now() + 1300;
 
         setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
         setTimeout(() => {
@@ -756,7 +756,7 @@ export default function Page() {
         // 애니메이션 완료 후 잠금 해제
         setTimeout(() => {
           isScrolling.current = false;
-        }, 1100);
+        }, 1300);
       }
     },
     [currentPage, qaPairs.length, isLoading],
@@ -830,7 +830,7 @@ export default function Page() {
               </span>
               <div className="border-neutral-4 flex-1 border-t" />
             </div>
-            {/* <div
+            <div
               className={`mx-auto w-193.25 flex-1 overflow-hidden transition-all duration-300 ${
                 slideDirection === 'down'
                   ? 'translate-y-full opacity-0'
@@ -838,8 +838,8 @@ export default function Page() {
                     ? '-translate-y-full opacity-0'
                     : 'translate-y-0 opacity-100'
               }`}
-            > */}
-            <div
+            >
+              {/* <div
               className={`mx-auto w-193.25 flex-1 transition-all duration-300 ${
                 slideDirection === 'down'
                   ? 'translate-y-full opacity-0'
@@ -847,7 +847,7 @@ export default function Page() {
                     ? '-translate-y-full opacity-0'
                     : 'translate-y-0 opacity-100'
               }`}
-            >
+            > */}
               {currentQA && (
                 <div className="flex h-full flex-col gap-6">
                   {/* 질문 영역 (고정) */}
