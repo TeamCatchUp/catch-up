@@ -1,8 +1,12 @@
 export const PERSON_OPTIONS = [
-  { name: '김철수찬구형진박', position: '책임연구원' },
-  { name: '이영희', position: '선임디자이너' },
-  { name: '박지성' }, // 직급 없음
-  { name: '손흥민', position: '팀장' },
+  { name: '김준휘', position: '기획' },
+  { name: '팀원B', position: '기획' },
+  { name: '팀원E', position: '프론트엔드' },
+  { name: '정성훈', position: '프론트엔드' },
+  { name: '팀원C', position: '백엔드' },
+  { name: '팀원A', position: '백엔드' },
+  { name: '팀원F', position: '디자인' },
+  { name: '조예원', position: '디자인' },
 ];
 
 export const DEPARTMENT_OPTIONS = [{ name: 'EngineeringTeam' }, { name: 'SoccerTeam' }];

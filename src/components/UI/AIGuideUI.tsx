@@ -1,7 +1,7 @@
 import IconX from '@/public/icons/icon/TextfiledDelete.svg';
 import IconHelp from '@/public/icons/icon/helpWhite.svg';
-import JiraGuide from '@/public/image/JiraGuide.jpg';
-import GitGuide from '@/public/image/gitGuide.jpg';
+import JiraGuide from '@/public/image/JiraGuidepng.png';
+import GitGuide from '@/public/image/gitGuidepng.png';
 import Image from 'next/image';
 
 interface GuideCardProps {

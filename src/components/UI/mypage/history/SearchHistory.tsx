@@ -13,9 +13,10 @@ interface SearchQuery {
 interface RecentlySearchProps {
   querys: SearchQuery[];
   isModal?: boolean;
+  onItemClick?: () => void;
 }
 
-export function SearchHistory({ querys, isModal = false }: RecentlySearchProps) {
+export function SearchHistory({ querys, isModal = false, onItemClick }: RecentlySearchProps) {
   if (!querys || querys.length === 0) {
     return (
       <div className="flex w-full items-center justify-center rounded-xl py-4">
@@ -69,6 +70,7 @@ export function SearchHistory({ querys, isModal = false }: RecentlySearchProps) 
             {section.data.map((item, i) => (
               <Link
                 href={`/ragAnswer/${item.sessionId}`}
+                onClick={() => onItemClick?.()}
                 key={item.sessionId + i}
                 className="hover:bg-neutral-2 group flex h-10 w-full items-center gap-2 rounded-xl bg-white px-2 py-1 transition-colors"
               >
