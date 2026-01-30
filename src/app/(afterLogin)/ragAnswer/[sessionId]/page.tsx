@@ -692,6 +692,12 @@ export default function Page() {
         return;
       }
 
+      if (isScrolling.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
       // 스크롤 방향 감지 (deltaY의 부호만 확인)
       const scrollingDown = e.deltaY > 0;
       const scrollingUp = e.deltaY < 0;
@@ -704,10 +710,10 @@ export default function Page() {
         // 즉시 잠금
         isScrolling.current = true;
 
-        // 기존 타임아웃 클리어
-        if (scrollTimeout.current) {
-          clearTimeout(scrollTimeout.current);
-        }
+        // // 기존 타임아웃 클리어
+        // if (scrollTimeout.current) {
+        //   clearTimeout(scrollTimeout.current);
+        // }
 
         setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
         setTimeout(() => {
@@ -716,7 +722,8 @@ export default function Page() {
         }, 300);
 
         // 애니메이션 완료 후 잠금 해제 (300ms 애니메이션 + 여유 200ms)
-        scrollTimeout.current = setTimeout(() => {
+        // scrollTimeout.current = setTimeout(() => {
+        setTimeout(() => {
           isScrolling.current = false;
         }, 500);
       }
@@ -728,10 +735,10 @@ export default function Page() {
         // 즉시 잠금
         isScrolling.current = true;
 
-        // 기존 타임아웃 클리어
-        if (scrollTimeout.current) {
-          clearTimeout(scrollTimeout.current);
-        }
+        // // 기존 타임아웃 클리어
+        // if (scrollTimeout.current) {
+        //   clearTimeout(scrollTimeout.current);
+        // }
 
         setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
         setTimeout(() => {
@@ -740,7 +747,8 @@ export default function Page() {
         }, 300);
 
         // 애니메이션 완료 후 잠금 해제 (300ms 애니메이션 + 여유 200ms)
-        scrollTimeout.current = setTimeout(() => {
+        // scrollTimeout.current = setTimeout(() => {
+        setTimeout(() => {
           isScrolling.current = false;
         }, 500);
       }
