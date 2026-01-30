@@ -120,8 +120,9 @@ export default function Page() {
 
   const wheelBlockUntilRef = useRef(0);
   const wheelAccumRef = useRef(0);
-  const wheelResetTimerRef = useRef<NodeJS.Timeout | null>(null);
   const wheelLockRef = useRef(false);
+  const wheelResetTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const wheelEndTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -681,9 +682,10 @@ export default function Page() {
   const isScrolling = useRef(false);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  const WHEEL_THRESHOLD = 120; // 민감도 (트랙패드면 60~100, 마우스휠이면 100~200)
+  const WHEEL_THRESHOLD = 140; // 민감도 (트랙패드면 60~100, 마우스휠이면 100~200)
   const WHEEL_LOCK_MS = 900; // 한 번 이동 후 잠금 시간
   const WHEEL_RESET_MS = 140; // 휠 입력 끊기면 누적 리셋
+  const WHEEL_END_MS = 220; // "휠 입력 끝"으로 보는 시간 (gesture 종료 판정)
 
   const normalizeDeltaY = (e: WheelEvent) => {
     // deltaMode: 0=pixel, 1=line, 2=page
@@ -695,7 +697,9 @@ export default function Page() {
     else if (e.deltaMode === 2) dy *= 800; // page -> px (대충 한 화면)
 
     // 트랙패드에서 가끔 너무 큰 spike가 들어오면 1번에 2페이지 넘어갈 수 있어서 클램프
-    dy = Math.max(-200, Math.min(200, dy));
+    // dy = Math.max(-200, Math.min(200, dy));
+    // 트랙패드 스파이크 완화 (너무 큰 값이 한 번에 들어오는 거 방지)
+    dy = Math.max(-120, Math.min(120, dy));
 
     return dy;
   };
@@ -716,52 +720,67 @@ export default function Page() {
       e.preventDefault();
       e.stopPropagation();
 
+      // wheel "끝" 타이머 갱신: 입력이 계속 들어오면 계속 연장됨 (추가)
+      if (wheelEndTimerRef.current) clearTimeout(wheelEndTimerRef.current);
+      wheelEndTimerRef.current = setTimeout(() => {
+        wheelLockRef.current = false;
+        wheelAccumRef.current = 0;
+      }, WHEEL_END_MS);
+
       // 잠금 중이면 무시
       if (wheelLockRef.current) return;
 
       // 누적 델타 쌓기
-      wheelAccumRef.current += e.deltaY;
-
       const dy = normalizeDeltaY(e);
       wheelAccumRef.current += dy;
 
-      // 휠이 잠깐 멈추면 누적 리셋 (하나의 gesture 구분)
-      if (wheelResetTimerRef.current) clearTimeout(wheelResetTimerRef.current);
-      wheelResetTimerRef.current = setTimeout(() => {
-        wheelAccumRef.current = 0;
-      }, WHEEL_RESET_MS);
+      // // 휠이 잠깐 멈추면 누적 리셋 (하나의 gesture 구분)
+      // if (wheelResetTimerRef.current) clearTimeout(wheelResetTimerRef.current);
+      // wheelResetTimerRef.current = setTimeout(() => {
+      //   wheelAccumRef.current = 0;
+      // }, WHEEL_RESET_MS);
 
       // threshold 안 넘으면 아직 이동 X
       if (Math.abs(wheelAccumRef.current) < WHEEL_THRESHOLD) return;
 
       // 여기 도달 = 이번 gesture에서 "딱 1번" 이동
       const dir = wheelAccumRef.current > 0 ? 1 : -1;
-      wheelAccumRef.current = 0;
+      // wheelAccumRef.current = 0;
 
       // 여기서부터 "딱 1번만" 이동되도록 잠금 걸고,
       // next 계산은 functional update로 확정
       wheelLockRef.current = true;
+      wheelAccumRef.current = 0; // 추가
+
       setSlideDirection(dir > 0 ? 'up' : 'down');
 
+      //   setCurrentPage((prev) => {
+      //     const next = prev + dir;
+      //     if (next < 0 || next > qaPairs.length - 1) {
+      //       // 범위 밖이면 잠금 해제
+      //       wheelLockRef.current = false;
+      //       setSlideDirection(null);
+      //       return prev;
+      //     }
+
+      //     // 애니메이션 종료 후 방향 초기화
+      //     setTimeout(() => setSlideDirection(null), 300);
+
+      //     // 잠금 해제는 약간 더 늦게
+      //     setTimeout(() => {
+      //       wheelLockRef.current = false;
+      //     }, WHEEL_LOCK_MS);
+
+      //     return next;
+      //   });
+      // },
       setCurrentPage((prev) => {
         const next = prev + dir;
-        if (next < 0 || next > qaPairs.length - 1) {
-          // 범위 밖이면 잠금 해제
-          wheelLockRef.current = false;
-          setSlideDirection(null);
-          return prev;
-        }
-
-        // 애니메이션 종료 후 방향 초기화
-        setTimeout(() => setSlideDirection(null), 300);
-
-        // 잠금 해제는 약간 더 늦게
-        setTimeout(() => {
-          wheelLockRef.current = false;
-        }, WHEEL_LOCK_MS);
-
+        if (next < 0 || next > qaPairs.length - 1) return prev;
         return next;
       });
+
+      setTimeout(() => setSlideDirection(null), 300);
     },
     [isLoading, qaPairs.length],
   );
@@ -825,7 +844,7 @@ export default function Page() {
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
           <div
             ref={scrollRef}
-            onWheel={(e) => handleWheel(e.nativeEvent)}
+            // onWheel={(e) => handleWheel(e.nativeEvent)}
             className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
           >
             <div className="mb-8 flex w-192.75 items-center justify-center gap-4">
