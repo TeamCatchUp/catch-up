@@ -84,7 +84,6 @@ export const GithubExplorer = ({
     else newSet.add(nodeId);
     setExpandedNodes(newSet);
   };
-
   const handleCheck = (item: GithubNode, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -92,19 +91,16 @@ export const GithubExplorer = ({
     const isFolder = item.type === 'tree' || item.type === 'repo';
     const isCurrentlySelected = selectedItems.includes(item.id);
 
-    if (isFolder && item.children) {
-      if (isCurrentlySelected) {
+    if (isCurrentlySelected) {
+      onToggleItem(item);
+    } else {
+      if (isFolder) {
+        const allRelatedNodes = getAllChildNodes(item);
+        const allRelatedIds = allRelatedNodes.map((node) => node.id);
         onToggleItem(item);
       } else {
-        const allRelatedNodes = getAllChildNodes(item);
-        allRelatedNodes.forEach((node) => {
-          if (!selectedItems.includes(node.id)) {
-            onToggleItem(node);
-          }
-        });
+        onToggleItem(item);
       }
-    } else {
-      onToggleItem(item);
     }
   };
   const getAllNodesFlat = (nodes: GithubNode[], result: GithubNode[] = []) => {
@@ -135,23 +131,44 @@ export const GithubExplorer = ({
 
   const allNodes = getAllNodesFlat(currentItems);
 
-  const isAllSelected = filteredItems.length > 0 && filteredItems.every((item) => selectedItems.includes(item.id));
+  const isAllSelected = useMemo(() => {
+    if (filteredItems.length === 0) return false;
 
+    // 레포 내부라면: 부모(currentRepo)가 선택되어 있거나, 모든 자식이 개별 선택되어 있는지 확인
+    if (currentRepo) {
+      return selectedItems.includes(currentRepo.id) || filteredItems.every((item) => selectedItems.includes(item.id));
+    }
+
+    // 최상위 목록이라면: 필터링된 레포들이 모두 선택되어 있는지 확인
+    return filteredItems.every((item) => selectedItems.includes(item.id));
+  }, [filteredItems, selectedItems, currentRepo]);
   const handleSelectAll = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (activeTab !== 'file') return;
-    filteredItems.forEach((item) => {
+
+    if (currentRepo) {
+      // [수정] 레포 내부일 경우, 개별 자식들이 아닌 currentRepo(type: 'repo') 자체를 토글
+      // 이미 선택되어 있다면(isAllSelected) 해제, 아니면 선택
       if (isAllSelected) {
-        if (selectedItems.includes(item.id)) handleCheck(item, e);
+        if (selectedItems.includes(currentRepo.id)) onToggleItem(currentRepo);
       } else {
-        if (!selectedItems.includes(item.id)) handleCheck(item, e);
+        if (!selectedItems.includes(currentRepo.id)) onToggleItem(currentRepo);
       }
-    });
+    } else {
+      // 최상위 목록일 때는 기존 필터링된 레포지토리들을 토글
+      filteredItems.forEach((item) => {
+        if (isAllSelected) {
+          if (selectedItems.includes(item.id)) onToggleItem(item);
+        } else {
+          if (!selectedItems.includes(item.id)) onToggleItem(item);
+        }
+      });
+    }
   };
   const renderItem = (node: GithubNode, depth: number = 0, isLastChild: boolean = false) => {
-    const isExpanded = expandedNodes.has(node.id);
-    const isSelected = selectedItems.includes(node.id);
+    const isExpanded = expandedNodes.has(node.id); // [수정] 본인이 선택되었거나, 상위 레포지토리(currentRepo)가 선택된 상태라면 true
+    const isSelected = selectedItems.includes(node.id) || (currentRepo && selectedItems.includes(currentRepo.id));
     const isFolder = node.type === 'tree';
     const isRepo = node.type === 'repo';
     const isSearching = searchQuery.length > 0;
@@ -308,10 +325,10 @@ export const GithubExplorer = ({
                 {currentRepo.name}
               </div>
             ) : (
-              <div className="flex items-center justify-center gap-2.5">
+              <div className="flex items-center justify-center gap-1">
                 <button
                   type="button"
-                  className="hover:bg-neutral-3 flex h-7 w-7 items-center justify-center rounded-full p-0.5"
+                  className="hover:bg-neutral-3 flex h-7 w-7 items-center justify-center rounded-full p-0.5 mr-3"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={handleGoBack}
                 >
@@ -332,7 +349,7 @@ export const GithubExplorer = ({
               ) : (
                 <IconCheckOff className="text-gray-30 h-5 w-5" />
               )}
-              <div className="text-body-xsmall text-gray-70 select-none">전체 범위 적용</div>
+              <div className="text-body-xsmall text-gray-70 select-none whitespace-nowrap">전체 범위 적용</div>
             </button>
           )}
         </div>

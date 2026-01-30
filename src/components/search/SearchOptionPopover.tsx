@@ -22,7 +22,6 @@ export function SearchOptionPopover({ trigger, open, onOpenChange, children }: S
           sideOffset={8}
           className="border-neutral-5 shadow-dropdown-menu flex h-95 w-75 flex-col items-center gap-3 rounded-2xl bg-white py-2.5"
           onOpenAutoFocus={(e) => e.preventDefault()}
-          onPointerDownOutside={(e) => e.preventDefault()}
         >
           {children}
         </Popover.Content>
