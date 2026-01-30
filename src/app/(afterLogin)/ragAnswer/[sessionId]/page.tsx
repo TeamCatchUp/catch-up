@@ -68,8 +68,6 @@ const TEAM_SPACES = [
   { id: 'design', name: 'Catch Up | Design' },
 ] as const;
 
-type TeamSpace = (typeof TEAM_SPACES)[number];
-
 // test 하드코딩
 const HARD_CODED_INDEX_LIST = ['CatchUp_BE_develop_code', 'CatchUp_BE_develop_pr', 'cu_jira_issue'] as const;
 
@@ -119,7 +117,11 @@ export default function Page() {
   const sseRef = useRef<EventSource | null>(null);
   const stoppedRef = useRef(false); // 로딩 중 질문 중지
   const feedbackRef = useRef<HTMLDivElement>(null); // 피드백 버튼 영역
+
   const wheelBlockUntilRef = useRef(0);
+  const wheelAccumRef = useRef(0);
+  const wheelResetTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const wheelLockRef = useRef(false);
 
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -679,85 +681,143 @@ export default function Page() {
   const isScrolling = useRef(false);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // 외부 스크롤로 페이지 전환
+  // // 외부 스크롤로 페이지 전환
+  // const handleWheel = useCallback(
+  //   (e: WheelEvent) => {
+  //     // 로딩 중이거나 이미 스크롤 중이면 무시
+  //     if (isLoading) {
+  //       e.preventDefault();
+  //       e.stopPropagation();
+  //       return;
+  //     }
+
+  //     // 답변 영역 또는 피드백 버튼 영역 내부에서 발생한 이벤트는 페이지 전환 차단
+  //     const isInsideAnswer = answerScrollRef.current && answerScrollRef.current.contains(e.target as Node);
+  //     const isInsideFeedback = feedbackRef.current && feedbackRef.current.contains(e.target as Node);
+
+  //     if (isInsideAnswer || isInsideFeedback) {
+  //       // 답변 영역과 피드백 영역에서는 페이지 전환 완전 차단
+  //       return;
+  //     }
+
+  //     // 관성 wheel 차단용 쿨다운
+  //     const now = performance.now();
+  //     if (now < wheelBlockUntilRef.current) {
+  //       e.preventDefault();
+  //       e.stopPropagation();
+  //       return;
+  //     }
+
+  //     if (isScrolling.current) {
+  //       e.preventDefault();
+  //       e.stopPropagation();
+  //       return;
+  //     }
+
+  //     // 스크롤 방향 감지 (deltaY의 부호만 확인)
+  //     const scrollingDown = e.deltaY > 0;
+  //     const scrollingUp = e.deltaY < 0;
+
+  //     // 다음 페이지로 (스크롤 다운)
+  //     if (scrollingDown && currentPage < qaPairs.length - 1) {
+  //       e.preventDefault();
+  //       e.stopPropagation();
+
+  //       // 즉시 잠금
+  //       isScrolling.current = true;
+
+  //       //  1.2~1.6초 정도 wheel 완전 차단 (관성 끝날 때까지)
+  //       wheelBlockUntilRef.current = performance.now() + 1300;
+
+  //       setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
+  //       setTimeout(() => {
+  //         setCurrentPage((prev) => prev + 1);
+  //         setSlideDirection(null);
+  //       }, 300);
+
+  //       // 애니메이션 완료 후 잠금 해제
+  //       setTimeout(() => {
+  //         isScrolling.current = false;
+  //       }, 1300);
+  //     }
+  //     // 이전 페이지로 (스크롤 업)
+  //     else if (scrollingUp && currentPage > 0) {
+  //       e.preventDefault();
+  //       e.stopPropagation();
+
+  //       // 즉시 잠금
+  //       isScrolling.current = true;
+  //       wheelBlockUntilRef.current = performance.now() + 1300;
+
+  //       setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
+  //       setTimeout(() => {
+  //         setCurrentPage((prev) => prev - 1);
+  //         setSlideDirection(null);
+  //       }, 300);
+
+  //       // 애니메이션 완료 후 잠금 해제
+  //       setTimeout(() => {
+  //         isScrolling.current = false;
+  //       }, 1300);
+  //     }
+  //   },
+  //   [currentPage, qaPairs.length, isLoading],
+  // );
+  const WHEEL_THRESHOLD = 100; // 민감도 (트랙패드면 60~100, 마우스휠이면 100~200)
+  const WHEEL_LOCK_MS = 650; // 한 번 이동 후 잠금 시간
+  const WHEEL_RESET_MS = 120; // 휠 입력 끊기면 누적 리셋
+
   const handleWheel = useCallback(
     (e: WheelEvent) => {
-      // 로딩 중이거나 이미 스크롤 중이면 무시
       if (isLoading) {
         e.preventDefault();
         e.stopPropagation();
         return;
       }
 
-      // 답변 영역 또는 피드백 버튼 영역 내부에서 발생한 이벤트는 페이지 전환 차단
       const isInsideAnswer = answerScrollRef.current && answerScrollRef.current.contains(e.target as Node);
       const isInsideFeedback = feedbackRef.current && feedbackRef.current.contains(e.target as Node);
+      if (isInsideAnswer || isInsideFeedback) return;
 
-      if (isInsideAnswer || isInsideFeedback) {
-        // 답변 영역과 피드백 영역에서는 페이지 전환 완전 차단
-        return;
-      }
+      // 여기부터는 "페이지 넘김"을 우리가 먹어야 해서 preventDefault 필요
+      e.preventDefault();
+      e.stopPropagation();
 
-      // 관성 wheel 차단용 쿨다운
-      const now = performance.now();
-      if (now < wheelBlockUntilRef.current) {
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
+      // 잠금 중이면 무시
+      if (wheelLockRef.current) return;
 
-      if (isScrolling.current) {
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
+      // 누적 델타 쌓기
+      wheelAccumRef.current += e.deltaY;
 
-      // 스크롤 방향 감지 (deltaY의 부호만 확인)
-      const scrollingDown = e.deltaY > 0;
-      const scrollingUp = e.deltaY < 0;
+      // 휠이 잠깐 멈추면 누적 리셋 (하나의 gesture 구분)
+      if (wheelResetTimerRef.current) clearTimeout(wheelResetTimerRef.current);
+      wheelResetTimerRef.current = setTimeout(() => {
+        wheelAccumRef.current = 0;
+      }, WHEEL_RESET_MS);
 
-      // 다음 페이지로 (스크롤 다운)
-      if (scrollingDown && currentPage < qaPairs.length - 1) {
-        e.preventDefault();
-        e.stopPropagation();
+      // threshold 안 넘으면 아직 이동 X
+      if (Math.abs(wheelAccumRef.current) < WHEEL_THRESHOLD) return;
 
-        // 즉시 잠금
-        isScrolling.current = true;
+      // 여기 도달 = 이번 gesture에서 "딱 1번" 이동
+      const dir = wheelAccumRef.current > 0 ? 1 : -1;
+      wheelAccumRef.current = 0;
 
-        //  1.2~1.6초 정도 wheel 완전 차단 (관성 끝날 때까지)
-        wheelBlockUntilRef.current = performance.now() + 1300;
+      // 범위 체크
+      const next = currentPage + dir;
+      if (next < 0 || next > qaPairs.length - 1) return;
 
-        setSlideDirection('up'); // 컨텐츠가 위로 올라가는 효과
-        setTimeout(() => {
-          setCurrentPage((prev) => prev + 1);
-          setSlideDirection(null);
-        }, 300);
+      // 이동 잠금
+      wheelLockRef.current = true;
+      setSlideDirection(dir > 0 ? 'up' : 'down');
 
-        // 애니메이션 완료 후 잠금 해제
-        setTimeout(() => {
-          isScrolling.current = false;
-        }, 1300);
-      }
-      // 이전 페이지로 (스크롤 업)
-      else if (scrollingUp && currentPage > 0) {
-        e.preventDefault();
-        e.stopPropagation();
+      setTimeout(() => {
+        setCurrentPage(next);
+        setSlideDirection(null);
+      }, 300);
 
-        // 즉시 잠금
-        isScrolling.current = true;
-        wheelBlockUntilRef.current = performance.now() + 1300;
-
-        setSlideDirection('down'); // 컨텐츠가 아래로 내려가는 효과
-        setTimeout(() => {
-          setCurrentPage((prev) => prev - 1);
-          setSlideDirection(null);
-        }, 300);
-
-        // 애니메이션 완료 후 잠금 해제
-        setTimeout(() => {
-          isScrolling.current = false;
-        }, 1300);
-      }
+      setTimeout(() => {
+        wheelLockRef.current = false;
+      }, WHEEL_LOCK_MS);
     },
     [currentPage, qaPairs.length, isLoading],
   );
@@ -800,6 +860,7 @@ export default function Page() {
       closeSSEConnection();
       if (scrollTimeout.current) {
         clearTimeout(scrollTimeout.current);
+        if (wheelResetTimerRef.current) clearTimeout(wheelResetTimerRef.current); // 추가
       }
     };
   }, [closeSSEConnection]);
