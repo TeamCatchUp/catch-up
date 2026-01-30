@@ -763,8 +763,8 @@ export default function Page() {
   //   },
   //   [currentPage, qaPairs.length, isLoading],
   // );
-  const WHEEL_THRESHOLD = 100; // 민감도 (트랙패드면 60~100, 마우스휠이면 100~200)
-  const WHEEL_LOCK_MS = 700; // 한 번 이동 후 잠금 시간
+  const WHEEL_THRESHOLD = 150; // 민감도 (트랙패드면 60~100, 마우스휠이면 100~200) 100
+  const WHEEL_LOCK_MS = 1000; // 한 번 이동 후 잠금 시간 700
   const WHEEL_RESET_MS = 140; // 휠 입력 끊기면 누적 리셋
 
   const handleWheel = useCallback(
