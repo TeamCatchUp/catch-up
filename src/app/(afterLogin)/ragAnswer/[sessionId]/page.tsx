@@ -61,6 +61,15 @@ const NODE_TO_UI_STEP: Record<string, RagUIStepKey | null> = {
   chitchat: 'generate',
 };
 
+const TEAM_SPACES = [
+  { id: 'fe', name: 'Catch Up | FE' },
+  { id: 'be', name: 'Catch Up | BE' },
+  { id: 'pm', name: 'Catch Up | 기획' },
+  { id: 'design', name: 'Catch Up | Design' },
+] as const;
+
+type TeamSpace = (typeof TEAM_SPACES)[number];
+
 // test 하드코딩
 const HARD_CODED_INDEX_LIST = ['CatchUp_BE_develop_code', 'CatchUp_BE_develop_pr', 'cu_jira_issue'] as const;
 
@@ -87,6 +96,8 @@ export default function Page() {
 
   const [filterOpenMap, setFilterOpenMap] = useState<Record<string, boolean>>({});
   const [spaceDropDownOpenMap, setSpaceDropDownOpenMap] = useState<Record<string, boolean>>({});
+  const [selectedTeamSpaceId, setSelectedTeamSpaceId] = useState<string>(TEAM_SPACES[0].id);
+  const selectedTeamSpace = TEAM_SPACES.find((t) => t.id === selectedTeamSpaceId) ?? TEAM_SPACES[0];
 
   const [activeTab, setActiveTab] = useState<'source' | 'detail'>('source');
   const [newInput, setNewInput] = useState('');
@@ -112,6 +123,22 @@ export default function Page() {
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
+
+  const toggleSpaceDropdown = useCallback((answerId: string) => {
+    setSpaceDropDownOpenMap((prev) => {
+      const nextOpen = !prev?.[answerId];
+      return nextOpen ? { [answerId]: true } : {};
+    });
+  }, []);
+
+  const closeSpaceDropdown = useCallback((answerId: string) => {
+    setSpaceDropDownOpenMap((prev) => {
+      if (!prev?.[answerId]) return prev;
+      const copied = { ...prev };
+      delete copied[answerId];
+      return copied;
+    });
+  }, []);
 
   // 질문/답변 쌍 (user + assistant 하나의 페이지)
   const getQAPairs = () => {
@@ -928,10 +955,7 @@ export default function Page() {
                                 <div
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setSpaceDropDownOpenMap((prev) => ({
-                                      ...prev,
-                                      [currentQA.answer!.id]: !prev?.[currentQA.answer!.id],
-                                    }));
+                                    toggleSpaceDropdown(currentQA.answer!.id);
                                   }}
                                   className={clsx(
                                     'icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1',
@@ -939,7 +963,7 @@ export default function Page() {
                                   )}
                                 >
                                   <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
-                                    스페이스명 text text text
+                                    {selectedTeamSpace.name}
                                   </div>
                                   <DropDown
                                     className={clsx(
@@ -948,7 +972,7 @@ export default function Page() {
                                     )}
                                   />
                                 </div>
-                                <div className="absolute bottom-12.5 left-23.75">
+                                <div className="absolute bottom-12.5 left-23.75 z-100">
                                   <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
                                 </div>
                               </div>
@@ -959,6 +983,9 @@ export default function Page() {
                                     onClose={() => {
                                       setSpaceDropDownOpenMap((prev) => ({ ...prev, [currentQA.answer!.id]: false }));
                                     }}
+                                    teamSpaces={[...TEAM_SPACES]}
+                                    selectedId={selectedTeamSpaceId}
+                                    onSelect={(team) => setSelectedTeamSpaceId(team.id)}
                                   />
                                 </div>
                               )}
@@ -1016,9 +1043,10 @@ export default function Page() {
                                 {spaceDropDownOpenMap?.[currentQA.answer!.id] && (
                                   <div className="absolute top-10.5 z-100">
                                     <TeamSpaceModal
-                                      onClose={() => {
-                                        setSpaceDropDownOpenMap((prev) => ({ ...prev, [currentQA.answer!.id]: false }));
-                                      }}
+                                      onClose={() => closeSpaceDropdown(currentQA.answer!.id)}
+                                      teamSpaces={[...TEAM_SPACES]}
+                                      selectedId={selectedTeamSpaceId}
+                                      onSelect={(team) => setSelectedTeamSpaceId(team.id)}
                                     />
                                   </div>
                                 )}
