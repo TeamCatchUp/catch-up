@@ -971,10 +971,11 @@ export default function Page() {
   useEffect(() => {
     return () => {
       closeSSEConnection();
-      if (scrollTimeout.current) {
-        clearTimeout(scrollTimeout.current);
-        if (wheelResetTimerRef.current) clearTimeout(wheelResetTimerRef.current); // 추가
-      }
+      // if (scrollTimeout.current) {
+      //   clearTimeout(scrollTimeout.current);
+      // }
+      if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
+      if (wheelEndTimerRef.current) clearTimeout(wheelEndTimerRef.current);
     };
   }, [closeSSEConnection]);
 
