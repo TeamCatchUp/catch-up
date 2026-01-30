@@ -130,21 +130,21 @@ const FeedbackSection = ({
         });
 
         // 추가 여유 공간 확보
-        setTimeout(() => {
-          if (detailRef.current) {
-            const rect = detailRef.current.getBoundingClientRect();
-            const viewportHeight = window.innerHeight;
-            const bottomGap = viewportHeight - rect.bottom;
+        // setTimeout(() => {
+        if (detailRef.current) {
+          const rect = detailRef.current.getBoundingClientRect();
+          const viewportHeight = window.innerHeight;
+          const bottomGap = viewportHeight - rect.bottom;
 
-            // 하단 여유 공간이 100px 미만이면 추가 스크롤
-            if (bottomGap < 100) {
-              window.scrollBy({
-                top: 100 - bottomGap,
-                behavior: 'smooth',
-              });
-            }
+          // 하단 여유 공간이 100px 미만이면 추가 스크롤
+          if (bottomGap < 100) {
+            window.scrollBy({
+              top: 100 - bottomGap,
+              behavior: 'smooth',
+            });
           }
-        }, 100);
+        }
+        // }, 100);
       }, DETAIL_ANIM_MS + 50);
     }
   }, [detailMounted, detailEntered]);
@@ -285,27 +285,26 @@ const FeedbackSection = ({
     ],
   );
 
-  if (!feedbackVisibleMap[messageId]) return null;
+  // if (!feedbackVisibleMap[messageId]) return null;
+  if (!mounted) return null;
+
+  const rootClass = clsx(
+    'border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4',
+    'transition-all duration-200 ease-out will-change-[transform,opacity]',
+    entered ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0',
+  );
 
   // 이미 피드백 제출 / 방금 제출 -> 감사 UI
   if (localHasFeedback || showThanks) {
     return (
-      // <div ref={feedbackRef} className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4">
-      <div
-        ref={feedbackRef}
-        className={clsx(
-          'border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4',
-          'transition-all duration-200 ease-out will-change-[transform,opacity]',
-          entered ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0',
-        )}
-      >
+      <div ref={feedbackRef} className={rootClass}>
         <div className="text-body-small flex items-center justify-center text-gray-50">피드백을 주셔서 감사합니다!</div>
       </div>
     );
   }
 
   return (
-    <div ref={feedbackRef} className="border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4">
+    <div ref={feedbackRef} className={rootClass}>
       <div className="flex justify-between">
         <span className="text-body-small text-gray-50">답변이 마음에 들지 않은 이유가 무엇인가요?</span>
         <div
