@@ -106,7 +106,7 @@ const SideNavBar = () => {
     const fetchDefaultData = async () => {
       try {
         setIsLoading(true);
-        const [chatroomRes] = await Promise.all([searchService.getRecentChatromms()]);
+        const [chatroomRes] = await Promise.all([searchService.getRecentChatrooms()]);
 
         if (chatroomRes.content) {
           const mappedChatrooms = chatroomRes.content.map((item: any) => ({
