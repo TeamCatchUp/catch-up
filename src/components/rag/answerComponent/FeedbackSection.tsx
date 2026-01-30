@@ -98,17 +98,42 @@ const FeedbackSection = ({
     resizeTextarea();
   }, [detailText, isDetailOpen, resizeTextarea]);
 
-  // 피드백 open 시 해당 요소로 하단 스크롤
-  useEffect(() => {
-    if (feedbackVisibleMap[messageId] && feedbackRef.current) {
-      setTimeout(() => {
-        feedbackRef.current?.scrollIntoView({
+  const scrollToBottom = useCallback((extra = 0) => {
+    // DOM 반영 이후에 측정/스크롤하려고 rAF 두 번
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!feedbackRef.current) return;
+
+        // 섹션을 먼저 화면 하단 쪽으로 붙임
+        feedbackRef.current.scrollIntoView({
           behavior: 'smooth',
           block: 'end',
         });
-      }, 100);
-    }
-  }, [feedbackVisibleMap[messageId]]);
+
+        if (extra <= 0) return;
+
+        // 문서 끝이라 scrollIntoView만으로 부족할 때 추가 밀기
+        window.scrollBy({ top: extra, behavior: 'smooth' });
+      });
+    });
+  }, []);
+
+  // // 피드백 open 시 해당 요소로 하단 스크롤
+  // useEffect(() => {
+  //   if (feedbackVisibleMap[messageId] && feedbackRef.current) {
+  //     setTimeout(() => {
+  //       feedbackRef.current?.scrollIntoView({
+  //         behavior: 'smooth',
+  //         block: 'end',
+  //       });
+  //     }, 100);
+  //   }
+  // }, [feedbackVisibleMap[messageId]]);
+  useEffect(() => {
+    if (!mounted || !entered) return;
+    // 열릴 때는 살짝 여유(예: 120px)까지 확보
+    scrollToBottom(120);
+  }, [mounted, entered, scrollToBottom]);
 
   // // 더 자세히 모달 open 시 해당 요소로 하단 스크롤
   // useEffect(() => {
@@ -284,6 +309,15 @@ const FeedbackSection = ({
       setFeedbackVisibleMap,
     ],
   );
+
+  // 감사 UI 자동 하단 스크롤
+  useEffect(() => {
+    if (!mounted || !entered) return;
+    if (!(showThanks || localHasFeedback)) return;
+
+    // 감사 UI가 나타나면서 높이 변화가 생길 수 있으니 다시 하단 정렬
+    scrollToBottom(120);
+  }, [mounted, entered, showThanks, localHasFeedback, scrollToBottom]);
 
   // if (!feedbackVisibleMap[messageId]) return null;
   if (!mounted) return null;
