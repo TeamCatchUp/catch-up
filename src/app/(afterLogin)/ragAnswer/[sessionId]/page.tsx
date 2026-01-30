@@ -832,7 +832,7 @@ export default function Page() {
   const isScrolling = useRef(false);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  const WHEEL_THRESHOLD = 90; // 민감도 (트랙패드면 60~100, 마우스휠이면 100~200) 95
+  const WHEEL_THRESHOLD = 80; // 민감도 (트랙패드면 60~100, 마우스휠이면 100~200) 95
   const WHEEL_LOCK_MS = 900; // 한 번 이동 후 잠금 시간
   const WHEEL_RESET_MS = 140; // 휠 입력 끊기면 누적 리셋
   const WHEEL_END_MS = 180; // "휠 입력 끝"으로 보는 시간 (gesture 종료 판정) 220
@@ -849,7 +849,7 @@ export default function Page() {
     // 트랙패드에서 가끔 너무 큰 spike가 들어오면 1번에 2페이지 넘어갈 수 있어서 클램프
     // dy = Math.max(-200, Math.min(200, dy));
     // 트랙패드 스파이크 완화 (너무 큰 값이 한 번에 들어오는 거 방지)
-    dy = Math.max(-160, Math.min(160, dy)); // 160
+    dy = Math.max(-180, Math.min(180, dy)); // 160
 
     return dy;
   };
