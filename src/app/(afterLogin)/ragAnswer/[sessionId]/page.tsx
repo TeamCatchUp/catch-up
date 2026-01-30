@@ -817,8 +817,7 @@ export default function Page() {
       <div className="flex min-w-0 flex-1 flex-col">
         <RagContentHeader title={chatData.title} onSelectQuestion={goToQuestion} />
         {/* 여기 gap도 */}
-        {/* <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0"> */}
-        <div className="border-neutral-3 relative flex flex-1 flex-col border-r-0">
+        <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
           <div
             ref={scrollRef}
             className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
@@ -839,15 +838,6 @@ export default function Page() {
                     : 'translate-y-0 opacity-100'
               }`}
             >
-              {/* <div
-              className={`mx-auto w-193.25 flex-1 transition-all duration-300 ${
-                slideDirection === 'down'
-                  ? 'translate-y-full opacity-0'
-                  : slideDirection === 'up'
-                    ? '-translate-y-full opacity-0'
-                    : 'translate-y-0 opacity-100'
-              }`}
-            > */}
               {currentQA && (
                 <div className="flex h-full flex-col gap-6">
                   {/* 질문 영역 (고정) */}
