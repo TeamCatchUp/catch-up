@@ -22,3 +22,6 @@ cohere
 # --- Database & Utils ---
 redis
 SQLAlchemy
+
+# Development Only
+pip-licenses
