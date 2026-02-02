@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from catchup.search.rerank import RerankService
+from catchup.components.reranker.service import RerankService
 
 
 @lru_cache(maxsize=1)
