@@ -1,10 +1,10 @@
 import logging
 from collections import defaultdict
 
+from catchup.components.reranker.factory import get_rerank_service
 from catchup.configs.config import settings
 from catchup.rag.nodes.utils import rerank_semaphore
 from catchup.rag.state import AgentState
-from catchup.components.reranker.factory import get_rerank_service
 from catchup.search.schemas import BaseSearchResult, SourceType
 
 logger = logging.getLogger(__name__)
