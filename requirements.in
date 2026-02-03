@@ -19,9 +19,15 @@ openai
 tiktoken
 cohere
 
+# --- Authorization ---
+pyjwt
+pydantic[email]
+
 # --- Database & Utils ---
 redis
 SQLAlchemy
+psycopg2-binary
 
 # Development Only
 pip-licenses
+ruff
