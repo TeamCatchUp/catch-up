@@ -4,9 +4,8 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from catchup.chat.factory import get_chat_service
-from catchup.chat.schemas import ChatResponse
+from catchup.chat.schemas import ChatRequest, ChatResponse, ChatStreamingResumeRequest
 from catchup.chat.service import ChatService
-from catchup.server.chat.schemas import ChatRequest, ChatStreamingResumeRequest
 
 logger = logging.getLogger()
 
