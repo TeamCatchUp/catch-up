@@ -7,6 +7,9 @@ from fastapi import FastAPI, Request
 from catchup import __version__
 from catchup.components.vector_db.meilisearch.factory import get_vector_repository
 from catchup.configs.config import MeiliEnvironment, settings
+from catchup.db.engine import engine
+from catchup.db.models import Base
+from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
 
 # logging 설정
@@ -43,7 +46,16 @@ async def lifespan(app: FastAPI):
                 )
             print("Successfully initilized server setup.")
     except Exception as e:
-        print(f"Falied to connect to Meilisearch. {e}")
+        logger.info(f"Falied to connect to Meilisearch. {e}")
+
+    try:
+        logger.info("Creating tables...")
+        Base.metadata.create_all(bind=engine)
+        logger.info("Done creating tables.")
+
+    except Exception as e:
+        logger.critical(f"Failed to create DB tables: {e}")
+        raise e
 
     yield
 
@@ -59,6 +71,7 @@ app = FastAPI(
 
 # Router 등록
 app.include_router(chat_router)
+app.include_router(auth_router)
 
 
 # 헬스 체크
