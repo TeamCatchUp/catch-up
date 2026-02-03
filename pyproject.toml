@@ -1,0 +1,47 @@
+[project]
+name = "CatchUp"
+version = "0.1.5"
+description = "A backend server for CatchUp."
+readme = "README.md"
+requires-python = ">=3.12.3"
+dependencies = [
+    # --- Core Server ---
+    "fastapi",
+    "uvicorn",
+    "python-dotenv",    
+    "python-multipart",
+    
+    # --- AI & RAG ---
+    "langchain",
+    "langchain-community",
+    "langgraph-checkpoint-redis",
+    "langchain-cohere",
+    "langchain-openai",
+    "langchain-text-splitters",
+    "langfuse",
+    "langgraph",
+    "meilisearch",
+    "meilisearch-python-sdk",
+    "openai",
+    "tiktoken",
+    "cohere",
+    
+    # --- Authorization ---
+    "pyjwt",
+    "pydantic[email]",
+    
+    # --- Database & Utils ---
+    "redis",
+    "sqlalchemy",
+    "psycopg2-binary",
+]
+
+# 개발 전용 의존성
+[dependency-groups]
+dev = [
+    "pip-licenses",
+    "ruff",
+]
+
+[tool.uv]
+package = false
