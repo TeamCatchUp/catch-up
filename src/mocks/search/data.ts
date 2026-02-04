@@ -9,22 +9,22 @@ export const MOCK_CHATROOMS: { content: ChatRoomResponse[] } = {
     {
       sessionId: 'uuid-001',
       title: '로그인 관련 질문',
-      lastActiveTime: '2024-01-15T10:30:00',
+      lastActiveTime: '2024-01-15T10:30:00Z',
     },
     {
       sessionId: 'uuid-002',
       title: '결제 모듈 질문',
-      lastActiveTime: '2024-01-14T15:20:00',
+      lastActiveTime: '2024-01-14T15:20:00Z',
     },
     {
       sessionId: 'uuid-003',
       title: 'API 인증 구현 방법',
-      lastActiveTime: '2024-01-13T09:15:00',
+      lastActiveTime: '2024-01-13T09:15:00Z',
     },
     {
       sessionId: 'uuid-004',
       title: 'React Query 캐싱 전략',
-      lastActiveTime: '2024-01-12T14:00:00',
+      lastActiveTime: '2024-01-12T14:00:00Z',
     },
   ],
 };

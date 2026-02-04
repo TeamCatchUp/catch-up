@@ -81,7 +81,7 @@ export const MOCK_SOURCES: ClientSource[] = [
     title: 'feat: 로그인 페이지 리뉴얼',
     prNumber: 42,
     state: 'merged',
-    createdAt: 1705056000000,
+    createdAt: 1705056000,
     author: '이프론트',
   },
   // Jira Source (sourceType: 3)
