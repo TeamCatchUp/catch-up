@@ -11,6 +11,7 @@ from catchup.db.engine import engine
 from catchup.db.models import Base
 from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
+from catchup.server.connector.github.api import router as github_router
 
 # logging 설정
 logging.basicConfig(
@@ -72,6 +73,7 @@ app = FastAPI(
 # Router 등록
 app.include_router(chat_router)
 app.include_router(auth_router)
+app.include_router(github_router)
 
 
 # 헬스 체크
