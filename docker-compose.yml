@@ -1,48 +1,69 @@
 services:
-  fastapi-rag-server:
-    container_name: fastapi-rag-server
-    image: "${DOCKER_REGISTRY_URL}/${DOCKER_IMAGE_NAME}:${IMAGE_TAG}"
-    env_file:
-      - .env
-    ports:
-      - "8000:8000"
-    networks:
-      - app_net
+  api_server:
+    container_name: catchup_server
+    profiles: ["backend", "full"] 
     depends_on:
-      - redis
-      - meilisearch
-    restart: always
-  
-  redis:
-    container_name: redis
-    image: redis
-    env_file:
-      - .env
-    ports:
-      - "6380:6379"
+      vector_db:
+        condition: service_started
+      graph_db:
+        condition: service_started
+      redis:
+        condition: service_started
     networks:
-      - app_net
-    volumes:
-      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
-      - ./redis_data:/data
-    command: redis-server /usr/local/etc/redis/redis.conf
-    restart: always
-  
-  meilisearch:
-    container_name: meilisearch
-    image: getmeili/meilisearch:v1.16
-    env_file:
-      - .env
+      - catchup_net
     environment:
-      - MEILI_HTTP_ADDR=0.0.0.0:7700
-    networks:
-      - app_net
-    ports:
-      - "7700:7700"
+      - DB_HOST=vector_db
+      - DB_DATABASE=${DB_DATABASE:-catchup}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - NEO4J_URI=bolt://graph_db:7687
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - REDIS_URL=redis://redis:6379/0
+
+  vector_db:
+    container_name: catchup_vectordb
+    image: pgvector/pgvector:pg16
+    profiles: ["backend", "full"]
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE:-catchup}
     volumes:
-      - ./meili_data:/meili_data
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - catchup_net
+    restart: always
+
+  graph_db:
+    container_name: catchup_graphdb
+    image: neo4j:5.15-community
+    profiles: ["backend", "full"]
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD}
+      NEO4J_dbms_memory_heap_initial__size: 512m
+      NEO4J_dbms_memory_heap_max__size: 1G
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - catchup_net
+    restart: always
+
+  redis:
+    container_name: catchup_redis
+    image: redis/redis-stack-server:7.2.0-v13
+    profiles: ["backend", "full"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - catchup_net
     restart: always
 
 networks:
-  app_net:
+  catchup_net:
     driver: bridge
+
+volumes:
+  pg_data:
+  neo4j_data:
+  redis_data:
