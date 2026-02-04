@@ -8,9 +8,8 @@ dependencies = [
     # --- Core Server ---
     "fastapi",
     "uvicorn",
-    "python-dotenv",    
+    "python-dotenv",
     "python-multipart",
-    
     # --- AI & RAG ---
     "langchain",
     "langchain-community",
@@ -25,15 +24,14 @@ dependencies = [
     "openai",
     "tiktoken",
     "cohere",
-    
     # --- Authorization ---
     "pyjwt",
     "pydantic[email]",
-    
     # --- Database & Utils ---
     "redis",
     "sqlalchemy",
     "psycopg2-binary",
+    "langchain-aws>=1.2.2",
 ]
 
 # 개발 전용 의존성

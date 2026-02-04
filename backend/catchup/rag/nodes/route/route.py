@@ -3,6 +3,7 @@ import logging
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
+from catchup.components.llm.service import LlmProvider
 from catchup.components.llm.factory import get_llm_service
 from catchup.observability.langfuse_client import langfuse_handler
 from catchup.rag.nodes.route.prompt import SYSTEM_QUERY_ROUTER_PROMPT
@@ -20,7 +21,7 @@ async def route_node(state: AgentState):
 
     logger.info(f"질문: {question}")
 
-    llm_service = get_llm_service()
+    llm_service = get_llm_service(LlmProvider.OPENAI)
     llm = llm_service.get_llm()
 
     structured_llm = llm.with_structured_output(RouteQuery, method="function_calling")

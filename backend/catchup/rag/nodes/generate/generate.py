@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
+from catchup.components.llm.service import LlmProvider
 from catchup.components.llm.factory import get_llm_service
 from catchup.configs.config import settings
 from catchup.observability.langfuse_client import langfuse_handler
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 async def generate_node(state: AgentState):
     logger.info("generate node 진입")
-    llm_service = get_llm_service()
+    llm_service = get_llm_service(LlmProvider.AWS_BEDROCK)
     llm = llm_service.get_llm()
     trimmer = llm_service.get_trimmer()
 
