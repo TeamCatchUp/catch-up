@@ -1,0 +1,31 @@
+services:
+  api_server:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: dev
+    image: catchup-backend:dev
+    volumes:
+      - ./backend/catchup:/app/catchup
+      - ./backend/pyproject.toml:/app/pyproject.toml
+      - ./backend/uv.lock:/app/uv.lock
+    env_file:
+      - ./backend/.env
+    environment:
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8000:8000"
+    command: uvicorn catchup.server.main:app --host 0.0.0.0 --port 8000 --reload
+
+  vector_db:
+    ports:
+      - "5432:5432"
+  
+  graph_db:
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+
+  redis:
+    ports:
+      - "6380:6379"
