@@ -164,3 +164,70 @@ class JiraOAuthToken(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+
+
+class SlackOAuthToken(Base):
+    """
+    Slack OAuth Token 저장
+    - Workspace(Team) 단위로 관리
+    - Bot Token 저장 (기본적으로 만료 없음, Token Rotation 활성화 시 갱신 필요)
+    """
+    __tablename__ = "slack_oauth_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Workspace 식별 정보
+    team_id: Mapped[str] = mapped_column(
+        String(20), nullable=False, unique=True, index=True,
+        comment="Slack Workspace ID"
+    )
+    team_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True,
+        comment="Slack Workspace 이름"
+    )
+
+    # Bot Token (필수)
+    bot_user_id: Mapped[str] = mapped_column(
+        String(20), nullable=False,
+        comment="Bot User ID"
+    )
+    bot_access_token: Mapped[str] = mapped_column(
+        String(512), nullable=False,
+        comment="Bot Access Token (xoxb-)"
+    )
+    bot_scopes: Mapped[str] = mapped_column(
+        String(1000), nullable=False,
+        comment="Bot Token에 부여된 scopes"
+    )
+
+    # OAuth 인증 사용자 정보
+    authed_user_id: Mapped[str | None] = mapped_column(
+        String(20), nullable=True,
+        comment="OAuth 인증한 사용자 ID"
+    )
+
+    bot_refresh_token: Mapped[str | None] = mapped_column(
+        String(512), nullable=True,
+        comment="Bot Refresh Token (Token Rotation 사용 시)"
+    )
+    bot_token_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="Bot Token 만료 시간 (Token Rotation 사용 시)"
+    )
+
+    incoming_webhook_url: Mapped[str | None] = mapped_column(
+        String(500), nullable=True,
+        comment="Incoming Webhook URL"
+    )
+    incoming_webhook_channel: Mapped[str | None] = mapped_column(
+        String(100), nullable=True,
+        comment="Incoming Webhook 채널"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        server_default=func.now(), onupdate=func.now()
+    )
