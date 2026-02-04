@@ -1,5 +1,7 @@
 from datetime import datetime
-from enum import StrEnum
+from email.policy import default
+from enum import StrEnum, auto, unique
+import time
 
 from sqlalchemy import func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -137,4 +139,28 @@ class GithubInstallation(Base):
             suspended_at = payload.installation.suspended_at,
         )
 
-        
+class JiraOAuthToken(Base):
+    __tablename__ = "jira_oauth_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    atlassian_account_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    cloud_id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    site_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    site_url: Mapped[str |None] = mapped_column(String(500), nullable=True)
+
+    access_token: Mapped[str] = mapped_column(String(4096), nullable=False)
+    refresh_token: Mapped[str] = mapped_column(String(4096), nullable=False)
+    token_type: Mapped[str] = mapped_column(String(50), default="Bearer")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="Access Token 만료 시간")
+    scopes: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="부여된 권한 범위")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), 
+        nullable=False, 
+        server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), 
+        nullable=False, 
+        server_default=func.now(),
+        onupdate=func.now()
+    )

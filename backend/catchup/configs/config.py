@@ -65,6 +65,15 @@ class Settings(BaseSettings):
     GITHUB_APP_CLIENT_ID: str
     GITHUB_APP_CLIENT_SECRET: str
 
+    JIRA_CLIENT_ID: str
+    JIRA_CLIENT_SECRET: str
+    JIRA_REDIRECT_URI: str
+    JIRA_SCOPES: str = "read:me read:jira-work read:jira-user manage:jira-webhook read:account offline_access"
+
+    ATLASSIAN_AUTH_URL: str = "https://auth.atlassian.com/authorize"
+    ATLASSIAN_TOKEN_URL: str = "https://auth.atlassian.com/oauth/token"
+    ATLASSIAN_API_URL: str = "https://api.atlassian.com"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
