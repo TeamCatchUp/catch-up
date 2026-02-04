@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     GITHUB_TOKEN: str
     GITHUB_BASE_URL: str
 
+    GITHUB_APP_ID: int
+    GITHUB_APP_PRIVATE_KEY_PATH: str
+    GITHUB_APP_WEBHOOK_SECRET: str
+    GITHUB_APP_CLIENT_ID: str
+    GITHUB_APP_CLIENT_SECRET: str
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

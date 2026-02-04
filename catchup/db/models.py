@@ -1,7 +1,9 @@
+from datetime import datetime
 from enum import StrEnum
 
+from sqlalchemy import func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.types import String, Boolean, Integer
+from sqlalchemy.types import String, Boolean, Integer, BigInteger, DateTime
 
 
 class Base(DeclarativeBase):
@@ -86,3 +88,53 @@ class GitHubUser(Base):
     email: Mapped[str] = mapped_column(String(255), nullable=True, index=True)
     avatar_url: Mapped[str] = mapped_column(String(500), nullable=True)
     org_role: Mapped[GitHubOrganizationRole] = mapped_column(String(20), nullable=True)
+
+class GithubInstallationType(StrEnum):
+    USER = "user"
+    ORGANIZATION = "organization"
+
+class GithubInstallation(Base):
+    """
+    Github App Installation 정보
+    - Organization Admin이 App을 설치하면 Webhook으로 Installation 정보 수신
+    - Installation Access Token 발급 시 installation_id 사용
+    """
+    __tablename__ = "github_installation"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # Github에서 발급하는 Installation ID
+    installation_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
+    account_type: Mapped[GithubInstallationType] = mapped_column(String(20), nullable=False)
+    account_id: Mapped[int] = mapped_column(BigInteger, nullable=False, comment="GitHub Account ID")
+    account_login: Mapped[str] = mapped_column(String(255), nullable=False, comment="Organization or User login name")
+    account_avatar_url: Mapped[str] = mapped_column(String(500), nullable=True)
+
+    suspended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True, comment="일시 중지된 경우")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), 
+        nullable=False, 
+        server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), 
+        nullable=False, 
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    @classmethod
+    def from_webhook_payload(cls, payload: "InstallationWebhookPayload")-> "GithubInstallation":
+        from catchup.auth.github.schemas import InstallationWebhookPayload
+
+        account = payload.installation.account
+        return cls(
+            installation_id = payload.installation.id,
+            account_type = GithubInstallationType(account.type.lower()),
+            account_id = account.id,
+            account_login = account.login,
+            account_avatar_url = account.avatar_url,
+            suspended_at = payload.installation.suspended_at,
+        )
+
+        
