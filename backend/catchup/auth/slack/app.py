@@ -7,12 +7,7 @@ import httpx
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from catchup.auth.slack.schemas import (
-    SlackAuthedUser,
-    SlackIncomingWebhook,
-    SlackOAuthTokenResponse,
-    SlackTeamInfo,
-)
+from catchup.auth.slack.schemas import SlackOAuthTokenResponse
 from catchup.configs.config import settings
 from catchup.db.models import SlackOAuthToken
 
@@ -190,33 +185,7 @@ class SlackOAuthService:
         return slack_token.bot_access_token
 
     def _parse_token_response(self, data: dict) -> SlackOAuthTokenResponse:
-        team_data = data.get("team", {})
-        authed_user_data = data.get("authed_user")
-        webhook_data = data.get("incoming_webhook")
-
-        return SlackOAuthTokenResponse(
-            ok=data["ok"],
-            access_token=data["access_token"],
-            token_type=data.get("token_type", "bot"),
-            scope=data.get("scope", ""),
-            bot_user_id=data.get("bot_user_id", ""),
-            app_id=data.get("app_id", ""),
-            team=SlackTeamInfo(
-                id=team_data.get("id", ""),
-                name=team_data.get("name", ""),
-            ),
-            authed_user=SlackAuthedUser(
-                id=authed_user_data["id"],
-            ) if authed_user_data else None,
-            incoming_webhook=SlackIncomingWebhook(
-                channel=webhook_data["channel"],
-                channel_id=webhook_data["channel_id"],
-                configuration_url=webhook_data["configuration_url"],
-                url=webhook_data["url"],
-            ) if webhook_data else None,
-            refresh_token=data.get("refresh_token"),
-            expires_in=data.get("expires_in"),
-        )
+        return SlackOAuthTokenResponse.model_validate(data)
 
 
 @lru_cache(maxsize=1)
