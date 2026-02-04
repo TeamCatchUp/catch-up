@@ -2,8 +2,9 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
+from httpx import HTTPStatusError, RequestError
 from sqlalchemy.orm import Session
 
 from catchup.auth.jira.app import get_jira_oauth_service, JiraOAuthService
@@ -14,6 +15,7 @@ from catchup.auth.jira.schemas import (
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
 from catchup.db import jira_oauth as jira_crud
+from catchup.utils.redis import store_oauth_state, validate_oauth_state
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,8 @@ async def install_jira():
     """
     jira_service = get_jira_oauth_service()
     state = secrets.token_urlsafe(32)
-    # TODO: state를 Redis에 저장하여 callback에서 검증
+
+    await store_oauth_state(state, provider="jira")
 
     authorization_url = jira_service.get_authorization_url(state=state)
     return RedirectResponse(url=authorization_url)
@@ -47,7 +50,19 @@ async def jira_oauth_callback(
     - 접근 가능한 Jira 리소스 조회
     - 각 리소스별 토큰 저장
     """
-    # TODO: state 검증
+    # State 파라미터 검증 (CSRF 방지)
+    if not state:
+        logger.warning("Jira OAuth state 파라미터 누락")
+        return RedirectResponse(
+            url=f"{auth_settings.FRONTEND_REDIRECT_URI}?jira_installed=false&reason=missing_state"
+        )
+
+    is_valid_state = await validate_oauth_state(state, provider="jira")
+    if not is_valid_state:
+        logger.warning(f"Jira OAuth state 검증 실패: {state}")
+        return RedirectResponse(
+            url=f"{auth_settings.FRONTEND_REDIRECT_URI}?jira_installed=false&reason=invalid_state"
+        )
 
     # 1. Code → Token 교환
     tokens = await jira_service.exchange_code_for_tokens(code)
@@ -103,8 +118,11 @@ async def jira_installation_status(
         valid_token = await jira_service.get_valid_access_token(db, tokens[0])
         resources = await jira_service.get_accessible_resources(valid_token)
         return JiraInstallationStatus(installed=True, resources=resources)
-    except Exception as e:
-        logger.warning(f"Jira 상태 조회 실패: {e}")
+    except HTTPException as e:
+        logger.warning(f"Jira 상태 조회 실패: {e.detail}")
+        return JiraInstallationStatus(installed=True, resources=[])
+    except (HTTPStatusError, RequestError) as e:
+        logger.warning(f"Jira API 요청 실패: {e}")
         return JiraInstallationStatus(installed=True, resources=[])
 
 
