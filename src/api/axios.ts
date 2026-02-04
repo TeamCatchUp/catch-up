@@ -1,4 +1,6 @@
-import axios from 'axios';
+import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import { USE_MOCK } from '@/mocks/config';
+import { createMockResponse } from '@/mocks/mockAxiosAdapter';
 
 const api = axios.create({
   baseURL: 'https://0-0-0-0.example.io',
@@ -7,6 +9,61 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Mock 에러 타입
+interface MockError extends AxiosError {
+  __MOCK__: true;
+  mockData: unknown;
+  mockStatus: number;
+  originalConfig: InternalAxiosRequestConfig;
+}
+
+// Mock 모드일 때만 Interceptor 활성화
+if (USE_MOCK) {
+
+  api.interceptors.request.use(
+    async (config: InternalAxiosRequestConfig) => {
+      const method = config.method || 'get';
+      const url = config.url || '';
+
+      const mockResponse = await createMockResponse(method, url, config.data);
+
+      if (mockResponse) {
+        console.log(`[Mock] ${method.toUpperCase()} ${url} →`, mockResponse.data);
+
+        // Mock 응답을 에러로 던져서 response interceptor에서 처리
+        const mockError: MockError = {
+          __MOCK__: true,
+          mockData: mockResponse.data,
+          mockStatus: mockResponse.status,
+          originalConfig: config,
+        } as MockError;
+
+        return Promise.reject(mockError);
+      }
+
+      return config;
+    }
+  );
+
+  api.interceptors.response.use(
+    (response: AxiosResponse) => response,
+    (error: AxiosError | MockError) => {
+      // Mock 응답인 경우 정상 응답으로 변환
+      if ('__MOCK__' in error && error.__MOCK__) {
+        const mockError = error as MockError;
+        return Promise.resolve({
+          data: mockError.mockData,
+          status: mockError.mockStatus,
+          statusText: 'OK',
+          headers: {},
+          config: mockError.originalConfig,
+        } as AxiosResponse);
+      }
+      return Promise.reject(error);
+    }
+  );
+}
 
 // 401 에러 시 토큰 갱신
 api.interceptors.response.use(
