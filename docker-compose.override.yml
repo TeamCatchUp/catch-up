@@ -9,6 +9,7 @@ services:
       - ./backend/catchup:/app/catchup
       - ./backend/pyproject.toml:/app/pyproject.toml
       - ./backend/uv.lock:/app/uv.lock
+      - ./backend/.secrets:/app/.secrets
     env_file:
       - ./backend/.env
     environment:
