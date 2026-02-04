@@ -5,3 +5,4 @@ __pycache__/
 .env.prod
 .DS_Store
 **/.secrets/
+Claude.md
