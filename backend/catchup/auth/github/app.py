@@ -7,7 +7,7 @@ import jwt
 
 from catchup.configs.config import settings
 
-class GithubAppService:
+class GitHubAppService:
     '''
     GithubApp 인증 서비스
     - JWT 객체 생성 (Private Key 서명)
@@ -81,10 +81,10 @@ def _load_private_key() -> str:
         return key_path.read_text()
     
 @lru_cache
-def get_github_app_service() -> GithubAppService:
+def get_github_app_service() -> GitHubAppService:
     """GitHubAppService 싱글톤 팩토리"""
     private_key = _load_private_key()
-    return GithubAppService(
+    return GitHubAppService(
         app_id=settings.GITHUB_APP_ID,
         private_key=private_key,
     )
