@@ -12,6 +12,12 @@ type MockHandler = {
   handler: (url: string, data?: unknown) => Promise<unknown>;
 };
 
+/**
+ * Mock 핸들러 목록
+ * - pattern: URL 매칭용 정규식
+ * - method: HTTP 메서드
+ * - handler: Mock 데이터 반환 함수
+ */
 const mockHandlers: MockHandler[] = [
   // ═══════════════════════════════════════
   // Auth
@@ -120,13 +126,29 @@ const mockHandlers: MockHandler[] = [
   },
 ];
 
+/**
+ * 요청 URL과 메서드에 맞는 Mock 핸들러 찾기
+ * mockHandlers 배열을 순회하며 pattern.test(url)로 매칭
+ */
 export const findMockHandler = (method: string, url: string): MockHandler | undefined => {
   return mockHandlers.find(
     (h) => h.method === method.toLowerCase() && h.pattern.test(url)
   );
 };
 
-// Mock 응답을 생성하는 헬퍼 함수
+/**
+ * Mock 응답 생성 함수 (axios interceptor에서 호출)
+ *
+ * 동작 흐름:
+ * 1. findMockHandler로 URL/메서드에 맞는 핸들러 검색
+ * 2. 핸들러가 없으면 null 반환 → 실제 API 호출로 진행
+ * 3. 핸들러가 있으면 100-300ms 지연 후 Mock 데이터 반환
+ *
+ * @param method - HTTP 메서드 (get, post 등)
+ * @param url - 요청 URL (/api/me 등)
+ * @param data - POST 요청 시 body 데이터
+ * @returns Mock 응답 { data, status } 또는 null
+ */
 export const createMockResponse = async (
   method: string,
   url: string,
@@ -135,7 +157,7 @@ export const createMockResponse = async (
   const handler = findMockHandler(method, url);
   if (!handler) return null;
 
-  // API 지연 시뮬레이션 (100-300ms)
+  // 실제 API처럼 보이도록 랜덤 지연
   await delay(100 + Math.random() * 200);
 
   const mockData = await handler.handler(url, data);
