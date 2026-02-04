@@ -74,6 +74,17 @@ class Settings(BaseSettings):
     ATLASSIAN_TOKEN_URL: str = "https://auth.atlassian.com/oauth/token"
     ATLASSIAN_API_URL: str = "https://api.atlassian.com"
 
+    # Slack OAuth
+    SLACK_CLIENT_ID: str
+    SLACK_CLIENT_SECRET: str
+    SLACK_REDIRECT_URI: str
+    SLACK_BOT_SCOPES: str = "channels:read channels:history groups:read groups:history mpim:history users:read users:read.email users.profile:read usergroups:read team:read app_mentions:read assistant:write chat:write chat:write.customize commands reactions:read reactions:write emoji:read files:read links:read"
+
+    # Slack API URLs
+    SLACK_AUTH_URL: str = "https://slack.com/oauth/v2/authorize"
+    SLACK_TOKEN_URL: str = "https://slack.com/api/oauth.v2.access"
+    SLACK_API_URL: str = "https://slack.com/api"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
