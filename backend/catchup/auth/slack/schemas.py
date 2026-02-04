@@ -4,8 +4,8 @@ from pydantic import BaseModel, Field
 
 
 class SlackTeamInfo(BaseModel):
-    id: str = Field(description="Team ID")
-    name: str = Field(description="Team Name")
+    id: str = Field(default="", description="Team ID")
+    name: str = Field(default="", description="Team Name")
 
 
 class SlackAuthedUser(BaseModel):
@@ -23,11 +23,11 @@ class SlackOAuthTokenResponse(BaseModel):
     ok: bool
     access_token: str = Field(description="Bot Access Token (xoxb-)")
     token_type: str = Field(default="bot")
-    scope: str = Field(description="Bot Token scopes")
-    bot_user_id: str = Field(description="Bot User ID")
-    app_id: str
+    scope: str = Field(default="", description="Bot Token scopes")
+    bot_user_id: str = Field(default="", description="Bot User ID")
+    app_id: str = Field(default="")
 
-    team: SlackTeamInfo
+    team: SlackTeamInfo = Field(default_factory=SlackTeamInfo)
     authed_user: SlackAuthedUser | None = None
     incoming_webhook: SlackIncomingWebhook | None = None
     refresh_token: str | None = None

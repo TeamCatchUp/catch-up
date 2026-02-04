@@ -2,8 +2,9 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
+from httpx import HTTPStatusError, RequestError
 from sqlalchemy.orm import Session
 
 from catchup.auth.slack.app import get_slack_oauth_service, SlackOAuthService
@@ -14,6 +15,7 @@ from catchup.auth.slack.schemas import (
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
 from catchup.db import slack_oauth as slack_crud
+from catchup.utils.redis import store_oauth_state, validate_oauth_state
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,8 @@ router = APIRouter(prefix="/api/v1/auth/slack", tags=["slack"])
 async def install_slack():
     slack_service = get_slack_oauth_service()
     state = secrets.token_urlsafe(32)
-    # TODO: state를 Redis에 저장하여 callback에서 검증
+
+    await store_oauth_state(state, provider="slack")
 
     authorization_url = slack_service.get_authorization_url(state=state)
     return RedirectResponse(url=authorization_url)
@@ -55,7 +58,19 @@ async def slack_oauth_callback(
             url=f"{auth_settings.FRONTEND_REDIRECT_URI}?slack_installed=false&reason=no_code"
         )
 
-    # TODO: state 검증 (Redis에서 조회)
+    # State 파라미터 검증 (CSRF 방지)
+    if not state:
+        logger.warning("Slack OAuth state 파라미터 누락")
+        return RedirectResponse(
+            url=f"{auth_settings.FRONTEND_REDIRECT_URI}?slack_installed=false&reason=missing_state"
+        )
+
+    is_valid_state = await validate_oauth_state(state, provider="slack")
+    if not is_valid_state:
+        logger.warning(f"Slack OAuth state 검증 실패: {state}")
+        return RedirectResponse(
+            url=f"{auth_settings.FRONTEND_REDIRECT_URI}?slack_installed=false&reason=invalid_state"
+        )
 
     # 1. Code → Token 교환
     tokens = await slack_service.exchange_code_for_tokens(code)
@@ -113,9 +128,18 @@ async def slack_installation_status(
                 scopes=token.bot_scopes.split() if token.bot_scopes else [],
                 connected_at=token.created_at,
             ))
-        except Exception as e:
-            logger.warning(f"Slack 상태 조회 실패 (Team: {token.team_id}): {e}")
+        except HTTPException as e:
+            logger.warning(f"Slack 상태 조회 실패 (Team: {token.team_id}): {e.detail}")
             # 토큰이 유효하지 않더라도 연결된 것으로 표시
+            workspaces.append(SlackWorkspaceInfo(
+                team_id=token.team_id,
+                team_name=token.team_name or "",
+                bot_user_id=token.bot_user_id,
+                scopes=[],
+                connected_at=token.created_at,
+            ))
+        except (HTTPStatusError, RequestError) as e:
+            logger.warning(f"Slack API 요청 실패 (Team: {token.team_id}): {e}")
             workspaces.append(SlackWorkspaceInfo(
                 team_id=token.team_id,
                 team_name=token.team_name or "",
@@ -144,8 +168,10 @@ async def slack_uninstall(
         try:
             await slack_service.revoke_token(token.bot_access_token)
             logger.info(f"Slack Token 취소 완료: Team ID = {team_id}")
-        except Exception as e:
-            logger.warning(f"Slack Token 취소 실패: {e}")
+        except HTTPException as e:
+            logger.warning(f"Slack Token 취소 실패: {e.detail}")
+        except (HTTPStatusError, RequestError) as e:
+            logger.warning(f"Slack API 요청 실패 (Token 취소): {e}")
 
     deleted = slack_crud.delete_slack_token(db, team_id)
     if deleted:

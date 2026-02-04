@@ -33,34 +33,30 @@ def create_or_update_slack_token(
     incoming_webhook_url: str | None = None,
     incoming_webhook_channel: str | None = None,
 ) -> SlackOAuthToken:
+    token_data = {
+        "team_id": team_id,
+        "team_name": team_name,
+        "bot_user_id": bot_user_id,
+        "bot_access_token": bot_access_token,
+        "bot_scopes": bot_scopes,
+        "authed_user_id": authed_user_id,
+        "bot_refresh_token": bot_refresh_token,
+        "bot_token_expires_at": bot_token_expires_at,
+        "incoming_webhook_url": incoming_webhook_url,
+        "incoming_webhook_channel": incoming_webhook_channel,
+    }
+
     existing = get_slack_token_by_team_id(db, team_id)
 
     if existing:
-        existing.team_name = team_name
-        existing.bot_user_id = bot_user_id
-        existing.bot_access_token = bot_access_token
-        existing.bot_scopes = bot_scopes
-        existing.authed_user_id = authed_user_id
-        existing.bot_refresh_token = bot_refresh_token
-        existing.bot_token_expires_at = bot_token_expires_at
-        existing.incoming_webhook_url = incoming_webhook_url
-        existing.incoming_webhook_channel = incoming_webhook_channel
+        for key, value in token_data.items():
+            if key != "team_id":
+                setattr(existing, key, value)
         db.commit()
         db.refresh(existing)
         return existing
 
-    new_token = SlackOAuthToken(
-        team_id=team_id,
-        team_name=team_name,
-        bot_user_id=bot_user_id,
-        bot_access_token=bot_access_token,
-        bot_scopes=bot_scopes,
-        authed_user_id=authed_user_id,
-        bot_refresh_token=bot_refresh_token,
-        bot_token_expires_at=bot_token_expires_at,
-        incoming_webhook_url=incoming_webhook_url,
-        incoming_webhook_channel=incoming_webhook_channel,
-    )
+    new_token = SlackOAuthToken(**token_data)
     db.add(new_token)
     db.commit()
     db.refresh(new_token)
