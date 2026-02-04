@@ -3,11 +3,6 @@ from sqlalchemy.orm import sessionmaker
 
 from catchup.configs.config import settings
 
-engine = create_engine(
-    f"{settings.DB_DIALECT}+{settings.DB_DRIVER}://"
-    f"{settings.DB_USERNAME}:{settings.DB_PASSWORD}@"
-    f"{settings.DB_HOST}:{settings.DB_PORT}/"
-    f"{settings.DB_DATABASE}"
-)
+engine = create_engine(settings.sqlalchemy_database_url)
 
 SessionLocal = sessionmaker(bind=engine)
