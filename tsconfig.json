@@ -32,7 +32,9 @@
       "@/apis/*": ["src/apis/*"],
       "@/store/*": ["src/store/*"],
       "@/api/*": ["src/api/*"],
-      "@/util/*": ["src/util/*"]
+      "@/util/*": ["src/util/*"],
+      "@/mocks/*": ["src/mocks/*"],
+      "@/services/*": ["src/services/*"]
     }
   },
   "include": [
