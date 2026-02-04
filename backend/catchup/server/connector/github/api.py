@@ -11,11 +11,11 @@ from sqlalchemy.orm import Session
 
 from catchup.configs.config import settings
 from catchup.db.dependencies import get_db
-from catchup.db import github_installations as installation_crud
+from catchup.db import github_installation as installation_crud
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix = "api/v1/github", tags = ["GitHub Connector"])
+router = APIRouter(prefix = "/api/v1/github", tags = ["GitHub Connector"])
 
 def verify_webhook_signature(
         payload_body: bytes,
