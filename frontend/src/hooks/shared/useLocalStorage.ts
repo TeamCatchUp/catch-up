@@ -1,15 +1,11 @@
-// ============================================================
-// localStorage 동기화 훅
-// SSR 환경에서 안전하게 localStorage를 사용
-// ============================================================
+/**
+ * localStorage 동기화 훅
+ * SSR 환경에서 안전하게 localStorage를 사용
+ */
 
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-
-// ============================================================
-// Types
-// ============================================================
 
 interface UseLocalStorageOptions<T> {
   /** localStorage 키 */
@@ -22,10 +18,7 @@ interface UseLocalStorageOptions<T> {
   deserialize?: (value: string) => T;
 }
 
-// ============================================================
-// Hook
-// ============================================================
-
+/** localStorage 동기화 훅 */
 export const useLocalStorage = <T>({
   key,
   initialValue,
@@ -95,13 +88,7 @@ export const useLocalStorage = <T>({
   return [storedValue, setValue, removeValue];
 };
 
-// ============================================================
-// Simple localStorage helper (for one-off reads/writes)
-// ============================================================
-
-/**
- * localStorage에서 값 읽기 (SSR 안전)
- */
+/** localStorage에서 값 읽기 (SSR 안전) */
 export const getFromLocalStorage = <T>(key: string, defaultValue: T): T => {
   if (typeof window === 'undefined') return defaultValue;
 
@@ -113,9 +100,7 @@ export const getFromLocalStorage = <T>(key: string, defaultValue: T): T => {
   }
 };
 
-/**
- * localStorage에 값 쓰기 (SSR 안전)
- */
+/** localStorage에 값 쓰기 (SSR 안전) */
 export const setToLocalStorage = <T>(key: string, value: T): void => {
   if (typeof window === 'undefined') return;
 

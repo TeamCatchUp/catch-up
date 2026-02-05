@@ -1,17 +1,13 @@
-// ============================================================
-// 휠 기반 페이지 네비게이션 훅
-// 트랙패드/마우스 휠로 페이지 전환을 처리
-// 휠 이벤트 감지만 담당, 실제 페이지 전환은 pagination 훅에서 처리
-// ============================================================
+/**
+ * 휠 기반 페이지 네비게이션 훅
+ * 트랙패드/마우스 휠로 페이지 전환을 처리
+ * 휠 이벤트 감지만 담당, 실제 페이지 전환은 pagination 훅에서 처리
+ */
 
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
 import { WHEEL_CONFIG, ANIMATION_CONFIG } from '@/constants/ragAnswer/config';
-
-// ============================================================
-// Types
-// ============================================================
 
 interface UseWheelNavigationOptions {
   /** 휠 이벤트를 감지할 컨테이너 ref */
@@ -30,10 +26,7 @@ interface UseWheelNavigationOptions {
   onSlideDirectionChange?: (direction: 'up' | 'down' | null) => void;
 }
 
-// ============================================================
-// Hook
-// ============================================================
-
+/** 휠 네비게이션 훅 */
 export const useWheelNavigation = ({
   containerRef,
   excludeRefs = [],
