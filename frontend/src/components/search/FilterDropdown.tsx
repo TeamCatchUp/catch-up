@@ -3,14 +3,14 @@
 import * as Popover from '@radix-ui/react-popover';
 import { ReactNode } from 'react';
 
-interface SearchOptionPopoverProps {
+interface FilterDropdownProps {
   trigger: ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   children: ReactNode;
 }
 
-export function SearchOptionPopover({ trigger, open, onOpenChange, children }: SearchOptionPopoverProps) {
+export function FilterDropdown({ trigger, open, onOpenChange, children }: FilterDropdownProps) {
   return (
     <Popover.Root open={open} onOpenChange={onOpenChange} modal={false}>
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>

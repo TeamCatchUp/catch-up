@@ -12,8 +12,8 @@ import IconSpace from '@/public/icons/icon/space.svg';
 import IconLock from '@/public/icons/icon/lock_filled.svg';
 
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/UI/SearchOptionButton';
-import { SearchOptionPopover } from '@/components/search/SearchOptionPopover';
-import { OptionListPopover } from '@/components/search/OptionListPopover';
+import { FilterDropdown } from '@/components/search/FilterDropdown';
+import { FilterOptionList } from '@/components/search/FilterOptionList';
 import { PERSON_OPTIONS } from '@/mocks/search/filterOptions';
 
 interface FilterBarProps {
@@ -42,7 +42,7 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
       </div>
       <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
       <div className="flex items-center gap-2">
-        <SearchOptionPopover
+        <FilterDropdown
           open={filters.openPopover === 'person'}
           onOpenChange={(o) => {
             filters.setOpenPopover(o ? 'person' : null);
@@ -58,14 +58,14 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
             />
           }
         >
-          <OptionListPopover
+          <FilterOptionList
             title="담당자 선택"
             options={PERSON_OPTIONS}
             selected={filters.selectedPeople}
             onToggle={filters.togglePerson}
             Icon={IconPerson}
           />
-        </SearchOptionPopover>
+        </FilterDropdown>
         <SearchOptionButton
           Icon={IconTag}
           label={filters.labels.dept}

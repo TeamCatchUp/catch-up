@@ -10,7 +10,7 @@ interface OptionItem {
   position?: string;
 }
 
-interface OptionListPopoverProps {
+interface FilterOptionListProps {
   title: string;
   options: OptionItem[];
   selected: string[];
@@ -18,7 +18,7 @@ interface OptionListPopoverProps {
   Icon: React.FC<React.SVGProps<SVGSVGElement>>;
 }
 
-export function OptionListPopover({ title, options, selected, onToggle, Icon }: OptionListPopoverProps) {
+export function FilterOptionList({ title, options, selected, onToggle, Icon }: FilterOptionListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
