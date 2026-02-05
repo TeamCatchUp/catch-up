@@ -1,6 +1,6 @@
 import { useRef } from 'react';
-import { useOutsideClick } from '@/hooks/useOutsideClick';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
+import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
+import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
 import LoadingProfile from '/public/icons/icon/loading_profile.svg';
 
 const members = [

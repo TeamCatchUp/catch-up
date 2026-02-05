@@ -7,8 +7,8 @@ import Add from '/public/icons/icon/add_small.svg';
 import Search from '/public/icons/icon/search.svg';
 import Close from '/public/icons/icon/cancel.svg';
 import Chat from '/public/icons/icon/chat.svg';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
-import { useOutsideClick } from '@/hooks/useOutsideClick';
+import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
+import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
 import { SearchHistory } from '@/components/UI/mypage/history/SearchHistory';
 import { searchService } from '@/api/search';
 

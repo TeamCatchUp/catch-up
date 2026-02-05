@@ -8,8 +8,8 @@ import Person from '/public/icons/icon/person.svg';
 import AdminPanelSettings from '/public/icons/icon/admin_panel_settings.svg';
 import Settings from '/public/icons/icon/settings.svg';
 import Logout from '/public/icons/icon/logout.svg';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
-import { useOutsideClick } from '@/hooks/useOutsideClick';
+import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
+import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
 import { logout } from '@/api/auth';
 
 interface UserModalProps {

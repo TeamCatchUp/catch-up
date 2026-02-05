@@ -3,8 +3,8 @@
 import { useRef } from 'react';
 import GroupAdd from '/public/icons/icon/group_add.svg';
 import Settings from '/public/icons/icon/settings.svg';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
-import { useOutsideClick } from '@/hooks/useOutsideClick';
+import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
+import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
 
 interface TeamSpaceMoreModalProps {
   onClose: () => void;

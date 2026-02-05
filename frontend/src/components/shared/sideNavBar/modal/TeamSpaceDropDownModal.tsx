@@ -4,8 +4,8 @@ import clsx from 'clsx';
 import { useRef } from 'react';
 import ArrowRight from '/public/icons/icon/arrow_right2.svg';
 import AddHome from '/public/icons/icon/add_home.svg';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
-import { useOutsideClick } from '@/hooks/useOutsideClick';
+import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
+import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
 
 interface TeamSpaceItem {
   id: string;

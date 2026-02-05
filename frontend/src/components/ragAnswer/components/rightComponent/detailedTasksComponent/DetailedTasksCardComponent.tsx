@@ -9,7 +9,7 @@ import Connector from '/public/icons/icon/connector.svg';
 import LastConnector from '/public/icons/icon/last_connector.svg';
 import DetailedTaskModal from './DetailedTaskModal';
 import SelectionBarModal from './SelectionBarModal';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
+import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
 
 interface DetailedTasksCardComponentProps {
   tasks: JiraTask[];
