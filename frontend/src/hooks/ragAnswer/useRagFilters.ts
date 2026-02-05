@@ -8,7 +8,7 @@
 import { useState, useCallback } from 'react';
 import type { GithubNode } from '@/constants/githubRepoData';
 import type { JiraNode } from '@/constants/jiraData';
-import { getAllGithubChildIds, getAllJiraChildIds } from '@/util/tree';
+import { getAllChildIds } from '@/util/tree';
 
 export type ExplorerType = 'github' | 'jira' | null;
 
@@ -103,7 +103,7 @@ export const useRagFilters = (): UseRagFiltersReturn => {
       const exists = prev.find((i) => i.id === item.id);
 
       if (exists) {
-        const idsToRemove = getAllGithubChildIds(item);
+        const idsToRemove = getAllChildIds(item);
         return prev.filter((i) => !idsToRemove.includes(i.id));
       } else {
         return [...prev, item];
@@ -117,7 +117,7 @@ export const useRagFilters = (): UseRagFiltersReturn => {
       const exists = prev.find((i) => i.id === item.id);
 
       if (exists) {
-        const idsToRemove = getAllJiraChildIds(item);
+        const idsToRemove = getAllChildIds(item);
         return prev.filter((i) => !idsToRemove.includes(i.id));
       } else {
         return [...prev, item];

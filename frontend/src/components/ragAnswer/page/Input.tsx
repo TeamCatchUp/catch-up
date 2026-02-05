@@ -64,9 +64,8 @@ const Input = ({ children, className }: InputProps) => {
       refs.textArea.current.style.height = '26px';
     }
 
-    // 새 페이지로 이동
-    const newPageIndex = Math.floor((chat.chatData?.messages.length ?? 0) / 2) + 1;
-    pagination.goToNewPage(newPageIndex);
+    // 새 페이지로 이동 (현재 질문답변 쌍 수 = 새 페이지 인덱스)
+    pagination.goToNewPage(pagination.qaPairs.length);
 
     await chat.sendMessage(message);
   };
