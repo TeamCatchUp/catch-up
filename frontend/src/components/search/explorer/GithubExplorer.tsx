@@ -4,18 +4,14 @@ import { useState, useEffect, useMemo } from 'react';
 import IconGithub from '@/public/icons/logo/GitHub.svg';
 import IconSpace from '@/public/icons/icon/folder_filled.svg';
 import IconTag from '@/public/icons/icon/file_filled.svg';
-import IconArrowRight from '@/public/icons/icon/arrow_right2.svg';
-import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
-import IconBack from '@/public/icons/icon/arrow_left2.svg';
-import IconSearch from '@/public/icons/icon/search.svg';
-import IconCheckOn from '@/public/icons/icon/checkbox_checked.svg';
-import IconCheckOff from '@/public/icons/icon/checkbox_unchecked.svg';
-import IconConnector from '@/public/icons/icon/connector.svg';
-import IconConnectorLast from '@/public/icons/icon/connector_last.svg';
 
 import type { GithubNode } from '@/types/search/github';
 import { useGithubExplorer } from '@/hooks/search/useGithubExplorer';
 import { useTreeExplorer } from '@/hooks/search/useTreeExplorer';
+import { ExplorerSearchInput } from './shared/ExplorerSearchInput';
+import { ExplorerHeader } from './shared/ExplorerHeader';
+import { ExplorerChildItem } from './shared/ExplorerChildItem';
+import { ExplorerRootItem } from './shared/ExplorerRootItem';
 
 interface GithubExplorerProps {
   selectedItems: string[];
@@ -69,6 +65,7 @@ export const GithubExplorer = ({
   useEffect(() => {
     setActiveTab('file');
   }, [currentRepo]);
+
   const handleCheck = (item: GithubNode, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -78,29 +75,25 @@ export const GithubExplorer = ({
   const isAllSelected = useMemo(() => {
     if (filteredItems.length === 0) return false;
 
-    // 레포 내부라면: 부모(currentRepo)가 선택되어 있거나, 모든 자식이 개별 선택되어 있는지 확인
     if (currentRepo) {
       return selectedItems.includes(currentRepo.id) || filteredItems.every((item) => selectedItems.includes(item.id));
     }
 
-    // 최상위 목록이라면: 필터링된 레포들이 모두 선택되어 있는지 확인
     return filteredItems.every((item) => selectedItems.includes(item.id));
   }, [filteredItems, selectedItems, currentRepo]);
+
   const handleSelectAll = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (activeTab !== 'file') return;
 
     if (currentRepo) {
-      // [수정] 레포 내부일 경우, 개별 자식들이 아닌 currentRepo(type: 'repo') 자체를 토글
-      // 이미 선택되어 있다면(isAllSelected) 해제, 아니면 선택
       if (isAllSelected) {
         if (selectedItems.includes(currentRepo.id)) onToggleItem(currentRepo);
       } else {
         if (!selectedItems.includes(currentRepo.id)) onToggleItem(currentRepo);
       }
     } else {
-      // 최상위 목록일 때는 기존 필터링된 레포지토리들을 토글
       filteredItems.forEach((item) => {
         if (isAllSelected) {
           if (selectedItems.includes(item.id)) onToggleItem(item);
@@ -110,203 +103,89 @@ export const GithubExplorer = ({
       });
     }
   };
+
   const renderItem = (node: GithubNode, depth: number = 0, isLastChild: boolean = false) => {
     const isExpanded = expandedNodes.has(node.id);
-    const isSelected = selectedItems.includes(node.id) || (currentRepo && selectedItems.includes(currentRepo.id));
+    const isSelected = selectedItems.includes(node.id) || Boolean(currentRepo && selectedItems.includes(currentRepo.id));
     const isFolder = node.type === 'tree';
     const isRepo = node.type === 'repo';
+
+    // 아이콘 결정
     let TypeIcon = IconTag;
     if (isFolder) TypeIcon = IconSpace;
-    else if (isRepo) TypeIcon = IconGithub;
-
-    const Connector = isLastChild ? IconConnectorLast : IconConnector;
 
     if (isRepo) {
       return (
-        <div key={node.id} className="flex flex-col" onClick={() => handleRepoClick(node)}>
-          <div
-            className="hover:bg-neutral-1 flex h-10 shrink-0 cursor-pointer items-center justify-between gap-2.5 self-stretch rounded-xl bg-white py-1"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={(e) => onNavigate(node)}
-          >
-            <div className="flex items-center gap-2.5 p-1">
-              <button
-                onClick={(e) => handleCheck(node, e)}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                }}
-                className="shrink-0"
-              >
-                {isSelected ? (
-                  <IconCheckOn className="h-5 w-5 text-blue-50" />
-                ) : (
-                  <IconCheckOff className="text-gray-30 h-5 w-5" />
-                )}
-              </button>
-              <div className="rounded-rounded border-neutral-3 bg-neutral-1 flex items-center justify-center gap-2.5 p-1.5">
-                <IconGithub className="h-5 w-5 text-gray-50" />
-              </div>
-              <div className="text-body-small text-gray-80 truncate">{node.name}</div>
-            </div>
-            <div className="flex items-center gap-2 pr-1">
-              <div className="text-body-xsmall text-gray-30">
-                {node.isPublic ? 'Public' : 'Private'} ∙ {node.lastEdited}
-              </div>
-              <div className="hover:bg-neutral-2 flex h-9 w-9 items-center justify-center rounded-lg p-1.5">
-                <IconArrowRight className="text-gray-70 h-6 w-6 shrink-0" />
-              </div>
-            </div>
+        <ExplorerRootItem
+          key={node.id}
+          node={node}
+          isSelected={isSelected}
+          icon={<IconGithub className="h-5 w-5 text-gray-50" />}
+          onCheck={handleCheck}
+          onNavigate={(n) => {
+            handleRepoClick(n);
+            onNavigate(n);
+          }}
+        />
+      );
+    }
+
+    return (
+      <ExplorerChildItem
+        key={node.id}
+        node={node}
+        depth={depth}
+        isLastChild={isLastChild}
+        isSelected={isSelected}
+        isExpanded={isExpanded}
+        isExpandable={isFolder}
+        icon={<TypeIcon className="h-4.5 w-4.5 shrink-0 text-gray-50" />}
+        onToggleExpand={toggleExpand}
+        onCheck={handleCheck}
+        renderChildren={(parent) =>
+          parent.children?.map((child, index) =>
+            renderItem(child as GithubNode, depth + 1, index === (parent.children?.length || 0) - 1),
+          )
+        }
+      />
+    );
+  };
+
+  /** 헤더 타이틀 렌더링 */
+  const renderHeaderTitle = () => {
+    if (currentRepo) {
+      return (
+        <div className="flex items-center justify-center gap-2.5">
+          <div className="rounded-rounded border-neutral-3 bg-neutral-1 flex items-center justify-center gap-2.5 border p-1.5">
+            <IconGithub className="h-5 w-5 text-gray-50" />
           </div>
+          {currentRepo.name}
         </div>
       );
     }
-    const INDENT_WIDTH = 38;
-
-    return (
-      <div key={node.id} className="flex flex-col">
-        <div
-          className="hover:bg-neutral-1 flex h-10 shrink-0 cursor-pointer items-center justify-between gap-2.5 self-stretch rounded-xl bg-white py-1 pr-2"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={(e) => {
-            if (isFolder) toggleExpand(node.id, e);
-            else handleCheck(node, e);
-          }}
-        >
-          <div className="flex flex-1 items-center overflow-hidden">
-            <div className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center">
-              {isFolder ? (
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleExpand(node.id, e);
-                  }}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  className="hover:bg-neutral-2 flex h-full w-full items-center justify-center rounded-lg"
-                >
-                  {isExpanded ? (
-                    <IconArrowDown className="text-gray-70 pointer-events-none h-5 w-5" />
-                  ) : (
-                    <IconArrowRight className="text-gray-70 pointer-events-none h-5 w-5" />
-                  )}
-                </button>
-              ) : (
-                <div className="w-5" />
-              )}
-            </div>
-
-            {depth > 0 && <div style={{ width: `${(depth - 1) * INDENT_WIDTH}px` }} className="shrink-0" />}
-
-            {depth > 0 && (
-              <div className="flex shrink-0 items-center justify-center" style={{ width: `${INDENT_WIDTH}px` }}>
-                <Connector className="text-gray-30 h-11.75 w-3.5" />
-              </div>
-            )}
-            <div className="flex items-center gap-2.5 overflow-hidden p-1">
-              <button
-                onClick={(e) => handleCheck(node, e)}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                className="shrink-0"
-              >
-                {isSelected ? (
-                  <IconCheckOn className="h-5 w-5 text-blue-50" />
-                ) : (
-                  <IconCheckOff className="text-gray-30 h-5 w-5" />
-                )}
-              </button>
-              <TypeIcon className="h-4.5 w-4.5 shrink-0 text-gray-50" />
-              <div className="text-body-small text-gray-80 truncate select-none">{node.name}</div>
-            </div>
-          </div>
-          <div className="text-body-xsmall text-gray-30 shrink-0">
-            {node.isPublic ? 'Public' : 'Private'} ∙ {node.lastEdited}
-          </div>
-        </div>
-        {isExpanded && node.children && (
-          <div className="flex flex-col">
-            {node.children.map((child, index) =>
-              renderItem(child, depth + 1, index === (node.children?.length || 0) - 1),
-            )}
-          </div>
-        )}
-      </div>
-    );
+    return <div>Github 내 Repository</div>;
   };
 
   return (
     <div className="flex h-full w-full flex-col gap-2.5">
+      {/* 헤더 영역 */}
       <div className="center flex items-center gap-5 self-stretch px-1 pt-2">
-        <div className="flex flex-[1_0_0] items-center gap-1.5">
-          {currentRepo ? (
-            <button
-              type="button"
-              className="hover:bg-neutral-3 flex h-7 w-7 items-center justify-center rounded-full p-0.5"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onNavigate(null);
-                setSearchQuery('');
-              }}
-            >
-              <IconBack className="text-gray-90 h-5 w-5" />
-            </button>
-          ) : (
-            <div className=""></div>
-          )}
-          <div className="text-body-medium text-gray-80 truncate select-none">
-            {currentRepo ? (
-              <div className="flex items-center justify-center gap-2.5">
-                <div className="rounded-rounded border-neutral-3 bg-neutral-1 flex items-center justify-center gap-2.5 border p-1.5">
-                  <IconGithub className="h-5 w-5 text-gray-50" />
-                </div>
-                {currentRepo.name}
-              </div>
-            ) : (
-              <div className="flex items-center justify-center gap-1">
-                <button
-                  type="button"
-                  className="hover:bg-neutral-3 flex h-7 w-7 items-center justify-center rounded-full p-0.5 mr-3"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={handleGoBack}
-                >
-                  <IconBack className="text-gray-90 h-5 w-5" />
-                </button>
-                <div>Github 내 Repository</div>
-              </div>
-            )}
-          </div>
-          {!currentRepo && (
-            <button
-              className="hover:bg-neutral-1 ml-1 flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={handleSelectAll}
-            >
-              {isAllSelected ? (
-                <IconCheckOn className="h-5 w-5 text-blue-50" />
-              ) : (
-                <IconCheckOff className="text-gray-30 h-5 w-5" />
-              )}
-              <div className="text-body-xsmall text-gray-70 select-none whitespace-nowrap">전체 범위 적용</div>
-            </button>
-          )}
-        </div>
-        <div className="border-neutral-5 flex h-9 w-68.25 items-center gap-1 rounded-xl border bg-white px-2.5 py-1.5">
-          <IconSearch className="h-5 w-5 shrink-0 text-gray-50" />
-          <input
-            className="text-body-small placeholder:text-gray-40 w-full truncate outline-none"
-            placeholder="Github 내 검색"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
+        <ExplorerHeader
+          title={renderHeaderTitle()}
+          showBackButton={true}
+          onBack={currentRepo ? () => { onNavigate(null); setSearchQuery(''); } : handleGoBack}
+          showSelectAll={!currentRepo}
+          isAllSelected={isAllSelected}
+          onSelectAll={handleSelectAll}
+        />
+        <ExplorerSearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Github 내 검색"
+        />
       </div>
 
+      {/* 탭 영역 (레포 내부일 때만) */}
       {currentRepo && (
         <div className="flex items-center justify-between self-stretch px-1">
           <div className="flex items-center gap-1">
@@ -330,23 +209,20 @@ export const GithubExplorer = ({
             })}
           </div>
           {activeTab === 'file' && (
-            <button
-              className="hover:bg-neutral-1 flex cursor-pointer items-center gap-0.5 rounded p-1"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={handleSelectAll}
-            >
-              <div className="flex items-center gap-2.5 px-1">
-                {isAllSelected ? (
-                  <IconCheckOn className="h-5 w-5 text-blue-50" />
-                ) : (
-                  <IconCheckOff className="text-gray-30 h-5 w-5" />
-                )}
-              </div>
-              <div className="text-body-xsmall text-gray-70 select-none">전체 선택</div>
-            </button>
+            <ExplorerHeader
+              title=""
+              showBackButton={false}
+              onBack={() => {}}
+              showSelectAll={true}
+              isAllSelected={isAllSelected}
+              onSelectAll={handleSelectAll}
+              selectAllLabel="전체 선택"
+            />
           )}
         </div>
       )}
+
+      {/* 아이템 목록 */}
       <div className="flex flex-col gap-1.5 self-stretch overflow-y-auto px-1 pb-4">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20">
