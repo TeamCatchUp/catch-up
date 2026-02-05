@@ -15,6 +15,7 @@ import IconConnectorLast from '@/public/icons/icon/connector_last.svg';
 
 import type { GithubNode } from '@/types/search/github';
 import { useGithubExplorer } from '@/hooks/search/useGithubExplorer';
+import { useTreeExplorer } from '@/hooks/search/useTreeExplorer';
 
 interface GithubExplorerProps {
   selectedItems: string[];
@@ -26,17 +27,6 @@ interface GithubExplorerProps {
 
 type TabType = 'file' | 'PR' | 'Issue';
 
-const getSearchableNodes = (items: any[]): any[] => {
-  let result: any[] = [];
-  items.forEach((item) => {
-    result.push(item);
-    if (item.children && item.children.length > 0) {
-      result = result.concat(getSearchableNodes(item.children));
-    }
-  });
-  return result;
-};
-
 export const GithubExplorer = ({
   selectedItems,
   onToggleItem,
@@ -45,12 +35,23 @@ export const GithubExplorer = ({
   onClickBack,
 }: GithubExplorerProps) => {
   const { repositories, fileStructure, setFileStructure, isLoading, loadFileStructure } = useGithubExplorer(onNavigate);
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<TabType>('file');
 
-  const handleRepoClick = (node: any) => {
+  /** 현재 표시할 아이템 계산 */
+  const currentItems = useMemo(() => {
+    if (currentRepo) {
+      return fileStructure ? fileStructure.children || [] : [];
+    }
+    return repositories;
+  }, [currentRepo, fileStructure, repositories]);
+
+  /** 공통 트리 탐색 훅 사용 */
+  const { searchQuery, setSearchQuery, expandedNodes, toggleExpand, filteredItems } = useTreeExplorer<GithubNode>({
+    items: currentItems,
+    selectedItems,
+  });
+
+  const handleRepoClick = (node: GithubNode) => {
     if (node.type === 'repo') {
       loadFileStructure(node);
     }
@@ -68,68 +69,11 @@ export const GithubExplorer = ({
   useEffect(() => {
     setActiveTab('file');
   }, [currentRepo]);
-  const getAllChildNodes = (node: GithubNode, nodes: GithubNode[] = []) => {
-    nodes.push(node);
-    if (node.children) {
-      node.children.forEach((child) => getAllChildNodes(child, nodes));
-    }
-    return nodes;
-  };
-
-  const toggleExpand = (nodeId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const newSet = new Set(expandedNodes);
-    if (newSet.has(nodeId)) newSet.delete(nodeId);
-    else newSet.add(nodeId);
-    setExpandedNodes(newSet);
-  };
   const handleCheck = (item: GithubNode, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-
-    const isFolder = item.type === 'tree' || item.type === 'repo';
-    const isCurrentlySelected = selectedItems.includes(item.id);
-
-    if (isCurrentlySelected) {
-      onToggleItem(item);
-    } else {
-      if (isFolder) {
-        const allRelatedNodes = getAllChildNodes(item);
-        const allRelatedIds = allRelatedNodes.map((node) => node.id);
-        onToggleItem(item);
-      } else {
-        onToggleItem(item);
-      }
-    }
+    onToggleItem(item);
   };
-  const getAllNodesFlat = (nodes: GithubNode[], result: GithubNode[] = []) => {
-    nodes.forEach((node) => {
-      result.push(node);
-      if (node.children) {
-        getAllNodesFlat(node.children, result);
-      }
-    });
-    return result;
-  };
-  const currentItems = useMemo(() => {
-    if (currentRepo) {
-      return fileStructure ? fileStructure.children || [] : [];
-    }
-    return repositories;
-  }, [currentRepo, fileStructure, repositories]);
-
-  const filteredItems = useMemo<GithubNode[]>(() => {
-    if (!searchQuery) return currentItems;
-
-    const searchLower = searchQuery.toLowerCase();
-
-    const allFlatNodes = getSearchableNodes(currentItems);
-
-    return allFlatNodes.filter((item) => item.name?.toLowerCase().includes(searchLower));
-  }, [searchQuery, currentItems]);
-
-  const allNodes = getAllNodesFlat(currentItems);
 
   const isAllSelected = useMemo(() => {
     if (filteredItems.length === 0) return false;
@@ -167,11 +111,10 @@ export const GithubExplorer = ({
     }
   };
   const renderItem = (node: GithubNode, depth: number = 0, isLastChild: boolean = false) => {
-    const isExpanded = expandedNodes.has(node.id); // [수정] 본인이 선택되었거나, 상위 레포지토리(currentRepo)가 선택된 상태라면 true
+    const isExpanded = expandedNodes.has(node.id);
     const isSelected = selectedItems.includes(node.id) || (currentRepo && selectedItems.includes(currentRepo.id));
     const isFolder = node.type === 'tree';
     const isRepo = node.type === 'repo';
-    const isSearching = searchQuery.length > 0;
     let TypeIcon = IconTag;
     if (isFolder) TypeIcon = IconSpace;
     else if (isRepo) TypeIcon = IconGithub;

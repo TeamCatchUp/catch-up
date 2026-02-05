@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo } from 'react';
 import IconJira from '@/public/icons/logo/Jira.svg';
 import IconSpace from '@/public/icons/icon/epic.svg';
 import IconTag from '@/public/icons/icon/task.svg';
@@ -15,6 +15,8 @@ import IconConnectorLast from '@/public/icons/icon/connector_last.svg';
 
 import type { JiraNode } from '@/types/search/jira';
 import { JIRA_MOCK_DATA } from '@/mocks/search/jira';
+import { useTreeExplorer } from '@/hooks/search/useTreeExplorer';
+import { getAllChildNodes } from '@/util/shared/tree';
 
 interface JiraExplorerProps {
   selectedItems: string[];
@@ -31,17 +33,17 @@ export const JiraExplorer = ({
   onNavigate,
   onClickBack,
 }: JiraExplorerProps) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  /** 현재 표시할 아이템 계산 */
+  const currentItems = useMemo(() => {
+    return currentProject ? currentProject.children || [] : JIRA_MOCK_DATA;
+  }, [currentProject]);
 
-  const toggleExpand = (nodeId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const newSet = new Set(expandedNodes);
-    if (newSet.has(nodeId)) newSet.delete(nodeId);
-    else newSet.add(nodeId);
-    setExpandedNodes(newSet);
-  };
+  /** 공통 트리 탐색 훅 사용 */
+  const { searchQuery, setSearchQuery, expandedNodes, toggleExpand, filteredItems, isAllSelected } =
+    useTreeExplorer<JiraNode>({
+      items: currentItems,
+      selectedItems,
+    });
 
   const handleCheck = (item: JiraNode, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -50,44 +52,17 @@ export const JiraExplorer = ({
     const isExpandable = item.type === 'project' || item.type === 'board';
     const isCurrentlySelected = selectedItems.includes(item.id);
 
-    if (isExpandable && item.children) {
-      if (isCurrentlySelected) {
-        onToggleItem(item);
-      } else {
-        const allRelatedNodes = getAllChildNodes(item);
-        allRelatedNodes.forEach((node) => {
-          if (!selectedItems.includes(node.id)) {
-            onToggleItem(node);
-          }
-        });
-      }
+    if (isExpandable && item.children && !isCurrentlySelected) {
+      const allRelatedNodes = getAllChildNodes(item);
+      allRelatedNodes.forEach((node) => {
+        if (!selectedItems.includes(node.id)) {
+          onToggleItem(node);
+        }
+      });
     } else {
       onToggleItem(item);
     }
   };
-  const getAllChildNodes = (node: JiraNode, nodes: JiraNode[] = []) => {
-    nodes.push(node);
-    if (node.children) {
-      node.children.forEach((child) => getAllChildNodes(child, nodes));
-    }
-    return nodes;
-  };
-
-  const getAllNodesFlat = (nodes: JiraNode[], result: JiraNode[] = []) => {
-    nodes.forEach((node) => {
-      result.push(node);
-      if (node.children) {
-        getAllNodesFlat(node.children, result);
-      }
-    });
-    return result;
-  };
-  const currentItems = currentProject ? currentProject.children || [] : JIRA_MOCK_DATA;
-  const filteredItems = searchQuery
-    ? getAllNodesFlat(currentItems).filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : currentItems;
-
-  const isAllSelected = filteredItems.length > 0 && filteredItems.every((item) => selectedItems.includes(item.id));
 
   const handleSelectAll = (e: React.MouseEvent) => {
     e.preventDefault();
