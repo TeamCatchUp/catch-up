@@ -6,8 +6,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-from catchup.components.llm.service import LlmProvider
-from catchup.components.llm.factory import get_llm_service
+from catchup.components.llm.factory import get_llm_service, LlmProvider
 from catchup.configs.config import settings
 from catchup.observability.langfuse_client import langfuse_handler
 from catchup.rag.nodes.generate.prompt import SYSTEM_ASSISTANT_PROMPT

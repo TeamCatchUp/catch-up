@@ -1,49 +1,28 @@
-import logging
-from typing import Annotated, Any, Literal, Optional, TypedDict
+from typing import Annotated, Any, Literal, TypedDict, Optional
 
-from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph.message import add_messages
 
-from catchup.rag.schemas import JiraSource, SearchQuery
+from catchup.rag.schemas import GraphDbSearchQuery, JiraSource, VectorDbSearchQuery
 from catchup.search.schemas import BaseSearchResult
-
-logger = logging.getLogger(__name__)
-
-
-def message_reducer(left: list, right: list):
-    all_messages = add_messages(left, right)
-
-    # 전체 메시지 중 사용자에 해당하는 메세지의 인덱스 필터링
-    human_message_indices = [
-        i for i, m in enumerate(all_messages) if isinstance(m, HumanMessage)
-    ]
-
-    # 최근 10 턴의 대화를 short-term memory로 관리
-    max_turns = 10
-    result = all_messages
-
-    if len(human_message_indices) > max_turns:
-        # 최근 max_turns 번째 질문의 위치
-        start_index = human_message_indices[-max_turns]
-
-        # 시스템 메시지(프롬프트) 보존
-        if isinstance(all_messages[0], SystemMessage):
-            result = [all_messages[0]] + all_messages[start_index:]
-
-        else:
-            result = all_messages[start_index:]
-
-    return result
 
 
 class AgentState(TypedDict):
-    messages: Annotated[list, message_reducer]  # 대화 내용
-    current_query: Optional[str]  # 현재 질문
-    datasource: str  # chitchat vs search_pipline
-    retry_count: int  # rewrite 재시도 횟수
-    index_list: list[str]  # 검색 대상 인덱스 이름
-    search_queries: list[SearchQuery]
-    retrieved_docs: list[BaseSearchResult]  # 검색 결과
-    grade_status: Literal["good", "bad", "max_retries"]
-    sources: list[dict[str, Any]]  # generate_node가 생성하는 최종 출처 데이터
-    related_jira_issues: list[JiraSource]  # 사용자 쿼리와 관련 있는 Jira 이슈 목록
+    messages: Annotated[list, add_messages]
+    intent: Literal["chitchat", "search_pipeline"]
+    
+    original_query: str
+    rewritten_query: str 
+    
+    grader_feedback: Optional[str] 
+    
+    vector_search_queries: list[VectorDbSearchQuery]
+    graph_search_queries: list[GraphDbSearchQuery]  # Cypher 쿼리 문자열 등
+    
+    retrieved_docs: list[BaseSearchResult]
+    
+    grade_status: Literal["good", "bad", "no_relationship", "max_retries"] 
+    
+    sources: list[dict[str, Any]]  # 최종 출처 목록
+    related_jira_issues: list[JiraSource]  # 사용자 쿼리와 유사한 Jira Issue 목록
+    
+    retry_count: int  # 최대 2회 제한용

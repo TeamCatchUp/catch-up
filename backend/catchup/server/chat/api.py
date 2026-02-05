@@ -20,7 +20,6 @@ async def chat_response(
         query=request.query,
         role=request.role,
         session_id=request.session_id,
-        index_list=request.index_list,
     )
 
 
@@ -33,7 +32,6 @@ async def chat_response_stream(
             query=request.query,
             role=request.role,
             session_id=request.session_id,
-            index_list=request.index_list,
         ):
             yield f"data: {chunk.model_dump_json(ensure_ascii=False)}\n\n"
 

@@ -47,14 +47,13 @@ class ChatService:
 
     @observe()
     async def chat(
-        self, query: str, role: str, session_id: str, index_list: list[str]
+        self, query: str, role: str, session_id: str
     ) -> ChatResponse:
         app = await self._get_app()
 
         inputs = {
             "messages": [HumanMessage(content=query)],
-            "role": role,
-            "index_list": index_list,
+            "original_query": query,
         }
 
         config = {"configurable": {"thread_id": session_id}}
@@ -84,7 +83,6 @@ class ChatService:
         session_id: str,
         query: str = None,
         role: str = "user",
-        index_list: list[str] = None,
         resume_data: Any = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         # Compiled Graph
@@ -100,8 +98,7 @@ class ChatService:
             # Graph 입력 값
             inputs = {
                 "messages": [HumanMessage(content=query)],
-                "role": role,
-                "index_list": index_list,
+                "original_query": query,
             }
 
         # 실행 시간 측정 시작

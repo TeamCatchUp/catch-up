@@ -5,7 +5,6 @@ from langchain_core.documents import Document
 from catchup.components.vector_db.meilisearch.factory import get_vector_repository
 from catchup.configs.config import settings
 from catchup.rag.nodes.utils import get_latest_query
-from catchup.rag.schemas import SearchQuery
 from catchup.rag.state import AgentState
 from catchup.search.schemas import (
     BaseSearchResult,
@@ -32,14 +31,14 @@ async def retrieve_node(state: AgentState):
     meili_repo = get_vector_repository()
 
     plans = state.get("search_queries", [])
-    user_scope = state.get("index_list", [])
+    # user_scope = state.get("index_list", [])
 
-    if not plans:
-        logger.warning("검색 계획 없음. Fallback 실행.")
-        current_query = state.get("current_query") or get_latest_query(
-            state["messages"][-1].content
-        )
-        plans = [SearchQuery(datasource="codebase", query=current_query)]
+    # if not plans:
+    #     logger.warning("검색 계획 없음. Fallback 실행.")
+    #     current_query = state.get("current_query") or get_latest_query(
+    #         state["messages"][-1].content
+    #     )
+    #     plans = [SearchQuery(datasource="codebase", query=current_query)]
 
     search_requests = []
 

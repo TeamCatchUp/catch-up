@@ -9,7 +9,7 @@ from catchup.rag.nodes import (
     generate_node,
     grade_node,
     manage_pr_context_node,
-    plan_node,
+    generate_vector_queries_node,
     rerank_node,
     retrieve_node,
     rewrite_node,
@@ -20,10 +20,11 @@ from catchup.rag.state import AgentState
 
 
 def route_question(state: AgentState):
-    datasource = state.get("datasource")
-    if datasource == "chitchat":
+    intent = state["intent"]
+    if intent == "chitchat":
         return "chitchat"
-    return "rewrite"
+    elif intent == "search_pipeline":
+        return "rewrite"
 
 
 def route_after_grade(state: AgentState):
@@ -40,7 +41,7 @@ async def get_compiled_graph():
     workflow.add_node("router", route_node)
     workflow.add_node("chitchat", chitchat_node)
     workflow.add_node("rewrite", rewrite_node)
-    workflow.add_node("plan", plan_node)
+    workflow.add_node("generate_vector_queries", generate_vector_queries_node)
     workflow.add_node("retrieve", retrieve_node)
     workflow.add_node("rerank", rerank_node)
     workflow.add_node("manage_pr_context", manage_pr_context_node)
@@ -58,8 +59,8 @@ async def get_compiled_graph():
     workflow.add_edge("rewrite", "search_related_jira")
     workflow.add_edge("search_related_jira", END)
 
-    workflow.add_edge("rewrite", "plan")
-    workflow.add_edge("plan", "retrieve")
+    workflow.add_edge("rewrite", "generate_vector_queries")
+    workflow.add_edge("generate_vector_queries", "retrieve")
     workflow.add_edge("retrieve", "rerank")
     workflow.add_edge("rerank", "manage_pr_context")
     workflow.add_edge("manage_pr_context", "grade")

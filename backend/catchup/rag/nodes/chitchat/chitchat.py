@@ -1,29 +1,25 @@
 import logging
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-from catchup.components.llm.service import LlmProvider
-from catchup.components.llm.factory import get_llm_service
+from catchup.components.llm.factory import get_llm_service, LlmProvider
 from catchup.observability.langfuse_client import langfuse_handler
 from catchup.rag.nodes.chitchat.prompt import CHITCHAT_PROMPT
-from catchup.rag.nodes.utils import llm_semaphore
+from catchup.rag.nodes.utils import filter_conversation, llm_semaphore, log_node
 from catchup.rag.state import AgentState
+
 
 logger = logging.getLogger(__name__)
 
+FALLBACK_ANSWER = "죄송합니다. 잠시 대화 연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요."
 
+@log_node
 async def chitchat_node(state: AgentState):
-    logger.info("chitchat node 진입")
-    llm_service = get_llm_service(LlmProvider.OPENAI)
-    llm = llm_service.get_llm()
+    llm = get_llm_service(LlmProvider.OPENAI).get_llm()
 
-    messages = state["messages"]
-
-    filtered_messages = [
-        m for m in messages if isinstance(m, (HumanMessage, AIMessage))
-    ]
+    filtered_messages = filter_conversation(state["messages"])
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -34,10 +30,21 @@ async def chitchat_node(state: AgentState):
 
     chain = prompt | llm | StrOutputParser()
 
-    async with llm_semaphore:
-        answer = await chain.ainvoke(
-            input={"messages": filtered_messages},
-            config={"callbacks": [langfuse_handler]},
-        )
+    try:
+        async with llm_semaphore:
+            answer = await chain.ainvoke(
+                input={"messages": filtered_messages},
+                config={"callbacks": [langfuse_handler]},
+            )
+            
+    except Exception as e:
+        logger.error(f"Chitchat node failed: {e}", exc_info=True)
+        return {
+                "messages": [AIMessage(content=FALLBACK_ANSWER)],
+                "sources": []
+            }
 
-    return {"messages": [AIMessage(content=answer)], "sources": []}
+    return {
+            "messages": [AIMessage(content=answer)],
+            "sources": []
+        }
