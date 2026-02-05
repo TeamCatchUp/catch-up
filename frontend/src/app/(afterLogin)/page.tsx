@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import TopNavbar from '@/components/common/topNavbar/TopNavbar';
+import TopNavbar from '@/components/shared/topNavbar/TopNavbar';
 import HowToUse from '@/components/home/cardComponents/HowToUse';
 import LinkTool from '@/components/home/cardComponents/LinkTool';
 import TaskRecentlyChecked from '@/components/home/cardComponents/TaskRecentlyChecked';

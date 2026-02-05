@@ -1,5 +1,8 @@
+/** Jira 이슈를 부모-자식 계층 구조로 정규화 */
+
 const safeSummary = (s?: string) => (s ?? '').trim();
 
+/** 백엔드 Jira 이슈 배열을 JiraTask 계층으로 변환 */
 export const normalizeRelatedJiraIssues = (issues: BackendSource[] = []): JiraTask[] => {
   const jiraOnly = (issues ?? []).filter((i) => Number(i.sourceType === 3));
 

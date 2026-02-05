@@ -5,7 +5,7 @@ import { useState } from 'react';
 import Align from '/public/icons/icon/align.svg';
 import Divider from '/public/icons/icon/divider.svg';
 import AddCircle from '/public/icons/icon/add_circle.svg';
-import SourceCardsComponent from '@/components/rag/rightComponent/sourceComponent/SourceCardsComponent';
+import SourceCardsComponent from '@/components/ragAnswer/components/rightComponent/sourceComponent/SourceCardsComponent';
 import RagSourceSkeleton from '@/components/Skeleton/RagRightComponentSkeleton';
 import ErrorSourceComponent from './ErrorSourceComponent';
 

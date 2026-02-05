@@ -1,3 +1,5 @@
+/** RAG 진행 단계별 UI 정보 (아이콘, 레이블) */
+
 import RouterIcon from '/public/icons/icon/router_rewrite.svg';
 import RetrieveIcon from '/public/icons/icon/plan_retrieve.svg';
 import RerankIcon from '/public/icons/icon/rerank.svg';
