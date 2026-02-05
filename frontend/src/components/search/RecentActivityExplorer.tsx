@@ -1,6 +1,6 @@
 'use client';
 
-import { JiraTicketList } from '@/components/UI/JiraTicketList';
+import { JiraTicketList } from '@/components/search/JiraTicketList';
 import { RecentSearchList } from '@/components/search/RecentSearchList';
 import { useEffect, useState } from 'react';
 import { searchService } from '@/api/search';
