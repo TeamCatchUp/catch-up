@@ -11,7 +11,7 @@ import TopNavbar from '@/components/shared/topNavbar/TopNavbar';
 import QueryInput from '@/components/shared/queryBox/QueryInput';
 import FilterBar from '@/components/shared/queryBox/FilterBar';
 import ExplorerPanel from '@/components/shared/queryBox/ExplorerPanel';
-import { SelectedFilterChips } from '@/components/search/SelectedFilterChips';
+import { SelectedFilterChips } from '@/components/search/filter/SelectedFilterChips';
 import { GithubGuideCard, JiraGuideCard } from '@/components/search/GuideCard';
 
 import IconLightbulb from '@/public/icons/icon/lightbulb.svg';

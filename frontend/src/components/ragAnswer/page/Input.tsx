@@ -8,12 +8,12 @@
 import { type PropsWithChildren } from 'react';
 import clsx from 'clsx';
 import { useRagPageContext } from './Context';
-import { GithubExplorer } from '@/components/search/GithubExplorer';
-import { JiraExplorer } from '@/components/search/JiraExplorer';
-import { SelectedFilterChips } from '@/components/search/SelectedFilterChips';
+import { GithubExplorer } from '@/components/search/explorer/GithubExplorer';
+import { JiraExplorer } from '@/components/search/explorer/JiraExplorer';
+import { SelectedFilterChips } from '@/components/search/filter/SelectedFilterChips';
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/shared/SearchOptionButton';
-import { FilterDropdown } from '@/components/search/FilterDropdown';
-import { FilterOptionList } from '@/components/search/FilterOptionList';
+import { FilterDropdown } from '@/components/search/filter/FilterDropdown';
+import { FilterOptionList } from '@/components/search/filter/FilterOptionList';
 import { PERSON_OPTIONS } from '@/mocks/search/filterOptions';
 import ToolTip from '@/components/shared/ToolTip';
 

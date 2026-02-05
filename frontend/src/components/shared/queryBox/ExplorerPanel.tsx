@@ -2,9 +2,9 @@
 
 import type { UseSearchFiltersReturn } from '@/hooks/search/useSearchFilters';
 
-import { GithubExplorer } from '@/components/search/GithubExplorer';
-import { JiraExplorer } from '@/components/search/JiraExplorer';
-import { RecentActivityExplorer } from '@/components/search/RecentActivityExplorer';
+import { GithubExplorer } from '@/components/search/explorer/GithubExplorer';
+import { JiraExplorer } from '@/components/search/explorer/JiraExplorer';
+import { RecentActivityExplorer } from '@/components/search/recent/RecentActivityExplorer';
 
 interface ExplorerPanelProps {
   filters: UseSearchFiltersReturn;

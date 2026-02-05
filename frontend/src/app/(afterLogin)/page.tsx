@@ -15,7 +15,7 @@ import TaskRecentlyCheckedModal from '@/components/home/modal/TaskRecentlyChecke
 import QueryInput from '@/components/shared/queryBox/QueryInput';
 import FilterBar from '@/components/shared/queryBox/FilterBar';
 import ExplorerPanel from '@/components/shared/queryBox/ExplorerPanel';
-import { SelectedFilterChips } from '@/components/search/SelectedFilterChips';
+import { SelectedFilterChips } from '@/components/search/filter/SelectedFilterChips';
 
 export default function Home() {
   const user = useUserStore((state) => state.user);
