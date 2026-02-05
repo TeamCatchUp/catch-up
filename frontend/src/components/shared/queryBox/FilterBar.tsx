@@ -14,7 +14,7 @@ import IconLock from '@/public/icons/icon/lock_filled.svg';
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/UI/SearchOptionButton';
 import { SearchOptionPopover } from '@/components/search/SearchOptionPopover';
 import { OptionListPopover } from '@/components/search/OptionListPopover';
-import { PERSON_OPTIONS } from '@/components/search/OptionDummyData';
+import { PERSON_OPTIONS } from '@/mocks/search/filterOptions';
 
 interface FilterBarProps {
   filters: UseSearchFiltersReturn;
