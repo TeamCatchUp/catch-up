@@ -1,6 +1,6 @@
 import Error from '/public/icons/icon/error.svg';
-import AnswerActionButtons from '@/components/rag/answerComponent/AnswerActionButtons';
-import FeedbackSection from '@/components/rag/answerComponent/FeedbackSection';
+import AnswerActionButtons from '@/components/ragAnswer/components/answerComponent/AnswerActionButtons';
+import FeedbackSection from '@/components/ragAnswer/components/answerComponent/FeedbackSection';
 
 const ErrorResponse = ({
   icons,
