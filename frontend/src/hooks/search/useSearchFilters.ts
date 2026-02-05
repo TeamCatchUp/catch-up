@@ -6,8 +6,8 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import type { GithubNode } from '@/constants/shared/githubRepoData';
-import type { JiraNode } from '@/constants/shared/jiraData';
+import type { GithubNode } from '@/types/search/github';
+import type { JiraNode } from '@/types/search/jira';
 import { getAllChildIds } from '@/util/shared/tree';
 import type { PopoverType, ExplorerMode, ChipData, FilterLabels } from '@/types/search/search';
 

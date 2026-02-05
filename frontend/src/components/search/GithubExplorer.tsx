@@ -13,7 +13,7 @@ import IconCheckOff from '@/public/icons/icon/checkbox_unchecked.svg';
 import IconConnector from '@/public/icons/icon/connector.svg';
 import IconConnectorLast from '@/public/icons/icon/connector_last.svg';
 
-import { GithubNode } from '@/constants/shared/githubRepoData';
+import type { GithubNode } from '@/types/search/github';
 import { useGithubExplorer } from '@/hooks/search/useGithubExplorer';
 
 interface GithubExplorerProps {

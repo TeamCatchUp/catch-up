@@ -1,5 +1,5 @@
-import type { GithubNode } from '@/constants/shared/githubRepoData';
-import type { JiraNode } from '@/constants/shared/jiraData';
+import type { GithubNode } from '@/types/search/github';
+import type { JiraNode } from '@/types/search/jira';
 
 /** Popover 타입 */
 export type PopoverType = 'person' | 'department' | 'project' | null;

@@ -13,7 +13,8 @@ import IconCheckOff from '@/public/icons/icon/checkbox_unchecked.svg';
 import IconConnector from '@/public/icons/icon/connector.svg';
 import IconConnectorLast from '@/public/icons/icon/connector_last.svg';
 
-import { JIRA_MOCK_DATA, JiraNode } from '@/constants/shared/jiraData';
+import type { JiraNode } from '@/types/search/jira';
+import { JIRA_MOCK_DATA } from '@/mocks/search/jira';
 
 interface JiraExplorerProps {
   selectedItems: string[];

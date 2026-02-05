@@ -6,8 +6,8 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import type { GithubNode } from '@/constants/shared/githubRepoData';
-import type { JiraNode } from '@/constants/shared/jiraData';
+import type { GithubNode } from '@/types/search/github';
+import type { JiraNode } from '@/types/search/jira';
 import { getAllChildIds } from '@/util/shared/tree';
 
 export type ExplorerType = 'github' | 'jira' | null;
