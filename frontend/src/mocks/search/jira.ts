@@ -1,11 +1,6 @@
-export interface JiraNode {
-  id: string;
-  name: string;
-  type: 'project' | 'board' | 'ticket';
-  isPublic: boolean;
-  lastEdited: string;
-  children?: JiraNode[];
-}
+// 경로: /search 페이지 → 필터바에서 Jira 버튼 클릭
+
+import type { JiraNode } from '@/types/search/jira';
 
 export const JIRA_MOCK_DATA: JiraNode[] = [
   {

@@ -2,16 +2,10 @@
 
 import ChatIcon from '@/public/icons/icon/chat.svg';
 import Link from 'next/link';
-
-interface SearchQuery {
-  query: string;
-  sessionId: string;
-  date: string;
-  rawDate: Date;
-}
+import type { SearchQuery } from '@/types/search/search';
 
 interface RecentlySearchProps {
-  querys: SearchQuery[];
+  querys: (SearchQuery & { rawDate: Date })[];
   isModal?: boolean;
   onItemClick?: () => void;
 }

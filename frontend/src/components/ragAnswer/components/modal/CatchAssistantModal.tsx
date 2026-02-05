@@ -7,25 +7,23 @@ import Add from '/public/icons/icon/add_small.svg';
 import Search from '/public/icons/icon/search.svg';
 import Close from '/public/icons/icon/cancel.svg';
 import Chat from '/public/icons/icon/chat.svg';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
-import { useOutsideClick } from '@/hooks/useOutsideClick';
-import { SearchHistory } from '@/components/UI/mypage/history/SearchHistory';
+import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
+import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
+import { SearchHistory } from '@/components/shared/SearchHistory';
 import { searchService } from '@/api/search';
+import { formatFullDate } from '@/util/shared/formatDate';
+import type { SearchQuery } from '@/types/search/search';
 
 interface CatchAssistantModalProps {
   onClose: () => void;
 }
-interface SearchQuery {
-  query: string;
-  sessionId: string;
-  date: string;
-  rawDate: Date;
-}
+
+type SearchQueryWithRawDate = SearchQuery & { rawDate: Date };
 
 const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const [recentQueries, setRecentQueries] = useState<SearchQuery[]>([]);
+  const [recentQueries, setRecentQueries] = useState<SearchQueryWithRawDate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -36,17 +34,10 @@ const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
         const [queriesRes] = await Promise.all([searchService.getRecentQueries()]);
 
         if (queriesRes.content) {
-          const mappedQueries = queriesRes.content.map((item: any) => ({
+          const mappedQueries: SearchQueryWithRawDate[] = queriesRes.content.map((item) => ({
             query: item.query,
             sessionId: item.sessionId,
-            date: new Date(item.createdAt)
-              .toLocaleDateString('ko-KR', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-              })
-              .replace(/\s/g, '')
-              .replace(/\.$/, ''),
+            date: formatFullDate(item.createdAt),
             rawDate: new Date(item.createdAt),
           }));
           setRecentQueries(mappedQueries);
@@ -64,7 +55,7 @@ const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
   useOutsideClick(modalRef, onClose);
 
   const handleNewQuestion = () => {
-onClose(); 
+    onClose();
     router.push('/search');
   };
 
@@ -104,7 +95,7 @@ onClose();
         <div className="text-gray-40 p-5">데이터를 불러오는 중입니다...</div>
       ) : (
         <div className="overflow-y-scroll">
-          <SearchHistory querys={recentQueries} isModal={true} onItemClick={onClose}/>
+          <SearchHistory querys={recentQueries} isModal={true} onItemClick={onClose} />
         </div>
       )}
     </div>

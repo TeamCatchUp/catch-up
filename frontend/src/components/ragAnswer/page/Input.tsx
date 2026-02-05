@@ -8,13 +8,13 @@
 import { type PropsWithChildren } from 'react';
 import clsx from 'clsx';
 import { useRagPageContext } from './Context';
-import { GithubExplorer } from '@/components/search/GithubExplorer';
-import { JiraExplorer } from '@/components/search/JiraExplorer';
-import { SelectedFilterChips } from '@/components/search/SelectedFilterChips';
-import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/UI/SearchOptionButton';
-import { SearchOptionPopover } from '@/components/search/SearchOptionPopover';
-import { OptionListPopover } from '@/components/search/OptionListPopover';
-import { PERSON_OPTIONS } from '@/components/search/OptionDummyData';
+import { GithubExplorer } from '@/components/search/explorer/GithubExplorer';
+import { JiraExplorer } from '@/components/search/explorer/JiraExplorer';
+import { SelectedFilterChips } from '@/components/search/filter/SelectedFilterChips';
+import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/shared/SearchOptionButton';
+import { FilterDropdown } from '@/components/search/filter/FilterDropdown';
+import { FilterOptionList } from '@/components/search/filter/FilterOptionList';
+import { PERSON_OPTIONS } from '@/mocks/search/filterOptions';
 import ToolTip from '@/components/shared/ToolTip';
 
 import Add from '/public/icons/icon/add_small.svg';
@@ -186,7 +186,7 @@ const Input = ({ children, className }: InputProps) => {
                 <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
 
                 <div className="flex items-center gap-2">
-                  <SearchOptionPopover
+                  <FilterDropdown
                     open={filters.openPopover === 'person'}
                     onOpenChange={(o) => filters.setOpenPopover(o ? 'person' : null)}
                     trigger={
@@ -199,14 +199,14 @@ const Input = ({ children, className }: InputProps) => {
                       />
                     }
                   >
-                    <OptionListPopover
+                    <FilterOptionList
                       title="담당자 선택"
                       options={PERSON_OPTIONS}
                       selected={filters.selectedPeople}
                       onToggle={filters.togglePerson}
                       Icon={IconPerson}
                     />
-                  </SearchOptionPopover>
+                  </FilterDropdown>
                   <SearchOptionButton Icon={IconTag} label="부서" onMouseDown={(e) => e.preventDefault()} />
                   <SearchOptionButton Icon={IconSpace} label="프로젝트" onMouseDown={(e) => e.preventDefault()} />
                 </div>

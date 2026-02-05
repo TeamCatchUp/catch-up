@@ -3,8 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams } from 'next/navigation'; // URL에서 sessionId를 가져오기 위함
 import List from '/public/icons/icon/list.svg';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
-import { useOutsideClick } from '@/hooks/useOutsideClick';
+import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
+import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
 import { nowChatroomService } from '@/api/search';
 
 interface QuestionsListInSessionModalProps {

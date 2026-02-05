@@ -1,12 +1,6 @@
 import IconReset from '@/public/icons/icon/reset.svg';
 import IconCloseSmall from '@/public/icons/icon/cancel_small.svg';
-
-interface ChipData {
-  id: string;
-  name: string;
-  Icon: any;
-  onRemove: () => void;
-}
+import type { ChipData } from '@/types/search/search';
 
 interface SelectedFilterChipsProps {
   chips: ChipData[];

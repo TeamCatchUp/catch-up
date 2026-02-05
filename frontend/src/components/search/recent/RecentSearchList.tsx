@@ -2,19 +2,14 @@
 
 import ChatIcon from '@/public/icons/icon/chat.svg';
 import Link from 'next/link';
+import type { SearchQuery } from '@/types/search/search';
 
-interface SearchQuery {
-  query: string;
-  sessionId: string;
-  date: string;
-}
-
-interface RecentlySearchProps {
+interface RecentSearchListProps {
   title: string;
   querys: SearchQuery[];
 }
 
-export function ReacentlySearchList({ title, querys }: RecentlySearchProps) {
+export function RecentSearchList({ title, querys }: RecentSearchListProps) {
   const displayedQuerys = querys.slice(0, 3);
   if (!displayedQuerys || displayedQuerys.length === 0)
     return (

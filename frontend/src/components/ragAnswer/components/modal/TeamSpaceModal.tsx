@@ -3,8 +3,8 @@
 import clsx from 'clsx';
 import { useRef, useState } from 'react';
 import ArrowRight from '/public/icons/icon/arrow_right2.svg';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
-import { useOutsideClick } from '@/hooks/useOutsideClick';
+import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
+import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
 
 interface TeamSpaceModalProps {
   onClose: () => void;
