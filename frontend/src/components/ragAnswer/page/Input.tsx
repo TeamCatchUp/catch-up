@@ -11,7 +11,7 @@ import { useRagPageContext } from './Context';
 import { GithubExplorer } from '@/components/search/GithubExplorer';
 import { JiraExplorer } from '@/components/search/JiraExplorer';
 import { SelectedFilterChips } from '@/components/search/SelectedFilterChips';
-import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/UI/SearchOptionButton';
+import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/shared/SearchOptionButton';
 import { FilterDropdown } from '@/components/search/FilterDropdown';
 import { FilterOptionList } from '@/components/search/FilterOptionList';
 import { PERSON_OPTIONS } from '@/mocks/search/filterOptions';

@@ -9,7 +9,7 @@ import Close from '/public/icons/icon/cancel.svg';
 import Chat from '/public/icons/icon/chat.svg';
 import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
 import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
-import { SearchHistory } from '@/components/UI/mypage/history/SearchHistory';
+import { SearchHistory } from '@/components/shared/SearchHistory';
 import { searchService } from '@/api/search';
 
 interface CatchAssistantModalProps {

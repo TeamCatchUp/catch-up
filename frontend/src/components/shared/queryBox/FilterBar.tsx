@@ -11,7 +11,7 @@ import IconTag from '@/public/icons/icon/tag.svg';
 import IconSpace from '@/public/icons/icon/space.svg';
 import IconLock from '@/public/icons/icon/lock_filled.svg';
 
-import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/UI/SearchOptionButton';
+import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/shared/SearchOptionButton';
 import { FilterDropdown } from '@/components/search/FilterDropdown';
 import { FilterOptionList } from '@/components/search/FilterOptionList';
 import { PERSON_OPTIONS } from '@/mocks/search/filterOptions';

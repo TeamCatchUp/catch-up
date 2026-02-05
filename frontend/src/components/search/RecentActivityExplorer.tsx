@@ -1,7 +1,7 @@
 'use client';
 
 import { JiraTicketList } from '@/components/UI/JiraTicketList';
-import { ReacentlySearchList } from '@/components/UI/RecetlySearchList';
+import { RecentSearchList } from '@/components/search/RecentSearchList';
 import { useEffect, useState } from 'react';
 import { searchService } from '@/api/search';
 
@@ -62,7 +62,7 @@ export const RecentActivityExplorer = () => {
 
   return (
     <>
-      <ReacentlySearchList title="최근 질문" querys={recentQueries} />
+      <RecentSearchList title="최근 질문" querys={recentQueries} />
       <JiraTicketList tickets={jiraTickets} title="최근 확인한 지라 티켓" />
     </>
   );

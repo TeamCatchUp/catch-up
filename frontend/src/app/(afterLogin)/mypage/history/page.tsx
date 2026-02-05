@@ -1,7 +1,7 @@
 'use client';
 
 import { searchService } from '@/api/search';
-import { SearchHistory } from '@/components/UI/mypage/history/SearchHistory';
+import { SearchHistory } from '@/components/shared/SearchHistory';
 import { useEffect, useState } from 'react';
 
 interface SearchQuery {
