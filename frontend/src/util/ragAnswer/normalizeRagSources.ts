@@ -1,3 +1,5 @@
+/** 백엔드 소스 데이터를 UI용으로 정규화 */
+
 import { formatDate } from '@/util/formatDate';
 
 const SOURCE_TYPE_MAP: Record<0 | 1 | 2 | 3, ChatSource['sourceType']> = {
@@ -7,19 +9,20 @@ const SOURCE_TYPE_MAP: Record<0 | 1 | 2 | 3, ChatSource['sourceType']> = {
   3: 'jira',
 };
 
-// code 제목
+/** 파일 경로에서 마지막 파일명 추출 */
 const getLastPath = (path?: string) => {
   if (!path) return '';
   const cleaned = path.replace(/\+$/, '');
   return cleaned.split('/').pop() ?? cleaned;
 };
 
-// code 날짜
+/** 코드 변경일 포맷팅 */
 const formatDaysAgo = (daysAgo?: number) => {
   if (typeof daysAgo !== 'number') return '';
   return `${daysAgo}일 전 변경`;
 };
 
+/** 백엔드 소스 배열을 UI용 ChatSource로 변환 */
 export const normalizeSources = (sources: BackendSource[]): ChatSource[] => {
   return (sources ?? [])
     .filter((s) => !!s.htmlUrl)
