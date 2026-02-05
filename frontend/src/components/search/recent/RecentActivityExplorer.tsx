@@ -4,12 +4,8 @@ import { JiraTicketList } from './JiraTicketList';
 import { RecentSearchList } from './RecentSearchList';
 import { useEffect, useState } from 'react';
 import { searchService } from '@/api/search';
-
-interface SearchQuery {
-  query: string;
-  sessionId: string;
-  date: string;
-}
+import { formatShortDate } from '@/util/shared/formatDate';
+import type { SearchQuery } from '@/types/search/search';
 
 export const RecentActivityExplorer = () => {
   const [recentQueries, setRecentQueries] = useState<SearchQuery[]>([]);
@@ -27,23 +23,17 @@ export const RecentActivityExplorer = () => {
         ]);
 
         if (queriesRes.content) {
-          const mappedQueries = queriesRes.content.map((item: any) => ({
+          const mappedQueries: SearchQuery[] = queriesRes.content.map((item) => ({
             query: item.query,
             sessionId: item.sessionId,
-            date: new Date(item.createdAt)
-              .toLocaleDateString('ko-KR', {
-                month: '2-digit',
-                day: '2-digit',
-              })
-              .replace(/\. /g, '.')
-              .slice(0, 5),
+            date: formatShortDate(item.createdAt),
           }));
           setRecentQueries(mappedQueries);
         }
 
-        const mappedTickets = jiraRes.map((ticket: any) => ({
-          id: ticket.issueKey, // JIRA-101 형태
-          label: ticket.summary, // 티켓 제목
+        const mappedTickets = jiraRes.map((ticket) => ({
+          id: ticket.issueKey,
+          label: ticket.summary,
         }));
         setJiraTickets(mappedTickets);
       } catch (err) {

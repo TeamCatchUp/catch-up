@@ -2,12 +2,7 @@
 
 import ChatIcon from '@/public/icons/icon/chat.svg';
 import Link from 'next/link';
-
-interface SearchQuery {
-  query: string;
-  sessionId: string;
-  date: string;
-}
+import type { SearchQuery } from '@/types/search/search';
 
 interface RecentSearchListProps {
   title: string;

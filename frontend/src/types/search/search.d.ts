@@ -23,3 +23,11 @@ export interface FilterLabels {
   git: string;
   jira: string;
 }
+
+/** 검색 쿼리 (최근 검색 기록) */
+export interface SearchQuery {
+  query: string;
+  sessionId: string;
+  date: string;
+  rawDate?: Date;
+}

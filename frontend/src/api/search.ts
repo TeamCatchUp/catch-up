@@ -1,25 +1,31 @@
 import api from '@/api/axios';
+import type {
+  RecentQueriesResponse,
+  JiraTicketResponse,
+  ChatroomsResponse,
+  SessionQueriesResponse,
+} from '@/types/search/api';
 
 export const searchService = {
-  getRecentQueries: async () => {
-    const res = await api.get('/api/chatrooms/queries');
+  getRecentQueries: async (): Promise<RecentQueriesResponse> => {
+    const res = await api.get<RecentQueriesResponse>('/api/chatrooms/queries');
     return res.data;
   },
 
-  getRecentJiraTickets: async () => {
-    const res = await api.get('/api/jira/issues');
+  getRecentJiraTickets: async (): Promise<JiraTicketResponse[]> => {
+    const res = await api.get<JiraTicketResponse[]>('/api/jira/issues');
     return res.data;
   },
 
-  getRecentChatrooms: async () => {
-    const res = await api.get('/api/chatrooms');
+  getRecentChatrooms: async (): Promise<ChatroomsResponse> => {
+    const res = await api.get<ChatroomsResponse>('/api/chatrooms');
     return res.data;
   },
 };
 
 export const nowChatroomService = {
-  getAllQueries: async (sessionId: string) => {
-    const res = await api.get(`/api/chatrooms/${sessionId}/queries`);
+  getAllQueries: async (sessionId: string): Promise<SessionQueriesResponse> => {
+    const res = await api.get<SessionQueriesResponse>(`/api/chatrooms/${sessionId}/queries`);
     return res.data;
   },
 };
