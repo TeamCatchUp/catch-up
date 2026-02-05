@@ -1,0 +1,8 @@
+.venv/
+venv/
+__pycache__/
+.env
+.env.prod
+.DS_Store
+**/.secrets/
+Claude.md
