@@ -4,7 +4,7 @@
 
 import clsx from 'clsx';
 import { useRagPageContext } from './Context';
-import PageIndicator from '@/components/common/PageIndicator';
+import PageIndicator from '@/components/shared/PageIndicator';
 
 interface IndicatorProps {
   className?: string;

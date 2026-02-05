@@ -22,7 +22,7 @@ import AnswerActionButtons from '@/components/ragAnswer/components/answerCompone
 import FeedbackSection from '@/components/ragAnswer/components/answerComponent/FeedbackSection';
 import FilterComponent from '@/components/ragAnswer/components/answerComponent/Filter';
 import TeamSpaceModal from '@/components/ragAnswer/components/modal/TeamSpaceModal';
-import ToolTip from '@/components/common/ToolTip';
+import ToolTip from '@/components/shared/ToolTip';
 import { MarkDownComponents } from '@/components/ragAnswer/components/answerComponent/markdown/MarkDownComponents';
 
 import Divider from '/public/icons/icon/divider.svg';

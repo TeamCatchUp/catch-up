@@ -15,7 +15,7 @@ import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/UI/
 import { SearchOptionPopover } from '@/components/search/SearchOptionPopover';
 import { OptionListPopover } from '@/components/search/OptionListPopover';
 import { PERSON_OPTIONS } from '@/components/search/OptionDummyData';
-import ToolTip from '@/components/common/ToolTip';
+import ToolTip from '@/components/shared/ToolTip';
 
 import Add from '/public/icons/icon/add_small.svg';
 import ArrowSend from '/public/icons/icon/arrow_send.svg';

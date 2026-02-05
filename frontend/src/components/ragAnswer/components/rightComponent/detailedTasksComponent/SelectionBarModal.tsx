@@ -9,7 +9,7 @@ import Reply from '/public/icons/icon/reply.svg';
 import Task from '/public/icons/icon/task.svg';
 import Edit from '/public/icons/icon/edit_square.svg';
 import Share from '/public/icons/icon/share_2.svg';
-import ToolTip from '@/components/common/ToolTip';
+import ToolTip from '@/components/shared/ToolTip';
 
 interface SelectionBarModalProps {
   onClose: () => void;

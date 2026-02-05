@@ -18,7 +18,7 @@ import {
 import useRagChat from '@/hooks/ragAnswer/useRagChat';
 import useRagPagination from '@/hooks/ragAnswer/useRagPagination';
 import useRagFilters from '@/hooks/ragAnswer/useRagFilters';
-import useWheelNavigation from '@/hooks/common/useWheelNavigation';
+import useWheelNavigation from '@/hooks/shared/useWheelNavigation';
 import { TEAM_SPACES, type TeamSpace } from '@/constants/ragAnswer/config';
 
 /** Context Value 타입 정의 */

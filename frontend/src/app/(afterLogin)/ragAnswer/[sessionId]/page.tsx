@@ -6,7 +6,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { RagPage } from '@/components/ragAnswer/page';
 
 // Common Components
-import DateDivider from '@/components/common/DateDivider';
+import DateDivider from '@/components/shared/DateDivider';
 
 export default function RagAnswerPage() {
   const params = useParams();

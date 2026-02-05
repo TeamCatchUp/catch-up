@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import TopNavbar from '@/components/common/topNavbar/TopNavbar';
+import TopNavbar from '@/components/shared/topNavbar/TopNavbar';
 import IconLightbulb from '@/public/icons/icon/lightbulb.svg';
 import Jira from '@/public/image/AIJIRA1.png';
 import Git from '@/public/image/aiGit.png';
