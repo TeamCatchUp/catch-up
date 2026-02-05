@@ -1,0 +1,287 @@
+@layer base {
+  .markdown-body {
+    font-family:
+      Pretendard,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      Oxygen,
+      Ubuntu,
+      Cantarell,
+      'Open Sans',
+      'Helvetica Neue',
+      sans-serif;
+    color: #1e2124;
+  }
+
+  /* 코드도 pretendard 적용 */
+  .markdown-body code,
+  .markdown-body pre,
+  .markdown-body pre code {
+    font-family:
+      Pretendard,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      Oxygen,
+      Ubuntu,
+      Cantarell,
+      'Open Sans',
+      'Helvetica Neue',
+      sans-serif;
+  }
+
+  /* ------------- 텍스트 ------------- */
+  /* h1 */
+  .markdown-body h1 {
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 150%;
+    margin-top: 0;
+    margin-bottom: 16px;
+  }
+
+  /* h2 */
+  .markdown-body h2 {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 150%;
+    margin-top: 32px;
+    margin-bottom: 16px;
+  }
+
+  /* h3 */
+  .markdown-body h3 {
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 150%;
+    margin-top: 24px;
+    margin-bottom: 8px;
+  }
+
+  /* p */
+  .markdown-body p {
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 160%;
+    margin: 8px 0;
+  }
+
+  /* strong */
+  .markdown-body strong {
+    font-weight: 600;
+  }
+
+  /* ------------- 코드 ------------- */
+  /* 인라인 코드 (code) */
+  .markdown-body :not(pre) > code {
+    padding: 2px 6px;
+    background: #f1f3f5;
+    border-radius: 4px;
+
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 160%;
+
+    color: #1e2124;
+  }
+  /* **`인라인코드`** 적용 */
+  .markdown-body strong > code {
+    font-weight: 600;
+  }
+
+  /* 코드블럭 (pre > code) */
+  .markdown-body pre {
+    background: #f7f7f8;
+    padding: 20px;
+    margin: 24px 0;
+    border-radius: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .markdown-body pre code {
+    background: none;
+    padding: 0;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 150%;
+    color: #464c53;
+
+    white-space: pre; /* 코드블럭은 줄바꿈 보존*/
+  }
+
+  /* markdown-body 內에서는 스크롤바 복구 */
+  .markdown-body pre::-webkit-scrollbar {
+    display: block;
+    height: 8px;
+  }
+
+  .markdown-body pre::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+  }
+
+  .markdown-body pre::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* 스크롤바 좌측 버튼 */
+  /* .markdown-body pre::-webkit-scrollbar-button:horizontal:decrement {
+    display: block;
+    width: 8px;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 16px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M8 3L5 6L8 9' stroke='%23666' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+
+  .markdown-body pre::-webkit-scrollbar-button:horizontal:decrement:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+  } */
+
+  /* 스크롤바 우측 버튼 */
+  /* .markdown-body pre::-webkit-scrollbar-button:horizontal:increment {
+    display: block;
+    width: 8x;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 16px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M4 3L7 6L4 9' stroke='%23666' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+  } */
+
+  /* ------------- 리스트 ------------- */
+  /* ul, ol */
+  .markdown-body ul,
+  .markdown-body ol {
+    margin: 12px 0;
+    padding-left: 29px;
+    list-style-position: outside;
+  }
+
+  .markdown-body li > ul,
+  .markdown-body li > ol {
+    margin: 6px 0;
+    padding-left: 36px;
+  }
+
+  /* ul 마커 스타일 */
+  .markdown-body ul {
+    list-style-type: disc;
+  }
+
+  .markdown-body ul ul {
+    list-style-type: disc;
+  }
+
+  /* ol 마커 스타일 */
+  .markdown-body ol {
+    list-style-type: decimal;
+  }
+
+  .markdown-body ol ol {
+    list-style-type: decimal;
+  }
+
+  /* 중첩 상하 마진 */
+  .markdown-body ul > li + li,
+  .markdown-body ol > li + li {
+    margin-top: 12px;
+  }
+
+  .markdown-body li > ul > li + li,
+  .markdown-body li > ol > li + li {
+    margin-top: 6px;
+  }
+
+  /* 줄바꿈 현상 방지 */
+  .markdown-body li > p {
+    display: inline;
+    margin: 0;
+  }
+
+  /* ------------- 인용/강조블록 ------------- */
+  .markdown-body blockquote {
+    margin: 24px 0;
+    padding: 8px 16px;
+    border-left: 4px solid #dbdcdf;
+    color: #33363d;
+    background: transparent;
+  }
+
+  /* ------------- 링크 ------------- */
+  /* a */
+  .markdown-body a {
+    color: #005eeb;
+    text-decoration: none;
+  }
+
+  .markdown-body a:hover {
+    text-decoration: underline;
+  }
+
+  .markdown-body a:visited {
+    color: #005eeb;
+    text-decoration: none;
+    opacity: 0.75;
+  }
+
+  /* ------------- 테이블 ------------- */
+  .markdown-body .table-wrapper {
+    overflow-x: auto;
+
+    /* 추가 */
+    width: 100%;
+    margin: 24px 0;
+  }
+
+  .markdown-body table {
+    width: 100%;
+    min-width: 640px;
+    max-width: 720px;
+    border-collapse: collapse;
+    /* margin: 24px 0; */
+    margin: 0;
+  }
+
+  .markdown-body th {
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 500;
+    font-size: 14px;
+    color: #1e2124;
+  }
+
+  .markdown-body td {
+    padding: 12px;
+    font-weight: 400;
+    font-size: 16px;
+    color: #1e2124;
+  }
+
+  .markdown-body thead tr {
+    border-bottom: 1px solid #dbdcdf;
+  }
+
+  .markdown-body tbody tr {
+    border-bottom: 1px solid #e6e8eb;
+  }
+
+  .markdown-body tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  /* ------------- 이미지/미디어 ------------- */
+  .markdown-body img {
+    max-width: 60%;
+    border-radius: 16px;
+  }
+}

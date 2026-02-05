@@ -1,0 +1,12 @@
+@theme {
+  /* Shadow */
+  --shadow-card: 0 0 12px rgba(111, 113, 115, 0.03);
+  --shadow-button: 0 0 4px rgba(0, 0, 0, 0.08);
+  --shadow-tooltip: 0 0 4px 0 rgba(0, 0, 0, 0.12), 2px 6px 12px 0 rgba(0, 0, 0, 0.12);
+  --shadow-rag-bar: 1px 1px 30px 0 rgba(181, 199, 228, 0.4);
+  --shadow-selection-bar: 0 0 40px 0 rgba(0, 0, 0, 0.2);
+  --shadow-modal: 0 6px 25px 0 rgba(0, 0, 0, 0.28);
+  --shadow-dropdown-menu: 0 4px 15px 0 rgba(0, 0, 0, 0.08);
+
+  --shadow-blue-bottom: 0 4px 0 0 rgba(229, 246, 254, 0.5);
+}
