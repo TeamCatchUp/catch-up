@@ -1,0 +1,20 @@
+services:
+  api_server:
+    image: "${DOCKER_REGISTRY_URL}/catchup-backend:${IMAGE_TAG}"
+    restart: always
+    environment:
+      - LOG_LEVEL=INFO
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  vector_db:
+    image: "${DOCKER_REGISTRY_URL}/mirror/pgvector:pg16"
+
+  graph_db:
+    image: "${DOCKER_REGISTRY_URL}/mirror/neo4j:5.15"
+
+  redis:
+    image: "${DOCKER_REGISTRY_URL}/mirror/redis:7.4-alpine"
