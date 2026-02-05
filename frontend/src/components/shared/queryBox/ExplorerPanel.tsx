@@ -4,7 +4,7 @@ import type { UseSearchFiltersReturn } from '@/hooks/search/useSearchFilters';
 
 import { GithubExplorer } from '@/components/search/GithubExplorer';
 import { JiraExplorer } from '@/components/search/JiraExplorer';
-import { DefaultSearchContent } from '@/components/search/DefaultSearchContent';
+import { RecentActivityExplorer } from '@/components/search/RecentActivityExplorer';
 
 interface ExplorerPanelProps {
   filters: UseSearchFiltersReturn;
@@ -30,7 +30,7 @@ export default function ExplorerPanel({ filters }: ExplorerPanelProps) {
           onClickBack={filters.handleJiraClick}
         />
       ) : (
-        <DefaultSearchContent />
+        <RecentActivityExplorer />
       )}
     </div>
   );

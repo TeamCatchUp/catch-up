@@ -11,7 +11,7 @@ interface SearchQuery {
   date: string;
 }
 
-export const DefaultSearchContent = () => {
+export const RecentActivityExplorer = () => {
   const [recentQueries, setRecentQueries] = useState<SearchQuery[]>([]);
   const [jiraTickets, setJiraTickets] = useState<{ id: string; label: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
