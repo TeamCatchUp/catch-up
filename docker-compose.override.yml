@@ -21,6 +21,8 @@ services:
   vector_db:
     ports:
       - "5432:5432"
+    volumes:
+      - ./backend/init_sql:/docker-entrypoint-initdb.d
   
   graph_db:
     ports:
