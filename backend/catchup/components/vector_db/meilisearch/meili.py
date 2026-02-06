@@ -7,6 +7,7 @@ from langchain_openai import OpenAIEmbeddings
 from meilisearch_python_sdk import AsyncClient
 from meilisearch_python_sdk.models.search import Hybrid, SearchParams
 
+from catchup.components.vector_db.factory import BaseVectorDbService
 from catchup.configs.config import settings
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 embedding_semaphore = asyncio.Semaphore(10)
 
 
-class LangChainMeiliRepository:
+class LangChainMeiliRepository(BaseVectorDbService):
     def __init__(self):
         self.embeddings = OpenAIEmbeddings(model=settings.OPENAI_EMBEDDING_MODEL)
 

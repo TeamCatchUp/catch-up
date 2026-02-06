@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 
 from catchup import __version__
-from catchup.components.vector_db.meilisearch.factory import get_vector_repository
+from catchup.components.vector_db.factory import VectorDbProvider, get_vector_db_service
 from catchup.configs.config import MeiliEnvironment, settings
 from catchup.db.engine import engine
 from catchup.db.models import Base
@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
 
         # Meilisearch가 개발 환경에서 구동 중인 경우에만 테스트용 인덱스에 대한 초기화 수행
         elif settings.MEILI_ENVIRONMENT == MeiliEnvironment.development:
-            repo = get_vector_repository()
+            repo = get_vector_db_service(VectorDbProvider.MEILISEARCH)
             if hasattr(repo, "initialize"):
                 await repo.initialize(
                     [

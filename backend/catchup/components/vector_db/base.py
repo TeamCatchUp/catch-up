@@ -1,0 +1,2 @@
+class BaseVectorDbService:
+    pass

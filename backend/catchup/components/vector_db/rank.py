@@ -20,6 +20,8 @@ def weighted_reciprocal_rank(
     doc_map = {}
 
     for doc_list, weight in zip(doc_lists, weights):
+        if not doc_list: continue
+        
         for rank, doc in enumerate(doc_list):
             # 문서 식별
             doc_key = doc.page_content 
