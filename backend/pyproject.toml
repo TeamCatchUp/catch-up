@@ -17,6 +17,7 @@ dependencies = [
     "langchain-cohere",
     "langchain-openai",
     "langchain-postgres>=0.0.16",
+    "langchain-aws>=1.2.2",
     "langchain-text-splitters",
     "langfuse",
     "langgraph",
@@ -32,8 +33,6 @@ dependencies = [
     "redis",
     "sqlalchemy",
     "psycopg-binary>=3.3.2",
-    "langchain-aws>=1.2.2",
-    "langchain-postgres>=0.0.6",
 ]
 
 # 개발 전용 의존성
