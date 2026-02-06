@@ -507,53 +507,6 @@ class JiraApiClient:
         )
         return result.get("comments", [])
 
-    async def get_issue_changelog(
-        self,
-        issue_key: str,
-        start_at: int = 0,
-        max_results: int = 100,
-    ) -> dict[str, Any]:
-        """
-        이슈 변경 이력 조회
-
-        이슈 필드의 변경 기록을 조회. 상태 변경 추적에 유용.
-
-        Args:
-            issue_key: 이슈 키
-            start_at: 페이지네이션 오프셋
-            max_results: 페이지 크기 (최대 100)
-
-        Returns:
-            {
-                "values": [
-                    {
-                        "id": "10001",
-                        "author": {"displayName": "member", ...},
-                        "created": "2024-02-01T09:00:00.000+0000",
-                        "items": [
-                            {
-                                "field": "status",
-                                "fromString": "To Do",
-                                "toString": "In Progress"
-                            }
-                        ]
-                    },
-                    ...
-                ],
-                "startAt": 0,
-                "maxResults": 100,
-                "total": 25
-            }
-        """
-        params = {
-            "startAt": start_at,
-            "maxResults": max_results,
-        }
-
-        return await self._request(
-            "GET", f"{self.base_url}/issue/{issue_key}/changelog", params=params
-        )
-
     # ============================================================
     # Field APIs (REST API v3)
     #
@@ -597,6 +550,53 @@ class JiraApiClient:
     #
     # 프로젝트 메타데이터, 컴포넌트, 버전 조회.
     # ============================================================
+
+    async def get_all_projects(
+        self,
+        expand: str = "description,lead",
+        max_results: int = 50,
+    ) -> list[dict[str, Any]]:
+        """
+        접근 가능한 모든 프로젝트 조회
+
+        Args:
+            expand: 추가 정보 확장 (description, lead, issueTypes, url)
+            max_results: 페이지 크기 (최대 50)
+
+        Returns:
+            프로젝트 목록
+            [
+                {"id": "10000", "key": "CATCH", "name": "CatchUp", ...},
+                {"id": "10001", "key": "PROJ", "name": "Project", ...},
+            ]
+        """
+        all_projects: list[dict[str, Any]] = []
+        start_at = 0
+
+        while True:
+            params = {
+                "expand": expand,
+                "startAt": start_at,
+                "maxResults": max_results,
+            }
+            response = await self._request(
+                "GET", f"{self.base_url}/project/search", params=params
+            )
+
+            projects = response.get("values", [])
+            if not projects:
+                break
+
+            all_projects.extend(projects)
+
+            # 다음 페이지 확인
+            if response.get("isLast", True):
+                break
+
+            start_at += len(projects)
+
+        logger.info(f"Retrieved {len(all_projects)} projects")
+        return all_projects
 
     async def get_project(
         self,

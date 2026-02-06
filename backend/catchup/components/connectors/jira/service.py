@@ -120,6 +120,9 @@ class JiraIngestionService:
         self,
         db: Session,
         project_keys: list[str] | None = None,
+        sync_issues: bool = True,
+        sync_projects: bool = True,
+        sync_sprints: bool = True,
     ) -> dict[str, Any]:
         """
         전체 동기화
@@ -129,6 +132,9 @@ class JiraIngestionService:
         Args:
             db: SQLAlchemy Session (동기화 상태 저장용)
             project_keys: 동기화할 프로젝트 키 목록 (None이면 전체 프로젝트)
+            sync_issues: 이슈/에픽 동기화 여부
+            sync_projects: 프로젝트 동기화 여부
+            sync_sprints: 스프린트 동기화 여부 (Agile API 필요)
 
         Returns:
             동기화 결과 통계
@@ -143,7 +149,9 @@ class JiraIngestionService:
 
         logger.info(
             f"Starting full sync for cloud_id={self.cloud_id}, "
-            f"projects={project_keys or 'all'}"
+            f"projects={project_keys or 'all'}, "
+            f"sync_issues={sync_issues}, sync_projects={sync_projects}, "
+            f"sync_sprints={sync_sprints}"
         )
 
         results = {
@@ -155,34 +163,49 @@ class JiraIngestionService:
 
         try:
             # 1. 프로젝트 동기화
-            if project_keys:
-                for project_key in project_keys:
-                    try:
-                        await self._sync_project(project_key)
-                        results["projects"]["synced"] += 1
-                    except JiraApiError as e:
-                        logger.error(f"Failed to sync project {project_key}: {e}")
-                        results["projects"]["errors"] += 1
+            if sync_projects:
+                project_results = await self._sync_all_projects(project_keys)
+                results["projects"]["synced"] = project_results["synced"]
+                results["projects"]["errors"] = project_results["errors"]
+
+                # 프로젝트 동기화 상태 업데이트
+                self._update_sync_state(
+                    db,
+                    JiraEntityType.PROJECT,
+                    JiraSyncStatus.SUCCESS,
+                    results["projects"]["synced"],
+                )
 
             # 2. 이슈 동기화 (Epic 포함, Epic은 별도 entity_type으로 저장됨)
-            issue_results = await self._sync_all_issues(project_keys)
-            results["issues"]["synced"] = issue_results["issues"]
-            results["epics"]["synced"] = issue_results["epics"]
-            results["issues"]["errors"] = issue_results["errors"]
+            if sync_issues:
+                issue_results = await self._sync_all_issues(project_keys)
+                results["issues"]["synced"] = issue_results["issues"]
+                results["epics"]["synced"] = issue_results["epics"]
+                results["issues"]["errors"] = issue_results["errors"]
+
+                # 이슈 동기화 상태 업데이트
+                self._update_sync_state(
+                    db,
+                    JiraEntityType.ISSUE,
+                    JiraSyncStatus.SUCCESS,
+                    results["issues"]["synced"] + results["epics"]["synced"],
+                )
 
             # 3. 스프린트 동기화 (Agile API 사용 가능한 경우만)
-            if await self.client.is_agile_available():
+            if sync_sprints and await self.client.is_agile_available():
                 sprint_results = await self._sync_all_sprints()
                 results["sprints"]["synced"] = sprint_results["synced"]
                 results["sprints"]["errors"] = sprint_results["errors"]
 
-            # 동기화 상태 업데이트
-            self._update_sync_state(
-                db,
-                JiraEntityType.ISSUE,
-                JiraSyncStatus.SUCCESS,
-                results["issues"]["synced"],
-            )
+                # 스프린트 동기화 상태 업데이트
+                self._update_sync_state(
+                    db,
+                    JiraEntityType.SPRINT,
+                    JiraSyncStatus.SUCCESS,
+                    results["sprints"]["synced"],
+                )
+            elif sync_sprints:
+                logger.info("Sprint sync skipped: Agile API not available")
 
             logger.info(f"Full sync completed: {results}")
             return results
@@ -237,7 +260,6 @@ class JiraIngestionService:
                 response = await self.client.search_issues(
                     jql=jql,
                     fields=None,  # 모든 필드
-                    expand="changelog",  # 쉼표 구분 문자열
                     max_results=batch_size,
                     next_page_token=next_page_token,
                 )
@@ -259,13 +281,9 @@ class JiraIngestionService:
 
                 for issue_data in issues:
                     try:
-                        # changelog 추출 (expand로 포함된 경우)
-                        changelog = issue_data.get("changelog", {}).get("histories", [])
-
                         doc = self.transformer.transform_issue(
                             issue_data,
                             self.site_url,
-                            changelog=changelog,
                         )
                         documents.append(doc)
                         doc_ids.append(doc.id)
@@ -304,6 +322,53 @@ class JiraIngestionService:
                 continue
 
         logger.info(f"Issue sync completed: {results}")
+        return results
+
+    async def _sync_all_projects(
+        self,
+        project_keys: list[str] | None = None,
+    ) -> dict[str, int]:
+        """
+        프로젝트 동기화
+
+        Args:
+            project_keys: 동기화할 프로젝트 키 목록 (None이면 접근 가능한 모든 프로젝트)
+
+        Returns:
+            {"synced": 3, "errors": 0}
+        """
+        self._ensure_initialized()
+
+        results = {"synced": 0, "errors": 0}
+
+        try:
+            # 프로젝트 목록 결정
+            if project_keys:
+                # 지정된 프로젝트만 동기화
+                keys_to_sync = project_keys
+            else:
+                # 접근 가능한 모든 프로젝트 조회
+                all_projects = await self.client.get_all_projects()
+                keys_to_sync = [p.get("key") for p in all_projects if p.get("key")]
+                logger.info(f"Found {len(keys_to_sync)} accessible projects")
+
+            # 각 프로젝트 동기화
+            for project_key in keys_to_sync:
+                try:
+                    await self._sync_project(project_key)
+                    results["synced"] += 1
+                except JiraApiError as e:
+                    logger.error(f"Failed to sync project {project_key}: {e}")
+                    results["errors"] += 1
+
+                # Rate limit 방지
+                await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
+
+        except JiraApiError as e:
+            logger.error(f"Failed to get project list: {e}")
+            results["errors"] += 1
+
+        logger.info(f"Project sync completed: {results}")
         return results
 
     async def _sync_project(self, project_key: str) -> None:
@@ -419,7 +484,6 @@ class JiraIngestionService:
                 response = await self.client.search_issues(
                     jql=jql,
                     fields=None,  # 모든 필드
-                    expand="changelog",  # 쉼표 구분 문자열
                     max_results=batch_size,
                     next_page_token=next_page_token,
                 )
@@ -441,11 +505,9 @@ class JiraIngestionService:
 
                 for issue_data in issues:
                     try:
-                        changelog = issue_data.get("changelog", {}).get("histories", [])
                         doc = self.transformer.transform_issue(
                             issue_data,
                             self.site_url,
-                            changelog=changelog,
                         )
                         documents.append(doc)
                         doc_ids.append(doc.id)

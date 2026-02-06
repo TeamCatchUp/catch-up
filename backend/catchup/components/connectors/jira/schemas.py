@@ -28,20 +28,34 @@ class JiraUser(BaseModel):
     email_address: str | None = None
 
 
+class JiraMention(BaseModel):
+    """코멘트 내 @멘션"""
+    account_id: str
+    display_name: str | None = None
+    text: str | None = None  # @멘션 텍스트 (예: "@John Doe")
+
+
+class JiraInlineAttachment(BaseModel):
+    """코멘트 본문에 포함된 인라인 미디어/첨부파일"""
+    id: str
+    collection: str | None = None  # Atlassian Media Collection ID
+    type: str | None = None  # image, file, video 등
+    alt: str | None = None  # 대체 텍스트 (이미지 설명)
+    filename: str | None = None  # 파일명 (있을 경우)
+    url: str | None = None  # 첨부파일 접근 URL
+
+
 class JiraComment(BaseModel):
     """이슈 코멘트"""
     id: str
     author: str  # display_name
+    author_account_id: str | None = None  # 작성자 account_id (멘션 매칭용)
     body: str    # 텍스트로 변환된 본문
     created: datetime
-
-
-class JiraStatusChange(BaseModel):
-    """상태 변경 이력 (changelog에서 추출)"""
-    from_status: str | None = Field(None, alias="from")
-    to_status: str | None = Field(None, alias="to")
-    changed_at: datetime
-    author: str | None = None
+    # 코멘트 내 @멘션 목록
+    mentions: list[JiraMention] = Field(default_factory=list)
+    # 코멘트 본문에 포함된 인라인 미디어/첨부파일
+    inline_attachments: list[JiraInlineAttachment] = Field(default_factory=list)
 
 
 class JiraLinkedIssue(BaseModel):
@@ -107,9 +121,8 @@ class JiraIssue(BaseModel):
     due_date: str | None = None       # "2024-02-10" (날짜만)
 
     # 계층 구조
-    parent_key: str | None = None     # Subtask인 경우 부모 이슈
-    epic_key: str | None = None       # 속한 Epic
-    epic_name: str | None = None      # Epic 이름
+    parent_key: str | None = None     # 부모 이슈 키 (Epic, Task 등)
+    parent_name: str | None = None    # 부모 이슈 제목
     subtask_keys: list[str] = Field(default_factory=list)
 
     # Agile
@@ -130,7 +143,6 @@ class JiraIssue(BaseModel):
 
     # 부가 정보
     comments: list[JiraComment] = Field(default_factory=list)
-    status_changes: list[JiraStatusChange] = Field(default_factory=list)
     attachments: list[JiraAttachment] = Field(default_factory=list)
 
     # 커스텀 필드 (ID → 이름으로 변환된 상태)

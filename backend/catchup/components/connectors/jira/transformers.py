@@ -28,15 +28,15 @@ from catchup.components.connectors.jira.schemas import (
     JiraComment,
     JiraComponent,
     JiraEpic,
+    JiraInlineAttachment,
     JiraIssue,
     JiraLinkedIssue,
+    JiraMention,
     JiraProject,
     JiraSprint,
     JiraSprintInfo,
-    JiraStatusChange,
     JiraUser,
 )
-from catchup.configs.config import settings
 
 
 # ============================================================
@@ -79,7 +79,6 @@ class JiraTransformer:
         issue_data: dict[str, Any],
         site_url: str,
         comments: list[dict] | None = None,
-        changelog: list[dict] | None = None,
     ) -> Document:
         """
         Jira Issue API 응답 → LangChain Document
@@ -88,12 +87,11 @@ class JiraTransformer:
             issue_data: GET /issue/{key} 응답
             site_url: Jira 사이트 URL (예: "https://catchup.atlassian.net")
             comments: 코멘트 목록 (별도 조회한 경우)
-            changelog: 변경 이력 (expand=changelog로 조회한 경우)
 
         Returns:
             LangChain Document with page_content and metadata
         """
-        issue = self._parse_issue(issue_data, site_url, comments, changelog)
+        issue = self._parse_issue(issue_data, site_url, comments)
 
         # Epic인 경우 별도 처리
         if issue.issue_type.lower() == "epic":
@@ -106,7 +104,6 @@ class JiraTransformer:
         data: dict[str, Any],
         site_url: str,
         comments: list[dict] | None = None,
-        changelog: list[dict] | None = None,
     ) -> JiraIssue:
         """Jira API 응답 → JiraIssue 스키마"""
         fields = data.get("fields", {})
@@ -140,8 +137,13 @@ class JiraTransformer:
         due_date = fields.get("duedate")  # "2024-02-10" 형식
 
         # 계층 구조
+        # 계층 구조 (Parent Issue - Epic, Task 등)
         parent = fields.get("parent", {})
         parent_key = parent.get("key") if parent else None
+        parent_name = None
+        if parent:
+            parent_fields = parent.get("fields", {})
+            parent_name = parent_fields.get("summary")
 
         # Subtasks
         subtasks = fields.get("subtasks", [])
@@ -162,10 +164,8 @@ class JiraTransformer:
         # 첨부파일
         attachments = self._parse_attachments(fields.get("attachment", []))
 
-        # 커스텀 필드 파싱 (Epic Link, Sprint, Story Points 등)
+        # 커스텀 필드 파싱 (Sprint, Story Points 등)
         custom_fields = {}
-        epic_key = None
-        epic_name = None
         sprint_info = None
         story_points = None
 
@@ -180,22 +180,12 @@ class JiraTransformer:
             field_name = field_info.name
             field_name_lower = field_name.lower()
 
-            # Epic Link 처리
-            if "epic" in field_name_lower and "link" in field_name_lower:
-                epic_key = value if isinstance(value, str) else None
-            # Epic Name 처리 (Epic 이슈 타입에서)
-            elif "epic" in field_name_lower and "name" in field_name_lower:
-                epic_name = value if isinstance(value, str) else None
             # Sprint 처리
-            elif field_name_lower == "sprint":
+            if field_name_lower == "sprint":
                 sprint_info = self._parse_sprint_field(value)
             # Story Points 처리
             elif "story" in field_name_lower and "point" in field_name_lower:
                 story_points = float(value) if value else None
-            # Parent Link (next-gen projects)
-            elif "parent" in field_name_lower and "link" in field_name_lower:
-                if not epic_key and isinstance(value, str):
-                    epic_key = value
             else:
                 # 기타 커스텀 필드 저장
                 custom_fields[field_name] = value
@@ -203,14 +193,9 @@ class JiraTransformer:
         # 코멘트 파싱
         parsed_comments = []
         if comments:
-            parsed_comments = self._parse_comments(comments)
+            parsed_comments = self._parse_comments(comments, site_url)
         elif fields.get("comment", {}).get("comments"):
-            parsed_comments = self._parse_comments(fields["comment"]["comments"])
-
-        # 상태 변경 이력 파싱
-        status_changes = []
-        if changelog:
-            status_changes = self._parse_status_changes(changelog)
+            parsed_comments = self._parse_comments(fields["comment"]["comments"], site_url)
 
         return JiraIssue(
             key=key,
@@ -232,8 +217,7 @@ class JiraTransformer:
             resolved_at=resolved_at,
             due_date=due_date,
             parent_key=parent_key,
-            epic_key=epic_key,
-            epic_name=epic_name,
+            parent_name=parent_name,
             subtask_keys=subtask_keys,
             sprint=sprint_info,
             story_points=story_points,
@@ -244,7 +228,6 @@ class JiraTransformer:
             time_spent_seconds=time_spent,
             linked_issues=linked_issues,
             comments=parsed_comments,
-            status_changes=status_changes,
             attachments=attachments,
             custom_fields=custom_fields,
         )
@@ -262,6 +245,7 @@ class JiraTransformer:
             "entity_type": "issue",
             "issue_key": issue.key,
             "issue_id": issue.id,
+            "summary": issue.summary,
             "url": issue.url,
 
             # 분류
@@ -285,8 +269,7 @@ class JiraTransformer:
 
             # 계층
             "parent_key": issue.parent_key,
-            "epic_key": issue.epic_key,
-            "epic_name": issue.epic_name,
+            "parent_name": issue.parent_name,
             "subtask_keys": issue.subtask_keys,
 
             # Agile
@@ -302,6 +285,35 @@ class JiraTransformer:
             # 시간 추적
             "time_spent_seconds": issue.time_spent_seconds,
 
+            # 코멘트 통계
+            "comment_count": len(issue.comments),
+            "mentioned_users": list({
+                m.display_name or m.account_id
+                for c in issue.comments
+                for m in c.mentions
+                if m.display_name or m.account_id
+            }),
+            # 인라인 첨부파일 상세 정보 (filename, url 포함)
+            "inline_attachments": [
+                {
+                    "filename": att.filename or att.alt or f"media:{att.id[:8]}",
+                    "url": att.url,
+                    "type": att.type,
+                }
+                for c in issue.comments
+                for att in c.inline_attachments
+            ],
+
+            # 첨부파일 (filename, url 포함)
+            "attachments": [
+                {
+                    "filename": att.filename,
+                    "url": att.url,
+                    "mime_type": att.mime_type,
+                }
+                for att in issue.attachments
+            ],
+
             # 동기화
             "synced_at": datetime.utcnow().isoformat(),
         }
@@ -314,40 +326,61 @@ class JiraTransformer:
 
     def _build_issue_content(self, issue: JiraIssue) -> str:
         """Issue용 page_content 생성"""
+        # Parent 정보 포맷팅
+        if issue.parent_key and issue.parent_name:
+            parent_str = f"{issue.parent_key} ({issue.parent_name})"
+        elif issue.parent_key:
+            parent_str = issue.parent_key
+        else:
+            parent_str = "None"
+
         lines = [
             f"[{issue.key}] {issue.summary}",
             "",
             f"Status: {issue.status} | Priority: {issue.priority or 'None'} | Type: {issue.issue_type}",
             f"Assigned to: {issue.assignee.display_name if issue.assignee else 'Unassigned'} | Reporter: {issue.reporter.display_name if issue.reporter else 'Unknown'}",
-            f"Epic: {issue.epic_name or 'None'} | Sprint: {issue.sprint.name if issue.sprint else 'No sprint'}",
+            f"Parent: {parent_str} | Sprint: {issue.sprint.name if issue.sprint else 'No sprint'}",
         ]
 
         # Description
         if issue.description:
             lines.extend(["", "Description:", issue.description])
 
-        # Recent Comments (최근 5개)
+        # Comments (모든 코멘트 포함)
         if issue.comments:
-            lines.extend(["", "Recent Discussion:"])
-            for comment in issue.comments[-settings.JIRA_SYNC_COMMENTS_LIMIT:]:
+            lines.extend(["", "Discussion:"])
+            for comment in issue.comments:
                 date_str = comment.created.strftime("%Y-%m-%d %H:%M")
-                lines.append(f"[{date_str} {comment.author}]: {comment.body[:200]}")
+                # 코멘트 본문 (길이 제한 없이 전체 포함)
+                comment_line = f"[{date_str} {comment.author}]: {comment.body}"
 
-        # Technical Context
-        lines.extend(["", "Technical Context:"])
-        lines.append(f"- Components: {', '.join(issue.components) or 'None'}")
-        lines.append(f"- Labels: {', '.join(issue.labels) or 'None'}")
-        lines.append(f"- Fix Version: {', '.join(issue.fix_versions) or 'None'}")
+                # 멘션이 있으면 표시
+                if comment.mentions:
+                    mention_names = [m.display_name or m.account_id for m in comment.mentions]
+                    comment_line += f" (mentions: {', '.join(mention_names)})"
 
-        # Status History
-        if issue.status_changes:
-            lines.extend(["", "Status History:"])
-            for change in issue.status_changes[-5:]:
-                date_str = change.changed_at.strftime("%Y-%m-%d %H:%M")
-                lines.append(
-                    f"{change.from_status or 'Created'} → {change.to_status} "
-                    f"({date_str} by {change.author or 'Unknown'})"
-                )
+                # 인라인 첨부파일이 있으면 파일명 표시
+                if comment.inline_attachments:
+                    filenames = [
+                        att.filename or att.alt or f"media:{att.id[:8]}"
+                        for att in comment.inline_attachments
+                    ]
+                    comment_line += f" [attachments: {', '.join(filenames)}]"
+
+                lines.append(comment_line)
+
+        # Technical Context (내용이 있을 때만 표시)
+        tech_context_items = []
+        if issue.components:
+            tech_context_items.append(f"- Components: {', '.join(issue.components)}")
+        if issue.labels:
+            tech_context_items.append(f"- Labels: {', '.join(issue.labels)}")
+        if issue.fix_versions:
+            tech_context_items.append(f"- Fix Version: {', '.join(issue.fix_versions)}")
+
+        if tech_context_items:
+            lines.extend(["", "Technical Context:"])
+            lines.extend(tech_context_items)
 
         # Related Issues
         if issue.linked_issues:
@@ -357,6 +390,12 @@ class JiraTransformer:
                     f"- {link.key} ({link.summary or 'No summary'}) - "
                     f"{link.status or 'Unknown'} - {link.link_type}"
                 )
+
+        # Attachments (파일명만 표시)
+        if issue.attachments:
+            lines.extend(["", "Attachments:"])
+            for att in issue.attachments:
+                lines.append(f"- {att.filename}")
 
         return "\n".join(lines)
 
@@ -549,38 +588,105 @@ class JiraTransformer:
         except ValueError:
             return None
 
-    def _parse_comments(self, comments_data: list[dict]) -> list[JiraComment]:
-        """코멘트 목록 파싱"""
+    def _parse_comments(
+        self, comments_data: list[dict], site_url: str = ""
+    ) -> list[JiraComment]:
+        """코멘트 목록 파싱 (멘션 및 인라인 첨부파일 포함)"""
         result = []
         for c in comments_data:
             author = c.get("author", {}).get("displayName", "Unknown")
-            body = self._extract_text(c.get("body"))
+            author_account_id = c.get("author", {}).get("accountId")
+            body_adf = c.get("body")
+            body = self._extract_text(body_adf)
             created = self._parse_datetime(c.get("created"))
+
+            # ADF에서 멘션 및 인라인 미디어 추출
+            mentions = []
+            inline_attachments = []
+            if isinstance(body_adf, dict) and body_adf.get("type") == "doc":
+                mentions = self._extract_mentions_from_adf(body_adf)
+                inline_attachments = self._extract_media_from_adf(body_adf, site_url)
+
             if created:
                 result.append(JiraComment(
                     id=c.get("id", ""),
                     author=author,
+                    author_account_id=author_account_id,
                     body=body,
                     created=created,
+                    mentions=mentions,
+                    inline_attachments=inline_attachments,
                 ))
         return result
 
-    def _parse_status_changes(self, changelog: list[dict]) -> list[JiraStatusChange]:
-        """상태 변경 이력 파싱 (changelog에서 status 변경만 추출)"""
-        result = []
-        for entry in changelog:
-            author = entry.get("author", {}).get("displayName")
-            created = self._parse_datetime(entry.get("created"))
+    def _extract_mentions_from_adf(self, adf: dict) -> list[JiraMention]:
+        """ADF에서 @멘션 노드 추출"""
+        mentions = []
 
-            for item in entry.get("items", []):
-                if item.get("field") == "status":
-                    result.append(JiraStatusChange(
-                        from_status=item.get("fromString"),
-                        to_status=item.get("toString"),
-                        changed_at=created,
-                        author=author,
-                    ))
-        return result
+        def extract(node: Any):
+            if isinstance(node, dict):
+                if node.get("type") == "mention":
+                    attrs = node.get("attrs", {})
+                    account_id = attrs.get("id", "")
+                    if account_id:
+                        mentions.append(JiraMention(
+                            account_id=account_id,
+                            display_name=attrs.get("text"),
+                            text=attrs.get("text"),
+                        ))
+                # 재귀적으로 하위 content 탐색
+                for child in node.get("content", []):
+                    extract(child)
+            elif isinstance(node, list):
+                for item in node:
+                    extract(item)
+
+        extract(adf.get("content", []))
+        return mentions
+
+    def _extract_media_from_adf(
+        self, adf: dict, site_url: str = ""
+    ) -> list[JiraInlineAttachment]:
+        """ADF에서 media/mediaGroup/mediaSingle 노드 추출"""
+        attachments = []
+
+        def extract(node: Any):
+            if isinstance(node, dict):
+                node_type = node.get("type")
+
+                # media 노드 처리
+                if node_type == "media":
+                    attrs = node.get("attrs", {})
+                    media_id = attrs.get("id", "")
+                    if media_id:
+                        # Atlassian Media URL 생성
+                        collection = attrs.get("collection", "")
+                        media_url = None
+                        if site_url and collection:
+                            # Atlassian Media API URL 형식
+                            media_url = (
+                                f"{site_url}/rest/api/3/attachment/content/{media_id}"
+                            )
+
+                        attachments.append(JiraInlineAttachment(
+                            id=media_id,
+                            collection=collection,
+                            type=attrs.get("type"),  # image, file 등
+                            alt=attrs.get("alt"),
+                            filename=attrs.get("__fileName"),  # 파일명 (있을 경우)
+                            url=media_url,
+                        ))
+
+                # mediaGroup, mediaSingle은 media를 감싸는 컨테이너
+                # 재귀적으로 하위 content 탐색
+                for child in node.get("content", []):
+                    extract(child)
+            elif isinstance(node, list):
+                for item in node:
+                    extract(item)
+
+        extract(adf.get("content", []))
+        return attachments
 
     def _parse_linked_issues(self, links_data: list[dict]) -> list[JiraLinkedIssue]:
         """연결된 이슈 파싱"""
@@ -663,22 +769,63 @@ class JiraTransformer:
         return str(content)
 
     def _adf_to_text(self, adf: dict) -> str:
-        """ADF JSON → 평문 텍스트 변환"""
+        """ADF JSON → 평문 텍스트 변환 (URL, 멘션, 이모지 포함)"""
         texts = []
 
         def extract(node: Any):
             if isinstance(node, dict):
-                if node.get("type") == "text":
-                    texts.append(node.get("text", ""))
-                elif node.get("type") == "hardBreak":
+                node_type = node.get("type")
+
+                if node_type == "text":
+                    text = node.get("text", "")
+                    # 링크가 있으면 URL 추가
+                    marks = node.get("marks", [])
+                    for mark in marks:
+                        if mark.get("type") == "link":
+                            url = mark.get("attrs", {}).get("href", "")
+                            if url and url != text:
+                                text = f"{text} ({url})"
+                                break
+                    texts.append(text)
+
+                elif node_type == "hardBreak":
                     texts.append("\n")
-                elif node.get("type") == "paragraph":
+
+                elif node_type == "paragraph":
                     for child in node.get("content", []):
                         extract(child)
                     texts.append("\n")
+
+                elif node_type == "mention":
+                    # @멘션 텍스트 포함
+                    attrs = node.get("attrs", {})
+                    mention_text = attrs.get("text", "")
+                    if mention_text:
+                        # 이미 @로 시작하면 그대로 사용
+                        if mention_text.startswith("@"):
+                            texts.append(mention_text)
+                        else:
+                            texts.append(f"@{mention_text}")
+
+                elif node_type == "inlineCard":
+                    # 인라인 URL 카드 (Jira, Confluence 링크 등)
+                    attrs = node.get("attrs", {})
+                    url = attrs.get("url", "")
+                    if url:
+                        texts.append(f"[{url}]")
+
+                elif node_type == "emoji":
+                    # 이모지 shortName 포함
+                    attrs = node.get("attrs", {})
+                    short_name = attrs.get("shortName", "")
+                    if short_name:
+                        texts.append(short_name)
+
                 else:
+                    # 기타 노드는 재귀적으로 content 탐색
                     for child in node.get("content", []):
                         extract(child)
+
             elif isinstance(node, list):
                 for item in node:
                     extract(item)
