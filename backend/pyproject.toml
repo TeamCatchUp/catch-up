@@ -30,8 +30,10 @@ dependencies = [
     # --- Database & Utils ---
     "redis",
     "sqlalchemy",
-    "psycopg2-binary",
+    "psycopg[binary]",
     "langchain-aws>=1.2.2",
+    # --- PGVector ---
+    "langchain-postgres>=0.0.6",
 ]
 
 # 개발 전용 의존성
