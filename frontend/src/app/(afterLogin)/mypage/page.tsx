@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import { useState } from 'react';
 import Profile from '/public/icons/icon/profile.svg';
 import EditPencil from '/public/icons/icon/edit_pencil.svg';
-import TopNavbar from '@/components/common/topNavbar/TopNavbar';
+import TopNavbar from '@/components/shared/topNavbar/TopNavbar';
 
 import { useUserStore } from '@/store/userStore';
 

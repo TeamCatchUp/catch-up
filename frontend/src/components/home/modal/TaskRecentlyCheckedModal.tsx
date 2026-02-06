@@ -1,6 +1,6 @@
 import { useRef } from 'react';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
-import { useOutsideClick } from '@/hooks/useOutsideClick';
+import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
+import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
 import EditSquare from '/public/icons/icon/edit_square.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import Cancel from '/public/icons/icon/cancel.svg';
@@ -14,7 +14,7 @@ import NotionLogo from '/public/icons/icon/Notion.svg';
 import Add from '/public/icons/icon/add_small.svg';
 import Chat from '/public/icons/icon/chat.svg';
 import TaskManagerPart from '@/components/home/cardComponents/TaskManagePart';
-import ToolTip from '@/components/common/ToolTip';
+import ToolTip from '@/components/shared/ToolTip';
 
 interface TaskRecentlyCheckedModalProps {
   task: TaskRecentlyCheckedCard;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/api/auth';
-import SideNavBar from '@/components/common/sideNavBar/SideNavBar';
+import SideNavBar from '@/components/shared/sideNavBar/SideNavBar';
 
 export default function AfterLoginLayout({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth(); // 쿠키 기반 인증 체크

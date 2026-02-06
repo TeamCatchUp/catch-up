@@ -1,6 +1,6 @@
 'use client';
 
-import { RAG_UI_STEPS } from '@/constants/ragStep';
+import { RAG_UI_STEPS } from '@/constants/ragAnswer/steps';
 import RagStepSkeleton from '@/components/Skeleton/RagStepSkeleton';
 
 interface Props {

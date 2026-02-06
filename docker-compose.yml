@@ -61,6 +61,14 @@ services:
     networks:
       - catchup_net
     restart: always
+    
+  web_client:
+    container_name: catchup_web
+    profiles: ["frontend", "full"]
+    networks:
+      - catchup_net
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api_server:8000  # 환경변수 이름은 자유
 
 networks:
   catchup_net:

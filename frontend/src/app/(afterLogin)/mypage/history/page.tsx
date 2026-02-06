@@ -1,18 +1,15 @@
 'use client';
 
 import { searchService } from '@/api/search';
-import { SearchHistory } from '@/components/UI/mypage/history/SearchHistory';
+import { SearchHistory } from '@/components/shared/SearchHistory';
 import { useEffect, useState } from 'react';
+import { formatFullDate } from '@/util/shared/formatDate';
+import type { SearchQuery } from '@/types/search/search';
 
-interface SearchQuery {
-  query: string;
-  sessionId: string;
-  date: string;
-  rawDate: Date;
-}
+type SearchQueryWithRawDate = SearchQuery & { rawDate: Date };
 
 export default function HistoryPage() {
-  const [recentQueries, setRecentQueries] = useState<SearchQuery[]>([]);
+  const [recentQueries, setRecentQueries] = useState<SearchQueryWithRawDate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -23,17 +20,10 @@ export default function HistoryPage() {
         const [queriesRes] = await Promise.all([searchService.getRecentQueries()]);
 
         if (queriesRes.content) {
-          const mappedQueries = queriesRes.content.map((item: any) => ({
+          const mappedQueries: SearchQueryWithRawDate[] = queriesRes.content.map((item) => ({
             query: item.query,
             sessionId: item.sessionId,
-            date: new Date(item.createdAt)
-              .toLocaleDateString('ko-KR', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-              })
-              .replace(/\s/g, '')
-              .replace(/\.$/, ''),
+            date: formatFullDate(item.createdAt),
             rawDate: new Date(item.createdAt),
           }));
           setRecentQueries(mappedQueries);

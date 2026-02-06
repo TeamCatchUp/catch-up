@@ -17,6 +17,21 @@ services:
     ports:
       - "8000:8000"
     command: uvicorn catchup.server.main:app --host 0.0.0.0 --port 8000 --reload
+    
+  web_client:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    image: catchup-frontend:dev
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    command: npm run dev
 
   vector_db:
     ports:

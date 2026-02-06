@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     ENV: Environment = Environment.development
 
     DB_DIALECT: str = "postgresql"
-    DB_DRIVER: str = "psycopg2"
+    DB_DRIVER: str = "psycopg"  # psycopg3 (langchain-postgres 호환)
     DB_USERNAME: str
     DB_PASSWORD: str
     DB_HOST: str
@@ -84,6 +84,16 @@ class Settings(BaseSettings):
     SLACK_AUTH_URL: str = "https://slack.com/oauth/v2/authorize"
     SLACK_TOKEN_URL: str = "https://slack.com/api/oauth.v2.access"
     SLACK_API_URL: str = "https://slack.com/api"
+
+    # PGVector Settings
+    PGVECTOR_COLLECTION_NAME: str = "catchup_jira"
+    PGVECTOR_EMBEDDING_DIMENSIONS: int = 3072  # text-embedding-3-large
+
+    # Jira Sync Settings
+    JIRA_SYNC_BATCH_SIZE: int = 100  # Jira API max per request
+    JIRA_SYNC_MAX_CONCURRENT_REQUESTS: int = 5  # Rate limit safe
+    JIRA_SYNC_COMMENTS_LIMIT: int = 5  # Recent comments to include
+    JIRA_API_RATE_LIMIT_DELAY: float = 0.1  # Seconds between requests
 
     model_config = SettingsConfigDict(
         env_file=".env",
