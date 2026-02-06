@@ -36,6 +36,15 @@ class SyncRequest(BaseModel):
         description="동기화할 프로젝트 키 목록 (None이면 전체)",
         examples=[["CATCH", "PROJ"]],
     )
+    sync_issues: bool = Field(True, description="이슈/에픽 동기화 여부")
+    sync_projects: bool = Field(True, description="프로젝트 동기화 여부")
+    sync_sprints: bool = Field(True, description="스프린트 동기화 여부 (Agile API 필요)")
+
+
+class SyncResultDetail(BaseModel):
+    """엔티티별 동기화 결과"""
+    synced: int = 0
+    errors: int = 0
 
 
 class SyncResponse(BaseModel):
@@ -43,6 +52,10 @@ class SyncResponse(BaseModel):
     status: str
     message: str
     cloud_id: str | None = None
+    results: dict[str, SyncResultDetail] | None = Field(
+        None,
+        description="엔티티별 동기화 결과 (issues, epics, projects, sprints)",
+    )
 
 
 class SyncStatusResponse(BaseModel):
@@ -210,12 +223,21 @@ async def _run_full_sync(
     site_url: str,
     db: Session,
     project_keys: list[str] | None = None,
+    sync_issues: bool = True,
+    sync_projects: bool = True,
+    sync_sprints: bool = True,
 ) -> dict[str, Any]:
     """전체 동기화 실행 (백그라운드 태스크용)"""
     try:
         service = JiraIngestionService(cloud_id, access_token, site_url)
         await service.initialize()
-        return await service.full_sync(db, project_keys)
+        return await service.full_sync(
+            db,
+            project_keys=project_keys,
+            sync_issues=sync_issues,
+            sync_projects=sync_projects,
+            sync_sprints=sync_sprints,
+        )
     except Exception as e:
         logger.error(f"Full sync failed for cloud_id={cloud_id}: {e}")
         raise
@@ -271,12 +293,34 @@ async def trigger_full_sync(
             site_url=site_url,
             db=db,
             project_keys=request.project_keys,
+            sync_issues=request.sync_issues,
+            sync_projects=request.sync_projects,
+            sync_sprints=request.sync_sprints,
         )
+
+        # 결과 메시지 생성
+        summary_parts = []
+        if result["issues"]["synced"] > 0 or result["issues"]["errors"] > 0:
+            summary_parts.append(f"Issues={result['issues']['synced']}")
+        if result["epics"]["synced"] > 0 or result["epics"]["errors"] > 0:
+            summary_parts.append(f"Epics={result['epics']['synced']}")
+        if result["projects"]["synced"] > 0 or result["projects"]["errors"] > 0:
+            summary_parts.append(f"Projects={result['projects']['synced']}")
+        if result["sprints"]["synced"] > 0 or result["sprints"]["errors"] > 0:
+            summary_parts.append(f"Sprints={result['sprints']['synced']}")
+
+        message = f"전체 동기화 완료: {', '.join(summary_parts)}" if summary_parts else "동기화할 데이터가 없습니다"
 
         return SyncResponse(
             status="success",
-            message=f"전체 동기화 완료: Issues={result['issues']['synced']}, Epics={result['epics']['synced']}",
+            message=message,
             cloud_id=cloud_id,
+            results={
+                "issues": SyncResultDetail(**result["issues"]),
+                "epics": SyncResultDetail(**result["epics"]),
+                "projects": SyncResultDetail(**result["projects"]),
+                "sprints": SyncResultDetail(**result["sprints"]),
+            },
         )
 
     except HTTPException:
