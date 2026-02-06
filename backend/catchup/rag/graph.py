@@ -8,7 +8,6 @@ from catchup.rag.nodes import (
     chitchat_node,
     generate_node,
     grade_node,
-    manage_pr_context_node,
     generate_vector_queries_node,
     rerank_node,
     search_vector_db_node,
@@ -43,10 +42,8 @@ async def get_compiled_graph():
     workflow.add_node("generate_vector_queries", generate_vector_queries_node)
     workflow.add_node("search_vector_db", search_vector_db_node)
     workflow.add_node("rerank", rerank_node)
-    workflow.add_node("manage_pr_context", manage_pr_context_node)
     workflow.add_node("grade", grade_node)
     workflow.add_node("generate", generate_node)
-    # workflow.add_node("search_related_jira", search_related_jira_issues_node)
 
     workflow.set_entry_point("route")
 
@@ -55,15 +52,11 @@ async def get_compiled_graph():
     # )
     # workflow.add_edge("chitchat", END)
 
-    # workflow.add_edge("rewrite", "search_related_jira")
-    # workflow.add_edge("search_related_jira", END)
-
     workflow.add_edge("route", "rewrite")
     workflow.add_edge("rewrite", "generate_vector_queries")
     workflow.add_edge("generate_vector_queries", "search_vector_db")
     workflow.add_edge("search_vector_db", "rerank")
-    workflow.add_edge("rerank", "manage_pr_context")
-    workflow.add_edge("manage_pr_context", "grade")
+    workflow.add_edge("rerank", "grade")
     workflow.add_conditional_edges(
         "grade",
         route_after_grade,
