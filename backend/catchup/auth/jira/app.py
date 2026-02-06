@@ -68,6 +68,20 @@ class JiraOAuthService:
             )
 
     async def refresh_access_token(self, refresh_token: str) -> JiraOAuthTokenResponse:
+        """
+        Refresh Token으로 새 Access Token 발급
+
+        Atlassian refresh_token 특성:
+        - 유효 기간: 90일 (사용 시마다 갱신)
+        - Token Rotation: refresh 시 새 refresh_token 발급
+        - 90일간 미사용 또는 사용자가 앱 연결 해제 시 무효화
+
+        Raises:
+            HTTPException(401): refresh_token 만료/무효화 시
+                - 사용자가 다시 OAuth 인증을 해야 함
+        
+        TODO : 주기적 refresh_token 유효성 검사 및 재발급 기능 고려
+        """
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 self.token_url,
@@ -82,9 +96,10 @@ class JiraOAuthService:
 
             if response.status_code != 200:
                 logger.error(f"Jira OAuth Token Refresh Failed: {response.text}")
+                # refresh_token 만료 또는 무효화 시 재인증 필요
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=f"Failed to refresh access token: {response.text}",
+                    detail="Jira 인증이 만료되었습니다. 다시 연결해주세요. (/api/v1/auth/jira/install)",
                 )
 
             data = response.json()
@@ -148,19 +163,45 @@ class JiraOAuthService:
     async def get_valid_access_token(
         self, db: Session, jira_token: JiraOAuthToken
     ) -> str:
+        """
+        유효한 Access Token 반환 (필요 시 자동 갱신)
+
+        Access Token이 만료 5분 전이면 refresh_token으로 갱신.
+        refresh_token도 만료/무효화된 경우 재인증 안내 예외 발생.
+
+        Args:
+            db: SQLAlchemy Session
+            jira_token: DB에서 조회한 JiraOAuthToken 객체
+
+        Returns:
+            유효한 access_token 문자열
+
+        Raises:
+            HTTPException(401): refresh_token 만료 시 (재인증 필요)
+        """
         buffer_time = timedelta(minutes=5)
         if jira_token.expires_at <= datetime.now(timezone.utc) + buffer_time:
             logger.info(f"Refreshing Jira Access Token: Cloud ID = {jira_token.cloud_id}")
 
-            new_tokens = await self.refresh_access_token(jira_token.refresh_token)
+            try:
+                new_tokens = await self.refresh_access_token(jira_token.refresh_token)
 
-            jira_token.access_token = new_tokens.access_token
-            jira_token.refresh_token = new_tokens.refresh_token
-            jira_token.expires_at = datetime.now(timezone.utc) + timedelta(
-                seconds=new_tokens.expires_in
-            )
-            db.commit()
-            db.refresh(jira_token)
+                jira_token.access_token = new_tokens.access_token
+                jira_token.refresh_token = new_tokens.refresh_token
+                jira_token.expires_at = datetime.now(timezone.utc) + timedelta(
+                    seconds=new_tokens.expires_in
+                )
+                db.commit()
+                db.refresh(jira_token)
+
+            except HTTPException as e:
+                if e.status_code == 401:
+                    # refresh_token 만료 → 토큰 레코드는 유지하되 로그 기록
+                    logger.warning(
+                        f"Jira refresh_token expired for cloud_id={jira_token.cloud_id}. "
+                        "User needs to re-authenticate."
+                    )
+                raise
 
         return jira_token.access_token
 
