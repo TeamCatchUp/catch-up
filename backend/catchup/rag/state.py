@@ -13,7 +13,7 @@ class AgentState(TypedDict):
     original_query: str
     rewritten_query: str 
     
-    grader_feedback: Optional[str] 
+    grade_comment: Optional[str] 
     
     vector_search_queries: list[VectorDbSearchQuery]
     graph_search_queries: list[GraphDbSearchQuery]  # Cypher 쿼리 문자열 등

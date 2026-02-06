@@ -43,4 +43,12 @@ async def route_node(state: AgentState):
     
     logger.info(f"intent: {answer.intent}")
 
-    return {"intent": answer.intent}
+    return {
+            "intent": answer.intent,
+            "retry_count": 0,
+            "grade_comment": None,
+            "grade_status": None,
+            "vector_search_queries": [],
+            "graph_search_queries":[],
+            "retrieved_docs": [],
+        }
