@@ -1,7 +1,7 @@
 # ===================
 # Builder Stage
 # ===================
-FROM python:3.12-slim as builder
+FROM python:3.12-slim As builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 

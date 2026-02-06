@@ -22,6 +22,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
 
   vector_db:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.textsearch-ko
     container_name: catchup_vectordb
     image: pgvector/pgvector:pg16
     profiles: ["backend", "full"]

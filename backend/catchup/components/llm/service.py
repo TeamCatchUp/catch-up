@@ -1,16 +1,10 @@
 from abc import ABC, abstractmethod
-from enum import StrEnum
 from langchain_core.messages import trim_messages
-from langchain_core.output_parsers import StrOutputParser
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from langchain_aws import ChatBedrock
 
 from catchup.configs.config import settings
-
-class LlmProvider(StrEnum):
-    OPENAI = "openai"
-    AWS_BEDROCK = "aws-bedrock"
 
 
 class BaseLlmService(ABC):

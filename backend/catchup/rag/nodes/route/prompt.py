@@ -21,5 +21,5 @@ SYSTEM_QUERY_ROUTER_PROMPT = """\
 3. **모호성 처리:** 질문이 업무와 조금이라도 관련이 있어 보이거나 판단이 애매할 경우, 안전하게 `search_pipeline`을 선택하여 검색 단계로 넘기세요. `chitchat`은 100% 확신이 들 때만 선택합니다.
 
 사용자의 질문:
-{question}
+{query}
 """

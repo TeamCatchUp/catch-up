@@ -1,6 +1,7 @@
 from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field
+from sqlalchemy import desc
 
 from catchup.search.schemas import (
     BaseSearchResult,
@@ -145,19 +146,38 @@ class PullRequestUserSelected(BaseModel):
     repo: str = Field(default="")
     owner: str = Field(default="")
 
+# Search Plan
+class BaseSearchQuery(BaseModel):
+    reasoning: str = Field(..., description="이 검색이 필요한 이유")
+    
 
-class SearchQuery(BaseModel):
-    datasource: Literal["codebase", "github_issue", "pr_history", "jira_issue"] = Field(
-        ..., description="검색할 데이터 소스 유형 선택"
+class VectorDbSearchQuery(BaseSearchQuery):
+    query: str = Field(
+        ..., 
+        description="Vector 검색 엔진에 전달할 최적화된 검색어"
     )
-    query: str = Field(..., description="검색어")
+    
+class VectorDbSearchPlan(BaseModel):
+    queries: list[VectorDbSearchQuery] = Field(
+            ..., 
+            min_items=1,
+            max_items=3,
+            description="사용자의 의도를 분석하여 생성된 독립적인 검색 쿼리 목록"
+        )
 
-
-class SearchPlan(BaseModel):
-    queries: list[SearchQuery] = Field(
-        ..., description="질문을 해결하기 위해 수행해야 할 모든 검색 쿼리의 목록"
+class GraphDbSearchQuery(BaseSearchQuery):
+    cypher: str = Field(
+        ...,
+        description="Graph DB에 검색할 최적화된 Cypher"
     )
 
+class GraphDbSearchPlan(BaseModel):
+    cyphers: list[GraphDbSearchQuery] = Field(
+        ...,
+        min_items=1,
+        max_items=3,
+        description="사용자의 의도를 분석하여 생성된 독립적인 Cypher 목록"
+    )
 
 # 검색 결과에 대한 평가 담당 LLM 응답 양식
 class GradeDocuments(BaseModel):
@@ -168,7 +188,7 @@ class GradeDocuments(BaseModel):
 
 # 정보 검색이 필요한지, 일상 대화인지 여부에 대한 쿼리 라우터
 class RouteQuery(BaseModel):
-    datasource: Literal["chitchat", "search_pipeline"] = Field(
+    intent: Literal["chitchat", "search_pipeline"] = Field(
         ...,
         description=(
             "질문의 성격에 따라 다음 단계로 라우팅합니다:\n"

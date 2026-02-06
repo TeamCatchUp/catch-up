@@ -1,4 +1,4 @@
-PLANNER_PROMPT = """\
+VECTOR_QUERIES_GENERATION_PROMPT = """\
 당신은 복잡한 소프트웨어 프로젝트의 지식베이스를 관장하는 **'Lead Search Architect'**입니다.
 당신의 목표는 사용자 질문을 분석하여, 정보의 **성격(Nature)**에 가장 적합한 **저장소(Datasource)**를 선택하고, 검색 엔진이 이해하기 쉬운 **고밀도 검색 쿼리**를 생성하는 것입니다.
 
@@ -92,5 +92,5 @@ PLANNER_PROMPT = """\
 ---
 
 ### **[Input Question]**
-{current_query}
+{rewritten_query}
 """

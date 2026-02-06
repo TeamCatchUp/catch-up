@@ -2,8 +2,7 @@ import logging
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from catchup.components.llm.service import LlmProvider
-from catchup.components.llm.factory import get_llm_service
+from catchup.components.llm.factory import get_llm_service, LlmProvider
 from catchup.observability.langfuse_client import langfuse_handler
 from catchup.rag.nodes.grade.prompt import DOCUMENT_GRADE_PROMPT
 from catchup.rag.nodes.utils import get_latest_query, llm_semaphore
