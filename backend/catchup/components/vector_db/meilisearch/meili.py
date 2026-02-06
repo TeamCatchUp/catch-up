@@ -7,7 +7,7 @@ from langchain_openai import OpenAIEmbeddings
 from meilisearch_python_sdk import AsyncClient
 from meilisearch_python_sdk.models.search import Hybrid, SearchParams
 
-from catchup.components.vector_db.factory import BaseVectorDbService
+from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.configs.config import settings
 
 logger = logging.getLogger(__name__)

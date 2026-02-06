@@ -21,7 +21,7 @@ async def search_related_jira_issues_node(state: AgentState):
     if not jira_indices:
         return {"related_jira_issues": []}
 
-    meili_repo = get_vector_db_service(VectorDbProvider.PGVECTOR)
+    meili_repo = get_vector_db_service(VectorDbProvider.MEILISEARCH)
 
     limit = 20
     search_requests = [

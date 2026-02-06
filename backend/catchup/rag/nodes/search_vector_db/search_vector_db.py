@@ -13,11 +13,8 @@ logger = logging.getLogger(__name__)
 @log_node
 async def search_vector_db_node(state: AgentState):
 
-    # queries = state.get("vector_search_queries", [])
-    queries=[VectorDbSearchQuery(query="코딩할 때 쓰는 도구", reasoning="")]
-    
-    logger.info(queries)
-    
+    queries = state.get("vector_search_queries", [])
+        
     if not queries:
         logger.warning("검색 계획 없음. rewritten query를 사용하여 검색 수행.")
         queries.append(VectorDbSearchQuery(query=state["rewritten_query"]))
@@ -31,7 +28,7 @@ async def search_vector_db_node(state: AgentState):
     
     unique_results = _deduplicate_search_results(results)
     
-    logger.info(f"검색 결과: {unique_results}")
+    logger.info(f"검색 결과: {len(unique_results)} 개")
     
     return {"retrieved_docs": unique_results}
     

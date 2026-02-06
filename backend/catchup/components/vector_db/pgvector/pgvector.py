@@ -9,7 +9,7 @@ from langchain_core.embeddings import Embeddings
 from pydantic import ConfigDict
 from sqlalchemy import Engine, text
 
-from catchup.components.vector_db.factory import BaseVectorDbService
+from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.components.vector_db.rank import weighted_reciprocal_rank
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
