@@ -1,6 +1,6 @@
 import logging
 
-from catchup.components.vector_db.meilisearch.factory import get_vector_repository
+from catchup.components.vector_db.factory import VectorDbProvider, get_vector_db_service
 from catchup.rag.nodes.utils import get_latest_query
 from catchup.rag.schemas import JiraSource
 from catchup.rag.state import AgentState
@@ -21,7 +21,7 @@ async def search_related_jira_issues_node(state: AgentState):
     if not jira_indices:
         return {"related_jira_issues": []}
 
-    meili_repo = get_vector_repository()
+    meili_repo = get_vector_db_service(VectorDbProvider.PGVECTOR)
 
     limit = 20
     search_requests = [

@@ -1,7 +1,6 @@
 from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field
-from sqlalchemy import desc
 
 from catchup.search.schemas import (
     BaseSearchResult,

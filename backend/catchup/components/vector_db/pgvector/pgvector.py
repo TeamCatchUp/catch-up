@@ -9,7 +9,9 @@ from langchain_core.embeddings import Embeddings
 from pydantic import ConfigDict
 from sqlalchemy import Engine, text
 
+from catchup.components.vector_db.factory import BaseVectorDbService
 from catchup.components.vector_db.rank import weighted_reciprocal_rank
+from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -19,7 +21,7 @@ class PostgresFTSRetriever(BaseRetriever):
     """PostgreSQL Full Text Search(FTS) 지원"""
     
     session_factory: Any  # e.g) sessionmaker (from sqlalchemy.orm)
-    collection_name: str
+    collection_name: str = settings.PGVECTOR_COLLECTION_NAME
     language_config: str = "korean"
     k: int = 4
 
@@ -76,14 +78,16 @@ class PostgresFTSRetriever(BaseRetriever):
         return docs
 
 
-class PGVectorService:
+class PGVectorService(BaseVectorDbService):
     def __init__(
         self,
         postgresql_engine: Engine,
         embeddings: Embeddings,
-        collection_name: str,
+        collection_name: str = settings.PGVECTOR_COLLECTION_NAME,
         session_factory: Any = SessionLocal,
     ):
+        logger.info(f"PGVectorService initialized with Collection Name: '{collection_name}'")
+        logger.info(f"DB URL Host: {postgresql_engine.url.host}")
         self.session_factory = session_factory
         self.collection_name = collection_name
         self.vector_store = self._create_pgvector(
@@ -181,44 +185,37 @@ class PGVectorService:
 
 # Test용 스크립트
 if __name__ == "__main__":
-    from langchain_core.embeddings import Embeddings
+    import os
     from langchain_core.documents import Document
+    from langchain_openai import OpenAIEmbeddings  # [변경] OpenAI 임베딩 임포트
     from sqlalchemy import create_engine, text
-    import numpy as np
     from catchup.configs.config import settings
 
-    # 가짜 임베딩 (테스트용)
-    class FakeEmbeddings(Embeddings):
-        def __init__(self, size: int = 1536):
-            self.size = size
-
-        def embed_documents(self, texts: list[str]) -> list[list[float]]:
-            return [np.random.rand(self.size).tolist() for _ in texts]
-
-        def embed_query(self, text: str) -> list[float]:
-            return np.random.rand(self.size).tolist()
-    
-    # DB 연결 설정
+    # ---------------------------------------------------------
+    # [설정] DB 및 OpenAI API 키 확인
+    # ---------------------------------------------------------
     DATABASE_URL = settings.sqlalchemy_database_url
+
     engine = create_engine(DATABASE_URL)
-    
     from sqlalchemy.orm import sessionmaker
     SessionFactory = sessionmaker(bind=engine)
 
-    COLLECTION_NAME = "test_hybrid_collection"
-    embeddings = FakeEmbeddings(size=1536)
+    COLLECTION_NAME = settings.PGVECTOR_COLLECTION_NAME
 
-    # 기존 데이터 초기화
+    embeddings = OpenAIEmbeddings(model=settings.OPENAI_EMBEDDING_MODEL, api_key=settings.OPENAI_API_KEY)
+
     print(f">>> 컬렉션 '{COLLECTION_NAME}' 초기화 중...")
-    
+
     with SessionFactory() as session:
         coll_query = text("SELECT uuid FROM langchain_pg_collection WHERE name = :name")
         result = session.execute(coll_query, {"name": COLLECTION_NAME}).fetchone()
         
         if result:
             coll_uuid = result[0]
+            # 임베딩 데이터 삭제
             del_embed = text("DELETE FROM langchain_pg_embedding WHERE collection_id = :uuid")
             session.execute(del_embed, {"uuid": coll_uuid})
+            # 컬렉션 정보 삭제
             del_coll = text("DELETE FROM langchain_pg_collection WHERE uuid = :uuid")
             session.execute(del_coll, {"uuid": coll_uuid})
             session.commit()
@@ -226,15 +223,17 @@ if __name__ == "__main__":
         else:
             print(">>> 삭제할 기존 데이터가 없습니다.")
 
-    # 서비스 초기화
-    print("\n>>> 서비스 초기화 및 데이터 주입...")
+    # ---------------------------------------------------------
+    # 2. 서비스 초기화 및 데이터 주입
+    # ---------------------------------------------------------
+    print("\n>>> 서비스 초기화 및 데이터 주입 (OpenAI API 호출 중)...")
     pg_service = PGVectorService(
         postgresql_engine=engine,
         embeddings=embeddings,
         collection_name=COLLECTION_NAME,
         session_factory=SessionFactory
     )
-    
+
     mock_docs = [
         Document(
             page_content="LangChain과 PGVector를 결합하면 강력한 검색 시스템을 구축할 수 있습니다.",
@@ -258,19 +257,31 @@ if __name__ == "__main__":
         ),
     ]
 
+    # 여기서 실제 OpenAI API를 사용하여 벡터화가 진행됩니다.
     pg_service.vector_store.add_documents(mock_docs)
     print(f">>> {len(mock_docs)}개의 문서를 DB에 저장했습니다.")
 
-    # 인덱스 생성
+    # 인덱스 생성 확인
     pg_service._ensure_fts_index()
 
-    # 검색 테스트
-    query_lunch = "언어"
-    print(f"\n>>> [TEST] 검색 쿼리: '{query_lunch}' (키워드 100%)")
-    
-    # FakeEmbedding이라 벡터 성능이 무작위이므로 키워드 검색(FTS)만 테스트
-    results_lunch = pg_service.hybrid_search(query_lunch, k=3, weights=[0.0, 1.0])
-    
-    print(">>> 검색 결과:")
-    for i, doc in enumerate(results_lunch):
+    # ---------------------------------------------------------
+    # 3. 검색 테스트 (하이브리드)
+    # ---------------------------------------------------------
+    # 테스트 1: 의미 기반 검색 (단어가 없어도 찾아야 함)
+    query_semantic = "코딩할 때 쓰는 도구" 
+    print(f"\n>>> [TEST 1] 의미 검색: '{query_semantic}'")
+    # 벡터 비중을 높임 (Vector: 0.8, Keyword: 0.2)
+    results_1 = pg_service.hybrid_search(query_semantic, k=2, weights=[0.8, 0.2])
+
+    for i, doc in enumerate(results_1):
+        print(f"[{i+1}] {doc.page_content}")
+
+
+    # 테스트 2: 키워드 기반 검색 (정확한 단어 매칭)
+    query_keyword = "김치찌개"
+    print(f"\n>>> [TEST 2] 키워드 검색: '{query_keyword}'")
+    # 키워드 비중을 높임 (Vector: 0.2, Keyword: 0.8)
+    results_2 = pg_service.hybrid_search(query_keyword, k=2, weights=[0.2, 0.8])
+
+    for i, doc in enumerate(results_2):
         print(f"[{i+1}] {doc.page_content}")

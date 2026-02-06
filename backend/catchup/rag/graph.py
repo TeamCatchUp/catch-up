@@ -11,10 +11,9 @@ from catchup.rag.nodes import (
     manage_pr_context_node,
     generate_vector_queries_node,
     rerank_node,
-    retrieve_node,
+    search_vector_db_node,
     rewrite_node,
     route_node,
-    search_related_jira_issues_node,
 )
 from catchup.rag.state import AgentState
 
@@ -38,30 +37,31 @@ async def get_compiled_graph():
     workflow = StateGraph(AgentState)
 
     # 노드 추가
-    workflow.add_node("router", route_node)
-    workflow.add_node("chitchat", chitchat_node)
+    workflow.add_node("route", route_node)
+    # workflow.add_node("chitchat", chitchat_node)
     workflow.add_node("rewrite", rewrite_node)
     workflow.add_node("generate_vector_queries", generate_vector_queries_node)
-    workflow.add_node("retrieve", retrieve_node)
+    workflow.add_node("search_vector_db", search_vector_db_node)
     workflow.add_node("rerank", rerank_node)
     workflow.add_node("manage_pr_context", manage_pr_context_node)
     workflow.add_node("grade", grade_node)
     workflow.add_node("generate", generate_node)
-    workflow.add_node("search_related_jira", search_related_jira_issues_node)
+    # workflow.add_node("search_related_jira", search_related_jira_issues_node)
 
-    workflow.set_entry_point("router")
+    workflow.set_entry_point("route")
 
-    workflow.add_conditional_edges(
-        "router", route_question, {"rewrite": "rewrite", "chitchat": "chitchat"}
-    )
-    workflow.add_edge("chitchat", END)
+    # workflow.add_conditional_edges(
+    #     "router", route_question, {"rewrite": "rewrite", "chitchat": "chitchat"}
+    # )
+    # workflow.add_edge("chitchat", END)
 
-    workflow.add_edge("rewrite", "search_related_jira")
-    workflow.add_edge("search_related_jira", END)
+    # workflow.add_edge("rewrite", "search_related_jira")
+    # workflow.add_edge("search_related_jira", END)
 
+    workflow.add_edge("route", "rewrite")
     workflow.add_edge("rewrite", "generate_vector_queries")
-    workflow.add_edge("generate_vector_queries", "retrieve")
-    workflow.add_edge("retrieve", "rerank")
+    workflow.add_edge("generate_vector_queries", "search_vector_db")
+    workflow.add_edge("search_vector_db", "rerank")
     workflow.add_edge("rerank", "manage_pr_context")
     workflow.add_edge("manage_pr_context", "grade")
     workflow.add_conditional_edges(
