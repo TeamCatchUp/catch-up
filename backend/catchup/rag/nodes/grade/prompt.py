@@ -16,5 +16,5 @@ DOCUMENT_GRADE_PROMPT = """\
 {context}
 
 [질문]
-{question}
+{query}
 """

@@ -1,3 +1,4 @@
+import logging
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph import END, StateGraph
 from redis.asyncio import Redis
@@ -11,10 +12,13 @@ from catchup.rag.nodes import (
     generate_vector_queries_node,
     rerank_node,
     search_vector_db_node,
+    search_graph_db_node,
     rewrite_node,
     route_node,
 )
 from catchup.rag.state import AgentState
+
+logger = logging.getLogger(__name__)
 
 
 def route_question(state: AgentState):
@@ -26,10 +30,17 @@ def route_question(state: AgentState):
 
 
 def route_after_grade(state: AgentState):
-    grade_status = state.get("grade_status")
-    if grade_status == "bad":
-        return "rewrite"
-    return "generate"
+    status = state.get("grade_status")
+    retry_count = state.get("retry_count", 0)
+    
+    if status == "good":
+        return "generate"
+    
+    if retry_count >= 2:
+        logger.info("Vector Search 최대 재시도 횟수 도달. Graph Search 수행.")
+        return "search_graph_db"
+    
+    return "rewrite"
 
 
 async def get_compiled_graph():
@@ -43,6 +54,7 @@ async def get_compiled_graph():
     workflow.add_node("search_vector_db", search_vector_db_node)
     workflow.add_node("rerank", rerank_node)
     workflow.add_node("grade", grade_node)
+    workflow.add_node("search_graph_db", search_graph_db_node)
     workflow.add_node("generate", generate_node)
 
     workflow.set_entry_point("route")
@@ -60,9 +72,13 @@ async def get_compiled_graph():
     workflow.add_conditional_edges(
         "grade",
         route_after_grade,
-        {"generate": "generate", "rewrite": "rewrite"},
+        {
+            "generate": "generate",
+            "rewrite": "rewrite",
+            "search_graph_db": "search_graph_db"
+        }
     )
-
+    workflow.add_edge("search_graph_db", "generate")
     workflow.add_edge("generate", END)
 
     redis_client = Redis.from_url(settings.REDIS_URL)

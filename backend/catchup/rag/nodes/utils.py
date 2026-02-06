@@ -5,6 +5,7 @@ import logging
 import time
 from typing import Callable, Awaitable, Annotated
 
+from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.graph.message import add_messages
 
@@ -29,6 +30,13 @@ def get_latest_query(messages: Annotated[list, add_messages]):
     return next(
         (m.content for m in reversed(messages) if isinstance(m, HumanMessage)), ""
     )
+
+
+def get_context_text_from_documents(documents: list[Document]):
+    return "\n\n".join([
+        f"[{i}] (Source: {doc.metadata.get('source_type', 'unknown')})\n{doc.page_content}" 
+        for i, doc in enumerate(documents, start=1)
+    ])
 
 
 # node 로깅 데코레이터

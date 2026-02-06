@@ -11,7 +11,7 @@ VECTOR_QUERIES_GENERATION_PROMPT = """\
 2. **PR 검색의 비용 제약 (Cost & Relevance):** `pr_history`는 검색 비용이 매우 높고 사용자 인터랙션을 유발합니다.
     - **금지 조건:** 질문에 특정 '사람(Person)' 이름이 있더라도, **"변경(Change)", "수정(Modify)", "PR", "기여(Contribution)"** 같은 단어가 명시적으로 없다면 `pr_history`를 포함하지 마십시오.
     - 단순히 "팀원A님이 맡은 업무 보여줘"는 `jira_issue`의 영역입니다.
-
+3. 빈 문자열("")나 "쿼리를 생성할 수 없습니다."와 같은 무의미한 쿼리를 생성하는 대신 빈 리스트를 반환하세요.
 ---
 
 ### **1. 저장소 선택 가이드라인 (Selection Policy)**

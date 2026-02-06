@@ -1,4 +1,4 @@
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -147,7 +147,10 @@ class PullRequestUserSelected(BaseModel):
 
 # Search Plan
 class BaseSearchQuery(BaseModel):
-    reasoning: str = Field(..., description="이 검색이 필요한 이유")
+    reasoning: Optional[str] = Field(
+        default="",
+        description="이 검색이 필요한 이유"
+    )
     
 
 class VectorDbSearchQuery(BaseSearchQuery):
@@ -158,8 +161,8 @@ class VectorDbSearchQuery(BaseSearchQuery):
     
 class VectorDbSearchPlan(BaseModel):
     queries: list[VectorDbSearchQuery] = Field(
-            ..., 
-            min_items=1,
+            default=[], 
+            min_items=0,
             max_items=3,
             description="사용자의 의도를 분석하여 생성된 독립적인 검색 쿼리 목록"
         )
@@ -172,8 +175,8 @@ class GraphDbSearchQuery(BaseSearchQuery):
 
 class GraphDbSearchPlan(BaseModel):
     cyphers: list[GraphDbSearchQuery] = Field(
-        ...,
-        min_items=1,
+        default=[],
+        min_items=0,
         max_items=3,
         description="사용자의 의도를 분석하여 생성된 독립적인 Cypher 목록"
     )
@@ -181,7 +184,10 @@ class GraphDbSearchPlan(BaseModel):
 # 검색 결과에 대한 평가 담당 LLM 응답 양식
 class GradeDocuments(BaseModel):
     binary_score: str = Field(
-        description="Relevance score: 'yes' if relevant, or 'no' if not relevant"
+        description="문서들이 질문에 답변하는 데 유용한지 여부. 'yes' 또는 'no'"
+    )
+    explanation: str = Field(
+        description="이 점수를 부여한 이유에 대한 간략한 설명 (예: '문서에 관련 키워드는 있으나 구체적인 해결책이 없음')"
     )
 
 

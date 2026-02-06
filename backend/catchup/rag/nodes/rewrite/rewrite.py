@@ -23,7 +23,7 @@ async def rewrite_node(state: AgentState):
     conversation_history = get_conversation_history(state["messages"])
     history_text = get_formatted_history_text(conversation_history)
     
-    feedback = state.get("grader_feedback", "")
+    grade_comment = state.get("grade_comment", "")
     
     current_try_cnt = state.get("retry_count", 0)
 
@@ -33,7 +33,7 @@ async def rewrite_node(state: AgentState):
                 input={
                     "history": history_text,
                     "original_query": original_query,
-                    "feedback": feedback if feedback else "None"
+                    "feedback": grade_comment if grade_comment else "None"
                 },
                 config={"callbacks": [langfuse_handler]},
             )
@@ -48,7 +48,7 @@ async def rewrite_node(state: AgentState):
     logger.info(
         f"\n[Rewrite Result]"
         f"\n1. 원본 쿼리: {original_query}"
-        f"\n2. 피드백: {feedback}"
+        f"\n2. 피드백: {grade_comment}"
         f"\n3. 재작성: {answer}"
     )
     

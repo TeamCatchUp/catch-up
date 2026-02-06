@@ -8,6 +8,7 @@ from .search_vector_db import search_vector_db_node
 from .rewrite import rewrite_node
 from .route import route_node
 from .search_related_jira_issues import search_related_jira_issues_node
+from .search_graph_db import search_graph_db_node
 
 __all__ = [
     "route_node",
@@ -20,4 +21,5 @@ __all__ = [
     "grade_node",
     "generate_node",
     "search_related_jira_issues_node",
+    "search_graph_db_node",
 ]
