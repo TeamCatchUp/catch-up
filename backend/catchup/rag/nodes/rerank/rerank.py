@@ -95,7 +95,7 @@ def select_diverse_top_k(
 
     # 고르게 담긴 문서들을 relevance_score 기준으로 정렬해서 LLM에게 제공
     selected_docs.sort(
-        key=lambda x: x.relevance_score,
+        key=lambda x: x.metadata.get("relevance_score", 0.0),
         reverse=True
     )
 
