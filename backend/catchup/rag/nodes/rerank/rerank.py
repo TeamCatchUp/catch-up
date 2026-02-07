@@ -69,7 +69,7 @@ def select_diverse_top_k(
     # 최소 보장 개수만큼 slot 차지
     for source in active_sources:
         # 특정 Source Type에 해당하는 문서 후보
-        candidates = docs_by_source_type[source_type]
+        candidates = docs_by_source_type[source]
 
         # 할당량 결정
         count_to_take = min(len(candidates), min_guarantee)
