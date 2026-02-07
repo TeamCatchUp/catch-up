@@ -4,7 +4,7 @@ import type {
   JiraTicketResponse,
   ChatroomsResponse,
   SessionQueriesResponse,
-} from '@/types/search/api';
+} from '@/features/search/types/api';
 
 export const searchService = {
   getRecentQueries: async (): Promise<RecentQueriesResponse> => {

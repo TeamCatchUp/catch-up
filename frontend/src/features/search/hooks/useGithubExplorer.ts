@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { githubService } from '@/shared/api/github';
-import type { GithubNode } from '@/types/search/github';
+import type { GithubNode } from '@/features/search/types/github';
 
 /** API 응답에서 받는 파일 구조 타입 */
 interface ApiFileNode {

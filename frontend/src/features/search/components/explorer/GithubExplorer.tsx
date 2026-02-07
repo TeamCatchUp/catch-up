@@ -5,9 +5,9 @@ import IconGithub from '@/public/icons/logo/GitHub.svg';
 import IconSpace from '@/public/icons/icon/folder_filled.svg';
 import IconTag from '@/public/icons/icon/file_filled.svg';
 
-import type { GithubNode } from '@/types/search/github';
-import { useGithubExplorer } from '@/hooks/search/useGithubExplorer';
-import { useTreeExplorer } from '@/hooks/search/useTreeExplorer';
+import type { GithubNode } from '@/features/search/types/github';
+import { useGithubExplorer } from '@/features/search/hooks/useGithubExplorer';
+import { useTreeExplorer } from '@/features/search/hooks/useTreeExplorer';
 import { ExplorerSearchInput } from './shared/ExplorerSearchInput';
 import { ExplorerHeader } from './shared/ExplorerHeader';
 import { ExplorerChildItem } from './shared/ExplorerChildItem';

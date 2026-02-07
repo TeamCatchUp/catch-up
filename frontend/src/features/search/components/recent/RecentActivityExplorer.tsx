@@ -5,7 +5,7 @@ import { RecentSearchList } from './RecentSearchList';
 import { useEffect, useState } from 'react';
 import { searchService } from '@/shared/api/search';
 import { formatShortDate } from '@/shared/utils/formatDate';
-import type { SearchQuery } from '@/types/search/search';
+import type { SearchQuery } from '@/features/search/types/search';
 
 export const RecentActivityExplorer = () => {
   const [recentQueries, setRecentQueries] = useState<SearchQuery[]>([]);

@@ -1,5 +1,5 @@
-import type { GithubNode } from '@/types/search/github';
-import type { JiraNode } from '@/types/search/jira';
+import type { GithubNode } from '@/features/search/types/github';
+import type { JiraNode } from '@/features/search/types/jira';
 
 /** Popover 타입 */
 export type PopoverType = 'person' | 'department' | 'project' | null;

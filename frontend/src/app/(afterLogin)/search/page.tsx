@@ -2,8 +2,8 @@
 
 import { useRef, useState } from 'react';
 import Image from 'next/image';
-import { useSearchFilters } from '@/hooks/search/useSearchFilters';
-import { useSearchInput } from '@/hooks/search/useSearchInput';
+import { useSearchFilters } from '@/features/search/hooks/useSearchFilters';
+import { useSearchInput } from '@/features/search/hooks/useSearchInput';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 
@@ -11,8 +11,8 @@ import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import QueryInput from '@/features/home/components/queryBox/QueryInput';
 import FilterBar from '@/features/home/components/queryBox/FilterBar';
 import ExplorerPanel from '@/features/home/components/queryBox/ExplorerPanel';
-import { SelectedFilterChips } from '@/components/search/filter/SelectedFilterChips';
-import { GithubGuideCard, JiraGuideCard } from '@/components/search/GuideCard';
+import { SelectedFilterChips } from '@/features/search/components/filter/SelectedFilterChips';
+import { GithubGuideCard, JiraGuideCard } from '@/features/search/components/GuideCard';
 
 import IconLightbulb from '@/public/icons/icon/lightbulb.svg';
 import Jira from '@/public/image/AIJIRA1.png';

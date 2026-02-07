@@ -1,10 +1,10 @@
 'use client';
 
-import type { UseSearchFiltersReturn } from '@/hooks/search/useSearchFilters';
+import type { UseSearchFiltersReturn } from '@/features/search/hooks/useSearchFilters';
 
-import { GithubExplorer } from '@/components/search/explorer/GithubExplorer';
-import { JiraExplorer } from '@/components/search/explorer/JiraExplorer';
-import { RecentActivityExplorer } from '@/components/search/recent/RecentActivityExplorer';
+import { GithubExplorer } from '@/features/search/components/explorer/GithubExplorer';
+import { JiraExplorer } from '@/features/search/components/explorer/JiraExplorer';
+import { RecentActivityExplorer } from '@/features/search/components/recent/RecentActivityExplorer';
 
 interface ExplorerPanelProps {
   filters: UseSearchFiltersReturn;

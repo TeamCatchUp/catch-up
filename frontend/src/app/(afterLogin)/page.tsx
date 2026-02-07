@@ -2,8 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { useUserStore } from '@/shared/store/userStore';
-import { useSearchFilters } from '@/hooks/search/useSearchFilters';
-import { useSearchInput } from '@/hooks/search/useSearchInput';
+import { useSearchFilters } from '@/features/search/hooks/useSearchFilters';
+import { useSearchInput } from '@/features/search/hooks/useSearchInput';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 
@@ -15,7 +15,7 @@ import TaskRecentlyCheckedModal from '@/features/home/components/TaskRecentlyChe
 import QueryInput from '@/features/home/components/queryBox/QueryInput';
 import FilterBar from '@/features/home/components/queryBox/FilterBar';
 import ExplorerPanel from '@/features/home/components/queryBox/ExplorerPanel';
-import { SelectedFilterChips } from '@/components/search/filter/SelectedFilterChips';
+import { SelectedFilterChips } from '@/features/search/components/filter/SelectedFilterChips';
 
 export default function Home() {
   const user = useUserStore((state) => state.user);

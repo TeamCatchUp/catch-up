@@ -1,7 +1,7 @@
 'use client';
 
 import { RefObject } from 'react';
-import type { UseSearchInputReturn } from '@/hooks/search/useSearchInput';
+import type { UseSearchInputReturn } from '@/features/search/hooks/useSearchInput';
 
 import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
