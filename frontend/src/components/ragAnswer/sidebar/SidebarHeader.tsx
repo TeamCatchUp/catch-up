@@ -6,7 +6,7 @@ interface Props {
   sourceCount: number;
 }
 
-const RagRightAdditionalHeader = ({ activeTab, onChange, sourceCount }: Props) => {
+const SidebarHeader = ({ activeTab, onChange, sourceCount }: Props) => {
   return (
     <div className="sticky top-0 z-100 flex bg-white">
       <div className={`border-b-neutral-3 flex w-full items-center justify-center border-b px-4 py-1.5`}>
@@ -35,4 +35,4 @@ const RagRightAdditionalHeader = ({ activeTab, onChange, sourceCount }: Props) =
   );
 };
 
-export default RagRightAdditionalHeader;
+export default SidebarHeader;

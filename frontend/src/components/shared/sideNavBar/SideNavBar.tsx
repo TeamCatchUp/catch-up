@@ -24,7 +24,7 @@ import ToolTip from '@/components/shared/ToolTip';
 import TeamSpaceMoreModal from '@/components/shared/sideNavBar/modal/TeamSpaceMoreModal';
 import TeamSpaceDropDownModal from '@/components/shared/sideNavBar/modal/TeamSpaceDropDownModal';
 import UserModal from '@/components/shared/sideNavBar/modal/UserModal';
-import CatchAssistantModal from '@/components/ragAnswer/components/modal/CatchAssistantModal';
+import CatchAssistantModal from '@/components/ragAnswer/header/CatchAssistantModal';
 import api from '@/api/axios';
 import { searchService } from '@/api/search';
 import Link from 'next/link';

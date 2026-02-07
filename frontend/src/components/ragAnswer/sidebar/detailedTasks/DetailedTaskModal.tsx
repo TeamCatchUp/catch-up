@@ -8,14 +8,14 @@ import Cancel from '/public/icons/icon/cancel.svg';
 import Check from '/public/icons/icon/check.svg';
 import Edit from '/public/icons/icon/edit_square.svg';
 import Share from '/public/icons/icon/share_2.svg';
-import InfoTabContent from './detailedTasksModalContent/InfoTabContent';
-import FilesTabContent from './detailedTasksModalContent/FilesTabContent';
-import WikiTabContent from './detailedTasksModalContent/WikiTabContent';
-import URLTabContent from './detailedTasksModalContent/URLTabContent';
-import CommentsTabContent from './detailedTasksModalContent/CommentsTabContent';
-import NoDataContent from './detailedTasksModalContent/NoDataContent';
-import OptionNavBar from './detailedTasksModalContent/OptionNavBar';
-import DetailedTaskContent from './detailedTasksModalContent/DetailedTaskContent';
+import InfoTabContent from './InfoTabContent';
+import FilesTabContent from './FilesTabContent';
+import WikiTabContent from './WikiTabContent';
+import URLTabContent from './URLTabContent';
+import CommentsTabContent from './CommentsTabContent';
+import NoDataContent from './NoDataContent';
+import OptionNavBar from './OptionNavBar';
+import DetailedTaskContent from './DetailedTaskContent';
 
 interface DetailedTaskModalProps {
   onClose: () => void;

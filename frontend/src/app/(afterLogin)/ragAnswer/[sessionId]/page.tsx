@@ -10,14 +10,12 @@ import useRagPagination from '@/hooks/ragAnswer/useRagPagination';
 import useRagFilters from '@/hooks/ragAnswer/useRagFilters';
 import useWheelNavigation from '@/hooks/shared/useWheelNavigation';
 
-// Section Components
-import RagQuestion from '@/components/ragAnswer/sections/RagQuestion';
-import RagAnswer from '@/components/ragAnswer/sections/RagAnswer';
-import RagSidebar from '@/components/ragAnswer/sections/RagSidebar';
-import RagInput from '@/components/ragAnswer/sections/RagInput';
-
-// Common Components
-import RagContentHeader from '@/components/ragAnswer/components/answerComponent/RagContentHeader';
+// ragAnswer Components
+import RagQuestion from '@/components/ragAnswer/answer/RagQuestion';
+import RagAnswer from '@/components/ragAnswer/answer/RagAnswer';
+import RagSidebar from '@/components/ragAnswer/sidebar/RagSidebar';
+import RagInput from '@/components/ragAnswer/RagInput';
+import RagContentHeader from '@/components/ragAnswer/header/RagContentHeader';
 import DateDivider from '@/components/shared/DateDivider';
 import PageIndicator from '@/components/shared/PageIndicator';
 

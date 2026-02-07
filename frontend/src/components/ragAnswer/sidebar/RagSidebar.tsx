@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import type { QAPair } from '@/util/ragAnswer/chat';
-import RagRightAdditionalHeader from '@/components/ragAnswer/components/rightComponent/sourceComponent/RagRightAdditionalHeader';
-import SourceComponent from '@/components/ragAnswer/components/rightComponent/sourceComponent/SourceComponent';
-import DetailedTasksComponent from '@/components/ragAnswer/components/rightComponent/detailedTasksComponent/DetailedTasksComponent';
+import SidebarHeader from './SidebarHeader';
+import SourceComponent from './source/SourceComponent';
+import DetailedTasksComponent from './detailedTasks/DetailedTasksComponent';
 
 interface RagSidebarProps {
   currentQA: QAPair | undefined;
@@ -21,7 +21,7 @@ const RagSidebar = ({ currentQA, isLoading, isError }: RagSidebarProps) => {
 
   return (
     <div className="border-neutral-3 flex w-115 flex-none flex-col border-l bg-white">
-      <RagRightAdditionalHeader
+      <SidebarHeader
         activeTab={activeTab}
         onChange={setActiveTab}
         sourceCount={sourceCount}

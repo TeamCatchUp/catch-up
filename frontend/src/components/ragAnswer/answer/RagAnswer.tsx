@@ -12,13 +12,13 @@ import { TEAM_SPACES } from '@/constants/ragAnswer/config';
 
 import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
 import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
-import ErrorResponse from '@/components/ragAnswer/components/answerComponent/ErrorResponse';
-import AnswerActionButtons from '@/components/ragAnswer/components/answerComponent/AnswerActionButtons';
-import FeedbackSection from '@/components/ragAnswer/components/answerComponent/FeedbackSection';
-import FilterComponent from '@/components/ragAnswer/components/answerComponent/Filter';
-import TeamSpaceModal from '@/components/ragAnswer/components/modal/TeamSpaceModal';
+import ErrorResponse from './ErrorResponse';
+import AnswerActionButtons from './AnswerActionButtons';
+import FeedbackSection from './FeedbackSection';
+import FilterComponent from './Filter';
+import TeamSpaceModal from './TeamSpaceModal';
 import ToolTip from '@/components/shared/ToolTip';
-import { MarkDownComponents } from '@/components/ragAnswer/components/answerComponent/markdown/MarkDownComponents';
+import { MarkDownComponents } from './markdown/MarkDownComponents';
 
 import Divider from '/public/icons/icon/divider.svg';
 import DropDown from '/public/icons/icon/dropdown_down.svg';

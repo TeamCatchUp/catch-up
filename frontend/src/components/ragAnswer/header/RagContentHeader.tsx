@@ -8,8 +8,8 @@ import ArrowRight2 from '/public/icons/icon/arrow_right2.svg';
 import Add from '/public/icons/icon/add_small.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
-import CatchAssistantModal from '@/components/ragAnswer/components/modal/CatchAssistantModal';
-import QuestionsListModal from '@/components/ragAnswer/components/modal/QuestionsListInSessionModal';
+import CatchAssistantModal from './CatchAssistantModal';
+import QuestionsListModal from './QuestionsListInSessionModal';
 
 interface RagHeaderProps {
   title: string;
