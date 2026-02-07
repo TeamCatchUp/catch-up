@@ -13,7 +13,7 @@ import WikiLogo from '/public/icons/icon/Wiki.svg';
 import NotionLogo from '/public/icons/icon/Notion.svg';
 import Add from '/public/icons/icon/add_small.svg';
 import Chat from '/public/icons/icon/chat.svg';
-import TaskManagerPart from '@/components/home/cardComponents/TaskManagePart';
+import TaskManagerPart from '@/features/home/components/TaskManagePart';
 import ToolTip from '@/shared/components/ui/ToolTip';
 
 interface TaskRecentlyCheckedModalProps {

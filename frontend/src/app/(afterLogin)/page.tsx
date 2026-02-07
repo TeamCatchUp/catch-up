@@ -8,13 +8,13 @@ import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
-import HowToUse from '@/components/home/cardComponents/HowToUse';
-import LinkTool from '@/components/home/cardComponents/LinkTool';
-import TaskRecentlyChecked from '@/components/home/cardComponents/TaskRecentlyChecked';
-import TaskRecentlyCheckedModal from '@/components/home/modal/TaskRecentlyCheckedModal';
-import QueryInput from '@/components/shared/queryBox/QueryInput';
-import FilterBar from '@/components/shared/queryBox/FilterBar';
-import ExplorerPanel from '@/components/shared/queryBox/ExplorerPanel';
+import HowToUse from '@/features/home/components/HowToUse';
+import LinkTool from '@/features/home/components/LinkTool';
+import TaskRecentlyChecked from '@/features/home/components/TaskRecentlyChecked';
+import TaskRecentlyCheckedModal from '@/features/home/components/TaskRecentlyCheckedModal';
+import QueryInput from '@/features/home/components/queryBox/QueryInput';
+import FilterBar from '@/features/home/components/queryBox/FilterBar';
+import ExplorerPanel from '@/features/home/components/queryBox/ExplorerPanel';
 import { SelectedFilterChips } from '@/components/search/filter/SelectedFilterChips';
 
 export default function Home() {
