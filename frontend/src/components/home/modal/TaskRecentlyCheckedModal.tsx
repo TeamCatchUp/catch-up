@@ -14,7 +14,7 @@ import NotionLogo from '/public/icons/icon/Notion.svg';
 import Add from '/public/icons/icon/add_small.svg';
 import Chat from '/public/icons/icon/chat.svg';
 import TaskManagerPart from '@/components/home/cardComponents/TaskManagePart';
-import ToolTip from '@/components/shared/ToolTip';
+import ToolTip from '@/shared/components/ui/ToolTip';
 
 interface TaskRecentlyCheckedModalProps {
   task: TaskRecentlyCheckedCard;

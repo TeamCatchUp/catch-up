@@ -9,7 +9,7 @@ import Close from '/public/icons/icon/cancel.svg';
 import Chat from '/public/icons/icon/chat.svg';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
-import { SearchHistory } from '@/components/shared/SearchHistory';
+import { SearchHistory } from '@/shared/components/SearchHistory';
 import { searchService } from '@/shared/api/search';
 import { formatFullDate } from '@/shared/utils/formatDate';
 import type { SearchQuery } from '@/types/search/search';

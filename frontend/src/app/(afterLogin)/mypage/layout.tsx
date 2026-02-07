@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import clsx from 'clsx';
-import TopNavbar from '@/components/shared/topNavbar/TopNavbar';
+import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 
 export default function MypageLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

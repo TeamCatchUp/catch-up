@@ -7,7 +7,7 @@ import { useSearchInput } from '@/hooks/search/useSearchInput';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 
-import TopNavbar from '@/components/shared/topNavbar/TopNavbar';
+import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import HowToUse from '@/components/home/cardComponents/HowToUse';
 import LinkTool from '@/components/home/cardComponents/LinkTool';
 import TaskRecentlyChecked from '@/components/home/cardComponents/TaskRecentlyChecked';

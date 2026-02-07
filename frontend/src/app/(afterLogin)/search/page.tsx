@@ -7,7 +7,7 @@ import { useSearchInput } from '@/hooks/search/useSearchInput';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 
-import TopNavbar from '@/components/shared/topNavbar/TopNavbar';
+import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import QueryInput from '@/components/shared/queryBox/QueryInput';
 import FilterBar from '@/components/shared/queryBox/FilterBar';
 import ExplorerPanel from '@/components/shared/queryBox/ExplorerPanel';

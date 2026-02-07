@@ -1,7 +1,7 @@
 'use client';
 
 import { searchService } from '@/shared/api/search';
-import { SearchHistory } from '@/components/shared/SearchHistory';
+import { SearchHistory } from '@/shared/components/SearchHistory';
 import { useEffect, useState } from 'react';
 import { formatFullDate } from '@/shared/utils/formatDate';
 import type { SearchQuery } from '@/types/search/search';

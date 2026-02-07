@@ -7,11 +7,11 @@ import type { UseRagFiltersReturn } from '@/hooks/ragAnswer/useRagFilters';
 import { GithubExplorer } from '@/components/search/explorer/GithubExplorer';
 import { JiraExplorer } from '@/components/search/explorer/JiraExplorer';
 import { SelectedFilterChips } from '@/components/search/filter/SelectedFilterChips';
-import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/shared/SearchOptionButton';
+import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
 import { FilterDropdown } from '@/components/search/filter/FilterDropdown';
 import { FilterOptionList } from '@/components/search/filter/FilterOptionList';
 import { PERSON_OPTIONS } from '@/shared/mocks/search/filterOptions';
-import ToolTip from '@/components/shared/ToolTip';
+import ToolTip from '@/shared/components/ui/ToolTip';
 
 import Add from '/public/icons/icon/add_small.svg';
 import ArrowSend from '/public/icons/icon/arrow_send.svg';

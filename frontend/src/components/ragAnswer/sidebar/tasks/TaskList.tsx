@@ -9,7 +9,7 @@ import Space from '/public/icons/icon/space.svg';
 import ArrowRight from '/public/icons/icon/arrow_right2.svg';
 import RagDetailedTasksSkeleton from '@/components/Skeleton/RagRightComponentSkeleton';
 import TaskCard from './TaskCard';
-import { SearchOptionButton } from '@/components/shared/SearchOptionButton';
+import { SearchOptionButton } from '@/shared/components/SearchOptionButton';
 
 const searchOptions = [
   {

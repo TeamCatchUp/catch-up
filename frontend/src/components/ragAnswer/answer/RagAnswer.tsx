@@ -17,7 +17,7 @@ import AnswerActionButtons from './actions/AnswerActionButtons';
 import FeedbackSection from './actions/FeedbackSection';
 import DateFilter from './filter/DateFilter';
 import TeamSpaceModal from './filter/TeamSpaceModal';
-import ToolTip from '@/components/shared/ToolTip';
+import ToolTip from '@/shared/components/ui/ToolTip';
 import { MarkDownComponents } from './markdown/MarkDownComponents';
 
 import Divider from '/public/icons/icon/divider.svg';
