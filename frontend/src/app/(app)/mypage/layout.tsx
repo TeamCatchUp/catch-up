@@ -9,8 +9,8 @@ export default function MypageLayout({ children }: { children: React.ReactNode }
   const router = useRouter();
 
   const tabs = [
-    { name: '프로필', href: '/mypage' },
-    { name: '협업툴 연동', href: '/mypage/tool' },
+    { name: '프로필', href: '/mypage/settings' },
+    { name: '협업툴 연동', href: '/mypage/integrations' },
     { name: '질문 히스토리', href: '/mypage/history' },
   ];
 

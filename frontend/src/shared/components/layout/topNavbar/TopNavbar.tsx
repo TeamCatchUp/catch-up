@@ -26,7 +26,7 @@ const pageConfigs: Record<PageType, PageConfig> = {
   mypage: {
     icon: MyPage,
     label: '마이페이지',
-    href: '/mypage',
+    href: '/mypage/settings',
   },
   settings: {
     icon: Settings,

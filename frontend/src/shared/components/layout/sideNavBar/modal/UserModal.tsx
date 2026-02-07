@@ -50,7 +50,7 @@ const UserModal = ({ onClose, userName, userEmail }: UserModalProps) => {
           <button
             onClick={() => {
               onClose();
-              router.push('/mypage');
+              router.push('/mypage/settings');
             }}
             className="icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2"
           >
