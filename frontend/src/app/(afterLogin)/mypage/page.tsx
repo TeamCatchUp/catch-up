@@ -6,7 +6,7 @@ import Profile from '/public/icons/icon/profile.svg';
 import EditPencil from '/public/icons/icon/edit_pencil.svg';
 import TopNavbar from '@/components/shared/topNavbar/TopNavbar';
 
-import { useUserStore } from '@/store/userStore';
+import { useUserStore } from '@/shared/store/userStore';
 
 const Page = () => {
   const { user } = useUserStore();

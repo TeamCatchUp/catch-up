@@ -11,8 +11,8 @@ import Rotate from '/public/icons/icon/rotate.svg';
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
 import LinkModal from './LinkModal';
 import GetAlertModal from './GetAlertModal';
-import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
-import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
+import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
+import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 
 const linkServices = ['Jira', 'Confluence', 'Github', 'Slack'] as const;
 type LinkService = (typeof linkServices)[number];

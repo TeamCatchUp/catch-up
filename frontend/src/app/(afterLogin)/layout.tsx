@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@/api/auth';
+import { useAuth } from '@/shared/api/auth';
 import SideNavBar from '@/components/shared/sideNavBar/SideNavBar';
 
 export default function AfterLoginLayout({ children }: { children: React.ReactNode }) {

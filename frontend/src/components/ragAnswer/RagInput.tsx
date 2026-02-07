@@ -10,7 +10,7 @@ import { SelectedFilterChips } from '@/components/search/filter/SelectedFilterCh
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/components/shared/SearchOptionButton';
 import { FilterDropdown } from '@/components/search/filter/FilterDropdown';
 import { FilterOptionList } from '@/components/search/filter/FilterOptionList';
-import { PERSON_OPTIONS } from '@/mocks/search/filterOptions';
+import { PERSON_OPTIONS } from '@/shared/mocks/search/filterOptions';
 import ToolTip from '@/components/shared/ToolTip';
 
 import Add from '/public/icons/icon/add_small.svg';

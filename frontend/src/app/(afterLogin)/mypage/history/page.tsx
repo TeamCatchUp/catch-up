@@ -1,9 +1,9 @@
 'use client';
 
-import { searchService } from '@/api/search';
+import { searchService } from '@/shared/api/search';
 import { SearchHistory } from '@/components/shared/SearchHistory';
 import { useEffect, useState } from 'react';
-import { formatFullDate } from '@/util/shared/formatDate';
+import { formatFullDate } from '@/shared/utils/formatDate';
 import type { SearchQuery } from '@/types/search/search';
 
 type SearchQueryWithRawDate = SearchQuery & { rawDate: Date };

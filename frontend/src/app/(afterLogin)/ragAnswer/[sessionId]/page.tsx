@@ -8,7 +8,7 @@ import clsx from 'clsx';
 import useRagChat from '@/hooks/ragAnswer/useRagChat';
 import useRagPagination from '@/hooks/ragAnswer/useRagPagination';
 import useRagFilters from '@/hooks/ragAnswer/useRagFilters';
-import useWheelNavigation from '@/hooks/shared/useWheelNavigation';
+import useWheelNavigation from '@/shared/hooks/useWheelNavigation';
 
 // ragAnswer Components
 import RagQuestion from '@/components/ragAnswer/answer/question/RagQuestion';

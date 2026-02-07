@@ -7,11 +7,11 @@ import Add from '/public/icons/icon/add_small.svg';
 import Search from '/public/icons/icon/search.svg';
 import Close from '/public/icons/icon/cancel.svg';
 import Chat from '/public/icons/icon/chat.svg';
-import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
-import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
+import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
+import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 import { SearchHistory } from '@/components/shared/SearchHistory';
-import { searchService } from '@/api/search';
-import { formatFullDate } from '@/util/shared/formatDate';
+import { searchService } from '@/shared/api/search';
+import { formatFullDate } from '@/shared/utils/formatDate';
 import type { SearchQuery } from '@/types/search/search';
 
 interface RecentQuestionsModalProps {

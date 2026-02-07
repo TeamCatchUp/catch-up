@@ -1,6 +1,6 @@
 /** 백엔드 소스 데이터를 UI용으로 정규화 */
 
-import { formatDate } from '@/util/shared/formatDate';
+import { formatDate } from '@/shared/utils/formatDate';
 
 const SOURCE_TYPE_MAP: Record<0 | 1 | 2 | 3, ChatSource['sourceType']> = {
   0: 'code',

@@ -4,8 +4,8 @@ import { useRef, useState } from 'react';
 import Image from 'next/image';
 import { useSearchFilters } from '@/hooks/search/useSearchFilters';
 import { useSearchInput } from '@/hooks/search/useSearchInput';
-import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
-import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
+import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
+import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 
 import TopNavbar from '@/components/shared/topNavbar/TopNavbar';
 import QueryInput from '@/components/shared/queryBox/QueryInput';

@@ -6,9 +6,9 @@ import IconSpace from '@/public/icons/icon/epic.svg';
 import IconTag from '@/public/icons/icon/task.svg';
 
 import type { JiraNode } from '@/types/search/jira';
-import { JIRA_MOCK_DATA } from '@/mocks/search/jira';
+import { JIRA_MOCK_DATA } from '@/shared/mocks/search/jira';
 import { useTreeExplorer } from '@/hooks/search/useTreeExplorer';
-import { getAllChildNodes } from '@/util/shared/tree';
+import { getAllChildNodes } from '@/shared/utils/tree';
 import { ExplorerSearchInput } from './shared/ExplorerSearchInput';
 import { ExplorerHeader } from './shared/ExplorerHeader';
 import { ExplorerChildItem } from './shared/ExplorerChildItem';

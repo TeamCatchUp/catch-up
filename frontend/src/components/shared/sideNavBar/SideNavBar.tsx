@@ -3,7 +3,7 @@
 import clsx from 'clsx';
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useUserStore } from '@/store/userStore';
+import { useUserStore } from '@/shared/store/userStore';
 import CatchupLogo from '/public/icons/logo/logo_catchup.svg';
 import CatchupLogoLetter from '/public/icons/logo/logo_catchup_letter.svg';
 import Close from '/public/icons/icon/close.svg';
@@ -25,8 +25,8 @@ import TeamSpaceMoreModal from '@/components/shared/sideNavBar/modal/TeamSpaceMo
 import TeamSpaceDropDownModal from '@/components/shared/sideNavBar/modal/TeamSpaceDropDownModal';
 import UserModal from '@/components/shared/sideNavBar/modal/UserModal';
 import RecentQuestionsModal from '@/components/ragAnswer/header/RecentQuestionsModal';
-import api from '@/api/axios';
-import { searchService } from '@/api/search';
+import api from '@/shared/api/client';
+import { searchService } from '@/shared/api/search';
 import Link from 'next/link';
 
 interface ChatRoomQuery {

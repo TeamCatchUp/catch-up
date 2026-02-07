@@ -1,6 +1,6 @@
 import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
-import { USE_MOCK } from '@/mocks/config';
-import { createMockResponse } from '@/mocks/mockAxiosAdapter';
+import { USE_MOCK } from '@/shared/mocks/config';
+import { createMockResponse } from '@/shared/mocks/mockAxiosAdapter';
 
 const api = axios.create({
   baseURL: 'https://0-0-0-0.example.io',

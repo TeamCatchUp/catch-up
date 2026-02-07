@@ -3,8 +3,8 @@
 import { JiraTicketList } from './JiraTicketList';
 import { RecentSearchList } from './RecentSearchList';
 import { useEffect, useState } from 'react';
-import { searchService } from '@/api/search';
-import { formatShortDate } from '@/util/shared/formatDate';
+import { searchService } from '@/shared/api/search';
+import { formatShortDate } from '@/shared/utils/formatDate';
 import type { SearchQuery } from '@/types/search/search';
 
 export const RecentActivityExplorer = () => {

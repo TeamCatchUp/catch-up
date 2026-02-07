@@ -1,4 +1,4 @@
-import api from '@/api/axios';
+import api from '@/shared/api/client';
 
 export const githubService = {
   // 레포지토리 목록 조회

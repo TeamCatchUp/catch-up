@@ -1,4 +1,4 @@
-import delay from '@/mocks/delay';
+import delay from '@/shared/mocks/delay';
 import createMockSSE from './sseSimulator';
 
 const mockChatService = {

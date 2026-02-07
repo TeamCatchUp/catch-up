@@ -3,7 +3,7 @@
 // import clsx from 'clsx';
 // import { useState, useRef, useEffect, useCallback } from 'react';
 // import Cancel from '/public/icons/icon/cancel.svg';
-// import { sendFeedbackQuery } from '@/api/feedback';
+// import { sendFeedbackQuery } from '@/shared/api/feedback';
 
 // const feedback = [
 //   { id: 1, content: '존재하지 않는 자료를 참고했어요' },
@@ -433,7 +433,7 @@
 import clsx from 'clsx';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Cancel from '/public/icons/icon/cancel.svg';
-import { sendFeedbackQuery } from '@/api/feedback';
+import { sendFeedbackQuery } from '@/shared/api/feedback';
 
 const feedback = [
   { id: 1, content: '존재하지 않는 자료를 참고했어요' },

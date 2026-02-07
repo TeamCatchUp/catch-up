@@ -1,4 +1,4 @@
-import api from '@/api/axios';
+import api from '@/shared/api/client';
 
 const realChatService = {
   createSSEConnection: (

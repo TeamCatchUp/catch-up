@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import api from '@/api/axios';
-import { useUserStore } from '@/store/userStore';
+import api from '@/shared/api/client';
+import { useUserStore } from '@/shared/store/userStore';
 
 export const useAuth = (redirectToLogin = true) => {
   const router = useRouter();
