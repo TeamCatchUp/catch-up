@@ -10,7 +10,7 @@ import useRagPagination from '@/features/chat/hooks/useRagPagination';
 import useRagFilters from '@/features/chat/hooks/useRagFilters';
 import useWheelNavigation from '@/shared/hooks/useWheelNavigation';
 
-// ragAnswer Components
+// Chat Components
 import RagQuestion from '@/features/chat/components/answer/question/RagQuestion';
 import RagAnswer from '@/features/chat/components/answer/RagAnswer';
 import RagSidebar from '@/features/chat/components/sidebar/RagSidebar';

@@ -34,7 +34,7 @@ export const useSearchInput = ({ currentRepo, inputRef }: UseSearchInputOptions)
     if (!value.trim()) return;
     const repoQuery = currentRepo ? `&repo=${currentRepo.id}` : '';
     const newSessionId = crypto.randomUUID();
-    router.push(`/ragAnswer/${newSessionId}?q=${encodeURIComponent(value)}${repoQuery}`);
+    router.push(`/chat/${newSessionId}?q=${encodeURIComponent(value)}${repoQuery}`);
   }, [value, currentRepo, router]);
 
   // Textarea 자동 높이 조절

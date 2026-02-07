@@ -19,7 +19,7 @@ interface ChatQuery {
 
 const SessionQuestionsModal = ({ onClose, onSelect }: SessionQuestionsModalProps) => {
   const params = useParams();
-  const sessionId = params.sessionId as string; // URL 구조가 /ragAnswer/[sessionId] 인 경우
+  const sessionId = params.sessionId as string; // URL 구조가 /chat/[sessionId] 인 경우
 
   const [allQueries, setAllQueries] = useState<ChatQuery[]>([]);
   const [isLoading, setIsLoading] = useState(true);

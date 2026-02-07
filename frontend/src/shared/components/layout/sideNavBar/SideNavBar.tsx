@@ -63,7 +63,7 @@ const navItems = [
 const SideNavBar = () => {
   const pathname = usePathname();
   const router = useRouter();
-  const isRagAnswerPage = pathname.startsWith('/ragAnswer');
+  const isRagAnswerPage = pathname.startsWith('/chat');
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage); // SNB opened 여부
   const [isTeamSpaceMoreModalOpen, setIsTeamSpaceMoreModalOpen] = useState(false); // 팀스페이스 더보기 버튼 모달 opened 여부
   const [isTeamDropDownModalOpen, setIsTeamDropDownModalOpen] = useState(false); // 팀스페이스 드롭다운 버튼 모달 opened 여부
@@ -440,11 +440,11 @@ const SideNavBar = () => {
             </button>
             <div className="mt-2 flex flex-col overflow-y-auto">
               {recentChatrooms.map((chatroom) => {
-                const isActive = pathname === `/ragAnswer/${chatroom.sessionId}`;
+                const isActive = pathname === `/chat/${chatroom.sessionId}`;
 
                 return (
                   <Link
-                    href={`/ragAnswer/${chatroom.sessionId}`}
+                    href={`/chat/${chatroom.sessionId}`}
                     key={chatroom.sessionId}
                     className={clsx(
                       'group flex cursor-pointer rounded-lg py-2',
