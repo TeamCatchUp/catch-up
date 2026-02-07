@@ -26,6 +26,12 @@ class RerankService:
     ) -> list[Document]:
         if not documents:
             return []
+        
+        for doc in documents:
+            if doc.id:
+                doc.metadata["_original_id"] = doc.id
+                
+        self._backup_ids(documents)
 
         self.reranker.top_n = top_n
 
@@ -34,7 +40,26 @@ class RerankService:
             documents=documents,
             query=query
         )
+        
+        self._restore_ids(reranked_docs)
 
         logger.info(f"Reranking 완료: {len(documents)} -> {len(reranked_docs)}건 (Top N: {top_n})")
        
         return reranked_docs
+    
+    def _backup_ids(
+        self,
+        documents: list[Document]
+    ) -> None:
+        for doc in documents:
+            if doc.id:
+                doc.metadata["_original_id"] = doc.id
+                
+    def _restore_ids(
+        self,
+        documents: list[Document]
+    ) -> None:
+        for doc in documents:
+            if "_original_id" in doc.metadata:
+                doc.id = doc.metadata.pop("_original_id")
+        
