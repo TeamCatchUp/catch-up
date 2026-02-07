@@ -24,7 +24,7 @@ import ToolTip from '@/components/shared/ToolTip';
 import TeamSpaceMoreModal from '@/components/shared/sideNavBar/modal/TeamSpaceMoreModal';
 import TeamSpaceDropDownModal from '@/components/shared/sideNavBar/modal/TeamSpaceDropDownModal';
 import UserModal from '@/components/shared/sideNavBar/modal/UserModal';
-import CatchAssistantModal from '@/components/ragAnswer/components/modal/CatchAssistantModal';
+import RecentQuestionsModal from '@/components/ragAnswer/header/RecentQuestionsModal';
 import api from '@/api/axios';
 import { searchService } from '@/api/search';
 import Link from 'next/link';
@@ -513,7 +513,7 @@ const SideNavBar = () => {
 
           {/* 모달 */}
           <div className="relative z-10">
-            <CatchAssistantModal onClose={() => setIsCatchModalOpen(false)} />
+            <RecentQuestionsModal onClose={() => setIsCatchModalOpen(false)} />
           </div>
         </div>
       )}
