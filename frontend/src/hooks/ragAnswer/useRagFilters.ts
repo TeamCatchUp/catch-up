@@ -12,7 +12,7 @@ import { getAllChildIds } from '@/util/shared/tree';
 
 export type ExplorerType = 'github' | 'jira' | null;
 
-interface UseRagFiltersReturn {
+export interface UseRagFiltersReturn {
   // Filter Bar State
   isFilterOpen: boolean;
   toggleFilter: () => void;
