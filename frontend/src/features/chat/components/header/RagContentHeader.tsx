@@ -8,7 +8,7 @@ import ArrowRight2 from '/public/icons/icon/arrow_right2.svg';
 import Add from '/public/icons/icon/add_small.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
-import RecentQuestionsModal from './RecentQuestionsModal';
+import RecentQuestionsModal from '@/shared/components/layout/sideNavBar/modal/RecentQuestionsModal';
 import SessionQuestionsModal from './SessionQuestionsModal';
 
 interface RagHeaderProps {
