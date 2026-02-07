@@ -8,9 +8,9 @@ import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
-import QueryInput from '@/features/home/components/queryBox/QueryInput';
-import FilterBar from '@/features/home/components/queryBox/FilterBar';
-import ExplorerPanel from '@/features/home/components/queryBox/ExplorerPanel';
+import QueryInput from '@/shared/components/query/QueryInput';
+import FilterBar from '@/shared/components/query/FilterBar';
+import ExplorerPanel from '@/shared/components/query/ExplorerPanel';
 import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
 import { GithubGuideCard, JiraGuideCard } from './GuideCard';
 
