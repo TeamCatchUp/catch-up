@@ -7,7 +7,7 @@ import IconTag from '@/public/icons/icon/task.svg';
 
 import type { JiraNode } from '@/shared/types/query/jira';
 import { JIRA_MOCK_DATA } from '@/shared/mocks/search/jira';
-import { useTreeExplorer } from '@/features/search/hooks/useTreeExplorer';
+import { useTreeExplorer } from '@/shared/hooks/query/useTreeExplorer';
 import { getAllChildNodes } from '@/shared/utils/tree';
 import { ExplorerSearchInput } from './shared/ExplorerSearchInput';
 import { ExplorerHeader } from './shared/ExplorerHeader';

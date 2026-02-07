@@ -6,8 +6,8 @@ import IconSpace from '@/public/icons/icon/folder_filled.svg';
 import IconTag from '@/public/icons/icon/file_filled.svg';
 
 import type { GithubNode } from '@/shared/types/query/github';
-import { useGithubExplorer } from '@/features/search/hooks/useGithubExplorer';
-import { useTreeExplorer } from '@/features/search/hooks/useTreeExplorer';
+import { useGithubExplorer } from '@/shared/hooks/query/useGithubExplorer';
+import { useTreeExplorer } from '@/shared/hooks/query/useTreeExplorer';
 import { ExplorerSearchInput } from './shared/ExplorerSearchInput';
 import { ExplorerHeader } from './shared/ExplorerHeader';
 import { ExplorerChildItem } from './shared/ExplorerChildItem';

@@ -1,7 +1,7 @@
 'use client';
 
 import { RefObject } from 'react';
-import type { UseSearchFiltersReturn } from '@/features/search/hooks/useSearchFilters';
+import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
 
 import IconJira from '@/public/icons/logo/Jira.svg';
 import IconGithub from '@/public/icons/logo/GitHub.svg';

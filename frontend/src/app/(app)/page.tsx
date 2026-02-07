@@ -2,8 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { useUserStore } from '@/shared/store/userStore';
-import { useSearchFilters } from '@/features/search/hooks/useSearchFilters';
-import { useSearchInput } from '@/features/search/hooks/useSearchInput';
+import { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
+import { useSearchInput } from '@/shared/hooks/query/useSearchInput';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 

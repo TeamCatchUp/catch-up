@@ -1,6 +1,6 @@
 'use client';
 
-import type { UseSearchFiltersReturn } from '@/features/search/hooks/useSearchFilters';
+import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
 
 import { GithubExplorer } from '@/shared/components/query/explorer/GithubExplorer';
 import { JiraExplorer } from '@/shared/components/query/explorer/JiraExplorer';
