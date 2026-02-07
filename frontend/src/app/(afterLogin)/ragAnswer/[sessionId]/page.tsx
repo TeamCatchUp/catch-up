@@ -11,7 +11,7 @@ import useRagFilters from '@/hooks/ragAnswer/useRagFilters';
 import useWheelNavigation from '@/hooks/shared/useWheelNavigation';
 
 // ragAnswer Components
-import RagQuestion from '@/components/ragAnswer/answer/RagQuestion';
+import RagQuestion from '@/components/ragAnswer/answer/question/RagQuestion';
 import RagAnswer from '@/components/ragAnswer/answer/RagAnswer';
 import RagSidebar from '@/components/ragAnswer/sidebar/RagSidebar';
 import RagInput from '@/components/ragAnswer/RagInput';

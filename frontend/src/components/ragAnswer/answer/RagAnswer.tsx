@@ -12,11 +12,11 @@ import { TEAM_SPACES } from '@/constants/ragAnswer/config';
 
 import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
 import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
-import AnswerError from './AnswerError';
-import AnswerActionButtons from './AnswerActionButtons';
-import FeedbackSection from './FeedbackSection';
-import DateFilter from './DateFilter';
-import TeamSpaceModal from './TeamSpaceModal';
+import AnswerError from './actions/AnswerError';
+import AnswerActionButtons from './actions/AnswerActionButtons';
+import FeedbackSection from './actions/FeedbackSection';
+import DateFilter from './filter/DateFilter';
+import TeamSpaceModal from './filter/TeamSpaceModal';
 import ToolTip from '@/components/shared/ToolTip';
 import { MarkDownComponents } from './markdown/MarkDownComponents';
 
