@@ -44,9 +44,9 @@ const eslintConfig = defineConfig([
     },
     settings: {
       'boundaries/elements': [
-        { type: 'app', pattern: ['src/app/*'], mode: 'folder' },
-        { type: 'features', pattern: ['src/features/*'], mode: 'folder' },
-        { type: 'shared', pattern: ['src/shared/*'], mode: 'folder' },
+        { type: 'app', pattern: ['src/app'], mode: 'folder' },
+        { type: 'features', pattern: ['src/features'], mode: 'folder' },
+        { type: 'shared', pattern: ['src/shared'], mode: 'folder' },
       ],
     },
     rules: {
@@ -55,7 +55,7 @@ const eslintConfig = defineConfig([
         {
           default: 'disallow',
           rules: [
-            { from: 'app', allow: ['features', 'shared'] },
+            { from: 'app', allow: ['app', 'features', 'shared'] },
             { from: 'features', allow: ['shared'] },
             { from: 'shared', allow: ['shared'] },
           ],
