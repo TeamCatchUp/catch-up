@@ -6,7 +6,7 @@ import Align from '/public/icons/icon/align.svg';
 import Divider from '/public/icons/icon/divider.svg';
 import AddCircle from '/public/icons/icon/add_circle.svg';
 import SourceCard from './SourceCard';
-import RagSourceSkeleton from '@/components/Skeleton/RagRightComponentSkeleton';
+import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
 import SourceError from './SourceError';
 
 interface Props {

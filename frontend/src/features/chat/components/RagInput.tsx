@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import clsx from 'clsx';
-import type { UseRagFiltersReturn } from '@/hooks/ragAnswer/useRagFilters';
+import type { UseRagFiltersReturn } from '@/features/chat/hooks/useRagFilters';
 
 import { GithubExplorer } from '@/components/search/explorer/GithubExplorer';
 import { JiraExplorer } from '@/components/search/explorer/JiraExplorer';

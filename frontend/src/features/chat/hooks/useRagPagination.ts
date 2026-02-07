@@ -6,8 +6,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { extractQAPairs, findQAPairIndexByQuery, type QAPair } from '@/util/ragAnswer/chat';
-import { ANIMATION_CONFIG, getStorageKeys } from '@/constants/ragAnswer/config';
+import { extractQAPairs, findQAPairIndexByQuery, type QAPair } from '@/features/chat/utils/chat';
+import { ANIMATION_CONFIG, getStorageKeys } from '@/features/chat/constants/config';
 
 interface UseRagPaginationOptions {
   sessionId: string;

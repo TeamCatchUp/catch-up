@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { QAPair } from '@/util/ragAnswer/chat';
+import type { QAPair } from '@/features/chat/utils/chat';
 import SidebarHeader from './SidebarHeader';
 import SourceList from './source/SourceList';
 import TaskList from './tasks/TaskList';

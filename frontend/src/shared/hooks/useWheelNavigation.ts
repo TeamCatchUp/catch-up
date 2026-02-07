@@ -7,7 +7,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
-import { WHEEL_CONFIG, ANIMATION_CONFIG } from '@/constants/ragAnswer/config';
+import { WHEEL_CONFIG, ANIMATION_CONFIG } from '@/features/chat/constants/config';
 
 interface UseWheelNavigationOptions {
   /** 휠 이벤트를 감지할 컨테이너 ref */

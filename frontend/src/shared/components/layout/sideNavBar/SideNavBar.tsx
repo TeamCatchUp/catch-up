@@ -24,7 +24,7 @@ import ToolTip from '@/shared/components/ui/ToolTip';
 import TeamSpaceMoreModal from '@/shared/components/layout/sideNavBar/modal/TeamSpaceMoreModal';
 import TeamSpaceDropDownModal from '@/shared/components/layout/sideNavBar/modal/TeamSpaceDropDownModal';
 import UserModal from '@/shared/components/layout/sideNavBar/modal/UserModal';
-import RecentQuestionsModal from '@/components/ragAnswer/header/RecentQuestionsModal';
+import RecentQuestionsModal from '@/features/chat/components/header/RecentQuestionsModal';
 import api from '@/shared/api/client';
 import { searchService } from '@/shared/api/search';
 import Link from 'next/link';

@@ -6,10 +6,10 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { createSSEConnection, sendChatQuery, resumeChatQuery } from '@/util/ragAnswer/sendChatQuery';
-import { normalizeSources } from '@/util/ragAnswer/normalizeRagSources';
-import { normalizeRelatedJiraIssues } from '@/util/ragAnswer/normalizeRelatedJiraIssues';
-import { NODE_TO_UI_STEP, HARD_CODED_INDEX_LIST, SSE_CONFIG, getStorageKeys } from '@/constants/ragAnswer/config';
+import { createSSEConnection, sendChatQuery, resumeChatQuery } from '@/features/chat/utils/sendChatQuery';
+import { normalizeSources } from '@/features/chat/utils/normalizeRagSources';
+import { normalizeRelatedJiraIssues } from '@/features/chat/utils/normalizeRelatedJiraIssues';
+import { NODE_TO_UI_STEP, HARD_CODED_INDEX_LIST, SSE_CONFIG, getStorageKeys } from '@/features/chat/constants/config';
 
 interface UseRagChatOptions {
   sessionId: string;

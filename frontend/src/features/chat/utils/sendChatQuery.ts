@@ -3,7 +3,7 @@
  * chatService에 위임하는 편의 함수들
  */
 
-import chatService from '@/services/chat/chatService';
+import chatService from '@/features/chat/services/chatService';
 
 /** SSE 연결 생성 */
 export const createSSEConnection = (

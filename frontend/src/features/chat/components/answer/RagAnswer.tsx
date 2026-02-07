@@ -6,12 +6,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 
-import type { QAPair } from '@/util/ragAnswer/chat';
-import { formatMarkdownString } from '@/util/ragAnswer/markdown';
-import { TEAM_SPACES } from '@/constants/ragAnswer/config';
+import type { QAPair } from '@/features/chat/utils/chat';
+import { formatMarkdownString } from '@/features/chat/utils/markdown';
+import { TEAM_SPACES } from '@/features/chat/constants/config';
 
-import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
-import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
+import RagAnswerSkeleton from '@/features/chat/components/skeleton/RagAnswerSkeleton';
+import GithubPRStepSkeleton from '@/features/chat/components/skeleton/GithubPRStepSkeleton';
 import AnswerError from './actions/AnswerError';
 import AnswerActionButtons from './actions/AnswerActionButtons';
 import FeedbackSection from './actions/FeedbackSection';

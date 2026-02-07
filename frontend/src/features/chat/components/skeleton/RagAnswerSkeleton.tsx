@@ -1,7 +1,7 @@
 'use client';
 
-import { RAG_UI_STEPS } from '@/constants/ragAnswer/steps';
-import RagStepSkeleton from '@/components/Skeleton/RagStepSkeleton';
+import { RAG_UI_STEPS } from '@/features/chat/constants/steps';
+import RagStepSkeleton from '@/features/chat/components/skeleton/RagStepSkeleton';
 
 interface Props {
   currentStep: RagUIStepKey;

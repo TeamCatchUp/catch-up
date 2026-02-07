@@ -5,19 +5,19 @@ import { useRef } from 'react';
 import clsx from 'clsx';
 
 // Hooks
-import useRagChat from '@/hooks/ragAnswer/useRagChat';
-import useRagPagination from '@/hooks/ragAnswer/useRagPagination';
-import useRagFilters from '@/hooks/ragAnswer/useRagFilters';
+import useRagChat from '@/features/chat/hooks/useRagChat';
+import useRagPagination from '@/features/chat/hooks/useRagPagination';
+import useRagFilters from '@/features/chat/hooks/useRagFilters';
 import useWheelNavigation from '@/shared/hooks/useWheelNavigation';
 
 // ragAnswer Components
-import RagQuestion from '@/components/ragAnswer/answer/question/RagQuestion';
-import RagAnswer from '@/components/ragAnswer/answer/RagAnswer';
-import RagSidebar from '@/components/ragAnswer/sidebar/RagSidebar';
-import RagInput from '@/components/ragAnswer/RagInput';
-import RagContentHeader from '@/components/ragAnswer/header/RagContentHeader';
-import DateDivider from '@/components/shared/DateDivider';
-import PageIndicator from '@/components/shared/PageIndicator';
+import RagQuestion from '@/features/chat/components/answer/question/RagQuestion';
+import RagAnswer from '@/features/chat/components/answer/RagAnswer';
+import RagSidebar from '@/features/chat/components/sidebar/RagSidebar';
+import RagInput from '@/features/chat/components/RagInput';
+import RagContentHeader from '@/features/chat/components/header/RagContentHeader';
+import DateDivider from '@/features/chat/components/DateDivider';
+import PageIndicator from '@/features/chat/components/PageIndicator';
 
 export default function RagAnswerPage() {
   const params = useParams();
