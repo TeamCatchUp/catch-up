@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     JIRA_SYNC_MAX_CONCURRENT_REQUESTS: int = 5  # Rate limit safe
     JIRA_SYNC_COMMENTS_LIMIT: int = 5  # Recent comments to include
     JIRA_API_RATE_LIMIT_DELAY: float = 0.1  # Seconds between requests
+    
+    # Neo4j
+    NEO4J_USER: str
+    NEO4J_PASSWORD: str
+    NEO4J_URI: str
 
     model_config = SettingsConfigDict(
         env_file=".env",
