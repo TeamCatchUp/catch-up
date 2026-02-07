@@ -7,7 +7,7 @@ import CheckboxUnchecked from '/public/icons/icon/checkbox_unchecked.svg';
 import CheckboxChecked from '/public/icons/icon/checkbox_checked.svg';
 import Connector from '/public/icons/icon/connector.svg';
 import LastConnector from '/public/icons/icon/last_connector.svg';
-import TaskDetailModal from './TaskDetailModal';
+import TaskDetailModal from './detail/TaskDetailModal';
 import TaskSelectionBar from './TaskSelectionBar';
 import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
 
