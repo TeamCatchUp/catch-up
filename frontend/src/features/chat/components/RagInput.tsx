@@ -4,12 +4,12 @@ import { useState, useRef } from 'react';
 import clsx from 'clsx';
 import type { UseRagFiltersReturn } from '@/features/chat/hooks/useRagFilters';
 
-import { GithubExplorer } from '@/features/search/components/explorer/GithubExplorer';
-import { JiraExplorer } from '@/features/search/components/explorer/JiraExplorer';
-import { SelectedFilterChips } from '@/features/search/components/filter/SelectedFilterChips';
+import { GithubExplorer } from '@/shared/components/query/explorer/GithubExplorer';
+import { JiraExplorer } from '@/shared/components/query/explorer/JiraExplorer';
+import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
-import { FilterDropdown } from '@/features/search/components/filter/FilterDropdown';
-import { FilterOptionList } from '@/features/search/components/filter/FilterOptionList';
+import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown';
+import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
 import { PERSON_OPTIONS } from '@/shared/mocks/search/filterOptions';
 import ToolTip from '@/shared/components/ui/ToolTip';
 

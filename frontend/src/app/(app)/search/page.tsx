@@ -11,8 +11,8 @@ import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import QueryInput from '@/features/home/components/queryBox/QueryInput';
 import FilterBar from '@/features/home/components/queryBox/FilterBar';
 import ExplorerPanel from '@/features/home/components/queryBox/ExplorerPanel';
-import { SelectedFilterChips } from '@/features/search/components/filter/SelectedFilterChips';
-import { GithubGuideCard, JiraGuideCard } from '@/features/search/components/GuideCard';
+import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
+import { GithubGuideCard, JiraGuideCard } from './GuideCard';
 
 import IconLightbulb from '@/public/icons/icon/lightbulb.svg';
 import Jira from '@/public/image/AIJIRA1.png';

@@ -12,8 +12,8 @@ import IconSpace from '@/public/icons/icon/space.svg';
 import IconLock from '@/public/icons/icon/lock_filled.svg';
 
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
-import { FilterDropdown } from '@/features/search/components/filter/FilterDropdown';
-import { FilterOptionList } from '@/features/search/components/filter/FilterOptionList';
+import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown';
+import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
 import { PERSON_OPTIONS } from '@/shared/mocks/search/filterOptions';
 
 interface FilterBarProps {
