@@ -1,6 +1,6 @@
 import IconReset from '@/public/icons/icon/reset.svg';
 import IconCloseSmall from '@/public/icons/icon/cancel_small.svg';
-import type { ChipData } from '@/features/search/types/search';
+import type { ChipData } from '@/shared/types/query/search';
 
 interface SelectedFilterChipsProps {
   chips: ChipData[];

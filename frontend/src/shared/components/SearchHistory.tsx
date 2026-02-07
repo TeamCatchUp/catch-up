@@ -2,7 +2,7 @@
 
 import ChatIcon from '@/public/icons/icon/chat.svg';
 import Link from 'next/link';
-import type { SearchQuery } from '@/features/search/types/search';
+import type { SearchQuery } from '@/shared/types/query/search';
 
 interface RecentlySearchProps {
   querys: (SearchQuery & { rawDate: Date })[];

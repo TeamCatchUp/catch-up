@@ -4,7 +4,7 @@ import { searchService } from '@/shared/api/search';
 import { SearchHistory } from '@/shared/components/SearchHistory';
 import { useEffect, useState } from 'react';
 import { formatFullDate } from '@/shared/utils/formatDate';
-import type { SearchQuery } from '@/features/search/types/search';
+import type { SearchQuery } from '@/shared/types/query/search';
 
 type SearchQueryWithRawDate = SearchQuery & { rawDate: Date };
 

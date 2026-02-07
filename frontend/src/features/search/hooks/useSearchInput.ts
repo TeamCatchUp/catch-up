@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useEffect, RefObject } from 'react';
 import { useRouter } from 'next/navigation';
-import type { GithubNode } from '@/features/search/types/github';
+import type { GithubNode } from '@/shared/types/query/github';
 
 interface UseSearchInputOptions {
   currentRepo: GithubNode | null;

@@ -12,7 +12,7 @@ import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 import { SearchHistory } from '@/shared/components/SearchHistory';
 import { searchService } from '@/shared/api/search';
 import { formatFullDate } from '@/shared/utils/formatDate';
-import type { SearchQuery } from '@/features/search/types/search';
+import type { SearchQuery } from '@/shared/types/query/search';
 
 interface RecentQuestionsModalProps {
   onClose: () => void;

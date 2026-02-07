@@ -6,10 +6,10 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import type { GithubNode } from '@/features/search/types/github';
-import type { JiraNode } from '@/features/search/types/jira';
+import type { GithubNode } from '@/shared/types/query/github';
+import type { JiraNode } from '@/shared/types/query/jira';
 import { getAllChildIds } from '@/shared/utils/tree';
-import type { PopoverType, ExplorerMode, ChipData, FilterLabels } from '@/features/search/types/search';
+import type { PopoverType, ExplorerMode, ChipData, FilterLabels } from '@/shared/types/query/search';
 
 // Icons
 import IconPerson from '@/public/icons/icon/person.svg';
