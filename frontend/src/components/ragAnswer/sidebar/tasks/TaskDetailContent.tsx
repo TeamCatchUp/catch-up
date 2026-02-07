@@ -1,14 +1,14 @@
 import { ReactNode } from 'react';
 import RelatedTasksSection from './RelatedTasksSection';
 
-interface DetailedTaskContentProps {
+interface TaskDetailContentProps {
   activeTab: string;
   renderContent: () => ReactNode;
   type: 'task' | 'subtask';
   currentTask?: JiraTask;
 }
 
-const DetailedTaskContent = ({ activeTab, renderContent, type, currentTask }: DetailedTaskContentProps) => {
+const TaskDetailContent = ({ activeTab, renderContent, type, currentTask }: TaskDetailContentProps) => {
   return (
     <div className="mt-4 flex flex-1 flex-col overflow-y-auto">
       {/* content */}
@@ -25,4 +25,4 @@ const DetailedTaskContent = ({ activeTab, renderContent, type, currentTask }: De
   );
 };
 
-export default DetailedTaskContent;
+export default TaskDetailContent;

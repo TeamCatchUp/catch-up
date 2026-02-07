@@ -26,7 +26,7 @@ const SOURCE_ICON_MAP: Record<ChatSource['sourceType'], React.FC<any>> = {
   jira: Jira,
 } as const;
 
-const SourceCardsComponent = ({ source, showCount = true, count }: Props) => {
+const SourceCard = ({ source, showCount = true, count }: Props) => {
   const handleClick = () => {
     if (!source.htmlUrl) {
       return;
@@ -75,4 +75,4 @@ const SourceCardsComponent = ({ source, showCount = true, count }: Props) => {
   );
 };
 
-export default SourceCardsComponent;
+export default SourceCard;

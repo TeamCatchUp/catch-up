@@ -14,13 +14,13 @@ import { searchService } from '@/api/search';
 import { formatFullDate } from '@/util/shared/formatDate';
 import type { SearchQuery } from '@/types/search/search';
 
-interface CatchAssistantModalProps {
+interface RecentQuestionsModalProps {
   onClose: () => void;
 }
 
 type SearchQueryWithRawDate = SearchQuery & { rawDate: Date };
 
-const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
+const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [recentQueries, setRecentQueries] = useState<SearchQueryWithRawDate[]>([]);
@@ -102,4 +102,4 @@ const CatchAssistantModal = ({ onClose }: CatchAssistantModalProps) => {
   );
 };
 
-export default CatchAssistantModal;
+export default RecentQuestionsModal;

@@ -11,7 +11,7 @@ import Edit from '/public/icons/icon/edit_square.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import ToolTip from '@/components/shared/ToolTip';
 
-interface SelectionBarModalProps {
+interface TaskSelectionBarProps {
   onClose: () => void;
   onClearAll: () => void;
   selectedTasks: Array<{
@@ -29,7 +29,7 @@ interface SelectionBarModalProps {
   onOpenDetail: (payload: { type: 'task' | 'subtask'; taskId: string; subId?: string }) => void;
 }
 
-const SelectionBarModal = ({
+const TaskSelectionBar = ({
   onClose,
   onClearAll,
   selectedTasks,
@@ -39,7 +39,7 @@ const SelectionBarModal = ({
   isCollapsed,
   onToggleCollapse,
   onOpenDetail,
-}: SelectionBarModalProps) => {
+}: TaskSelectionBarProps) => {
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>(
     Object.fromEntries(selectedTasks.map((task) => [task.taskId, true])),
   );
@@ -228,4 +228,4 @@ const SelectionBarModal = ({
   );
 };
 
-export default SelectionBarModal;
+export default TaskSelectionBar;

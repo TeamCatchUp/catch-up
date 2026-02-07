@@ -7,7 +7,7 @@ import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
 import { useOutsideClick } from '@/hooks/shared/useOutsideClick';
 import { nowChatroomService } from '@/api/search';
 
-interface QuestionsListInSessionModalProps {
+interface SessionQuestionsModalProps {
   onClose: () => void;
   onSelect: (query: string) => void;
 }
@@ -17,7 +17,7 @@ interface ChatQuery {
   query: string;
 }
 
-const QuestionsListInSessionModal = ({ onClose, onSelect }: QuestionsListInSessionModalProps) => {
+const SessionQuestionsModal = ({ onClose, onSelect }: SessionQuestionsModalProps) => {
   const params = useParams();
   const sessionId = params.sessionId as string; // URL 구조가 /ragAnswer/[sessionId] 인 경우
 
@@ -95,4 +95,4 @@ const QuestionsListInSessionModal = ({ onClose, onSelect }: QuestionsListInSessi
   );
 };
 
-export default QuestionsListInSessionModal;
+export default SessionQuestionsModal;

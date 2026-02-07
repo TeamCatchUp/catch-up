@@ -8,8 +8,8 @@ import ArrowRight2 from '/public/icons/icon/arrow_right2.svg';
 import Add from '/public/icons/icon/add_small.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
-import CatchAssistantModal from './CatchAssistantModal';
-import QuestionsListModal from './QuestionsListInSessionModal';
+import RecentQuestionsModal from './RecentQuestionsModal';
+import SessionQuestionsModal from './SessionQuestionsModal';
 
 interface RagHeaderProps {
   title: string;
@@ -66,7 +66,7 @@ const RagHeader = ({ title, onSelectQuestion }: RagHeaderProps) => {
           {/* 대화 내 질문 목록 모달 */}
           {isQuestionsListOpen && (
             <div className="absolute top-8.5 left-35">
-              <QuestionsListModal
+              <SessionQuestionsModal
                 onClose={() => setIsQuestionsListOpen(false)}
                 onSelect={(query) => {
                   onSelectQuestion(query);
@@ -98,7 +98,7 @@ const RagHeader = ({ title, onSelectQuestion }: RagHeaderProps) => {
       {/* 캐치스턴트 모달 */}
       {isCatchModalOpen && (
         <div className="bg-alpha-white-50 fixed inset-0 z-1000 flex items-center justify-center">
-          <CatchAssistantModal onClose={() => setIsCatchModalOpen(false)} />
+          <RecentQuestionsModal onClose={() => setIsCatchModalOpen(false)} />
         </div>
       )}
     </>

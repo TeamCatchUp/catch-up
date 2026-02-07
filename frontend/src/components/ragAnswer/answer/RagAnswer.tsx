@@ -12,10 +12,10 @@ import { TEAM_SPACES } from '@/constants/ragAnswer/config';
 
 import RagAnswerSkeleton from '@/components/Skeleton/RagAnswerSkeleton';
 import GithubPRStepSkeleton from '@/components/Skeleton/GithubPRStepSkeleton';
-import ErrorResponse from './ErrorResponse';
+import AnswerError from './AnswerError';
 import AnswerActionButtons from './AnswerActionButtons';
 import FeedbackSection from './FeedbackSection';
-import FilterComponent from './Filter';
+import DateFilter from './DateFilter';
 import TeamSpaceModal from './TeamSpaceModal';
 import ToolTip from '@/components/shared/ToolTip';
 import { MarkDownComponents } from './markdown/MarkDownComponents';
@@ -197,7 +197,7 @@ const RagAnswer = ({
                     )}
                   </div>
 
-                  <FilterComponent
+                  <DateFilter
                     isOpen={isFilterOpen}
                     onClose={() => setFilterOpenMap((prev) => ({ ...prev, [answerId]: false }))}
                   />
@@ -243,7 +243,7 @@ const RagAnswer = ({
               </div>
             </>
           ) : (
-            <ErrorResponse
+            <AnswerError
               icons={ANSWER_ICONS}
               messageId={`error_${sessionId}`}
               hasFeedback={currentQA.answer.hasFeedback}
@@ -270,7 +270,7 @@ const RagAnswer = ({
         <RagAnswerSkeleton currentStep={currentStep} />
       )}
       {isError && (
-        <ErrorResponse
+        <AnswerError
           icons={ANSWER_ICONS}
           messageId={`error_${sessionId}`}
           feedbackVisibleMap={feedbackVisibleMap}

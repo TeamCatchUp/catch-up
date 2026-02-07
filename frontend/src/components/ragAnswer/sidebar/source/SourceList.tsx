@@ -5,9 +5,9 @@ import { useState } from 'react';
 import Align from '/public/icons/icon/align.svg';
 import Divider from '/public/icons/icon/divider.svg';
 import AddCircle from '/public/icons/icon/add_circle.svg';
-import SourceCardsComponent from './SourceCardsComponent';
+import SourceCard from './SourceCard';
 import RagSourceSkeleton from '@/components/Skeleton/RagRightComponentSkeleton';
-import ErrorSourceComponent from './ErrorSourceComponent';
+import SourceError from './SourceError';
 
 interface Props {
   sources: ChatSource[];
@@ -30,7 +30,7 @@ const filterCategory = [
 
 type FilterType = (typeof filterCategory)[number]['type'];
 
-const SourceComponent = ({ sources, isLoading, isError }: Props) => {
+const SourceList = ({ sources, isLoading, isError }: Props) => {
   const [activeFilters, setActiveFilters] = useState<FilterType[]>([]);
 
   const toggleFilter = (type: FilterType) => {
@@ -101,13 +101,13 @@ const SourceComponent = ({ sources, isLoading, isError }: Props) => {
       <div className="mt-4 flex flex-col gap-2">
         {/* 출처 카드 컴포넌트 */}
         {isError ? (
-          <ErrorSourceComponent />
+          <SourceError />
         ) : isLoading ? (
           <RagSourceSkeleton message={'출처를 분석하는 중입니다.'} />
         ) : (
           <div className="flex flex-col gap-2">
             {citedSources.map((source) => (
-              <SourceCardsComponent key={source.id} source={source} showCount count={source.sourceIndex} />
+              <SourceCard key={source.id} source={source} showCount count={source.sourceIndex} />
             ))}
 
             {/* divider */}
@@ -122,7 +122,7 @@ const SourceComponent = ({ sources, isLoading, isError }: Props) => {
                   </div>
                 </div>
                 {recommendedSources.map((source) => (
-                  <SourceCardsComponent key={source.id} source={source} showCount={false} />
+                  <SourceCard key={source.id} source={source} showCount={false} />
                 ))}
               </>
             )}
@@ -133,4 +133,4 @@ const SourceComponent = ({ sources, isLoading, isError }: Props) => {
   );
 };
 
-export default SourceComponent;
+export default SourceList;

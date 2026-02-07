@@ -8,7 +8,7 @@ import Tag from '/public/icons/icon/tag.svg';
 import Space from '/public/icons/icon/space.svg';
 import ArrowRight from '/public/icons/icon/arrow_right2.svg';
 import RagDetailedTasksSkeleton from '@/components/Skeleton/RagRightComponentSkeleton';
-import DetailedTasksCardComponent from './DetailedTasksCardComponent';
+import TaskCard from './TaskCard';
 import { SearchOptionButton } from '@/components/shared/SearchOptionButton';
 
 const searchOptions = [
@@ -29,12 +29,12 @@ const searchOptions = [
   },
 ];
 
-interface DetailedTasksComponentProps {
+interface TaskListProps {
   tasks: JiraTask[];
   isLoading?: boolean;
 }
 
-const DetailedTasksComponent = ({ tasks, isLoading }: DetailedTasksComponentProps) => {
+const TaskList = ({ tasks, isLoading }: TaskListProps) => {
   const [selectedOptions, setSelectedOptions] = useState<Set<string>>(new Set());
 
   const toggleOption = (key: string) => {
@@ -81,11 +81,11 @@ const DetailedTasksComponent = ({ tasks, isLoading }: DetailedTasksComponentProp
         {isLoading ? (
           <RagDetailedTasksSkeleton message={'관련 상세 업무를 분석하는 중입니다.'} />
         ) : (
-          <DetailedTasksCardComponent tasks={tasks} />
+          <TaskCard tasks={tasks} />
         )}
       </div>
     </div>
   );
 };
 
-export default DetailedTasksComponent;
+export default TaskList;

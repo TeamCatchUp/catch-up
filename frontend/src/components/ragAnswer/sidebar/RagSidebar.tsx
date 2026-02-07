@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import type { QAPair } from '@/util/ragAnswer/chat';
 import SidebarHeader from './SidebarHeader';
-import SourceComponent from './source/SourceComponent';
-import DetailedTasksComponent from './detailedTasks/DetailedTasksComponent';
+import SourceList from './source/SourceList';
+import TaskList from './tasks/TaskList';
 
 interface RagSidebarProps {
   currentQA: QAPair | undefined;
@@ -28,14 +28,14 @@ const RagSidebar = ({ currentQA, isLoading, isError }: RagSidebarProps) => {
       />
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'source' && (
-          <SourceComponent
+          <SourceList
             sources={sources}
             isLoading={isLoading}
             isError={isError}
           />
         )}
         {activeTab === 'detail' && (
-          <DetailedTasksComponent
+          <TaskList
             tasks={tasks}
             isLoading={isLoading}
           />

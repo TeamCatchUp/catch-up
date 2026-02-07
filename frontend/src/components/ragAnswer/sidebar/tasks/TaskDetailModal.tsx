@@ -13,11 +13,11 @@ import FilesTabContent from './FilesTabContent';
 import WikiTabContent from './WikiTabContent';
 import URLTabContent from './URLTabContent';
 import CommentsTabContent from './CommentsTabContent';
-import NoDataContent from './NoDataContent';
-import OptionNavBar from './OptionNavBar';
-import DetailedTaskContent from './DetailedTaskContent';
+import EmptyState from './EmptyState';
+import DetailTabNav from './DetailTabNav';
+import TaskDetailContent from './TaskDetailContent';
 
-interface DetailedTaskModalProps {
+interface TaskDetailModalProps {
   onClose: () => void;
   data: {
     type: 'task' | 'subtask';
@@ -37,7 +37,7 @@ interface DetailedTaskModalProps {
 
 type TabType = 'info' | 'files' | 'wiki' | 'url' | 'comments' | 'notion' | 'slack';
 
-const DetailedTaskModal = ({
+const TaskDetailModal = ({
   onClose,
   data,
   tasks,
@@ -48,7 +48,7 @@ const DetailedTaskModal = ({
   disablePrev,
   disableNext,
   bottomOffset = 30,
-}: DetailedTaskModalProps) => {
+}: TaskDetailModalProps) => {
   const [activeTab, setActiveTab] = useState<TabType>('info');
 
   // useEscapeKey(onClose);
@@ -73,7 +73,7 @@ const DetailedTaskModal = ({
     const tab = tabs.find((t) => t.id === activeTab);
 
     if (tab?.count === 0 && activeTab !== 'info') {
-      return <NoDataContent />;
+      return <EmptyState />;
     }
 
     switch (activeTab) {
@@ -88,7 +88,7 @@ const DetailedTaskModal = ({
       case 'comments':
         return <CommentsTabContent />;
       default:
-        return <NoDataContent />;
+        return <EmptyState />;
     }
   };
 
@@ -151,9 +151,9 @@ const DetailedTaskModal = ({
         <span className="text-heading-large text-gray-70 line-clamp-2">{taskTitle}</span>
       </div>
       {/* option bar */}
-      <OptionNavBar tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+      <DetailTabNav tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
       {/* 내용 */}
-      <DetailedTaskContent
+      <TaskDetailContent
         activeTab={activeTab}
         renderContent={renderTabContent}
         type={data.type}
@@ -179,4 +179,4 @@ const DetailedTaskModal = ({
   );
 };
 
-export default DetailedTaskModal;
+export default TaskDetailModal;

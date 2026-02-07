@@ -2,7 +2,7 @@ import Error from '/public/icons/icon/error.svg';
 import AnswerActionButtons from './AnswerActionButtons';
 import FeedbackSection from './FeedbackSection';
 
-const ErrorResponse = ({
+const AnswerError = ({
   icons,
   messageId,
   feedbackVisibleMap,
@@ -38,4 +38,4 @@ const ErrorResponse = ({
   );
 };
 
-export default ErrorResponse;
+export default AnswerError;

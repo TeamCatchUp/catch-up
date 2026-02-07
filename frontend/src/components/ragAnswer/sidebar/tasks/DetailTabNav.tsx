@@ -15,13 +15,13 @@ interface Tab {
   locked: boolean;
 }
 
-interface TaskDetailTabsProps {
+interface DetailTabNavProps {
   tabs: Tab[];
   activeTab: TabType;
   onChange: (tab: TabType) => void;
 }
 
-const OptionalNavbar = ({ tabs, activeTab, onChange }: TaskDetailTabsProps) => {
+const DetailTabNav = ({ tabs, activeTab, onChange }: DetailTabNavProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -115,4 +115,4 @@ const OptionalNavbar = ({ tabs, activeTab, onChange }: TaskDetailTabsProps) => {
   );
 };
 
-export default OptionalNavbar;
+export default DetailTabNav;

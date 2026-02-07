@@ -20,7 +20,7 @@ interface FilterComponentsProps {
   onClose: () => void;
 }
 
-const Filter = ({ isOpen, onClose }: FilterComponentsProps) => {
+const DateFilter = ({ isOpen, onClose }: FilterComponentsProps) => {
   const [activeFilters, setActiveFilters] = useState<number[]>([1]);
   // const [keyword, setKeyword] = useState('');
   // const [secondKeyword, setSecondKeyword] = useState('');
@@ -96,4 +96,4 @@ const Filter = ({ isOpen, onClose }: FilterComponentsProps) => {
   );
 };
 
-export default Filter;
+export default DateFilter;

@@ -7,11 +7,11 @@ import CheckboxUnchecked from '/public/icons/icon/checkbox_unchecked.svg';
 import CheckboxChecked from '/public/icons/icon/checkbox_checked.svg';
 import Connector from '/public/icons/icon/connector.svg';
 import LastConnector from '/public/icons/icon/last_connector.svg';
-import DetailedTaskModal from './DetailedTaskModal';
-import SelectionBarModal from './SelectionBarModal';
+import TaskDetailModal from './TaskDetailModal';
+import TaskSelectionBar from './TaskSelectionBar';
 import { useEscapeKey } from '@/hooks/shared/useEscapeKey';
 
-interface DetailedTasksCardComponentProps {
+interface TaskCardProps {
   tasks: JiraTask[];
 }
 
@@ -35,7 +35,7 @@ const createInitialCheckedMap = (tasks: JiraTask[]) => {
 
 type ToggleOptions = { closeDetail?: boolean };
 
-const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) => {
+const TaskCard = ({ tasks }: TaskCardProps) => {
   const [checkedMap, setCheckedMap] = useState(() => createInitialCheckedMap(tasks));
   const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
   const [suppressAutoOpenSelectionBar, setSuppressAutoOpenSelectionBar] = useState(false);
@@ -410,7 +410,7 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
 
       {detailModal && (
         <div className="transition-opacity duration-150">
-          <DetailedTaskModal
+          <TaskDetailModal
             onClose={() => setDetailModal(null)}
             data={detailModal}
             tasks={tasks}
@@ -426,7 +426,7 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
       )}
       {showSelectionBar && !shouldHideSelectionBar && (
         <div className="transition-all duration-200">
-          <SelectionBarModal
+          <TaskSelectionBar
             onClose={() => setShowSelectionBar(false)}
             onClearAll={handleClearAllFromSelectionBar}
             selectedTasks={selectedTasks}
@@ -445,4 +445,4 @@ const DetailedTasksCardComponent = ({ tasks }: DetailedTasksCardComponentProps) 
   );
 };
 
-export default DetailedTasksCardComponent;
+export default TaskCard;

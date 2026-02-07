@@ -1,6 +1,6 @@
 import SourceFile from '/public/icons/icon/source-file.svg';
 
-const ErrorSourceComponent = () => {
+const SourceError = () => {
   return (
     <div className="mx-auto mt-3 flex w-105 flex-col items-center justify-center gap-5">
       <div className="bg-blue-1 flex w-105 flex-col items-center justify-center gap-5 rounded-2xl p-5">
@@ -11,4 +11,4 @@ const ErrorSourceComponent = () => {
   );
 };
 
-export default ErrorSourceComponent;
+export default SourceError;
