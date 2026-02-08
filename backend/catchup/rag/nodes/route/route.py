@@ -3,7 +3,6 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.observability.langfuse_client import langfuse_handler
 from catchup.rag.nodes.route.prompt import SYSTEM_QUERY_ROUTER_PROMPT
 from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
 from catchup.rag.schemas import RouteQuery
@@ -34,8 +33,7 @@ async def route_node(state: AgentState):
     try:
         async with llm_semaphore:
             answer: RouteQuery = await chain.ainvoke(
-                input={"query": query, "history": conversation_history},
-                config={"callbacks": [langfuse_handler]},
+                input={"query": query, "history": conversation_history}
             )
 
     except Exception as e:

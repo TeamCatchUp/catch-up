@@ -4,7 +4,6 @@ from langgraph.graph import END, StateGraph
 from redis.asyncio import Redis
 
 from catchup.configs.config import settings
-from catchup.observability.langfuse_client import langfuse_handler
 from catchup.rag.conditional_edges import route_after_grade, route_question
 from catchup.rag.nodes import (
     chitchat_node,
@@ -79,6 +78,4 @@ async def get_compiled_graph():
 
     await checkpointer.setup()  # 인덱스 생성
 
-    return workflow.compile(checkpointer=checkpointer).with_config(
-        {"callbacks": [langfuse_handler]}
-    )
+    return workflow.compile(checkpointer=checkpointer)

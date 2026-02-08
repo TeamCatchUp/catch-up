@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: str
     LANGFUSE_PUBLIC_KEY: str
     LANGFUSE_BASE_URL: str
+    ENABLE_LANGFUSE: bool
 
     COHERE_API_KEY: str
     RERANK_THRESHOLD: float

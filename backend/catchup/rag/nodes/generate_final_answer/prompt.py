@@ -59,4 +59,3 @@ SYSTEM_ASSISTANT_PROMPT = """
 """
 
 FALLBACK_ANSWER = "답변을 생성하지 못했습니다. 다시 시도해주세요."
-
