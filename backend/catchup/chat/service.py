@@ -20,15 +20,30 @@ from catchup.rag.graph import get_compiled_graph
 logger = logging.getLogger(__name__)
 
 NODE_STATUS_MAP = {
-    "router": "질문을 분석하고 있습니다...",
-    "rewrite": "질문을 최적화하고 있습니다...",
+    # 1. 초기 분석
+    "route": "질문의 성격을 분석하고 있습니다...",
+    
+    # 2. 질문 재작성
+    "rewrite": "검색 정확도를 높이기 위해 질문을 최적화하고 있습니다...",
+    
+    # 3. 검색 계획 및 실행
+    "generate_vector_queries": "최적의 검색 쿼리를 생성하고 있습니다...",
+    "search_vector_db": "지식 저장소(Vector DB)에서 문서를 검색 중입니다...",
+    "rerank": "검색된 문서들의 관련성을 분석하여 우선순위를 정하고 있습니다...",
+    
+    # 4. 검수 및 확장
+    "grade": "검색 결과가 충분한지 검토하고 있습니다...",
+    "expand_graph_context": "지식 그래프를 통해 연관된 정보를 확장 탐색 중입니다...",
+    "fetch_details_after_graph_context_expansion": "확장된 정보의 상세 내용을 불러오고 있습니다...",
+    
+    # 5. 폴백 (Fallback)
+    "fallback_cypher_query": "추가적인 그래프 질의(Cypher)를 실행하여 정보를 보완 중입니다...",
+    
+    # 6. 최종 답변
+    "generate_final_answer": "모든 정보를 종합하여 최종 답변을 작성하고 있습니다...",
+    
+    # (Optional) 일상 대화용
     "chitchat": "답변을 생성하고 있습니다...",
-    "plan": "검색 계획을 수립하고 있습니다...",
-    "retrieve": "지식 저장소(GitHub, Jira)를 검색 중입니다...",
-    "rerank": "관련성 높은 문서를 선별 중입니다...",
-    "github_pr_mcp": "Pull Request 분석을 위해 필요한 데이터를 불러오는 중입니다.",
-    "grade": "검색 품질을 검수하고 있습니다...",
-    "generate": "최종 답변을 생성하고 있습니다...",
 }
 
 
@@ -121,7 +136,7 @@ class ChatService:
                 # Keep-alive
                 elif (
                     kind == "on_chat_model_stream"
-                    and event["metadata"].get("langgraph_node") == "generate"
+                    and event["metadata"].get("langgraph_node") == "generate_final_answer"
                 ):
                     current_time = time.perf_counter()
 
@@ -132,7 +147,7 @@ class ChatService:
                         last_ping_time = current_time
 
                 # generate node 종료 시점에 수행할 작업
-                elif kind == "on_chain_end" and name in ("generate", "chitchat"):
+                elif kind == "on_chain_end" and name in ("generate_final_answer", "chitchat"):
                     end = time.perf_counter()
                     elapsed_time = end - start
 
