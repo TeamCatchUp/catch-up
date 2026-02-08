@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo,useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import clsx from 'clsx';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 
@@ -11,7 +10,8 @@ import RagAnswerSkeleton from '@/features/chat/components/skeleton/RagAnswerSkel
 import { TEAM_SPACES } from '@/features/chat/constants/config';
 import type { QAPair } from '@/features/chat/utils/chat';
 import { formatMarkdownString } from '@/features/chat/utils/markdown';
-import ToolTip from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent,TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { cn } from '@/shared/utils/cn';
 
 import AnswerActionButtons from './actions/AnswerActionButtons';
 import AnswerError from './actions/AnswerError';
@@ -107,31 +107,31 @@ const RagAnswer = ({
             <div className="mb-3 rounded-xl">
               {!isFilterOpen ? (
                 <div className="relative flex items-center gap-1">
-                  <div className="group relative flex items-center gap-1">
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSpaceDropdown(answerId);
-                      }}
-                      className={clsx(
-                        'icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1',
-                        isSpaceOpen && 'bg-neutral-3 rounded-lg',
-                      )}
-                    >
-                      <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
-                        {selectedTeamSpace.name}
-                      </div>
-                      <DropDown
-                        className={clsx(
-                          'text-gray-70 relative bottom-px h-4 w-4 shrink-0',
-                          isSpaceOpen && 'rotate-180',
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSpaceDropdown(answerId);
+                        }}
+                        className={cn(
+                          'icon-button-only-gray flex cursor-pointer items-center gap-1 px-2 py-1',
+                          isSpaceOpen && 'bg-neutral-3 rounded-lg',
                         )}
-                      />
-                    </div>
-                    <div className="absolute bottom-9.5 left-23.75 z-100">
-                      <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
-                    </div>
-                  </div>
+                      >
+                        <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
+                          {selectedTeamSpace.name}
+                        </div>
+                        <DropDown
+                          className={cn(
+                            'text-gray-70 relative bottom-px h-4 w-4 shrink-0',
+                            isSpaceOpen && 'rotate-180',
+                          )}
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>답변 기준 팀스페이스 변경하기</TooltipContent>
+                  </Tooltip>
 
                   {isSpaceOpen && (
                     <div className="absolute top-10.5 z-100">
@@ -159,31 +159,31 @@ const RagAnswer = ({
               ) : (
                 <div className="flex flex-col gap-2">
                   <div className="relative flex gap-1">
-                    <div className="group relative w-fit gap-1">
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleSpaceDropdown(answerId);
-                        }}
-                        className={clsx(
-                          'flex cursor-pointer items-center gap-1 px-2 py-1',
-                          isSpaceOpen ? 'bg-neutral-3 rounded-lg' : 'icon-button-only-gray',
-                        )}
-                      >
-                        <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
-                          {selectedTeamSpace.name}
-                        </div>
-                        <DropDown
-                          className={clsx(
-                            'text-gray-70 relative h-4 w-4 shrink-0',
-                            isSpaceOpen ? 'rotate-180 rounded-lg' : 'bottom-px',
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSpaceDropdown(answerId);
+                          }}
+                          className={cn(
+                            'flex cursor-pointer items-center gap-1 px-2 py-1',
+                            isSpaceOpen ? 'bg-neutral-3 rounded-lg' : 'icon-button-only-gray',
                           )}
-                        />
-                      </div>
-                      <div className="absolute bottom-9.5 left-23.75">
-                        <ToolTip text={'답변 기준 팀스페이스 변경하기'} />
-                      </div>
-                    </div>
+                        >
+                          <div className="text-body-small text-gray-70 relative top-px block w-32 truncate px-2 py-1">
+                            {selectedTeamSpace.name}
+                          </div>
+                          <DropDown
+                            className={cn(
+                              'text-gray-70 relative h-4 w-4 shrink-0',
+                              isSpaceOpen ? 'rotate-180 rounded-lg' : 'bottom-px',
+                            )}
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>답변 기준 팀스페이스 변경하기</TooltipContent>
+                    </Tooltip>
 
                     {isSpaceOpen && (
                       <div className="absolute top-10.5 z-100">

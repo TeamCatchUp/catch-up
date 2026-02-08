@@ -1,10 +1,10 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import clsx from 'clsx';
 
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
+import { cn } from '@/shared/utils/cn';
 
 import ArrowRight from '/public/icons/icon/arrow_right2.svg';
 
@@ -48,7 +48,7 @@ const TeamSpaceModal = ({ onClose, teamSpaces, selectedId, onSelect }: TeamSpace
               onSelect(team);
               onClose();
             }}
-            className={clsx(
+            className={cn(
               'icon-button-only-gray flex w-58.25 cursor-pointer items-center gap-2.5 rounded-lg p-2',
               isSelected && 'bg-neutral-3',
             )}

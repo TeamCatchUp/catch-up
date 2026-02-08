@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+import { cn } from '@/shared/utils/cn';
 
 import Calendar from '/public/icons/icon/calendar_filled.svg';
 import DefaultProfile from '/public/icons/icon/default_profile.svg';

@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import clsx from 'clsx';
 
 import type { QAPair } from '@/features/chat/utils/chat';
+import { cn } from '@/shared/utils/cn';
 
 import EditMessageInput from './EditMessageInput';
 
@@ -45,7 +45,7 @@ const RagQuestion = ({ currentQA, isLastPage, onSubmitEdit }: RagQuestionProps) 
       {isLastPage && (
         <button
           onClick={() => setEditingMessageId(currentQA.question.id)}
-          className={clsx(
+          className={cn(
             'border-neutral-3 box-button-outline-gray',
             'hidden group-hover:inline-flex',
             'translate-y-1 cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1',

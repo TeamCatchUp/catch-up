@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef } from 'react';
-import clsx from 'clsx';
 import { useParams, useSearchParams } from 'next/navigation';
 
 // Chat Components
@@ -17,6 +16,7 @@ import useRagChat from '@/features/chat/hooks/useRagChat';
 import useRagFilters from '@/features/chat/hooks/useRagFilters';
 import useRagPagination from '@/features/chat/hooks/useRagPagination';
 import useWheelNavigation from '@/features/chat/hooks/useWheelNavigation';
+import { cn } from '@/shared/utils/cn';
 
 export default function RagAnswerPage() {
   const params = useParams();
@@ -77,7 +77,7 @@ export default function RagAnswerPage() {
 
             {/* 슬라이드 애니메이션 영역 */}
             <div
-              className={clsx(
+              className={cn(
                 'mx-auto w-193.25 flex-1 overflow-hidden transition-all duration-300',
                 pagination.slideDirection === 'down'
                   ? 'translate-y-full opacity-0'

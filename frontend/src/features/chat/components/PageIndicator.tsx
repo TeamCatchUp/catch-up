@@ -5,7 +5,7 @@
 
 'use client';
 
-import clsx from 'clsx';
+import { cn } from '@/shared/utils/cn';
 
 // ============================================================
 // Types
@@ -42,7 +42,7 @@ const PageIndicator = ({
   if (total <= 1) return null;
 
   return (
-    <div className={clsx('flex items-center gap-2', className)}>
+    <div className={cn('flex items-center gap-2', className)}>
       {Array.from({ length: total }, (_, idx) => (
         <button
           key={idx}
@@ -52,7 +52,7 @@ const PageIndicator = ({
             }
           }}
           disabled={disabled}
-          className={clsx(
+          className={cn(
             'rounded-full transition-all',
             variant === 'bar'
               ? // Bar variant: 현재 페이지는 길고 파란색

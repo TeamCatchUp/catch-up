@@ -1,6 +1,6 @@
 'use client';
 
-import clsx from 'clsx';
+import { cn } from '@/shared/utils/cn';
 
 interface JiraTicket {
   id: string | number;
@@ -29,7 +29,7 @@ export function JiraTicketList({ tickets, title }: JiraTicketListProps) {
           {tickets.map((ticket, idx) => (
             <span
               key={ticket.id}
-              className={clsx(
+              className={cn(
                 'text-body-small text-gray-70 flex shrink-0 cursor-pointer items-center rounded-full px-4 py-1.5 transition-all hover:brightness-95',
                 getTicketColor(idx),
               )}

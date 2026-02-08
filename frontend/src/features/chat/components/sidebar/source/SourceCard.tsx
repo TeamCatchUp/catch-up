@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+import { cn } from '@/shared/utils/cn';
 
 // import File from '/public/icons/icon/file.svg';
 // import Wiki from '/public/icons/logo/Wiki.svg';
@@ -49,7 +49,7 @@ const SourceCard = ({ source, showCount = true, count }: Props) => {
         {/* 제목 */}
         <div className="itmes-center flex gap-1.5">
           <div
-            className={clsx(
+            className={cn(
               'relative right-px flex items-center gap-1.5 rounded-full px-2 py-1',
               source.sourceType === 'jira' ? 'bg-green-10' : 'bg-blue-5',
             )}

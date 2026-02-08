@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect,useRef, useState } from 'react';
-import clsx from 'clsx';
+
+import { cn } from '@/shared/utils/cn';
 
 interface EditMessageInputProps {
   initialContent: string;
@@ -40,7 +41,7 @@ const EditMessageInput = ({ initialContent, onCancel, onSubmit }: EditMessageInp
 
   return (
     <div
-      className={clsx(
+      className={cn(
         'flex flex-col gap-2.5 rounded-2xl border bg-white px-4.5 py-2.5',
         isFocused ? 'border-blue-30' : 'border-neutral-3',
       )}

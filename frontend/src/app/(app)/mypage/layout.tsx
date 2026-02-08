@@ -1,9 +1,9 @@
 'use client';
 
-import clsx from 'clsx';
 import { usePathname, useRouter } from 'next/navigation';
 
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
+import { cn } from '@/shared/utils/cn';
 
 export default function MypageLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -24,7 +24,7 @@ export default function MypageLayout({ children }: { children: React.ReactNode }
           <button
             key={tab.href}
             onClick={() => router.push(tab.href)}
-            className={clsx(
+            className={cn(
               'cursor-pointer pb-2',
               pathname === tab.href ? 'border-gray-80 text-gray-80 border-b-[2px]' : 'text-gray-30',
             )}

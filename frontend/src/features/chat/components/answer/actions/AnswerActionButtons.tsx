@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+import { cn } from '@/shared/utils/cn';
 
 const AnswerActionButtons = ({
   icons,
@@ -25,7 +25,7 @@ const AnswerActionButtons = ({
             }}
             className={`icon-button-only-gray cursor-pointer p-1.5 ${isActive ? 'bg-neutral-3 border-neutral-5' : ''}`}
           >
-            <item.icon className={clsx('h-6 w-6', isActive ? 'text-gray-70' : 'active:text-gray-70 text-gray-50')} />
+            <item.icon className={cn('h-6 w-6', isActive ? 'text-gray-70' : 'active:text-gray-70 text-gray-50')} />
           </button>
         );
       })}

@@ -37,6 +37,33 @@ const eslintConfig = defineConfig([
       'prettier/prettier': 'off',
     },
   },
+  // shared/components/ui 래퍼 사용 강제: Radix·cmdk 직접 import 금지
+  {
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@radix-ui/*'],
+              message:
+                '@radix-ui 직접 import 금지. @/shared/components/ui 의 래퍼 컴포넌트를 사용하세요.',
+            },
+            {
+              group: ['cmdk'],
+              message:
+                'cmdk 직접 import 금지. @/shared/components/ui/command 를 사용하세요.',
+            },
+            {
+              group: ['@headlessui/*'],
+              message: '@headlessui 는 제거되었습니다. shadcn 컴포넌트를 사용하세요.',
+            },
+          ],
+        },
+      ],
+    },
+    ignores: ['src/shared/components/ui/**'],
+  },
   // 3-Layer 아키텍처 의존성 규칙: app → features → shared
   {
     plugins: {

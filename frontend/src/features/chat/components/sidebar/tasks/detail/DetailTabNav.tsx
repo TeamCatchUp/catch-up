@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect,useRef, useState } from 'react';
-import clsx from 'clsx';
+
+import { cn } from '@/shared/utils/cn';
 
 import ArrowLeft from '/public/icons/icon/arrow_left2.svg';
 import ArrowRight from '/public/icons/icon/arrow_right2.svg';
@@ -57,13 +58,13 @@ const DetailTabNav = ({ tabs, activeTab, onChange }: DetailTabNavProps) => {
             <button
               key={tab.id}
               onClick={() => !tab.locked && onChange(tab.id)}
-              className={clsx(
+              className={cn(
                 'relative flex shrink-0 items-center justify-center gap-1.5',
                 tab.locked ? '' : 'cursor-pointer',
               )}
             >
               <span
-                className={clsx(
+                className={cn(
                   'text-heading-small relative',
                   tab.locked ? 'text-gray-30' : activeTab === tab.id ? 'text-blue-55' : 'text-gray-50',
                 )}
@@ -76,7 +77,7 @@ const DetailTabNav = ({ tabs, activeTab, onChange }: DetailTabNavProps) => {
               ) : (
                 tab.count > 0 && (
                   <span
-                    className={clsx(
+                    className={cn(
                       'text-body-xsmall rounded-md2 flex h-5 w-5 items-center justify-center text-center',
                       activeTab === tab.id ? 'bg-blue-50 text-white' : 'bg-neutral-3 text-gray-50',
                     )}

@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import clsx from 'clsx';
 
 import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
+import { cn } from '@/shared/utils/cn';
 
 import SourceCard from './SourceCard';
 import SourceError from './SourceError';
@@ -87,7 +87,7 @@ const SourceList = ({ sources, isLoading, isError }: Props) => {
               <button
                 key={category.id}
                 onClick={() => toggleFilter(category.type)}
-                className={clsx(
+                className={cn(
                   'text-body-small mr-1.5 flex h-full shrink-0 cursor-pointer items-center justify-center rounded-full px-3 leading-none whitespace-nowrap transition',
                   isActive
                     ? 'border border-black bg-black text-white'

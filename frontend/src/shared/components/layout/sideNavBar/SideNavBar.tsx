@@ -1,27 +1,27 @@
 'use client';
 
-import { useEffect, useMemo,useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import clsx from 'clsx';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
-import { chatQueries } from '@/shared/queries/chatroom.queries';
 import RecentQuestionsModal from '@/shared/components/layout/sideNavBar/modal/RecentQuestionsModal';
-import TeamSpaceDropDownModal from '@/shared/components/layout/sideNavBar/modal/TeamSpaceDropDownModal';
-import TeamSpaceMoreModal from '@/shared/components/layout/sideNavBar/modal/TeamSpaceMoreModal';
-import UserModal from '@/shared/components/layout/sideNavBar/modal/UserModal';
-import ToolTip from '@/shared/components/ui/ToolTip';
+import { TeamSpaceDropDownContent } from '@/shared/components/layout/sideNavBar/modal/TeamSpaceDropDownModal';
+import { TeamSpaceMoreContent } from '@/shared/components/layout/sideNavBar/modal/TeamSpaceMoreModal';
+import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
+import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
+import { Popover, PopoverTrigger } from '@/shared/components/ui/popover';
+import { Tooltip, TooltipContent,TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { useUserStore } from '@/shared/store/userStore';
+import { cn } from '@/shared/utils/cn';
 
 import AI from '/public/icons/icon/ai.svg';
 import ArrowLeft from '/public/icons/icon/arrow_left.svg';
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
 import Close from '/public/icons/icon/close.svg';
-import Dashboard from '/public/icons/icon/dashboard.svg';
 import Dropdown from '/public/icons/icon/dropdown_down.svg';
 import Home from '/public/icons/icon/home.svg';
-import Mail from '/public/icons/icon/inbox.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
 import Necessary from '/public/icons/icon/necessary.svg';
 import Open from '/public/icons/icon/open.svg';
@@ -52,14 +52,6 @@ const navItems = [
     tooltipOpen: '사내 지식 물어보기',
     tooltipClosed: '캐치스턴트 AI',
   },
-  // {
-  //   name: '업무 대시보드',
-  //   href: '/stacks',
-  //   Icon: Dashboard,
-  //   tooltipOpen: '나의 업무 이력 확인하기',
-  //   tooltipClosed: '내 업무 관리',
-  // },
-  // { name: '수신함', href: '/mail', Icon: Mail, tooltipOpen: '멘션 및 알림 보기', tooltipClosed: '수신함' },
 ];
 
 const SideNavBar = () => {
@@ -67,11 +59,8 @@ const SideNavBar = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const isRagAnswerPage = pathname.startsWith('/chat');
-  const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage); // SNB opened 여부
-  const [isTeamSpaceMoreModalOpen, setIsTeamSpaceMoreModalOpen] = useState(false); // 팀스페이스 더보기 버튼 모달 opened 여부
-  const [isTeamDropDownModalOpen, setIsTeamDropDownModalOpen] = useState(false); // 팀스페이스 드롭다운 버튼 모달 opened 여부
-  const [isUserModalOpen, setIsUserModalOpen] = useState(false); // 유저 모달 opened 여부
-  const [isCatchModalOpen, setIsCatchModalOpen] = useState(false); // 캐치스턴트 모달 opened 여부
+  const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
+  const [isCatchModalOpen, setIsCatchModalOpen] = useState(false);
 
   const { data: chatroomData } = useQuery(chatQueries.recentRooms());
 
@@ -97,19 +86,11 @@ const SideNavBar = () => {
     setIsOpen(!isRagAnswerPage);
   }, [isRagAnswerPage]);
 
-  // 닫을 때 열린 모달/드롭다운들 정리 + showOpenContent 타이밍
   useEffect(() => {
     if (isOpen) {
       setShowOpenContent(true);
       return;
     }
-
-    // 닫히는 순간: hover로 떠있는 것들 정리
-    setIsTeamSpaceMoreModalOpen(false);
-    setIsTeamDropDownModalOpen(false);
-    setIsUserModalOpen(false);
-
-    // 닫힘 애니메이션(내용 fade) 시간 후 open-only 컨텐츠 언마운트
     const t = setTimeout(() => setShowOpenContent(false), 200);
     return () => clearTimeout(t);
   }, [isOpen]);
@@ -125,26 +106,26 @@ const SideNavBar = () => {
 
   // SNB item (메뉴 상태별 스타일 CSS)
   const defaultClass =
-    'border-transparent bg-white hover:bg-neutral-2 hover:border-neutral-2 active:bg-neutral-3 active:border active:border-neutral-3'; // hover, active
+    'border-transparent bg-white hover:bg-neutral-2 hover:border-neutral-2 active:bg-neutral-3 active:border active:border-neutral-3';
   const selectedClass = 'border-neutral-2 border bg-blue-1 hover:border-neutral-2 hover:bg-blue-5';
 
   return (
     <>
       <nav
-        className={clsx(
+        className={cn(
           'border-neutral-3 flex h-screen flex-col gap-5 border-r bg-white',
           'transition-[width,padding] duration-300 ease-out will-change-[width,padding]',
           isOpen ? 'w-60.25 px-2 py-2.5' : 'w-18 items-center px-3 py-5',
         )}
       >
         {/* 로고/열림 버튼 */}
-        <div className={clsx('flex', isOpen ? 'items-center justify-between' : '')}>
+        <div className={cn('flex', isOpen ? 'items-center justify-between' : '')}>
           <div
             onClick={() => router.push('/')}
-            className={clsx('flex cursor-pointer items-center gap-2.5', isOpen ? 'px-1' : '')}
+            className={cn('flex cursor-pointer items-center gap-2.5', isOpen ? 'px-1' : '')}
           >
             <div
-              className={clsx(
+              className={cn(
                 'group relative flex h-10 w-10 items-center px-1.25 py-1.5',
                 isOpen ? '' : 'border-neutral-3 rounded-xl border-[0.5px]',
               )}
@@ -152,27 +133,27 @@ const SideNavBar = () => {
               <CatchupLogo className="relative left-px h-7.5 w-7" />
 
               {!isOpen && (
-                <div className="group flex gap-px">
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setIsOpen(true);
-                    }}
-                    className="transition:opacity bg-neutral-2 active:bg-neutral-3 border-neutral-5 absolute inset-0 cursor-pointer rounded-xl border-[0.5px] p-1.5 opacity-0 group-hover:opacity-100"
-                  >
-                    <Open className="h-6 w-6" />
-                  </button>
-                  <div className="relative bottom-4.5 left-2">
-                    <ToolTip text={'사이드바 열기'} />
-                  </div>
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsOpen(true);
+                      }}
+                      className="bg-neutral-2 active:bg-neutral-3 border-neutral-5 absolute inset-0 cursor-pointer rounded-xl border-[0.5px] p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      <Open className="h-6 w-6" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">사이드바 열기</TooltipContent>
+                </Tooltip>
               )}
             </div>
 
             {isOpen && (
               <div
-                className={clsx(
+                className={cn(
                   'relative top-0.5 flex items-center',
                   'transition-all duration-200 ease-out',
                   isOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-2 opacity-0',
@@ -183,51 +164,37 @@ const SideNavBar = () => {
             )}
           </div>
           {isOpen && (
-            <div className="group flex gap-px">
-              <button className="icon-button-only-gray flex items-center justify-center rounded-full! p-0.5">
-                <Close onClick={() => setIsOpen(false)} className="h-6 w-6 cursor-pointer text-gray-50" />
-              </button>
-              <div className="relative bottom-1 left-0.5">
-                <ToolTip text={'사이드바 닫기'} />
-              </div>
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="icon-button-only-gray flex items-center justify-center rounded-full! p-0.5">
+                  <Close onClick={() => setIsOpen(false)} className="h-6 w-6 cursor-pointer text-gray-50" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>사이드바 닫기</TooltipContent>
+            </Tooltip>
           )}
         </div>
 
-        {/* 팀스페이스 */}
+        {/* 팀스페이스 (열린 모드) */}
         {isOpen && (
-          <div
-            onClick={() => {
-              setIsTeamSpaceMoreModalOpen(false);
-              setIsTeamDropDownModalOpen((prev) => !prev);
-            }}
-            onMouseEnter={() => {
-              setIsTeamSpaceMoreModalOpen(false);
-              setIsTeamDropDownModalOpen(true);
-            }}
-            onMouseLeave={() => {
-              setIsTeamDropDownModalOpen(false);
-            }}
-            className={clsx(
-              'group/teamspace border-neutral-3 flex cursor-pointer flex-col justify-center gap-1.5 rounded-xl! border px-2.5 py-2',
-              isTeamSpaceMoreModalOpen || isTeamDropDownModalOpen ? 'bg-neutral-2' : 'hover:bg-neutral-2 bg-white',
-            )}
-          >
+          <div className="group/teamspace border-neutral-3 flex cursor-default flex-col justify-center gap-1.5 rounded-xl! border px-2.5 py-2 hover:bg-neutral-2 has-data-[state=open]:bg-neutral-2">
             <span className="flex items-center justify-between">
               <span className="text-body-xsmall text-gray-50">팀스페이스</span>
-              <Dropdown
-                onClick={(e: React.MouseEvent<SVGSVGElement>) => {
-                  e.stopPropagation();
-                  setIsTeamSpaceMoreModalOpen(false);
-                  setIsTeamDropDownModalOpen(!isTeamDropDownModalOpen);
-                }}
-                className={clsx(
-                  'h-4 w-4 cursor-pointer rounded-full text-gray-50 transition-opacity',
-                  isTeamDropDownModalOpen
-                    ? 'bg-neutral-3 opacity-100'
-                    : 'hover:bg-neutral-3 active:bg-neutral-4 opacity-0 group-hover/teamspace:opacity-100',
-                )}
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="h-4 w-4 cursor-pointer rounded-full text-gray-50 opacity-0 transition-opacity hover:bg-neutral-3 active:bg-neutral-4 group-hover/teamspace:opacity-100 data-[state=open]:bg-neutral-3 data-[state=open]:opacity-100"
+                  >
+                    <Dropdown />
+                  </button>
+                </PopoverTrigger>
+                <TeamSpaceDropDownContent
+                  teamSpaces={[...TEAM_SPACES]}
+                  selectedId={selectedTeamSpaceId}
+                  onSelect={(team) => setSelectedTeamSpaceId(team.id)}
+                />
+              </Popover>
             </span>
             <div className="flex">
               <div className="flex items-center">
@@ -240,112 +207,55 @@ const SideNavBar = () => {
               </div>
 
               <div className="relative min-w-0 flex-1">
-                <div
-                  className={clsx(
-                    isTeamSpaceMoreModalOpen
-                      ? 'text-body-small text-gray-80 relative top-px left-1 max-w-36 truncate'
-                      : 'text-body-small text-gray-80 relative top-px left-1 max-w-42 truncate group-hover/teamspace:max-w-36',
-                  )}
-                >
+                <div className="text-body-small text-gray-80 relative top-px left-1 max-w-42 truncate group-hover/teamspace:max-w-36">
                   {selectedTeamSpace.name}
                 </div>
-                <div className="group absolute top-0 right-0">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsTeamSpaceMoreModalOpen(!isTeamSpaceMoreModalOpen);
-                      setIsTeamDropDownModalOpen(false);
-                    }}
-                    className={clsx(
-                      'ml-3 flex h-5.5 w-5.5 cursor-pointer items-center justify-center rounded-full p-0.5 transition-opacity',
-                      isTeamSpaceMoreModalOpen
-                        ? 'bg-neutral-3 opacity-100'
-                        : 'hover:bg-neutral-3 active:bg-neutral-4 opacity-0 group-hover/teamspace:opacity-100',
-                    )}
-                  >
-                    <Kebeb className="h-4.5 w-4.5 text-gray-50" />
-                  </button>
-                  <div className="relative bottom-6.75 left-9">
-                    <ToolTip text={'팀원 추가 및 설정'} />
-                  </div>
+                <div className="absolute top-0 right-0">
+                  <Tooltip>
+                    <DropdownMenu>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <button className="ml-3 flex h-5.5 w-5.5 cursor-pointer items-center justify-center rounded-full p-0.5 opacity-0 transition-opacity hover:bg-neutral-3 active:bg-neutral-4 group-hover/teamspace:opacity-100 data-[state=open]:bg-neutral-3 data-[state=open]:opacity-100">
+                            <Kebeb className="h-4.5 w-4.5 text-gray-50" />
+                          </button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">팀원 추가 및 설정</TooltipContent>
+                      <TeamSpaceMoreContent />
+                    </DropdownMenu>
+                  </Tooltip>
                 </div>
               </div>
             </div>
-            {/* 팀스페이스 모달 */}
-            {isTeamSpaceMoreModalOpen && (
-              <div className="absolute top-32 left-49 z-100">
-                <TeamSpaceMoreModal onClose={() => setIsTeamSpaceMoreModalOpen(false)} />
-              </div>
-            )}
-            {isTeamDropDownModalOpen && (
-              <div className="absolute top-17.5 left-58.5 z-100">
-                <TeamSpaceDropDownModal
-                  onClose={() => setIsTeamDropDownModalOpen(false)}
-                  teamSpaces={[...TEAM_SPACES]}
-                  selectedId={selectedTeamSpaceId}
-                  onSelect={(team) => {
-                    setSelectedTeamSpaceId(team.id);
-                  }}
-                />
-              </div>
-            )}
           </div>
         )}
+
+        {/* 팀스페이스 (닫힌 모드) */}
         {!isOpen && (
-          <div
-            onClick={() => {
-              setIsTeamSpaceMoreModalOpen(false);
-              setIsTeamDropDownModalOpen((prev) => !prev);
-            }}
-            onMouseEnter={() => {
-              setIsTeamSpaceMoreModalOpen(false);
-              setIsTeamDropDownModalOpen(true);
-            }}
-            onMouseLeave={() => {
-              setIsTeamDropDownModalOpen(false);
-            }}
-            className={clsx(
-              'group border-neutral-3 shadow-blue-bottom flex h-10 w-14.5 cursor-pointer items-center justify-center rounded-xl border p-1.5',
-              isTeamDropDownModalOpen ? 'bg-neutral-2' : 'hover:bg-neutral-2 bg-white',
-            )}
-          >
-            <div className="flex items-center gap-1.5">
-              <div className="relative flex">
-                <div
-                  className={clsx(
-                    'text-body-small rounded-md2 flex h-6 w-6 items-center justify-center text-gray-50',
-                    isTeamDropDownModalOpen ? 'bg-neutral-3' : 'bg-neutral-2 group-hover:bg-neutral-3',
-                  )}
-                >
-                  {selectedTeamSpace.name.trim().charAt(0)}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="group border-neutral-3 shadow-blue-bottom flex h-10 w-14.5 cursor-pointer items-center justify-center rounded-xl border bg-white p-1.5 hover:bg-neutral-2 data-[state=open]:bg-neutral-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="relative flex">
+                    <div className="text-body-small rounded-md2 flex h-6 w-6 items-center justify-center bg-neutral-2 text-gray-50 group-hover:bg-neutral-3 group-data-[state=open]:bg-neutral-3">
+                      {selectedTeamSpace.name.trim().charAt(0)}
+                    </div>
+                    <div className="absolute bottom-4.75 left-4.5">
+                      <Necessary className="h-2 w-2" />
+                    </div>
+                  </div>
+                  <div className="h-4 w-4">
+                    <Dropdown className="text-gray-50" />
+                  </div>
                 </div>
-                <div className="absolute bottom-4.75 left-4.5">
-                  <Necessary className="h-2 w-2" />
-                </div>
-              </div>
-              <div
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsTeamDropDownModalOpen(!isTeamDropDownModalOpen);
-                }}
-                className="h-4 w-4"
-              >
-                <Dropdown className="text-gray-50" />
-              </div>
-            </div>
-            {isTeamDropDownModalOpen && (
-              <div className="absolute top-20 left-17 z-100">
-                <TeamSpaceDropDownModal
-                  onClose={() => setIsTeamDropDownModalOpen(false)}
-                  teamSpaces={[...TEAM_SPACES]}
-                  selectedId={selectedTeamSpaceId}
-                  onSelect={(team) => {
-                    setSelectedTeamSpaceId(team.id);
-                  }}
-                />
-              </div>
-            )}
-          </div>
+              </button>
+            </PopoverTrigger>
+            <TeamSpaceDropDownContent
+              teamSpaces={[...TEAM_SPACES]}
+              selectedId={selectedTeamSpaceId}
+              onSelect={(team) => setSelectedTeamSpaceId(team.id)}
+            />
+          </Popover>
         )}
 
         {/* 메뉴 */}
@@ -363,47 +273,43 @@ const SideNavBar = () => {
 
             return (
               <div key={item.name} className="group relative">
-                <button
-                  onClick={handleClick}
-                  className={clsx(
-                    'flex h-10 cursor-pointer items-center rounded-lg',
-                    isActive ? selectedClass : defaultClass,
-                    isOpen ? 'w-56.5 gap-3 px-2.5 py-2' : 'w-10 items-center justify-center',
-                  )}
-                >
-                  <item.Icon
-                    className={clsx(
-                      isOpen ? 'h-5.5 w-5.5' : 'h-7 w-7',
-                      isActive ? 'text-blue-50 group-hover:text-blue-50' : 'text-gray-70',
-                    )}
-                  />
-                  {isOpen && (
-                    <span
-                      className={clsx(
-                        'text-body-small relative',
-                        isActive ? 'text-blue-55 group-hover:text-blue-55' : 'text-gray-80',
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={handleClick}
+                      className={cn(
+                        'flex h-10 cursor-pointer items-center rounded-lg',
+                        isActive ? selectedClass : defaultClass,
+                        isOpen ? 'w-56.5 gap-3 px-2.5 py-2' : 'w-10 items-center justify-center',
                       )}
                     >
-                      {item.name}
-                    </span>
-                  )}
-                  {isOpen && item.name === '수신함' && (
-                    <div className="rounded-md2 bg-blue-1 border-blue-30 ml-auto flex h-5.75 w-5.75 items-center justify-center border-[0.5px] px-0.5">
-                      <span className="text-body-small text-blue-40">2</span>
-                    </div>
-                  )}
-                </button>
-                <div className="flex opacity-0 transition-opacity group-hover:opacity-100">
-                  {isOpen ? (
-                    <div className={clsx('relative bottom-9.5 left-57')}>
-                      <ToolTip text={item.tooltipOpen} />
-                    </div>
-                  ) : (
-                    <div className="relative bottom-9.25 left-10.5">
-                      <ToolTip text={item.tooltipClosed} />
-                    </div>
-                  )}
-                </div>
+                      <item.Icon
+                        className={cn(
+                          isOpen ? 'h-5.5 w-5.5' : 'h-7 w-7',
+                          isActive ? 'text-blue-50 group-hover:text-blue-50' : 'text-gray-70',
+                        )}
+                      />
+                      {isOpen && (
+                        <span
+                          className={cn(
+                            'text-body-small relative',
+                            isActive ? 'text-blue-55 group-hover:text-blue-55' : 'text-gray-80',
+                          )}
+                        >
+                          {item.name}
+                        </span>
+                      )}
+                      {isOpen && item.name === '수신함' && (
+                        <div className="rounded-md2 bg-blue-1 border-blue-30 ml-auto flex h-5.75 w-5.75 items-center justify-center border-[0.5px] px-0.5">
+                          <span className="text-body-small text-blue-40">2</span>
+                        </div>
+                      )}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    {isOpen ? item.tooltipOpen : item.tooltipClosed}
+                  </TooltipContent>
+                </Tooltip>
                 {!isOpen && item.name === '수신함' && (
                   <div className="relative bottom-9 left-7.5">
                     <Necessary className="h-2 w-2" />
@@ -439,12 +345,12 @@ const SideNavBar = () => {
                   <Link
                     href={`/chat/${chatroom.sessionId}`}
                     key={chatroom.sessionId}
-                    className={clsx(
+                    className={cn(
                       'group flex cursor-pointer rounded-lg py-2',
                       isActive ? selectedClass : defaultClass,
                     )}
                   >
-                    <span className={clsx('text-body-small truncate px-2.5')}>{chatroom.title}</span>
+                    <span className={cn('text-body-small truncate px-2.5')}>{chatroom.title}</span>
                     <span className="mr-2.5 ml-auto flex h-5 w-5 items-center opacity-0 transition-opacity group-hover:opacity-100">
                       <Kebeb className="text-gray-50" />
                     </span>
@@ -456,47 +362,48 @@ const SideNavBar = () => {
         )}
 
         {/* 유저 */}
-        <div className={'group mt-auto flex flex-col gap-1.5'}>
-          {isOpen && <div className={`bg-neutral-3 relative right-2 h-px w-60`} />}
-          <div
-            onClick={() => setIsUserModalOpen(!isUserModalOpen)}
-            className={clsx(
-              'flex h-13.5 cursor-pointer items-center rounded-lg',
-              isOpen ? 'icon-button-only-gray w-56.25 justify-between px-1.5 py-1' : 'justify-center',
-            )}
-          >
-            <div className={clsx('flex gap-4', isOpen ? 'mt-auto' : '')}>
-              <Profile className="border-neutral-2 h-10 w-10 rounded-xl border-[0.5px]" />
-              {isOpen && (
-                <div className="relative top-px max-w-31">
-                  <div className="text-heading-small text-gray-80 truncate">{user?.name ?? '이름없음'}</div>
-                  <div className="text-body-small truncate text-gray-50">{user?.email ?? ''}</div>
-                </div>
-              )}
-            </div>
-            {isOpen && (
-              <div className="bottom-1 flex cursor-pointer items-center p-0.5">
-                <UnfoldMore className="h-6 w-6" />
-              </div>
-            )}
-          </div>
-          {!isOpen && (
-            <div className="relative bottom-15.5 left-10.5">
-              <ToolTip
-                text={
+        <div className="mt-auto flex flex-col gap-1.5">
+          {isOpen && <div className="bg-neutral-3 relative right-2 h-px w-60" />}
+          <Tooltip>
+            <DropdownMenu>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={cn(
+                      'flex h-13.5 cursor-pointer items-center rounded-lg',
+                      isOpen
+                        ? 'w-56.25 justify-between px-1.5 py-1 hover:bg-neutral-2 data-[state=open]:bg-neutral-2'
+                        : 'justify-center',
+                    )}
+                  >
+                    <div className={cn('flex gap-4', isOpen ? 'mt-auto' : '')}>
+                      <Profile className="border-neutral-2 h-10 w-10 rounded-xl border-[0.5px]" />
+                      {isOpen && (
+                        <div className="relative top-px max-w-31 text-left">
+                          <div className="text-heading-small text-gray-80 truncate">{user?.name ?? '이름없음'}</div>
+                          <div className="text-body-small truncate text-gray-50">{user?.email ?? ''}</div>
+                        </div>
+                      )}
+                    </div>
+                    {isOpen && (
+                      <div className="bottom-1 flex items-center p-0.5">
+                        <UnfoldMore className="h-6 w-6" />
+                      </div>
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              {!isOpen && (
+                <TooltipContent side="right">
                   <div className="flex flex-col">
                     <span>{user?.name ?? '이름없음'}</span>
                     <span>{user?.email ?? '역할없음'}</span>
                   </div>
-                }
-              />
-            </div>
-          )}
-          {isUserModalOpen && (
-            <div className="absolute bottom-15.5 z-100">
-              <UserModal onClose={() => setIsUserModalOpen(false)} userName={user?.name} userEmail={user?.email} />
-            </div>
-          )}
+                </TooltipContent>
+              )}
+              <UserMenuContent userName={user?.name} userEmail={user?.email} />
+            </DropdownMenu>
+          </Tooltip>
         </div>
       </nav>
       {isCatchModalOpen && (
