@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 class Neo4jRetrievalService:
     def __init__(self):
         try:
+            logger.info(f"Neo4j URL: {settings.NEO4J_URI}")
             self.graph = Neo4jGraph(
                 url=settings.NEO4J_URI,
                 username=settings.NEO4J_USER,
@@ -43,15 +44,12 @@ class Neo4jRetrievalService:
         MATCH (start_node)
         WHERE start_node.id IN $anchor_ids
         
-        // 연결된 관계 조회 (방향 무관)
         MATCH (start_node)-[r]-(connected_node)
         
-        // 결과 반환 (LLM이 읽기 좋은 형태로 가공)
         RETURN 
             start_node.id AS source,
             type(r) AS relation,
             connected_node.id AS target,
-            coalesce(connected_node.summary, connected_node.name, connected_node.content) AS context_text,
             labels(connected_node) AS target_labels
         LIMIT $limit
         """
