@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     SLACK_CLIENT_ID: str
     SLACK_CLIENT_SECRET: str
     SLACK_REDIRECT_URI: str
-    SLACK_BOT_SCOPES: str = "channels:read channels:history groups:read groups:history mpim:history users:read users:read.email users.profile:read usergroups:read team:read app_mentions:read assistant:write chat:write chat:write.customize commands reactions:read reactions:write emoji:read files:read links:read"
+    SLACK_BOT_SCOPES: str = "channels:read channels:history groups:read groups:history mpim:history mpim:read users:read users:read.email users.profile:read usergroups:read team:read app_mentions:read assistant:write chat:write chat:write.customize commands reactions:read reactions:write emoji:read files:read links:read im:read im:history"
 
     # Slack API URLs
     SLACK_AUTH_URL: str = "https://slack.com/oauth/v2/authorize"
@@ -86,7 +86,7 @@ class Settings(BaseSettings):
     SLACK_API_URL: str = "https://slack.com/api"
 
     # PGVector Settings
-    PGVECTOR_COLLECTION_NAME: str = "catchup_jira"
+    PGVECTOR_COLLECTION_NAME: str = "vectorstore"  # 통합 Collection (Jira, Slack, GitHub 등)
     PGVECTOR_EMBEDDING_DIMENSIONS: int = 3072  # text-embedding-3-large
 
     # Jira Sync Settings
@@ -94,6 +94,13 @@ class Settings(BaseSettings):
     JIRA_SYNC_MAX_CONCURRENT_REQUESTS: int = 5  # Rate limit safe
     JIRA_SYNC_COMMENTS_LIMIT: int = 5  # Recent comments to include
     JIRA_API_RATE_LIMIT_DELAY: float = 0.1  # Seconds between requests
+
+    # Slack Sync Settings
+    SLACK_SYNC_MAX_CONCURRENT_REQUESTS: int = 10  # 동시 요청 수
+    SLACK_API_RATE_LIMIT_DELAY: float = 0.1  # 요청 간 딜레이 (초)
+    SLACK_THREAD_REPLY_LIMIT: int = 10  # 부모 메시지에 포함할 최근 Reply 수
+    SLACK_MESSAGE_BATCH_SIZE: int = 200  # 한 번에 가져올 메시지 수
+    SLACK_DEFAULT_SYNC_DAYS: int = 30  # 기본 동기화 기간 (일)
 
     model_config = SettingsConfigDict(
         env_file=".env",
