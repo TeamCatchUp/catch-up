@@ -66,6 +66,7 @@ import {
 import { Separator } from '@/shared/components/ui/separator';
 import { Switch } from '@/shared/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 
 /* ─────────────────────────────────────────────
  * Figma icon size constant
@@ -701,12 +702,14 @@ export default function UIPreviewPage() {
                 { icon: <SearchIcon className={IC} />, label: '캐치스턴트 AI' },
                 { icon: <SettingsIcon className={IC} />, label: '업무 대시보드' },
               ].map((item) => (
-                <div key={item.label} className="group relative flex size-10 items-center justify-center rounded-lg text-gray-50 hover:bg-neutral-2 cursor-pointer">
-                  {item.icon}
-                  <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-lg bg-alpha-black-75 px-1.5 py-1 text-label-xsmall text-white opacity-0 shadow-tooltip transition-opacity group-hover:opacity-100">
-                    {item.label}
-                  </span>
-                </div>
+                <Tooltip key={item.label}>
+                  <TooltipTrigger asChild>
+                    <div className="flex size-10 cursor-pointer items-center justify-center rounded-lg text-gray-50 hover:bg-neutral-2">
+                      {item.icon}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">{item.label}</TooltipContent>
+                </Tooltip>
               ))}
             </div>
           </Section>

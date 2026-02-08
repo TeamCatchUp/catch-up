@@ -70,7 +70,9 @@ export function MoreButtonContent() {
         <input
           placeholder="검색어를 입력하세요."
           className="border-neutral-3 text-body-small placeholder-gray-30 h-10 w-full rounded-xl border px-3 py-2 transition-colors outline-none focus:border-blue-30 focus:bg-neutral-1 focus:caret-blue-30"
-          onKeyDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key !== 'Tab' && e.key !== 'Escape') e.stopPropagation();
+          }}
         />
       </div>
 
