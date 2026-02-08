@@ -1,18 +1,21 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import AI from '/public/icons/icon/ai.svg';
-import Add from '/public/icons/icon/add_small.svg';
-import Search from '/public/icons/icon/search.svg';
-import Close from '/public/icons/icon/cancel.svg';
-import Chat from '/public/icons/icon/chat.svg';
+
+import { chatQueries } from '@/shared/queries/chatroom.queries';
+import { SearchHistory } from '@/shared/components/SearchHistory';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
-import { SearchHistory } from '@/shared/components/SearchHistory';
-import { searchService } from '@/shared/api/search';
-import { formatFullDate } from '@/shared/utils/formatDate';
 import type { SearchQuery } from '@/shared/types/query/search';
+import { formatFullDate } from '@/shared/utils/formatDate';
+
+import Add from '/public/icons/icon/add_small.svg';
+import AI from '/public/icons/icon/ai.svg';
+import Close from '/public/icons/icon/cancel.svg';
+import Chat from '/public/icons/icon/chat.svg';
+import Search from '/public/icons/icon/search.svg';
 
 interface RecentQuestionsModalProps {
   onClose: () => void;
@@ -23,33 +26,17 @@ type SearchQueryWithRawDate = SearchQuery & { rawDate: Date };
 const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const [recentQueries, setRecentQueries] = useState<SearchQueryWithRawDate[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading } = useQuery(chatQueries.recentQueries());
 
-  useEffect(() => {
-    const fetchDefaultData = async () => {
-      try {
-        setIsLoading(true);
-
-        const [queriesRes] = await Promise.all([searchService.getRecentQueries()]);
-
-        if (queriesRes.content) {
-          const mappedQueries: SearchQueryWithRawDate[] = queriesRes.content.map((item) => ({
-            query: item.query,
-            sessionId: item.sessionId,
-            date: formatFullDate(item.createdAt),
-            rawDate: new Date(item.createdAt),
-          }));
-          setRecentQueries(mappedQueries);
-        }
-      } catch (err) {
-        console.error('데이터 로드 실패:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchDefaultData();
-  }, []);
+  const recentQueries = useMemo<SearchQueryWithRawDate[]>(() => {
+    if (!data?.content) return [];
+    return data.content.map((item) => ({
+      query: item.query,
+      sessionId: item.sessionId,
+      date: formatFullDate(item.createdAt),
+      rawDate: new Date(item.createdAt),
+    }));
+  }, [data]);
 
   useEscapeKey(onClose);
   useOutsideClick(modalRef, onClose);

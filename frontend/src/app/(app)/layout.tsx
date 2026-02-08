@@ -1,12 +1,12 @@
 'use client';
 
-import { useAuth } from '@/shared/api/auth';
 import SideNavBar from '@/shared/components/layout/sideNavBar/SideNavBar';
+import { useCurrentUser } from '@/shared/hooks/useCurrentUser';
 
 export default function AfterLoginLayout({ children }: { children: React.ReactNode }) {
-  const { loading } = useAuth(); // 쿠키 기반 인증 체크
+  const { isLoading } = useCurrentUser(); // TanStack Query 기반 인증 체크
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-xl font-semibold">로딩 중...</div>

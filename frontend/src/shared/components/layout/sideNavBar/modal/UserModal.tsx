@@ -1,16 +1,19 @@
 'use client';
 
-import clsx from 'clsx';
 import { useRef, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import clsx from 'clsx';
 import { useRouter } from 'next/navigation';
-import DefaultProfile from '/public/icons/icon/profile.svg';
-import Person from '/public/icons/icon/person.svg';
-import AdminPanelSettings from '/public/icons/icon/admin_panel_settings.svg';
-import Settings from '/public/icons/icon/settings.svg';
-import Logout from '/public/icons/icon/logout.svg';
+
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
-import { logout } from '@/shared/api/auth';
+import { authMutations } from '@/shared/queries/auth.mutations';
+
+import AdminPanelSettings from '/public/icons/icon/admin_panel_settings.svg';
+import Logout from '/public/icons/icon/logout.svg';
+import Person from '/public/icons/icon/person.svg';
+import DefaultProfile from '/public/icons/icon/profile.svg';
+import Settings from '/public/icons/icon/settings.svg';
 
 interface UserModalProps {
   onClose: () => void;
@@ -20,15 +23,24 @@ interface UserModalProps {
 
 const UserModal = ({ onClose, userName, userEmail }: UserModalProps) => {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const modalRef = useRef<HTMLDivElement>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEscapeKey(onClose);
   useOutsideClick(modalRef, onClose);
 
-  const handleLogout = async () => {
-    onClose(); // 모달 close
-    await logout();
+  const logoutMutation = useMutation({
+    ...authMutations.logout(),
+    onSuccess: () => {
+      queryClient.clear();
+      window.location.href = '/login';
+    },
+  });
+
+  const handleLogout = () => {
+    onClose();
+    logoutMutation.mutate();
   };
 
   return (
