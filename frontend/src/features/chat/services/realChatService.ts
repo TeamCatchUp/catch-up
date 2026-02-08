@@ -1,118 +1,85 @@
-import api from '@/shared/api/client';
+import { API } from '@/shared/api/endpoints';
+
+/** SSE 스트림 라인 파싱 공통 로직 */
+async function parseSSEStream(
+  res: Response,
+  onEvent: (event: StreamEvent) => void,
+) {
+  if (!res.ok) throw new Error(`Stream error: ${res.status}`);
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const event = JSON.parse(line.slice(6)) as StreamEvent;
+          onEvent(event);
+        } catch {
+          // JSON 파싱 실패 무시
+        }
+      }
+    }
+  }
+}
 
 const realChatService = {
-  createSSEConnection: (
+  /**
+   * POST /api/chat/stream
+   * 요청 자체가 SSE 스트림 응답을 반환
+   */
+  streamChat: async (
+    query: string,
     sessionId: string,
-    onMessage: (notification: RagNotification) => void,
-    onError?: (error: Event) => void,
-    onOpen?: () => void,
-  ): EventSource => {
-    const url = 'https://0-0-0-0.example.io/api/notification/subscribe';
-
-    const eventSource = new EventSource(url, {
-      withCredentials: true,
+    onEvent: (event: StreamEvent) => void,
+    signal?: AbortSignal,
+  ) => {
+    const res = await fetch(API.chat.stream, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ query, session_id: sessionId }),
+      signal,
     });
 
-    // 연결 성공
-    eventSource.onopen = () => {
-      console.log('[SSE] onopen');
-      onOpen?.();
-    };
-
-    const safeParse = (event: MessageEvent) => {
-      const raw = event.data;
-      if (raw == null) return;
-
-      const text = typeof raw === 'string' ? raw.trim() : raw;
-
-      // keep-alive / 주석 라인 무시
-      if (typeof text === 'string') {
-        if (!text) return;
-        if (text === ':') return;
-        if (text.startsWith(':')) return;
-      }
-
-      // 1) JSON 파싱
-      let parsed: unknown;
-      try {
-        parsed = typeof text === 'string' ? JSON.parse(text) : text;
-      } catch (err) {
-        console.error('[SSE] JSON parse error:', err, { eventType: event.type, raw });
-        return;
-      }
-
-      // 2) 최소 형태 가드 (이상한 payload는 그냥 무시)
-      if (!parsed || typeof parsed !== 'object' || !('type' in parsed) || !('target' in parsed)) {
-        console.warn('[SSE] unknown payload ignored:', parsed);
-        return;
-      }
-
-      // CONNECT 이벤트 로깅
-      if ((parsed as RagNotification).type === 'CONNECT') {
-        console.log('[SSE] CONNECT event received: ', parsed);
-      }
-
-      // 3) onMessage 처리 에러 분리
-      try {
-        onMessage(parsed as RagNotification);
-      } catch (err) {
-        console.error('[SSE] onMessage handler error:', err, { notification: parsed });
-      }
-    };
-
-    eventSource.addEventListener('CONNECT', safeParse as EventListener);
-    eventSource.addEventListener('RAG_IN_PROGRESS', safeParse as EventListener);
-    eventSource.addEventListener('RAG_INTERRUPT', safeParse as EventListener);
-    eventSource.addEventListener('RAG_DONE', safeParse as EventListener);
-
-    eventSource.onmessage = (event) => safeParse(event);
-
-    eventSource.onerror = (event) => {
-      console.error('[SSE] connection error:', event, 'readyState:', eventSource.readyState);
-      onError?.(event);
-    };
-
-    return eventSource;
+    await parseSSEStream(res, onEvent);
   },
 
-  sendChatQuery: async (
-    queryText: string,
+  /**
+   * POST /api/chat/stream/resume
+   * PR 선택 후 스트림 재개
+   */
+  resumeStream: async (
     sessionId: string,
-    indexList: string[],
-  ): Promise<ChatResponse> => {
-    console.log('[sendChatQuery] 요청 전송: ', { queryText, sessionId, indexList });
-    const requestBody = { query: queryText, sessionId, indexList };
+    selectedPRs: { prNumber: number; repoName: string; owner: string }[],
+    onEvent: (event: StreamEvent) => void,
+    signal?: AbortSignal,
+  ) => {
+    const res = await fetch(API.chat.streamResume, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        session_id: sessionId,
+        user_selected_pull_requests: selectedPRs.map((pr) => ({
+          pr_number: pr.prNumber,
+          repo: pr.repoName,
+          owner: pr.owner,
+        })),
+      }),
+      signal,
+    });
 
-    try {
-      const response = await api.post('/api/chat', requestBody);
-      console.log('[sendChatQuery] 응답 받음: ', response.data);
-
-      // "SSE 연결이 필요합니다" 응답 체크
-      if (response.data.answer === 'SSE 연결이 필요합니다.') {
-        console.error('[sendChatQuery] SSE 연결 없음');
-        throw new Error('SSE_NOT_CONNECTED');
-      }
-      return response.data;
-    } catch (err) {
-      console.error('[sendChatQuery] 에러: ', err);
-      throw err;
-    }
-  },
-
-  resumeChatQuery: async (
-    sessionId: string,
-    userSelectedPullRequests: { prNumber: number; repoName: string; owner: string }[],
-  ): Promise<ChatResponse> => {
-    const request: ResumeRequest = { sessionId, userSelectedPullRequests };
-
-    try {
-      const response = await api.post('/api/chat/resume', request);
-      console.log('[resumeChatQuery] 응답 받음:', response.data);
-      return response.data;
-    } catch (err) {
-      console.error('[resumeChatQuery] 에러:', err);
-      throw err;
-    }
+    await parseSSEStream(res, onEvent);
   },
 };
 

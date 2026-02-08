@@ -1,42 +1,46 @@
 import delay from '@/shared/mocks/delay';
-import createMockSSE from './sseSimulator';
 
 const mockChatService = {
-  createSSEConnection: (
+  streamChat: async (
+    query: string,
     sessionId: string,
-    onMessage: (notification: RagNotification) => void,
-    onError?: (error: Event) => void,
-    onOpen?: () => void,
-  ): EventSource => {
-    console.log('[mockChatService] SSE 연결 생성:', sessionId);
-    return createMockSSE({ sessionId, onMessage, onError, onOpen });
+    onEvent: (event: StreamEvent) => void,
+    _signal?: AbortSignal,
+  ) => {
+    console.log('[mockChatService] streamChat:', { query, sessionId });
+
+    await delay(500);
+    onEvent({ type: 'status', node: 'router', message: '질문 분석 중...' });
+    await delay(500);
+    onEvent({ type: 'status', node: 'retrieve', message: '문서 검색 중...' });
+    await delay(500);
+    onEvent({ type: 'status', node: 'rerank', message: '관련도 평가 중...' });
+    await delay(500);
+    onEvent({ type: 'status', node: 'generate', message: '답변 생성 중...' });
+    await delay(300);
+    onEvent({
+      type: 'result',
+      answer: `Mock 답변: "${query}"에 대한 답변입니다.`,
+      sources: [],
+    });
   },
 
-  sendChatQuery: async (
-    queryText: string,
+  resumeStream: async (
     sessionId: string,
-    indexList: string[],
-  ): Promise<ChatResponse> => {
-    console.log('[mockChatService] 채팅 요청:', { queryText, sessionId, indexList });
-    await delay(200);
-    return {
-      sessionId,
-      answer: '답변 생성을 시작합니다.',
-      sources: [],
-    };
-  },
+    selectedPRs: { prNumber: number; repoName: string; owner: string }[],
+    onEvent: (event: StreamEvent) => void,
+    _signal?: AbortSignal,
+  ) => {
+    console.log('[mockChatService] resumeStream:', { sessionId, selectedPRs });
 
-  resumeChatQuery: async (
-    sessionId: string,
-    userSelectedPullRequests: { prNumber: number; repoName: string; owner: string }[],
-  ): Promise<ChatResponse> => {
-    console.log('[mockChatService] 채팅 재개:', { sessionId, userSelectedPullRequests });
-    await delay(200);
-    return {
-      sessionId,
-      answer: '답변 생성을 재개합니다.',
+    await delay(500);
+    onEvent({ type: 'status', node: 'generate', message: 'PR 컨텍스트로 답변 생성 중...' });
+    await delay(500);
+    onEvent({
+      type: 'result',
+      answer: `Mock 답변: PR ${selectedPRs.map((p) => p.prNumber).join(', ')} 기반 답변입니다.`,
       sources: [],
-    };
+    });
   },
 };
 

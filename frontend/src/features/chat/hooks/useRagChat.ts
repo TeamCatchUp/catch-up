@@ -1,15 +1,16 @@
 /**
  * useRagChat
- * SSE 연결, 메시지 전송/수신, 채팅 상태 관리
+ * fetch ReadableStream SSE, 메시지 전송/수신, 채팅 상태 관리
  */
 
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { createSSEConnection, sendChatQuery, resumeChatQuery } from '@/features/chat/utils/sendChatQuery';
+import { useCallback, useEffect,useRef, useState } from 'react';
+
+import { getStorageKeys,NODE_TO_UI_STEP, SSE_CONFIG } from '@/features/chat/constants/config';
+import chatService from '@/features/chat/services/chatService';
 import { normalizeSources } from '@/features/chat/utils/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/features/chat/utils/normalizeRelatedJiraIssues';
-import { NODE_TO_UI_STEP, HARD_CODED_INDEX_LIST, SSE_CONFIG, getStorageKeys } from '@/features/chat/constants/config';
 
 interface UseRagChatOptions {
   sessionId: string;
@@ -55,15 +56,15 @@ export const useRagChat = ({
   const [showPRSelection, setShowPRSelection] = useState(false);
 
   // Refs
-  const sseRef = useRef<EventSource | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const stoppedRef = useRef(false);
 
-  /** SSE 연결 종료 */
-  const closeSSEConnection = useCallback(() => {
-    if (sseRef.current) {
-      console.log('[useRagChat] SSE 연결 종료');
-      sseRef.current.close();
-      sseRef.current = null;
+  /** 스트림 중단 */
+  const abortStream = useCallback(() => {
+    if (abortRef.current) {
+      console.log('[useRagChat] 스트림 중단');
+      abortRef.current.abort();
+      abortRef.current = null;
     }
   }, []);
 
@@ -125,134 +126,75 @@ export const useRagChat = ({
     [storageKeys.chat],
   );
 
-  /** SSE 메시지 핸들러 */
-  const handleSSEMessage = useCallback(
-    (notification: RagNotification) => {
+  /** StreamEvent 핸들러 */
+  const handleStreamEvent = useCallback(
+    (event: StreamEvent) => {
       if (stoppedRef.current) return;
 
-      if (!notification?.data || notification.data.sessionId !== sessionId) {
-        return;
-      }
+      switch (event.type) {
+        case 'status': {
+          const mappedStep = NODE_TO_UI_STEP[event.node];
+          if (mappedStep === null || mappedStep === undefined) return;
 
-      const { type, data } = notification;
-
-      switch (type) {
-        case 'RAG_IN_PROGRESS': {
-          if (data.type !== 'status') return;
-
-          const mappedStep = NODE_TO_UI_STEP[data.node];
-          if (mappedStep === null) return;
-
-          console.log('[useRagChat] Step update:', data.node, '->', mappedStep);
+          console.log('[useRagChat] Step update:', event.node, '->', mappedStep);
           setCurrentStep(mappedStep);
           break;
         }
 
-        case 'RAG_INTERRUPT': {
-          if (data.node !== 'manage_pr_context' || !data.payload) return;
-
-          console.log('[useRagChat] RAG_INTERRUPT payload length:', data.payload.length);
-
-          setPrList(data.payload);
+        case 'interrupt': {
+          console.log('[useRagChat] interrupt payload length:', event.payload.length);
+          setPrList(event.payload);
           setShowPRSelection(true);
           setIsLoading(false);
-          closeSSEConnection();
+          abortStream();
           break;
         }
 
-        case 'RAG_DONE': {
+        case 'result': {
           window.dispatchEvent(new Event('refresh_sidebar'));
-          console.log('[useRagChat] RAG_DONE received');
+          console.log('[useRagChat] result received');
 
-          const response = data.response;
-          if (!response) {
-            console.error('[useRagChat] RAG_DONE but no response');
-            setIsError(true);
-            setIsLoading(false);
-            closeSSEConnection();
-            return;
-          }
-
-          const related = data.relatedJiraIssues ?? [];
           appendAssistantAnswer(
-            response.answer,
-            response.sources || [],
-            related,
-            response.chatHistoryId,
-            response.hasFeedback,
+            event.answer,
+            event.sources || [],
+            event.relatedJiraIssues ?? [],
+            event.chatHistoryId,
+            event.hasFeedback,
           );
-
-          closeSSEConnection();
           break;
         }
+
+        case 'ping':
+          break;
 
         default:
           break;
       }
     },
-    [sessionId, appendAssistantAnswer, closeSSEConnection],
+    [appendAssistantAnswer, abortStream],
   );
 
-  /** SSE 연결 및 쿼리 전송 */
-  const connectSSEAndSendQuery = useCallback(
-    async (query: string, indexList: string[], isResume = false, resumePayload?: any) => {
-      return new Promise<void>((resolve, reject) => {
-        console.log('[useRagChat] SSE 연결 시작');
-        closeSSEConnection();
+  /** 스트림 채팅 전송 */
+  const streamAndSendQuery = useCallback(
+    async (query: string, isResume = false, resumePayload?: { prNumber: number; repoName: string; owner: string }[]) => {
+      abortStream();
 
-        let chatRequestSent = false;
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-        const timeout = setTimeout(() => {
-          if (!chatRequestSent) {
-            console.error('[useRagChat] 타임아웃 - 30초 내 응답 없음');
-            closeSSEConnection();
-            reject(new Error('SSE connection timeout'));
-          }
-        }, SSE_CONFIG.TIMEOUT_MS);
-
-        const sse = createSSEConnection(
-          sessionId,
-          handleSSEMessage,
-          (err) => {
-            console.error('[useRagChat] SSE error:', err);
-            if (!chatRequestSent) {
-              clearTimeout(timeout);
-              closeSSEConnection();
-              reject(err);
-            }
-          },
-          async () => {
-            console.log('[useRagChat] SSE 연결 완료');
-
-            try {
-              if (isResume) {
-                await resumeChatQuery(sessionId, resumePayload);
-              } else {
-                await sendChatQuery(query, sessionId, indexList);
-              }
-              chatRequestSent = true;
-              resolve();
-            } catch (err) {
-              console.error('[useRagChat] 채팅 요청 실패:', err);
-              clearTimeout(timeout);
-              closeSSEConnection();
-              reject(err);
-            }
-          },
-        );
-
-        sseRef.current = sse;
-      });
+      if (isResume && resumePayload) {
+        await chatService.resumeStream(sessionId, resumePayload, handleStreamEvent, controller.signal);
+      } else {
+        await chatService.streamChat(query, sessionId, handleStreamEvent, controller.signal);
+      }
     },
-    [sessionId, handleSSEMessage, closeSSEConnection],
+    [sessionId, handleStreamEvent, abortStream],
   );
 
   /** 메시지 전송 */
   const sendMessage = useCallback(
     async (message: string) => {
       if (!message.trim() || isLoading || !chatData) return;
-
-      const indexList = [...HARD_CODED_INDEX_LIST];
 
       const userMessage: Message = {
         id: crypto.randomUUID(),
@@ -271,14 +213,15 @@ export const useRagChat = ({
       beginAnswerLoading();
 
       try {
-        await connectSSEAndSendQuery(message, indexList);
+        await streamAndSendQuery(message);
       } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
         console.error('[useRagChat] sendMessage Error:', err);
         setIsError(true);
         setIsLoading(false);
       }
     },
-    [isLoading, chatData, sessionId, beginAnswerLoading, connectSSEAndSendQuery],
+    [isLoading, chatData, storageKeys.chat, beginAnswerLoading, streamAndSendQuery],
   );
 
   /** 메시지 수정 제출 */
@@ -306,17 +249,16 @@ export const useRagChat = ({
 
       beginAnswerLoading();
 
-      const indexList = [...HARD_CODED_INDEX_LIST];
-
       try {
-        await connectSSEAndSendQuery(newContent, indexList);
+        await streamAndSendQuery(newContent);
       } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
         console.error('[useRagChat] submitEdit Error:', err);
         setIsError(true);
         setIsLoading(false);
       }
     },
-    [chatData, beginAnswerLoading, connectSSEAndSendQuery],
+    [chatData, beginAnswerLoading, streamAndSendQuery],
   );
 
   /** PR 선택 후 계속 진행 */
@@ -337,14 +279,15 @@ export const useRagChat = ({
         }));
 
       try {
-        await connectSSEAndSendQuery('', [], true, selectedPRs);
+        await streamAndSendQuery('', true, selectedPRs);
       } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
         console.error('[useRagChat] handlePRContinue Error:', err);
         setIsError(true);
         setIsLoading(false);
       }
     },
-    [prList, beginAnswerLoading, connectSSEAndSendQuery],
+    [prList, beginAnswerLoading, streamAndSendQuery],
   );
 
   /** PR 목록 다시 가져오기 */
@@ -355,17 +298,18 @@ export const useRagChat = ({
     const query = lastUser?.content?.trim();
     if (!query) return;
 
-    closeSSEConnection();
+    abortStream();
     beginAnswerLoading();
 
     try {
-      await connectSSEAndSendQuery(query, [...HARD_CODED_INDEX_LIST]);
+      await streamAndSendQuery(query);
     } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
       console.error('[useRagChat] handlePRRefetch Error:', err);
       setIsError(true);
       setIsLoading(false);
     }
-  }, [chatData, closeSSEConnection, beginAnswerLoading, connectSSEAndSendQuery]);
+  }, [chatData, abortStream, beginAnswerLoading, streamAndSendQuery]);
 
   /** 응답 생성 중지 */
   const handleStop = useCallback(() => {
@@ -378,9 +322,9 @@ export const useRagChat = ({
     setShowPRSelection(false);
     setCurrentStep('router');
 
-    closeSSEConnection();
+    abortStream();
     appendAssistantAnswer('\n', [], []);
-  }, [isLoading, appendAssistantAnswer, closeSSEConnection]);
+  }, [isLoading, appendAssistantAnswer, abortStream]);
 
   /** 메시지 피드백 상태 업데이트 */
   const updateMessageFeedback = useCallback(
@@ -409,8 +353,6 @@ export const useRagChat = ({
     const fetchFirstAnswer = async (query: string) => {
       beginAnswerLoading();
 
-      const indexList = [...HARD_CODED_INDEX_LIST];
-
       const initialData: ChatData = {
         sessionId,
         title: query,
@@ -428,8 +370,9 @@ export const useRagChat = ({
       setChatData(initialData);
 
       try {
-        await connectSSEAndSendQuery(query, indexList);
+        await streamAndSendQuery(query);
       } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
         console.error('[useRagChat] fetchFirstAnswer Error:', err);
         setIsError(true);
         setIsLoading(false);
@@ -443,7 +386,6 @@ export const useRagChat = ({
       const lastMessage = parsedData.messages[parsedData.messages.length - 1];
 
       if (lastMessage?.role === 'user') {
-        // 답변을 받지 못한 상태 - 에러 메시지 추가
         const errorData: ChatData = {
           ...parsedData,
           messages: [
@@ -481,14 +423,14 @@ export const useRagChat = ({
       repo: repo || '',
       messages: [],
     });
-  }, [sessionId, initialQuery, repo, storageKeys.chat, beginAnswerLoading, connectSSEAndSendQuery]);
+  }, [sessionId, initialQuery, repo, storageKeys.chat, beginAnswerLoading, streamAndSendQuery]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      closeSSEConnection();
+      abortStream();
     };
-  }, [closeSSEConnection]);
+  }, [abortStream]);
 
   return {
     chatData,
