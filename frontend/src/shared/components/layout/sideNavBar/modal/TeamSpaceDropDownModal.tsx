@@ -1,10 +1,7 @@
 'use client';
 
-import { useRef } from 'react';
-import clsx from 'clsx';
-
-import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
-import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
+import { PopoverClose, PopoverContent } from '@/shared/components/ui/popover';
+import { cn } from '@/shared/utils/cn';
 
 import AddHome from '/public/icons/icon/add_home.svg';
 import ArrowRight from '/public/icons/icon/arrow_right2.svg';
@@ -14,59 +11,54 @@ interface TeamSpaceItem {
   name: string;
 }
 
-interface TeamSpaceDropDownModalProps {
-  onClose: () => void;
+interface TeamSpaceDropDownContentProps {
   teamSpaces: TeamSpaceItem[];
   selectedId: string;
   onSelect: (team: TeamSpaceItem) => void;
 }
-const TeamSpaceDropDownModal = ({ onClose, teamSpaces, selectedId, onSelect }: TeamSpaceDropDownModalProps) => {
-  const modalRef = useRef<HTMLDivElement>(null);
 
-  useEscapeKey(onClose);
-  useOutsideClick(modalRef, onClose);
-
+export function TeamSpaceDropDownContent({ teamSpaces, selectedId, onSelect }: TeamSpaceDropDownContentProps) {
   return (
-    <div
-      ref={modalRef}
-      className="shadow-dropdown-menu border-neutral-4 flex max-h-95 w-62.5 flex-col items-center gap-2 rounded-2xl border bg-white px-1.5 py-2"
+    <PopoverContent
+      side="right"
+      align="start"
+      sideOffset={8}
+      className="flex max-h-95 w-62.5 flex-col items-center gap-2 px-1.5 py-2"
+      onOpenAutoFocus={(e) => e.preventDefault()}
     >
       {/* 팀스페이스 목록 */}
-      <div className="flex w-59.5 flex-col gap-1">
+      <div className="flex w-full flex-col gap-1">
         {teamSpaces.map((team) => {
           const isSelected = team.id === selectedId;
 
           return (
-            <button
-              key={team.id}
-              type="button"
-              onClick={() => {
-                onSelect(team);
-                onClose();
-              }}
-              className={clsx(
-                'icon-button-only-gray flex cursor-pointer items-center gap-2.5 p-2',
-                isSelected && 'bg-neutral-2',
-              )}
-            >
-              <ArrowRight className="text-gray-70 h-6 w-6" />
-              <span className={clsx('text-body-small', isSelected ? 'text-gray-80 font-semibold' : 'text-gray-80')}>
-                {team.name}
-              </span>
-            </button>
+            <PopoverClose asChild key={team.id}>
+              <button
+                type="button"
+                onClick={() => onSelect(team)}
+                className={cn(
+                  'flex h-10 cursor-pointer items-center gap-2.5 rounded-lg p-2 transition-colors hover:bg-neutral-2',
+                  isSelected && 'bg-neutral-2',
+                )}
+              >
+                <ArrowRight className="h-6 w-6 text-gray-70" />
+                <span className={cn('text-body-small text-gray-80', isSelected && 'font-semibold')}>
+                  {team.name}
+                </span>
+              </button>
+            </PopoverClose>
           );
         })}
       </div>
 
       {/* divider */}
-      <div className="bg-neutral-3 h-px w-55" />
-      {/* 팀스페이스 추가 버튼 */}
-      <div className="icon-button-only-gray flex w-59.5 cursor-pointer items-center gap-2.5 p-2">
-        <AddHome className="text-gray-70 h-6 w-6" />
-        <span className="text-body-small text-gray-80">팀스페이스 추가</span>
-      </div>
-    </div>
-  );
-};
+      <div className="h-px w-full bg-neutral-3" />
 
-export default TeamSpaceDropDownModal;
+      {/* 팀스페이스 추가 */}
+      <button className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg p-2 transition-colors hover:bg-neutral-2">
+        <AddHome className="h-6 w-6 text-gray-70" />
+        <span className="text-body-small text-gray-80">팀스페이스 추가</span>
+      </button>
+    </PopoverContent>
+  );
+}
