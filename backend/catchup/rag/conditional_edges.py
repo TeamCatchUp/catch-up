@@ -32,6 +32,6 @@ def route_after_grade(state: AgentState):
         
         else:
             logger.info("Anchor 없음 -> fallback_cypher_query 노드로 이동.")
-            return "fallback_cypher_queyr"
+            return "fallback_cypher_query"
     
     return "rewrite"
