@@ -835,3 +835,68 @@ class JiraApiClient:
         return await self._request(
             "GET", f"{self.agile_url}/sprint/{sprint_id}/issue", params=params
         )
+
+    # ============================================================
+    # User APIs (REST API v3)
+    #
+    # 사용자 검색 및 조회.
+    # ============================================================
+
+    async def get_all_users(
+        self,
+        max_results: int = 50,
+    ) -> list[dict[str, Any]]:
+        """
+        접근 가능한 모든 사용자 조회
+
+        Jira Cloud의 모든 사용자를 조회 (Bot, 비활성 사용자 포함).
+        페이지네이션을 자동으로 처리하여 전체 사용자 목록 반환.
+
+        Args:
+            max_results: 페이지 크기 (최대 50)
+
+        Returns:
+            사용자 목록
+            [
+                {
+                    "accountId": "5b10ac8d82e05b22cc7d4ef5",
+                    "accountType": "atlassian",
+                    "displayName": "홍길동",
+                    "emailAddress": "hong@example.com",  # 권한에 따라 없을 수 있음
+                    "avatarUrls": {"48x48": "https://..."},
+                    "active": true,
+                    "self": "https://..."
+                },
+                ...
+            ]
+
+        Note:
+            - read:jira-user 스코프 필요
+            - emailAddress는 사이트 설정에 따라 반환되지 않을 수 있음
+        """
+        all_users: list[dict[str, Any]] = []
+        start_at = 0
+
+        while True:
+            params = {
+                "startAt": start_at,
+                "maxResults": max_results,
+            }
+            response = await self._request(
+                "GET", f"{self.base_url}/users/search", params=params
+            )
+
+            # users/search는 배열을 직접 반환
+            if not response:
+                break
+
+            all_users.extend(response)
+
+            # 반환된 수가 max_results보다 적으면 마지막 페이지
+            if len(response) < max_results:
+                break
+
+            start_at += len(response)
+
+        logger.info(f"Retrieved {len(all_users)} users")
+        return all_users

@@ -65,10 +65,15 @@ class JiraTransformer:
 
     Attributes:
         field_mapper: 커스텀 필드 ID → 이름 변환용 매퍼
+        project_cache: RDBMS에서 로드한 프로젝트 정보 캐시 (project_key → JiraProject)
+        sprint_cache: RDBMS에서 로드한 스프린트 정보 캐시 (sprint_id → JiraSprint)
     """
 
     def __init__(self, field_mapper: JiraFieldMapper):
         self.field_mapper = field_mapper
+        # RDBMS 캐시 (service에서 주입)
+        self.project_cache: dict[str, Any] = {}
+        self.sprint_cache: dict[int, Any] = {}
 
     # ================================================================
     # Issue 변환
@@ -238,62 +243,43 @@ class JiraTransformer:
         # page_content 생성
         page_content = self._build_issue_content(issue)
 
-        # metadata 생성
+        # metadata 생성 (엔티티 접근용 필드만 유지)
         metadata = {
             # 기본 식별
             "source": "jira",
             "entity_type": "issue",
             "issue_key": issue.key,
             "issue_id": issue.id,
-            "summary": issue.summary,
             "url": issue.url,
 
             # 분류
             "project_key": issue.project_key,
-            "project_name": issue.project_name,
             "issue_type": issue.issue_type,
             "status": issue.status,
-            "priority": issue.priority,
-            "resolution": issue.resolution,
 
             # 담당자
             "assignee": issue.assignee.display_name if issue.assignee else None,
             "assignee_email": issue.assignee.email_address if issue.assignee else None,
-            "reporter": issue.reporter.display_name if issue.reporter else None,
 
             # 시간
             "created_at": issue.created_at.isoformat() if issue.created_at else None,
             "updated_at": issue.updated_at.isoformat() if issue.updated_at else None,
             "resolved_at": issue.resolved_at.isoformat() if issue.resolved_at else None,
-            "due_date": issue.due_date,
 
             # 계층
             "parent_key": issue.parent_key,
-            "parent_name": issue.parent_name,
             "subtask_keys": issue.subtask_keys,
 
             # Agile
+            "sprint_id": issue.sprint.id if issue.sprint else None,
             "sprint_name": issue.sprint.name if issue.sprint else None,
-            "sprint_state": issue.sprint.state if issue.sprint else None,
-            "story_points": issue.story_points,
 
             # 분류 태그
             "components": issue.components,
             "labels": issue.labels,
             "fix_versions": issue.fix_versions,
 
-            # 시간 추적
-            "time_spent_seconds": issue.time_spent_seconds,
-
-            # 코멘트 통계
-            "comment_count": len(issue.comments),
-            "mentioned_users": list({
-                m.display_name or m.account_id
-                for c in issue.comments
-                for m in c.mentions
-                if m.display_name or m.account_id
-            }),
-            # 인라인 첨부파일 상세 정보 (filename, url 포함)
+            # 첨부파일 (엔티티 접근용)
             "inline_attachments": [
                 {
                     "filename": att.filename or att.alt or f"media:{att.id[:8]}",
@@ -303,8 +289,6 @@ class JiraTransformer:
                 for c in issue.comments
                 for att in c.inline_attachments
             ],
-
-            # 첨부파일 (filename, url 포함)
             "attachments": [
                 {
                     "filename": att.filename,
@@ -325,7 +309,7 @@ class JiraTransformer:
         )
 
     def _build_issue_content(self, issue: JiraIssue) -> str:
-        """Issue용 page_content 생성"""
+        """Issue용 page_content 생성 (RDBMS 캐시 활용)"""
         # Parent 정보 포맷팅
         if issue.parent_key and issue.parent_name:
             parent_str = f"{issue.parent_key} ({issue.parent_name})"
@@ -334,12 +318,26 @@ class JiraTransformer:
         else:
             parent_str = "None"
 
+        # Sprint 정보 enrichment (RDBMS 캐시 활용)
+        sprint_str = "No sprint"
+        if issue.sprint:
+            sprint_str = issue.sprint.name
+            # 캐시에서 추가 정보 조회
+            if issue.sprint.id and issue.sprint.id in self.sprint_cache:
+                cached_sprint = self.sprint_cache[issue.sprint.id]
+                state = getattr(cached_sprint, 'state', None)
+                goal = getattr(cached_sprint, 'goal', None)
+                if state:
+                    sprint_str = f"{issue.sprint.name} ({state})"
+                if goal:
+                    sprint_str += f" - Goal: {goal[:80]}{'...' if len(goal) > 80 else ''}"
+
         lines = [
             f"[{issue.key}] {issue.summary}",
             "",
             f"Status: {issue.status} | Priority: {issue.priority or 'None'} | Type: {issue.issue_type}",
             f"Assigned to: {issue.assignee.display_name if issue.assignee else 'Unassigned'} | Reporter: {issue.reporter.display_name if issue.reporter else 'Unknown'}",
-            f"Parent: {parent_str} | Sprint: {issue.sprint.name if issue.sprint else 'No sprint'}",
+            f"Parent: {parent_str} | Sprint: {sprint_str}",
         ]
 
         # Description
@@ -424,18 +422,15 @@ class JiraTransformer:
 
         page_content = "\n".join(lines)
 
-        # Epic metadata
+        # Epic metadata (엔티티 접근용 필드만 유지)
         metadata = {
             "source": "jira",
             "entity_type": "epic",
             "issue_key": issue.key,
             "issue_id": issue.id,
             "url": issue.url,
-            "epic_name": issue.epic_name or issue.summary,
             "project_key": issue.project_key,
-            "project_name": issue.project_name,
             "status": issue.status,
-            "priority": issue.priority,
             "assignee": issue.assignee.display_name if issue.assignee else None,
             "created_at": issue.created_at.isoformat() if issue.created_at else None,
             "updated_at": issue.updated_at.isoformat() if issue.updated_at else None,
@@ -659,14 +654,12 @@ class JiraTransformer:
                     attrs = node.get("attrs", {})
                     media_id = attrs.get("id", "")
                     if media_id:
-                        # Atlassian Media URL 생성
                         collection = attrs.get("collection", "")
-                        media_url = None
-                        if site_url and collection:
-                            # Atlassian Media API URL 형식
-                            media_url = (
-                                f"{site_url}/rest/api/3/attachment/content/{media_id}"
-                            )
+                        # Jira attachment content URL 생성
+                        media_url = (
+                            f"{site_url}/rest/api/3/attachment/content/{media_id}"
+                            if site_url else None
+                        )
 
                         attachments.append(JiraInlineAttachment(
                             id=media_id,
