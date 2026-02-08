@@ -93,7 +93,7 @@ def _convert_fallback_results_to_documents(
         
         documents.append(document)
 
-    return document
+    return documents
 
 
 def _hash(data: str):

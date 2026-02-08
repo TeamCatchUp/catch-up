@@ -3,7 +3,6 @@ import logging
 from langchain_core.documents import Document
 
 from catchup.components.graph_db.factory import get_graph_db_service
-from catchup.components.vector_db.factory import get_vector_db_service
 from catchup.rag.nodes.utils import extract_anchor_ids, log_node
 from catchup.rag.state import AgentState
 
