@@ -15,6 +15,15 @@ const nextConfig = {
 
   output: 'standalone',
 
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${process.env.NEXT_PUBLIC_API_URL}/api/:path*`,
+      },
+    ];
+  },
+
   webpack(config) {
     const fileLoaderRule = config.module.rules.find(
       (rule: any) => rule?.test instanceof RegExp && rule.test.test('.svg'),
