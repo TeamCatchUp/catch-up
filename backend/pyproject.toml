@@ -37,6 +37,8 @@ dependencies = [
     # --- Slack ---
     "slack-sdk>=3.39.0",
     "aiodns",
+    "githubkit>=0.14.3",
+    "cryptography>=46.0.4",
 ]
 
 # 개발 전용 의존성

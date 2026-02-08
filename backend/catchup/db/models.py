@@ -265,6 +265,12 @@ class GithubInstallationType(StrEnum):
     USER = "user"
     ORGANIZATION = "organization"
 
+
+class GithubRepositorySelection(StrEnum):
+    ALL = "all"
+    SELECTED = "selected"
+
+
 class GithubInstallation(Base):
     """
     Github App Installation 정보
@@ -281,6 +287,9 @@ class GithubInstallation(Base):
     account_id: Mapped[int] = mapped_column(BigInteger, nullable=False, comment="GitHub Account ID")
     account_login: Mapped[str] = mapped_column(String(255), nullable=False, comment="Organization or User login name")
     account_avatar_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    repository_selection: Mapped[GithubRepositorySelection] = mapped_column(
+        String(20), nullable=True, comment="all: 모든 레포 접근 / selected: 선택된 레포만"
+    )
 
     suspended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True, comment="일시 중지된 경우")
     created_at: Mapped[datetime] = mapped_column(
@@ -296,17 +305,25 @@ class GithubInstallation(Base):
     )
 
     @classmethod
-    def from_webhook_payload(cls, payload: "InstallationWebhookPayload")-> "GithubInstallation":
+    def from_webhook_payload(cls, payload: "InstallationWebhookPayload") -> "GithubInstallation":
         from catchup.auth.github.schemas import InstallationWebhookPayload
 
         account = payload.installation.account
+        installation = payload.installation
+
+        # repository_selection 변환
+        repo_selection = None
+        if installation.repository_selection:
+            repo_selection = GithubRepositorySelection(installation.repository_selection)
+
         return cls(
-            installation_id = payload.installation.id,
-            account_type = GithubInstallationType(account.type.lower()),
-            account_id = account.id,
-            account_login = account.login,
-            account_avatar_url = account.avatar_url,
-            suspended_at = payload.installation.suspended_at,
+            installation_id=installation.id,
+            account_type=GithubInstallationType(account.type.lower()),
+            account_id=account.id,
+            account_login=account.login,
+            account_avatar_url=account.avatar_url,
+            repository_selection=repo_selection,
+            suspended_at=installation.suspended_at,
         )
 
 class JiraOAuthToken(Base):
@@ -566,4 +583,180 @@ class SlackSyncState(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False,
         server_default=func.now(), onupdate=func.now()
+    )
+
+
+# ============================================================
+# GitHub Sync State
+# ============================================================
+
+class GitHubSyncStatus(StrEnum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+class GitHubEntityType(StrEnum):
+    ISSUE = "issue"
+    PULL_REQUEST = "pull_request"
+    COMMIT = "commit"
+    REPOSITORY = "repository"
+
+
+class GitHubSyncState(Base):
+    """
+    GitHub 엔티티 동기화 상태 추적을 위한 테이블
+
+    - Entity Type별로 동기화 상태 관리 -> 타입별로 병렬처리 및 재시도 가능
+    - 증분 동기화 : last_successful_sync_at 기준으로 이후 변경된 엔티티만 동기화
+    """
+    __tablename__ = "github_sync_states"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # GitHub Installation 식별
+    installation_id: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, index=True,
+        comment="GitHub App Installation ID"
+    )
+    # Repository 식별 (owner/repo 형식)
+    repository_full_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, index=True,
+        comment="Repository full name (owner/repo)"
+    )
+    entity_type: Mapped[GitHubEntityType] = mapped_column(
+        String(50), nullable=False,
+        comment="issue, pull_request, commit, repository"
+    )
+
+    # 동기화 상태
+    last_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="마지막 동기화 시작 시간"
+    )
+    last_successful_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="마지막 성공적인 동기화 시간 (증분 동기화 기준)"
+    )
+    last_sync_status: Mapped[GitHubSyncStatus | None] = mapped_column(
+        String(20), nullable=True,
+        comment="pending, in_progress, success, failed"
+    )
+    last_sync_error: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True,
+        comment="마지막 에러 메시지"
+    )
+
+    # 진행 상황
+    total_entities: Mapped[int] = mapped_column(
+        Integer, default=0,
+        comment="동기화 대상 총 엔티티 수"
+    )
+    synced_entities: Mapped[int] = mapped_column(
+        Integer, default=0,
+        comment="동기화 완료된 엔티티 수"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        server_default=func.now(), onupdate=func.now()
+    )
+
+
+class GitHubRepository(Base):
+    """
+    GitHub Repository 정보 (정적 데이터, RDBMS 저장)
+    - Installation에 연결된 Repository 목록 관리
+    """
+    __tablename__ = "github_repositories"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Installation 연결
+    installation_id: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, index=True,
+        comment="GitHub App Installation ID"
+    )
+
+    # Repository 식별
+    repo_id: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, unique=True,
+        comment="GitHub Repository ID"
+    )
+    owner: Mapped[str] = mapped_column(
+        String(255), nullable=False, index=True,
+        comment="Repository owner (user or org)"
+    )
+    name: Mapped[str] = mapped_column(
+        String(255), nullable=False,
+        comment="Repository name"
+    )
+    full_name: Mapped[str] = mapped_column(
+        String(512), nullable=False, unique=True, index=True,
+        comment="Full name (owner/repo)"
+    )
+
+    # Repository 정보
+    description: Mapped[str | None] = mapped_column(
+        String(2000), nullable=True,
+        comment="Repository description"
+    )
+    html_url: Mapped[str] = mapped_column(
+        String(512), nullable=False,
+        comment="Repository URL"
+    )
+    default_branch: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="main",
+        comment="Default branch name"
+    )
+    language: Mapped[str | None] = mapped_column(
+        String(100), nullable=True,
+        comment="Primary programming language"
+    )
+    topics: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True,
+        comment="Repository topics (JSON array as string)"
+    )
+
+    # 통계
+    stargazers_count: Mapped[int] = mapped_column(
+        Integer, default=0, comment="Star count"
+    )
+    forks_count: Mapped[int] = mapped_column(
+        Integer, default=0, comment="Fork count"
+    )
+    open_issues_count: Mapped[int] = mapped_column(
+        Integer, default=0, comment="Open issues count"
+    )
+
+    # 상태
+    private: Mapped[bool] = mapped_column(
+        Boolean, default=False, comment="Private repository"
+    )
+    archived: Mapped[bool] = mapped_column(
+        Boolean, default=False, comment="Archived repository"
+    )
+    disabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, comment="Disabled repository"
+    )
+
+    # 시간
+    pushed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="마지막 push 시간"
+    )
+    repo_created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="Repository 생성 시간"
+    )
+    repo_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="Repository 업데이트 시간"
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )

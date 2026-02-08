@@ -16,6 +16,7 @@ class GitHubInstallationInfo(BaseModel):
     id: int
     account: GitHubAccount
     app_id: int
+    repository_selection: Optional[str] = None  # "all" or "selected"
     suspended_at: Optional[datetime] = None
 
 
