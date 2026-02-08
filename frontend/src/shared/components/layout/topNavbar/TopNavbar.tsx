@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 
-import MoreButtonModal from './MoreButtonModal';
-import ShareButtonModal from './ShareButtonModal';
+import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
+import { Popover, PopoverTrigger } from '@/shared/components/ui/popover';
+
+import { MoreButtonContent } from './MoreButtonModal';
+import { ShareButtonContent } from './ShareButtonModal';
 
 import Settings from '/public/icons/icon/admin_panel_settings.svg';
 import Home from '/public/icons/icon/home.svg';
@@ -42,21 +44,8 @@ interface TopNavbarProps {
 }
 
 const TopNavbar = ({ pageType }: TopNavbarProps) => {
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [isMoreModalOpen, setIsMoreModalOpen] = useState(false);
-
   const config = pageConfigs[pageType];
   const IconComponent = config.icon;
-
-  const toggleShareModal = () => {
-    setIsShareModalOpen((prev) => !prev);
-    setIsMoreModalOpen(false);
-  };
-
-  const toggleMoreModal = () => {
-    setIsMoreModalOpen((prev) => !prev);
-    setIsShareModalOpen(false);
-  };
 
   return (
     <nav aria-label="메인 네비게이션" className="border-neutral-3 sticky top-0 z-50 h-full w-full border-b bg-white">
@@ -70,45 +59,25 @@ const TopNavbar = ({ pageType }: TopNavbarProps) => {
           </Link>
         </div>
         <ul className="flex items-center justify-center gap-2">
-          <li className="relative">
-            <button
-              onClick={toggleShareModal}
-              aria-expanded={isShareModalOpen}
-              aria-controls="share-modal"
-              className={`flex h-[38.5px] cursor-pointer items-center justify-center rounded-lg border px-2.5 py-1.5 text-center transition-colors ${
-                isShareModalOpen
-                  ? 'border-neutral-4 bg-neutral-2 active:border-neutral-5 active:bg-neutral-3'
-                  : 'border-neutral-3 active:border-neutral-5 active:bg-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 bg-white'
-              } `}
-            >
-              <span className="text-body-small text-gray-70 relative top-px flex items-center">공유</span>
-            </button>
-            {/* 공유 모달 */}
-            {isShareModalOpen && (
-              <div className="absolute top-full right-0 mt-1.5">
-                <ShareButtonModal onClose={() => setIsShareModalOpen(false)} />
-              </div>
-            )}
+          <li>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="flex h-[38.5px] cursor-pointer items-center justify-center rounded-lg border border-neutral-3 bg-white px-2.5 py-1.5 text-center transition-colors hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 data-[state=open]:border-neutral-4 data-[state=open]:bg-neutral-2">
+                  <span className="text-body-small text-gray-70 relative top-px flex items-center">공유</span>
+                </button>
+              </PopoverTrigger>
+              <ShareButtonContent />
+            </Popover>
           </li>
-          <li className="relative">
-            <button
-              aria-expanded={isMoreModalOpen}
-              aria-controls="more-modal"
-              onClick={toggleMoreModal}
-              className={`${
-                isMoreModalOpen
-                  ? 'border-neutral-4 bg-neutral-2 active:border-neutral-5 active:bg-neutral-3'
-                  : 'border-neutral-3 active:border-neutral-5 active:bg-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 bg-white'
-              } cursor-pointer rounded-lg border px-1.5 py-1.5 transition-colors`}
-            >
-              <Kebeb_2 className="text-gray-70 h-6 w-6" />
-            </button>
-            {/* 더보기 모달 */}
-            {isMoreModalOpen && (
-              <div className="absolute top-full right-0 mt-1.5">
-                <MoreButtonModal onClose={() => setIsMoreModalOpen(false)} />
-              </div>
-            )}
+          <li>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="cursor-pointer rounded-lg border border-neutral-3 bg-white px-1.5 py-1.5 transition-colors hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 data-[state=open]:border-neutral-4 data-[state=open]:bg-neutral-2">
+                  <Kebeb_2 className="text-gray-70 h-6 w-6" />
+                </button>
+              </DropdownMenuTrigger>
+              <MoreButtonContent />
+            </DropdownMenu>
           </li>
         </ul>
       </div>
