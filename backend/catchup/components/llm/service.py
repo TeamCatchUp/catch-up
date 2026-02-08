@@ -41,6 +41,7 @@ class OpenAiLlmService(BaseLlmService):
             model=settings.OPENAI_CHAT_MODEL,
             api_key=settings.OPENAI_API_KEY,
             temperature=0,
+            streaming=True
         )
 
 
@@ -50,4 +51,5 @@ class AwsBedrockLlmService(BaseLlmService):
             model=settings.AWS_BEDROCK_MODEL,
             region=settings.AWS_BEDROCK_REGION,
             temperature=0,
+            streaming=True
         )
