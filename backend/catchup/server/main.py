@@ -3,6 +3,7 @@ import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from catchup import __version__
 from catchup.components.vector_db.factory import VectorDbProvider, get_vector_db_service
@@ -84,6 +85,17 @@ app.include_router(slack_router)
 app.include_router(slack_sync_router)
 app.include_router(github_sync_router)
 
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5500",
+        "http://catchup_web:3000",
+    ], # Go Live 포트 허용
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 헬스 체크
 @app.get("/")

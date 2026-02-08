@@ -1,9 +1,9 @@
 from typing import Annotated, Any, Literal, TypedDict, Optional
 
+from langchain_core.documents import Document
 from langgraph.graph.message import add_messages
 
 from catchup.rag.schemas import GraphDbSearchQuery, JiraSource, VectorDbSearchQuery
-from catchup.search.schemas import BaseSearchResult
 
 
 class AgentState(TypedDict):
@@ -18,7 +18,7 @@ class AgentState(TypedDict):
     vector_search_queries: list[VectorDbSearchQuery]
     graph_search_queries: list[GraphDbSearchQuery]  # Cypher 쿼리 문자열 등
     
-    retrieved_docs: list[BaseSearchResult]
+    retrieved_docs: list[Document]
     
     grade_status: Literal["good", "bad", "no_relationship", "max_retries"] 
     
