@@ -2,13 +2,35 @@
 @import './font.css';
 @import './button.css';
 @import './color.css';
-@import './control.css';
-@import './font.css';
 @import './radius.css';
 @import './shadow.css';
 @import './markdown.css';
 
 @layer base {
+  :root {
+    /* shadcn semantic tokens → CatchUp design tokens */
+    --background: var(--color-white);
+    --foreground: var(--color-gray-90);
+    --card: var(--color-white);
+    --card-foreground: var(--color-gray-90);
+    --popover: var(--color-white);
+    --popover-foreground: var(--color-gray-90);
+    --primary: var(--color-blue-50);
+    --primary-foreground: var(--color-white);
+    --secondary: var(--color-neutral-2);
+    --secondary-foreground: var(--color-gray-90);
+    --muted: var(--color-neutral-2);
+    --muted-foreground: var(--color-gray-50);
+    --accent: var(--color-neutral-2);
+    --accent-foreground: var(--color-gray-90);
+    --destructive: var(--color-red-50);
+    --destructive-foreground: var(--color-white);
+    --border: var(--color-neutral-3);
+    --input: var(--color-neutral-3);
+    --ring: var(--color-blue-50);
+    --radius: 0.5rem;
+  }
+
   ::-webkit-scrollbar {
     width: 0px;
     height: 0px;
