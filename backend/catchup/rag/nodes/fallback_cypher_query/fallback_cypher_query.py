@@ -90,7 +90,7 @@ def _convert_fallback_results_to_documents(
             metadata=metadata,
             id=doc_id,
         )
-        
+
         documents.append(document)
 
     return documents

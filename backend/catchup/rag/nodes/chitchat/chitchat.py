@@ -34,9 +34,7 @@ async def chitchat_node(state: AgentState):
 
     try:
         async with llm_semaphore:
-            answer = await chain.ainvoke(
-                input={"messages": filtered_messages}
-            )
+            answer = await chain.ainvoke(input={"messages": filtered_messages})
 
     except Exception as e:
         logger.error(f"Chitchat node failed: {e}", exc_info=True)

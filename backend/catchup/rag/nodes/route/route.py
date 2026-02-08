@@ -33,10 +33,7 @@ async def route_node(state: AgentState):
     try:
         async with llm_semaphore:
             answer: RouteQuery = await chain.ainvoke(
-                input={
-                    "query": query, 
-                    "history": conversation_history
-                }
+                input={"query": query, "history": conversation_history}
             )
 
     except Exception as e:

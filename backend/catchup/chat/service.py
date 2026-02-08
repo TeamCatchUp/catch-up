@@ -35,13 +35,11 @@ class ChatService:
         return ChatService._app
 
     @observe(name="chat")
-    async def chat(
-        self, query: str, role: str, session_id: str
-    ) -> ChatResponse:
+    async def chat(self, query: str, role: str, session_id: str) -> ChatResponse:
         app = await self._get_app()
-        
+
         config = self._setup_config(session_id)
-        
+
         inputs = {
             "messages": [HumanMessage(content=query)],
             "original_query": query,
@@ -78,12 +76,12 @@ class ChatService:
 
         # Checkpointer 설정
         config = self._setup_config(session_id)
-        
+
         inputs = {
             "messages": [HumanMessage(content=query)],
             "original_query": query,
         }
-        
+
         # 실행 시간 측정 시작
         start = time.perf_counter()
 
@@ -95,18 +93,16 @@ class ChatService:
         except asyncio.CancelledError:
             logger.warning(f"({session_id})클라이언트 연결 종료.")
             raise
-        
+
         except Exception as e:
-            logger.error(f"({session_id})Streaming 중 에러 발생: {e}" , exc_info=True)
-        
+            logger.error(f"({session_id})Streaming 중 에러 발생: {e}", exc_info=True)
+
         finally:
             elapsed_time = time.perf_counter() - start
             logger.info(f"({session_id})Streaming 종료: total {elapsed_time:.4f}s")
 
     async def _parse_stream_event(
-        self,
-        event: dict[str, Any],
-        session_id: str
+        self, event: dict[str, Any], session_id: str
     ) -> AsyncGenerator[StreamEvent, None]:
         kind = event["event"]  # 이벤트 종류
         name = event["name"]  # 이벤트 이름
@@ -114,36 +110,32 @@ class ChatService:
         # 노드 시작 상태 알림
         if kind == "on_chain_start" and name in NODE_STATUS_MAP:
             yield ChatStreamingStatusResponse(
-                session_id=session_id,
-                node=name,
-                message=NODE_STATUS_MAP[name]
+                session_id=session_id, node=name, message=NODE_STATUS_MAP[name]
             )
-            
+
             if name == "generate_final_answer":
                 input_data = event["data"].get("input", {})
                 docs = input_data.get("retrieve_docs", [])
-                
+
                 sources = []
                 # TODO: Source 담아서 보내야 함.
                 # if docs:
                 #     sources = []
-                    
+
                 yield ChatStreamingSourceResponse(
-                    session_id=session_id,
-                    sources=sources
+                    session_id=session_id, sources=sources
                 )
-        
+
         elif kind == "on_chat_model_stream":
             node = event["metadata"].get("langgraph_node")
             is_final_node = node in ("chitchat", "generate_final_answer")
             chunk = event["data"].get("chunk")
-            
+
             if is_final_node and chunk and chunk.content:
                 yield ChatStreamingTokenResponse(
-                    session_id=session_id,
-                    token=chunk.content  
+                    session_id=session_id, token=chunk.content
                 )
-                
+
     def _setup_config(self, session_id: str):
         default_config = {"configurable": {"thread_id": session_id}}
         if settings.ENABLE_LANGFUSE:

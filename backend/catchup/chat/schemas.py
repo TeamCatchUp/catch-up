@@ -33,6 +33,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     """일반 채팅 응답"""
+
     answer: str
     sources: list[SourceResponse] = []
     process_time: float
@@ -40,6 +41,7 @@ class ChatResponse(BaseModel):
 
 class ChatStreamingStatusResponse(BaseModel):
     """답변 생성 단계 스트리밍"""
+
     type: Literal["status"] = "status"
     session_id: str
     node: str
@@ -48,11 +50,12 @@ class ChatStreamingStatusResponse(BaseModel):
 
 class ChatStreamingSourceResponse(BaseModel):
     """출처 정보 전송 (답변 생성 전 먼저 전송)"""
+
     type: Literal["sources"] = "sources"
     session_id: str
     # sources: list[SourceResponse]  TODO: 주석 해제
     sources: Optional[list]
-    
+
 
 class ChatStreamingTokenResponse(BaseModel):
     type: Literal["token"] = "token"
@@ -81,5 +84,3 @@ StreamEvent = Annotated[
 #     session_id: str
 #     node: str
 #     payload: Any
-
-

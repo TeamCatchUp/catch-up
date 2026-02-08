@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 @log_node
 async def expand_graph_context_node(state: AgentState):
     vector_docs = state.get("retrieved_docs", [])
-    
+
     anchor_ids = extract_anchor_ids(vector_docs)
-    
+
     logger.info(anchor_ids)
 
     if not anchor_ids:
@@ -30,11 +30,11 @@ async def expand_graph_context_node(state: AgentState):
         raw_results = graph_service.get_context_by_anchors(
             anchor_ids=anchor_ids, limit=50
         )
-        
+
         if not raw_results:
             logger.info("연결된 Graph 노드 없음.")
             return {"retrieved_docs": vector_docs}
-        
+
     except Exception as e:
         logger.warning(f"Graph DB 조회 실패: {e}")
         return {"retrieved_docs": vector_docs}
@@ -81,15 +81,16 @@ def _resolve_document_id(result):
 
     return f"graph:expand:{safe_source}:{result['relation']}:{safe_target}"
 
+
 if __name__ == "__main__":
     from catchup.components.graph_db.factory import get_graph_db_service
 
     # Retrieval 테스트 용 데이터 적재 스크립트
     def seed():
         print("데이터 적재 시작...")
-        
+
         graph_service = get_graph_db_service()
-        
+
         # Graph DB 초기화
         graph_service.query("MATCH (n) DETACH DELETE n")
         print("기존 데이터 삭제 완료")
@@ -121,9 +122,9 @@ if __name__ == "__main__":
         CREATE (d3)-[:USES {timestamp: datetime()}]->(lib)
         CREATE (lib)-[:CONNECTS_TO {timestamp: datetime()}]->(d2)
         """
-        
+
         # 쿼리 실행
         graph_service.query(query)
         print("데이터 적재 완료.")
-        
+
     seed()
