@@ -6,7 +6,6 @@ from typing import Any, AsyncGenerator
 from langchain_core.messages import HumanMessage
 from langfuse import observe
 
-from catchup.observability.langfuse_client import langfuse_handler
 from catchup.configs.config import settings
 from catchup.chat.schemas import (
     NODE_STATUS_MAP,
@@ -139,5 +138,6 @@ class ChatService:
     def _setup_config(self, session_id: str):
         default_config = {"configurable": {"thread_id": session_id}}
         if settings.ENABLE_LANGFUSE:
+            from catchup.observability.langfuse_client import langfuse_handler
             default_config["callbacks"] = [langfuse_handler]
         return default_config
