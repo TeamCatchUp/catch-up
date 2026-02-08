@@ -53,7 +53,7 @@ def select_diverse_top_k(
     # 문서 그룹핑
     docs_by_source_type: dict[str, list[Document]] = defaultdict(list)
     for doc in reranked_docs:
-        source_type = doc.metadata.get("source_type", "unknown")
+        source_type = doc.metadata.get("source", "unknown")
         docs_by_source_type[source_type].append(doc)
 
     # Source Type 종류
