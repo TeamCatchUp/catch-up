@@ -1,13 +1,13 @@
 import asyncio
-import json
 import logging
 import time
 from typing import Any, AsyncGenerator
 
 from langchain_core.messages import HumanMessage
 from langfuse import observe
-# from langgraph.types import Command
 
+from catchup.observability.langfuse_client import langfuse_handler
+from catchup.configs.config import settings
 from catchup.chat.schemas import (
     NODE_STATUS_MAP,
     ChatResponse,
@@ -34,18 +34,18 @@ class ChatService:
             ChatService._app = await get_compiled_graph()
         return ChatService._app
 
-    @observe()
+    @observe(name="chat")
     async def chat(
         self, query: str, role: str, session_id: str
     ) -> ChatResponse:
         app = await self._get_app()
-
+        
+        config = self._setup_config(session_id)
+        
         inputs = {
             "messages": [HumanMessage(content=query)],
             "original_query": query,
         }
-
-        config = {"configurable": {"thread_id": session_id}}
 
         start = time.perf_counter()
         final_state = await app.ainvoke(inputs, config)
@@ -66,7 +66,7 @@ class ChatService:
             answer=answer_text, sources=sources, process_time=elapsed_time
         )
 
-    @observe()
+    @observe(name="chat-stream")
     async def chat_stream(
         self,
         session_id: str,
@@ -77,7 +77,7 @@ class ChatService:
         app = await self._get_app()
 
         # Checkpointer 설정
-        config = {"configurable": {"thread_id": session_id}}
+        config = self._setup_config(session_id)
         
         inputs = {
             "messages": [HumanMessage(content=query)],
@@ -95,8 +95,10 @@ class ChatService:
         except asyncio.CancelledError:
             logger.warning(f"({session_id})클라이언트 연결 종료.")
             raise
+        
         except Exception as e:
             logger.error(f"({session_id})Streaming 중 에러 발생: {e}" , exc_info=True)
+        
         finally:
             elapsed_time = time.perf_counter() - start
             logger.info(f"({session_id})Streaming 종료: total {elapsed_time:.4f}s")
@@ -141,3 +143,9 @@ class ChatService:
                     session_id=session_id,
                     token=chunk.content  
                 )
+                
+    def _setup_config(self, session_id: str):
+        default_config = {"configurable": {"thread_id": session_id}}
+        if settings.ENABLE_LANGFUSE:
+            default_config["callbacks"] = [langfuse_handler]
+        return default_config

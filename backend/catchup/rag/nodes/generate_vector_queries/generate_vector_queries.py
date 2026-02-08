@@ -3,7 +3,6 @@ import logging
 from langchain_core.prompts import ChatPromptTemplate
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.observability.langfuse_client import langfuse_handler
 from catchup.rag.nodes.generate_vector_queries.prompt import (
     VECTOR_QUERIES_GENERATION_PROMPT,
 )
@@ -28,8 +27,7 @@ async def generate_vector_queries_node(state: AgentState):
     try:
         async with llm_semaphore:
             plan: VectorDbSearchPlan = await chain.ainvoke(
-                input={"rewritten_query": rewritten_query},
-                config={"callbacks": [langfuse_handler]},
+                input={"rewritten_query": rewritten_query}
             )
 
         _print_search_plan_log(plan)

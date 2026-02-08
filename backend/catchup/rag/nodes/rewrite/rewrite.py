@@ -5,7 +5,6 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.observability.langfuse_client import langfuse_handler
 from catchup.rag.nodes.rewrite.prompt import REWRITE_PROMPT
 from catchup.rag.nodes.utils import (
     get_conversation_history,
@@ -39,8 +38,7 @@ async def rewrite_node(state: AgentState):
                     "history": history_text,
                     "original_query": original_query,
                     "feedback": grade_comment if grade_comment else "None",
-                },
-                config={"callbacks": [langfuse_handler]},
+                }
             )
 
     except Exception as e:

@@ -5,7 +5,6 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.observability.langfuse_client import langfuse_handler
 from catchup.rag.nodes.chitchat.prompt import CHITCHAT_PROMPT
 from catchup.rag.nodes.utils import filter_conversation, llm_semaphore, log_node
 from catchup.rag.state import AgentState
@@ -36,8 +35,7 @@ async def chitchat_node(state: AgentState):
     try:
         async with llm_semaphore:
             answer = await chain.ainvoke(
-                input={"messages": filtered_messages},
-                config={"callbacks": [langfuse_handler]},
+                input={"messages": filtered_messages}
             )
 
     except Exception as e:
