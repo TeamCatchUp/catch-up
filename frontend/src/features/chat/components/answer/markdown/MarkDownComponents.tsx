@@ -1,6 +1,7 @@
-import type { Components } from 'react-markdown';
-import { renderWithBadges } from './renderWithBadges';
 import React from 'react';
+import type { Components } from 'react-markdown';
+
+import { renderWithBadges } from './renderWithBadges';
 
 const processChildren = (children: any, sources?: ChatSource[]) => {
   return React.Children.map(children, (child) => {

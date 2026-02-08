@@ -1,12 +1,13 @@
 'use client';
 
-import clsx from 'clsx';
 import { useState } from 'react';
-import Profile from '/public/icons/icon/profile.svg';
-import EditPencil from '/public/icons/icon/edit_pencil.svg';
-import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
+import clsx from 'clsx';
 
+import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import { useUserStore } from '@/shared/store/userStore';
+
+import EditPencil from '/public/icons/icon/edit_pencil.svg';
+import Profile from '/public/icons/icon/profile.svg';
 
 const Page = () => {
   const { user } = useUserStore();

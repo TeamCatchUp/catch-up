@@ -1,7 +1,7 @@
 'use client';
 
-import * as Popover from '@radix-ui/react-popover';
 import { ReactNode } from 'react';
+import * as Popover from '@radix-ui/react-popover';
 
 interface FilterDropdownProps {
   trigger: ReactNode;

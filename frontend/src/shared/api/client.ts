@@ -1,9 +1,10 @@
-import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import axios, { AxiosError,AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+
+import { API } from '@/shared/api/endpoints';
 import { USE_MOCK } from '@/shared/mocks/config';
 import { createMockResponse } from '@/shared/mocks/mockAxiosAdapter';
 
 const api = axios.create({
-  baseURL: 'https://0-0-0-0.example.io',
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -76,8 +77,8 @@ api.interceptors.response.use(
       const devToken = localStorage.getItem('accessToken');
 
       if (devToken === 'dev-token') {
-        // /api/user/me 요청인 경우 mock 유저 정보 반환
-        if (originalRequest.url?.includes('/api/user/me')) {
+        // /api/v1/auth/me 요청인 경우 mock 유저 정보 반환
+        if (originalRequest.url?.includes(API.auth.me)) {
           return Promise.resolve({
             data: {
               id: 'dev-user-123',
@@ -103,7 +104,7 @@ api.interceptors.response.use(
     }
 
     // refresh 요청 자체가 실패한 경우 무한 루프 방지
-    if (originalRequest.url?.includes('/api/auth/refresh')) {
+    if (originalRequest.url?.includes(API.auth.refresh)) {
       if (typeof window !== 'undefined') {
         window.location.href = '/login';
       }
@@ -116,7 +117,7 @@ api.interceptors.response.use(
 
       try {
         // refresh token -> access token 갱신
-        await api.post('/api/auth/refresh');
+        await api.post(API.auth.refresh);
 
         return api(originalRequest); // 기존 요청 재시도
       } catch (refreshErr) {

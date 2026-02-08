@@ -1,4 +1,4 @@
-import { MOCK_RAG_ANSWER, MOCK_SOURCES, MOCK_RELATED_JIRA_ISSUES } from './data';
+import { MOCK_RAG_ANSWER, MOCK_RELATED_JIRA_ISSUES,MOCK_SOURCES } from './data';
 
 interface MockSSEOptions {
   sessionId: string;

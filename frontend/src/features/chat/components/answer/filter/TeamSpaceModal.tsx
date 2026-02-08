@@ -1,10 +1,12 @@
 'use client';
 
-import clsx from 'clsx';
 import { useRef, useState } from 'react';
-import ArrowRight from '/public/icons/icon/arrow_right2.svg';
+import clsx from 'clsx';
+
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
+
+import ArrowRight from '/public/icons/icon/arrow_right2.svg';
 
 interface TeamSpaceModalProps {
   onClose: () => void;

@@ -1,9 +1,10 @@
 'use client';
 
-import DashboardImage from '@/public/image/catchup-login.jpg';
-import CatchUpLogo from '@/public/icons/logo/catchUp.svg';
 import Image from 'next/image';
+
 import IconOpen from '@/public/icons/icon/open_in_new.svg';
+import CatchUpLogo from '@/public/icons/logo/catchUp.svg';
+import DashboardImage from '@/public/image/catchup-login.jpg';
 
 export default function Login() {
   const handleGoogleLogin = () => {

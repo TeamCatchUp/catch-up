@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, Suspense } from 'react';
+import { Suspense,useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 function CallbackHandler() {

@@ -1,13 +1,16 @@
 'use client';
 
-import clsx from 'clsx';
 import { useState } from 'react';
+import clsx from 'clsx';
+
+import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
+
+import SourceCard from './SourceCard';
+import SourceError from './SourceError';
+
+import AddCircle from '/public/icons/icon/add_circle.svg';
 import Align from '/public/icons/icon/align.svg';
 import Divider from '/public/icons/icon/divider.svg';
-import AddCircle from '/public/icons/icon/add_circle.svg';
-import SourceCard from './SourceCard';
-import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
-import SourceError from './SourceError';
 
 interface Props {
   sources: ChatSource[];

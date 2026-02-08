@@ -1,4 +1,7 @@
 import type { Metadata } from 'next';
+
+import QueryProvider from '@/shared/providers/QueryProvider';
+
 import '@/shared/styles/globals.css';
 
 export const metadata: Metadata = {
@@ -13,7 +16,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className="h-screen">{children}</body>
+      <body className="h-screen">
+        <QueryProvider>{children}</QueryProvider>
+      </body>
     </html>
   );
 }

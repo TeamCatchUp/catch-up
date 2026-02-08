@@ -1,10 +1,9 @@
-import delay from './delay';
-
 // Data imports
-import { MOCK_USER, MOCK_JWT_TOKENS } from './auth/data';
-import { MOCK_CHATROOMS, MOCK_RECENT_QUERIES, MOCK_JIRA_TICKETS } from './search/data';
-import { MOCK_REPOSITORIES, MOCK_FILE_TREES, DEFAULT_FILE_TREE } from './github/data';
+import { MOCK_JWT_TOKENS,MOCK_USER } from './auth/data';
+import delay from './delay';
 import { MOCK_FEEDBACK_RESPONSE } from './feedback/data';
+import { DEFAULT_FILE_TREE,MOCK_FILE_TREES, MOCK_REPOSITORIES } from './github/data';
+import { MOCK_CHATROOMS, MOCK_JIRA_TICKETS,MOCK_RECENT_QUERIES } from './search/data';
 
 type MockHandler = {
   pattern: RegExp;
@@ -23,17 +22,17 @@ const mockHandlers: MockHandler[] = [
   // Auth
   // ═══════════════════════════════════════
   {
-    pattern: /^\/api\/me$/,
+    pattern: /^\/api\/v1\/auth\/me$/,
     method: 'get',
     handler: async () => MOCK_USER,
   },
   {
-    pattern: /^\/api\/auth\/logout$/,
+    pattern: /^\/api\/v1\/auth\/logout$/,
     method: 'post',
     handler: async () => ({ success: true }),
   },
   {
-    pattern: /^\/api\/auth\/refresh$/,
+    pattern: /^\/api\/v1\/auth\/refresh$/,
     method: 'post',
     handler: async () => MOCK_JWT_TOKENS,
   },
@@ -51,12 +50,17 @@ const mockHandlers: MockHandler[] = [
     method: 'get',
     handler: async () => MOCK_RECENT_QUERIES,
   },
+  {
+    pattern: /^\/api\/chatrooms\/[^/]+\/queries$/,
+    method: 'get',
+    handler: async () => MOCK_RECENT_QUERIES,
+  },
 
   // ═══════════════════════════════════════
   // GitHub
   // ═══════════════════════════════════════
   {
-    pattern: /^\/api\/github\/read\/repositories$/,
+    pattern: /^\/api\/v1\/github\/installations$/,
     method: 'get',
     handler: async () => MOCK_REPOSITORIES,
   },
@@ -96,7 +100,7 @@ const mockHandlers: MockHandler[] = [
     },
   },
   {
-    pattern: /^\/api\/chat\/resume$/,
+    pattern: /^\/api\/chat\/stream\/resume$/,
     method: 'post',
     handler: async (_, data) => {
       const requestData = data as { sessionId?: string } | undefined;

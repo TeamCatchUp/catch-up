@@ -1,10 +1,9 @@
 'use client';
 
-import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
-
 import { GithubExplorer } from '@/shared/components/query/explorer/GithubExplorer';
 import { JiraExplorer } from '@/shared/components/query/explorer/JiraExplorer';
 import { RecentActivityExplorer } from '@/shared/components/query/recent/RecentActivityExplorer';
+import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
 
 interface ExplorerPanelProps {
   filters: UseSearchFiltersReturn;

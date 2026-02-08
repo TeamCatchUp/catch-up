@@ -1,7 +1,8 @@
 'use client';
 
-import clsx from 'clsx';
 import { useState } from 'react';
+import clsx from 'clsx';
+
 import DropDownDown from '/public/icons/icon/dropdown_down.svg';
 
 interface RelatedTasksSectionProps {

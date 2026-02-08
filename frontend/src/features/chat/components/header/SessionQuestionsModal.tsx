@@ -1,57 +1,29 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { useParams } from 'next/navigation'; // URL에서 sessionId를 가져오기 위함
-import List from '/public/icons/icon/list.svg';
+import { useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useParams } from 'next/navigation';
+
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
-import { nowChatroomService } from '@/shared/api/search';
+import { chatQueries } from '@/shared/queries/chatroom.queries';
+
+import List from '/public/icons/icon/list.svg';
 
 interface SessionQuestionsModalProps {
   onClose: () => void;
   onSelect: (query: string) => void;
 }
 
-// 인터페이스 정의 수정
-interface ChatQuery {
-  query: string;
-}
-
 const SessionQuestionsModal = ({ onClose, onSelect }: SessionQuestionsModalProps) => {
   const params = useParams();
-  const sessionId = params.sessionId as string; // URL 구조가 /chat/[sessionId] 인 경우
+  const sessionId = params.sessionId as string;
 
-  const [allQueries, setAllQueries] = useState<ChatQuery[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const modalRef = useRef<HTMLDivElement>(null);
+  const { data, isLoading } = useQuery(chatQueries.sessionQueries(sessionId));
 
-  useEffect(() => {
-    const fetchDefaultData = async () => {
-      if (!sessionId) return;
+  const allQueries = data?.content ?? [];
 
-      try {
-        setIsLoading(true);
-        // 이전에 고친 서비스 함수를 호출 (sessionId 전달)
-        const res = await nowChatroomService.getAllQueries(sessionId);
-
-        // 백엔드 응답 구조가 { content: [ { query: '...' }, ... ] } 인 경우
-        if (res && res.content) {
-          setAllQueries(res.content);
-        } else if (Array.isArray(res)) {
-          // 응답이 바로 배열인 경우 대비
-          setAllQueries(res.map((q: any) => (typeof q === 'string' ? { query: q } : q)));
-        }
-      } catch (err) {
-        console.error('데이터 로드 실패:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchDefaultData();
-  }, [sessionId]);
-
-  // Hook 규칙 준수: Early Return(isLoading)보다 위에서 호출
   useEscapeKey(onClose);
   useOutsideClick(modalRef, onClose);
 
@@ -78,7 +50,6 @@ const SessionQuestionsModal = ({ onClose, onSelect }: SessionQuestionsModalProps
                 key={idx}
                 className="hover:bg-neutral-1 rounded-md2 flex h-10 w-full cursor-pointer items-center px-2.5 py-1 transition-colors"
                 onClick={() => {
-                  /* 필요한 경우 해당 질문 위치로 스크롤 등 액션 추가 */
                   onSelect(item.query);
                   onClose();
                 }}

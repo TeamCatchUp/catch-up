@@ -5,22 +5,22 @@
 
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
-import type { GithubNode } from '@/shared/types/query/github';
-import type { JiraNode } from '@/shared/types/query/jira';
-import { getAllChildIds } from '@/shared/utils/tree';
-import type { PopoverType, ExplorerMode, ChipData, FilterLabels } from '@/shared/types/query/search';
+import { useCallback, useMemo,useState } from 'react';
 
+import IconFile from '@/public/icons/icon/file_filled.svg';
+import IconFolder from '@/public/icons/icon/folder_blue.svg';
 // Icons
 import IconPerson from '@/public/icons/icon/person.svg';
-import IconTag from '@/public/icons/icon/tag.svg';
 import IconSpace from '@/public/icons/icon/space.svg';
+import IconTag from '@/public/icons/icon/tag.svg';
+import IconJiraSprint from '@/public/icons/jira/Epic.svg';
+import IconJiraTicket from '@/public/icons/jira/Task.svg';
 import IconGithub from '@/public/icons/logo/GitHub.svg';
 import IconJira from '@/public/icons/logo/Jira.svg';
-import IconFolder from '@/public/icons/icon/folder_blue.svg';
-import IconFile from '@/public/icons/icon/file_filled.svg';
-import IconJiraTicket from '@/public/icons/jira/Task.svg';
-import IconJiraSprint from '@/public/icons/jira/Epic.svg';
+import type { GithubNode } from '@/shared/types/query/github';
+import type { JiraNode } from '@/shared/types/query/jira';
+import type { ChipData, ExplorerMode, FilterLabels,PopoverType } from '@/shared/types/query/search';
+import { getAllChildIds } from '@/shared/utils/tree';
 
 export interface UseSearchFiltersReturn {
   // Explorer 모드

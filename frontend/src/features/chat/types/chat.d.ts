@@ -102,6 +102,20 @@ interface RagNotification {
   data: RagNotificationData | null;
 }
 
+/** 새 SSE 스트림 이벤트 (fetch ReadableStream 방식) */
+type StreamEvent =
+  | { type: 'status'; node: string; message: string }
+  | { type: 'interrupt'; payload: PRPayload[] }
+  | {
+      type: 'result';
+      answer: string;
+      sources: BackendSource[];
+      chatHistoryId?: string;
+      hasFeedback?: boolean;
+      relatedJiraIssues?: BackendSource[];
+    }
+  | { type: 'ping' };
+
 interface JiraSubTask {
   id: string;
   title: string;

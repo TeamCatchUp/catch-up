@@ -1,20 +1,22 @@
 import { useRef } from 'react';
-import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
-import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
-import EditSquare from '/public/icons/icon/edit_square.svg';
-import Share from '/public/icons/icon/share_2.svg';
-import Cancel from '/public/icons/icon/cancel.svg';
-import ArrowRight from '/public/icons/icon/arrow_right.svg';
-import Link from '/public/icons/icon/link.svg';
-import SlackLogo from '/public/icons/logo/Slack.svg';
-import GithubLogo from '/public/icons/logo/GitHub.svg';
-import ConfluenceLogo from '/public/icons/logo/Confluence.svg';
-import WikiLogo from '/public/icons/icon/Wiki.svg';
-import NotionLogo from '/public/icons/icon/Notion.svg';
-import Add from '/public/icons/icon/add_small.svg';
-import Chat from '/public/icons/icon/chat.svg';
+
 import TaskManagerPart from '@/features/home/components/TaskManagePart';
 import ToolTip from '@/shared/components/ui/ToolTip';
+import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
+import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
+
+import Add from '/public/icons/icon/add_small.svg';
+import ArrowRight from '/public/icons/icon/arrow_right.svg';
+import Cancel from '/public/icons/icon/cancel.svg';
+import Chat from '/public/icons/icon/chat.svg';
+import EditSquare from '/public/icons/icon/edit_square.svg';
+import Link from '/public/icons/icon/link.svg';
+import NotionLogo from '/public/icons/icon/Notion.svg';
+import Share from '/public/icons/icon/share_2.svg';
+import WikiLogo from '/public/icons/icon/Wiki.svg';
+import ConfluenceLogo from '/public/icons/logo/Confluence.svg';
+import GithubLogo from '/public/icons/logo/GitHub.svg';
+import SlackLogo from '/public/icons/logo/Slack.svg';
 
 interface TaskRecentlyCheckedModalProps {
   task: TaskRecentlyCheckedCard;

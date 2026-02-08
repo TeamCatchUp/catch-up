@@ -1,33 +1,33 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useRef,useState } from 'react';
 import clsx from 'clsx';
-import type { UseRagFiltersReturn } from '@/features/chat/hooks/useRagFilters';
 
+import type { UseRagFiltersReturn } from '@/features/chat/hooks/useRagFilters';
+import IconDivider from '@/public/icons/icon/divider.svg';
+import IconFile from '@/public/icons/icon/file_filled.svg';
+import IconFolder from '@/public/icons/icon/folder_blue.svg';
+import IconLock from '@/public/icons/icon/lock_filled.svg';
+import IconPerson from '@/public/icons/icon/person.svg';
+import IconSpace from '@/public/icons/icon/space.svg';
+import IconTag from '@/public/icons/icon/tag.svg';
+import IconJiraSprint from '@/public/icons/jira/Epic.svg';
+import IconJiraTicket from '@/public/icons/jira/Task.svg';
+import IconGithub from '@/public/icons/logo/GitHub.svg';
+import IconJira from '@/public/icons/logo/Jira.svg';
 import { GithubExplorer } from '@/shared/components/query/explorer/GithubExplorer';
 import { JiraExplorer } from '@/shared/components/query/explorer/JiraExplorer';
-import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
-import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
 import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown';
 import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
-import { PERSON_OPTIONS } from '@/shared/mocks/search/filterOptions';
+import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
+import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
 import ToolTip from '@/shared/components/ui/ToolTip';
+import { PERSON_OPTIONS } from '@/shared/mocks/search/filterOptions';
 
 import Add from '/public/icons/icon/add_small.svg';
 import ArrowSend from '/public/icons/icon/arrow_send.svg';
-import Stop from '/public/icons/icon/stop.svg';
 import Filter from '/public/icons/icon/filter-2.svg';
-import IconJira from '@/public/icons/logo/Jira.svg';
-import IconGithub from '@/public/icons/logo/GitHub.svg';
-import IconDivider from '@/public/icons/icon/divider.svg';
-import IconPerson from '@/public/icons/icon/person.svg';
-import IconTag from '@/public/icons/icon/tag.svg';
-import IconSpace from '@/public/icons/icon/space.svg';
-import IconLock from '@/public/icons/icon/lock_filled.svg';
-import IconFile from '@/public/icons/icon/file_filled.svg';
-import IconFolder from '@/public/icons/icon/folder_blue.svg';
-import IconJiraTicket from '@/public/icons/jira/Task.svg';
-import IconJiraSprint from '@/public/icons/jira/Epic.svg';
+import Stop from '/public/icons/icon/stop.svg';
 
 interface RagInputProps {
   filters: UseRagFiltersReturn;

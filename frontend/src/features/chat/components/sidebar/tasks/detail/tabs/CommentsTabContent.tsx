@@ -1,12 +1,13 @@
 'use client';
 
-import clsx from 'clsx';
 import { useState } from 'react';
-import LoadingProfile from '/public/icons/icon/loading_profile.svg';
-import DefaultProfile from '/public/icons/icon/default_profile.svg';
+import clsx from 'clsx';
+
 import Connector from '/public/icons/icon/connector.svg';
+import DefaultProfile from '/public/icons/icon/default_profile.svg';
 import LastConnector from '/public/icons/icon/last_connector.svg';
 import Link from '/public/icons/icon/link.svg';
+import LoadingProfile from '/public/icons/icon/loading_profile.svg';
 
 interface Reply {
   id: number;

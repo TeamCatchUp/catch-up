@@ -1,11 +1,13 @@
 'use client';
 
-import clsx from 'clsx';
 import { useRef } from 'react';
-import ArrowRight from '/public/icons/icon/arrow_right2.svg';
-import AddHome from '/public/icons/icon/add_home.svg';
+import clsx from 'clsx';
+
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
+
+import AddHome from '/public/icons/icon/add_home.svg';
+import ArrowRight from '/public/icons/icon/arrow_right2.svg';
 
 interface TeamSpaceItem {
   id: string;

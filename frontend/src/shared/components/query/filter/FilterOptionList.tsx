@@ -1,8 +1,9 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import IconCloseCircle from '@/public/icons/icon/TextfiledDelete.svg';
+
 import IconCloseSmall from '@/public/icons/icon/cancel_small.svg';
+import IconCloseCircle from '@/public/icons/icon/TextfiledDelete.svg';
 
 interface OptionItem {
   id?: string | number;

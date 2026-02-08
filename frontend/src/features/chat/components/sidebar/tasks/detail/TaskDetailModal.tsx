@@ -1,21 +1,23 @@
 'use client';
 
+import { useEffect,useState } from 'react';
 import clsx from 'clsx';
-import { useState, useEffect } from 'react';
-import DropDownDown from '/public/icons/icon/dropdown_down.svg';
-import Kebab from '/public/icons/icon/kebab.svg';
+
+import DetailTabNav from './DetailTabNav';
+import EmptyState from './EmptyState';
+import CommentsTabContent from './tabs/CommentsTabContent';
+import FilesTabContent from './tabs/FilesTabContent';
+import InfoTabContent from './tabs/InfoTabContent';
+import URLTabContent from './tabs/URLTabContent';
+import WikiTabContent from './tabs/WikiTabContent';
+import TaskDetailContent from './TaskDetailContent';
+
 import Cancel from '/public/icons/icon/cancel.svg';
 import Check from '/public/icons/icon/check.svg';
+import DropDownDown from '/public/icons/icon/dropdown_down.svg';
 import Edit from '/public/icons/icon/edit_square.svg';
+import Kebab from '/public/icons/icon/kebab.svg';
 import Share from '/public/icons/icon/share_2.svg';
-import InfoTabContent from './tabs/InfoTabContent';
-import FilesTabContent from './tabs/FilesTabContent';
-import WikiTabContent from './tabs/WikiTabContent';
-import URLTabContent from './tabs/URLTabContent';
-import CommentsTabContent from './tabs/CommentsTabContent';
-import EmptyState from './EmptyState';
-import DetailTabNav from './DetailTabNav';
-import TaskDetailContent from './TaskDetailContent';
 
 interface TaskDetailModalProps {
   onClose: () => void;

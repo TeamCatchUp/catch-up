@@ -1,8 +1,9 @@
-import IconX from '@/public/icons/icon/TextfiledDelete.svg';
-import IconHelp from '@/public/icons/icon/helpWhite.svg';
-import JiraGuide from '@/public/image/jiraGuidJpg.jpg';
-import GitGuide from '@/public/image/gitGuidejpg.jpg';
 import Image from 'next/image';
+
+import IconHelp from '@/public/icons/icon/helpWhite.svg';
+import IconX from '@/public/icons/icon/TextfiledDelete.svg';
+import GitGuide from '@/public/image/gitGuidejpg.jpg';
+import JiraGuide from '@/public/image/jiraGuidJpg.jpg';
 
 interface GuideCardProps {
   onClose: () => void;

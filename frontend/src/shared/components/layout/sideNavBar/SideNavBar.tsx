@@ -1,33 +1,35 @@
 'use client';
 
+import { useEffect, useMemo,useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+
+import { chatQueries } from '@/shared/queries/chatroom.queries';
+import RecentQuestionsModal from '@/shared/components/layout/sideNavBar/modal/RecentQuestionsModal';
+import TeamSpaceDropDownModal from '@/shared/components/layout/sideNavBar/modal/TeamSpaceDropDownModal';
+import TeamSpaceMoreModal from '@/shared/components/layout/sideNavBar/modal/TeamSpaceMoreModal';
+import UserModal from '@/shared/components/layout/sideNavBar/modal/UserModal';
+import ToolTip from '@/shared/components/ui/ToolTip';
 import { useUserStore } from '@/shared/store/userStore';
-import CatchupLogo from '/public/icons/logo/logo_catchup.svg';
-import CatchupLogoLetter from '/public/icons/logo/logo_catchup_letter.svg';
-import Close from '/public/icons/icon/close.svg';
-import Open from '/public/icons/icon/open.svg';
-import TeamSpace from '/public/icons/icon/teamspace.svg';
-import Dropdown from '/public/icons/icon/dropdown_down.svg';
-import Kebeb from '/public/icons/icon/kebeb 2.svg';
-import Home from '/public/icons/icon/home.svg';
+
 import AI from '/public/icons/icon/ai.svg';
-import Dashboard from '/public/icons/icon/dashboard.svg';
-import Mail from '/public/icons/icon/inbox.svg';
-import Profile from '/public/icons/icon/profile.svg';
-import UnfoldMore from '/public/icons/icon/unfold_more.svg';
 import ArrowLeft from '/public/icons/icon/arrow_left.svg';
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
+import Close from '/public/icons/icon/close.svg';
+import Dashboard from '/public/icons/icon/dashboard.svg';
+import Dropdown from '/public/icons/icon/dropdown_down.svg';
+import Home from '/public/icons/icon/home.svg';
+import Mail from '/public/icons/icon/inbox.svg';
+import Kebeb from '/public/icons/icon/kebeb 2.svg';
 import Necessary from '/public/icons/icon/necessary.svg';
-import ToolTip from '@/shared/components/ui/ToolTip';
-import TeamSpaceMoreModal from '@/shared/components/layout/sideNavBar/modal/TeamSpaceMoreModal';
-import TeamSpaceDropDownModal from '@/shared/components/layout/sideNavBar/modal/TeamSpaceDropDownModal';
-import UserModal from '@/shared/components/layout/sideNavBar/modal/UserModal';
-import RecentQuestionsModal from '@/shared/components/layout/sideNavBar/modal/RecentQuestionsModal';
-import api from '@/shared/api/client';
-import { searchService } from '@/shared/api/search';
-import Link from 'next/link';
+import Open from '/public/icons/icon/open.svg';
+import Profile from '/public/icons/icon/profile.svg';
+import TeamSpace from '/public/icons/icon/teamspace.svg';
+import UnfoldMore from '/public/icons/icon/unfold_more.svg';
+import CatchupLogo from '/public/icons/logo/logo_catchup.svg';
+import CatchupLogoLetter from '/public/icons/logo/logo_catchup_letter.svg';
 
 interface ChatRoomQuery {
   title: string;
@@ -63,6 +65,7 @@ const navItems = [
 const SideNavBar = () => {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const isRagAnswerPage = pathname.startsWith('/chat');
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage); // SNB opened 여부
   const [isTeamSpaceMoreModalOpen, setIsTeamSpaceMoreModalOpen] = useState(false); // 팀스페이스 더보기 버튼 모달 opened 여부
@@ -70,8 +73,17 @@ const SideNavBar = () => {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false); // 유저 모달 opened 여부
   const [isCatchModalOpen, setIsCatchModalOpen] = useState(false); // 캐치스턴트 모달 opened 여부
 
-  const [recentChatrooms, setRecentChatrooms] = useState<ChatRoomQuery[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: chatroomData } = useQuery(chatQueries.recentRooms());
+
+  const recentChatrooms = useMemo<ChatRoomQuery[]>(() => {
+    if (!chatroomData?.content) return [];
+    return chatroomData.content
+      .map((item) => ({
+        title: item.title,
+        sessionId: item.sessionId,
+      }))
+      .reverse();
+  }, [chatroomData]);
 
   const user = useUserStore((state) => state.user);
 
@@ -102,33 +114,14 @@ const SideNavBar = () => {
     return () => clearTimeout(t);
   }, [isOpen]);
 
+  // refresh_sidebar 이벤트 → TanStack Query invalidation
   useEffect(() => {
-    const fetchDefaultData = async () => {
-      try {
-        setIsLoading(true);
-        const [chatroomRes] = await Promise.all([searchService.getRecentChatrooms()]);
-
-        if (chatroomRes.content) {
-          const mappedChatrooms = chatroomRes.content.map((item: any) => ({
-            title: item.title,
-            sessionId: item.sessionId,
-          }));
-
-          setRecentChatrooms(mappedChatrooms.reverse());
-        }
-      } catch (err) {
-        console.error('데이터 로드 실패:', err);
-      } finally {
-        setIsLoading(false);
-      }
+    const handleRefresh = () => {
+      queryClient.invalidateQueries({ queryKey: chatQueries.all() });
     };
-
-    fetchDefaultData();
-    const handleRefresh = () => fetchDefaultData();
-
     window.addEventListener('refresh_sidebar', handleRefresh);
     return () => window.removeEventListener('refresh_sidebar', handleRefresh);
-  }, []);
+  }, [queryClient]);
 
   // SNB item (메뉴 상태별 스타일 CSS)
   const defaultClass =

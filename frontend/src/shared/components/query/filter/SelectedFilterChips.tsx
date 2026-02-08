@@ -1,5 +1,5 @@
-import IconReset from '@/public/icons/icon/reset.svg';
 import IconCloseSmall from '@/public/icons/icon/cancel_small.svg';
+import IconReset from '@/public/icons/icon/reset.svg';
 import type { ChipData } from '@/shared/types/query/search';
 
 interface SelectedFilterChipsProps {

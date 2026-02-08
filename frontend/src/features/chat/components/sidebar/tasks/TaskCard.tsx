@@ -1,15 +1,18 @@
 'use client';
 
+import { useCallback,useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { useState, useMemo, useEffect, useCallback } from 'react';
-import DropDownDown from '/public/icons/icon/dropdown_down.svg';
-import CheckboxUnchecked from '/public/icons/icon/checkbox_unchecked.svg';
-import CheckboxChecked from '/public/icons/icon/checkbox_checked.svg';
-import Connector from '/public/icons/icon/connector.svg';
-import LastConnector from '/public/icons/icon/last_connector.svg';
+
+import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
+
 import TaskDetailModal from './detail/TaskDetailModal';
 import TaskSelectionBar from './TaskSelectionBar';
-import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
+
+import CheckboxChecked from '/public/icons/icon/checkbox_checked.svg';
+import CheckboxUnchecked from '/public/icons/icon/checkbox_unchecked.svg';
+import Connector from '/public/icons/icon/connector.svg';
+import DropDownDown from '/public/icons/icon/dropdown_down.svg';
+import LastConnector from '/public/icons/icon/last_connector.svg';
 
 interface TaskCardProps {
   tasks: JiraTask[];

@@ -1,7 +1,8 @@
+import type { ReactNode } from 'react';
+
 import IconBack from '@/public/icons/icon/arrow_left2.svg';
 import IconCheckOn from '@/public/icons/icon/checkbox_checked.svg';
 import IconCheckOff from '@/public/icons/icon/checkbox_unchecked.svg';
-import type { ReactNode } from 'react';
 
 interface ExplorerHeaderProps {
   title: ReactNode;

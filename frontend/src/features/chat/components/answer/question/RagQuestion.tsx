@@ -2,9 +2,12 @@
 
 import { useState } from 'react';
 import clsx from 'clsx';
-import EditPencil from '/public/icons/icon/edit_pencil.svg';
-import EditMessageInput from './EditMessageInput';
+
 import type { QAPair } from '@/features/chat/utils/chat';
+
+import EditMessageInput from './EditMessageInput';
+
+import EditPencil from '/public/icons/icon/edit_pencil.svg';
 
 interface RagQuestionProps {
   currentQA: QAPair | undefined;

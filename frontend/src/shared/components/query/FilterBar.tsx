@@ -1,19 +1,18 @@
 'use client';
 
 import { RefObject } from 'react';
-import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
 
-import IconJira from '@/public/icons/logo/Jira.svg';
-import IconGithub from '@/public/icons/logo/GitHub.svg';
 import IconDivider from '@/public/icons/icon/divider.svg';
-import IconPerson from '@/public/icons/icon/person.svg';
-import IconTag from '@/public/icons/icon/tag.svg';
-import IconSpace from '@/public/icons/icon/space.svg';
 import IconLock from '@/public/icons/icon/lock_filled.svg';
-
-import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
+import IconPerson from '@/public/icons/icon/person.svg';
+import IconSpace from '@/public/icons/icon/space.svg';
+import IconTag from '@/public/icons/icon/tag.svg';
+import IconGithub from '@/public/icons/logo/GitHub.svg';
+import IconJira from '@/public/icons/logo/Jira.svg';
 import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown';
 import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
+import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
+import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
 import { PERSON_OPTIONS } from '@/shared/mocks/search/filterOptions';
 
 interface FilterBarProps {

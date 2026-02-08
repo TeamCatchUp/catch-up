@@ -1,18 +1,19 @@
 'use client';
 
 import { useMemo } from 'react';
-import IconJira from '@/public/icons/logo/Jira.svg';
+
 import IconSpace from '@/public/icons/icon/epic.svg';
 import IconTag from '@/public/icons/icon/task.svg';
-
-import type { JiraNode } from '@/shared/types/query/jira';
-import { JIRA_MOCK_DATA } from '@/shared/mocks/search/jira';
+import IconJira from '@/public/icons/logo/Jira.svg';
 import { useTreeExplorer } from '@/shared/hooks/query/useTreeExplorer';
+import { JIRA_MOCK_DATA } from '@/shared/mocks/search/jira';
+import type { JiraNode } from '@/shared/types/query/jira';
 import { getAllChildNodes } from '@/shared/utils/tree';
-import { ExplorerSearchInput } from './shared/ExplorerSearchInput';
-import { ExplorerHeader } from './shared/ExplorerHeader';
+
 import { ExplorerChildItem } from './shared/ExplorerChildItem';
+import { ExplorerHeader } from './shared/ExplorerHeader';
 import { ExplorerRootItem } from './shared/ExplorerRootItem';
+import { ExplorerSearchInput } from './shared/ExplorerSearchInput';
 
 interface JiraExplorerProps {
   selectedItems: string[];
@@ -79,7 +80,7 @@ export const JiraExplorer = ({
     const isRootProject = node.type === 'project' && !currentProject;
 
     // 아이콘 결정
-    let TypeIcon = node.type === 'ticket' ? IconTag : IconSpace;
+    const TypeIcon = node.type === 'ticket' ? IconTag : IconSpace;
 
     if (isRootProject) {
       return (
