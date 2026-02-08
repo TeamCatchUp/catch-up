@@ -24,12 +24,12 @@ from langchain_core.documents import Document
 from slack_sdk.errors import SlackApiError
 from sqlalchemy.orm import Session
 
-from catchup.components.connectors.slack.client import SlackApiClientWrapper
-from catchup.components.connectors.slack.schemas import (
+from catchup.connectors.slack.client import SlackApiClientWrapper
+from catchup.connectors.slack.schemas import (
     SlackThreadReply,
     SlackUser,
 )
-from catchup.components.connectors.slack.transformers import SlackTransformer
+from catchup.connectors.slack.transformers import SlackTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.configs.config import settings
 from catchup.db.models import SlackEntityType, SlackSyncStatus, SlackChannelType

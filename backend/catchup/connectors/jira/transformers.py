@@ -22,8 +22,8 @@ from typing import Any
 
 from langchain_core.documents import Document
 
-from catchup.components.connectors.jira.field_mapper import JiraFieldMapper
-from catchup.components.connectors.jira.schemas import (
+from catchup.connectors.jira.field_mapper import JiraFieldMapper
+from catchup.connectors.jira.schemas import (
     JiraAttachment,
     JiraComment,
     JiraComponent,

@@ -4,7 +4,7 @@ from typing import Any
 
 from langgraph.types import interrupt
 
-from catchup.components.connectors.github.factory import get_github_service
+from catchup.connectors.github.factory import get_github_service
 from catchup.rag.schemas import (
     PullRequestCandidate,
     PullRequestUserSelected,

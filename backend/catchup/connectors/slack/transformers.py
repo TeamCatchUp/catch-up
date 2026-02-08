@@ -22,7 +22,8 @@ from typing import Any
 
 from langchain_core.documents import Document
 
-from catchup.components.connectors.slack.schemas import (
+from catchup.connectors.base import format_file_size
+from catchup.connectors.slack.schemas import (
     SlackAttachment,
     SlackChannel,
     SlackFile,
@@ -149,7 +150,7 @@ class SlackTransformer:
         if message.files:
             file_strs = []
             for f in message.files:
-                size_str = self._format_file_size(f.size) if f.size else ""
+                size_str = format_file_size(f.size) if f.size else ""
                 file_type = f.filetype.upper() if f.filetype else "File"
                 if size_str:
                     file_strs.append(f"{f.name} ({file_type}, {size_str})")
@@ -254,7 +255,7 @@ class SlackTransformer:
             "source": "slack",
             "entity_type": "message",
             "url": message.url,
-            "summary": self._truncate(self._parse_slack_markdown(message.text), 200),
+            "summary": self._parse_slack_markdown(message.text),
 
             # === Slack 식별 ===
             "team_id": workspace_id,
@@ -521,7 +522,7 @@ class SlackTransformer:
 
         # 파일 정보
         parts.append(f"Type: {file.pretty_type or file.filetype}")
-        parts.append(f"Size: {self._format_file_size(file.size)}")
+        parts.append(f"Size: {format_file_size(file.size)}")
 
         if file.user_name:
             parts.append(f"Uploaded by: {file.user_name}")
@@ -1065,22 +1066,3 @@ class SlackTransformer:
             return datetime.fromtimestamp(epoch, tz=timezone.utc)
         except (ValueError, IndexError):
             return datetime.now(timezone.utc)
-
-    def _truncate(self, text: str, max_length: int) -> str:
-        """텍스트 길이 제한"""
-        if not text:
-            return ""
-        if len(text) <= max_length:
-            return text
-        return text[:max_length - 3] + "..."
-
-    def _format_file_size(self, size: int) -> str:
-        """파일 크기 포맷팅"""
-        if size < 1024:
-            return f"{size} B"
-        elif size < 1024 * 1024:
-            return f"{size / 1024:.1f} KB"
-        elif size < 1024 * 1024 * 1024:
-            return f"{size / (1024 * 1024):.1f} MB"
-        else:
-            return f"{size / (1024 * 1024 * 1024):.1f} GB"

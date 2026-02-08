@@ -10,15 +10,15 @@ Components:
     - JiraIngestionService: 동기화 서비스
 """
 
-from catchup.components.connectors.jira.client import (
+from catchup.connectors.jira.client import (
     JiraApiClient,
     JiraApiError,
     JiraAuthError,
     JiraRateLimitError,
 )
-from catchup.components.connectors.jira.field_mapper import JiraFieldMapper
-from catchup.components.connectors.jira.service import JiraIngestionService
-from catchup.components.connectors.jira.transformers import JiraTransformer
+from catchup.connectors.jira.field_mapper import JiraFieldMapper
+from catchup.connectors.jira.service import JiraIngestionService
+from catchup.connectors.jira.transformers import JiraTransformer
 
 __all__ = [
     "JiraApiClient",

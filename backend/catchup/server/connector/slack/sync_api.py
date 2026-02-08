@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from catchup.components.connectors.slack.factory import create_slack_ingestion_service
+from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.db.dependencies import get_db
 from catchup.db.models import SlackSyncState
 
@@ -113,10 +113,10 @@ class SlackSearchResponse(BaseModel):
 # Router
 # ================================================================
 
-sync_router = APIRouter(prefix="/api/v1/slack/sync", tags=["slack-sync"])
+router = APIRouter(prefix="/api/v1/slack/sync", tags=["slack-sync"])
 
 
-@sync_router.post("/full", response_model=SlackSyncResponse)
+@router.post("/full", response_model=SlackSyncResponse)
 async def trigger_full_sync(
     request: SlackSyncRequest,
     team_id: str = Query(..., description="Slack Team/Workspace ID"),
@@ -182,7 +182,7 @@ async def trigger_full_sync(
         )
 
 
-@sync_router.post("/incremental", response_model=SlackSyncResponse)
+@router.post("/incremental", response_model=SlackSyncResponse)
 async def trigger_incremental_sync(
     team_id: str = Query(..., description="Slack Team/Workspace ID"),
     db: Session = Depends(get_db),
@@ -225,7 +225,7 @@ async def trigger_incremental_sync(
         )
 
 
-@sync_router.get("/status", response_model=list[SlackSyncStatusResponse])
+@router.get("/status", response_model=list[SlackSyncStatusResponse])
 async def get_sync_status(
     team_id: str = Query(..., description="Slack Team/Workspace ID"),
     db: Session = Depends(get_db),
@@ -279,7 +279,7 @@ class ChannelAccessResponse(BaseModel):
     channels: list[ChannelAccessInfo]
 
 
-@sync_router.get("/debug/channels", response_model=ChannelAccessResponse)
+@router.get("/debug/channels", response_model=ChannelAccessResponse)
 async def debug_channel_access(
     team_id: str = Query(..., description="Slack Team/Workspace ID"),
     db: Session = Depends(get_db),
@@ -348,7 +348,7 @@ async def debug_channel_access(
         )
 
 
-@sync_router.post("/search", response_model=SlackSearchResponse)
+@router.post("/search", response_model=SlackSearchResponse)
 async def search_slack_documents(
     request: SlackSearchRequest,
     team_id: str = Query(..., description="Slack Team/Workspace ID"),

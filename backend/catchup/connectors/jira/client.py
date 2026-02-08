@@ -45,7 +45,14 @@ logger = logging.getLogger(__name__)
 # 예외 클래스 정의
 # ============================================================
 
-class JiraApiError(Exception):
+from catchup.connectors.base import (
+    AuthenticationError,
+    ConnectorApiError,
+    RateLimitError,
+)
+
+
+class JiraApiError(ConnectorApiError):
     """
     Jira API 에러 기본 클래스
 
@@ -53,12 +60,10 @@ class JiraApiError(Exception):
     status_code를 통해 HTTP 상태 코드 확인 가능.
     """
 
-    def __init__(self, message: str, status_code: int | None = None):
-        super().__init__(message)
-        self.status_code = status_code
+    service = "jira"
 
 
-class JiraRateLimitError(JiraApiError):
+class JiraRateLimitError(RateLimitError, JiraApiError):
     """
     Rate limit 초과 에러 (HTTP 429)
 
@@ -72,12 +77,10 @@ class JiraRateLimitError(JiraApiError):
             # 재시도
     """
 
-    def __init__(self, retry_after: int = 60):
-        super().__init__(f"Rate limit exceeded. Retry after {retry_after}s", 429)
-        self.retry_after = retry_after
+    service = "jira"
 
 
-class JiraAuthError(JiraApiError):
+class JiraAuthError(AuthenticationError, JiraApiError):
     """
     인증 에러 (HTTP 401)
 
@@ -90,8 +93,7 @@ class JiraAuthError(JiraApiError):
             # JiraOAuthService.get_valid_access_token()으로 토큰 갱신 후 재시도
     """
 
-    def __init__(self, message: str = "Authentication failed"):
-        super().__init__(message, 401)
+    service = "jira"
 
 
 # ============================================================

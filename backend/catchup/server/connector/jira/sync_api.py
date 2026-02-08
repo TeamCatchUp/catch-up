@@ -1,32 +1,29 @@
+"""
+Jira Sync API
+
+Jira 데이터 동기화 API 엔드포인트.
+전체/증분 동기화, 상태 조회, 검색 기능 제공.
+"""
+
 import logging
-import secrets
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from fastapi.responses import RedirectResponse
-from httpx import HTTPStatusError, RequestError
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.auth.jira.app import get_jira_oauth_service, JiraOAuthService
-from catchup.auth.jira.schemas import (
-    JiraInstallationStatus,
-    JiraOAuthCallbackResponse,
-)
-from catchup.components.connectors.jira.service import JiraIngestionService
-from catchup.configs.config import auth_settings
+from catchup.connectors.jira.service import JiraIngestionService
 from catchup.db.dependencies import get_db
 from catchup.db import jira_oauth as jira_crud
-from catchup.db.models import JiraEntityType, JiraSyncState, JiraSyncStatus
-from catchup.utils.redis import store_oauth_state, validate_oauth_state
+from catchup.db.models import JiraSyncState
 
 logger = logging.getLogger(__name__)
 
 
 # ================================================================
-# Sync API Schemas
+# Request/Response Schemas
 # ================================================================
 
 class SyncRequest(BaseModel):
@@ -91,131 +88,17 @@ class SearchResponse(BaseModel):
     results: list[SearchResultItem]
     total: int
 
-router = APIRouter(prefix="/api/v1/auth/jira", tags=["jira"])
 
+# ================================================================
+# Router
+# ================================================================
 
-@router.get("/install")
-async def install_jira():
-    """
-    Jira OAuth 설치 시작
-    - 관리자가 Jira Workspace에 앱을 설치하는 진입점
-    """
-    jira_service = get_jira_oauth_service()
-    state = secrets.token_urlsafe(32)
-
-    await store_oauth_state(state, provider="jira")
-
-    authorization_url = jira_service.get_authorization_url(state=state)
-    return RedirectResponse(url=authorization_url)
-
-
-@router.get("/callback")
-async def jira_oauth_callback(
-    code: str,
-    state: str | None = None,
-    db: Session = Depends(get_db),
-    jira_service: JiraOAuthService = Depends(get_jira_oauth_service),
-):
-    """
-    Jira OAuth 콜백 처리
-    - Authorization code → 토큰 교환
-    - 접근 가능한 Jira 리소스 조회
-    - 각 리소스별 토큰 저장
-    """
-    # State 파라미터 검증 (CSRF 방지)
-    if not state:
-        logger.warning("Jira OAuth state 파라미터 누락")
-        return RedirectResponse(
-            url=f"{auth_settings.FRONTEND_REDIRECT_URI}?jira_installed=false&reason=missing_state"
-        )
-
-    is_valid_state = await validate_oauth_state(state, provider="jira")
-    if not is_valid_state:
-        logger.warning(f"Jira OAuth state 검증 실패: {state}")
-        return RedirectResponse(
-            url=f"{auth_settings.FRONTEND_REDIRECT_URI}?jira_installed=false&reason=invalid_state"
-        )
-
-    # 1. Code → Token 교환
-    tokens = await jira_service.exchange_code_for_tokens(code)
-
-    # 2. Atlassian 계정 정보 조회
-    user_info = await jira_service.get_user_info(tokens.access_token)
-
-    # 3. 접근 가능한 Jira 리소스 조회
-    resources = await jira_service.get_accessible_resources(tokens.access_token)
-
-    if not resources:
-        # 프론트엔드로 리다이렉트 (실패)
-        return RedirectResponse(
-            url=f"{auth_settings.FRONTEND_REDIRECT_URI}?jira_installed=false&reason=no_resources"
-        )
-
-    # 4. 각 리소스별 토큰 저장
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens.expires_in)
-
-    for resource in resources:
-        jira_crud.create_or_update_jira_token(
-            db=db,
-            atlassian_account_id=user_info.account_id,
-            cloud_id=resource.id,
-            site_name=resource.name,
-            site_url=resource.url,
-            access_token=tokens.access_token,
-            refresh_token=tokens.refresh_token,
-            expires_at=expires_at,
-            scopes=tokens.scope,
-        )
-
-    logger.info(f"Jira 설치 완료: {len(resources)}개 사이트 연결")
-
-    # 5. 프론트엔드로 리다이렉트 (성공)
-    return RedirectResponse(
-        url=f"{auth_settings.FRONTEND_REDIRECT_URI}?jira_installed=true&count={len(resources)}"
-    )
-
-
-@router.get("/status", response_model=JiraInstallationStatus)
-async def jira_installation_status(
-    db: Session = Depends(get_db),
-    jira_service: JiraOAuthService = Depends(get_jira_oauth_service),
-):
-    """Jira 설치 상태 조회"""
-    tokens = jira_crud.get_all_jira_tokens(db)
-
-    if not tokens:
-        return JiraInstallationStatus(installed=False)
-
-    try:
-        valid_token = await jira_service.get_valid_access_token(db, tokens[0])
-        resources = await jira_service.get_accessible_resources(valid_token)
-        return JiraInstallationStatus(installed=True, resources=resources)
-    except HTTPException as e:
-        logger.warning(f"Jira 상태 조회 실패: {e.detail}")
-        return JiraInstallationStatus(installed=True, resources=[])
-    except (HTTPStatusError, RequestError) as e:
-        logger.warning(f"Jira API 요청 실패: {e}")
-        return JiraInstallationStatus(installed=True, resources=[])
-
-
-@router.delete("/uninstall")
-async def jira_uninstall(
-    cloud_id: str = Query(..., description="삭제할 Jira Cloud ID"),
-    db: Session = Depends(get_db),
-):
-    """Jira 연결 해제"""
-    deleted = jira_crud.delete_jira_token(db, cloud_id)
-    if deleted:
-        return {"status": "success", "message": "Jira 연결이 해제되었습니다."}
-    return {"status": "not_found", "message": "해당 Jira 연결을 찾을 수 없습니다."}
+router = APIRouter(prefix="/api/v1/jira/sync", tags=["jira-sync"])
 
 
 # ================================================================
-# Sync Router
+# Helper Functions
 # ================================================================
-
-sync_router = APIRouter(prefix="/api/v1/jira/sync", tags=["jira-sync"])
-
 
 async def _run_full_sync(
     cloud_id: str,
@@ -227,7 +110,7 @@ async def _run_full_sync(
     sync_projects: bool = True,
     sync_sprints: bool = True,
 ) -> dict[str, Any]:
-    """전체 동기화 실행 (백그라운드 태스크용)"""
+    """전체 동기화 실행"""
     try:
         service = JiraIngestionService(cloud_id, access_token, site_url)
         await service.initialize()
@@ -249,7 +132,7 @@ async def _run_incremental_sync(
     site_url: str,
     db: Session,
 ) -> dict[str, Any]:
-    """증분 동기화 실행 (백그라운드 태스크용)"""
+    """증분 동기화 실행"""
     try:
         service = JiraIngestionService(cloud_id, access_token, site_url)
         await service.initialize()
@@ -259,11 +142,14 @@ async def _run_incremental_sync(
         raise
 
 
-@sync_router.post("/full", response_model=SyncResponse)
+# ================================================================
+# Endpoints
+# ================================================================
+
+@router.post("/full", response_model=SyncResponse)
 async def trigger_full_sync(
     request: SyncRequest,
     cloud_id: str = Query(..., description="Jira Cloud ID"),
-    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     jira_service: JiraOAuthService = Depends(get_jira_oauth_service),
 ):
@@ -273,7 +159,6 @@ async def trigger_full_sync(
     지정된 프로젝트(또는 전체)의 모든 Jira 데이터를 PGVector에 동기화.
     대량의 데이터가 있을 경우 시간이 오래 걸릴 수 있습니다.
     """
-    # 토큰 조회 및 검증
     token_record = jira_crud.get_jira_token_by_cloud_id(db, cloud_id)
     if not token_record:
         raise HTTPException(
@@ -282,11 +167,9 @@ async def trigger_full_sync(
         )
 
     try:
-        # 유효한 access token 획득
         access_token = await jira_service.get_valid_access_token(db, token_record)
         site_url = token_record.site_url or ""
 
-        # 동기 실행 (백그라운드 태스크로 전환 가능)
         result = await _run_full_sync(
             cloud_id=cloud_id,
             access_token=access_token,
@@ -298,7 +181,6 @@ async def trigger_full_sync(
             sync_sprints=request.sync_sprints,
         )
 
-        # 결과 메시지 생성
         summary_parts = []
         if result["issues"]["synced"] > 0 or result["issues"]["errors"] > 0:
             summary_parts.append(f"Issues={result['issues']['synced']}")
@@ -333,7 +215,7 @@ async def trigger_full_sync(
         )
 
 
-@sync_router.post("/incremental", response_model=SyncResponse)
+@router.post("/incremental", response_model=SyncResponse)
 async def trigger_incremental_sync(
     cloud_id: str = Query(..., description="Jira Cloud ID"),
     db: Session = Depends(get_db),
@@ -379,7 +261,7 @@ async def trigger_incremental_sync(
         )
 
 
-@sync_router.get("/status", response_model=list[SyncStatusResponse])
+@router.get("/status", response_model=list[SyncStatusResponse])
 async def get_sync_status(
     cloud_id: str = Query(..., description="Jira Cloud ID"),
     db: Session = Depends(get_db),
@@ -413,7 +295,7 @@ async def get_sync_status(
     ]
 
 
-@sync_router.post("/search", response_model=SearchResponse)
+@router.post("/search", response_model=SearchResponse)
 async def search_jira_documents(
     request: SearchRequest,
     cloud_id: str = Query(..., description="Jira Cloud ID"),
@@ -449,7 +331,7 @@ async def search_jira_documents(
         results = [
             SearchResultItem(
                 id=doc.id or "",
-                content=doc.page_content[:500],  # 500자로 제한
+                content=doc.page_content[:500],
                 metadata=doc.metadata,
             )
             for doc in documents

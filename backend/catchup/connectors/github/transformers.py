@@ -16,7 +16,8 @@ from typing import Any
 
 from langchain_core.documents import Document
 
-from catchup.components.connectors.github.schemas import (
+from catchup.connectors.base import clean_markdown
+from catchup.connectors.github.schemas import (
     GitHubUser,
     GitHubLabel,
     GitHubMilestone,
@@ -262,7 +263,7 @@ class GitHubTransformer:
         # 본문
         if issue.body:
             lines.append("Description:")
-            lines.append(self._clean_markdown(issue.body))
+            lines.append(clean_markdown(issue.body))
             lines.append("")
 
         # 최근 토론
@@ -271,8 +272,7 @@ class GitHubTransformer:
             for comment in issue.comments[:5]:  # 최근 5개만
                 author_name = comment.author.login if comment.author else "unknown"
                 date_str = comment.created_at.strftime("%Y-%m-%d %H:%M")
-                body_preview = self._truncate(comment.body, 200)
-                lines.append(f"[{date_str} @{author_name}]: {body_preview}")
+                lines.append(f"[{date_str} @{author_name}]: {comment.body}")
             lines.append("")
 
         # 관련 항목
@@ -302,7 +302,7 @@ class GitHubTransformer:
             "source": "github",
             "entity_type": "issue",
             "url": issue.html_url,
-            "summary": self._truncate(issue.title, 200),
+            "summary": issue.title,
 
             # GitHub 식별
             "installation_id": installation_id,
@@ -571,7 +571,7 @@ class GitHubTransformer:
         # 본문
         if pr.body:
             lines.append("Description:")
-            lines.append(self._clean_markdown(pr.body))
+            lines.append(clean_markdown(pr.body))
             lines.append("")
 
         # 코드 변경 통계
@@ -592,7 +592,7 @@ class GitHubTransformer:
                 # 커밋 메시지 첫 줄만
                 message_first_line = commit.message.split("\n")[0] if commit.message else ""
                 author = commit.author_login or commit.author_name or "unknown"
-                lines.append(f"- [{short_sha}] {self._truncate(message_first_line, 60)} (@{author})")
+                lines.append(f"- [{short_sha}] {message_first_line} (@{author})")
             if len(pr.commits) > 10:
                 lines.append(f"  ... and {len(pr.commits) - 10} more commits")
             lines.append("")
@@ -667,7 +667,7 @@ class GitHubTransformer:
             "source": "github",
             "entity_type": "pr",
             "url": pr.html_url,
-            "summary": self._truncate(pr.title, 200),
+            "summary": pr.title,
 
             # GitHub 식별
             "installation_id": installation_id,
@@ -876,7 +876,7 @@ class GitHubTransformer:
             "source": "github",
             "entity_type": "commit",
             "url": commit.html_url,
-            "summary": self._truncate(commit.message.split("\n")[0], 200),
+            "summary": commit.message.split("\n")[0] if commit.message else "",
 
             # GitHub 식별
             "installation_id": installation_id,
@@ -981,23 +981,6 @@ class GitHubTransformer:
                 referenced.append(num)
 
         return list(set(referenced))
-
-    def _clean_markdown(self, text: str) -> str:
-        """마크다운 텍스트 정리 (과도한 공백 제거)"""
-        if not text:
-            return ""
-        # 연속된 빈 줄 제거
-        text = re.sub(r"\n{3,}", "\n\n", text)
-        return text.strip()
-
-    def _truncate(self, text: str, max_length: int) -> str:
-        """텍스트를 최대 길이로 자르기"""
-        if not text:
-            return ""
-        text = text.replace("\n", " ").strip()
-        if len(text) <= max_length:
-            return text
-        return text[:max_length - 3] + "..."
 
     def _summarize_diff_hunk(self, diff_hunk: str) -> str | None:
         """

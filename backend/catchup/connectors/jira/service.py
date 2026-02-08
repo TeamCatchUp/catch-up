@@ -25,13 +25,13 @@ from langchain_core.documents import Document
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from catchup.components.connectors.jira.client import (
+from catchup.connectors.jira.client import (
     JiraApiClient,
     JiraApiError,
     JiraRateLimitError,
 )
-from catchup.components.connectors.jira.field_mapper import JiraFieldMapper
-from catchup.components.connectors.jira.transformers import JiraTransformer
+from catchup.connectors.jira.field_mapper import JiraFieldMapper
+from catchup.connectors.jira.transformers import JiraTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.configs.config import settings
 from catchup.db.models import JiraEntityType, JiraSyncState, JiraSyncStatus

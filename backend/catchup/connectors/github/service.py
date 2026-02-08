@@ -26,21 +26,21 @@ from typing import Any
 from langchain_core.documents import Document
 from sqlalchemy.orm import Session
 
-from catchup.components.connectors.github.client import (
+from catchup.connectors.github.client import (
     GitHubApiClient,
     GitHubApiError,
     GitHubRateLimitError,
     GitHubAuthError,
     GitHubNotFoundError,
 )
-from catchup.components.connectors.github.schemas import (
+from catchup.connectors.github.schemas import (
     GitHubUser,
     GitHubIssue,
     GitHubPullRequest,
     GitHubCommit,
     PRFileContext,
 )
-from catchup.components.connectors.github.transformers import GitHubTransformer
+from catchup.connectors.github.transformers import GitHubTransformer
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
 from catchup.configs.config import settings
 from catchup.db import github_sync, github_entities
@@ -572,7 +572,7 @@ class GithubService:
     def _merge_files_and_comments(
         self, files_data: list[dict[str, Any]], comments_data: list[dict[str, Any]]
     ) -> list[PRFileContext]:
-        from catchup.components.connectors.github.schemas import PRComment
+        from catchup.connectors.github.schemas import PRComment
 
         merged_files: dict[str, dict] = {}
 

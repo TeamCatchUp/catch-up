@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from catchup.components.connectors.jira.client import JiraApiClient
+    from catchup.connectors.jira.client import JiraApiClient
 
 logger = logging.getLogger(__name__)
 
