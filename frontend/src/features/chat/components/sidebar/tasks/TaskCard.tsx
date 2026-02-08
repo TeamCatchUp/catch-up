@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback,useEffect, useMemo, useState } from 'react';
-import clsx from 'clsx';
 
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
+import { cn } from '@/shared/utils/cn';
 
 import TaskDetailModal from './detail/TaskDetailModal';
 import TaskSelectionBar from './TaskSelectionBar';
@@ -313,7 +313,7 @@ const TaskCard = ({ tasks }: TaskCardProps) => {
           <div key={task.id} className="flex flex-col">
             {/* 상위 업무 */}
             <div
-              className={clsx(
+              className={cn(
                 'border-neutral-4 flex items-center border-b px-2 py-3',
                 detailModal?.type === 'task' &&
                   detailModal.taskId === task.id &&
@@ -323,20 +323,20 @@ const TaskCard = ({ tasks }: TaskCardProps) => {
               {/* dropdown */}
               <button
                 onClick={() => setOpenMap((prev) => ({ ...prev, [task.id]: !opened }))}
-                className={clsx(
+                className={cn(
                   'icon-button-only-gray mr-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full',
                   opened ? 'bg-neutral-2' : 'bg-white',
                 )}
               >
                 <DropDownDown
-                  className={clsx('h-4.5 w-4.5 text-gray-50 transition-transform', opened && 'rotate-180')}
+                  className={cn('h-4.5 w-4.5 text-gray-50 transition-transform', opened && 'rotate-180')}
                 />
               </button>
 
               {/* 상위 체크박스 */}
               <button
                 onClick={() => toggleTask(task)}
-                className={clsx(
+                className={cn(
                   'mr-1.5 grid h-6.5 w-6.5 cursor-pointer place-items-center rounded-full',
                   checked ? 'hover:bg-blue-5' : 'hover:bg-neutral-2',
                 )}
@@ -368,7 +368,7 @@ const TaskCard = ({ tasks }: TaskCardProps) => {
                   return (
                     <div
                       key={sub.id}
-                      className={clsx(
+                      className={cn(
                         'border-neutral-4 flex h-11.75 items-center border-b',
                         detailModal?.type === 'subtask' &&
                           detailModal.taskId === task.id &&
@@ -381,7 +381,7 @@ const TaskCard = ({ tasks }: TaskCardProps) => {
 
                         <button
                           onClick={() => toggleSubTask(task, sub.id)}
-                          className={clsx(
+                          className={cn(
                             'mr-1.5 grid h-6.5 w-6.5 cursor-pointer place-items-center rounded-full',
                             subChecked ? 'hover:bg-blue-5' : 'hover:bg-neutral-2',
                           )}

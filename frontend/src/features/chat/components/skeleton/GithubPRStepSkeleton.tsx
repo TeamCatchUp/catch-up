@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo,useRef, useState } from 'react';
-import clsx from 'clsx';
 
+import { cn } from '@/shared/utils/cn';
 import { formatDate } from '@/shared/utils/formatDate';
 
 import ArrowForward from '/public/icons/icon/arrow_forward.svg';
@@ -90,7 +90,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
             <button
               disabled={!isActive}
               onClick={() => onContinue(selectedPrNumbers)}
-              className={clsx(
+              className={cn(
                 'flex h-9 w-24.75 gap-1 rounded-lg px-2.5 py-1.5 text-white',
                 isActive
                   ? 'hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 cursor-pointer rounded-lg bg-blue-50'
@@ -112,17 +112,17 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
                     <div className="flex h-28.75 items-center">
                       <button
                         onClick={() => toggleSelect(pr.prNumber)}
-                        className={clsx(
+                        className={cn(
                           'flex h-8.5 w-8.5 cursor-pointer items-center justify-center rounded-lg border',
                           isSelected ? 'bg-blue-1 border-blue-45' : 'border-neutral-3 bg-neutral-1',
                         )}
                       >
-                        <Check className={clsx('h-5.5 w-5.5', isSelected ? 'text-blue-50' : 'text-gray-30')} />
+                        <Check className={cn('h-5.5 w-5.5', isSelected ? 'text-blue-50' : 'text-gray-30')} />
                       </button>
                     </div>
                     <div
                       onClick={() => toggleSelect(pr.prNumber)}
-                      className={clsx(
+                      className={cn(
                         'flex h-28.75 w-166.25 cursor-pointer flex-col gap-1.5 rounded-2xl border bg-white px-5 py-4',
                         isSelected ? 'border-blue-30' : 'border-neutral-2',
                       )}

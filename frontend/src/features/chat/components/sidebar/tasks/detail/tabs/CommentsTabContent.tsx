@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import clsx from 'clsx';
+
+import { cn } from '@/shared/utils/cn';
 
 import Connector from '/public/icons/icon/connector.svg';
 import DefaultProfile from '/public/icons/icon/default_profile.svg';
@@ -137,7 +138,7 @@ const CommentsTabContent = () => {
                 </div>
               </div>
               <div
-                className={clsx(
+                className={cn(
                   'text-body-small text-gray-70 -mt-2',
                   !isLast && hasMultipleReplies ? 'border-neutral-3 border-l pl-12.5' : 'ml-12.5',
                 )}
@@ -145,7 +146,7 @@ const CommentsTabContent = () => {
                 {reply.content}
               </div>
               {reply.attachment && (
-                <div className={clsx(!isLast && hasMultipleReplies && 'border-neutral-3 border-l pl-0')}>
+                <div className={cn(!isLast && hasMultipleReplies && 'border-neutral-3 border-l pl-0')}>
                   <div className="bg-neutral-1 border-neutral-3 mt-1.5 ml-12.5 flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-1.5">
                     <Link className="h-5 w-5 text-gray-50" />
                     <span className="text-body-small text-gray-70">{reply.attachment.title}</span>

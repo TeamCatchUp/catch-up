@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import clsx from 'clsx';
 
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import { useUserStore } from '@/shared/store/userStore';
+import { cn } from '@/shared/utils/cn';
 
 import EditPencil from '/public/icons/icon/edit_pencil.svg';
 import Profile from '/public/icons/icon/profile.svg';

@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect,useState } from 'react';
-import clsx from 'clsx';
 
-import ToolTip from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent,TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { cn } from '@/shared/utils/cn';
 
 import Cancel from '/public/icons/icon/cancel_small.svg';
 import DropDownDown from '/public/icons/icon/dropdown_down.svg';
@@ -77,7 +77,7 @@ const TaskSelectionBar = ({
   return (
     <div className="pointer-events-none absolute bottom-8 flex flex-col gap-2">
       <div
-        className={clsx(
+        className={cn(
           'border-neutral-5 shadow-selection-bar pointer-events-auto flex w-108.75 flex-col border bg-white',
           isCollapsed ? 'h-14 items-center rounded-full p-2.5' : 'h-54.5 rounded-xl p-2.5 pb-0',
         )}
@@ -112,7 +112,7 @@ const TaskSelectionBar = ({
                             </span>
                             <span className="h-4 w-4">
                               <DropDownDown
-                                className={clsx(
+                                className={cn(
                                   'flex text-blue-50 transition-transform',
                                   isExpanded ? 'relative bottom-px rotate-180' : 'relative bottom-0.5',
                                 )}
@@ -153,7 +153,7 @@ const TaskSelectionBar = ({
                             <Task />
                           </button>
                           <span
-                            className={clsx(
+                            className={cn(
                               'text-body-small text-gray-80 min-w-0 flex-1 truncate',
                               showParentTask ? 'max-w-84' : 'w-89.25',
                             )}
@@ -185,11 +185,11 @@ const TaskSelectionBar = ({
           </>
         )}
         {/* task 버튼 */}
-        <div className={clsx('flex h-14 w-101.25 items-center justify-between', isCollapsed && 'relative bottom-px')}>
+        <div className={cn('flex h-14 w-101.25 items-center justify-between', isCollapsed && 'relative bottom-px')}>
           <div className="flex items-center gap-1.5 pl-1">
             <button onClick={onToggleCollapse} className="icon-button-only-gray flex h-4.5 w-4.5 cursor-pointer p-0.5">
               <DropDownDown
-                className={clsx('text-gray-70 transition-transform', !isCollapsed ? 'rotate-0' : 'rotate-180')}
+                className={cn('text-gray-70 transition-transform', !isCollapsed ? 'rotate-0' : 'rotate-180')}
               />
             </button>
             <span>
@@ -215,16 +215,18 @@ const TaskSelectionBar = ({
           </div>
         </div>
       </div>
-      <div className="group pointer-events-auto relative left-53 w-9">
-        <button
-          onClick={handleClearAll}
-          className="text-button-secondary-mono shadow-button border-neutral-3 pointer-events-auto flex h-9 w-9 cursor-pointer items-center justify-center border p-1.5"
-        >
-          <Cancel className="text-gray-70 h-6 w-6" />
-          <div className="relative bottom-4.25 left-1">
-            <ToolTip text="전체 선택 취소" />
-          </div>
-        </button>
+      <div className="pointer-events-auto relative left-53 w-9">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handleClearAll}
+              className="text-button-secondary-mono shadow-button border-neutral-3 pointer-events-auto flex h-9 w-9 cursor-pointer items-center justify-center border p-1.5"
+            >
+              <Cancel className="text-gray-70 h-6 w-6" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>전체 선택 취소</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );

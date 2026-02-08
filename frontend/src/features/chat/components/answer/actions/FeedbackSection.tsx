@@ -2,9 +2,9 @@
 
 import { useCallback,useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import clsx from 'clsx';
 
 import { chatMutations } from '@/features/chat/mutations';
+import { cn } from '@/shared/utils/cn';
 
 import Cancel from '/public/icons/icon/cancel.svg';
 
@@ -322,7 +322,7 @@ const FeedbackSection = ({
 
   if (!mounted) return null;
 
-  const rootClass = clsx(
+  const rootClass = cn(
     'border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4',
     'transition-all duration-200 ease-out will-change-[transform,opacity]',
     entered ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0',
@@ -365,7 +365,7 @@ const FeedbackSection = ({
                 }
                 submitFeedback(feedbackItem.content);
               }}
-              className={clsx(
+              className={cn(
                 'text-xsmall text-gray-80 cursor-pointer rounded-lg px-2 py-1',
                 feedbackItem.id === DETAIL_ID && isDetailOpen
                   ? 'bg-neutral-3 border-neutral-5'
@@ -382,7 +382,7 @@ const FeedbackSection = ({
       {detailMounted && (
         <div
           ref={detailRef}
-          className={clsx(
+          className={cn(
             'text-body-medium border-blue-30 flex w-184.75 flex-col rounded-2xl border bg-white px-3 py-2.5',
             'transition-all duration-200 ease-out will-change-[transform,opacity]',
             detailEntered ? 'translate-y-0 scale-100 opacity-100' : '-translate-y-1 scale-[0.99] opacity-0',
@@ -409,7 +409,7 @@ const FeedbackSection = ({
           <button
             disabled={!detailText.trim() || isSubmitting}
             onClick={() => submitFeedback()}
-            className={clsx(
+            className={cn(
               'capsule-button-solid-primary h-9 w-12.5 items-end self-end px-3 py-1.5',
               detailText.trim() ? 'cursor-pointer' : '',
             )}

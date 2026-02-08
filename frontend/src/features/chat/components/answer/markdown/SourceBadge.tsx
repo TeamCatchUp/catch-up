@@ -1,11 +1,11 @@
-import clsx from 'clsx';
+import { cn } from '@/shared/utils/cn';
 
 export type SourceType = 'jira' | 'github';
 
 const SourceBadge = ({ n, sourceType }: { n: string; sourceType: SourceType }) => {
   return (
     <span
-      className={clsx(
+      className={cn(
         'relative -top-0.5 mr-px inline-flex h-6 w-6.5 items-center justify-center rounded-full whitespace-nowrap',
         sourceType === 'jira' ? 'bg-green-10' : 'bg-blue-5',
       )}

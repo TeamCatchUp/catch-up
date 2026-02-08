@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import clsx from 'clsx';
 import { useRouter } from 'next/navigation';
 
 import RecentQuestionsModal from '@/shared/components/layout/sideNavBar/modal/RecentQuestionsModal';
+import { cn } from '@/shared/utils/cn';
 
 import SessionQuestionsModal from './SessionQuestionsModal';
 
@@ -45,7 +45,7 @@ const RagHeader = ({ title, onSelectQuestion }: RagHeaderProps) => {
               setIsQuestionsListOpen(false);
               setIsCatchModalOpen(true);
             }}
-            className={clsx(
+            className={cn(
               'icon-button-only-gray flex items-center rounded-xl px-2 py-1',
               isCatchModalOpen && 'bg-neutral-3 rounded-xl',
             )}
@@ -59,7 +59,7 @@ const RagHeader = ({ title, onSelectQuestion }: RagHeaderProps) => {
               setIsCatchModalOpen(false);
               setIsQuestionsListOpen(true);
             }}
-            className={clsx(
+            className={cn(
               'text-heading-small text-gray-80! icon-button-only-gray max-w-50 cursor-pointer truncate rounded-xl px-2 py-1',
               isQuestionsListOpen && 'bg-neutral-3 rounded-xl',
             )}

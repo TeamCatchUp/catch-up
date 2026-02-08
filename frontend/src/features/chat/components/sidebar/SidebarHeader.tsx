@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+import { cn } from '@/shared/utils/cn';
 
 interface Props {
   activeTab: 'source' | 'detail';
@@ -13,7 +13,7 @@ const SidebarHeader = ({ activeTab, onChange, sourceCount }: Props) => {
         <div className="border-neutral-1 bg-neutral-1 flex gap-0.5 rounded-full border p-0.5">
           <button
             onClick={() => onChange('source')}
-            className={clsx(
+            className={cn(
               'text-heading-small text-gray-70 cursor-pointer rounded-full px-7 py-1.5 transition',
               activeTab === 'source' ? 'shadow-button border-neutral-3 bg-white' : 'bg-neutral-1',
             )}
@@ -22,7 +22,7 @@ const SidebarHeader = ({ activeTab, onChange, sourceCount }: Props) => {
           </button>
           <button
             onClick={() => onChange('detail')}
-            className={clsx(
+            className={cn(
               'text-heading-small text-gray-70 cursor-pointer rounded-full px-7 py-1.5 transition',
               activeTab === 'detail' ? 'shadow-button border-neutral-3 bg-white' : 'bg-neutral-1',
             )}

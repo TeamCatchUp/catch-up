@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import clsx from 'clsx';
+
+import { cn } from '@/shared/utils/cn';
 
 import ToggleOn from '/public/icons/icon/state=On.svg';
 // import Delete from '/public/icons/icon/delete_2.svg';
@@ -52,7 +53,7 @@ const DateFilter = ({ isOpen, onClose }: FilterComponentsProps) => {
             <div
               key={item.id}
               onClick={() => toggleFilter(item.id)}
-              className={clsx(
+              className={cn(
                 'text-body-small flex cursor-pointer items-center justify-center rounded-full px-3 py-1.5',
                 isActive ? 'border-neutral-5 border text-black' : 'text-button-secondary-mono text-gray-50',
               )}

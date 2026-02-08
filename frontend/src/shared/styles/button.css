@@ -4,20 +4,12 @@
 /* 버튼별 스타일(색상) 분리 */
 @layer utilities {
   /* icon-buttons */
-  .icon-button-solid-blue {
-    @apply hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 rounded-lg bg-blue-50 text-white;
-  }
-
   .icon-button-outline-gray {
     @apply disabled:text-gray-20 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 disabled:border-neutral-2 text-gray-70 border-neutral-3 rounded-lg border bg-white;
   }
 
   .icon-button-only-gray {
     @apply active:text-gray-70 disabled:text-gray-20 hover:text-gray-70 hover:bg-neutral-2 active:bg-neutral-3 disabled:bg-neutral-2 rounded-lg text-gray-50;
-  }
-
-  .icon-button-only-blue {
-    @apply hover:bg-blue-5 active:bg-blue-10 active:text-blue-60 disabled:text-gray-20 rounded-full text-blue-50;
   }
 
   /* box-buttons */

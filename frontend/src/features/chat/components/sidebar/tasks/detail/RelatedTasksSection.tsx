@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import clsx from 'clsx';
+
+import { cn } from '@/shared/utils/cn';
 
 import DropDownDown from '/public/icons/icon/dropdown_down.svg';
 
@@ -23,7 +24,7 @@ const RelatedTasksSection = ({ type, currentTask }: RelatedTasksSectionProps) =>
       <>
         <div className="flex gap-1.5">
           <button onClick={() => setIsOpen(!isOpen)} className="cursor-pointer">
-            <DropDownDown className={clsx('text-gray-70 h-4.5 w-4.5 transition-transform', isOpen && 'rotate-180')} />
+            <DropDownDown className={cn('text-gray-70 h-4.5 w-4.5 transition-transform', isOpen && 'rotate-180')} />
           </button>
           <span className="text-heading-small text-gray-80">하위 업무</span>
           <span className="text-heading-small text-blue-40">{subtasks.length}</span>
@@ -44,7 +45,7 @@ const RelatedTasksSection = ({ type, currentTask }: RelatedTasksSectionProps) =>
       <>
         <div className="flex gap-1.5">
           <button onClick={() => setIsOpen(!isOpen)} className="cursor-pointer">
-            <DropDownDown className={clsx('text-gray-70 h-4.5 w-4.5 transition-transform', isOpen && 'rotate-180')} />
+            <DropDownDown className={cn('text-gray-70 h-4.5 w-4.5 transition-transform', isOpen && 'rotate-180')} />
           </button>
           <span className="text-heading-small text-gray-80">상위 업무</span>
           <span className="text-heading-small text-blue-40">1</span>

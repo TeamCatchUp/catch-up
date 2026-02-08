@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef,useState } from 'react';
-import clsx from 'clsx';
 
 import type { UseRagFiltersReturn } from '@/features/chat/hooks/useRagFilters';
 import IconDivider from '@/public/icons/icon/divider.svg';
@@ -21,8 +20,9 @@ import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown'
 import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
 import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
-import ToolTip from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent,TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import { PERSON_OPTIONS } from '@/shared/mocks/search/filterOptions';
+import { cn } from '@/shared/utils/cn';
 
 import Add from '/public/icons/icon/add_small.svg';
 import ArrowSend from '/public/icons/icon/arrow_send.svg';
@@ -124,7 +124,7 @@ const RagInput = ({
       <div className="mx-auto w-193.25">
         {/* Explorer Panel */}
         <div
-          className={clsx(
+          className={cn(
             'border-neutral-2 mb-3 w-160 overflow-hidden rounded-2xl border bg-transparent',
             filters.activeExplorer ? 'shadow-dropdown-menu h-95 opacity-100' : 'max-h-0 border-none opacity-0',
           )}
@@ -153,7 +153,7 @@ const RagInput = ({
 
         {/* Filter Bar */}
         <div
-          className={clsx(
+          className={cn(
             'overflow-hidden transition-all duration-300 ease-in-out',
             filters.isFilterOpen ? 'mb-3 max-h-40 opacity-100' : 'mb-0 max-h-0 opacity-0',
           )}
@@ -211,19 +211,19 @@ const RagInput = ({
 
         {/* Input Bar */}
         <div
-          className={clsx(
+          className={cn(
             'border-neutral-4 shadow-rag-bar flex gap-2 border bg-white px-3 py-2.5',
             isMultiLine ? 'items-end rounded-3xl' : 'items-center rounded-full',
           )}
         >
-          <div className="group relative flex-shrink-0">
-            <button className="icon-button-only-gray cursor-pointer rounded-full! p-1.5">
-              <Add className="text-gray-70 h-7 w-7" />
-            </button>
-            <div className="relative top-0.5 right-10">
-              <ToolTip text={'파일 추가 및 기타'} />
-            </div>
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button className="icon-button-only-gray shrink-0 cursor-pointer rounded-full! p-1.5">
+                <Add className="text-gray-70 h-7 w-7" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>파일 추가 및 기타</TooltipContent>
+          </Tooltip>
 
           <textarea
             ref={textAreaRef}
@@ -240,7 +240,7 @@ const RagInput = ({
             {!newInput.trim() && !isLoading && (
               <div
                 onClick={filters.toggleFilter}
-                className={clsx(
+                className={cn(
                   'box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1',
                   filters.isFilterOpen && 'bg-blue-5 border-blue-20',
                 )}
@@ -261,13 +261,13 @@ const RagInput = ({
               <button
                 onClick={handleSendMessage}
                 disabled={isLoading || !newInput.trim()}
-                className={clsx(
+                className={cn(
                   'cursor-pointer rounded-full p-2 transition-colors',
                   newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border',
                 )}
               >
                 <ArrowSend
-                  className={clsx('h-6 w-6 cursor-pointer', newInput.trim() ? 'brightness-0 invert' : 'text-gray-30')}
+                  className={cn('h-6 w-6 cursor-pointer', newInput.trim() ? 'brightness-0 invert' : 'text-gray-30')}
                 />
               </button>
             )}

@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect,useState } from 'react';
-import clsx from 'clsx';
+
+import { cn } from '@/shared/utils/cn';
 
 import DetailTabNav from './DetailTabNav';
 import EmptyState from './EmptyState';
@@ -143,12 +144,12 @@ const TaskDetailModal = ({
       <div className="mt-4 flex max-h-14.5 items-center gap-2.5">
         <button
           onClick={handleCheckToggle}
-          className={clsx(
+          className={cn(
             'flex h-8.5 w-8.5 cursor-pointer items-center justify-center rounded-lg border p-1.5',
             isChecked ? 'border-blue-45 bg-blue-1' : 'border-neutral-3 bg-neutral-1',
           )}
         >
-          <Check className={clsx('h-5.5 w-5.5', isChecked ? 'text-blue-50' : 'text-gray-30')} />
+          <Check className={cn('h-5.5 w-5.5', isChecked ? 'text-blue-50' : 'text-gray-30')} />
         </button>
         <span className="text-heading-large text-gray-70 line-clamp-2">{taskTitle}</span>
       </div>
