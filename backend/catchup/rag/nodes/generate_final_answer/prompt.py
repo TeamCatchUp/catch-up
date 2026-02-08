@@ -56,7 +56,4 @@ SYSTEM_ASSISTANT_PROMPT = """
 ---
 [Context]
 {context}
-
-[대화 기록]
-{history}
 """

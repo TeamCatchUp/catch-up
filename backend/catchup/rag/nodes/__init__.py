@@ -1,5 +1,5 @@
 from .chitchat import chitchat_node
-from .generate import generate_node
+from .generate_final_answer import generate_final_answer_node
 from .grade import grade_node
 from .manage_pr_context import manage_pr_context_node
 from .generate_vector_queries import generate_vector_queries_node
@@ -20,7 +20,7 @@ __all__ = [
     "rerank_node",
     "manage_pr_context_node",
     "grade_node",
-    "generate_node",
+    "generate_final_answer_node",
     "expand_graph_context_node", 
     "fetch_details_after_graph_context_expansion_node",
     "fallback_cypher_query_node",

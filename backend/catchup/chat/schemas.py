@@ -41,9 +41,9 @@ class ChatStreamingFinalResponse(BaseModel):
     session_id: str
     node: str
     answer: str
-    sources: list[SourceResponse] = []
-    related_jira_issues: list[JiraSource] = []
-    process_time: float
+    #sources: list[SourceResponse] = []
+    #related_jira_issues: list[JiraSource] = []
+    #process_time: float
 
 
 class ChatStreamingInterruptResponse(BaseModel):

@@ -19,7 +19,7 @@ def route_after_grade(state: AgentState):
     retry_count = state.get("retry_count", 0)
     
     if status == "good":
-        return "generate"
+        return "generate_final_answer"
     
     if retry_count >= 2:
         logger.info("Vector Search 최대 재시도 횟수 도달. Graph Search 전략 선택.")
