@@ -40,14 +40,118 @@ class JiraAccountType(StrEnum):
 class JiraUser(Base):
     __tablename__ = "jira_users"
 
-    account_id: Mapped[str] = mapped_column(String(128), primary_key=True, nullable=False)
-    account_type: Mapped[JiraAccountType] = mapped_column(String(20), nullable=False)
-    active: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    # TODO : Jira Third Party App으로 Email 수집 가능 여부 체크 후 nullable 옵션 수정
-    email_address: Mapped[str] = mapped_column(String(255), nullable=True)
-    avatar_url: Mapped[str] = mapped_column(String(500), nullable=True)
-    self_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    cloud_id: Mapped[str] = mapped_column(
+        String(128), primary_key=True, comment="Jira Cloud ID"
+    )
+    account_id: Mapped[str] = mapped_column(
+        String(128), primary_key=True, comment="Atlassian Account ID"
+    )
+    account_type: Mapped[JiraAccountType] = mapped_column(
+        String(20), nullable=False, comment="atlassian/app/customer"
+    )
+    active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, comment="활성 상태"
+    )
+    display_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="표시 이름"
+    )
+    email_address: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="이메일 (권한에 따라 수집 불가)"
+    )
+    avatar_url: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="프로필 이미지 URL"
+    )
+    self_url: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="Jira API self URL"
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class JiraProjectType(StrEnum):
+    SOFTWARE = "software"
+    BUSINESS = "business"
+    SERVICE_DESK = "service_desk"
+
+
+class JiraProject(Base):
+    __tablename__ = "jira_projects"
+
+    cloud_id: Mapped[str] = mapped_column(
+        String(128), primary_key=True, comment="Jira Cloud ID"
+    )
+    project_key: Mapped[str] = mapped_column(
+        String(20), primary_key=True, comment="프로젝트 키 (CATCH)"
+    )
+    project_id: Mapped[str] = mapped_column(
+        String(32), nullable=False, comment="Jira 내부 ID"
+    )
+    project_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, comment="프로젝트 이름"
+    )
+    description: Mapped[str | None] = mapped_column(
+        String(4000), nullable=True, comment="프로젝트 설명"
+    )
+    project_type: Mapped[JiraProjectType | None] = mapped_column(
+        String(32), nullable=True, comment="software/business/service_desk"
+    )
+    lead_account_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, comment="프로젝트 리드 account_id"
+    )
+    lead_display_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="프로젝트 리드 표시 이름"
+    )
+    url: Mapped[str | None] = mapped_column(
+        String(512), nullable=True, comment="프로젝트 URL"
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class JiraSprintState(StrEnum):
+    FUTURE = "future"
+    ACTIVE = "active"
+    CLOSED = "closed"
+
+
+class JiraSprint(Base):
+    __tablename__ = "jira_sprints"
+
+    cloud_id: Mapped[str] = mapped_column(
+        String(128), primary_key=True, comment="Jira Cloud ID"
+    )
+    sprint_id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, comment="Sprint ID"
+    )
+    sprint_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, comment="스프린트 이름"
+    )
+    state: Mapped[JiraSprintState | None] = mapped_column(
+        String(20), nullable=True, comment="future/active/closed"
+    )
+    goal: Mapped[str | None] = mapped_column(
+        String(2000), nullable=True, comment="스프린트 목표"
+    )
+    project_key: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, index=True, comment="연결된 프로젝트 키"
+    )
+    board_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="보드 ID"
+    )
+    start_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    end_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    complete_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class SlackWorkspace(Base):

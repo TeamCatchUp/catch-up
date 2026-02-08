@@ -35,6 +35,7 @@ from catchup.components.connectors.jira.transformers import JiraTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.configs.config import settings
 from catchup.db.models import JiraEntityType, JiraSyncState, JiraSyncStatus
+from catchup.db import jira_entities
 
 logger = logging.getLogger(__name__)
 
@@ -159,12 +160,19 @@ class JiraIngestionService:
             "epics": {"synced": 0, "errors": 0},
             "projects": {"synced": 0, "errors": 0},
             "sprints": {"synced": 0, "errors": 0},
+            "users": {"synced": 0, "errors": 0},
         }
 
         try:
-            # 1. 프로젝트 동기화
+            # 1. 사용자 동기화 (RDBMS)
+            # 사용자를 먼저 동기화하여 Issue에서 참조 가능
+            user_results = await self._sync_all_users(db)
+            results["users"]["synced"] = user_results["synced"]
+            results["users"]["errors"] = user_results["errors"]
+
+            # 2. 프로젝트 동기화 (RDBMS + 선택적 PGVector)
             if sync_projects:
-                project_results = await self._sync_all_projects(project_keys)
+                project_results = await self._sync_all_projects(db, project_keys)
                 results["projects"]["synced"] = project_results["synced"]
                 results["projects"]["errors"] = project_results["errors"]
 
@@ -176,24 +184,10 @@ class JiraIngestionService:
                     results["projects"]["synced"],
                 )
 
-            # 2. 이슈 동기화 (Epic 포함, Epic은 별도 entity_type으로 저장됨)
-            if sync_issues:
-                issue_results = await self._sync_all_issues(project_keys)
-                results["issues"]["synced"] = issue_results["issues"]
-                results["epics"]["synced"] = issue_results["epics"]
-                results["issues"]["errors"] = issue_results["errors"]
-
-                # 이슈 동기화 상태 업데이트
-                self._update_sync_state(
-                    db,
-                    JiraEntityType.ISSUE,
-                    JiraSyncStatus.SUCCESS,
-                    results["issues"]["synced"] + results["epics"]["synced"],
-                )
-
-            # 3. 스프린트 동기화 (Agile API 사용 가능한 경우만)
+            # 3. 스프린트 동기화 (RDBMS + 선택적 PGVector, Agile API 필요)
+            # 스프린트를 먼저 동기화하여 Issue 동기화 시 캐시 활용
             if sync_sprints and await self.client.is_agile_available():
-                sprint_results = await self._sync_all_sprints()
+                sprint_results = await self._sync_all_sprints(db)
                 results["sprints"]["synced"] = sprint_results["synced"]
                 results["sprints"]["errors"] = sprint_results["errors"]
 
@@ -206,6 +200,21 @@ class JiraIngestionService:
                 )
             elif sync_sprints:
                 logger.info("Sprint sync skipped: Agile API not available")
+
+            # 4. 이슈 동기화 (Epic 포함, RDBMS 캐시 활용)
+            if sync_issues:
+                issue_results = await self._sync_all_issues(db, project_keys)
+                results["issues"]["synced"] = issue_results["issues"]
+                results["epics"]["synced"] = issue_results["epics"]
+                results["issues"]["errors"] = issue_results["errors"]
+
+                # 이슈 동기화 상태 업데이트
+                self._update_sync_state(
+                    db,
+                    JiraEntityType.ISSUE,
+                    JiraSyncStatus.SUCCESS,
+                    results["issues"]["synced"] + results["epics"]["synced"],
+                )
 
             logger.info(f"Full sync completed: {results}")
             return results
@@ -223,6 +232,7 @@ class JiraIngestionService:
 
     async def _sync_all_issues(
         self,
+        db: Session,
         project_keys: list[str] | None = None,
     ) -> dict[str, int]:
         """
@@ -230,11 +240,42 @@ class JiraIngestionService:
 
         search_issues API로 배치 조회하여 효율적으로 동기화.
         Epic도 이슈로 조회되지만 별도 entity_type으로 저장.
+        RDBMS에서 Project/Sprint 캐시를 로드하여 Document enrichment에 활용.
 
         Returns:
             {"issues": 150, "epics": 10, "errors": 2}
         """
         self._ensure_initialized()
+
+        # RDBMS에서 캐시 로드 (테이블이 없어도 계속 진행)
+        project_cache: dict = {}
+        sprint_cache: dict = {}
+
+        try:
+            # RDBMS에서 Project 캐시 로드
+            if project_keys:
+                project_cache = jira_entities.get_projects_by_keys(
+                    db, self.cloud_id, project_keys
+                )
+            else:
+                projects = jira_entities.get_projects_by_cloud_id(db, self.cloud_id)
+                project_cache = {p.project_key: p for p in projects}
+
+            # RDBMS에서 Sprint 캐시 로드
+            sprints = jira_entities.get_sprints_by_cloud_id(db, self.cloud_id)
+            sprint_cache = {s.sprint_id: s for s in sprints}
+
+            logger.info(
+                f"Loaded caches: {len(project_cache)} projects, {len(sprint_cache)} sprints"
+            )
+        except Exception as e:
+            # 캐시 로드 실패 시 빈 캐시로 진행 (enrichment 없이)
+            db.rollback()
+            logger.warning(f"Failed to load caches, continuing without enrichment: {e}")
+
+        # Transformer에 캐시 전달
+        self.transformer.project_cache = project_cache
+        self.transformer.sprint_cache = sprint_cache
 
         # JQL 구성
         jql_parts = []
@@ -326,12 +367,14 @@ class JiraIngestionService:
 
     async def _sync_all_projects(
         self,
+        db: Session,
         project_keys: list[str] | None = None,
     ) -> dict[str, int]:
         """
-        프로젝트 동기화
+        프로젝트 동기화 (RDBMS 저장)
 
         Args:
+            db: SQLAlchemy Session
             project_keys: 동기화할 프로젝트 키 목록 (None이면 접근 가능한 모든 프로젝트)
 
         Returns:
@@ -340,56 +383,83 @@ class JiraIngestionService:
         self._ensure_initialized()
 
         results = {"synced": 0, "errors": 0}
+        projects_data: list[dict] = []
 
         try:
             # 프로젝트 목록 결정
             if project_keys:
-                # 지정된 프로젝트만 동기화
                 keys_to_sync = project_keys
             else:
-                # 접근 가능한 모든 프로젝트 조회
                 all_projects = await self.client.get_all_projects()
                 keys_to_sync = [p.get("key") for p in all_projects if p.get("key")]
                 logger.info(f"Found {len(keys_to_sync)} accessible projects")
 
-            # 각 프로젝트 동기화
+            # 각 프로젝트 조회 및 데이터 수집
             for project_key in keys_to_sync:
                 try:
-                    await self._sync_project(project_key)
+                    project_data = await self.client.get_project(
+                        project_key,
+                        expand="description,lead",
+                    )
+
+                    lead = project_data.get("lead", {})
+                    url = f"{self.site_url}/projects/{project_key}"
+
+                    # RDBMS 저장용 데이터 구성
+                    projects_data.append({
+                        "cloud_id": self.cloud_id,
+                        "project_key": project_key,
+                        "project_id": project_data.get("id", ""),
+                        "project_name": project_data.get("name", ""),
+                        "description": project_data.get("description"),
+                        "project_type": project_data.get("projectTypeKey"),
+                        "lead_account_id": lead.get("accountId"),
+                        "lead_display_name": lead.get("displayName"),
+                        "url": url,
+                    })
+
                     results["synced"] += 1
+
                 except JiraApiError as e:
                     logger.error(f"Failed to sync project {project_key}: {e}")
                     results["errors"] += 1
 
-                # Rate limit 방지
                 await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
 
+            # RDBMS 벌크 저장
+            if projects_data:
+                jira_entities.upsert_projects_bulk(db, projects_data)
+                logger.info(f"Saved {len(projects_data)} projects to RDBMS")
+
         except JiraApiError as e:
-            logger.error(f"Failed to get project list: {e}")
+            logger.error(f"Failed to get project list (API error): {e}")
+            results["errors"] += 1
+        except Exception as e:
+            # DB 에러 등 발생 시 트랜잭션 롤백
+            db.rollback()
+            logger.error(f"Failed to sync projects (DB error): {e}")
             results["errors"] += 1
 
         logger.info(f"Project sync completed: {results}")
         return results
 
-    async def _sync_project(self, project_key: str) -> None:
-        """단일 프로젝트 동기화"""
-        self._ensure_initialized()
+    async def _sync_all_sprints(
+        self,
+        db: Session,
+    ) -> dict[str, int]:
+        """
+        모든 스프린트 동기화 (RDBMS 저장)
 
-        logger.info(f"Syncing project: {project_key}")
+        Args:
+            db: SQLAlchemy Session
 
-        project_data = await self.client.get_project(
-            project_key,
-            expand="description,lead",
-        )
-
-        doc = self.transformer.transform_project(project_data, self.site_url)
-        await self.repository.upsert_documents([doc], [doc.id])
-
-    async def _sync_all_sprints(self) -> dict[str, int]:
-        """모든 스프린트 동기화"""
+        Returns:
+            {"synced": N, "errors": M}
+        """
         self._ensure_initialized()
 
         results = {"synced": 0, "errors": 0}
+        sprints_data: list[dict] = []
 
         try:
             # 모든 보드 조회
@@ -404,20 +474,28 @@ class JiraIngestionService:
                     sprints_response = await self.client.get_board_sprints(board_id)
                     sprints = sprints_response.get("values", [])
 
-                    documents: list[Document] = []
-                    doc_ids: list[str] = []
-
                     for sprint_data in sprints:
-                        doc = self.transformer.transform_sprint(
-                            sprint_data,
-                            project_key,
-                        )
-                        documents.append(doc)
-                        doc_ids.append(doc.id)
-                        results["synced"] += 1
+                        # RDBMS 저장용 데이터 구성
+                        sprints_data.append({
+                            "cloud_id": self.cloud_id,
+                            "sprint_id": sprint_data.get("id"),
+                            "sprint_name": sprint_data.get("name", ""),
+                            "state": sprint_data.get("state"),
+                            "goal": sprint_data.get("goal"),
+                            "project_key": project_key,
+                            "board_id": board_id,
+                            "start_date": self._parse_datetime(
+                                sprint_data.get("startDate")
+                            ),
+                            "end_date": self._parse_datetime(
+                                sprint_data.get("endDate")
+                            ),
+                            "complete_date": self._parse_datetime(
+                                sprint_data.get("completeDate")
+                            ),
+                        })
 
-                    if documents:
-                        await self.repository.upsert_documents(documents, doc_ids)
+                        results["synced"] += 1
 
                 except JiraApiError as e:
                     logger.error(f"Failed to sync sprints for board {board_id}: {e}")
@@ -425,12 +503,90 @@ class JiraIngestionService:
 
                 await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
 
+            # RDBMS 벌크 저장
+            if sprints_data:
+                jira_entities.upsert_sprints_bulk(db, sprints_data)
+                logger.info(f"Saved {len(sprints_data)} sprints to RDBMS")
+
         except JiraApiError as e:
-            logger.error(f"Failed to get boards: {e}")
+            logger.error(f"Failed to get boards (API error): {e}")
+            results["errors"] += 1
+        except Exception as e:
+            # DB 에러 등 발생 시 트랜잭션 롤백
+            db.rollback()
+            logger.error(f"Failed to sync sprints (DB error): {e}")
             results["errors"] += 1
 
         logger.info(f"Sprint sync completed: {results}")
         return results
+
+    async def _sync_all_users(self, db: Session) -> dict[str, int]:
+        """
+        모든 사용자 동기화 (RDBMS 저장)
+
+        Jira Cloud의 모든 사용자를 조회하여 RDBMS에 저장.
+
+        Args:
+            db: SQLAlchemy Session
+
+        Returns:
+            {"synced": N, "errors": M}
+        """
+        self._ensure_initialized()
+
+        results = {"synced": 0, "errors": 0}
+        users_data: list[dict] = []
+
+        try:
+            # 모든 사용자 조회
+            all_users = await self.client.get_all_users()
+            logger.info(f"Fetched {len(all_users)} users from Jira API")
+
+            for user_data in all_users:
+                account_id = user_data.get("accountId")
+                if not account_id:
+                    continue
+
+                # RDBMS 저장용 데이터 구성
+                users_data.append({
+                    "cloud_id": self.cloud_id,
+                    "account_id": account_id,
+                    "account_type": user_data.get("accountType", "atlassian"),
+                    "active": user_data.get("active", True),
+                    "display_name": user_data.get("displayName", "Unknown"),
+                    "email_address": user_data.get("emailAddress"),
+                    "avatar_url": user_data.get("avatarUrls", {}).get("48x48"),
+                    "self_url": user_data.get("self"),
+                })
+
+            # RDBMS 벌크 저장 (저장 후 카운트)
+            if users_data:
+                saved_count = jira_entities.upsert_users_bulk(db, users_data)
+                results["synced"] = saved_count
+                logger.info(f"Saved {saved_count} users to RDBMS")
+            else:
+                logger.warning("No valid users to save (all missing accountId)")
+
+        except JiraApiError as e:
+            logger.error(f"Failed to sync users (API error): {e}")
+            results["errors"] += 1
+        except Exception as e:
+            # DB 에러 등 발생 시 트랜잭션 롤백
+            db.rollback()
+            logger.error(f"Failed to sync users (DB error): {e}", exc_info=True)
+            results["errors"] += 1
+
+        logger.info(f"User sync completed: {results}")
+        return results
+
+    def _parse_datetime(self, dt_str: str | None) -> datetime | None:
+        """ISO 날짜 문자열 -> datetime 변환"""
+        if not dt_str:
+            return None
+        try:
+            return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+        except ValueError:
+            return None
 
     # ================================================================
     # 증분 동기화 (Incremental Sync)
