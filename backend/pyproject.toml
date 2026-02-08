@@ -34,6 +34,9 @@ dependencies = [
     "sqlalchemy",
     "psycopg-binary>=3.3.2",
     "langchain-neo4j>=0.8.0",
+    # --- Slack ---
+    "slack-sdk>=3.39.0",
+    "aiodns",
 ]
 
 # 개발 전용 의존성

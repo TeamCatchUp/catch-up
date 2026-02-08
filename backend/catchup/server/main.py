@@ -14,6 +14,7 @@ from catchup.server.chat.api import router as chat_router
 from catchup.server.connector.github.api import router as github_router
 from catchup.server.connector.jira.api import router as jira_router, sync_router as jira_sync_router
 from catchup.server.connector.slack.api import router as slack_router
+from catchup.server.connector.slack.sync_api import sync_router as slack_sync_router
 
 # logging 설정
 logging.basicConfig(
@@ -79,6 +80,7 @@ app.include_router(github_router)
 app.include_router(jira_router)
 app.include_router(jira_sync_router)
 app.include_router(slack_router)
+app.include_router(slack_sync_router)
 
 
 # 헬스 체크

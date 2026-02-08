@@ -50,7 +50,62 @@ class JiraUser(Base):
     self_url: Mapped[str] = mapped_column(String(500), nullable=True)
 
 
+class SlackWorkspace(Base):
+    """
+    Slack 워크스페이스 정보 (정적 데이터, RDBMS 저장)
+    """
+    __tablename__ = "slack_workspaces"
+
+    id: Mapped[str] = mapped_column(String(20), primary_key=True, comment="Team ID (T123ABC)")
+    name: Mapped[str] = mapped_column(String(255), nullable=False, comment="워크스페이스 이름")
+    domain: Mapped[str] = mapped_column(String(255), nullable=False, comment="{domain}.slack.com")
+    url: Mapped[str] = mapped_column(String(512), nullable=False, comment="https://{domain}.slack.com/")
+    email_domain: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="허용 이메일 도메인")
+    icon_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    enterprise_id: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="Enterprise Grid ID")
+    enterprise_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class SlackChannelType(StrEnum):
+    PUBLIC = "public"
+    PRIVATE = "private"
+    DM = "dm"
+    MPIM = "mpim"
+
+
+class SlackChannel(Base):
+    """
+    Slack 채널 정보 (정적 데이터, RDBMS 저장)
+    """
+    __tablename__ = "slack_channels"
+
+    id: Mapped[str] = mapped_column(String(20), primary_key=True, comment="Channel ID (C456DEF)")
+    team_id: Mapped[str] = mapped_column(String(20), nullable=False, index=True, comment="Workspace ID")
+    name: Mapped[str] = mapped_column(String(255), nullable=False, comment="채널 이름")
+    channel_type: Mapped[SlackChannelType] = mapped_column(
+        String(16), nullable=False, comment="public/private/dm/mpim"
+    )
+    topic: Mapped[str | None] = mapped_column(String(1000), nullable=True, comment="채널 토픽")
+    purpose: Mapped[str | None] = mapped_column(String(1000), nullable=True, comment="채널 목적")
+    creator_id: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="생성자 user_id")
+    member_count: Mapped[int] = mapped_column(Integer, default=0, comment="멤버 수")
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, comment="아카이브 여부")
+    is_private: Mapped[bool] = mapped_column(Boolean, default=False, comment="비공개 여부")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, comment="채널 생성 시간"
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class SlackUser(Base):
+    """
+    Slack 사용자 정보 (정적 데이터, RDBMS 저장)
+    """
     __tablename__ = "slack_users"
 
     team_id: Mapped[str] = mapped_column(String(20), primary_key=True, comment="WorkSpaceId")
@@ -60,12 +115,23 @@ class SlackUser(Base):
     deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, comment="비활성 사용자 여부")
 
     # Profile
-    email: Mapped[str] = mapped_column(String(255), nullable=True, index=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    avatar_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="직함")
+    phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tz: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="타임존 ID")
+    tz_label: Mapped[str | None] = mapped_column(String(128), nullable=True, comment="타임존 라벨")
     is_bot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_owner: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_restricted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, comment="Guest User")
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="프로필 업데이트 시간"
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class GitHubOrganizationRole(StrEnum):
@@ -301,6 +367,93 @@ class JiraSyncState(Base):
     oldest_entity_created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True,
         comment="동기화된 엔티티 중 가장 오래된 생성 시간 (이 시점 이후 데이터만 보유)"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        server_default=func.now(), onupdate=func.now()
+    )
+
+
+# ============================================================
+# Slack Sync State
+# ============================================================
+
+class SlackSyncStatus(StrEnum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+class SlackEntityType(StrEnum):
+    MESSAGE = "message"
+    CHANNEL = "channel"
+    USER = "user"
+    FILE = "file"
+    WORKSPACE = "workspace"
+
+
+class SlackSyncState(Base):
+    """
+    Slack 엔티티 동기화 상태 추적을 위한 테이블
+
+    - Entity Type별로 동기화 상태 관리 -> 타입별로 병렬처리 및 재시도 가능
+    - 증분 동기화 : last_successful_sync_at 기준으로 이후 변경된 엔티티만 동기화
+    """
+    __tablename__ = "slack_sync_states"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Slack Workspace 식별
+    team_id: Mapped[str] = mapped_column(
+        String(128), nullable=False, index=True,
+        comment="Slack Team/Workspace ID"
+    )
+    entity_type: Mapped[SlackEntityType] = mapped_column(
+        String(50), nullable=False,
+        comment="message, channel, user, file, workspace"
+    )
+
+    # 동기화 상태
+    last_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="마지막 동기화 시작 시간"
+    )
+    last_successful_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="마지막 성공적인 동기화 시간 (증분 동기화 기준)"
+    )
+    last_sync_status: Mapped[SlackSyncStatus | None] = mapped_column(
+        String(20), nullable=True,
+        comment="pending, in_progress, success, failed"
+    )
+    last_sync_error: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True,
+        comment="마지막 에러 메시지"
+    )
+
+    # 진행 상황
+    total_entities: Mapped[int] = mapped_column(
+        Integer, default=0,
+        comment="동기화 대상 총 엔티티 수"
+    )
+    synced_entities: Mapped[int] = mapped_column(
+        Integer, default=0,
+        comment="동기화 완료된 엔티티 수"
+    )
+
+    # 날짜 범위 (사용자 지정 동기화용)
+    oldest_ts: Mapped[str | None] = mapped_column(
+        String(50), nullable=True,
+        comment="동기화 시작 Slack timestamp (oldest 파라미터)"
+    )
+    latest_ts: Mapped[str | None] = mapped_column(
+        String(50), nullable=True,
+        comment="동기화 종료 Slack timestamp (latest 파라미터)"
     )
 
     created_at: Mapped[datetime] = mapped_column(
