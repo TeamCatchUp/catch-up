@@ -43,6 +43,7 @@ async def expand_graph_context_node(state: AgentState):
     graph_docs = _convert_to_documents(raw_results)
 
     logger.info(f"Graph 확장 완료: +{len(graph_docs)}개 문서 추가.")
+    logger.info(graph_docs)
 
     combined_docs = vector_docs + graph_docs
 
@@ -88,19 +89,20 @@ if __name__ == "__main__":
     def seed():
         print("데이터 적재 시작...")
         
-        # 1. 서비스 인스턴스 가져오기
         graph_service = get_graph_db_service()
         
-        # 2. 초기화 (await 제거, .driver 제거 -> .query() 사용)
+        # Graph DB 초기화
         graph_service.query("MATCH (n) DETACH DELETE n")
         print("기존 데이터 삭제 완료")
 
-        # 3. 데이터 적재 쿼리
+        # 데이터 적재 쿼리
         query = """
         CREATE (kim:Person {name: 'Kim', role: 'Backend Dev'})
         CREATE (lee:Person {name: 'Lee', role: 'Data Scientist'})
         CREATE (topic_db:Topic {name: 'Database'})
         CREATE (topic_ai:Topic {name: 'AI'})
+        
+        CREATE (lib:Library {id: 'lib-psycopg2', name: 'psycopg2', type: 'python-library'})
 
         CREATE (d1:Document {id: '480e29d9-05ae-4efb-8a84-37b1e9478aad', title: 'LangChain', type: 'tech_blog'})
         CREATE (d2:Document {id: 'cd72fa82-37f5-4d94-9f52-8d4347cb88a0', title: 'PostgreSQL', type: 'wiki'})
@@ -111,6 +113,14 @@ if __name__ == "__main__":
         CREATE (d1)-[:RELATED_TO {timestamp: datetime()}]->(topic_db)
         CREATE (d2)-[:RELATED_TO {timestamp: datetime()}]->(topic_db)
         CREATE (d3)-[:RELATED_TO {timestamp: datetime()}]->(topic_ai)
+
+        CREATE (d3)-[:INTEGRATES_WITH {
+            timestamp: datetime(), 
+            context: 'Python은 psycopg2 드라이버를 사용하여 PostgreSQL과 연동할 수 있습니다.'
+        }]->(d2)
+
+        CREATE (d3)-[:USES {timestamp: datetime()}]->(lib)
+        CREATE (lib)-[:CONNECTS_TO {timestamp: datetime()}]->(d2)
         """
         
         # 쿼리 실행

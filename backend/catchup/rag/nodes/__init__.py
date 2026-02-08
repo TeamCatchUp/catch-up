@@ -9,6 +9,7 @@ from .rewrite import rewrite_node
 from .route import route_node
 from .expand_graph_context import expand_graph_context_node
 from .fallback_cypher_query import fallback_cypher_query_node
+from .fetch_details_after_graph_context_expansion import fetch_details_after_graph_context_expansion_node
 
 __all__ = [
     "route_node",
@@ -20,6 +21,7 @@ __all__ = [
     "manage_pr_context_node",
     "grade_node",
     "generate_node",
-    "expand_graph_context_node",
+    "expand_graph_context_node", 
+    "fetch_details_after_graph_context_expansion_node",
     "fallback_cypher_query_node",
 ]

@@ -14,6 +14,7 @@ from catchup.rag.nodes import (
     rerank_node,
     search_vector_db_node,
     expand_graph_context_node,
+    fetch_details_after_graph_context_expansion_node,
     rewrite_node,
     route_node,
     fallback_cypher_query_node,
@@ -35,6 +36,7 @@ async def get_compiled_graph():
     workflow.add_node("rerank", rerank_node)
     workflow.add_node("grade", grade_node)
     workflow.add_node("expand_graph_context", expand_graph_context_node)
+    workflow.add_node("fetch_details_after_graph_context_expansion", fetch_details_after_graph_context_expansion_node)
     workflow.add_node("fallback_cypher_query", fallback_cypher_query_node)
     workflow.add_node("generate", generate_node)
 
@@ -65,7 +67,8 @@ async def get_compiled_graph():
             "fallback_cypher_query": "fallback_cypher_query"
         }
     )
-    workflow.add_edge("expand_graph_context", "generate")
+    workflow.add_edge("expand_graph_context", "fetch_details_after_graph_context_expansion")
+    workflow.add_edge("fetch_details_after_graph_context_expansion", "generate")
     workflow.add_edge("fallback_cypher_query", "generate")
     workflow.add_edge("generate", END)
 

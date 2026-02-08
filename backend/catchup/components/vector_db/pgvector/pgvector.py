@@ -137,7 +137,6 @@ class PGVectorService(BaseVectorDbService):
         )
         return retriever.invoke(query)
     
-    
     def hybrid_search(
             self,
             query: str,
@@ -181,52 +180,57 @@ class PGVectorService(BaseVectorDbService):
         chain = retriever_parallel | RunnableLambda(apply_rrf)
         
         return chain
+    
+    def get_documents_by_ids(self, ids: list[str]) -> list[Document]:
+        if not ids:
+            return []
+        return self.vector_store.get_by_ids(ids)
    
 
 # Test용 스크립트
 if __name__ == "__main__":
-    import os
     from langchain_core.documents import Document
-    from langchain_openai import OpenAIEmbeddings  # [변경] OpenAI 임베딩 임포트
+    from langchain_openai import OpenAIEmbeddings
     from sqlalchemy import create_engine, text
+    from sqlalchemy.orm import sessionmaker
+    
+    # [주의] 이 부분은 프로젝트 경로에 맞게 수정 필요
     from catchup.configs.config import settings
 
     # ---------------------------------------------------------
-    # [설정] DB 및 OpenAI API 키 확인
+    # 1. DB 연결 및 초기화
     # ---------------------------------------------------------
     DATABASE_URL = settings.sqlalchemy_database_url
-
     engine = create_engine(DATABASE_URL)
-    from sqlalchemy.orm import sessionmaker
     SessionFactory = sessionmaker(bind=engine)
+    COLLECTION_NAME = settings.PGVECTOR_COLLECTION_NAME # 예: 'catchup_jira'
 
-    COLLECTION_NAME = settings.PGVECTOR_COLLECTION_NAME
-
-    embeddings = OpenAIEmbeddings(model=settings.OPENAI_EMBEDDING_MODEL, api_key=settings.OPENAI_API_KEY)
+    embeddings = OpenAIEmbeddings(
+        model=settings.OPENAI_EMBEDDING_MODEL, 
+        api_key=settings.OPENAI_API_KEY
+    )
 
     print(f">>> 컬렉션 '{COLLECTION_NAME}' 초기화 중...")
 
+    # 기존 데이터 싹 지우기 (초기화)
     with SessionFactory() as session:
         coll_query = text("SELECT uuid FROM langchain_pg_collection WHERE name = :name")
         result = session.execute(coll_query, {"name": COLLECTION_NAME}).fetchone()
         
         if result:
             coll_uuid = result[0]
-            # 임베딩 데이터 삭제
-            del_embed = text("DELETE FROM langchain_pg_embedding WHERE collection_id = :uuid")
-            session.execute(del_embed, {"uuid": coll_uuid})
-            # 컬렉션 정보 삭제
-            del_coll = text("DELETE FROM langchain_pg_collection WHERE uuid = :uuid")
-            session.execute(del_coll, {"uuid": coll_uuid})
+            session.execute(text("DELETE FROM langchain_pg_embedding WHERE collection_id = :uuid"), {"uuid": coll_uuid})
+            session.execute(text("DELETE FROM langchain_pg_collection WHERE uuid = :uuid"), {"uuid": coll_uuid})
             session.commit()
             print(">>> 기존 데이터 삭제 완료.")
         else:
             print(">>> 삭제할 기존 데이터가 없습니다.")
 
     # ---------------------------------------------------------
-    # 2. 서비스 초기화 및 데이터 주입
+    # 2. 데이터 주입 (Graph DB와 ID 싱크 맞추기)
     # ---------------------------------------------------------
-    print("\n>>> 서비스 초기화 및 데이터 주입 (OpenAI API 호출 중)...")
+    print("\n>>> 데이터 주입 시작...")
+    
     pg_service = PGVectorService(
         postgresql_engine=engine,
         embeddings=embeddings,
@@ -234,54 +238,48 @@ if __name__ == "__main__":
         session_factory=SessionFactory
     )
 
+    # ★ 핵심: Graph DB에 넣은 ID와 똑같은 ID를 사용해야 함! ★
     mock_docs = [
         Document(
+            # d1: LangChain 문서
+            id='480e29d9-05ae-4efb-8a84-37b1e9478aad', 
             page_content="LangChain과 PGVector를 결합하면 강력한 검색 시스템을 구축할 수 있습니다.",
             metadata={"source": "tech_blog", "author": "Kim"}
         ),
         Document(
+            # d2: PostgreSQL 문서
+            id='cd72fa82-37f5-4d94-9f52-8d4347cb88a0',
             page_content="PostgreSQL은 세계에서 가장 진보된 오픈소스 관계형 데이터베이스입니다.",
             metadata={"source": "wiki", "category": "db"}
         ),
         Document(
+            # d3: Python 문서
+            id='0e2f490d-68f7-484f-8b82-13c98bd54d67',
+            page_content="파이썬(Python)은 데이터 사이언스와 AI 분야에서 가장 널리 쓰이는 언어입니다.",
+            metadata={"source": "tech_blog", "author": "Lee"}
+        ),
+        # 아래는 Graph에는 없지만 검색 테스트용으로 추가 (Noise)
+        Document(
+            id='a05668b6-0767-4189-a5c4-29cd2dfa5097',
             page_content="하이브리드 검색은 키워드 매칭과 시맨틱(의미) 검색의 장점을 모두 활용합니다.",
             metadata={"source": "paper", "year": 2024}
         ),
         Document(
+            id='a1b6822a-4774-442c-8cd0-510365f18116',
             page_content="오늘 점심 메뉴는 김치찌개와 계란말이입니다. 맛집을 찾아봅시다.",
             metadata={"source": "chat", "type": "noise"}
         ),
-        Document(
-            page_content="파이썬(Python)은 데이터 사이언스와 AI 분야에서 가장 널리 쓰이는 언어입니다.",
-            metadata={"source": "tech_blog", "author": "Lee"}
-        ),
     ]
 
-    # 여기서 실제 OpenAI API를 사용하여 벡터화가 진행됩니다.
-    pg_service.vector_store.add_documents(mock_docs)
-    print(f">>> {len(mock_docs)}개의 문서를 DB에 저장했습니다.")
-
-    # 인덱스 생성 확인
-    pg_service._ensure_fts_index()
+    # PGVector에 저장
+    pg_service.vector_store.add_documents(mock_docs, ids=[doc.id for doc in mock_docs])
+    print(f">>> {len(mock_docs)}개의 문서를 Vector DB에 저장했습니다. (Graph DB와 ID 동기화 완료)")
 
     # ---------------------------------------------------------
-    # 3. 검색 테스트 (하이브리드)
+    # 3. 확인용 검색
     # ---------------------------------------------------------
-    # 테스트 1: 의미 기반 검색 (단어가 없어도 찾아야 함)
-    query_semantic = "코딩할 때 쓰는 도구" 
-    print(f"\n>>> [TEST 1] 의미 검색: '{query_semantic}'")
-    # 벡터 비중을 높임 (Vector: 0.8, Keyword: 0.2)
-    results_1 = pg_service.hybrid_search(query_semantic, k=2, weights=[0.8, 0.2])
-
-    for i, doc in enumerate(results_1):
-        print(f"[{i+1}] {doc.page_content}")
-
-
-    # 테스트 2: 키워드 기반 검색 (정확한 단어 매칭)
-    query_keyword = "김치찌개"
-    print(f"\n>>> [TEST 2] 키워드 검색: '{query_keyword}'")
-    # 키워드 비중을 높임 (Vector: 0.2, Keyword: 0.8)
-    results_2 = pg_service.hybrid_search(query_keyword, k=2, weights=[0.2, 0.8])
-
-    for i, doc in enumerate(results_2):
-        print(f"[{i+1}] {doc.page_content}")
+    print("\n>>> [검색 테스트] '파이썬' 검색")
+    results = pg_service.hybrid_search("파이썬", k=1)
+    for doc in results:
+        print(f"ID: {doc.id} | Content: {doc.page_content}")
+        # ID가 0e2f... 로 나오면 성공!
