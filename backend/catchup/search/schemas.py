@@ -4,7 +4,7 @@ from typing import Optional
 from langchain_core.documents import Document
 from pydantic import BaseModel, Field
 
-from catchup.components.connectors.github.schemas import PRFileContext
+from catchup.connectors.github.schemas import PRFileContext
 
 
 class SourceType(IntEnum):

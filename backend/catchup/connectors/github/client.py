@@ -44,7 +44,15 @@ logger = logging.getLogger(__name__)
 # 예외 클래스 정의
 # ============================================================
 
-class GitHubApiError(Exception):
+from catchup.connectors.base import (
+    AuthenticationError,
+    ConnectorApiError,
+    NotFoundError,
+    RateLimitError,
+)
+
+
+class GitHubApiError(ConnectorApiError):
     """
     GitHub API 에러 기본 클래스
 
@@ -52,12 +60,10 @@ class GitHubApiError(Exception):
     status_code를 통해 HTTP 상태 코드 확인 가능.
     """
 
-    def __init__(self, message: str, status_code: int | None = None):
-        super().__init__(message)
-        self.status_code = status_code
+    service = "github"
 
 
-class GitHubRateLimitError(GitHubApiError):
+class GitHubRateLimitError(RateLimitError, GitHubApiError):
     """
     Rate limit 초과 에러 (HTTP 429 또는 403 with rate limit)
 
@@ -71,13 +77,10 @@ class GitHubRateLimitError(GitHubApiError):
             # 재시도
     """
 
-    def __init__(self, retry_after: int = 60, remaining: int = 0):
-        super().__init__(f"Rate limit exceeded. Retry after {retry_after}s", 429)
-        self.retry_after = retry_after
-        self.remaining = remaining
+    service = "github"
 
 
-class GitHubAuthError(GitHubApiError):
+class GitHubAuthError(AuthenticationError, GitHubApiError):
     """
     인증 에러 (HTTP 401)
 
@@ -90,19 +93,17 @@ class GitHubAuthError(GitHubApiError):
             # GitHubAppService.get_installation_access_token()으로 토큰 재발급 후 재시도
     """
 
-    def __init__(self, message: str = "Authentication failed"):
-        super().__init__(message, 401)
+    service = "github"
 
 
-class GitHubNotFoundError(GitHubApiError):
+class GitHubNotFoundError(NotFoundError, GitHubApiError):
     """
     리소스를 찾을 수 없음 (HTTP 404)
 
     Repository가 삭제되었거나 접근 권한이 없을 때 발생.
     """
 
-    def __init__(self, message: str = "Resource not found"):
-        super().__init__(message, 404)
+    service = "github"
 
 
 # ============================================================

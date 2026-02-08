@@ -9,14 +9,14 @@ GitHub 데이터 수집 및 PGVector 적재를 위한 커넥터.
 - GitHubIngestionService: 데이터 동기화 서비스
 """
 
-from catchup.components.connectors.github.client import (
+from catchup.connectors.github.client import (
     GitHubApiClient,
     GitHubApiError,
     GitHubRateLimitError,
     GitHubAuthError,
     GitHubNotFoundError,
 )
-from catchup.components.connectors.github.schemas import (
+from catchup.connectors.github.schemas import (
     GitHubUser,
     GitHubLabel,
     GitHubMilestone,
@@ -31,12 +31,12 @@ from catchup.components.connectors.github.schemas import (
     PRFileContext,
     PRComment,
 )
-from catchup.components.connectors.github.transformers import GitHubTransformer
-from catchup.components.connectors.github.service import (
+from catchup.connectors.github.transformers import GitHubTransformer
+from catchup.connectors.github.service import (
     GitHubIngestionService,
     GithubService,
 )
-from catchup.components.connectors.github.factory import (
+from catchup.connectors.github.factory import (
     get_github_service,
     create_github_ingestion_service,
 )

@@ -12,11 +12,12 @@ from catchup.db.engine import engine
 from catchup.db.models import Base
 from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
-from catchup.server.connector.github.api import router as github_router
-from catchup.server.connector.jira.api import router as jira_router, sync_router as jira_sync_router
-from catchup.server.connector.slack.api import router as slack_router
-from catchup.server.connector.slack.sync_api import sync_router as slack_sync_router
+from catchup.server.connector.github.auth_api import router as github_auth_router
 from catchup.server.connector.github.sync_api import router as github_sync_router
+from catchup.server.connector.jira.auth_api import router as jira_auth_router
+from catchup.server.connector.jira.sync_api import router as jira_sync_router
+from catchup.server.connector.slack.auth_api import router as slack_auth_router
+from catchup.server.connector.slack.sync_api import router as slack_sync_router
 
 # logging 설정
 logging.basicConfig(
@@ -78,12 +79,12 @@ app = FastAPI(
 # Router 등록
 app.include_router(chat_router)
 app.include_router(auth_router)
-app.include_router(github_router)
-app.include_router(jira_router)
-app.include_router(jira_sync_router)
-app.include_router(slack_router)
-app.include_router(slack_sync_router)
+app.include_router(github_auth_router)
 app.include_router(github_sync_router)
+app.include_router(jira_auth_router)
+app.include_router(jira_sync_router)
+app.include_router(slack_auth_router)
+app.include_router(slack_sync_router)
 
 
 app.add_middleware(

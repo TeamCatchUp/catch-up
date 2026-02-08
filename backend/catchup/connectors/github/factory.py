@@ -8,7 +8,7 @@ from functools import lru_cache
 
 from sqlalchemy.orm import Session
 
-from catchup.components.connectors.github.service import GithubService, GitHubIngestionService
+from catchup.connectors.github.service import GithubService, GitHubIngestionService
 from catchup.db.github_installation import get_installation_info_by_id
 from catchup.auth.github.app import get_github_app_service
 

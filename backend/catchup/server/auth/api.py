@@ -1,8 +1,7 @@
 import logging
-from typing import Optional
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -14,7 +13,6 @@ from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
 from catchup.db.models import User
 from catchup.db.users import get_user_by_email, update_user_refresh_token
-from catchup.db import github_installation as installation_crud
 from catchup.server.auth.schemas import CurrentUserInfo, TokenRefreshResponse
 
 logger = logging.getLogger(__name__)
@@ -111,64 +109,3 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     return CurrentUserInfo(
         email=current_user.email, name=current_user.name, role=current_user.role
     )
-
-
-# ============================================================
-# GitHub App Installation Callback
-# ============================================================
-
-@router.get("/github/install")
-async def github_app_install_callback(
-    installation_id: Optional[int] = Query(None),
-    setup_action: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-):
-    """
-    GitHub App 설치 완료 후 Callback 엔드포인트
-
-    GitHub App 설정에서 "Setup URL (optional)"로 등록:
-    https://your-domain.com/api/v1/auth/github/install
-
-    GitHub이 전달하는 Query Parameters:
-    - installation_id: 설치된 Installation ID
-    - setup_action: "install" (신규 설치) 또는 "update" (권한 변경)
-    """
-    logger.info(
-        f"GitHub App install callback received: "
-        f"installation_id={installation_id}, setup_action={setup_action}"
-    )
-
-    # installation_id가 없으면 에러
-    if not installation_id:
-        logger.warning("GitHub App install callback received without installation_id")
-        redirect_url = f"{auth_settings.FRONTEND_REDIRECT_URI}?github_install=error&reason=missing_installation_id"
-        return RedirectResponse(url=redirect_url)
-
-    # DB에서 Installation 확인 (Webhook이 먼저 도착했으면 이미 저장되어 있음)
-    installation = installation_crud.get_installation_by_installation_id(db, installation_id)
-
-    if installation:
-        logger.info(
-            f"GitHub App installation found: "
-            f"installation_id={installation_id}, account={installation.account_login}"
-        )
-        redirect_url = (
-            f"{auth_settings.FRONTEND_REDIRECT_URI}"
-            f"?github_install=success"
-            f"&installation_id={installation_id}"
-            f"&account={installation.account_login}"
-        )
-    else:
-        # Webhook이 아직 처리되지 않았을 수 있음 (race condition)
-        # 일단 성공으로 처리하고, 프론트엔드에서 polling으로 확인하도록
-        logger.info(
-            f"GitHub App installation not yet in DB: installation_id={installation_id}. "
-            f"Webhook may arrive shortly."
-        )
-        redirect_url = (
-            f"{auth_settings.FRONTEND_REDIRECT_URI}"
-            f"?github_install=pending"
-            f"&installation_id={installation_id}"
-        )
-
-    return RedirectResponse(url=redirect_url)
