@@ -33,6 +33,7 @@ dependencies = [
     "redis",
     "sqlalchemy",
     "psycopg-binary>=3.3.2",
+    "langchain-neo4j>=0.8.0",
     # --- Slack ---
     "slack-sdk>=3.39.0",
     "aiodns",

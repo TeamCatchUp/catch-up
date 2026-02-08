@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     JIRA_SYNC_MAX_CONCURRENT_REQUESTS: int = 5  # Rate limit safe
     JIRA_SYNC_COMMENTS_LIMIT: int = 5  # Recent comments to include
     JIRA_API_RATE_LIMIT_DELAY: float = 0.1  # Seconds between requests
+    
+    # Neo4j
+    NEO4J_USER: str
+    NEO4J_PASSWORD: str
+    NEO4J_URI: str
 
     # Slack Sync Settings
     SLACK_SYNC_MAX_CONCURRENT_REQUESTS: int = 10  # 동시 요청 수

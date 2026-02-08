@@ -13,7 +13,10 @@ from catchup.rag.state import AgentState
 
 logger = logging.getLogger(__name__)
 
-FALLBACK_ANSWER = "죄송합니다. 잠시 대화 연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요."
+FALLBACK_ANSWER = (
+    "죄송합니다. 잠시 대화 연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요."
+)
+
 
 @log_node
 async def chitchat_node(state: AgentState):
@@ -36,15 +39,9 @@ async def chitchat_node(state: AgentState):
                 input={"messages": filtered_messages},
                 config={"callbacks": [langfuse_handler]},
             )
-            
+
     except Exception as e:
         logger.error(f"Chitchat node failed: {e}", exc_info=True)
-        return {
-                "messages": [AIMessage(content=FALLBACK_ANSWER)],
-                "sources": []
-            }
+        return {"messages": [AIMessage(content=FALLBACK_ANSWER)], "sources": []}
 
-    return {
-            "messages": [AIMessage(content=answer)],
-            "sources": []
-        }
+    return {"messages": [AIMessage(content=answer)], "sources": []}

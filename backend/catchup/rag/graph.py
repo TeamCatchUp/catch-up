@@ -5,6 +5,7 @@ from redis.asyncio import Redis
 
 from catchup.configs.config import settings
 from catchup.observability.langfuse_client import langfuse_handler
+from catchup.rag.conditional_edges import route_after_grade, route_question
 from catchup.rag.nodes import (
     chitchat_node,
     generate_node,
@@ -12,35 +13,15 @@ from catchup.rag.nodes import (
     generate_vector_queries_node,
     rerank_node,
     search_vector_db_node,
-    search_graph_db_node,
+    expand_graph_context_node,
+    fetch_details_after_graph_context_expansion_node,
     rewrite_node,
     route_node,
+    fallback_cypher_query_node,
 )
 from catchup.rag.state import AgentState
 
 logger = logging.getLogger(__name__)
-
-
-def route_question(state: AgentState):
-    intent = state["intent"]
-    if intent == "chitchat":
-        return "chitchat"
-    elif intent == "search_pipeline":
-        return "rewrite"
-
-
-def route_after_grade(state: AgentState):
-    status = state.get("grade_status")
-    retry_count = state.get("retry_count", 0)
-    
-    if status == "good":
-        return "generate"
-    
-    if retry_count >= 2:
-        logger.info("Vector Search 최대 재시도 횟수 도달. Graph Search 수행.")
-        return "search_graph_db"
-    
-    return "rewrite"
 
 
 async def get_compiled_graph():
@@ -54,13 +35,20 @@ async def get_compiled_graph():
     workflow.add_node("search_vector_db", search_vector_db_node)
     workflow.add_node("rerank", rerank_node)
     workflow.add_node("grade", grade_node)
-    workflow.add_node("search_graph_db", search_graph_db_node)
+    workflow.add_node("expand_graph_context", expand_graph_context_node)
+    workflow.add_node("fetch_details_after_graph_context_expansion", fetch_details_after_graph_context_expansion_node)
+    workflow.add_node("fallback_cypher_query", fallback_cypher_query_node)
     workflow.add_node("generate", generate_node)
 
     workflow.set_entry_point("route")
 
     # workflow.add_conditional_edges(
-    #     "router", route_question, {"rewrite": "rewrite", "chitchat": "chitchat"}
+    #     "router",
+    #     route_question, 
+    #     {
+    #         "rewrite": "rewrite",
+    #         "chitchat": "chitchat"
+    #     }
     # )
     # workflow.add_edge("chitchat", END)
 
@@ -75,10 +63,13 @@ async def get_compiled_graph():
         {
             "generate": "generate",
             "rewrite": "rewrite",
-            "search_graph_db": "search_graph_db"
+            "expand_graph_context": "expand_graph_context",
+            "fallback_cypher_query": "fallback_cypher_query"
         }
     )
-    workflow.add_edge("search_graph_db", "generate")
+    workflow.add_edge("expand_graph_context", "fetch_details_after_graph_context_expansion")
+    workflow.add_edge("fetch_details_after_graph_context_expansion", "generate")
+    workflow.add_edge("fallback_cypher_query", "generate")
     workflow.add_edge("generate", END)
 
     redis_client = Redis.from_url(settings.REDIS_URL)
