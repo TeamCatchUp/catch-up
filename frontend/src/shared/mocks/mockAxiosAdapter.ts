@@ -22,17 +22,17 @@ const mockHandlers: MockHandler[] = [
   // Auth
   // ═══════════════════════════════════════
   {
-    pattern: /^\/api\/me$/,
+    pattern: /^\/api\/v1\/auth\/me$/,
     method: 'get',
     handler: async () => MOCK_USER,
   },
   {
-    pattern: /^\/api\/auth\/logout$/,
+    pattern: /^\/api\/v1\/auth\/logout$/,
     method: 'post',
     handler: async () => ({ success: true }),
   },
   {
-    pattern: /^\/api\/auth\/refresh$/,
+    pattern: /^\/api\/v1\/auth\/refresh$/,
     method: 'post',
     handler: async () => MOCK_JWT_TOKENS,
   },
@@ -50,12 +50,17 @@ const mockHandlers: MockHandler[] = [
     method: 'get',
     handler: async () => MOCK_RECENT_QUERIES,
   },
+  {
+    pattern: /^\/api\/chatrooms\/[^/]+\/queries$/,
+    method: 'get',
+    handler: async () => MOCK_RECENT_QUERIES,
+  },
 
   // ═══════════════════════════════════════
   // GitHub
   // ═══════════════════════════════════════
   {
-    pattern: /^\/api\/github\/read\/repositories$/,
+    pattern: /^\/api\/v1\/github\/installations$/,
     method: 'get',
     handler: async () => MOCK_REPOSITORIES,
   },
@@ -95,7 +100,7 @@ const mockHandlers: MockHandler[] = [
     },
   },
   {
-    pattern: /^\/api\/chat\/resume$/,
+    pattern: /^\/api\/chat\/stream\/resume$/,
     method: 'post',
     handler: async (_, data) => {
       const requestData = data as { sessionId?: string } | undefined;
