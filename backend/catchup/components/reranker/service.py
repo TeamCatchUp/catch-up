@@ -26,11 +26,7 @@ class RerankService:
     ) -> list[Document]:
         if not documents:
             return []
-        
-        for doc in documents:
-            if doc.id:
-                doc.metadata["_original_id"] = doc.id
-                
+                        
         self._backup_ids(documents)
 
         self.reranker.top_n = top_n
