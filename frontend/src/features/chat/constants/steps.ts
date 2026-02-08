@@ -1,10 +1,10 @@
 /** RAG 진행 단계별 UI 정보 (아이콘, 레이블) */
 
-import RouterIcon from '/public/icons/icon/router_rewrite.svg';
+import GenerateIcon from '/public/icons/icon/generate.svg';
+import GradeIcon from '/public/icons/icon/grade.svg';
 import RetrieveIcon from '/public/icons/icon/plan_retrieve.svg';
 import RerankIcon from '/public/icons/icon/rerank.svg';
-import GradeIcon from '/public/icons/icon/grade.svg';
-import GenerateIcon from '/public/icons/icon/generate.svg';
+import RouterIcon from '/public/icons/icon/router_rewrite.svg';
 
 export const RAG_UI_STEPS: Record<
   Exclude<RagUIStepKey, 'manage_pr_context'>,

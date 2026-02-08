@@ -1,10 +1,9 @@
-import delay from './delay';
-
 // Data imports
-import { MOCK_USER, MOCK_JWT_TOKENS } from './auth/data';
-import { MOCK_CHATROOMS, MOCK_RECENT_QUERIES, MOCK_JIRA_TICKETS } from './search/data';
-import { MOCK_REPOSITORIES, MOCK_FILE_TREES, DEFAULT_FILE_TREE } from './github/data';
+import { MOCK_JWT_TOKENS,MOCK_USER } from './auth/data';
+import delay from './delay';
 import { MOCK_FEEDBACK_RESPONSE } from './feedback/data';
+import { DEFAULT_FILE_TREE,MOCK_FILE_TREES, MOCK_REPOSITORIES } from './github/data';
+import { MOCK_CHATROOMS, MOCK_JIRA_TICKETS,MOCK_RECENT_QUERIES } from './search/data';
 
 type MockHandler = {
   pattern: RegExp;

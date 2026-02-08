@@ -1,6 +1,7 @@
 import IconArrowRight from '@/public/icons/icon/arrow_right2.svg';
 import IconCheckOn from '@/public/icons/icon/checkbox_checked.svg';
 import IconCheckOff from '@/public/icons/icon/checkbox_unchecked.svg';
+
 import type { BaseTreeNode } from './ExplorerChildItem';
 
 interface RootItemProps<T extends BaseTreeNode> {

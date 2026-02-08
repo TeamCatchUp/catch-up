@@ -1,9 +1,9 @@
+import ArrowOutward from '/public/icons/icon/arrow_outward.svg';
 import CloudCheck from '/public/icons/icon/cloud_check.svg';
-import JiraLogo from '/public/icons/logo/Jira.svg';
 import ConfluenceLogo from '/public/icons/logo/Counfluence.svg';
 import GithubLogo from '/public/icons/logo/GitHub.svg';
+import JiraLogo from '/public/icons/logo/Jira.svg';
 import SlackLogo from '/public/icons/logo/Slack.svg';
-import ArrowOutward from '/public/icons/icon/arrow_outward.svg';
 
 const cardData = [
   {

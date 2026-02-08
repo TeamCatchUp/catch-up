@@ -4,9 +4,9 @@ import { useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 
-import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
+import { chatQueries } from '@/shared/queries/chatroom.queries';
 
 import List from '/public/icons/icon/list.svg';
 

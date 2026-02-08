@@ -2,21 +2,21 @@
 
 import { useRef, useState } from 'react';
 import Image from 'next/image';
+
+import IconLightbulb from '@/public/icons/icon/lightbulb.svg';
+import Git from '@/public/image/aiGit.png';
+import Jira from '@/public/image/AIJIRA1.png';
+import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
+import ExplorerPanel from '@/shared/components/query/ExplorerPanel';
+import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
+import FilterBar from '@/shared/components/query/FilterBar';
+import QueryInput from '@/shared/components/query/QueryInput';
 import { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
 import { useSearchInput } from '@/shared/hooks/query/useSearchInput';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 
-import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
-import QueryInput from '@/shared/components/query/QueryInput';
-import FilterBar from '@/shared/components/query/FilterBar';
-import ExplorerPanel from '@/shared/components/query/ExplorerPanel';
-import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
 import { GithubGuideCard, JiraGuideCard } from './GuideCard';
-
-import IconLightbulb from '@/public/icons/icon/lightbulb.svg';
-import Jira from '@/public/image/AIJIRA1.png';
-import Git from '@/public/image/aiGit.png';
 
 export default function Search() {
   const containerRef = useRef<HTMLDivElement>(null);

@@ -1,13 +1,13 @@
 'use client';
 
-import IconJira from '@/public/icons/logo/Jira28.svg';
-import IconAT from '@/public/icons/logo/atlassian.svg';
-import IconRotate from '@/public/icons/icon/rotate.svg';
+import Image from 'next/image';
+
 import IconCheck from '@/public/icons/icon/check.svg';
+import IconRotate from '@/public/icons/icon/rotate.svg';
+import IconAT from '@/public/icons/logo/atlassian.svg';
+import IconJira from '@/public/icons/logo/Jira28.svg';
 import ImgAPItoken from '@/public/image/apitoken.jpg';
 import ImgAPItoken1 from '@/public/image/apitoken1.jpg';
-
-import Image from 'next/image';
 export default function ToolPage() {
   return (
     <div className="flex items-start gap-6 self-stretch px-16 pt-6 pb-30">

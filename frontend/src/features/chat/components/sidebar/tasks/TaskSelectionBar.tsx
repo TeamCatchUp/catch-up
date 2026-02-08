@@ -1,15 +1,17 @@
 'use client';
 
+import { useEffect,useState } from 'react';
 import clsx from 'clsx';
-import { useState, useEffect } from 'react';
-import Epic from '/public/icons/icon/epic.svg';
-import DropDownDown from '/public/icons/icon/dropdown_down.svg';
-import Cancel from '/public/icons/icon/cancel_small.svg';
-import Reply from '/public/icons/icon/reply.svg';
-import Task from '/public/icons/icon/task.svg';
-import Edit from '/public/icons/icon/edit_square.svg';
-import Share from '/public/icons/icon/share_2.svg';
+
 import ToolTip from '@/shared/components/ui/ToolTip';
+
+import Cancel from '/public/icons/icon/cancel_small.svg';
+import DropDownDown from '/public/icons/icon/dropdown_down.svg';
+import Edit from '/public/icons/icon/edit_square.svg';
+import Epic from '/public/icons/icon/epic.svg';
+import Reply from '/public/icons/icon/reply.svg';
+import Share from '/public/icons/icon/share_2.svg';
+import Task from '/public/icons/icon/task.svg';
 
 interface TaskSelectionBarProps {
   onClose: () => void;

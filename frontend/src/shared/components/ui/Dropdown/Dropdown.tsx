@@ -3,12 +3,14 @@
 import {
   Listbox,
   ListboxButton,
-  ListboxOptions,
   ListboxOption as HeadlessListboxOption,
+  ListboxOptions,
 } from '@headlessui/react';
 import clsx from 'clsx';
+
+import { DropdownOptionProps,DropdownProps } from './Dropdown.types';
+
 import UnfoldMore from '/public/icons/icon/unfold_more.svg';
-import { DropdownProps, DropdownOptionProps } from './Dropdown.types';
 
 function Dropdown<T>({
   label,

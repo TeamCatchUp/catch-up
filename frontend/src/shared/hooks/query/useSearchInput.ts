@@ -5,8 +5,9 @@
 
 'use client';
 
-import { useState, useCallback, useEffect, RefObject } from 'react';
+import { RefObject,useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+
 import type { GithubNode } from '@/shared/types/query/github';
 
 interface UseSearchInputOptions {

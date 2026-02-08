@@ -1,13 +1,14 @@
 import clsx from 'clsx';
-import Flag from '/public/icons/icon/flag_filled.svg';
-import Menu from '/public/icons/icon/menu.svg';
-import UnfoldMore from '/public/icons/icon/unfold_more.svg';
-import Status from '/public/icons/icon/status_filled.svg';
-import Progress from '/public/icons/icon/progress.svg';
-import Person from '/public/icons/icon/person_filled.svg';
+
+import Calendar from '/public/icons/icon/calendar_filled.svg';
 import DefaultProfile from '/public/icons/icon/default_profile.svg';
 import Divider from '/public/icons/icon/divider.svg';
-import Calendar from '/public/icons/icon/calendar_filled.svg';
+import Flag from '/public/icons/icon/flag_filled.svg';
+import Menu from '/public/icons/icon/menu.svg';
+import Person from '/public/icons/icon/person_filled.svg';
+import Progress from '/public/icons/icon/progress.svg';
+import Status from '/public/icons/icon/status_filled.svg';
+import UnfoldMore from '/public/icons/icon/unfold_more.svg';
 
 const InfoTabContent = () => {
   return (

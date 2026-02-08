@@ -1,10 +1,10 @@
 'use client';
 
 import { RefObject } from 'react';
-import type { UseSearchInputReturn } from '@/shared/hooks/query/useSearchInput';
 
 import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
+import type { UseSearchInputReturn } from '@/shared/hooks/query/useSearchInput';
 
 interface QueryInputProps {
   input: UseSearchInputReturn;

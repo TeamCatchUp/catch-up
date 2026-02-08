@@ -1,8 +1,9 @@
-import Storage from '/public/icons/icon/storage.svg';
-import ArrowRight from '/public/icons/icon/arrow_right2.svg';
-import Folder from '/public/icons/icon/home_card_folder.svg';
-import Source from '/public/icons/icon/assignment_filled.svg';
 import TaskManagePart from './TaskManagePart';
+
+import ArrowRight from '/public/icons/icon/arrow_right2.svg';
+import Source from '/public/icons/icon/assignment_filled.svg';
+import Folder from '/public/icons/icon/home_card_folder.svg';
+import Storage from '/public/icons/icon/storage.svg';
 
 interface TaskRecentlyCheckedProps {
   onClickCard: (card: TaskRecentlyCheckedCard) => void;

@@ -1,15 +1,18 @@
 'use client';
 
 import { useState } from 'react';
+
+import RagDetailedTasksSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
+import { SearchOptionButton } from '@/shared/components/SearchOptionButton';
+
+import TaskCard from './TaskCard';
+
 import Align from '/public/icons/icon/align.svg';
+import ArrowRight from '/public/icons/icon/arrow_right2.svg';
 import Divider from '/public/icons/icon/divider.svg';
 import Person from '/public/icons/icon/person.svg';
-import Tag from '/public/icons/icon/tag.svg';
 import Space from '/public/icons/icon/space.svg';
-import ArrowRight from '/public/icons/icon/arrow_right2.svg';
-import RagDetailedTasksSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
-import TaskCard from './TaskCard';
-import { SearchOptionButton } from '@/shared/components/SearchOptionButton';
+import Tag from '/public/icons/icon/tag.svg';
 
 const searchOptions = [
   {

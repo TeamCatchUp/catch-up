@@ -1,9 +1,9 @@
+import ArrowRight from '/public/icons/icon/arrow_right.svg';
+import Explore from '/public/icons/icon/explore.svg';
 import HowToUse1 from '/public/icons/icon/how_to_use_1.svg';
 import HowToUse2 from '/public/icons/icon/how_to_use_2.svg';
 import HowToUse3 from '/public/icons/icon/how_to_use_3.svg';
-import Explore from '/public/icons/icon/explore.svg';
 import WebTraffic from '/public/icons/icon/web_traffic.svg';
-import ArrowRight from '/public/icons/icon/arrow_right.svg';
 
 const cardData = [
   {

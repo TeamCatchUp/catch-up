@@ -1,7 +1,8 @@
 'use client';
 
-import ChatIcon from '@/public/icons/icon/chat.svg';
 import Link from 'next/link';
+
+import ChatIcon from '@/public/icons/icon/chat.svg';
 import type { SearchQuery } from '@/shared/types/query/search';
 
 interface RecentlySearchProps {

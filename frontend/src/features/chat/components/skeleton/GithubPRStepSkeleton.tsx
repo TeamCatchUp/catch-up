@@ -1,15 +1,17 @@
 'use client';
 
+import { useEffect, useMemo,useRef, useState } from 'react';
 import clsx from 'clsx';
-import { useState, useRef, useEffect, useMemo } from 'react';
-import GithubIcon from '/public/icons/logo/GitHub.svg';
-import SearchData from '/public/icons/icon/searchData.svg';
-import FastForward from '/public/icons/icon/fast_forward.svg';
-import CheckCircle from '/public/icons/icon/check_circle.svg';
-import Rotate from '/public/icons/icon/rotate.svg';
+
+import { formatDate } from '@/shared/utils/formatDate';
+
 import ArrowForward from '/public/icons/icon/arrow_forward.svg';
 import Check from '/public/icons/icon/check.svg';
-import { formatDate } from '@/shared/utils/formatDate';
+import CheckCircle from '/public/icons/icon/check_circle.svg';
+import FastForward from '/public/icons/icon/fast_forward.svg';
+import Rotate from '/public/icons/icon/rotate.svg';
+import SearchData from '/public/icons/icon/searchData.svg';
+import GithubIcon from '/public/icons/logo/GitHub.svg';
 
 interface GithubPRStepSkeletonProps {
   prList: PRPayload[];

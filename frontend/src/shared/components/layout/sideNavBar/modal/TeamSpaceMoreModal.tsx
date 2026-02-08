@@ -1,10 +1,12 @@
 'use client';
 
 import { useRef } from 'react';
-import GroupAdd from '/public/icons/icon/group_add.svg';
-import Settings from '/public/icons/icon/settings.svg';
+
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
+
+import GroupAdd from '/public/icons/icon/group_add.svg';
+import Settings from '/public/icons/icon/settings.svg';
 
 interface TeamSpaceMoreModalProps {
   onClose: () => void;

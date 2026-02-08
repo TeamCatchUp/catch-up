@@ -1,8 +1,9 @@
 'use client';
 
 import clsx from 'clsx';
-import ToggleOn from '/public/icons/icon/state=On.svg';
+
 import ToggleOff from '/public/icons/icon/state=Off.svg';
+import ToggleOn from '/public/icons/icon/state=On.svg';
 
 type Props = {
   alerts: Record<string, boolean>;

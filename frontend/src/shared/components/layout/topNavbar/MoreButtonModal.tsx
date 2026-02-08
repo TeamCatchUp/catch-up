@@ -1,18 +1,21 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import AddSmall from '/public/icons/icon/add_small.svg';
-import IconType from '/public/icons/icon/icon_type.svg';
-import Error from '/public/icons/icon/error.svg';
-import Storage from '/public/icons/icon/storage.svg';
-import CloudCheck from '/public/icons/icon/cloud_check.svg';
-import Alarm from '/public/icons/icon/alarm.svg';
-import Rotate from '/public/icons/icon/rotate.svg';
-import ArrowRight from '/public/icons/icon/arrow_right.svg';
-import LinkModal from './LinkModal';
-import GetAlertModal from './GetAlertModal';
-import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
+import { useRef,useState } from 'react';
+
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
+import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
+
+import GetAlertModal from './GetAlertModal';
+import LinkModal from './LinkModal';
+
+import AddSmall from '/public/icons/icon/add_small.svg';
+import Alarm from '/public/icons/icon/alarm.svg';
+import ArrowRight from '/public/icons/icon/arrow_right.svg';
+import CloudCheck from '/public/icons/icon/cloud_check.svg';
+import Error from '/public/icons/icon/error.svg';
+import IconType from '/public/icons/icon/icon_type.svg';
+import Rotate from '/public/icons/icon/rotate.svg';
+import Storage from '/public/icons/icon/storage.svg';
 
 const linkServices = ['Jira', 'Confluence', 'Github', 'Slack'] as const;
 type LinkService = (typeof linkServices)[number];

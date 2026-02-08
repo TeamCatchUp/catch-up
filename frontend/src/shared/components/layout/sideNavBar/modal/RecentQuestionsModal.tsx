@@ -4,10 +4,10 @@ import { useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
-import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { SearchHistory } from '@/shared/components/SearchHistory';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
+import { chatQueries } from '@/shared/queries/chatroom.queries';
 import type { SearchQuery } from '@/shared/types/query/search';
 import { formatFullDate } from '@/shared/utils/formatDate';
 

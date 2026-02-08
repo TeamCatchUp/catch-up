@@ -1,6 +1,6 @@
 import Depart from '/public/icons/icon/business_center_filled.svg';
-import Manager from '/public/icons/icon/person_filled.svg';
 import LoadingProfile from '/public/icons/icon/loading_profile.svg';
+import Manager from '/public/icons/icon/person_filled.svg';
 
 interface TaskManagePartProps {
   depart: string;

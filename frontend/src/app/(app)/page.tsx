@@ -1,21 +1,21 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { useUserStore } from '@/shared/store/userStore';
-import { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
-import { useSearchInput } from '@/shared/hooks/query/useSearchInput';
-import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
-import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 
-import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import HowToUse from '@/features/home/components/HowToUse';
 import LinkTool from '@/features/home/components/LinkTool';
 import TaskRecentlyChecked from '@/features/home/components/TaskRecentlyChecked';
 import TaskRecentlyCheckedModal from '@/features/home/components/TaskRecentlyCheckedModal';
-import QueryInput from '@/shared/components/query/QueryInput';
-import FilterBar from '@/shared/components/query/FilterBar';
+import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import ExplorerPanel from '@/shared/components/query/ExplorerPanel';
 import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
+import FilterBar from '@/shared/components/query/FilterBar';
+import QueryInput from '@/shared/components/query/QueryInput';
+import { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
+import { useSearchInput } from '@/shared/hooks/query/useSearchInput';
+import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
+import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
+import { useUserStore } from '@/shared/store/userStore';
 
 export default function Home() {
   const user = useUserStore((state) => state.user);

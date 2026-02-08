@@ -1,23 +1,22 @@
 'use client';
 
-import { useParams, useSearchParams } from 'next/navigation';
 import { useRef } from 'react';
 import clsx from 'clsx';
-
-// Hooks
-import useRagChat from '@/features/chat/hooks/useRagChat';
-import useRagPagination from '@/features/chat/hooks/useRagPagination';
-import useRagFilters from '@/features/chat/hooks/useRagFilters';
-import useWheelNavigation from '@/features/chat/hooks/useWheelNavigation';
+import { useParams, useSearchParams } from 'next/navigation';
 
 // Chat Components
 import RagQuestion from '@/features/chat/components/answer/question/RagQuestion';
 import RagAnswer from '@/features/chat/components/answer/RagAnswer';
-import RagSidebar from '@/features/chat/components/sidebar/RagSidebar';
-import RagInput from '@/features/chat/components/RagInput';
-import RagContentHeader from '@/features/chat/components/header/RagContentHeader';
 import DateDivider from '@/features/chat/components/DateDivider';
+import RagContentHeader from '@/features/chat/components/header/RagContentHeader';
 import PageIndicator from '@/features/chat/components/PageIndicator';
+import RagInput from '@/features/chat/components/RagInput';
+import RagSidebar from '@/features/chat/components/sidebar/RagSidebar';
+// Hooks
+import useRagChat from '@/features/chat/hooks/useRagChat';
+import useRagFilters from '@/features/chat/hooks/useRagFilters';
+import useRagPagination from '@/features/chat/hooks/useRagPagination';
+import useWheelNavigation from '@/features/chat/hooks/useWheelNavigation';
 
 export default function RagAnswerPage() {
   const params = useParams();
