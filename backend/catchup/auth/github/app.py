@@ -33,18 +33,21 @@ class GitHubAppService:
         payload = {
             "iat": now - 60,
             "exp": now + (10 * 60),  # 10분
-            "iss": self.app_id,
+            "iss": str(self.app_id),  # JWT iss 클레임은 문자열이어야 함
         }
         return jwt.encode(payload, self.private_key, algorithm="RS256")
     
-    async def get_installation_access_token(self, installation_id: int) -> dict:
+    async def get_installation_access_token(self, installation_id: int) -> str:
         """
         Installation Access Token 발급
         - 유효 시간: 1시간
         - Repository 접근에 사용
+
+        Returns:
+            Access Token 문자열 (ghs_xxx...)
         """
         jwt_token = self._create_jwt()
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.GITHUB_API_BASE}/app/installations/{installation_id}/access_tokens",
@@ -55,7 +58,8 @@ class GitHubAppService:
                 },
             )
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            return data["token"]
         
     async def get_app_info(self) -> dict:
         """GitHub App 정보 조회 (Health Check)"""
