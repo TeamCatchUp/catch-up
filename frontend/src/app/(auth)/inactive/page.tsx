@@ -1,0 +1,84 @@
+'use client';
+
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+
+import ErrorIcon from '@/public/icons/icon/error_blue.svg';
+import IconOpen from '@/public/icons/icon/open_in_new.svg';
+import CatchUpLogo from '@/public/icons/logo/catchUp.svg';
+import DashboardImage from '@/public/image/catchup-login.jpg';
+import { Button } from '@/shared/components/ui/button';
+import { useCurrentUser } from '@/shared/hooks/useCurrentUser';
+
+export default function InactivePage() {
+  const { isLoading } = useCurrentUser(true);
+  const router = useRouter();
+
+  const handleRequestApproval = () => {
+    window.location.href = 'mailto:?subject=CatchUp%20승인%20요청';
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex size-full items-center justify-center">
+        <p className="text-heading-large text-gray-60">로딩 중...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-226.5 w-360 items-center justify-center bg-white p-6">
+      <div className="flex flex-[1_0_0] items-center gap-5 self-stretch overflow-clip rounded-2xl border border-neutral-4 p-6">
+        <div className="flex min-w-80 flex-[1_0_0] flex-col items-center justify-center gap-24 self-stretch overflow-clip px-28 py-30">
+          <div className="flex w-full min-w-80 flex-col gap-8">
+            <CatchUpLogo className="w-[181px] h-[55px]"/>
+
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 rounded-full border border-neutral-2 bg-blue-1 p-2">
+                <ErrorIcon className="size-6" />
+              </div>
+              <h1 className="text-display-large tracking-tight text-gray-90">
+                비활성화 된 계정이에요.
+              </h1>
+            </div>
+
+            <div className="flex min-w-80 flex-col gap-2.5">
+              <p className="text-body-medium tracking-tight text-gray-60">
+                팀에 다시 합류하려면 관리자의 확인이 필요해요.
+              </p>
+              <Button
+                variant="box-solid-primary"
+                size="lg"
+                className="h-[46px] w-full"
+                onClick={handleRequestApproval}
+              >
+                관리자에게 승인 요청하기
+              </Button>
+              <Button
+                variant="box-outline-gray"
+                size="lg"
+                className="h-[46px] w-full"
+                onClick={() => router.push('/login')}
+              >
+                로그인 화면으로 가기
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-5">
+            <a href="#" className="flex items-center gap-0.5 px-1.5 py-1">
+              <span className="text-body-xsmall text-gray-50 underline">서비스 이용약관</span>
+              <IconOpen className="size-6 text-gray-50" />
+            </a>
+            <a href="#" className="flex items-center gap-0.5 px-1.5 py-1">
+              <span className="text-body-xsmall text-gray-50 underline">개인정보처리방침</span>
+              <IconOpen className="size-6 text-gray-50" />
+            </a>
+          </div>
+        </div>
+
+        <Image src={DashboardImage} alt="CatchUp 대시보드" className="h-174.5 flex-[1_0_0] object-cover" />
+      </div>
+    </div>
+  );
+}

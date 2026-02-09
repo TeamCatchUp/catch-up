@@ -30,7 +30,9 @@ export const useCurrentUser = (redirectToLogin = true) => {
         router.replace('/login');
       } else if (status === 'PENDING' && pathname !== '/pending') {
         router.replace('/pending');
-      } else if (status === 'ACTIVE' && (pathname === '/onboarding' || pathname === '/pending')) {
+      } else if (status === 'INACTIVE' && pathname !== '/inactive') {
+        router.replace('/inactive');
+      } else if (status === 'ACTIVE' && (pathname === '/onboarding' || pathname === '/pending' || pathname === '/inactive')) {
         router.replace('/');
       }
     }
