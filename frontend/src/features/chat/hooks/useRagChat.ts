@@ -55,7 +55,7 @@ const loadSavedChat = (key: string): ChatData | null => {
           role: 'assistant',
           content: '',
           sources: [],
-          detailedTasks: [],
+          detailed_tasks: [],
           timestamp: new Date().toISOString(),
         },
       ],
@@ -81,7 +81,7 @@ export const useRagChat = ({
     if (saved) return saved;
     if (initialQuery) {
       return {
-        sessionId,
+        session_id: sessionId,
         title: initialQuery,
         repo: repo || '',
         messages: [
@@ -94,7 +94,7 @@ export const useRagChat = ({
         ],
       };
     }
-    return { sessionId, title: '', repo: repo || '', messages: [] };
+    return { session_id: sessionId, title: '', repo: repo || '', messages: [] };
   });
   const [isLoading, setIsLoading] = useState(
     () => !localStorage.getItem(storageKeys.chat) && !!initialQuery,
@@ -124,7 +124,7 @@ export const useRagChat = ({
       setIsLoading(false);
     } else if (initialQuery) {
       setChatData({
-        sessionId,
+        session_id: sessionId,
         title: initialQuery,
         repo: repo || '',
         messages: [
@@ -138,7 +138,7 @@ export const useRagChat = ({
       });
       setIsLoading(true);
     } else {
-      setChatData({ sessionId, title: '', repo: repo || '', messages: [] });
+      setChatData({ session_id: sessionId, title: '', repo: repo || '', messages: [] });
       setIsLoading(false);
     }
   }
@@ -188,10 +188,10 @@ export const useRagChat = ({
           role: 'assistant',
           content: answer,
           sources: uiSources,
-          detailedTasks,
+          detailed_tasks: detailedTasks,
           timestamp: new Date().toISOString(),
-          chatHistoryId,
-          hasFeedback,
+          chat_history_id: chatHistoryId,
+          has_feedback: hasFeedback,
         };
 
         const finalData: ChatData = {
@@ -241,9 +241,9 @@ export const useRagChat = ({
           appendAssistantAnswer(
             event.answer,
             event.sources || [],
-            event.relatedJiraIssues ?? [],
-            event.chatHistoryId,
-            event.hasFeedback,
+            event.related_jira_issues ?? [],
+            event.chat_history_id,
+            event.has_feedback,
           );
           break;
         }
@@ -260,7 +260,7 @@ export const useRagChat = ({
 
   /** 스트림 채팅 전송 */
   const streamAndSendQuery = useCallback(
-    async (query: string, isResume = false, resumePayload?: { prNumber: number; repoName: string; owner: string }[]) => {
+    async (query: string, isResume = false, resumePayload?: { pr_number: number; repo_name: string; owner: string }[]) => {
       abortStream();
 
       const controller = new AbortController();
@@ -354,11 +354,11 @@ export const useRagChat = ({
       beginAnswerLoading();
 
       const selectedPRs = selectedPrNumbers
-        .map((prNumber) => prList.find((p) => p.prNumber === prNumber))
+        .map((prNumber) => prList.find((p) => p.pr_number === prNumber))
         .filter((pr): pr is PRPayload => pr !== undefined)
         .map((pr) => ({
-          prNumber: pr.prNumber,
-          repoName: pr.repoName,
+          pr_number: pr.pr_number,
+          repo_name: pr.repo_name,
           owner: pr.owner,
         }));
 
@@ -417,7 +417,7 @@ export const useRagChat = ({
         if (!prev) return prev;
 
         const updatedMessages = prev.messages.map((msg) =>
-          msg.id === messageId ? { ...msg, hasFeedback: true } : msg,
+          msg.id === messageId ? { ...msg, has_feedback: true } : msg,
         );
 
         const updatedData: ChatData = {

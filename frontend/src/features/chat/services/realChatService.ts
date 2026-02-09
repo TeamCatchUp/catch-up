@@ -60,7 +60,7 @@ const realChatService = {
    */
   resumeStream: async (
     sessionId: string,
-    selectedPRs: { prNumber: number; repoName: string; owner: string }[],
+    selectedPRs: { pr_number: number; repo_name: string; owner: string }[],
     onEvent: (event: StreamEvent) => void,
     signal?: AbortSignal,
   ) => {
@@ -71,8 +71,8 @@ const realChatService = {
       body: JSON.stringify({
         session_id: sessionId,
         user_selected_pull_requests: selectedPRs.map((pr) => ({
-          pr_number: pr.prNumber,
-          repo: pr.repoName,
+          pr_number: pr.pr_number,
+          repo: pr.repo_name,
           owner: pr.owner,
         })),
       }),

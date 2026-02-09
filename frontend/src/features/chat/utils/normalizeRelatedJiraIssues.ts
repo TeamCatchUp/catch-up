@@ -4,47 +4,46 @@ const safeSummary = (s?: string) => (s ?? '').trim();
 
 /** 백엔드 Jira 이슈 배열을 JiraTask 계층으로 변환 */
 export const normalizeRelatedJiraIssues = (issues: BackendSource[] = []): JiraTask[] => {
-  const jiraOnly = (issues ?? []).filter((i) => Number(i.sourceType === 3));
+  const jiraOnly = (issues ?? []).filter((i) => Number(i.source_type === 3));
 
-  // parentKey 無 이슈 -> issueKey로 매핑
+  // parent_key 無 이슈 -> issue_key로 매핑
   const rootByIssueKey = new Map<string, BackendSource>();
   jiraOnly.forEach((i) => {
-    if (!i.parentKey && i.issueKey) {
-      rootByIssueKey.set(i.issueKey, i);
+    if (!i.parent_key && i.issue_key) {
+      rootByIssueKey.set(i.issue_key, i);
     }
   });
 
-  // subtasks (parentKey 기준 그룹핑)
+  // subtasks (parent_key 기준 그룹핑)
   const childrenByParentKey = new Map<string, BackendSource[]>();
   jiraOnly.forEach((i) => {
-    if (!i.parentKey) return;
-    const pk = i.parentKey;
+    if (!i.parent_key) return;
+    const pk = i.parent_key;
     const prev = childrenByParentKey.get(pk) ?? [];
     childrenByParentKey.set(pk, [...prev, i]);
   });
 
   const tasks: JiraTask[] = [];
 
-  // 자식이 有 parentKey 그룹 생성
+  // 자식이 有 parent_key 그룹 생성
   childrenByParentKey.forEach((children, parentKey) => {
-    // parentKey = root issueKey => 부모 이슈로 흡수하고 root에서 제거 (중복 제거)
     const parentIssue = rootByIssueKey.get(parentKey);
     if (parentIssue) rootByIssueKey.delete(parentKey);
 
     const parentSummary =
       safeSummary(parentIssue?.summary) ||
-      safeSummary(parentIssue?.parentSummary) ||
-      safeSummary(children[0]?.parentSummary);
+      safeSummary(parentIssue?.parent_summary) ||
+      safeSummary(children[0]?.parent_summary);
 
     tasks.push({
       id: parentKey,
       title: parentSummary,
-      parentKey,
-      parentSummary,
+      parent_key: parentKey,
+      parent_summary: parentSummary,
       subtasks: children.map((c) => ({
-        id: c.issueKey ?? crypto.randomUUID(),
+        id: c.issue_key ?? crypto.randomUUID(),
         title: safeSummary(c.summary) || safeSummary(c.content) || '',
-        issueKey: c.issueKey,
+        issue_key: c.issue_key,
       })),
     });
   });

@@ -2,7 +2,7 @@
 
 import { formatDate } from '@/shared/utils/formatDate';
 
-const SOURCE_TYPE_MAP: Record<0 | 1 | 2 | 3, ChatSource['sourceType']> = {
+const SOURCE_TYPE_MAP: Record<0 | 1 | 2 | 3, ChatSource['source_type']> = {
   0: 'code',
   1: 'pr',
   2: 'github_issue',
@@ -25,9 +25,9 @@ const formatDaysAgo = (daysAgo?: number) => {
 /** 백엔드 소스 배열을 UI용 ChatSource로 변환 */
 export const normalizeSources = (sources: BackendSource[]): ChatSource[] => {
   return (sources ?? [])
-    .filter((s) => !!s.htmlUrl)
+    .filter((s) => !!s.html_url)
     .map((s) => {
-      const sourceType = SOURCE_TYPE_MAP[s.sourceType];
+      const sourceType = SOURCE_TYPE_MAP[s.source_type];
 
       // repo
       const repo = s.repo ?? '';
@@ -39,27 +39,27 @@ export const normalizeSources = (sources: BackendSource[]): ChatSource[] => {
           : sourceType === 'jira'
             ? (s.summary ?? '')
             : sourceType === 'code'
-              ? getLastPath(s.filePath) || ''
+              ? getLastPath(s.file_path) || ''
               : '';
 
       // date
       const date =
-        sourceType === 'code' ? formatDaysAgo(s.daysAgo) : s.createdAt ? formatDate(s.createdAt) : '';
+        sourceType === 'code' ? formatDaysAgo(s.days_ago) : s.created_at ? formatDate(s.created_at) : '';
 
       // author
-      const author = sourceType === 'code' ? (s.author ?? '') : (s.assigneeName ?? '');
+      const author = sourceType === 'code' ? (s.author ?? '') : (s.assignee_name ?? '');
 
       return {
         id: crypto.randomUUID(),
-        sourceType,
-        isCited: s.isCited,
+        source_type: sourceType,
+        is_cited: s.is_cited,
         repo,
         title,
         content: s.content ?? '',
         date,
         author,
-        htmlUrl: s.htmlUrl ?? '',
-        sourceIndex: s.index,
+        html_url: s.html_url ?? '',
+        source_index: s.index,
       };
     });
 };
