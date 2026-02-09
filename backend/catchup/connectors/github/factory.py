@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from catchup.connectors.github.service import GithubService, GitHubIngestionService
 from catchup.db.github_installation import get_installation_info_by_id
-from catchup.auth.github.app import get_github_app_service
+from catchup.connectors.github.auth import get_github_app_service
 
 
 @lru_cache(maxsize=1)

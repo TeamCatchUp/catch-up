@@ -1,3 +1,14 @@
+"""
+Jira OAuth Service
+
+Jira OAuth 2.0 인증을 담당하는 서비스.
+- Authorization URL 생성
+- Code → Token 교환
+- Token 갱신
+- 접근 가능 리소스 조회
+- 사용자 정보 조회
+"""
+
 import logging
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
@@ -7,7 +18,7 @@ import httpx
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from catchup.auth.jira.schemas import (
+from catchup.connectors.jira.schemas import (
     JiraAccessibleResource,
     JiraOAuthTokenResponse,
     JiraUserInfo,
@@ -79,7 +90,7 @@ class JiraOAuthService:
         Raises:
             HTTPException(401): refresh_token 만료/무효화 시
                 - 사용자가 다시 OAuth 인증을 해야 함
-        
+
         TODO : 주기적 refresh_token 유효성 검사 및 재발급 기능 고려
         """
         async with httpx.AsyncClient() as client:

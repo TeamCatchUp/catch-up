@@ -1,3 +1,12 @@
+"""
+GitHub App Authentication Service
+
+GitHub App 인증을 담당하는 서비스.
+- JWT 생성 (Private Key 서명)
+- Installation Access Token 발급
+- App 정보 조회
+"""
+
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -6,6 +15,7 @@ import httpx
 import jwt
 
 from catchup.configs.config import settings
+
 
 class GitHubAppService:
     '''
@@ -36,7 +46,7 @@ class GitHubAppService:
             "iss": str(self.app_id),  # JWT iss 클레임은 문자열이어야 함
         }
         return jwt.encode(payload, self.private_key, algorithm="RS256")
-    
+
     async def get_installation_access_token(self, installation_id: int) -> str:
         """
         Installation Access Token 발급
@@ -60,11 +70,11 @@ class GitHubAppService:
             response.raise_for_status()
             data = response.json()
             return data["token"]
-        
+
     async def get_app_info(self) -> dict:
         """GitHub App 정보 조회 (Health Check)"""
         jwt_token = self._create_jwt()
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{self.GITHUB_API_BASE}/app",
@@ -76,14 +86,16 @@ class GitHubAppService:
             )
             response.raise_for_status()
             return response.json()
-        
+
+
 def _load_private_key() -> str:
         """Private Key 파일 로드"""
         key_path = Path(settings.GITHUB_APP_PRIVATE_KEY_PATH)
         if not key_path.exists():
             raise FileNotFoundError(f"GitHub App Private Key not found: {key_path}")
         return key_path.read_text()
-    
+
+
 @lru_cache
 def get_github_app_service() -> GitHubAppService:
     """GitHubAppService 싱글톤 팩토리"""

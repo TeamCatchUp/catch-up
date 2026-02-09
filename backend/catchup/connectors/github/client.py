@@ -881,7 +881,7 @@ class GitHubApiClient:
         per_page: int = 100,
     ) -> list[dict[str, Any]]:
         """
-        Organization 멤버 목록 조회
+        Organization 멤버 목록 조회 (REST API)
 
         Args:
             org: Organization name
@@ -914,6 +914,94 @@ class GitHubApiClient:
             page += 1
 
         return members
+
+    async def list_org_members_graphql(
+        self,
+        org: str,
+    ) -> list[dict[str, Any]]:
+        """
+        GraphQL로 Organization 멤버 목록 조회 (상세 정보 포함)
+
+        REST API는 기본 정보만 반환하지만, GraphQL은 name, email 등 상세 정보를 포함.
+        또한 Organization 내 역할(ADMIN/MEMBER)도 함께 조회.
+
+        Args:
+            org: Organization name
+
+        Returns:
+            멤버 리스트 (databaseId, login, name, email, avatarUrl, role 포함)
+        """
+        query = """
+        query($org: String!, $first: Int!, $after: String) {
+          organization(login: $org) {
+            membersWithRole(first: $first, after: $after) {
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+              edges {
+                role
+                node {
+                  databaseId
+                  login
+                  name
+                  email
+                  avatarUrl
+                }
+              }
+            }
+          }
+        }
+        """
+
+        all_members = []
+        after_cursor = None
+        per_page = 100
+
+        while True:
+            variables = {
+                "org": org,
+                "first": per_page,
+                "after": after_cursor,
+            }
+
+            response = await self._with_rate_limit(
+                self._github.async_graphql(query, variables)
+            )
+
+            if not response:
+                break
+
+            org_data = response.get("organization")
+            if not org_data:
+                break
+
+            members_connection = org_data.get("membersWithRole", {})
+            edges = members_connection.get("edges") or []
+
+            for edge in edges:
+                if not edge:
+                    continue
+
+                node = edge.get("node") or {}
+                role = edge.get("role")
+
+                all_members.append({
+                    "database_id": node.get("databaseId"),
+                    "login": node.get("login"),
+                    "name": node.get("name"),
+                    "email": node.get("email"),
+                    "avatar_url": node.get("avatarUrl"),
+                    "org_role": role,
+                })
+
+            page_info = members_connection.get("pageInfo", {})
+            if not page_info.get("hasNextPage"):
+                break
+
+            after_cursor = page_info.get("endCursor")
+
+        return all_members
 
     # ============================================================
     # GraphQL APIs

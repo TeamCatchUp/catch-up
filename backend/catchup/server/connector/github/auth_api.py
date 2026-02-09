@@ -7,14 +7,15 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, 
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from catchup.auth.github.schemas import InstallationRepositoriesWebhookPayload, InstallationWebhookPayload
-from catchup.auth.github.app import get_github_app_service
+from catchup.connectors.github.schemas import InstallationRepositoriesWebhookPayload, InstallationWebhookPayload
+from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.client import GitHubApiClient
 from catchup.configs.config import auth_settings, settings
 from catchup.db.dependencies import get_db
 from catchup.db.engine import SessionLocal
 from catchup.db import github_installation as installation_crud
 from catchup.db import github_entities
+from catchup.db.models import GithubInstallationType
 
 logger = logging.getLogger(__name__)
 
@@ -166,27 +167,71 @@ def _verify_webhook_signature(
     return hmac.compare_digest(expected_signature, signature_header)
 
 
-async def _sync_installation_repositories(installation_id: int) -> None:
+async def _sync_installation_metadata(installation_id: int) -> None:
     """
-    Background Task: Installation에 접근 가능한 Repository 목록을 가져와서 RDBMS에 저장
+    Background Task: Installation 메타데이터 동기화 (Users + Repositories)
+
+    - Organization인 경우: 멤버 목록 + Repository 목록
+    - User인 경우: 해당 User + Repository 목록
     """
     try:
-        logger.info(f"Starting repository sync for installation {installation_id}")
+        logger.info(f"Starting metadata sync for installation {installation_id}")
 
         github_app_service = get_github_app_service()
         access_token = await github_app_service.get_installation_access_token(installation_id)
-
         client = GitHubApiClient(access_token)
-        repos_data = await client.list_installation_repos()
-
-        logger.info(f"Found {len(repos_data)} repositories for installation {installation_id}")
 
         with SessionLocal() as db:
-            count = github_entities.upsert_repositories_bulk(db, installation_id, repos_data)
-            logger.info(f"Saved {count} repositories for installation {installation_id}")
+            # Installation 정보 조회
+            installation = installation_crud.get_installation_by_installation_id(db, installation_id)
+            if not installation:
+                logger.warning(f"Installation {installation_id} not found in DB")
+                return
+
+            account_login = installation.account_login
+            account_type = installation.account_type
+
+            # 1. User 동기화
+            users_data = []
+            if account_type == GithubInstallationType.ORGANIZATION:
+                try:
+                    members = await client.list_org_members_graphql(account_login)
+                    users_data.extend(members)
+                    logger.info(f"Found {len(members)} members in organization '{account_login}'")
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to fetch org members for '{account_login}': {e}. "
+                        "Organization members permission may be required."
+                    )
+            else:
+                try:
+                    user_info = await client.get_user(account_login)
+                    if user_info:
+                        users_data.append({
+                            "database_id": user_info.get("id"),
+                            "login": user_info.get("login"),
+                            "name": user_info.get("name"),
+                            "email": user_info.get("email"),
+                            "avatar_url": user_info.get("avatar_url"),
+                            "org_role": None,
+                        })
+                        logger.info(f"Found user '{account_login}'")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch user '{account_login}': {e}")
+
+            if users_data:
+                user_count = github_entities.upsert_users_bulk(db, users_data)
+                logger.info(f"Saved {user_count} users for installation {installation_id}")
+
+            # 2. Repository 동기화
+            repos_data = await client.list_installation_repos()
+            logger.info(f"Found {len(repos_data)} repositories for installation {installation_id}")
+
+            repo_count = github_entities.upsert_repositories_bulk(db, installation_id, repos_data)
+            logger.info(f"Saved {repo_count} repositories for installation {installation_id}")
 
     except Exception as e:
-        logger.error(f"Failed to sync repositories for installation {installation_id}: {e}")
+        logger.error(f"Failed to sync metadata for installation {installation_id}: {e}")
 
 
 # =============================================================================
@@ -231,7 +276,7 @@ async def _handle_installation_created(
         f"account={new_installation.account_login}"
     )
 
-    background_tasks.add_task(_sync_installation_repositories, installation.id)
+    background_tasks.add_task(_sync_installation_metadata, installation.id)
     logger.info(f"Scheduled repository sync for installation {installation.id}")
 
     return {"status": "created", "installation_id": new_installation.installation_id}
@@ -276,7 +321,7 @@ async def _handle_installation_unsuspended(
     installation_crud.update_installation_suspended(db, installation_id, None)
     logger.info(f"Installation Unsuspended: installation_id={installation_id}")
 
-    background_tasks.add_task(_sync_installation_repositories, installation_id)
+    background_tasks.add_task(_sync_installation_metadata, installation_id)
 
     return {"status": "unsuspended", "installation_id": installation_id}
 

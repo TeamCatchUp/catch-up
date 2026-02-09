@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from catchup.auth.jira.app import get_jira_oauth_service, JiraOAuthService
+from catchup.connectors.jira.auth import get_jira_oauth_service, JiraOAuthService
 from catchup.connectors.jira.service import JiraIngestionService
 from catchup.db.dependencies import get_db
 from catchup.db import jira_oauth as jira_crud

@@ -1,3 +1,15 @@
+"""
+Slack OAuth Service
+
+Slack OAuth 2.0 V2 인증을 담당하는 서비스.
+- Authorization URL 생성
+- Code → Token 교환
+- Token 갱신
+- Workspace 정보 조회
+- 인증 상태 확인
+- Token 취소
+"""
+
 import logging
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
@@ -7,7 +19,7 @@ import httpx
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from catchup.auth.slack.schemas import SlackOAuthTokenResponse
+from catchup.connectors.slack.schemas import SlackOAuthTokenResponse
 from catchup.configs.config import settings
 from catchup.db.models import SlackOAuthToken
 

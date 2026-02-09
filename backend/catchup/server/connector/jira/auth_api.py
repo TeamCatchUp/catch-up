@@ -13,8 +13,8 @@ from fastapi.responses import RedirectResponse
 from httpx import HTTPStatusError, RequestError
 from sqlalchemy.orm import Session
 
-from catchup.auth.jira.app import get_jira_oauth_service, JiraOAuthService
-from catchup.auth.jira.schemas import JiraInstallationStatus
+from catchup.connectors.jira.auth import get_jira_oauth_service, JiraOAuthService
+from catchup.connectors.jira.schemas import JiraInstallationStatus
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
 from catchup.db import jira_oauth as jira_crud
