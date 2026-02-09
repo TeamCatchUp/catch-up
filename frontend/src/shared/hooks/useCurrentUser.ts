@@ -26,13 +26,11 @@ export const useCurrentUser = (redirectToLogin = true) => {
         return;
       }
 
-      if (status === 'NEW' && pathname !== '/onboarding') {
-        router.replace('/login');
-      } else if (status === 'PENDING' && pathname !== '/pending') {
+      if (status === 'PENDING' && pathname !== '/pending') {
         router.replace('/pending');
       } else if (status === 'INACTIVE' && pathname !== '/inactive') {
         router.replace('/inactive');
-      } else if (status === 'ACTIVE' && (pathname === '/onboarding' || pathname === '/pending' || pathname === '/inactive')) {
+      } else if ((status === 'NEW' || status === 'ACTIVE') && (pathname === '/pending' || pathname === '/inactive')) {
         router.replace('/');
       }
     }
