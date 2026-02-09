@@ -1,9 +1,17 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useState } from 'react';
+import Image from 'next/image';
 
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import UnfoldMore from '@/public/icons/icon/unfold_more.svg';
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/shared/components/ui/command';
 import {
   Popover,
   PopoverContent,
@@ -29,27 +37,8 @@ export function ConnectorSelect({
   onChange,
 }: ConnectorSelectProps) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const selected = accounts.find((a) => a.id === value);
-
-  const filtered = useMemo(() => {
-    if (!search) return accounts;
-    const q = search.toLowerCase();
-    return accounts.filter(
-      (a) =>
-        a.name.toLowerCase().includes(q) ||
-        a.email.toLowerCase().includes(q) ||
-        a.tag.toLowerCase().includes(q),
-    );
-  }, [accounts, search]);
-
-  const handleSelect = (id: string) => {
-    onChange(id);
-    setOpen(false);
-    setSearch('');
-  };
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -57,13 +46,7 @@ export function ConnectorSelect({
         <span className="size-[5px] rounded-full bg-red-50" />
         {label}
       </label>
-      <Popover
-        open={open}
-        onOpenChange={(o) => {
-          setOpen(o);
-          if (!o) setSearch('');
-        }}
-      >
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
@@ -78,9 +61,9 @@ export function ConnectorSelect({
             {selected ? (
               <>
                 {selected.picture ? (
-                  <img
+                  <Image
                     src={selected.picture}
-                    alt=""
+                    alt="프로필"
                     className="size-10 shrink-0 rounded-full border border-neutral-1"
                   />
                 ) : (
@@ -110,42 +93,25 @@ export function ConnectorSelect({
           </button>
         </PopoverTrigger>
         <PopoverContent
-          className="flex max-h-[260px] flex-col rounded-lg border-neutral-5 px-0 py-2.5"
+          className="rounded-lg border-neutral-5 p-0"
           style={{ width: 'var(--radix-popover-trigger-width)' }}
           align="start"
-          onOpenAutoFocus={(e) => {
-            e.preventDefault();
-            inputRef.current?.focus();
-          }}
         >
-          {/* 검색 */}
-          <div className="shrink-0 px-2.5 pb-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="이름, 이메일, 아이디를 검색하세요."
-              className="min-h-[40px] w-full rounded-lg border border-transparent bg-neutral-1 px-3 py-2 text-body-small tracking-tight text-gray-80 placeholder:text-gray-30 focus:border-blue-30 focus:outline-none"
-            />
-          </div>
-
-          {/* 계정 목록 */}
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-body-small text-gray-40">
-                검색 결과가 없습니다.
-              </p>
-            ) : (
-              filtered.map((account, idx) => (
-                <button
+          <Command className="max-h-[260px] gap-2.5 rounded-lg py-2.5">
+            <div className="px-2.5">
+              <CommandInput placeholder="이름, 이메일, 아이디를 검색하세요." />
+            </div>
+            <CommandList className="max-h-none px-0 py-0">
+              <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
+              {accounts.map((account) => (
+                <CommandItem
                   key={account.id}
-                  type="button"
-                  onClick={() => handleSelect(account.id)}
-                  className={cn(
-                    'flex w-full items-center gap-3 px-3 py-2 hover:bg-neutral-1 cursor-pointer',
-                    idx < filtered.length - 1 && 'border-b border-neutral-2',
-                  )}
+                  value={`${account.name} ${account.email} ${account.tag}`}
+                  onSelect={() => {
+                    onChange(account.id);
+                    setOpen(false);
+                  }}
+                  className="gap-3 rounded-none border-b border-neutral-2 px-3 py-2"
                 >
                   {account.picture ? (
                     <img
@@ -156,7 +122,7 @@ export function ConnectorSelect({
                   ) : (
                     <DefaultProfile className="size-10 shrink-0 rounded-full border border-neutral-1 text-gray-30" />
                   )}
-                  <div className="flex min-w-0 flex-col items-start">
+                  <div className="flex min-w-0 flex-col items-start gap-0.5">
                     <div className="flex items-center gap-2.5">
                       <span className="max-w-[175px] truncate text-heading-small tracking-tight text-gray-80">
                         {account.name}
@@ -169,10 +135,10 @@ export function ConnectorSelect({
                       {account.email}
                     </span>
                   </div>
-                </button>
-              ))
-            )}
-          </div>
+                </CommandItem>
+              ))}
+            </CommandList>
+          </Command>
         </PopoverContent>
       </Popover>
     </div>
