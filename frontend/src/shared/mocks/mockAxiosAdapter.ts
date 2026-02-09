@@ -1,5 +1,6 @@
 // Data imports
-import { MOCK_JWT_TOKENS,MOCK_USER } from './auth/data';
+import { MOCK_JWT_TOKENS, MOCK_USER } from './auth/data';
+import type { UserStatus } from '@/shared/queries/auth.types';
 import delay from './delay';
 import { MOCK_FEEDBACK_RESPONSE } from './feedback/data';
 import { DEFAULT_FILE_TREE,MOCK_FILE_TREES, MOCK_REPOSITORIES } from './github/data';
@@ -110,6 +111,57 @@ const mockHandlers: MockHandler[] = [
         sources: [],
       };
     },
+  },
+
+  // ═══════════════════════════════════════
+  // Onboarding
+  // ═══════════════════════════════════════
+  {
+    pattern: /^\/api\/v1\/onboarding\/profile$/,
+    method: 'post',
+    handler: async (_, data) => {
+      console.log('[Mock] 온보딩 프로필 저장:', data);
+      return { success: true };
+    },
+  },
+  {
+    pattern: /^\/api\/v1\/onboarding\/organization$/,
+    method: 'post',
+    handler: async (_, data) => {
+      console.log('[Mock] 조직 정보 저장:', data);
+      return { success: true, organizationId: 'mock-org-001' };
+    },
+  },
+  {
+    pattern: /^\/api\/v1\/onboarding\/complete$/,
+    method: 'post',
+    handler: async () => {
+      const nextStatus: UserStatus = MOCK_USER.role === 'ROOT_ADMIN' ? 'ACTIVE' : 'PENDING';
+      MOCK_USER.status = nextStatus;
+      return {
+        success: true,
+        status: nextStatus,
+        message: nextStatus === 'PENDING'
+          ? '관리자 승인을 기다리고 있습니다.'
+          : '온보딩이 완료되었습니다.',
+      };
+    },
+  },
+  {
+    pattern: /^\/api\/v1\/onboarding\/connectors$/,
+    method: 'get',
+    handler: async () => ({
+      jira: [
+        { id: 'jira-1', name: '김개발', email: 'dev@catchup.io', picture: null, tag: 'catchup-workspace' },
+        { id: 'jira-2', name: '김개발', email: 'dev2@catchup.io', picture: null, tag: 'personal-workspace' },
+      ],
+      github: [
+        { id: 'gh-1', name: '김개발', email: 'dev@catchup.io', picture: null, tag: 'CatchUp-org' },
+      ],
+      slack: [
+        { id: 'slack-1', name: '김개발', email: 'dev@catchup.io', picture: null, tag: 'CatchUp Workspace' },
+      ],
+    }),
   },
 
   // ═══════════════════════════════════════
