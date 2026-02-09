@@ -13,6 +13,7 @@ interface BackendSource {
   // github
   repo?: string;
   filePath?: string;
+  daysAgo?: number;
   title?: string;
   prNumber?: number;
   createdAt?: number;

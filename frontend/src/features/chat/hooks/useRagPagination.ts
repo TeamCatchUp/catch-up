@@ -56,18 +56,16 @@ export const useRagPagination = ({
   // 현재 Q&A
   const currentQA = qaPairs[currentPage];
 
+  // 페이지 유효성 검증 (adjusting state during render)
+  if (qaPairs.length > 0 && currentPage >= qaPairs.length) {
+    setCurrentPage(qaPairs.length - 1);
+  }
+
   /** localStorage 동기화 */
   useEffect(() => {
     if (typeof window === 'undefined') return;
     localStorage.setItem(storageKeys.page, String(currentPage));
   }, [storageKeys.page, currentPage]);
-
-  /** 페이지 유효성 검증 */
-  useEffect(() => {
-    if (qaPairs.length > 0 && currentPage >= qaPairs.length) {
-      setCurrentPage(qaPairs.length - 1);
-    }
-  }, [qaPairs.length, currentPage]);
 
   /** 특정 페이지로 이동 (애니메이션 포함) */
   const goToPage = useCallback(

@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect,useRef, useState } from 'react';
 
-import { getStorageKeys,NODE_TO_UI_STEP, SSE_CONFIG } from '@/features/chat/constants/config';
+import { getStorageKeys,NODE_TO_UI_STEP } from '@/features/chat/constants/config';
 import chatService from '@/features/chat/services/chatService';
 import { normalizeSources } from '@/features/chat/utils/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/features/chat/utils/normalizeRelatedJiraIssues';
@@ -37,6 +37,36 @@ interface UseRagChatReturn {
   updateMessageFeedback: (messageId: string) => void;
 }
 
+/** Read + repair saved chat from localStorage */
+const loadSavedChat = (key: string): ChatData | null => {
+  const saved = localStorage.getItem(key);
+  if (!saved) return null;
+
+  const parsedData: ChatData = JSON.parse(saved);
+  const lastMessage = parsedData.messages[parsedData.messages.length - 1];
+
+  if (lastMessage?.role === 'user') {
+    const errorData: ChatData = {
+      ...parsedData,
+      messages: [
+        ...parsedData.messages,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: '',
+          sources: [],
+          detailedTasks: [],
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    };
+    localStorage.setItem(key, JSON.stringify(errorData));
+    return errorData;
+  }
+
+  return parsedData;
+};
+
 export const useRagChat = ({
   sessionId,
   repo,
@@ -45,9 +75,30 @@ export const useRagChat = ({
   // Storage Keys
   const storageKeys = getStorageKeys(sessionId);
 
-  // Chat State
-  const [chatData, setChatData] = useState<ChatData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  // Chat State - initialize from localStorage
+  const [chatData, setChatData] = useState<ChatData | null>(() => {
+    const saved = loadSavedChat(storageKeys.chat);
+    if (saved) return saved;
+    if (initialQuery) {
+      return {
+        sessionId,
+        title: initialQuery,
+        repo: repo || '',
+        messages: [
+          {
+            id: crypto.randomUUID(),
+            role: 'user',
+            content: initialQuery,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      };
+    }
+    return { sessionId, title: '', repo: repo || '', messages: [] };
+  });
+  const [isLoading, setIsLoading] = useState(
+    () => !localStorage.getItem(storageKeys.chat) && !!initialQuery,
+  );
   const [isError, setIsError] = useState(false);
   const [currentStep, setCurrentStep] = useState<RagUIStepKey>('router');
 
@@ -58,6 +109,39 @@ export const useRagChat = ({
   // Refs
   const abortRef = useRef<AbortController | null>(null);
   const stoppedRef = useRef(false);
+
+  // Handle session change (adjusting state during render)
+  const [prevSessionId, setPrevSessionId] = useState(sessionId);
+  if (prevSessionId !== sessionId) {
+    setPrevSessionId(sessionId);
+    setIsError(false);
+    setShowPRSelection(false);
+    setCurrentStep('router');
+
+    const saved = loadSavedChat(storageKeys.chat);
+    if (saved) {
+      setChatData(saved);
+      setIsLoading(false);
+    } else if (initialQuery) {
+      setChatData({
+        sessionId,
+        title: initialQuery,
+        repo: repo || '',
+        messages: [
+          {
+            id: crypto.randomUUID(),
+            role: 'user',
+            content: initialQuery,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      });
+      setIsLoading(true);
+    } else {
+      setChatData({ sessionId, title: '', repo: repo || '', messages: [] });
+      setIsLoading(false);
+    }
+  }
 
   /** 스트림 중단 */
   const abortStream = useCallback(() => {
@@ -348,29 +432,15 @@ export const useRagChat = ({
     [storageKeys.chat],
   );
 
-  /** 초기 데이터 로드 */
+  /** 초기 스트리밍 시작 (저장된 데이터 없고 initialQuery 있을 때만) */
   useEffect(() => {
-    const fetchFirstAnswer = async (query: string) => {
-      beginAnswerLoading();
+    if (localStorage.getItem(storageKeys.chat) || !initialQuery) return;
 
-      const initialData: ChatData = {
-        sessionId,
-        title: query,
-        repo: repo || '',
-        messages: [
-          {
-            id: crypto.randomUUID(),
-            role: 'user',
-            content: query,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      };
+    stoppedRef.current = false;
 
-      setChatData(initialData);
-
+    const runStream = async () => {
       try {
-        await streamAndSendQuery(query);
+        await streamAndSendQuery(initialQuery);
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
         console.error('[useRagChat] fetchFirstAnswer Error:', err);
@@ -378,52 +448,8 @@ export const useRagChat = ({
         setIsLoading(false);
       }
     };
-
-    const saved = localStorage.getItem(storageKeys.chat);
-
-    if (saved) {
-      const parsedData: ChatData = JSON.parse(saved);
-      const lastMessage = parsedData.messages[parsedData.messages.length - 1];
-
-      if (lastMessage?.role === 'user') {
-        const errorData: ChatData = {
-          ...parsedData,
-          messages: [
-            ...parsedData.messages,
-            {
-              id: crypto.randomUUID(),
-              role: 'assistant',
-              content: '',
-              sources: [],
-              detailedTasks: [],
-              timestamp: new Date().toISOString(),
-            },
-          ],
-        };
-
-        setChatData(errorData);
-        localStorage.setItem(storageKeys.chat, JSON.stringify(errorData));
-        setIsLoading(false);
-        return;
-      }
-
-      setChatData(parsedData);
-      setIsLoading(false);
-      return;
-    }
-
-    if (initialQuery) {
-      fetchFirstAnswer(initialQuery);
-      return;
-    }
-
-    setChatData({
-      sessionId,
-      title: '',
-      repo: repo || '',
-      messages: [],
-    });
-  }, [sessionId, initialQuery, repo, storageKeys.chat, beginAnswerLoading, streamAndSendQuery]);
+    runStream();
+  }, [sessionId, initialQuery, storageKeys.chat, streamAndSendQuery]);
 
   // Cleanup on unmount
   useEffect(() => {

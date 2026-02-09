@@ -44,12 +44,10 @@ export const normalizeSources = (sources: BackendSource[]): ChatSource[] => {
 
       // date
       const date =
-        sourceType === 'code' ? formatDaysAgo((s as any).daysAgo) : s.createdAt ? formatDate(s.createdAt) : '';
+        sourceType === 'code' ? formatDaysAgo(s.daysAgo) : s.createdAt ? formatDate(s.createdAt) : '';
 
       // author
       const author = sourceType === 'code' ? (s.author ?? '') : (s.assigneeName ?? '');
-
-      const count = s.isCited ? s.index : undefined;
 
       return {
         id: crypto.randomUUID(),
