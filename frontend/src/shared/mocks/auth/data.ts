@@ -3,8 +3,8 @@ import type { UserRole, UserStatus } from '@/shared/queries/auth.types';
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 시나리오 선택 (ADMIN/MEMBER, NEW/PENDING/ACTIVE/INACTIVE/DELETED)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const MOCK_ROLE: UserRole = 'MEMBER';
-const MOCK_STATUS: UserStatus = 'NEW';
+const MOCK_ROLE: UserRole = (process.env.NEXT_PUBLIC_USER_ROLE as UserRole) || 'ADMIN';
+const MOCK_STATUS: UserStatus = (process.env.NEXT_PUBLIC_USER_STATUS as UserStatus) || 'NEW';
 
 export interface MemberInfoResponse {
   name: string;

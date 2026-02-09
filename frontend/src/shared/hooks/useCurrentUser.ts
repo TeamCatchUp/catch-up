@@ -20,8 +20,14 @@ export const useCurrentUser = (redirectToLogin = true) => {
       setUser(query.data);
       const { status } = query.data;
 
+      // 삭제된 사용자는 모든 페이지에서 로그인으로 이동
+      if (status === 'DELETED') {
+        router.replace('/login');
+        return;
+      }
+
       if (status === 'NEW' && pathname !== '/onboarding') {
-        router.replace('/onboarding');
+        router.replace('/login');
       } else if (status === 'PENDING' && pathname !== '/pending') {
         router.replace('/pending');
       } else if (status === 'ACTIVE' && (pathname === '/onboarding' || pathname === '/pending')) {
