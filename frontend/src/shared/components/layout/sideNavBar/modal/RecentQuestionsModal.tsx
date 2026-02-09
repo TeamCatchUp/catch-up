@@ -14,7 +14,6 @@ import { formatFullDate } from '@/shared/utils/formatDate';
 import Add from '/public/icons/icon/add_small.svg';
 import AI from '/public/icons/icon/ai.svg';
 import Close from '/public/icons/icon/cancel.svg';
-import Chat from '/public/icons/icon/chat.svg';
 import Search from '/public/icons/icon/search.svg';
 
 interface RecentQuestionsModalProps {

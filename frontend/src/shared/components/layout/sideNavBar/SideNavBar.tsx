@@ -17,7 +17,6 @@ import { useUserStore } from '@/shared/store/userStore';
 import { cn } from '@/shared/utils/cn';
 
 import AI from '/public/icons/icon/ai.svg';
-import ArrowLeft from '/public/icons/icon/arrow_left.svg';
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
 import Close from '/public/icons/icon/close.svg';
 import Dropdown from '/public/icons/icon/dropdown_down.svg';
@@ -79,21 +78,12 @@ const SideNavBar = () => {
   const [selectedTeamSpaceId, setSelectedTeamSpaceId] = useState<string>(TEAM_SPACES[0].id);
   const selectedTeamSpace = TEAM_SPACES.find((t) => t.id === selectedTeamSpaceId) ?? TEAM_SPACES[0];
 
-  // 닫힘 애니메이션 동안 open 컨텐츠 잠깐 유지
-  const [showOpenContent, setShowOpenContent] = useState(isOpen);
-
-  useEffect(() => {
+  // isRagAnswerPage 변경 시 사이드바 상태 동기화 (adjusting state during render)
+  const [prevIsRagAnswerPage, setPrevIsRagAnswerPage] = useState(isRagAnswerPage);
+  if (prevIsRagAnswerPage !== isRagAnswerPage) {
+    setPrevIsRagAnswerPage(isRagAnswerPage);
     setIsOpen(!isRagAnswerPage);
-  }, [isRagAnswerPage]);
-
-  useEffect(() => {
-    if (isOpen) {
-      setShowOpenContent(true);
-      return;
-    }
-    const t = setTimeout(() => setShowOpenContent(false), 200);
-    return () => clearTimeout(t);
-  }, [isOpen]);
+  }
 
   // refresh_sidebar 이벤트 → TanStack Query invalidation
   useEffect(() => {

@@ -1,6 +1,7 @@
 // Data imports
-import { MOCK_JWT_TOKENS, MOCK_USER } from './auth/data';
 import type { UserStatus } from '@/shared/queries/auth.types';
+
+import { MOCK_JWT_TOKENS, MOCK_USER } from './auth/data';
 import delay from './delay';
 import { MOCK_FEEDBACK_RESPONSE } from './feedback/data';
 import { DEFAULT_FILE_TREE,MOCK_FILE_TREES, MOCK_REPOSITORIES } from './github/data';

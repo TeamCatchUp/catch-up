@@ -1,6 +1,3 @@
-import type { GithubNode } from '@/shared/types/query/github';
-import type { JiraNode } from '@/shared/types/query/jira';
-
 /** Popover 타입 */
 export type PopoverType = 'person' | 'department' | 'project' | null;
 

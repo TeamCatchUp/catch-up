@@ -26,9 +26,6 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
   const handleBoxClick = () => {
     inputRef.current?.focus();
   };
-  const handleClear = () => {
-    setSearchTerm('');
-  };
   return (
     <>
       {' '}

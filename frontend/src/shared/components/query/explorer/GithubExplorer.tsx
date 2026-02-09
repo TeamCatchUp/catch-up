@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo,useState } from 'react';
+import { useMemo,useState } from 'react';
 
 import IconTag from '@/public/icons/icon/file_filled.svg';
 import IconSpace from '@/public/icons/icon/folder_filled.svg';
@@ -63,9 +63,12 @@ export const GithubExplorer = ({
     }
   };
 
-  useEffect(() => {
+  // currentRepo 변경 시 탭 리셋 (adjusting state during render)
+  const [prevRepo, setPrevRepo] = useState(currentRepo);
+  if (prevRepo !== currentRepo) {
+    setPrevRepo(currentRepo);
     setActiveTab('file');
-  }, [currentRepo]);
+  }
 
   const handleCheck = (item: GithubNode, e: React.MouseEvent) => {
     e.stopPropagation();

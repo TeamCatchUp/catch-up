@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useCallback,useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 interface UseLocalStorageOptions<T> {
   /** localStorage 키 */
@@ -40,20 +40,17 @@ export const useLocalStorage = <T>({
     }
   });
 
-  // 클라이언트 사이드에서 localStorage 동기화
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
+  // key 변경 시 localStorage 재동기화 (adjusting state during render)
+  const [prevKey, setPrevKey] = useState(key);
+  if (prevKey !== key) {
+    setPrevKey(key);
     try {
-      const item = localStorage.getItem(key);
-      if (item) {
-        const parsed = deserialize(item);
-        setStoredValue(parsed);
-      }
-    } catch (error) {
-      console.warn(`Error syncing localStorage key "${key}":`, error);
+      const item = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+      setStoredValue(item ? deserialize(item) : initialValue);
+    } catch {
+      setStoredValue(initialValue);
     }
-  }, [key, deserialize]);
+  }
 
   // 값 설정 함수
   const setValue = useCallback(

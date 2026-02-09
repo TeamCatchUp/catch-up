@@ -153,7 +153,6 @@ const mockChatService = {
     query: string,
     sessionId: string,
     onEvent: (event: StreamEvent) => void,
-    _signal?: AbortSignal,
   ) => {
     console.log('[mockChatService] streamChat:', { query, sessionId });
 
@@ -179,7 +178,6 @@ const mockChatService = {
     sessionId: string,
     selectedPRs: { prNumber: number; repoName: string; owner: string }[],
     onEvent: (event: StreamEvent) => void,
-    _signal?: AbortSignal,
   ) => {
     console.log('[mockChatService] resumeStream:', { sessionId, selectedPRs });
 
