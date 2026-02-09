@@ -28,8 +28,6 @@ async def generate_final_answer_node(state: AgentState):
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
     context_text, final_sources = _prepare_fixed_context_and_sources(retrieved_docs)
     
-    logger.info(f"final_source:{final_sources}")
-
     query = state["rewritten_query"]
     forced_query = _build_forced_query(query)
 
@@ -57,7 +55,7 @@ async def generate_final_answer_node(state: AgentState):
                     "role": state.get("role", "user"),
                 }
             )
-            logger.info(full_answer)
+            logger.info(f"full_answer: {full_answer}")
 
     except Exception as e:
         logger.warning(f"Generate final answer failed: {e}")

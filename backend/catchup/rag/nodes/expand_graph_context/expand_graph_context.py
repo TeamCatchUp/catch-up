@@ -42,7 +42,6 @@ async def expand_graph_context_node(state: AgentState):
     graph_docs = _convert_to_documents(raw_results)
 
     logger.info(f"Graph 확장 완료: +{len(graph_docs)}개 문서 추가.")
-    logger.info(graph_docs)
 
     combined_docs = vector_docs + graph_docs
 

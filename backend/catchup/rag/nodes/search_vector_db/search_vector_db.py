@@ -27,7 +27,6 @@ async def search_vector_db_node(state: AgentState):
     unique_results = _deduplicate_search_results(results)
 
     logger.info(f"검색 결과: {len(unique_results)} 개")
-    logger.info(unique_results)
 
     return {"retrieved_docs": unique_results}
 
