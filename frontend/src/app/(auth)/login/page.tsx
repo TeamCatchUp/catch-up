@@ -59,15 +59,15 @@ export default function Login() {
             </div>
           </div>
 
-          <div className="flex items-start gap-5">
-            <div className="flex items-center justify-center gap-0.5 px-1.5 py-1">
-              <div className="text-body-xsmall truncate text-gray-50 underline">서비스 이용약관</div>
-              <IconOpen className="size-4.5" />
-            </div>
-            <div className="flex items-center justify-center gap-0.5 px-1.5 py-1">
-              <div className="text-body-xsmall truncate text-gray-50 underline">개인정보처리방침</div>
-              <IconOpen className="size-4.5" />
-            </div>
+          <div className="flex shrink-0 items-start gap-5">
+            <a href="#" className="flex shrink-0 items-center gap-0.5 whitespace-nowrap px-1.5 py-1">
+              <span className="text-body-xsmall text-gray-50 underline">서비스 이용약관</span>
+              <IconOpen className="size-4.5 shrink-0 text-gray-50" />
+            </a>
+            <a href="#" className="flex shrink-0 items-center gap-0.5 whitespace-nowrap px-1.5 py-1">
+              <span className="text-body-xsmall text-gray-50 underline">개인정보처리방침</span>
+              <IconOpen className="size-4.5 shrink-0 text-gray-50" />
+            </a>
           </div>
         </div>
 

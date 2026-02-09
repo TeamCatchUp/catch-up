@@ -35,7 +35,7 @@ export default function PendingPage() {
               <div className="shrink-0 rounded-full border border-neutral-2 bg-blue-1 p-2">
                 <ErrorIcon className="size-5.5" />
               </div>
-              <h1 className="text-display-large tracking-tight text-gray-90">
+              <h1 className="whitespace-nowrap text-display-large tracking-tight text-gray-90">
                 관리자의 승인을 기다리고 있어요
               </h1>
             </div>
@@ -64,14 +64,14 @@ export default function PendingPage() {
             </div>
           </div>
 
-          <div className="flex items-start gap-5">
-            <a href="#" className="flex items-center gap-0.5 px-1.5 py-1">
+          <div className="flex shrink-0 items-start gap-5">
+            <a href="#" className="flex shrink-0 items-center gap-0.5 whitespace-nowrap px-1.5 py-1">
               <span className="text-body-xsmall text-gray-50 underline">서비스 이용약관</span>
-              <IconOpen className="size-6 text-gray-50" />
+              <IconOpen className="size-6 shrink-0 text-gray-50" />
             </a>
-            <a href="#" className="flex items-center gap-0.5 px-1.5 py-1">
+            <a href="#" className="flex shrink-0 items-center gap-0.5 whitespace-nowrap px-1.5 py-1">
               <span className="text-body-xsmall text-gray-50 underline">개인정보처리방침</span>
-              <IconOpen className="size-6 text-gray-50" />
+              <IconOpen className="size-6 shrink-0 text-gray-50" />
             </a>
           </div>
         </div>
