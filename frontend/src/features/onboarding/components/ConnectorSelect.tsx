@@ -77,7 +77,7 @@ export function ConnectorSelect({
                       {selected.name}
                     </span>
                     <span className="shrink-0 rounded-md2 bg-neutral-2 px-1.5 py-0.5 text-body-xsmall text-gray-50">
-                      {selected.tag}
+                      {selected.id}
                     </span>
                   </div>
                   <span className="text-left truncate text-body-xsmall tracking-tight text-gray-50">
@@ -108,7 +108,7 @@ export function ConnectorSelect({
               {accounts.map((account) => (
                 <CommandItem
                   key={account.id}
-                  value={`${account.name} ${account.email} ${account.tag}`}
+                  value={`${account.name} ${account.email} ${account.id}`}
                   onSelect={() => {
                     onChange(account.id);
                     setOpen(false);
@@ -132,7 +132,7 @@ export function ConnectorSelect({
                         {account.name}
                       </span>
                       <span className="rounded-md2 bg-neutral-2 px-1.5 py-0.5 text-body-xsmall text-gray-50">
-                        {account.tag}
+                        {account.id}
                       </span>
                     </div>
                     <span className="truncate text-label-xsmall tracking-tight text-gray-50">
