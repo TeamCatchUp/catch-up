@@ -33,7 +33,7 @@ export default function PendingPage() {
 
             <div className="flex items-start gap-3">
               <div className="shrink-0 rounded-full border border-neutral-2 bg-blue-1 p-2">
-                <ErrorIcon className="size-6" />
+                <ErrorIcon className="size-5.5" />
               </div>
               <h1 className="text-display-large tracking-tight text-gray-90">
                 관리자의 승인을 기다리고 있어요
