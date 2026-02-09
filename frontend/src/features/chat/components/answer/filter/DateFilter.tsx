@@ -42,7 +42,7 @@ const DateFilter = ({ isOpen, onClose }: FilterComponentsProps) => {
       <div className="flex justify-between">
         <span className="text-body-xsmall text-gray-50">기간 선택</span>
         <button onClick={onClose} className="cursor-pointer">
-          <ToggleOn />
+          <ToggleOn className="h-5 w-9" />
         </button>
       </div>
       <div className="flex h-8.75 items-center gap-1.5">

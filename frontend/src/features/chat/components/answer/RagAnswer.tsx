@@ -152,7 +152,7 @@ const RagAnswer = ({
                       onClick={() => setFilterOpenMap((prev) => ({ ...prev, [answerId]: true }))}
                       className="cursor-pointer"
                     >
-                      <ToggleOff />
+                      <ToggleOff className="h-5 w-9" />
                     </button>
                   </div>
                 </div>

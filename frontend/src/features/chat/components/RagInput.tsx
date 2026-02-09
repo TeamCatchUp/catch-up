@@ -245,7 +245,7 @@ const RagInput = ({
                   filters.isFilterOpen && 'bg-blue-5 border-blue-20',
                 )}
               >
-                <Filter className="relative top-0.5 h-4.5 w-4.5" />
+                <Filter className="h-4.5 w-4.5" />
                 <span className="text-body-xsmall text-gray-50">필터</span>
               </div>
             )}

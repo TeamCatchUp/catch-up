@@ -377,7 +377,7 @@ const TaskCard = ({ tasks }: TaskCardProps) => {
                       )}
                     >
                       <div className="flex min-w-0 items-center gap-1.5 pr-3 pl-11.5">
-                        {isLast ? <LastConnector /> : <Connector />}
+                        {isLast ? <LastConnector className="h-[47px] w-[15px]" /> : <Connector className="h-[47px] w-[15px]" />}
 
                         <button
                           onClick={() => toggleSubTask(task, sub.id)}
