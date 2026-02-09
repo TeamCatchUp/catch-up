@@ -1,8 +1,8 @@
 /** 최근 검색 쿼리 API 응답 */
 export interface RecentQueryResponse {
   query: string;
-  sessionId: string;
-  createdAt: string;
+  session_id: string;
+  created_at: string;
 }
 
 /** 최근 검색 쿼리 목록 API 응답 */
@@ -12,16 +12,16 @@ export interface RecentQueriesResponse {
 
 /** Jira 티켓 API 응답 */
 export interface JiraTicketResponse {
-  issueKey: string;
+  issue_key: string;
   summary: string;
 }
 
 /** 채팅방 API 응답 */
 export interface ChatroomResponse {
-  sessionId: string;
+  session_id: string;
   title: string;
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 /** 채팅방 목록 API 응답 */

@@ -24,7 +24,7 @@ export interface FilterLabels {
 /** 검색 쿼리 (최근 검색 기록) */
 export interface SearchQuery {
   query: string;
-  sessionId: string;
+  session_id: string;
   date: string;
   rawDate?: Date;
 }

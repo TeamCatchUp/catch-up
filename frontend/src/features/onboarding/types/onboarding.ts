@@ -13,8 +13,8 @@ export type OnboardingSteps = {
     name: string;
     position: string;
     rank: string;
-    companyName?: string;
-    teamSize?: string;
+    company_name?: string;
+    team_size?: string;
   };
 
   Connector: {
@@ -22,11 +22,11 @@ export type OnboardingSteps = {
     position: string;
     rank: string;
     department?: string;
-    companyName?: string;
-    teamSize?: string;
-    jiraAccountId?: string;
-    githubAccountId?: string;
-    slackAccountId?: string;
+    company_name?: string;
+    team_size?: string;
+    jira_account_id?: string;
+    github_account_id?: string;
+    slack_account_id?: string;
   };
 
   Complete: {
@@ -34,11 +34,11 @@ export type OnboardingSteps = {
     position: string;
     rank: string;
     department?: string;
-    companyName?: string;
-    teamSize?: string;
-    jiraAccountId?: string;
-    githubAccountId?: string;
-    slackAccountId?: string;
+    company_name?: string;
+    team_size?: string;
+    jira_account_id?: string;
+    github_account_id?: string;
+    slack_account_id?: string;
   };
 };
 
@@ -50,14 +50,14 @@ export interface ProfileFormData {
 }
 
 export interface OrgInfoFormData {
-  companyName: string;
-  teamSize: string;
+  company_name: string;
+  team_size: string;
 }
 
 export interface ConnectorFormData {
-  jiraAccountId?: string;
-  githubAccountId?: string;
-  slackAccountId?: string;
+  jira_account_id?: string;
+  github_account_id?: string;
+  slack_account_id?: string;
 }
 
 export interface ConnectorAccount {

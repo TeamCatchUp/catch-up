@@ -1,14 +1,14 @@
 interface ChatFeedbackRequest {
-  chatHistoryId: string;
+  chat_history_id: string;
   tags: string[];
   detail: string;
 }
 
 interface ChatFeedbackResponse {
-  messageId: string;
-  chatHistoryId?: string;
-  hasFeedback?: boolean;
+  message_id: string;
+  chat_history_id?: string;
+  has_feedback?: boolean;
   tags: string[];
   detail: string;
-  createdAt: string;
+  created_at: string;
 }
