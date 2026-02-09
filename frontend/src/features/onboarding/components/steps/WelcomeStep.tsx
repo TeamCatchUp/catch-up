@@ -30,7 +30,7 @@ export function WelcomeStep({ onStart }: WelcomeStepProps) {
                 <div className="flex size-[55px] shrink-0 flex-col items-center justify-center overflow-clip rounded-2xl border border-neutral-3 bg-white p-2">
                   <CatchUpIcon className="w-full shrink-0" />
                 </div>
-                <CatchUpLetter/>
+                <CatchUpLetter className="w-[133px] h-[31px]"/>
               </div>
               <span className="text-display-large tracking-tight text-gray-80">
                 이 도와드릴게요.
