@@ -12,7 +12,7 @@ from catchup.rag.nodes.generate_final_answer.prompt import (
     SYSTEM_ASSISTANT_PROMPT,
 )
 from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
-from catchup.rag.schemas import BaseSource
+from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.state import AgentState
 
 
@@ -27,6 +27,8 @@ async def generate_final_answer_node(state: AgentState):
 
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
     context_text, final_sources = _prepare_fixed_context_and_sources(retrieved_docs)
+    
+    logger.info(f"final_source:{final_sources}")
 
     query = state["rewritten_query"]
     forced_query = _build_forced_query(query)
@@ -47,16 +49,14 @@ async def generate_final_answer_node(state: AgentState):
     full_answer = ""
     try:
         async with llm_semaphore:
-            async for chunk in chain.astream(
+            full_answer = await chain.ainvoke(
                 input={
                     "history": trimmed_history,
                     "context": context_text,
                     "query": forced_query,
                     "role": state.get("role", "user"),
                 }
-            ):
-                full_answer += chunk
-
+            )
             logger.info(full_answer)
 
     except Exception as e:
@@ -64,7 +64,7 @@ async def generate_final_answer_node(state: AgentState):
         return {"messages": [AIMessage(content=FALLBACK_ANSWER)], "sources": []}
 
     cited_indices = _extract_citation(full_answer)
-    # _mark_citations(final_sources, cited_indices)  TODO: Source 관련 구현 후 주석 해제
+    _mark_citations(final_sources, cited_indices)
 
     logger.info(
         f"LLM이 인용한 문서 인덱스: {cited_indices} / 전체 소스: {len(final_sources)}개"
@@ -90,14 +90,15 @@ def _prepare_fixed_context_and_sources(
     sources = []
 
     for i, document in enumerate(documents, start=1):
-        try:
-            # source_dto = BaseSource.from_search_result(index=i, doc=document) # TODO: Source 관련 구현 필요
-            source_dto = None  # TODO: 삭제
-        except AttributeError:
-            raise
+        
+        source_dto = BaseSource.from_document(
+            index=i,
+            doc=document
+        )
 
         if document.metadata.get("db_origin") == "graph":
             line = f"[{i}] [Graph Data] {document.page_content}"
+            
         else:
             source_type = document.metadata.get("source", "Document")
             line = f"[{i}] (Source: {source_type}\n{document.page_content})"

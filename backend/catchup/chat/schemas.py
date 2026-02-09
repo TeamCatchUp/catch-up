@@ -3,7 +3,7 @@ from typing import Annotated, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
-from catchup.rag.schemas import SourceResponse
+from catchup.rag.schemas.sources import SourceResponse
 
 
 NODE_STATUS_MAP = {
@@ -53,8 +53,7 @@ class ChatStreamingSourceResponse(BaseModel):
 
     type: Literal["sources"] = "sources"
     session_id: str
-    # sources: list[SourceResponse]  TODO: 주석 해제
-    sources: Optional[list]
+    sources: Optional[list[SourceResponse]]
 
 
 class ChatStreamingTokenResponse(BaseModel):

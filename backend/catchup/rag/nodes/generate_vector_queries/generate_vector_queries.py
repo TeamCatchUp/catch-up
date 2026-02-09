@@ -7,7 +7,7 @@ from catchup.rag.nodes.generate_vector_queries.prompt import (
     VECTOR_QUERIES_GENERATION_PROMPT,
 )
 from catchup.rag.nodes.utils import llm_semaphore, log_node
-from catchup.rag.schemas import VectorDbSearchPlan
+from catchup.rag.schemas.structures import VectorDbSearchPlan, VectorDbSearchQuery
 from catchup.rag.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ async def generate_vector_queries_node(state: AgentState):
     try:
         async with llm_semaphore:
             plan: VectorDbSearchPlan = await chain.ainvoke(
-                input={"rewritten_query": rewritten_query}
+                input={"rewritten_query": [VectorDbSearchQuery(query=rewritten_query)]}
             )
 
         _print_search_plan_log(plan)

@@ -14,6 +14,7 @@ from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
 from catchup.server.connector.github.auth_api import router as github_auth_router
 from catchup.server.connector.github.sync_api import router as github_sync_router
+from catchup.utils.redis import init_langgraph_checkpointer
 from catchup.server.connector.jira.auth_api import router as jira_auth_router
 from catchup.server.connector.jira.sync_api import router as jira_sync_router
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
@@ -63,6 +64,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.critical(f"Failed to create DB tables: {e}")
         raise e
+    
+    try:
+        await init_langgraph_checkpointer()
+    
+    except Exception as e:
+        logger.critical(f"Failed to create Redis langgraph checkpointer: {e}")
 
     yield
 
@@ -90,9 +97,9 @@ app.include_router(slack_sync_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5500",
+        "http://localhost:5500", # Go Live 포트 허용
         "http://catchup_web:3000",
-    ], # Go Live 포트 허용
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

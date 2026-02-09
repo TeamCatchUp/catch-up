@@ -5,7 +5,7 @@ from langchain_core.documents import Document
 
 from catchup.components.vector_db.factory import VectorDbProvider, get_vector_db_service
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.schemas import VectorDbSearchQuery
+from catchup.rag.schemas.structures import VectorDbSearchQuery
 from catchup.rag.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ async def search_vector_db_node(state: AgentState):
         queries.append(VectorDbSearchQuery(query=state["rewritten_query"]))
 
     results: list[list[Document]] = await _get_hybrid_search_results(
-        provider=VectorDbProvider.PGVECTOR, queries=queries, k=10, weights=[0.6, 0.4]
+        provider=VectorDbProvider.PGVECTOR, queries=queries, k=100, weights=[0.6, 0.4]
     )
 
     unique_results = _deduplicate_search_results(results)

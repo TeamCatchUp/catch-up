@@ -10,7 +10,7 @@ from catchup.rag.nodes.utils import (
     llm_semaphore,
     log_node,
 )
-from catchup.rag.schemas import GradeDocuments
+from catchup.rag.schemas.structures import GradeDocuments
 from catchup.rag.state import AgentState
 
 logger = logging.getLogger(__name__)
