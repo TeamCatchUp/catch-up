@@ -1,5 +1,5 @@
-export type UserRole = 'ROOT_ADMIN' | 'MEMBER';
-export type UserStatus = 'NEW' | 'PENDING' | 'ACTIVE' | 'INACTIVE' | 'DELETED';
+export type UserRole = 'admin' | 'user';
+export type UserStatus = 'new' | 'pending' | 'active' | 'inactive' | 'deleted';
 
 /** GET /api/v1/auth/me 응답 */
 export interface AuthUser {
