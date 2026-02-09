@@ -76,7 +76,7 @@ export default function PendingPage() {
           </div>
         </div>
 
-        <Image src={DashboardImage} alt="CatchUp 대시보드" className="h-174.5 flex-[1_0_0]" />
+        <Image src={DashboardImage} alt="CatchUp 대시보드" className="h-174.5 flex-[1_0_0] object-cover" />
       </div>
     </div>
   );

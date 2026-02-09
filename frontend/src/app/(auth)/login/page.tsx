@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 import IconOpen from '@/public/icons/icon/open_in_new.svg';
 import CatchUpLogo from '@/public/icons/logo/catchUp.svg';
@@ -8,8 +9,14 @@ import DashboardImage from '@/public/image/catchup-login.jpg';
 import { Button } from '@/shared/components/ui/button';
 
 export default function Login() {
+  const router = useRouter();
+
   const handleGoogleLogin = () => {
     window.location.href = `https://0-0-0-0.example.io/`;
+  };
+
+  const handleSignup = () => {
+    router.push('/onboarding');
   };
 
   return (
@@ -45,6 +52,7 @@ export default function Login() {
                 variant="box-outline-gray"
                 size="lg"
                 className="h-[46px] w-full"
+                onClick={handleSignup}
               >
                 회원가입 시작하기
               </Button>
@@ -63,7 +71,7 @@ export default function Login() {
           </div>
         </div>
 
-        <Image src={DashboardImage} alt="catchup" className="h-174.5 flex-[1_0_0]" />
+        <Image src={DashboardImage} alt="catchup" className="h-174.5 flex-[1_0_0] object-cover" />
       </div>
     </div>
   );
