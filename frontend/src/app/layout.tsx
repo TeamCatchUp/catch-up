@@ -7,6 +7,9 @@ import '@/shared/styles/globals.css';
 export const metadata: Metadata = {
   title: 'CatchUp',
   description: 'Catchup Service Website',
+  icons: {
+    icon: '/icons/favicon.svg',
+  },
 };
 
 export default function RootLayout({
