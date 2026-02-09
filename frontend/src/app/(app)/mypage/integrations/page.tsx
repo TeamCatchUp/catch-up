@@ -13,8 +13,8 @@ export default function ToolPage() {
     <div className="flex items-start gap-6 self-stretch px-16 pt-6 pb-30">
       <div className="flex cursor-pointer flex-col items-start gap-3">
         <div className="border-blue-30 bg-whit flex w-[325px] items-center gap-5 rounded-xl border-2 p-4">
-          <div className="border-0.5 border-neutral-5 flex h-10.5 w-10.5 shrink-0 flex-col justify-center gap-2.5 rounded-xl px-4 py-[5px]">
-            <IconJira />
+          <div className="h-10.5 w-10.5 flex justify-center items-center">
+            <IconJira className="h-8 w-8" />
           </div>
           <div className="flex flex-[1_0_0] flex-col items-start gap-1">
             <div className="text-heading-large text-gray-70">Jira</div>
@@ -77,7 +77,7 @@ export default function ToolPage() {
                 className="box-button-outline-gray !border-neutral-4 flex cursor-pointer flex-col items-start gap-2.5 rounded-xl border px-3 py-2"
               >
                 <div className="flex items-center gap-4">
-                  <IconAT />
+                  <IconAT className="h-5 w-5" />
                   <div className="flex w-[334px] flex-col items-start">
                     <div className="text-gray-80 text-body-xsmall">Atlassian account</div>
                     <div className="text-body-xsmall text-gray-50">
