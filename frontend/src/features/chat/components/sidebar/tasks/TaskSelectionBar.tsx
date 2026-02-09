@@ -110,10 +110,10 @@ const TaskSelectionBar = ({
                             <span className="text-body-xsmall text-blue-55 flex items-center">
                               {task.subtasks.length}
                             </span>
-                            <span className="h-4 w-4">
+                            <span className="h-4.5 w-4.5">
                               <DropDownDown
                                 className={cn(
-                                  'flex text-blue-50 transition-transform',
+                                  'flex text-blue-50 transition-transform h-4.5 w-4.5',
                                   isExpanded ? 'relative bottom-px rotate-180' : 'relative bottom-0.5',
                                 )}
                               />
@@ -132,7 +132,7 @@ const TaskSelectionBar = ({
                             onClick={() => onTaskToggle(task.taskId)}
                             className="flex h-6 w-6 cursor-pointer items-center"
                           >
-                            <Cancel className="text-gray-70 flex items-center" />
+                            <Cancel className="text-gray-70 flex items-center h-6 w-6" />
                           </button>
                         </div>
                       </div>
@@ -145,7 +145,7 @@ const TaskSelectionBar = ({
                           className="group hover:bg-neutral-2 flex h-9 w-103.75 items-center gap-1 rounded-lg p-1 transition-all duration-200"
                         >
                           {showParentTask && (
-                            <div className="h-4.5 w-4.5">
+                            <div className="h-6 w-6">
                               <Reply className="text-gray-20" />
                             </div>
                           )}
@@ -171,7 +171,7 @@ const TaskSelectionBar = ({
                               onClick={() => onSubtaskToggle(task.taskId, subtask.id)}
                               className="flex h-6 w-6 cursor-pointer items-center"
                             >
-                              <Cancel className="text-gray-70" />
+                              <Cancel className="text-gray-70 h-6 w-6" />
                             </button>
                           </div>
                         </div>
@@ -189,7 +189,7 @@ const TaskSelectionBar = ({
           <div className="flex items-center gap-1.5 pl-1">
             <button onClick={onToggleCollapse} className="icon-button-only-gray flex h-4.5 w-4.5 cursor-pointer p-0.5">
               <DropDownDown
-                className={cn('text-gray-70 transition-transform', !isCollapsed ? 'rotate-0' : 'rotate-180')}
+                className={cn('text-gray-70 transition-transform h-4.5 w-4.5', !isCollapsed ? 'rotate-0' : 'rotate-180')}
               />
             </button>
             <span>
@@ -201,14 +201,14 @@ const TaskSelectionBar = ({
           </div>
           <div className="-mr-1.5 flex items-center gap-2">
             <button className="capsule-button-outline-blue flex w-38.75 cursor-pointer gap-1.5 px-3 py-1.5">
-              <div className="relative top-px flex h-5 w-5 items-center">
+              <div className="relative top-px flex h-6 w-6 items-center">
                 <Edit className="text-blue-50" />
               </div>
               <span className="text-blue-55 text-body-small whitespace-nowrap">인수인계 시작하기</span>
             </button>
             <button className="capsule-button-solid-primary flex w-25.75 cursor-pointer gap-1.5 px-3 py-1.5">
-              <div className="relative top-px flex h-5 w-5 items-center">
-                <Share />
+              <div className="relative top-px flex h-6 w-6 items-center">
+                <Share className="h-6 w-6" />
               </div>
               <span className="text-body-small whitespace-nowrap">자료 공유</span>
             </button>

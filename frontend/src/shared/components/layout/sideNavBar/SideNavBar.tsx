@@ -186,7 +186,7 @@ const SideNavBar = () => {
                     type="button"
                     className="h-4 w-4 cursor-pointer rounded-full text-gray-50 opacity-0 transition-opacity hover:bg-neutral-3 active:bg-neutral-4 group-hover/teamspace:opacity-100 data-[state=open]:bg-neutral-3 data-[state=open]:opacity-100"
                   >
-                    <Dropdown />
+                    <Dropdown className="h-4 w-4" />
                   </button>
                 </PopoverTrigger>
                 <TeamSpaceDropDownContent
@@ -199,7 +199,7 @@ const SideNavBar = () => {
             <div className="flex">
               <div className="flex items-center">
                 <div className="bg-neutral-3 h-6 w-6 rounded-md">
-                  <TeamSpace className="text-gray-70" />
+                  <TeamSpace className="text-gray-70 h-6 w-6" />
                 </div>
                 <div className="relative right-1.25 bottom-2.75">
                   <Necessary className="h-2 w-2" />
@@ -245,7 +245,7 @@ const SideNavBar = () => {
                     </div>
                   </div>
                   <div className="h-4 w-4">
-                    <Dropdown className="text-gray-50" />
+                    <Dropdown className="text-gray-50 h-4 w-4" />
                   </div>
                 </div>
               </button>
@@ -324,18 +324,10 @@ const SideNavBar = () => {
         {isOpen && (
           <div className="flex min-h-0 flex-1 flex-col">
             <button onClick={() => setIsCatchModalOpen(true)} className="h-7 w-fit cursor-pointer items-center">
-              {!isCatchModalOpen ? (
                 <div className="text-button-secondary-mono flex items-center px-2.5 py-1">
                   <span className="text-body-xsmall text-gray-70">내 질문</span>
                   <ArrowRight className="relative bottom-px h-5 w-5 text-gray-50" />
                 </div>
-              ) : (
-                <span className="bg-neutral-4 flex items-center gap-1 rounded-full px-1.5 py-1">
-                  <ArrowLeft className="text-gray-70 relative bottom-px h-5 w-5" />
-                  <span className="text-body-xsmall text-gray-70">더보기</span>
-                  <ArrowRight className="text-gray-70 relative bottom-px h-5 w-5" />
-                </span>
-              )}
             </button>
             <div className="mt-2 flex flex-col overflow-y-auto">
               {recentChatrooms.map((chatroom) => {
@@ -352,7 +344,7 @@ const SideNavBar = () => {
                   >
                     <span className={cn('text-body-small truncate px-2.5')}>{chatroom.title}</span>
                     <span className="mr-2.5 ml-auto flex h-5 w-5 items-center opacity-0 transition-opacity group-hover:opacity-100">
-                      <Kebeb className="text-gray-50" />
+                      <Kebeb className="text-gray-50 h-4.5 w-4.5" />
                     </span>
                   </Link>
                 );

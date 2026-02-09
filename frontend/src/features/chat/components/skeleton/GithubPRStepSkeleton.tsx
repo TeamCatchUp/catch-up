@@ -51,14 +51,14 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
         {/* 헤더 */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-5">
-            <SearchData />
+            <SearchData className="h-6 w-6" />
             <span className="text-heading-large text-gray-90">잠시만요! 정확한 답변을 위해 확인이 필요해요.</span>
             <button
               onClick={() => onContinue([])}
               className="text-button-primary-blue flex cursor-pointer items-center gap-0.5 px-1.5 py-1"
             >
               <span className="text-body-small text-blue-55">건너뛰기</span>
-              <FastForward />
+              <FastForward className="h-6 w-6" />
             </button>
           </div>
           <span className="text-body-small text-gray-70 flex items-center gap-1">
@@ -76,14 +76,14 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
                 onClick={toggleAll}
                 className="icon-button-outline-gray flex h-7.5 cursor-pointer items-center gap-1 px-2 py-1"
               >
-                <CheckCircle className="text-gray-70 relative bottom-px h-5 w-5 flex-shrink-0" />
+                <CheckCircle className="text-gray-70 relative bottom-px h-6 w-6 flex-shrink-0" />
                 <span className="text-body-xsmall text-gray-80 flex-shrink-0">전체 선택</span>
               </button>
               <button
                 // onClick={() => onRefetch?.()}
                 className="icon-button-outline-gray flex h-7.5 cursor-pointer items-center gap-1 px-2 py-1"
               >
-                <Rotate className="text-gray-70 relative bottom-px h-5 w-5 flex-shrink-0" />
+                <Rotate className="text-gray-70 relative bottom-px h-6 w-6 flex-shrink-0" />
                 <span className="text-body-xsmall text-gray-80 flex-shrink-0">다시 찾기</span>
               </button>
             </div>
@@ -117,7 +117,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
                           isSelected ? 'bg-blue-1 border-blue-45' : 'border-neutral-3 bg-neutral-1',
                         )}
                       >
-                        <Check className={cn('h-5.5 w-5.5', isSelected ? 'text-blue-50' : 'text-gray-30')} />
+                        <Check className={cn('h-6 w-6', isSelected ? 'text-blue-50' : 'text-gray-30')} />
                       </button>
                     </div>
                     <div
@@ -129,7 +129,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
                     >
                       {/* 제목 */}
                       <div className="flex w-156 items-center gap-1.5">
-                        <GithubIcon className="h-5.5 w-5.5" />
+                        <GithubIcon className="h-6 w-6" />
                         <span className="text-body-medium text-gray-70 truncate">{pr.title}</span>
                       </div>
                       {/* 설명 */}
