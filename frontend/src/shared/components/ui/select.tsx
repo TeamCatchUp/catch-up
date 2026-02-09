@@ -3,8 +3,7 @@
 import * as React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
 
-import CheckIcon from '@/public/icons/icon/check.svg';
-import DropdownDownIcon from '@/public/icons/icon/dropdown_down.svg';
+import UnfoldMoreIcon from '@/public/icons/icon/unfold_more.svg';
 import { cn } from '@/shared/utils/cn';
 
 const Select = SelectPrimitive.Root;
@@ -18,14 +17,14 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-neutral-3 bg-white px-3 py-1.5 text-body-small text-gray-80 transition-colors hover:border-neutral-4 hover:bg-neutral-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
+      'flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg border border-neutral-3 bg-white px-2.5 py-1.5 text-body-small tracking-tight text-gray-80 transition-colors hover:bg-neutral-2 data-[state=open]:bg-neutral-3 data-[state=open]:border-neutral-4 data-placeholder:text-gray-30 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
       className,
     )}
     {...props}
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <DropdownDownIcon className="size-4 shrink-0 text-gray-50" />
+      <UnfoldMoreIcon className="size-6 shrink-0 text-gray-50" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));
@@ -39,9 +38,9 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-2xl border border-neutral-4 bg-white shadow-dropdown-menu data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+        'relative z-50 max-h-96 min-w-32 overflow-hidden rounded-lg border border-neutral-4 bg-white shadow-dropdown-menu data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
         position === 'popper' &&
-          'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
+          'data-[side=bottom]:translate-y-0.5 data-[side=left]:-translate-x-0.5 data-[side=right]:translate-x-0.5 data-[side=top]:-translate-y-0.5',
         className,
       )}
       position={position}
@@ -49,7 +48,7 @@ const SelectContent = React.forwardRef<
     >
       <SelectPrimitive.Viewport
         className={cn(
-          'px-1.5 py-2',
+          'p-1 space-y-1',
           position === 'popper' &&
             'h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]',
         )}
@@ -68,16 +67,11 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex h-10 w-full cursor-pointer select-none items-center rounded-lg px-2 pr-8 text-body-small text-gray-80 outline-none data-[highlighted]:bg-neutral-2 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+      'relative flex w-full cursor-pointer select-none items-center rounded-lg px-2 py-2 text-body-small tracking-tight text-gray-80 outline-none data-highlighted:bg-neutral-2 data-disabled:pointer-events-none data-disabled:opacity-50',
       className,
     )}
     {...props}
   >
-    <span className="absolute right-2 flex size-4 items-center justify-center">
-      <SelectPrimitive.ItemIndicator>
-        <CheckIcon className="size-4 text-blue-50" />
-      </SelectPrimitive.ItemIndicator>
-    </span>
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
   </SelectPrimitive.Item>
 ));
