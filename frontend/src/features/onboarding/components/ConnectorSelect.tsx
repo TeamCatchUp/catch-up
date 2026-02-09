@@ -19,7 +19,7 @@ import {
 } from '@/shared/components/ui/popover';
 import { cn } from '@/shared/utils/cn';
 
-import type { ConnectorAccount } from '../model/onboarding.types';
+import type { ConnectorAccount } from '../types/onboarding';
 
 interface ConnectorSelectProps {
   label: string;

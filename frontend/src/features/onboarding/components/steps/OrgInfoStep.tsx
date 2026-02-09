@@ -12,8 +12,8 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 
-import { TEAM_SIZE_OPTIONS } from '../../model/onboarding.constants';
-import type { OrgInfoFormData } from '../../model/onboarding.types';
+import { TEAM_SIZE_OPTIONS } from '../../constants/onboarding';
+import type { OrgInfoFormData } from '../../types/onboarding';
 import { StepIndicator } from '../StepIndicator';
 import { StepNavButtons } from '../StepNavButtons';
 

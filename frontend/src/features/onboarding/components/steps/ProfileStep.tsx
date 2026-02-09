@@ -16,8 +16,8 @@ import {
   MOCK_DEPARTMENT_OPTIONS,
   POSITION_OPTIONS,
   RANK_OPTIONS,
-} from '../../model/onboarding.constants';
-import type { ProfileFormData } from '../../model/onboarding.types';
+} from '../../constants/onboarding';
+import type { ProfileFormData } from '../../types/onboarding';
 import { StepIndicator } from '../StepIndicator';
 import { StepNavButtons } from '../StepNavButtons';
 
