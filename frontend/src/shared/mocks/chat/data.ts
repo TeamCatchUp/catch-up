@@ -1,53 +1,52 @@
 interface ClientSourceBase {
   index: number;
-  isCited: boolean;
-  sourceType: 0 | 1 | 3;
-  relevanceScore: number;
-  htmlUrl: string;
+  is_cited: boolean;
+  source_type: 0 | 1 | 3;
+  relevance_score: number;
+  html_url: string;
   content: string;
   owner: string;
   repo: string;
 }
 
 interface ClientCodeSource extends ClientSourceBase {
-  sourceType: 0;
-  filePath: string;
+  source_type: 0;
+  file_path: string;
   category?: string;
   language?: string;
 }
 
 interface ClientPullRequestSource extends ClientSourceBase {
-  sourceType: 1;
+  source_type: 1;
   title: string;
-  prNumber: number;
+  pr_number: number;
   state?: string;
-  createdAt: number;
+  created_at: number;
   author: string;
 }
 
 interface ClientJiraIssueSource extends ClientSourceBase {
-  sourceType: 3;
+  source_type: 3;
   issueTypeName?: string;
   summary: string;
-  projectName: string;
-  issueKey: string;
-  parentKey?: string;
-  parentSummary?: string;
-  statusId?: number;
-  assigneeName?: string;
+  project_name: string;
+  issue_key: string;
+  parent_key?: string;
+  parent_summary?: string;
+  status_id?: number;
+  assignee_name?: string;
 }
 
 type ClientSource = ClientCodeSource | ClientPullRequestSource | ClientJiraIssueSource;
 
 // Mock Source 데이터
 export const MOCK_SOURCES: ClientSource[] = [
-  // Code Source (sourceType: 0)
   {
     index: 0,
-    isCited: true,
-    sourceType: 0,
-    relevanceScore: 0.95,
-    htmlUrl: 'https://github.com/TeamCatchUp/CatchUp-BE/blob/main/src/AuthController.java',
+    is_cited: true,
+    source_type: 0,
+    relevance_score: 0.95,
+    html_url: 'https://github.com/TeamCatchUp/CatchUp-BE/blob/main/src/AuthController.java',
     content: `public class AuthController {
   @PostMapping("/login")
   public ResponseEntity<TokenDto> login(@RequestBody LoginRequest request) {
@@ -61,17 +60,16 @@ export const MOCK_SOURCES: ClientSource[] = [
 }`,
     owner: 'TeamCatchUp',
     repo: 'CatchUp-BE',
-    filePath: 'src/main/java/AuthController.java',
+    file_path: 'src/main/java/AuthController.java',
     category: 'controller',
     language: 'java',
   },
-  // PR Source (sourceType: 1)
   {
     index: 1,
-    isCited: true,
-    sourceType: 1,
-    relevanceScore: 0.88,
-    htmlUrl: 'https://github.com/TeamCatchUp/CatchUp-FE/pull/42',
+    is_cited: true,
+    source_type: 1,
+    relevance_score: 0.88,
+    html_url: 'https://github.com/TeamCatchUp/CatchUp-FE/pull/42',
     content: `## 변경사항
 - 로그인 폼 UI 개선
 - 에러 메시지 표시 개선
@@ -79,33 +77,31 @@ export const MOCK_SOURCES: ClientSource[] = [
     owner: 'TeamCatchUp',
     repo: 'CatchUp-FE',
     title: 'feat: 로그인 페이지 리뉴얼',
-    prNumber: 42,
+    pr_number: 42,
     state: 'merged',
-    createdAt: 1705056000,
+    created_at: 1705056000,
     author: '이프론트',
   },
-  // Jira Source (sourceType: 3)
   {
     index: 2,
-    isCited: true,
-    sourceType: 3,
-    relevanceScore: 0.82,
-    htmlUrl: 'https://jira.catchup.io/browse/CATCH-101',
+    is_cited: true,
+    source_type: 3,
+    relevance_score: 0.82,
+    html_url: 'https://jira.catchup.io/browse/CATCH-101',
     content: '소셜 로그인 시 간헐적으로 토큰이 발급되지 않는 버그가 발생합니다. 재현 단계: 1) 구글 로그인 클릭 2) OAuth 완료 후 리다이렉트 3) 토큰이 undefined로 설정됨',
     owner: 'CATCH',
     repo: '',
     issueTypeName: 'Bug',
     summary: '소셜 로그인 버그 수정',
-    projectName: 'CatchUp',
-    issueKey: 'CATCH-101',
-    parentKey: 'CATCH-100',
-    parentSummary: '인증 시스템 개선',
-    statusId: 3,
-    assigneeName: '최QA',
+    project_name: 'CatchUp',
+    issue_key: 'CATCH-101',
+    parent_key: 'CATCH-100',
+    parent_summary: '인증 시스템 개선',
+    status_id: 3,
+    assignee_name: '최QA',
   },
 ];
 
-// Mock RAG 답변
 export const MOCK_RAG_ANSWER = `## 인증 흐름 설명
 
 CatchUp 서비스의 인증 흐름은 다음과 같습니다:
@@ -131,54 +127,51 @@ public ResponseEntity<TokenDto> login(@RequestBody LoginRequest request) {
 - Refresh Token 유효기간: 7일
 `;
 
-// Mock RAG Response
 export const MOCK_RAG_RESPONSE = {
-  sessionId: '', // 동적 설정
+  session_id: '',
   answer: MOCK_RAG_ANSWER,
   sources: MOCK_SOURCES,
-  chatHistoryId: 'mock-chat-history-001',
-  hasFeedback: false,
+  chat_history_id: 'mock-chat-history-001',
+  has_feedback: false,
 };
 
-// Mock Related Jira Issues
 export const MOCK_RELATED_JIRA_ISSUES: ClientJiraIssueSource[] = [
   {
     index: 0,
-    isCited: true,
-    sourceType: 3,
-    relevanceScore: 0.9,
-    htmlUrl: 'https://jira.catchup.io/browse/CATCH-100',
+    is_cited: true,
+    source_type: 3,
+    relevance_score: 0.9,
+    html_url: 'https://jira.catchup.io/browse/CATCH-100',
     content: '인증 시스템 전반 개선 - OAuth 2.0 적용, 토큰 갱신 로직 개선, 보안 강화',
     owner: 'CATCH',
     repo: '',
     summary: '인증 시스템 개선',
-    projectName: 'CatchUp',
-    issueKey: 'CATCH-100',
-    parentKey: 'CATCH-EPIC-01',
-    parentSummary: '보안 강화 에픽',
+    project_name: 'CatchUp',
+    issue_key: 'CATCH-100',
+    parent_key: 'CATCH-EPIC-01',
+    parent_summary: '보안 강화 에픽',
   },
 ];
 
-// Mock PR Candidates (인터럽트용)
 export const MOCK_PR_CANDIDATES = [
   {
-    prNumber: 42,
+    pr_number: 42,
     title: 'feat: 로그인 페이지 리뉴얼',
-    repoName: 'CatchUp-FE',
+    repo_name: 'CatchUp-FE',
     summary: '로그인 폼 UI 개선 및 에러 처리 강화',
     owner: 'TeamCatchUp',
   },
   {
-    prNumber: 38,
+    pr_number: 38,
     title: 'fix: 토큰 갱신 버그 수정',
-    repoName: 'CatchUp-BE',
+    repo_name: 'CatchUp-BE',
     summary: 'Refresh Token 만료 시 처리 로직 수정',
     owner: 'TeamCatchUp',
   },
   {
-    prNumber: 55,
+    pr_number: 55,
     title: 'feat: OAuth 2.0 적용',
-    repoName: 'CatchUp-BE',
+    repo_name: 'CatchUp-BE',
     summary: '구글, 깃허브 소셜 로그인 지원',
     owner: 'TeamCatchUp',
   },

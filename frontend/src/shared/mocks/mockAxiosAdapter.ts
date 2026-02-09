@@ -93,9 +93,9 @@ const mockHandlers: MockHandler[] = [
     pattern: /^\/api\/chat$/,
     method: 'post',
     handler: async (_, data) => {
-      const requestData = data as { sessionId?: string } | undefined;
+      const requestData = data as { session_id?: string } | undefined;
       return {
-        sessionId: requestData?.sessionId || 'mock-session',
+        session_id: requestData?.session_id || 'mock-session',
         answer: '답변 생성을 시작합니다.',
         sources: [],
       };
@@ -105,9 +105,9 @@ const mockHandlers: MockHandler[] = [
     pattern: /^\/api\/chat\/stream\/resume$/,
     method: 'post',
     handler: async (_, data) => {
-      const requestData = data as { sessionId?: string } | undefined;
+      const requestData = data as { session_id?: string } | undefined;
       return {
-        sessionId: requestData?.sessionId || 'mock-session',
+        session_id: requestData?.session_id || 'mock-session',
         answer: '답변 생성을 재개합니다.',
         sources: [],
       };
@@ -172,10 +172,10 @@ const mockHandlers: MockHandler[] = [
     pattern: /^\/api\/chat\/feedback$/,
     method: 'post',
     handler: async (_, data) => {
-      const requestData = data as { chatHistoryId?: string; tags?: string[]; detail?: string } | undefined;
+      const requestData = data as { chat_history_id?: string; tags?: string[]; detail?: string } | undefined;
       return {
         ...MOCK_FEEDBACK_RESPONSE,
-        chatHistoryId: requestData?.chatHistoryId || 'mock-history',
+        chat_history_id: requestData?.chat_history_id || 'mock-history',
         tags: requestData?.tags || [],
         detail: requestData?.detail || '',
       };

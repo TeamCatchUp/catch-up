@@ -67,7 +67,7 @@ const createMockSSE = (options: MockSSEOptions): EventSource => {
           target: 'CHAT',
           message: null,
           data: {
-            sessionId,
+            session_id: sessionId,
             type: 'status',
             node: step,
             message: `Processing ${step}...`,
@@ -86,17 +86,17 @@ const createMockSSE = (options: MockSSEOptions): EventSource => {
               target: 'CHAT',
               message: null,
               data: {
-                sessionId,
+                session_id: sessionId,
                 type: 'result',
                 node: 'generate',
                 response: {
-                  sessionId,
+                  session_id: sessionId,
                   answer: MOCK_RAG_ANSWER,
-                  sources: MOCK_SOURCES,
-                  chatHistoryId: `mock-history-${Date.now()}`,
-                  hasFeedback: false,
+                  sources: MOCK_SOURCES as unknown as BackendSource[],
+                  chat_history_id: `mock-history-${Date.now()}`,
+                  has_feedback: false,
                 },
-                relatedJiraIssues: MOCK_RELATED_JIRA_ISSUES,
+                related_jira_issues: MOCK_RELATED_JIRA_ISSUES as unknown as BackendSource[],
               },
             });
           }, stepDelay);
