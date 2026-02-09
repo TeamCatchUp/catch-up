@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect,useState } from 'react';
+import { useState } from 'react';
 
 import { Tooltip, TooltipContent,TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import { cn } from '@/shared/utils/cn';
@@ -55,24 +55,23 @@ const TaskSelectionBar = ({
     onClose();
   };
 
-  // useEscapeKey(onClose);
-
-  useEffect(() => {
-    setExpandedTasks((prev) => {
-      const newState = { ...prev };
-      selectedTasks.forEach((task) => {
-        // 새로 추가된 task (한 번에 checked 되지 않은 task)
-        if (prev[task.taskId] === undefined) {
-          newState[task.taskId] = task.taskChecked;
-        }
-        // 하위 업무 check -> 해당 상위 업무 check 시 자동 expanded
-        else if (!task.taskChecked && prev[task.taskId] === false) {
-          newState[task.taskId] = true;
-        }
-      });
-      return newState;
+  // selectedTasks 변경 시 expandedTasks 동기화 (adjusting state during render)
+  const [prevSelectedTasks, setPrevSelectedTasks] = useState(selectedTasks);
+  if (prevSelectedTasks !== selectedTasks) {
+    setPrevSelectedTasks(selectedTasks);
+    const newState = { ...expandedTasks };
+    let changed = false;
+    selectedTasks.forEach((task) => {
+      if (expandedTasks[task.taskId] === undefined) {
+        newState[task.taskId] = task.taskChecked;
+        changed = true;
+      } else if (!task.taskChecked && expandedTasks[task.taskId] === false) {
+        newState[task.taskId] = true;
+        changed = true;
+      }
     });
-  }, [selectedTasks]);
+    if (changed) setExpandedTasks(newState);
+  }
 
   return (
     <div className="pointer-events-none absolute bottom-8 flex flex-col gap-2">

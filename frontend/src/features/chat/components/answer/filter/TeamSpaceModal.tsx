@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 
+import type { TeamSpace } from '@/features/chat/constants/config';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 import { cn } from '@/shared/utils/cn';
@@ -15,22 +16,10 @@ interface TeamSpaceModalProps {
   onSelect: (team: TeamSpace) => void;
 }
 
-const TEAM_SPACES = [
-  { id: 'fe', name: 'Catch Up | FE' },
-  { id: 'be', name: 'Catch Up | BE' },
-  { id: 'pm', name: 'Catch Up | 기획' },
-  { id: 'design', name: 'Catch Up | Design' },
-] as const;
-
-type TeamSpace = (typeof TEAM_SPACES)[number];
-
 const TeamSpaceModal = ({ onClose, teamSpaces, selectedId, onSelect }: TeamSpaceModalProps) => {
   const modalRef = useRef<HTMLDivElement>(null);
   useEscapeKey(onClose);
   useOutsideClick(modalRef, onClose);
-
-  const [selectedTeamSpaceId, setSelectedTeamSpaceId] = useState<string>(TEAM_SPACES[0].id);
-  const selectedTeamSpace = TEAM_SPACES.find((t) => t.id === selectedTeamSpaceId) ?? TEAM_SPACES[0];
 
   return (
     <div
@@ -53,7 +42,7 @@ const TeamSpaceModal = ({ onClose, teamSpaces, selectedId, onSelect }: TeamSpace
               isSelected && 'bg-neutral-3',
             )}
           >
-            <ArrowRight className="text-gray-70 h-6 w-6 flex-shrink-0" />
+            <ArrowRight className="text-gray-70 h-6 w-6 shrink-0" />
             <span className="text-body-small text-gray-80 min-w-0 truncate">{team.name}</span>
           </button>
         );

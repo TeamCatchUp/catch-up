@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback,useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { cn } from '@/shared/utils/cn';
@@ -44,17 +44,6 @@ const TaskCard = ({ tasks }: TaskCardProps) => {
   const [suppressAutoOpenSelectionBar, setSuppressAutoOpenSelectionBar] = useState(false);
   const [selectionBarDismissed, setSelectionBarDismissed] = useState(false);
 
-  // tasks가 바뀌면(새 답변) 체크맵 리셋
-  useEffect(() => {
-    setCheckedMap(createInitialCheckedMap(tasks));
-    setOpenMap({});
-    setDetailModal(null);
-    setShowSelectionBar(false);
-    setIsSelectionBarCollapsed(false);
-    setSelectionBarDismissed(false);
-    setSuppressAutoOpenSelectionBar(false);
-  }, [tasks]);
-
   // detail modal (업무 선택)
   const [detailModal, setDetailModal] = useState<{
     type: 'task' | 'subtask';
@@ -62,11 +51,19 @@ const TaskCard = ({ tasks }: TaskCardProps) => {
     subId?: string;
   } | null>(null);
 
-  // selection bar 표시 여부
-  const [showSelectionBar, setShowSelectionBar] = useState(false);
   const [isSelectionBarCollapsed, setIsSelectionBarCollapsed] = useState(false);
 
-  const detailModalBottom = showSelectionBar ? 305 : 30;
+  // tasks가 바뀌면(새 답변) 리셋 (adjusting state during render)
+  const [prevTasks, setPrevTasks] = useState(tasks);
+  if (prevTasks !== tasks) {
+    setPrevTasks(tasks);
+    setCheckedMap(createInitialCheckedMap(tasks));
+    setOpenMap({});
+    setDetailModal(null);
+    setIsSelectionBarCollapsed(false);
+    setSelectionBarDismissed(false);
+    setSuppressAutoOpenSelectionBar(false);
+  }
 
   // checked tasks 개수
   const selectedTasks = useMemo<SelectedTask[]>(() => {
@@ -97,12 +94,24 @@ const TaskCard = ({ tasks }: TaskCardProps) => {
     }, 0);
   }, [selectedTasks]);
 
-  // selection bar 표시 여부
-  useEffect(() => {
-    // bar 펼쳐진 상태 = 상세 업무 모달 동시 렌더링 0
-    setShowSelectionBar(totalCheckedCount > 0);
-    if (totalCheckedCount === 0) setIsSelectionBarCollapsed(false);
-  }, [totalCheckedCount]);
+  // totalCheckedCount가 0이 되면 관련 플래그 리셋 (adjusting state during render)
+  const [prevCheckedCount, setPrevCheckedCount] = useState(0);
+  if (prevCheckedCount !== totalCheckedCount) {
+    setPrevCheckedCount(totalCheckedCount);
+    if (totalCheckedCount === 0) {
+      setIsSelectionBarCollapsed(false);
+      setSelectionBarDismissed(false);
+      setSuppressAutoOpenSelectionBar(false);
+    }
+  }
+
+  // showSelectionBar: derived state (no useState/useEffect)
+  const showSelectionBar =
+    totalCheckedCount > 0 &&
+    !selectionBarDismissed &&
+    !(detailModal && suppressAutoOpenSelectionBar);
+
+  const detailModalBottom = showSelectionBar ? 305 : 30;
 
   // 상위 업무 (checkbox)
   const toggleTask = useCallback((task: JiraTask, opts?: ToggleOptions) => {
@@ -221,31 +230,22 @@ const TaskCard = ({ tasks }: TaskCardProps) => {
   };
 
   const handleDetailModalOpen = (type: 'task' | 'subtask', taskId: string, subId?: string) => {
-    // setShowSelectionBar(false);
     setDetailModal((prev) =>
       prev?.type === type && prev.taskId === taskId && prev.subId === subId ? null : { type, taskId, subId },
     );
   };
 
-  const opneDetail = (payload: { type: 'task' | 'subtask'; taskId: string; subId?: string }) => {
-    setDetailModal((prev) =>
-      prev?.type === payload.type && prev.taskId === payload.taskId && prev.subId === payload.subId ? null : payload,
-    );
-  };
-
   const handleClearAllFromSelectionBar = () => {
     setCheckedMap(createInitialCheckedMap(tasks));
-    setShowSelectionBar(false);
     setIsSelectionBarCollapsed(false);
     setSelectionBarDismissed(false);
-    setSuppressAutoOpenSelectionBar(false); // 상세 업무 모달 유지
+    setSuppressAutoOpenSelectionBar(false);
   };
 
   const onEsc = useCallback(() => {
     // 둘 다 열려있으면 둘 다 닫기
     if (detailModal && showSelectionBar) {
       setDetailModal(null);
-      setShowSelectionBar(false);
       setIsSelectionBarCollapsed(false);
       setSelectionBarDismissed(true);
       setSuppressAutoOpenSelectionBar(false);
@@ -261,7 +261,6 @@ const TaskCard = ({ tasks }: TaskCardProps) => {
 
     // selection만 열려있으면 selection만 닫기
     if (showSelectionBar) {
-      setShowSelectionBar(false);
       setIsSelectionBarCollapsed(false);
       setSelectionBarDismissed(true);
       setSuppressAutoOpenSelectionBar(false);
@@ -270,32 +269,6 @@ const TaskCard = ({ tasks }: TaskCardProps) => {
   }, [detailModal, showSelectionBar]);
 
   useEscapeKey(onEsc);
-
-  useEffect(() => {
-    // 선택이 없으면 완전 리셋
-    if (totalCheckedCount === 0) {
-      setShowSelectionBar(false);
-      setIsSelectionBarCollapsed(false);
-      setSelectionBarDismissed(false);
-      setSuppressAutoOpenSelectionBar(false);
-      return;
-    }
-
-    // 사용자가 esc로 닫아둔 상태면 자동 오픈 X
-    if (selectionBarDismissed) {
-      setShowSelectionBar(false);
-      return;
-    }
-
-    // 상세모달에서 체크한 직후에는 자동 오픈 X
-    if (detailModal && suppressAutoOpenSelectionBar) {
-      setShowSelectionBar(false);
-      return;
-    }
-
-    // 그 외 = 자동 오픈
-    setShowSelectionBar(true);
-  }, [totalCheckedCount, detailModal, suppressAutoOpenSelectionBar, selectionBarDismissed]);
 
   const shouldHideSelectionBar = !!detailModal && isSelectionBarCollapsed;
 
@@ -430,7 +403,7 @@ const TaskCard = ({ tasks }: TaskCardProps) => {
       {showSelectionBar && !shouldHideSelectionBar && (
         <div className="transition-all duration-200">
           <TaskSelectionBar
-            onClose={() => setShowSelectionBar(false)}
+            onClose={() => setSelectionBarDismissed(true)}
             onClearAll={handleClearAllFromSelectionBar}
             selectedTasks={selectedTasks}
             totalCheckedCount={totalCheckedCount}

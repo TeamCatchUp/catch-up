@@ -25,10 +25,6 @@ const RagHeader = ({ title, onSelectQuestion }: RagHeaderProps) => {
   const router = useRouter();
 
   const handleNewQuestion = () => {
-    // new 세션 ID 생성
-    const newSessionId = crypto.randomUUID();
-
-    // router.push(`/chat/${newSessionId}`);
     router.push(`/search`);
 
     setIsCatchModalOpen(false);

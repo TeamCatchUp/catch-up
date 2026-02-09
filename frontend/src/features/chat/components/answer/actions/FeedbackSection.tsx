@@ -42,6 +42,9 @@ const FeedbackSection = ({
     ...chatMutations.sendFeedback(),
     meta: { skipGlobalErrorHandler: true },
   });
+  // ref로 안정화 (useMutation 반환값은 매 렌더 새 객체 → deps에 넣으면 무한 루프)
+  const feedbackMutationRef = useRef(feedbackMutation);
+  feedbackMutationRef.current = feedbackMutation;
 
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailText, setDetailText] = useState('');
@@ -82,7 +85,7 @@ const FeedbackSection = ({
       setIsDetailOpen(false);
       setDetailText('');
       setShowThanks(false);
-      feedbackMutation.reset();
+      feedbackMutationRef.current.reset();
     }, SECTION_ANIM_MS);
 
     return () => clearTimeout(t);
@@ -179,13 +182,13 @@ const FeedbackSection = ({
 
   // feedbackSection 닫히면 detail 입력 초기화
   useEffect(() => {
-    if (!feedbackVisibleMap[messageId]) {
+    if (!isVisible) {
       setIsDetailOpen(false);
       setDetailText('');
       setShowThanks(false);
-      feedbackMutation.reset();
+      feedbackMutationRef.current.reset();
     }
-  }, [feedbackVisibleMap[messageId], messageId]);
+  }, [isVisible, messageId]);
 
   // detail panel 열고/닫을 때 마운트/enter 제어
   useEffect(() => {
@@ -205,7 +208,7 @@ const FeedbackSection = ({
 
   // 피드백 제출 완 -> 자동 감사 UI
   useEffect(() => {
-    if (hasFeedback && feedbackVisibleMap[messageId]) {
+    if (hasFeedback && isVisible) {
       setShowThanks(true);
 
       const timer = setTimeout(() => {
@@ -215,7 +218,7 @@ const FeedbackSection = ({
 
       return () => clearTimeout(timer);
     }
-  }, [hasFeedback, feedbackVisibleMap[messageId], messageId, setFeedbackVisibleMap]);
+  }, [hasFeedback, isVisible, messageId, setFeedbackVisibleMap]);
 
   // 감사 UI 자동 하단 스크롤
   useEffect(() => {
@@ -264,7 +267,7 @@ const FeedbackSection = ({
           detail,
         });
 
-        await feedbackMutation.mutateAsync({
+        await feedbackMutationRef.current.mutateAsync({
           chatHistoryId,
           tags,
           detail,
@@ -286,7 +289,7 @@ const FeedbackSection = ({
       } catch (e) {
         console.error('[feedback] submit failed', e);
         // 실패 시에도 이미 제출된 경우라면 감사 메시지 표시
-        const error = e as any;
+        const error = e as { response?: { status?: number } };
         if (error?.response?.status === 500) {
           // 500 에러 = 이미 제출된 피드백
           console.warn('[feedback] Already submitted, showing thanks message');
@@ -305,7 +308,7 @@ const FeedbackSection = ({
         }
         // 그 외 에러는 사용자가 다시 시도할 수 있도록 유지
       } finally {
-        feedbackMutation.reset();
+        feedbackMutationRef.current.reset();
       }
     },
     [

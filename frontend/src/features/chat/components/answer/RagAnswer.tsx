@@ -209,7 +209,7 @@ const RagAnswer = ({
           {currentQA.answer.content ? (
             <>
               {/* 마크다운 답변 */}
-              <div className="markdown-body max-w-192.75 break-words">
+              <div className="markdown-body max-w-192.75 wrap-break-words">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm, remarkBreaks]}
                   components={MarkDownComponents(currentQA.answer.sources)}

@@ -19,7 +19,7 @@ interface GithubPRStepSkeletonProps {
   onRefetch?: () => void; // 다시 찾기
 }
 
-const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSkeletonProps) => {
+const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps) => {
   const [selectedPrNumbers, setSelectedPrNumbers] = useState<number[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -76,15 +76,15 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
                 onClick={toggleAll}
                 className="icon-button-outline-gray flex h-7.5 cursor-pointer items-center gap-1 px-2 py-1"
               >
-                <CheckCircle className="text-gray-70 relative bottom-px h-6 w-6 flex-shrink-0" />
-                <span className="text-body-xsmall text-gray-80 flex-shrink-0">전체 선택</span>
+                <CheckCircle className="text-gray-70 relative bottom-px h-6 w-6 shrink-0" />
+                <span className="text-body-xsmall text-gray-80 shrink-0">전체 선택</span>
               </button>
               <button
                 // onClick={() => onRefetch?.()}
                 className="icon-button-outline-gray flex h-7.5 cursor-pointer items-center gap-1 px-2 py-1"
               >
-                <Rotate className="text-gray-70 relative bottom-px h-6 w-6 flex-shrink-0" />
-                <span className="text-body-xsmall text-gray-80 flex-shrink-0">다시 찾기</span>
+                <Rotate className="text-gray-70 relative bottom-px h-6 w-6 shrink-0" />
+                <span className="text-body-xsmall text-gray-80 shrink-0">다시 찾기</span>
               </button>
             </div>
             <button
@@ -134,7 +134,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
                       </div>
                       {/* 설명 */}
                       <div className="flex w-156 items-center gap-1.5">
-                        <span className="text-heading-small text-gray-80 flex-shrink-0">설명:</span>
+                        <span className="text-heading-small text-gray-80 shrink-0">설명:</span>
                         <span className="text-body-small text-gray-70 max-w-147.25 truncate">
                           {pr.summary || '설명 없음'}
                         </span>

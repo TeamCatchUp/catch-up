@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect,useState } from 'react';
+import { useState } from 'react';
 
 import { cn } from '@/shared/utils/cn';
 
@@ -48,8 +48,6 @@ const TaskDetailModal = ({
   onToggleCheck,
   onPrev,
   onNext,
-  disablePrev,
-  disableNext,
   bottomOffset = 30,
 }: TaskDetailModalProps) => {
   const [activeTab, setActiveTab] = useState<TabType>('info');
@@ -92,12 +90,6 @@ const TaskDetailModal = ({
         return <CommentsTabContent />;
       default:
         return <EmptyState />;
-    }
-  };
-
-  const handleTabClick = (tab: (typeof tabs)[0]) => {
-    if (!tab.locked) {
-      setActiveTab(tab.id);
     }
   };
 

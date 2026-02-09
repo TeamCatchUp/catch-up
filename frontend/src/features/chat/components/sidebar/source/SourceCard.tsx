@@ -14,7 +14,7 @@ interface Props {
   count?: number;
 }
 
-const SOURCE_ICON_MAP: Record<ChatSource['sourceType'], React.FC<any>> = {
+const SOURCE_ICON_MAP: Record<ChatSource['sourceType'], React.FC<React.SVGProps<SVGSVGElement>>> = {
   // file: File,
   // wiki: Wiki,
   // url: Link,

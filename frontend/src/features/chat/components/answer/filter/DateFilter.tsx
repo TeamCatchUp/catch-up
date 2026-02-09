@@ -22,7 +22,7 @@ interface FilterComponentsProps {
   onClose: () => void;
 }
 
-const DateFilter = ({ isOpen, onClose }: FilterComponentsProps) => {
+const DateFilter = ({ onClose }: FilterComponentsProps) => {
   const [activeFilters, setActiveFilters] = useState<number[]>([1]);
   // const [keyword, setKeyword] = useState('');
   // const [secondKeyword, setSecondKeyword] = useState('');
