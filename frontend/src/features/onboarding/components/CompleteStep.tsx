@@ -3,8 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { useCompleteOnboarding } from '../api/onboarding.queries';
-import type { OnboardingSteps } from '../model/onboarding.types';
+import { useCompleteOnboarding } from '../mutations';
+import type { OnboardingSteps } from '../types/onboarding';
 
 interface CompleteStepProps {
   data: OnboardingSteps['Complete'];

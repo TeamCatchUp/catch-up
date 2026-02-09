@@ -1,14 +1,9 @@
-import { queryOptions, useMutation } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type {
-  ConnectorFormData,
-  ConnectorOptions,
-  OrgInfoFormData,
-  ProfileFormData,
-} from '../model/onboarding.types';
+import type { ConnectorFormData, OrgInfoFormData, ProfileFormData } from './types/onboarding';
 
 export function useSubmitProfile() {
   return useMutation({
@@ -30,15 +25,3 @@ export function useCompleteOnboarding() {
       api.post(API.onboarding.complete, data),
   });
 }
-
-export const connectorQueries = {
-  all: () => ['onboarding', 'connectors'] as const,
-  list: () =>
-    queryOptions({
-      queryKey: connectorQueries.all(),
-      queryFn: async (): Promise<ConnectorOptions> => {
-        const res = await api.get<ConnectorOptions>(API.onboarding.connectors);
-        return res.data;
-      },
-    }),
-};

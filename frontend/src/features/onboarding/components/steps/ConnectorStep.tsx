@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import { connectorQueries } from '../../api/onboarding.queries';
-import type { ConnectorFormData } from '../../model/onboarding.types';
+import { connectorQueries } from '../../queries';
+import type { ConnectorFormData } from '../../types/onboarding';
 import { ConnectorSelect } from '../ConnectorSelect';
 import { StepIndicator } from '../StepIndicator';
 import { StepNavButtons } from '../StepNavButtons';

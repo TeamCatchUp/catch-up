@@ -4,8 +4,8 @@ import { useFunnel } from '@use-funnel/browser';
 
 import { useUserStore } from '@/shared/store/userStore';
 
-import { useSubmitOrganization, useSubmitProfile } from '../api/onboarding.queries';
-import type { OnboardingSteps } from '../model/onboarding.types';
+import { useSubmitOrganization, useSubmitProfile } from '../mutations';
+import type { OnboardingSteps } from '../types/onboarding';
 import { CompleteStep } from './CompleteStep';
 import { OnboardingLayout } from './OnboardingLayout';
 import { ConnectorStep } from './steps/ConnectorStep';
