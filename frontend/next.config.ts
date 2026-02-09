@@ -24,7 +24,7 @@ const nextConfig = {
 
   webpack(config) {
     const fileLoaderRule = config.module.rules.find(
-      (rule: any) => rule?.test instanceof RegExp && rule.test.test('.svg'),
+      (rule: { test?: RegExp }) => rule?.test instanceof RegExp && rule.test.test('.svg'),
     );
 
     config.module.rules.push({

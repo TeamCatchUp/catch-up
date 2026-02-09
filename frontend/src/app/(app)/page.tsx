@@ -4,7 +4,6 @@ import { useRef, useState } from 'react';
 
 import HowToUse from '@/features/home/components/HowToUse';
 import LinkTool from '@/features/home/components/LinkTool';
-import TaskRecentlyChecked from '@/features/home/components/TaskRecentlyChecked';
 import TaskRecentlyCheckedModal from '@/features/home/components/TaskRecentlyCheckedModal';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import ExplorerPanel from '@/shared/components/query/ExplorerPanel';

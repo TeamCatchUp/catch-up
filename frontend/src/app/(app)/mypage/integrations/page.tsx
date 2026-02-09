@@ -74,7 +74,7 @@ export default function ToolPage() {
               </div>
               <div
                 onClick={() => window.open('https://id.atlassian.com/manage-profile/profile-and-visibility', '_blank')}
-                className="box-button-outline-gray !border-neutral-4 flex cursor-pointer flex-col items-start gap-2.5 rounded-xl border px-3 py-2"
+                className="box-button-outline-gray border-neutral-4! flex cursor-pointer flex-col items-start gap-2.5 rounded-xl border px-3 py-2"
               >
                 <div className="flex items-center gap-4">
                   <IconAT className="h-5 w-5" />
@@ -92,9 +92,9 @@ export default function ToolPage() {
                 <div className="text-gray-80 text-heading-medium">2. 보안 설정 이동 및 토큰 생성</div>
                 <Image src={ImgAPItoken1} alt="apitoken" />
                 <div className="text-body-small text-gray-70">
-                  1) 상단 메뉴 또는 페이지 내에서 '보안(Security)' 탭을 클릭합니다.
+                  1) 상단 메뉴 또는 페이지 내에서 &apos;보안(Security)&apos; 탭을 클릭합니다.
                   <br />
-                  2) 'API 토큰 만들기 및 관리(Create and manage API tokens)' 항목을 찾아 클릭합니다. <br />
+                  2) &apos;API 토큰 만들기 및 관리(Create and manage API tokens)&apos; 항목을 찾아 클릭합니다. <br />
                   3) 페이지 상단의 [API 토큰 만들기] 버튼을 누릅니다.
                 </div>
                 <Image src={ImgAPItoken} alt="apitoken" />

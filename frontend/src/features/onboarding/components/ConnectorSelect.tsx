@@ -64,6 +64,8 @@ export function ConnectorSelect({
                   <Image
                     src={selected.picture}
                     alt="프로필"
+                    width={40}
+                    height={40}
                     className="size-10 shrink-0 rounded-full border border-neutral-1"
                   />
                 ) : (
@@ -114,9 +116,11 @@ export function ConnectorSelect({
                   className="gap-3 rounded-none border-b border-neutral-2 px-3 py-2"
                 >
                   {account.picture ? (
-                    <img
+                    <Image
                       src={account.picture}
                       alt=""
+                      width={40}
+                      height={40}
                       className="size-10 shrink-0 rounded-full border border-neutral-1"
                     />
                   ) : (

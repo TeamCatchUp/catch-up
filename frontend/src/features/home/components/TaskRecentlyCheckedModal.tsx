@@ -11,11 +11,7 @@ import Cancel from '/public/icons/icon/cancel.svg';
 import Chat from '/public/icons/icon/chat.svg';
 import EditSquare from '/public/icons/icon/edit_square.svg';
 import Link from '/public/icons/icon/link.svg';
-import NotionLogo from '/public/icons/icon/Notion.svg';
 import Share from '/public/icons/icon/share_2.svg';
-import WikiLogo from '/public/icons/icon/Wiki.svg';
-import ConfluenceLogo from '/public/icons/logo/Confluence.svg';
-import GithubLogo from '/public/icons/logo/GitHub.svg';
 import SlackLogo from '/public/icons/logo/Slack.svg';
 
 interface TaskRecentlyCheckedModalProps {
