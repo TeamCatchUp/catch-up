@@ -29,7 +29,7 @@ export function RecentSearchList({ title, querys }: RecentSearchListProps) {
       <div className="flex flex-col gap-1">
         {displayedQuerys.map((item, index) => (
           <Link
-            href={`/chat/${item.sessionId}`}
+            href={`/chat/${item.session_id}`}
             key={`recent-query-${index}`}
             className="hover:bg-neutral-2 group flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl bg-white px-2 py-1 transition-colors"
           >

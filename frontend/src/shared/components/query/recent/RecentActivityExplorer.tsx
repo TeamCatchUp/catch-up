@@ -19,15 +19,15 @@ export const RecentActivityExplorer = () => {
     if (!queriesQuery.data?.content) return [];
     return queriesQuery.data.content.map((item) => ({
       query: item.query,
-      sessionId: item.sessionId,
-      date: formatShortDate(item.createdAt),
+      session_id: item.session_id,
+      date: formatShortDate(item.created_at),
     }));
   }, [queriesQuery.data]);
 
   const jiraTickets = useMemo(() => {
     if (!jiraQuery.data) return [];
     return jiraQuery.data.map((ticket) => ({
-      id: ticket.issueKey,
+      id: ticket.issue_key,
       label: ticket.summary,
     }));
   }, [jiraQuery.data]);

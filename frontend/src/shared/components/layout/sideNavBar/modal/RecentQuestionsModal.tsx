@@ -31,9 +31,9 @@ const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
     if (!data?.content) return [];
     return data.content.map((item) => ({
       query: item.query,
-      sessionId: item.sessionId,
-      date: formatFullDate(item.createdAt),
-      rawDate: new Date(item.createdAt),
+      session_id: item.session_id,
+      date: formatFullDate(item.created_at),
+      rawDate: new Date(item.created_at),
     }));
   }, [data]);
 

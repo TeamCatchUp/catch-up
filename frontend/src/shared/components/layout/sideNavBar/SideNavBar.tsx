@@ -32,7 +32,7 @@ import CatchupLogoLetter from '/public/icons/logo/logo_catchup_letter.svg';
 
 interface ChatRoomQuery {
   title: string;
-  sessionId: string;
+  session_id: string;
 }
 
 const TEAM_SPACES = [
@@ -68,7 +68,7 @@ const SideNavBar = () => {
     return chatroomData.content
       .map((item) => ({
         title: item.title,
-        sessionId: item.sessionId,
+        session_id: item.session_id,
       }))
       .reverse();
   }, [chatroomData]);
@@ -321,12 +321,12 @@ const SideNavBar = () => {
             </button>
             <div className="mt-2 flex flex-col overflow-y-auto">
               {recentChatrooms.map((chatroom) => {
-                const isActive = pathname === `/chat/${chatroom.sessionId}`;
+                const isActive = pathname === `/chat/${chatroom.session_id}`;
 
                 return (
                   <Link
-                    href={`/chat/${chatroom.sessionId}`}
-                    key={chatroom.sessionId}
+                    href={`/chat/${chatroom.session_id}`}
+                    key={chatroom.session_id}
                     className={cn(
                       'group flex cursor-pointer rounded-lg py-2',
                       isActive ? selectedClass : defaultClass,
