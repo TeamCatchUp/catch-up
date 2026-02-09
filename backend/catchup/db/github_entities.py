@@ -13,7 +13,11 @@ from sqlalchemy import select, delete, and_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from catchup.db.models import GitHubRepository as GitHubRepositoryModel
+from catchup.db.models import (
+    GitHubRepository as GitHubRepositoryModel,
+    GitHubUser as GitHubUserModel,
+    GitHubOrganizationRole,
+)
 
 
 def get_repository(
@@ -296,3 +300,142 @@ def _to_int(value: Any, default: int = 0) -> int:
         return int(value)
     except (ValueError, TypeError):
         return default
+
+
+# ============================================================
+# GitHub User CRUD
+# ============================================================
+
+def get_user(
+    db: Session,
+    database_id: int,
+) -> GitHubUserModel | None:
+    """User 조회 by database_id"""
+    stmt = select(GitHubUserModel).where(
+        GitHubUserModel.database_id == database_id
+    )
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def get_user_by_login(
+    db: Session,
+    login: str,
+) -> GitHubUserModel | None:
+    """User 조회 by login"""
+    stmt = select(GitHubUserModel).where(
+        GitHubUserModel.login == login
+    )
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def upsert_user(
+    db: Session,
+    database_id: int,
+    login: str,
+    name: str | None = None,
+    email: str | None = None,
+    avatar_url: str | None = None,
+    org_role: GitHubOrganizationRole | None = None,
+) -> GitHubUserModel:
+    """
+    User 정보 Upsert
+
+    Args:
+        db: SQLAlchemy Session
+        database_id: GitHub User ID (databaseId from GraphQL)
+        login: GitHub login (username)
+        name: Display name
+        email: Email (public only)
+        avatar_url: Avatar URL
+        org_role: Organization role (ADMIN/MEMBER)
+
+    Returns:
+        Upsert된 GitHubUser
+    """
+    values = {
+        "database_id": database_id,
+        "login": login,
+        "name": name,
+        "email": email,
+        "avatar_url": avatar_url,
+        "org_role": org_role.value if org_role else None,
+    }
+
+    stmt = insert(GitHubUserModel).values(**values)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["database_id"],
+        set_={
+            "login": stmt.excluded.login,
+            "name": stmt.excluded.name,
+            "email": stmt.excluded.email,
+            "avatar_url": stmt.excluded.avatar_url,
+            "org_role": stmt.excluded.org_role,
+        }
+    )
+
+    db.execute(stmt)
+    db.commit()
+
+    return get_user(db, database_id)
+
+
+def upsert_users_bulk(
+    db: Session,
+    users_data: list[dict[str, Any]],
+) -> int:
+    """
+    User 정보 벌크 Upsert
+
+    Args:
+        db: SQLAlchemy Session
+        users_data: User 정보 리스트
+            - database_id: GitHub User ID
+            - login: GitHub login
+            - name: Display name (optional)
+            - email: Email (optional)
+            - avatar_url: Avatar URL (optional)
+            - org_role: Organization role (optional)
+
+    Returns:
+        Upsert된 User 수
+    """
+    if not users_data:
+        return 0
+
+    values_list = []
+    for user in users_data:
+        org_role = user.get("org_role")
+        if isinstance(org_role, GitHubOrganizationRole):
+            org_role = org_role.value
+
+        values_list.append({
+            "database_id": _to_int(user.get("database_id")),
+            "login": user.get("login", ""),
+            "name": user.get("name"),
+            "email": user.get("email"),
+            "avatar_url": user.get("avatar_url"),
+            "org_role": org_role,
+        })
+
+    stmt = insert(GitHubUserModel).values(values_list)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["database_id"],
+        set_={
+            "login": stmt.excluded.login,
+            "name": stmt.excluded.name,
+            "email": stmt.excluded.email,
+            "avatar_url": stmt.excluded.avatar_url,
+            "org_role": stmt.excluded.org_role,
+        }
+    )
+
+    db.execute(stmt)
+    db.commit()
+
+    return len(values_list)
+
+
+def get_all_users(db: Session) -> list[GitHubUserModel]:
+    """모든 User 조회"""
+    stmt = select(GitHubUserModel).order_by(GitHubUserModel.login)
+    return list(db.execute(stmt).scalars().all())

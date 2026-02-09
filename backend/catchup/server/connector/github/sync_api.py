@@ -21,8 +21,8 @@ from catchup.db.dependencies import get_db
 from catchup.db import github_sync, github_entities
 from catchup.db.models import GitHubEntityType
 from catchup.db.github_installation import get_installation_by_installation_id
-from catchup.auth.github.app import get_github_app_service
-from catchup.components.connectors.github.service import GitHubIngestionService
+from catchup.connectors.github.auth import get_github_app_service
+from catchup.connectors.github.service import GitHubIngestionService
 
 logger = logging.getLogger(__name__)
 
