@@ -14,13 +14,13 @@ import DownloadIcon from '@/public/icons/icon/download.svg';
 import EditIcon from '@/public/icons/icon/edit_pencil.svg';
 import FilterIcon from '@/public/icons/icon/filter.svg';
 import HomeIcon from '@/public/icons/icon/home.svg';
+import TagIcon from '@/public/icons/icon/icon_type.svg';
 import InventoryIcon from '@/public/icons/icon/inventory.svg';
 import KebabIcon from '@/public/icons/icon/kebab.svg';
 import LinkIcon from '@/public/icons/icon/link.svg';
 import SearchIcon from '@/public/icons/icon/search.svg';
 import SettingsIcon from '@/public/icons/icon/settings.svg';
 import ShareIcon from '@/public/icons/icon/share.svg';
-import TagIcon from '@/public/icons/icon/icon_type.svg';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
@@ -150,6 +150,7 @@ export default function UIPreviewPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   return (
+    <TooltipProvider>
     <div className="flex min-h-screen bg-white">
       {/* ── Sticky sidebar nav ── */}
       <nav className="sticky top-0 h-screen w-56 shrink-0 overflow-y-auto border-r border-neutral-3 bg-white p-4">
@@ -696,7 +697,6 @@ export default function UIPreviewPage() {
             <p className="text-body-xsmall text-gray-50 mb-2">
               (TooltipProvider가 필요합니다. 아래는 Tooltip이 적용될 SNB 아이콘 예시입니다.)
             </p>
-            <TooltipProvider>
               <div className="flex items-center gap-6">
                 {[
                   { icon: <HomeIcon className={IC} />, label: '홈' },
@@ -713,7 +713,6 @@ export default function UIPreviewPage() {
                   </Tooltip>
                 ))}
               </div>
-            </TooltipProvider>
           </Section>
         </div>
 
@@ -1039,5 +1038,6 @@ export default function UIPreviewPage() {
         <div className="h-20" />
       </main>
     </div>
+    </TooltipProvider>
   );
 }
