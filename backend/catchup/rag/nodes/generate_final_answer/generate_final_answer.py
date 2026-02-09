@@ -95,11 +95,11 @@ def _prepare_fixed_context_and_sources(
         )
 
         if document.metadata.get("db_origin") == "graph":
-            line = f"[{i}] [Graph Data] {document.page_content}"
+            line = f"[{i}] [Graph Data] {document.metadata.get('display_content', '')}"
             
         else:
             source_type = document.metadata.get("source", "Document")
-            line = f"[{i}] (Source: {source_type}\n{document.page_content})"
+            line = f"[{i}] (Source: {source_type}\n{document.metadata.get('display_content', '')})"
 
         context_lines.append(line)
         sources.append(source_dto)

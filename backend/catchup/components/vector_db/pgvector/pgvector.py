@@ -281,5 +281,5 @@ if __name__ == "__main__":
     print("\n>>> [검색 테스트] '파이썬' 검색")
     results = pg_service.hybrid_search("파이썬", k=1)
     for doc in results:
-        print(f"ID: {doc.id} | Content: {doc.page_content}")
+        print(f"ID: {doc.id} | Content: {doc.metadata.get('display_content', '')}")
         # ID가 0e2f... 로 나오면 성공!
