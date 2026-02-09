@@ -28,8 +28,6 @@ async def generate_final_answer_node(state: AgentState):
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
     context_text, final_sources = _prepare_fixed_context_and_sources(retrieved_docs)
     
-    logger.info(f"final_source:{final_sources}")
-
     query = state["rewritten_query"]
     forced_query = _build_forced_query(query)
 
@@ -57,7 +55,7 @@ async def generate_final_answer_node(state: AgentState):
                     "role": state.get("role", "user"),
                 }
             )
-            logger.info(full_answer)
+            logger.info(f"full_answer: {full_answer}")
 
     except Exception as e:
         logger.warning(f"Generate final answer failed: {e}")
@@ -97,11 +95,11 @@ def _prepare_fixed_context_and_sources(
         )
 
         if document.metadata.get("db_origin") == "graph":
-            line = f"[{i}] [Graph Data] {document.page_content}"
+            line = f"[{i}] [Graph Data] {document.metadata.get('display_content', '')}"
             
         else:
             source_type = document.metadata.get("source", "Document")
-            line = f"[{i}] (Source: {source_type}\n{document.page_content})"
+            line = f"[{i}] (Source: {source_type}\n{document.metadata.get('display_content', '')})"
 
         context_lines.append(line)
         sources.append(source_dto)

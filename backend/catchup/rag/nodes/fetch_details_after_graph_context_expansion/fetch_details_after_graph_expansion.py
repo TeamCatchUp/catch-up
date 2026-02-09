@@ -29,8 +29,6 @@ async def fetch_details_after_graph_context_expansion_node(state: AgentState):
             vector_db.get_documents_by_ids, list(target_ids)
         )
 
-        logger.info(fetched_docs)
-
         if fetched_docs:
             logger.info(f"상세 문서 {len(fetched_docs)}개 조회 성공.")
 
