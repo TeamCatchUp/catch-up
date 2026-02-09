@@ -35,7 +35,14 @@ const nextConfig = {
     config.module.rules.push({
       test: /\.svg$/i,
       issuer: fileLoaderRule.issuer,
-      use: ['@svgr/webpack'],
+      use: [
+        {
+          loader: '@svgr/webpack',
+          options: {
+            dimensions: true,
+          },
+        },
+      ],
     });
 
     // fileLoaderRule.exclude = /\.svg$/i;
