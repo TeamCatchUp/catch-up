@@ -3,6 +3,7 @@ import logging
 import time
 from typing import Any, AsyncGenerator
 
+from langchain_community.docstore import document
 from langchain_core.messages import HumanMessage
 from langfuse import observe
 
@@ -16,6 +17,7 @@ from catchup.chat.schemas import (
     StreamEvent,
 )
 from catchup.rag.graph import get_compiled_graph
+from catchup.rag.schemas.sources import BaseSource
 from catchup.utils.redis import get_langgraph_checkpointer
 
 logger = logging.getLogger(__name__)
@@ -116,12 +118,16 @@ class ChatService:
 
             if name == "generate_final_answer":
                 input_data = event["data"].get("input", {})
-                docs = input_data.get("retrieve_docs", [])
+                candidate_citations = input_data.get("retrieved_docs", [])
+                logger.info(f"candidate_citations: {candidate_citations}")
 
                 sources = []
-                # TODO: Source 담아서 보내야 함.
-                # if docs:
-                #     sources = []
+                if candidate_citations:
+                    for i, document in enumerate(candidate_citations, start=1):
+                        sources.append(BaseSource.from_document(
+                            index=i,
+                            doc=document
+                        ))
 
                 yield ChatStreamingSourceResponse(
                     session_id=session_id, sources=sources
@@ -143,3 +149,4 @@ class ChatService:
             from catchup.observability.langfuse_client import langfuse_handler
             default_config["callbacks"] = [langfuse_handler]
         return default_config
+    

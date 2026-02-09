@@ -3,7 +3,7 @@ from typing import Annotated, Any, Literal, TypedDict, Optional
 from langchain_core.documents import Document
 from langgraph.graph.message import add_messages
 
-from catchup.rag.schemas import GraphDbSearchQuery, JiraSource, VectorDbSearchQuery
+from catchup.rag.schemas.structures import GraphDbSearchQuery, VectorDbSearchQuery
 
 
 class AgentState(TypedDict):
@@ -23,6 +23,5 @@ class AgentState(TypedDict):
     grade_status: Literal["good", "bad", "no_relationship", "max_retries"] 
     
     sources: list[dict[str, Any]]  # 최종 출처 목록
-    related_jira_issues: list[JiraSource]  # 사용자 쿼리와 유사한 Jira Issue 목록
     
     retry_count: int  # 최대 2회 제한용

@@ -7,7 +7,7 @@ from catchup.rag.nodes.generate_vector_queries.prompt import (
     VECTOR_QUERIES_GENERATION_PROMPT,
 )
 from catchup.rag.nodes.utils import llm_semaphore, log_node
-from catchup.rag.schemas import VectorDbSearchPlan, VectorDbSearchQuery
+from catchup.rag.schemas.structures import VectorDbSearchPlan, VectorDbSearchQuery
 from catchup.rag.state import AgentState
 
 logger = logging.getLogger(__name__)

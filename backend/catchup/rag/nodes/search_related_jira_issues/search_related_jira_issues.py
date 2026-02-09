@@ -2,7 +2,7 @@ import logging
 
 from catchup.components.vector_db.factory import VectorDbProvider, get_vector_db_service
 from catchup.rag.nodes.utils import get_latest_query
-from catchup.rag.schemas import JiraSource
+from catchup.rag.schemas.structures import JiraSource
 from catchup.rag.state import AgentState
 from catchup.search.schemas import JiraIssueSearchResult
 

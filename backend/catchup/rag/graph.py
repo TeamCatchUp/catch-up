@@ -58,7 +58,7 @@ def get_compiled_graph(
         "grade",
         route_after_grade,
         {
-            "generate": "generate_final_answer",
+            "generate_final_answer": "generate_final_answer",
             "rewrite": "rewrite",
             "expand_graph_context": "expand_graph_context",
             "fallback_cypher_query": "fallback_cypher_query"

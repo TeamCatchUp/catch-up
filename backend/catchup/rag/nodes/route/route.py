@@ -5,7 +5,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from catchup.components.llm.factory import get_llm_service, LlmProvider
 from catchup.rag.nodes.route.prompt import SYSTEM_QUERY_ROUTER_PROMPT
 from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
-from catchup.rag.schemas import RouteQuery
+from catchup.rag.schemas.structures import RouteQuery
 from catchup.rag.state import AgentState
 
 logger = logging.getLogger(__name__)
