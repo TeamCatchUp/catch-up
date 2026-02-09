@@ -306,7 +306,7 @@ class GithubInstallation(Base):
 
     @classmethod
     def from_webhook_payload(cls, payload: "InstallationWebhookPayload") -> "GithubInstallation":
-        from catchup.auth.github.schemas import InstallationWebhookPayload
+        from catchup.connectors.github.schemas import InstallationWebhookPayload
 
         account = payload.installation.account
         installation = payload.installation
@@ -602,6 +602,7 @@ class GitHubEntityType(StrEnum):
     PULL_REQUEST = "pull_request"
     COMMIT = "commit"
     REPOSITORY = "repository"
+    USER = "user"
 
 
 class GitHubSyncState(Base):

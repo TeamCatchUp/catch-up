@@ -333,3 +333,50 @@ class GitHubRepository(BaseModel):
     created_at: datetime
     updated_at: datetime
     pushed_at: datetime | None = None
+
+
+# ============================================================
+# Webhook Payload 스키마 (GitHub App 설치/관리 이벤트)
+# ============================================================
+
+class GitHubAccount(BaseModel):
+    """GitHub App이 설치된 계정 (Organization 또는 User)"""
+    id: int
+    login: str
+    type: str  # "Organization" or "User"
+    avatar_url: Optional[str] = None
+
+
+class GitHubInstallationInfo(BaseModel):
+    id: int
+    account: GitHubAccount
+    app_id: int
+    repository_selection: Optional[str] = None  # "all" or "selected"
+    suspended_at: Optional[datetime] = None
+
+
+class GitHubSender(BaseModel):
+    id: int
+    login: str
+
+
+class InstallationWebhookPayload(BaseModel):
+    """
+    GitHub App Installation Webhook Payload
+    - action: created, deleted, suspend, unsuspend, new_permissions_accepted
+    """
+    action: str
+    installation: GitHubInstallationInfo
+    sender: GitHubSender
+
+
+class InstallationRepositoriesWebhookPayload(BaseModel):
+    """
+    Installation Repositories Webhook Payload
+    - action: added, removed
+    """
+    action: str
+    installation: GitHubInstallationInfo
+    repositories_added: list = Field(default_factory=list)
+    repositories_removed: list = Field(default_factory=list)
+    sender: GitHubSender

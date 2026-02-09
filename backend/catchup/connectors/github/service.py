@@ -43,8 +43,8 @@ from catchup.connectors.github.schemas import (
 from catchup.connectors.github.transformers import GitHubTransformer
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
 from catchup.configs.config import settings
-from catchup.db import github_sync, github_entities
-from catchup.db.models import GitHubEntityType, GitHubSyncStatus
+from catchup.db import github_sync, github_entities, github_installation
+from catchup.db.models import GitHubEntityType, GitHubSyncStatus, GithubInstallationType
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,7 @@ class GitHubIngestionService:
         sync_prs: bool = True,
         sync_commits: bool = False,  # Deprecated: Commit은 PR Document에 포함
         sync_repos: bool = True,
+        sync_users: bool = False,  # Installation 시점에 동기화되므로 기본 False
         branch: str | None = None,
     ) -> dict[str, Any]:
         """
@@ -118,6 +119,7 @@ class GitHubIngestionService:
             sync_prs: PR 동기화 여부
             sync_commits: Deprecated (무시됨). Commit은 PR Document에 포함됨
             sync_repos: Repository 메타데이터 동기화 여부
+            sync_users: User 동기화 여부 (기본 False - Installation 시점에 동기화됨)
             branch: 코드베이스 동기화 대상 브랜치 (향후 구현 예정, 현재 미사용)
 
         Returns:
@@ -127,9 +129,16 @@ class GitHubIngestionService:
             "repositories": {"synced": 0, "errors": 0},
             "issues": {"synced": 0, "errors": 0},
             "pull_requests": {"synced": 0, "errors": 0},
+            "users": {"synced": 0, "errors": 0},
         }
 
         try:
+            # 0. User 동기화 (Organization 멤버 → RDBMS)
+            if sync_users:
+                user_result = await self._sync_users(db)
+                results["users"]["synced"] = user_result.get("synced", 0)
+                results["users"]["errors"] = user_result.get("errors", 0)
+
             # 1. Repository 목록 조회 및 RDBMS 저장
             if sync_repos or repo_ids is None:
                 repos_to_sync = await self._sync_repositories(db)
@@ -171,6 +180,87 @@ class GitHubIngestionService:
         except Exception as e:
             logger.error(f"Full sync failed: {e}")
             raise
+
+    async def _sync_users(self, db: Session) -> dict[str, int]:
+        """
+        Organization 멤버 동기화 (RDBMS 저장)
+
+        Installation이 Organization에 설치된 경우에만 동기화.
+        User 계정에 설치된 경우 해당 User만 저장.
+
+        Returns:
+            동기화 결과 {"synced": N, "errors": N}
+        """
+        try:
+            # Installation 정보 조회
+            installation = github_installation.get_installation_by_installation_id(
+                db, self.installation_id
+            )
+
+            if not installation:
+                logger.warning(f"Installation {self.installation_id} not found in DB")
+                return {"synced": 0, "errors": 0}
+
+            account_login = installation.account_login
+            account_type = installation.account_type
+
+            logger.info(
+                f"Syncing users for {account_type} '{account_login}' "
+                f"(installation_id={self.installation_id})"
+            )
+
+            users_data = []
+
+            if account_type == GithubInstallationType.ORGANIZATION:
+                # Organization 멤버 조회 (GraphQL)
+                try:
+                    members = await self.client.list_org_members_graphql(account_login)
+                    logger.info(f"Found {len(members)} members in organization '{account_login}'")
+                    users_data.extend(members)
+                except GitHubApiError as e:
+                    # Organization 멤버 조회 권한이 없을 수 있음
+                    logger.warning(
+                        f"Failed to fetch org members for '{account_login}': {e}. "
+                        "Organization members permission may be required."
+                    )
+                    return {"synced": 0, "errors": 1}
+
+            else:
+                # User 계정인 경우 해당 User 정보만 조회
+                try:
+                    user_info = await self.client.get_user(account_login)
+                    if user_info:
+                        users_data.append({
+                            "database_id": user_info.get("id"),
+                            "login": user_info.get("login"),
+                            "name": user_info.get("name"),
+                            "email": user_info.get("email"),
+                            "avatar_url": user_info.get("avatar_url"),
+                            "org_role": None,
+                        })
+                        logger.info(f"Found user '{account_login}'")
+                except GitHubApiError as e:
+                    logger.warning(f"Failed to fetch user '{account_login}': {e}")
+                    return {"synced": 0, "errors": 1}
+
+            # RDBMS에 벌크 저장
+            if users_data:
+                github_entities.upsert_users_bulk(db, users_data)
+
+                # User 캐시 업데이트 (멘션 변환용)
+                for user in users_data:
+                    self.user_cache[user["login"]] = GitHubUser(
+                        id=user["database_id"],
+                        login=user["login"],
+                        avatar_url=user.get("avatar_url"),
+                    )
+
+            logger.info(f"User sync completed: {len(users_data)} users synced")
+            return {"synced": len(users_data), "errors": 0}
+
+        except Exception as e:
+            logger.error(f"User sync failed: {e}")
+            return {"synced": 0, "errors": 1}
 
     async def _sync_repositories(self, db: Session) -> list[str]:
         """
@@ -432,6 +522,8 @@ class GitHubIngestionService:
         }
 
         try:
+            # Note: User는 Installation 시점에 동기화되므로 여기서는 생략
+
             # Repository 목록 조회
             repos_to_sync = await self._sync_repositories(db)
             results["repositories"]["synced"] = len(repos_to_sync)

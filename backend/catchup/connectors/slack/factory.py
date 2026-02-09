@@ -14,7 +14,7 @@ import logging
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from catchup.auth.slack.app import get_slack_oauth_service
+from catchup.connectors.slack.auth import get_slack_oauth_service
 from catchup.connectors.slack.service import SlackIngestionService
 from catchup.db import slack_oauth as slack_crud
 

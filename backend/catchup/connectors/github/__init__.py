@@ -36,6 +36,10 @@ from catchup.connectors.github.service import (
     GitHubIngestionService,
     GithubService,
 )
+from catchup.connectors.github.auth import (
+    GitHubAppService,
+    get_github_app_service,
+)
 from catchup.connectors.github.factory import (
     get_github_service,
     create_github_ingestion_service,
@@ -67,6 +71,12 @@ __all__ = [
     # Service
     "GitHubIngestionService",
     "GithubService",
+    # Auth
+    "GitHubAppService",
+    "get_github_app_service",
+    # Webhook Schemas
+    "InstallationWebhookPayload",
+    "InstallationRepositoriesWebhookPayload",
     # Factory
     "get_github_service",
     "create_github_ingestion_service",

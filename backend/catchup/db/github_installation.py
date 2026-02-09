@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from catchup.auth.github.schemas import InstallationWebhookPayload
+from catchup.connectors.github.schemas import InstallationWebhookPayload
 from catchup.db.models import GithubInstallation
 
 

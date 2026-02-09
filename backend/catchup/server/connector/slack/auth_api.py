@@ -7,8 +7,8 @@ from fastapi.responses import RedirectResponse
 from httpx import HTTPStatusError, RequestError
 from sqlalchemy.orm import Session
 
-from catchup.auth.slack.app import get_slack_oauth_service, SlackOAuthService
-from catchup.auth.slack.schemas import (
+from catchup.connectors.slack.auth import get_slack_oauth_service, SlackOAuthService
+from catchup.connectors.slack.schemas import (
     SlackInstallationStatus,
     SlackWorkspaceInfo,
 )
