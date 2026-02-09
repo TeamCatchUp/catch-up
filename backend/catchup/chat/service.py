@@ -16,6 +16,7 @@ from catchup.chat.schemas import (
     StreamEvent,
 )
 from catchup.rag.graph import get_compiled_graph
+from catchup.utils.redis import get_langgraph_checkpointer
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,8 @@ class ChatService:
     async def _get_app(self):
         # 싱글톤
         if ChatService._app is None:
-            ChatService._app = await get_compiled_graph()
+            checkpointer = get_langgraph_checkpointer()
+            ChatService._app = get_compiled_graph(checkpointer)
         return ChatService._app
 
     @observe(name="chat")
