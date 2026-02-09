@@ -166,7 +166,7 @@ class BaseSource(BaseModel):
         elif source_str == "github":
             full_name = metadata.get("full_name", "")
             owner, repo = (
-                full_name.split("/")
+                full_name.split("/", 1)  # 최대 한 번만 분리
                 if "/" in full_name
                 else (metadata.get("owner"), metadata.get("repo"))
             )

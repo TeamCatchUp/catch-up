@@ -30,8 +30,7 @@ async def rerank_node(state: AgentState):
 
         final_docs = select_diverse_top_k(
             reranked_docs=reranked_docs,
-            #total_k=settings.CUSTOM_RERANK_TOTAL_K,  # 최종 10개
-            total_k=20,
+            total_k=settings.CUSTOM_RERANK_TOTAL_K,  # 최종 10개
             min_guarantee=2,  # 최소 2개 보장
         )
 
