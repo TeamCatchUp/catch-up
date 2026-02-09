@@ -67,8 +67,8 @@ export function OnboardingFunnel() {
         OrgInfo={({ context, history }) => (
           <OrgInfoStep
             defaultValues={{
-              companyName: context.companyName ?? '',
-              teamSize: context.teamSize ?? '',
+              company_name: context.company_name ?? '',
+              team_size: context.team_size ?? '',
             }}
             onSubmit={(orgData) => {
               submitOrg.mutate(orgData);
@@ -81,9 +81,9 @@ export function OnboardingFunnel() {
         Connector={({ context, history }) => (
           <ConnectorStep
             defaultValues={{
-              jiraAccountId: context.jiraAccountId ?? '',
-              githubAccountId: context.githubAccountId ?? '',
-              slackAccountId: context.slackAccountId ?? '',
+              jira_account_id: context.jira_account_id ?? '',
+              github_account_id: context.github_account_id ?? '',
+              slack_account_id: context.slack_account_id ?? '',
             }}
             onSubmit={(connData) => {
               history.replace('Connector', { ...context, ...connData });

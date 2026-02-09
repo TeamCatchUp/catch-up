@@ -11,9 +11,9 @@ import { StepNavButtons } from '../StepNavButtons';
 
 interface ConnectorStepProps {
   defaultValues: {
-    jiraAccountId: string;
-    githubAccountId: string;
-    slackAccountId: string;
+    jira_account_id: string;
+    github_account_id: string;
+    slack_account_id: string;
   };
   onSubmit: (data: ConnectorFormData) => void;
   onBack: () => void;
@@ -22,15 +22,15 @@ interface ConnectorStepProps {
 export function ConnectorStep({ defaultValues, onSubmit, onBack }: ConnectorStepProps) {
   const { data: connectors } = useQuery(connectorQueries.list());
 
-  const [jiraAccountId, setJiraAccountId] = useState(defaultValues.jiraAccountId);
-  const [githubAccountId, setGithubAccountId] = useState(defaultValues.githubAccountId);
-  const [slackAccountId, setSlackAccountId] = useState(defaultValues.slackAccountId);
+  const [jiraAccountId, setJiraAccountId] = useState(defaultValues.jira_account_id);
+  const [githubAccountId, setGithubAccountId] = useState(defaultValues.github_account_id);
+  const [slackAccountId, setSlackAccountId] = useState(defaultValues.slack_account_id);
 
   const handleNext = () => {
     onSubmit({
-      jiraAccountId: jiraAccountId || undefined,
-      githubAccountId: githubAccountId || undefined,
-      slackAccountId: slackAccountId || undefined,
+      jira_account_id: jiraAccountId || undefined,
+      github_account_id: githubAccountId || undefined,
+      slack_account_id: slackAccountId || undefined,
     });
   };
 

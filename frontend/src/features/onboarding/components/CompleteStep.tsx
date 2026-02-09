@@ -19,9 +19,9 @@ export function CompleteStep({ data, isAdmin }: CompleteStepProps) {
     complete(
       {
         connectors: {
-          jiraAccountId: data.jiraAccountId,
-          githubAccountId: data.githubAccountId,
-          slackAccountId: data.slackAccountId,
+          jira_account_id: data.jira_account_id,
+          github_account_id: data.github_account_id,
+          slack_account_id: data.slack_account_id,
         },
       },
       {

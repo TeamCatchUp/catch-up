@@ -19,16 +19,16 @@ import { StepNavButtons } from '../StepNavButtons';
 
 interface OrgInfoStepProps {
   defaultValues: {
-    companyName: string;
-    teamSize: string;
+    company_name: string;
+    team_size: string;
   };
   onSubmit: (data: OrgInfoFormData) => void;
   onBack: () => void;
 }
 
 export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProps) {
-  const [companyName, setCompanyName] = useState(defaultValues.companyName);
-  const [teamSize, setTeamSize] = useState(defaultValues.teamSize);
+  const [companyName, setCompanyName] = useState(defaultValues.company_name);
+  const [teamSize, setTeamSize] = useState(defaultValues.team_size);
 
   const [errors, setErrors] = useState<Record<string, boolean>>({});
 
@@ -42,7 +42,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
 
   const handleNext = () => {
     if (!validate()) return;
-    onSubmit({ companyName: companyName.trim(), teamSize });
+    onSubmit({ company_name: companyName.trim(), team_size: teamSize });
   };
 
   const isComplete = companyName.trim() && teamSize;
