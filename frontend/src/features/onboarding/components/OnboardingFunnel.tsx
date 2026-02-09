@@ -4,7 +4,6 @@ import { useFunnel } from '@use-funnel/browser';
 
 import { useUserStore } from '@/shared/store/userStore';
 
-import { useSubmitOrganization, useSubmitProfile } from '../mutations';
 import type { OnboardingSteps } from '../types/onboarding';
 import { CompleteStep } from './CompleteStep';
 import { OnboardingLayout } from './OnboardingLayout';
@@ -15,10 +14,7 @@ import { WelcomeStep } from './steps/WelcomeStep';
 
 export function OnboardingFunnel() {
   const user = useUserStore((s) => s.user);
-  const isAdmin = user?.role === 'ROOT_ADMIN';
-
-  const submitProfile = useSubmitProfile();
-  const submitOrg = useSubmitOrganization();
+  const isAdmin = user?.role === 'admin';
 
   const funnel = useFunnel<OnboardingSteps>({
     id: 'onboarding',
@@ -53,7 +49,6 @@ export function OnboardingFunnel() {
               department: context.department ?? '',
             }}
             onSubmit={(data) => {
-              submitProfile.mutate(data);
               history.replace('Profile', data);
               if (isAdmin) {
                 history.push('OrgInfo', data);
@@ -71,7 +66,6 @@ export function OnboardingFunnel() {
               team_size: context.team_size ?? '',
             }}
             onSubmit={(orgData) => {
-              submitOrg.mutate(orgData);
               history.replace('OrgInfo', { ...context, ...orgData });
               history.push('Complete', { ...context, ...orgData });
             }}

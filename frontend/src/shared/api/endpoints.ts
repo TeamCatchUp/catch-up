@@ -34,8 +34,6 @@ export const API = {
     uninstall: '/api/v1/auth/slack/uninstall',
   },
   onboarding: {
-    profile: '/api/v1/onboarding/profile',
-    organization: '/api/v1/onboarding/organization',
     complete: '/api/v1/onboarding/complete',
     connectors: '/api/v1/onboarding/connectors',
   },

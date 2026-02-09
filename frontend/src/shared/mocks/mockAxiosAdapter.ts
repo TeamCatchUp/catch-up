@@ -118,34 +118,13 @@ const mockHandlers: MockHandler[] = [
   // Onboarding
   // ═══════════════════════════════════════
   {
-    pattern: /^\/api\/v1\/onboarding\/profile$/,
-    method: 'post',
-    handler: async (_, data) => {
-      console.log('[Mock] 온보딩 프로필 저장:', data);
-      return { success: true };
-    },
-  },
-  {
-    pattern: /^\/api\/v1\/onboarding\/organization$/,
-    method: 'post',
-    handler: async (_, data) => {
-      console.log('[Mock] 조직 정보 저장:', data);
-      return { success: true, organizationId: 'mock-org-001' };
-    },
-  },
-  {
     pattern: /^\/api\/v1\/onboarding\/complete$/,
     method: 'post',
-    handler: async () => {
-      const nextStatus: UserStatus = MOCK_USER.role === 'ROOT_ADMIN' ? 'ACTIVE' : 'PENDING';
+    handler: async (_, data) => {
+      console.log('[Mock] 온보딩 완료:', data);
+      const nextStatus: UserStatus = MOCK_USER.role === 'admin' ? 'active' : 'pending';
       MOCK_USER.status = nextStatus;
-      return {
-        success: true,
-        status: nextStatus,
-        message: nextStatus === 'PENDING'
-          ? '관리자 승인을 기다리고 있습니다.'
-          : '온보딩이 완료되었습니다.',
-      };
+      return { success: true };
     },
   },
   {
@@ -153,14 +132,14 @@ const mockHandlers: MockHandler[] = [
     method: 'get',
     handler: async () => ({
       jira: [
-        { id: 'jira-1', name: '김개발', email: 'dev@catchup.io', picture: null, tag: 'catchup-workspace' },
-        { id: 'jira-2', name: '김개발', email: 'dev2@catchup.io', picture: null, tag: 'personal-workspace' },
+        { id: '5b10ac8d14c9e6', name: '김개발', email: 'dev@catchup.io', picture: null },
+        { id: '6a21bd9e25d0f7', name: '김개발', email: 'dev2@catchup.io', picture: null },
       ],
       github: [
-        { id: 'gh-1', name: '김개발', email: 'dev@catchup.io', picture: null, tag: 'CatchUp-org' },
+        { id: 'kimdev', name: '김개발', email: 'dev@catchup.io', picture: null },
       ],
       slack: [
-        { id: 'slack-1', name: '김개발', email: 'dev@catchup.io', picture: null, tag: 'CatchUp Workspace' },
+        { id: 'U04ABC12DEF', name: '김개발', email: 'dev@catchup.io', picture: null },
       ],
     }),
   },

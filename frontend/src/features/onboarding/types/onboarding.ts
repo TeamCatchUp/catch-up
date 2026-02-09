@@ -65,11 +65,21 @@ export interface ConnectorAccount {
   name: string;
   email: string;
   picture: string | null;
-  tag: string;
 }
 
 export interface ConnectorOptions {
   jira: ConnectorAccount[];
   github: ConnectorAccount[];
   slack: ConnectorAccount[];
+}
+
+/** POST /api/v1/onboarding/complete 요청 바디 */
+export interface OnboardingCompleteRequest {
+  name: string;
+  position: string;
+  rank: string;
+  department?: string;
+  company_name?: string;
+  team_size?: string;
+  connectors: ConnectorFormData;
 }
