@@ -268,7 +268,7 @@ const FeedbackSection = ({
         });
 
         await feedbackMutationRef.current.mutateAsync({
-          chatHistoryId,
+          chat_history_id: chatHistoryId,
           tags,
           detail,
         });

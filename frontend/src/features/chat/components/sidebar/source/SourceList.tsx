@@ -45,7 +45,7 @@ const SourceList = ({ sources, isLoading, isError }: Props) => {
     setActiveFilters((prev) => (prev.includes(type) ? prev.filter((v) => v !== type) : [...prev, type]));
   };
 
-  const getSourceCategory = (t: ChatSource['sourceType']): Exclude<FilterType, 'all'> => {
+  const getSourceCategory = (t: ChatSource['source_type']): Exclude<FilterType, 'all'> => {
     switch (t) {
       case 'jira':
         return 'jira';
@@ -59,11 +59,11 @@ const SourceList = ({ sources, isLoading, isError }: Props) => {
   const filteredSources =
     activeFilters.length === 0
       ? sources
-      : sources.filter((source) => activeFilters.includes(getSourceCategory(source.sourceType)));
+      : sources.filter((source) => activeFilters.includes(getSourceCategory(source.source_type)));
 
   // 출처 number 렌더링
-  const citedSources = filteredSources.filter((source) => source.isCited);
-  const recommendedSources = filteredSources.filter((source) => !source.isCited);
+  const citedSources = filteredSources.filter((source) => source.is_cited);
+  const recommendedSources = filteredSources.filter((source) => !source.is_cited);
 
   return (
     <div className="flex w-full flex-col gap-3 px-4 py-3">
@@ -110,7 +110,7 @@ const SourceList = ({ sources, isLoading, isError }: Props) => {
         ) : (
           <div className="flex flex-col gap-2">
             {citedSources.map((source) => (
-              <SourceCard key={source.id} source={source} showCount count={source.sourceIndex} />
+              <SourceCard key={source.id} source={source} showCount count={source.source_index} />
             ))}
 
             {/* divider */}

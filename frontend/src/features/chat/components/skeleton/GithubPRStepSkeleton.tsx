@@ -23,7 +23,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
   const [selectedPrNumbers, setSelectedPrNumbers] = useState<number[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const allPrNumbers = useMemo(() => prList.map((pr) => pr.prNumber), [prList]);
+  const allPrNumbers = useMemo(() => prList.map((pr) => pr.pr_number), [prList]);
 
   const toggleSelect = (prNumber: number) => {
     setSelectedPrNumbers((prev) =>
@@ -32,7 +32,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
   };
 
   const toggleAll = () => {
-    const isAllSelected = prList.every((pr) => selectedPrNumbers.includes(pr.prNumber));
+    const isAllSelected = prList.every((pr) => selectedPrNumbers.includes(pr.pr_number));
     setSelectedPrNumbers(isAllSelected ? [] : allPrNumbers);
   };
 
@@ -104,14 +104,14 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
           {/* 선택 리스트 */}
           <div className="flex w-180.75 flex-col gap-4">
             {prList.map((pr, idx) => {
-              const isSelected = selectedPrNumbers.includes(pr.prNumber);
+              const isSelected = selectedPrNumbers.includes(pr.pr_number);
 
               return (
-                <div key={`${pr.owner}/${pr.repoName}#${pr.prNumber}`}>
+                <div key={`${pr.owner}/${pr.repo_name}#${pr.pr_number}`}>
                   <div className="flex h-28.75 w-full gap-6">
                     <div className="flex h-28.75 items-center">
                       <button
-                        onClick={() => toggleSelect(pr.prNumber)}
+                        onClick={() => toggleSelect(pr.pr_number)}
                         className={cn(
                           'flex h-8.5 w-8.5 cursor-pointer items-center justify-center rounded-lg border',
                           isSelected ? 'bg-blue-1 border-blue-45' : 'border-neutral-3 bg-neutral-1',
@@ -121,7 +121,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
                       </button>
                     </div>
                     <div
-                      onClick={() => toggleSelect(pr.prNumber)}
+                      onClick={() => toggleSelect(pr.pr_number)}
                       className={cn(
                         'flex h-28.75 w-166.25 cursor-pointer flex-col gap-1.5 rounded-2xl border bg-white px-5 py-4',
                         isSelected ? 'border-blue-30' : 'border-neutral-2',
@@ -141,9 +141,9 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
                       </div>
                       {/* 부가정보 */}
                       <div className="text-body-xsmall flex w-156 items-center gap-1.5 text-gray-50">
-                        <span className="max-w-95 truncate">{pr.repoName}</span>
+                        <span className="max-w-95 truncate">{pr.repo_name}</span>
                         <div className="bg-neutral-3 h-3.75 w-px" />
-                        <span>{formatDate(pr.createdAt)}</span>
+                        <span>{formatDate(pr.created_at)}</span>
                         <div className="bg-neutral-3 h-3.75 w-px" />
                         <span>{pr.owner}</span>
                       </div>

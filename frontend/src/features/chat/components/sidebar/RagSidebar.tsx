@@ -19,7 +19,7 @@ const RagSidebar = ({ currentQA, isLoading, isError }: RagSidebarProps) => {
 
   const sourceCount = currentQA?.answer?.sources?.length ?? 0;
   const sources = currentQA?.answer?.sources ?? [];
-  const tasks = currentQA?.answer?.detailedTasks ?? [];
+  const tasks = currentQA?.answer?.detailed_tasks ?? [];
 
   return (
     <div className="border-neutral-3 flex w-115 flex-none flex-col border-l bg-white">

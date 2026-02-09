@@ -234,8 +234,8 @@ const RagAnswer = ({
               <div ref={feedbackRef}>
                 <FeedbackSection
                   messageId={currentQA.answer.id}
-                  chatHistoryId={currentQA.answer.chatHistoryId}
-                  hasFeedback={currentQA.answer.hasFeedback}
+                  chatHistoryId={currentQA.answer.chat_history_id}
+                  hasFeedback={currentQA.answer.has_feedback}
                   feedbackVisibleMap={feedbackVisibleMap}
                   setFeedbackVisibleMap={setFeedbackVisibleMap}
                   onFeedbackSubmitted={onFeedbackSubmitted}
@@ -246,7 +246,7 @@ const RagAnswer = ({
             <AnswerError
               icons={ANSWER_ICONS}
               messageId={`error_${sessionId}`}
-              hasFeedback={currentQA.answer.hasFeedback}
+              hasFeedback={currentQA.answer.has_feedback}
               feedbackVisibleMap={feedbackVisibleMap}
               setFeedbackVisibleMap={setFeedbackVisibleMap}
             />
