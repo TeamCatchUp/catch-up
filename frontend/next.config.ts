@@ -8,11 +8,6 @@ const nextConfig = {
     unoptimized: true,
   },
 
-  experimental: {
-    // @ts-expect-error Next 16 turbo option
-    turbo: false,
-  },
-
   output: 'standalone',
 
   async rewrites() {
