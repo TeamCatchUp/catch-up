@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     MEILISEARCH_GLOBAL_RETRIEVAL_BUDGET: int
     CUSTOM_RERANK_TOTAL_K: int
     OPENAI_EMBEDDING_MODEL: str
+    COHERE_EMBEDDING_MODEL: str = "embed-v4.0"
     OPENAI_CHAT_MODEL: str
     FINAL_SOURCES_SANITY_THRESHOLD: float
 
@@ -88,7 +89,7 @@ class Settings(BaseSettings):
 
     # PGVector Settings
     PGVECTOR_COLLECTION_NAME: str = "vectorstore"  # 통합 Collection (Jira, Slack, GitHub 등)
-    PGVECTOR_EMBEDDING_DIMENSIONS: int = 3072  # text-embedding-3-large
+    PGVECTOR_EMBEDDING_DIMENSIONS: int = 1536  # Cohere embed-v4.0
 
     # Jira Sync Settings
     JIRA_SYNC_BATCH_SIZE: int = 100  # Jira API max per request

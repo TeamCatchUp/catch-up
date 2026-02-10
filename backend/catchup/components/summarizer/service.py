@@ -59,11 +59,14 @@ class SummarizerService:
             return content
 
         try:
-            prompt = get_summary_prompt(source_type, content)
+            system_prompt, user_prompt = get_summary_prompt(source_type, content)
 
             response = await self.client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
                 max_tokens=self.max_tokens,
                 temperature=self.temperature,
             )
