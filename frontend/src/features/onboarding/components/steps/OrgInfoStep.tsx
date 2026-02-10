@@ -23,7 +23,7 @@ interface OrgInfoStepProps {
     team_size: string;
   };
   onSubmit: (data: OrgInfoFormData) => void;
-  onBack: () => void;
+  onBack: (data: OrgInfoFormData) => void;
 }
 
 export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProps) {
@@ -120,7 +120,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
       </div>
 
       <StepNavButtons
-        onBack={onBack}
+        onBack={() => onBack({ company_name: companyName.trim(), team_size: teamSize })}
         onNext={handleNext}
         isNextDisabled={!isComplete}
       />

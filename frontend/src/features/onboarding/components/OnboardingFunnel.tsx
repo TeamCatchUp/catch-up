@@ -1,10 +1,12 @@
 'use client';
 
+import { useRef } from 'react';
+
 import { useFunnel } from '@use-funnel/browser';
 
 import { useUserStore } from '@/shared/store/userStore';
 
-import type { OnboardingSteps } from '../types/onboarding';
+import type { ConnectorFormData, OrgInfoFormData, OnboardingSteps } from '../types/onboarding';
 import { CompleteStep } from './CompleteStep';
 import { OnboardingLayout } from './OnboardingLayout';
 import { ConnectorStep } from './steps/ConnectorStep';
@@ -15,6 +17,10 @@ import { WelcomeStep } from './steps/WelcomeStep';
 export function OnboardingFunnel() {
   const user = useUserStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
+
+  // 뒤로가기 후 다시 앞으로 갈 때 입력값 보존을 위한 캐시
+  const cachedOrgInfo = useRef<Partial<OrgInfoFormData>>({});
+  const cachedConnector = useRef<Partial<ConnectorFormData>>({});
 
   const funnel = useFunnel<OnboardingSteps>({
     id: 'onboarding',
@@ -51,9 +57,9 @@ export function OnboardingFunnel() {
             onSubmit={(data) => {
               history.replace('Profile', data);
               if (isAdmin) {
-                history.push('OrgInfo', data);
+                history.push('OrgInfo', { ...data, ...cachedOrgInfo.current });
               } else {
-                history.push('Connector', data);
+                history.push('Connector', { ...data, ...cachedConnector.current });
               }
             }}
             onBack={() => history.back()}
@@ -69,7 +75,10 @@ export function OnboardingFunnel() {
               history.replace('OrgInfo', { ...context, ...orgData });
               history.push('Complete', { ...context, ...orgData });
             }}
-            onBack={() => history.back()}
+            onBack={(orgData) => {
+              cachedOrgInfo.current = orgData;
+              history.back();
+            }}
           />
         )}
         Connector={({ context, history }) => (
@@ -83,7 +92,10 @@ export function OnboardingFunnel() {
               history.replace('Connector', { ...context, ...connData });
               history.push('Complete', { ...context, ...connData });
             }}
-            onBack={() => history.back()}
+            onBack={(connData) => {
+              cachedConnector.current = connData;
+              history.back();
+            }}
           />
         )}
         Complete={({ context }) => (
