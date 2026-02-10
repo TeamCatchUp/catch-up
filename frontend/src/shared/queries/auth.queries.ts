@@ -1,4 +1,5 @@
 import { queryOptions } from '@tanstack/react-query';
+import type { AxiosError } from 'axios';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
@@ -15,6 +16,10 @@ export const authQueries = {
         const res = await api.get<AuthUser>(API.auth.me);
         return res.data;
       },
-      retry: false,
+      retry: (failureCount, error) => {
+        const status = (error as AxiosError)?.response?.status;
+        if (status && status < 500) return false;
+        return failureCount < 2;
+      },
     }),
 };
