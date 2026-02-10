@@ -14,7 +14,7 @@ import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown'
 import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
 import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
-import { PERSON_OPTIONS } from '@/shared/mocks/search/filterOptions';
+import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/shared/mocks/search/filterOptions';
 
 interface FilterBarProps {
   filters: UseSearchFiltersReturn;
@@ -27,9 +27,7 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
       <div className="flex items-center gap-2">
         <SearchOptionButton Icon={IconJira} label="Jira" selected={filters.selectedSources.includes('jira')} onClick={() => filters.toggleSource('jira')} />
         <SearchOptionButton Icon={IconGithub} label="Github" selected={filters.selectedSources.includes('github')} onClick={() => filters.toggleSource('github')} />
-        <SearchOptionButton Icon={IconSlack} label="Slack" selected={filters.selectedSources.includes('slack')} onClick={() => filters.toggleSource('slack')} />
-        <SearchOptionDisabledButton Icon={IconLock} label="Wiki" />
-        
+        <SearchOptionButton Icon={IconSlack} label="Slack" selected={filters.selectedSources.includes('slack')} onClick={() => filters.toggleSource('slack')} />        
       </div>
       <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
       <div className="flex items-center gap-2">
@@ -57,18 +55,54 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
             Icon={IconPerson}
           />
         </FilterDropdown>
-        <SearchOptionButton
-          Icon={IconTag}
-          label={filters.labels.dept}
-          selected={filters.selectedDepts.length > 0}
-          onMouseDown={(e) => e.preventDefault()}
-        />
-        <SearchOptionButton
-          Icon={IconSpace}
-          label={filters.labels.project}
-          selected={filters.selectedProjects.length > 0}
-          onMouseDown={(e) => e.preventDefault()}
-        />
+        <FilterDropdown
+          open={filters.openPopover === 'department'}
+          onOpenChange={(o) => {
+            filters.setOpenPopover(o ? 'department' : null);
+            if (!o) inputRef.current?.focus();
+          }}
+          trigger={
+            <SearchOptionButton
+              Icon={IconTag}
+              label={filters.labels.dept}
+              selected={filters.selectedDepts.length > 0}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => filters.setOpenPopover('department')}
+            />
+          }
+        >
+          <FilterOptionList
+            title="부서 선택"
+            options={DEPARTMENT_OPTIONS}
+            selected={filters.selectedDepts}
+            onToggle={filters.toggleDept}
+            Icon={IconTag}
+          />
+        </FilterDropdown>
+        <FilterDropdown
+          open={filters.openPopover === 'project'}
+          onOpenChange={(o) => {
+            filters.setOpenPopover(o ? 'project' : null);
+            if (!o) inputRef.current?.focus();
+          }}
+          trigger={
+            <SearchOptionButton
+              Icon={IconSpace}
+              label={filters.labels.project}
+              selected={filters.selectedProjects.length > 0}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => filters.setOpenPopover('project')}
+            />
+          }
+        >
+          <FilterOptionList
+            title="프로젝트 선택"
+            options={PROJECT_OPTIONS}
+            selected={filters.selectedProjects}
+            onToggle={filters.toggleProject}
+            Icon={IconSpace}
+          />
+        </FilterDropdown>
       </div>
     </div>
   );

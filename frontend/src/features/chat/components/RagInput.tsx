@@ -16,7 +16,7 @@ import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionL
 import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
-import { PERSON_OPTIONS } from '@/shared/mocks/search/filterOptions';
+import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/shared/mocks/search/filterOptions';
 import { cn } from '@/shared/utils/cn';
 
 import Add from '/public/icons/icon/add_small.svg';
@@ -79,10 +79,22 @@ const RagInput = ({
 
   const allSelectedChips = [
     ...filters.selectedPeople.map((name) => ({
-      id: name,
+      id: `person-${name}`,
       name,
       Icon: IconPerson,
       onRemove: () => filters.togglePerson(name),
+    })),
+    ...filters.selectedDepts.map((name) => ({
+      id: `dept-${name}`,
+      name,
+      Icon: IconTag,
+      onRemove: () => filters.toggleDept(name),
+    })),
+    ...filters.selectedProjects.map((name) => ({
+      id: `project-${name}`,
+      name,
+      Icon: IconSpace,
+      onRemove: () => filters.toggleProject(name),
     })),
   ];
 
@@ -129,8 +141,48 @@ const RagInput = ({
                       Icon={IconPerson}
                     />
                   </FilterDropdown>
-                  <SearchOptionButton Icon={IconTag} label="부서" onMouseDown={(e) => e.preventDefault()} />
-                  <SearchOptionButton Icon={IconSpace} label="프로젝트" onMouseDown={(e) => e.preventDefault()} />
+                  <FilterDropdown
+                    open={filters.openPopover === 'department'}
+                    onOpenChange={(o) => filters.setOpenPopover(o ? 'department' : null)}
+                    trigger={
+                      <SearchOptionButton
+                        Icon={IconTag}
+                        label={filters.deptLabel}
+                        selected={filters.selectedDepts.length > 0}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => filters.setOpenPopover('department')}
+                      />
+                    }
+                  >
+                    <FilterOptionList
+                      title="부서 선택"
+                      options={DEPARTMENT_OPTIONS}
+                      selected={filters.selectedDepts}
+                      onToggle={filters.toggleDept}
+                      Icon={IconTag}
+                    />
+                  </FilterDropdown>
+                  <FilterDropdown
+                    open={filters.openPopover === 'project'}
+                    onOpenChange={(o) => filters.setOpenPopover(o ? 'project' : null)}
+                    trigger={
+                      <SearchOptionButton
+                        Icon={IconSpace}
+                        label={filters.projectLabel}
+                        selected={filters.selectedProjects.length > 0}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => filters.setOpenPopover('project')}
+                      />
+                    }
+                  >
+                    <FilterOptionList
+                      title="프로젝트 선택"
+                      options={PROJECT_OPTIONS}
+                      selected={filters.selectedProjects}
+                      onToggle={filters.toggleProject}
+                      Icon={IconSpace}
+                    />
+                  </FilterDropdown>
                 </div>
               </div>
             </div>

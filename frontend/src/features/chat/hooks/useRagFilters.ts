@@ -18,9 +18,13 @@ export interface UseRagFiltersReturn {
   selectedSources: SourceType[];
   toggleSource: (source: SourceType) => void;
 
-  // People Filter
+  // 필터 선택
   selectedPeople: string[];
   togglePerson: (val: string) => void;
+  selectedDepts: string[];
+  toggleDept: (val: string) => void;
+  selectedProjects: string[];
+  toggleProject: (val: string) => void;
 
   // Popover State
   openPopover: 'person' | 'department' | 'project' | null;
@@ -28,6 +32,8 @@ export interface UseRagFiltersReturn {
 
   // Computed Labels
   personLabel: string;
+  deptLabel: string;
+  projectLabel: string;
 
   // Actions
   handleResetAll: () => void;
@@ -47,26 +53,40 @@ export const useRagFilters = (): UseRagFiltersReturn => {
   // Popover
   const [openPopover, setOpenPopover] = useState<'person' | 'department' | 'project' | null>(null);
 
-  // People
+  // 필터 상태
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
+  const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
 
   /** 필터 바 토글 */
   const toggleFilter = useCallback(() => {
     setIsFilterOpen((prev) => !prev);
   }, []);
 
-  /** 담당자 선택 토글 */
+  /** 토글 핸들러 */
   const togglePerson = useCallback((val: string) => {
     setSelectedPeople((p) => (p.includes(val) ? p.filter((i) => i !== val) : [...p, val]));
+  }, []);
+
+  const toggleDept = useCallback((val: string) => {
+    setSelectedDepts((p) => (p.includes(val) ? p.filter((i) => i !== val) : [...p, val]));
+  }, []);
+
+  const toggleProject = useCallback((val: string) => {
+    setSelectedProjects((p) => (p.includes(val) ? p.filter((i) => i !== val) : [...p, val]));
   }, []);
 
   /** 전체 필터 초기화 */
   const handleResetAll = useCallback(() => {
     setSelectedPeople([]);
+    setSelectedDepts([]);
+    setSelectedProjects([]);
   }, []);
 
   // Labels
   const personLabel = selectedPeople.length > 0 ? `담당자: ${selectedPeople[0]} 외` : '담당자';
+  const deptLabel = selectedDepts.length > 0 ? `부서: ${selectedDepts[0]} 외` : '부서';
+  const projectLabel = selectedProjects.length > 0 ? `프로젝트: ${selectedProjects[0]} 외` : '프로젝트';
 
   return {
     isFilterOpen,
@@ -75,9 +95,15 @@ export const useRagFilters = (): UseRagFiltersReturn => {
     toggleSource,
     selectedPeople,
     togglePerson,
+    selectedDepts,
+    toggleDept,
+    selectedProjects,
+    toggleProject,
     openPopover,
     setOpenPopover,
     personLabel,
+    deptLabel,
+    projectLabel,
     handleResetAll,
   };
 };

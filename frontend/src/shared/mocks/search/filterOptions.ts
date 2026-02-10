@@ -13,7 +13,7 @@ export const DEPARTMENT_OPTIONS = [{ name: 'EngineeringTeam' }, { name: 'SoccerT
 
 export const PROJECT_OPTIONS = [
   { name: '미국진출프로젝트' },
-  { name: '미국진출프로젝트' },
-  { name: '미국진출프로젝트' },
-  { name: '미국진출프로젝트' },
+  { name: '영국진출프로젝트2' },
+  { name: '호국진출프로젝트3' },
+  { name: '중국진출프로젝트4' },
 ];
