@@ -3,12 +3,10 @@ import logging
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
-from catchup.auth.dependencies import get_current_user
 from catchup.chat.factory import get_chat_service
 from catchup.chat.schemas import ChatRequest, ChatResponse
 from catchup.chat.service import ChatService
-from catchup.db.models import User
-from catchup.rag.schemas.context import GlobalContext, GlobalUserContext
+from catchup.rag.schemas.context import GlobalContext
 from catchup.server.chat.context import get_full_global_context
 
 logger = logging.getLogger()

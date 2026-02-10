@@ -2,7 +2,7 @@ from fastapi import Depends
 
 from catchup.auth.dependencies import get_current_user
 from catchup.db.models import User
-from catchup.rag.schemas.context import GlobalContext, GlobalUserContext, GlobalCompanyContext
+from catchup.rag.schemas.context import GlobalContext, GlobalUserContext
 
 # TODO: company 정보 등 채울 게 많음
 async def get_full_global_context(
