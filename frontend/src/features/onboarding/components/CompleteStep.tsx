@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+
+import { authQueries } from '@/shared/queries/auth.queries';
 
 import { useCompleteOnboarding } from '../mutations';
 import type { OnboardingSteps } from '../types/onboarding';
@@ -13,6 +16,7 @@ interface CompleteStepProps {
 
 export function CompleteStep({ data, isAdmin }: CompleteStepProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { mutate: complete, isPending } = useCompleteOnboarding();
 
   useEffect(() => {
@@ -31,7 +35,8 @@ export function CompleteStep({ data, isAdmin }: CompleteStepProps) {
         },
       },
       {
-        onSuccess: () => {
+        onSuccess: async () => {
+          await queryClient.invalidateQueries({ queryKey: authQueries.all() });
           if (isAdmin) {
             router.replace('/');
           } else {
