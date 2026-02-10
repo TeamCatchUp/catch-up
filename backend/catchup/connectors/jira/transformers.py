@@ -240,8 +240,11 @@ class JiraTransformer:
     def _issue_to_document(self, issue: JiraIssue) -> Document:
         """JiraIssue → LangChain Document"""
 
-        # page_content 생성
-        page_content = self._build_issue_content(issue)
+        # page_content: 임베딩용 (의미 중심 텍스트)
+        page_content = self._build_issue_embedding_content(issue)
+
+        # display_content: LLM 답변 생성용 (기존 포맷)
+        display_content = self._build_issue_display_content(issue)
 
         # metadata 생성 (엔티티 접근용 필드만 유지)
         metadata = {
@@ -298,6 +301,9 @@ class JiraTransformer:
                 for att in issue.attachments
             ],
 
+            # LLM 답변 생성용 (기존 포맷)
+            "display_content": display_content,
+
             # 동기화
             "synced_at": datetime.utcnow().isoformat(),
         }
@@ -308,8 +314,32 @@ class JiraTransformer:
             id=f"jira:issue:{issue.key}",
         )
 
-    def _build_issue_content(self, issue: JiraIssue) -> str:
-        """Issue용 page_content 생성 (RDBMS 캐시 활용)"""
+    def _build_issue_embedding_content(self, issue: JiraIssue) -> str:
+        """
+        Issue용 임베딩 텍스트 생성 (의미 중심)
+
+        포함: summary, description, comments(본문만)
+        제외: 메타데이터(Status, Priority, Type, Assignee 등), 포맷 마커
+        """
+        parts = []
+
+        # 1. Summary (제목)
+        if issue.summary:
+            parts.append(issue.summary)
+
+        # 2. Description (설명)
+        if issue.description:
+            parts.append(issue.description)
+
+        # 3. Comments (본문만, author 제외)
+        for comment in issue.comments:
+            if comment.body:
+                parts.append(comment.body)
+
+        return "\n\n".join(parts)
+
+    def _build_issue_display_content(self, issue: JiraIssue) -> str:
+        """Issue용 display_content 생성 - LLM 답변 생성용 (RDBMS 캐시 활용)"""
         # Parent 정보 포맷팅
         if issue.parent_key and issue.parent_name:
             parent_str = f"{issue.parent_key} ({issue.parent_name})"
@@ -404,23 +434,11 @@ class JiraTransformer:
     def _issue_to_epic_document(self, issue: JiraIssue) -> Document:
         """Epic Issue → LangChain Document (별도 entity_type)"""
 
-        # Epic용 page_content
-        lines = [
-            f"[Epic: {issue.key}] {issue.summary}",
-            "",
-            f"Status: {issue.status} | Priority: {issue.priority or 'None'}",
-            f"Owner: {issue.assignee.display_name if issue.assignee else 'Unassigned'}",
-        ]
+        # page_content: 임베딩용 (의미 중심)
+        page_content = self._build_epic_embedding_content(issue)
 
-        if issue.description:
-            lines.extend(["", "Epic Description:", issue.description])
-
-        lines.extend(["", "Technical Context:"])
-        lines.append(f"- Components: {', '.join(issue.components) or 'None'}")
-        lines.append(f"- Labels: {', '.join(issue.labels) or 'None'}")
-        lines.append(f"- Target Version: {', '.join(issue.fix_versions) or 'None'}")
-
-        page_content = "\n".join(lines)
+        # display_content: LLM 답변 생성용 (기존 포맷)
+        display_content = self._build_epic_display_content(issue)
 
         # Epic metadata (엔티티 접근용 필드만 유지)
         metadata = {
@@ -437,6 +455,10 @@ class JiraTransformer:
             "components": issue.components,
             "labels": issue.labels,
             "fix_versions": issue.fix_versions,
+
+            # LLM 답변 생성용 (기존 포맷)
+            "display_content": display_content,
+
             "synced_at": datetime.utcnow().isoformat(),
         }
 
@@ -445,6 +467,42 @@ class JiraTransformer:
             metadata=metadata,
             id=f"jira:epic:{issue.key}",
         )
+
+    def _build_epic_embedding_content(self, issue: JiraIssue) -> str:
+        """
+        Epic용 임베딩 텍스트 생성 (의미 중심)
+
+        포함: summary, description
+        제외: 메타데이터(Status, Priority, Owner 등), 포맷 마커
+        """
+        parts = []
+
+        if issue.summary:
+            parts.append(issue.summary)
+
+        if issue.description:
+            parts.append(issue.description)
+
+        return "\n\n".join(parts)
+
+    def _build_epic_display_content(self, issue: JiraIssue) -> str:
+        """Epic용 display_content 생성 - LLM 답변 생성용"""
+        lines = [
+            f"[Epic: {issue.key}] {issue.summary}",
+            "",
+            f"Status: {issue.status} | Priority: {issue.priority or 'None'}",
+            f"Owner: {issue.assignee.display_name if issue.assignee else 'Unassigned'}",
+        ]
+
+        if issue.description:
+            lines.extend(["", "Epic Description:", issue.description])
+
+        lines.extend(["", "Technical Context:"])
+        lines.append(f"- Components: {', '.join(issue.components) or 'None'}")
+        lines.append(f"- Labels: {', '.join(issue.labels) or 'None'}")
+        lines.append(f"- Target Version: {', '.join(issue.fix_versions) or 'None'}")
+
+        return "\n".join(lines)
 
     # ================================================================
     # Project 변환
@@ -470,8 +528,16 @@ class JiraTransformer:
         components = [c.get("name") for c in project_data.get("components", []) if c.get("name")]
         versions = [v.get("name") for v in project_data.get("versions", []) if v.get("name")]
 
-        # page_content
-        lines = [
+        # page_content: 임베딩용 (의미 중심)
+        embedding_parts = []
+        if name:
+            embedding_parts.append(name)
+        if description:
+            embedding_parts.append(description)
+        page_content = "\n\n".join(embedding_parts)
+
+        # display_content: LLM 답변 생성용 (기존 포맷)
+        display_lines = [
             f"Project: {name} [{key}]",
             "",
             f"Description:",
@@ -483,8 +549,7 @@ class JiraTransformer:
             f"Components: {', '.join(components) or 'None'}",
             f"Versions: {', '.join(versions) or 'None'}",
         ]
-
-        page_content = "\n".join(lines)
+        display_content = "\n".join(display_lines)
 
         metadata = {
             "source": "jira",
@@ -497,6 +562,10 @@ class JiraTransformer:
             "project_lead": lead.display_name if lead else None,
             "components": components,
             "versions": versions,
+
+            # LLM 답변 생성용 (기존 포맷)
+            "display_content": display_content,
+
             "synced_at": datetime.utcnow().isoformat(),
         }
 
@@ -526,18 +595,24 @@ class JiraTransformer:
         end_date = sprint_data.get("endDate")
         complete_date = sprint_data.get("completeDate")
 
-        # page_content
-        lines = [
+        # page_content: 임베딩용 (의미 중심)
+        embedding_parts = []
+        if name:
+            embedding_parts.append(name)
+        if goal:
+            embedding_parts.append(goal)
+        page_content = "\n\n".join(embedding_parts)
+
+        # display_content: LLM 답변 생성용 (기존 포맷)
+        display_lines = [
             f"Sprint: {name} (ID: {sprint_id})",
             "",
             f"Status: {state}",
             f"Start: {start_date or 'Not started'} | End: {end_date or 'Not set'}",
         ]
-
         if goal:
-            lines.extend(["", f"Goal: {goal}"])
-
-        page_content = "\n".join(lines)
+            display_lines.extend(["", f"Goal: {goal}"])
+        display_content = "\n".join(display_lines)
 
         metadata = {
             "source": "jira",
@@ -550,6 +625,10 @@ class JiraTransformer:
             "start_date": start_date,
             "end_date": end_date,
             "complete_date": complete_date,
+
+            # LLM 답변 생성용 (기존 포맷)
+            "display_content": display_content,
+
             "synced_at": datetime.utcnow().isoformat(),
         }
 

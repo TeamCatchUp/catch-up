@@ -31,6 +31,7 @@ from catchup.connectors.slack.schemas import (
 )
 from catchup.connectors.slack.transformers import SlackTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
 from catchup.db.models import SlackEntityType, SlackSyncStatus, SlackChannelType
 from catchup.db import slack_sync
@@ -51,18 +52,26 @@ class SlackIngestionService:
         user_cache: user_id → SlackUser 캐시
     """
 
-    def __init__(self, team_id: str, access_token: str):
+    def __init__(
+        self,
+        team_id: str,
+        access_token: str,
+        enable_summarization: bool = True,
+    ):
         """
         SlackIngestionService 초기화
 
         Args:
             team_id: Slack Team/Workspace ID
             access_token: Slack Bot Access Token
+            enable_summarization: 임베딩 전 LLM 요약 활성화 여부
         """
         self.team_id = team_id
+        self.enable_summarization = enable_summarization
         self.client = SlackApiClientWrapper(access_token, team_id)
         self.transformer: SlackTransformer | None = None
         self.repository = PGVectorRepository()
+        self.summarizer: SummarizerService | None = None
         self.user_cache: dict[str, SlackUser] = {}
         self._initialized = False
 
@@ -83,6 +92,11 @@ class SlackIngestionService:
 
         # Transformer 생성
         self.transformer = SlackTransformer(self.user_cache)
+
+        # Summarizer 초기화 (요약 활성화 시)
+        if self.enable_summarization:
+            self.summarizer = get_summarizer_service()
+            logger.info("Summarization enabled for embedding optimization")
 
         # PGVector 초기화
         await self.repository.initialize()
@@ -620,6 +634,9 @@ class SlackIngestionService:
                     break
 
             if documents:
+                # 요약 적용 (summarizer가 활성화된 경우)
+                if self.summarizer:
+                    documents = await self._summarize_documents(documents)
                 await self.repository.upsert_documents(documents, doc_ids)
 
             logger.debug(
@@ -666,4 +683,41 @@ class SlackIngestionService:
             logger.warning(f"Failed to fetch replies for {thread_ts}: {e}")
 
         return replies
+
+    async def _summarize_documents(
+        self,
+        documents: list[Document],
+    ) -> list[Document]:
+        """
+        문서들의 page_content를 LLM으로 요약하여 교체
+
+        display_content(구조화된 정보 포함)를 요약 입력으로 사용하여
+        더 풍부한 컨텍스트 기반 요약 생성.
+
+        Args:
+            documents: 요약할 Document 리스트
+
+        Returns:
+            page_content가 요약된 Document 리스트
+        """
+        if not self.summarizer or not documents:
+            return documents
+
+        # SummarizeRequest 리스트 생성 (source + entity_type → source_type)
+        requests = []
+        for doc in documents:
+            content = doc.metadata.get("display_content", doc.page_content)
+            entity_type = doc.metadata.get("entity_type", "message")
+            source_type = f"slack_{entity_type}"  # slack_message
+            requests.append(SummarizeRequest(content=content, source_type=source_type))
+
+        # 일괄 요약
+        summarized = await self.summarizer.summarize_batch(requests)
+
+        # 요약된 텍스트로 교체
+        for doc, summary in zip(documents, summarized):
+            doc.page_content = summary
+
+        logger.debug(f"Summarized {len(documents)} documents for embedding")
+        return documents
 
