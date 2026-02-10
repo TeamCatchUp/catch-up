@@ -9,6 +9,7 @@ import IconSpace from '@/public/icons/icon/space.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import IconGithub from '@/public/icons/logo/GitHub.svg';
 import IconJira from '@/public/icons/logo/Jira.svg';
+import IconSlack from '@/public/icons/logo/Slack.svg'
 import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown';
 import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
@@ -36,8 +37,9 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
           selected={filters.selectedGithubItems.length > 0}
           onClick={filters.handleGithubClick}
         />
+        <SearchOptionDisabledButton Icon={IconSlack} label="Slack" />
         <SearchOptionDisabledButton Icon={IconLock} label="Wiki" />
-        <SearchOptionDisabledButton Icon={IconLock} label="Slack" />
+        
       </div>
       <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
       <div className="flex items-center gap-2">
