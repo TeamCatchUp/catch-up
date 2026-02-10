@@ -66,7 +66,7 @@ export default function Search() {
             <QueryInput input={input} inputRef={inputRef} />
 
             {input.isFocused && (
-              <div className="border-neutral-4 mt-1 flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden border-t pt-2">
+              <div className="animate-in fade-in-0 slide-in-from-top-3 duration-300 border-neutral-4 mt-1 flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden border-t pt-2">
                 <FilterBar filters={filters} inputRef={inputRef} />
                 <SelectedFilterChips chips={filters.allSelectedChips} onReset={filters.handleResetAll} />
                 <ExplorerPanel />
@@ -76,7 +76,11 @@ export default function Search() {
         </div>
 
         {/* AI Guide Section */}
-        <div className="flex flex-col items-center gap-4 self-stretch px-52 pt-10 pb-30">
+        <div
+          className={`flex flex-col items-center gap-4 self-stretch px-52 pt-10 pb-30 transition-all duration-300 ${
+            input.isFocused ? 'pointer-events-none translate-y-4 opacity-0' : 'opacity-100'
+          }`}
+        >
           <div className="flex w-190 flex-col items-center gap-3">
             <div className="flex items-center justify-between self-stretch">
               <div className="flex items-center gap-2">
