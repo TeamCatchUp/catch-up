@@ -3,11 +3,10 @@ import logging
 import time
 from typing import Any, AsyncGenerator
 
-from langchain_community.docstore import document
 from langchain_core.messages import HumanMessage
-from langfuse import observe
 
 from catchup.configs.config import settings
+from catchup.observability.langfuse import observe
 from catchup.chat.schemas import (
     NODE_STATUS_MAP,
     ChatResponse,
@@ -37,12 +36,11 @@ class ChatService:
             ChatService._app = get_compiled_graph(checkpointer)
         return ChatService._app
 
-    @observe(name="chat")
     async def chat(self, query: str, role: str, session_id: str) -> ChatResponse:
         app = await self._get_app()
 
         config = self._setup_config(session_id)
-
+        
         inputs = {
             "messages": [HumanMessage(content=query)],
             "original_query": query,
@@ -118,12 +116,12 @@ class ChatService:
 
             if name == "generate_final_answer":
                 input_data = event["data"].get("input", {})
-                candidate_citations = input_data.get("retrieved_docs", [])
-                logger.info(f"candidate_citations: {candidate_citations}")
+                citation_candidate_docs = input_data.get("retrieved_docs", [])
+                logger.info(f"citation_candidate_docs: {citation_candidate_docs}")
 
                 sources = []
-                if candidate_citations:
-                    for i, document in enumerate(candidate_citations, start=1):
+                if citation_candidate_docs:
+                    for i, document in enumerate(citation_candidate_docs, start=1):
                         sources.append(BaseSource.from_document(
                             index=i,
                             doc=document
@@ -146,7 +144,9 @@ class ChatService:
     def _setup_config(self, session_id: str):
         default_config = {"configurable": {"thread_id": session_id}}
         if settings.ENABLE_LANGFUSE:
-            from catchup.observability.langfuse_client import langfuse_handler
+            from catchup.observability.langfuse import langfuse_handler
             default_config["callbacks"] = [langfuse_handler]
+            logger.info(f"Langfuse Status: {settings.ENABLE_LANGFUSE}, Handler: {langfuse_handler is not None}")
+
         return default_config
-    
+        
