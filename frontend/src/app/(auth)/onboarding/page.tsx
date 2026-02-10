@@ -7,7 +7,7 @@ import { WelcomeStep } from '@/features/onboarding/components/steps/WelcomeStep'
 import { useCurrentUser } from '@/shared/hooks/useCurrentUser';
 
 export default function OnboardingPage() {
-  const { data } = useCurrentUser(false);
+  const { data, isLoading } = useCurrentUser(false);
   const [started, setStarted] = useState(false);
 
   // 버튼 클릭 후 + 로그인 완료 상태: funnel 시작
@@ -18,6 +18,7 @@ export default function OnboardingPage() {
   // 항상 WelcomeStep을 먼저 표시
   return (
     <WelcomeStep
+      isLoading={isLoading}
       onStart={() => {
         if (data?.status === 'new') {
           // 이미 로그인됨 → funnel로 전환
