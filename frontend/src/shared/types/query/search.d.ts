@@ -1,9 +1,6 @@
 /** Popover 타입 */
 export type PopoverType = 'person' | 'department' | 'project' | null;
 
-/** Explorer 모드 타입 */
-export type ExplorerMode = 'github' | 'jira' | null;
-
 /** 필터 칩 데이터 */
 export interface ChipData {
   id: string;
@@ -17,8 +14,6 @@ export interface FilterLabels {
   person: string;
   dept: string;
   project: string;
-  git: string;
-  jira: string;
 }
 
 /** 검색 쿼리 (최근 검색 기록) */

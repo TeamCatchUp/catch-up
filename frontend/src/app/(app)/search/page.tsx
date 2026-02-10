@@ -24,7 +24,7 @@ export default function Search() {
   const [activeCard, setActiveCard] = useState<'jira' | 'git' | null>(null);
 
   const filters = useSearchFilters();
-  const input = useSearchInput({ currentRepo: filters.currentRepo, inputRef });
+  const input = useSearchInput({ inputRef });
 
   useEscapeKey(() => {
     input.setIsFocused(false);
@@ -69,7 +69,7 @@ export default function Search() {
               <div className="border-neutral-4 mt-1 flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden border-t pt-2">
                 <FilterBar filters={filters} inputRef={inputRef} />
                 <SelectedFilterChips chips={filters.allSelectedChips} onReset={filters.handleResetAll} />
-                <ExplorerPanel filters={filters} />
+                <ExplorerPanel />
               </div>
             )}
           </div>

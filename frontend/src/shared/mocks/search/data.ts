@@ -64,16 +64,3 @@ export const MOCK_RECENT_QUERIES: { content: RecentQueryResponse[] } = {
     },
   ],
 };
-
-export interface JiraIssueResponse {
-  issue_key: string;
-  summary: string;
-}
-
-export const MOCK_JIRA_TICKETS: JiraIssueResponse[] = [
-  { issue_key: 'CATCH-101', summary: '로그인 페이지 UI 개선' },
-  { issue_key: 'CATCH-102', summary: '다크모드 버그 수정' },
-  { issue_key: 'CATCH-103', summary: 'API 응답 속도 최적화' },
-  { issue_key: 'CATCH-104', summary: '사용자 프로필 페이지 추가' },
-  { issue_key: 'CATCH-105', summary: '알림 기능 구현' },
-];
