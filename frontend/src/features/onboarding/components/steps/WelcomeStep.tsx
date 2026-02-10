@@ -7,9 +7,10 @@ import { Button } from '@/shared/components/ui/button';
 
 interface WelcomeStepProps {
   onStart: () => void;
+  isLoading?: boolean;
 }
 
-export function WelcomeStep({ onStart }: WelcomeStepProps) {
+export function WelcomeStep({ onStart, isLoading }: WelcomeStepProps) {
   return (
     <div
       className="flex size-full flex-col items-center justify-center"
@@ -53,6 +54,7 @@ export function WelcomeStep({ onStart }: WelcomeStepProps) {
             variant="box-solid-primary"
             size="lg"
             onClick={onStart}
+            disabled={isLoading}
             className="h-[46px] w-full"
           >
             구글 계정으로 계속하기

@@ -16,7 +16,7 @@ interface ConnectorStepProps {
     slack_account_id: string;
   };
   onSubmit: (data: ConnectorFormData) => void;
-  onBack: () => void;
+  onBack: (data: ConnectorFormData) => void;
 }
 
 export function ConnectorStep({ defaultValues, onSubmit, onBack }: ConnectorStepProps) {
@@ -25,6 +25,8 @@ export function ConnectorStep({ defaultValues, onSubmit, onBack }: ConnectorStep
   const [jiraAccountId, setJiraAccountId] = useState(defaultValues.jira_account_id);
   const [githubAccountId, setGithubAccountId] = useState(defaultValues.github_account_id);
   const [slackAccountId, setSlackAccountId] = useState(defaultValues.slack_account_id);
+
+  const isComplete = jiraAccountId && githubAccountId && slackAccountId;
 
   const handleNext = () => {
     onSubmit({
@@ -77,8 +79,13 @@ export function ConnectorStep({ defaultValues, onSubmit, onBack }: ConnectorStep
       </div>
 
       <StepNavButtons
-        onBack={onBack}
+        onBack={() => onBack({
+          jira_account_id: jiraAccountId || undefined,
+          github_account_id: githubAccountId || undefined,
+          slack_account_id: slackAccountId || undefined,
+        })}
         onNext={handleNext}
+        isNextDisabled={!isComplete}
       />
     </div>
   );

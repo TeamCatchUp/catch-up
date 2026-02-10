@@ -1,18 +1,33 @@
 'use client';
 
+import { useState } from 'react';
+
 import { OnboardingFunnel } from '@/features/onboarding';
+import { WelcomeStep } from '@/features/onboarding/components/steps/WelcomeStep';
 import { useCurrentUser } from '@/shared/hooks/useCurrentUser';
 
 export default function OnboardingPage() {
-  const { isLoading } = useCurrentUser(true);
+  const { data, isLoading } = useCurrentUser(false);
+  const [started, setStarted] = useState(false);
 
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-xl font-semibold">로딩 중...</div>
-      </div>
-    );
+  // 버튼 클릭 후 + 로그인 완료 상태: funnel 시작
+  if (started && data?.status === 'new') {
+    return <OnboardingFunnel />;
   }
 
-  return <OnboardingFunnel />;
+  // 항상 WelcomeStep을 먼저 표시
+  return (
+    <WelcomeStep
+      isLoading={isLoading}
+      onStart={() => {
+        if (data?.status === 'new') {
+          // 이미 로그인됨 → funnel로 전환
+          setStarted(true);
+        } else {
+          // 비로그인 → Google OAuth
+          window.location.href = '/api/v1/auth/login';
+        }
+      }}
+    />
+  );
 }

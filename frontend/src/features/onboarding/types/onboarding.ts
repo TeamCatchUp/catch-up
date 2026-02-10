@@ -1,7 +1,5 @@
 /** useFunnel 스텝별 context 타입 */
 export type OnboardingSteps = {
-  Welcome: Record<string, never>;
-
   Profile: {
     name?: string;
     position?: string;

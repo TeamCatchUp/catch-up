@@ -14,7 +14,7 @@ function CallbackHandler() {
     if (err) {
       console.error('로그인 실패:', err);
       router.replace('/login');
-    } else if (success === 'true' || !err) {
+    } else if (success === 'true') {
       router.replace('/');
     } else {
       router.replace('/login');

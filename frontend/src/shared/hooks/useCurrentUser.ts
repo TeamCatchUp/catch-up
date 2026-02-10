@@ -22,19 +22,22 @@ export const useCurrentUser = (redirectToLogin = true) => {
 
       // 삭제된 사용자는 모든 페이지에서 로그인으로 이동
       if (status === 'deleted') {
+        clearUser();
         router.replace('/login');
         return;
       }
 
-      if (status === 'pending' && pathname !== '/pending') {
+      if (status === 'new' && pathname !== '/onboarding') {
+        router.replace('/onboarding');
+      } else if (status === 'pending' && pathname !== '/pending') {
         router.replace('/pending');
       } else if (status === 'inactive' && pathname !== '/inactive') {
         router.replace('/inactive');
-      } else if ((status === 'new' || status === 'active') && (pathname === '/pending' || pathname === '/inactive')) {
+      } else if (status === 'active' && (pathname === '/onboarding' || pathname === '/pending' || pathname === '/inactive')) {
         router.replace('/');
       }
     }
-  }, [query.data, setUser, router, pathname]);
+  }, [query.data, setUser, clearUser, router, pathname]);
 
   useEffect(() => {
     if (query.isError) {

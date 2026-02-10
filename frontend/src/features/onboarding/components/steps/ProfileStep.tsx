@@ -30,7 +30,7 @@ interface ProfileStepProps {
     department: string;
   };
   onSubmit: (data: ProfileFormData) => void;
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: ProfileStepProps) {
