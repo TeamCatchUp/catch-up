@@ -26,6 +26,8 @@ export function ConnectorStep({ defaultValues, onSubmit, onBack }: ConnectorStep
   const [githubAccountId, setGithubAccountId] = useState(defaultValues.github_account_id);
   const [slackAccountId, setSlackAccountId] = useState(defaultValues.slack_account_id);
 
+  const isComplete = jiraAccountId && githubAccountId && slackAccountId;
+
   const handleNext = () => {
     onSubmit({
       jira_account_id: jiraAccountId || undefined,
@@ -79,6 +81,7 @@ export function ConnectorStep({ defaultValues, onSubmit, onBack }: ConnectorStep
       <StepNavButtons
         onBack={onBack}
         onNext={handleNext}
+        isNextDisabled={!isComplete}
       />
     </div>
   );
