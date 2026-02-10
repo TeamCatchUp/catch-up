@@ -22,15 +22,15 @@ import asyncio
 import logging
 from typing import Any
 
+from langchain_cohere import CohereEmbeddings
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
 from langchain_postgres import PGVector
 
 from catchup.configs.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Embedding API Rate Limit 제한 (OpenAI API 동시 요청 제한)
+# Embedding API Rate Limit 제한 (Cohere API 동시 요청 제한)
 _embedding_semaphore = asyncio.Semaphore(10)
 
 
@@ -42,7 +42,7 @@ class PGVectorRepository:
     임베딩을 저장하고 시맨틱 검색을 제공합니다.
 
     Attributes:
-        embeddings: OpenAI 임베딩 모델
+        embeddings: Cohere 임베딩 모델
         vector_store: langchain-postgres PGVector 인스턴스
         _initialized: 초기화 완료 여부
     """
@@ -56,10 +56,10 @@ class PGVectorRepository:
         """
         self.collection_name = collection_name or settings.PGVECTOR_COLLECTION_NAME
 
-        # OpenAI Embeddings 설정 (text-embedding-3-large, 3072 dimensions)
-        self.embeddings = OpenAIEmbeddings(
-            model=settings.OPENAI_EMBEDDING_MODEL,
-            dimensions=settings.PGVECTOR_EMBEDDING_DIMENSIONS,
+        # Cohere Embeddings 설정 (embed-v4.0, 1536 dimensions)
+        self.embeddings = CohereEmbeddings(
+            model=settings.COHERE_EMBEDDING_MODEL,
+            cohere_api_key=settings.COHERE_API_KEY,
         )
 
         self.vector_store: PGVector | None = None

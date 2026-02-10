@@ -189,11 +189,11 @@ class PGVectorService(BaseVectorDbService):
 
 # Test용 스크립트
 if __name__ == "__main__":
+    from langchain_cohere import CohereEmbeddings
     from langchain_core.documents import Document
-    from langchain_openai import OpenAIEmbeddings
     from sqlalchemy import create_engine, text
     from sqlalchemy.orm import sessionmaker
-    
+
     # [주의] 이 부분은 프로젝트 경로에 맞게 수정 필요
     from catchup.configs.config import settings
 
@@ -205,9 +205,9 @@ if __name__ == "__main__":
     SessionFactory = sessionmaker(bind=engine)
     COLLECTION_NAME = settings.PGVECTOR_COLLECTION_NAME # 예: 'catchup_jira'
 
-    embeddings = OpenAIEmbeddings(
-        model=settings.OPENAI_EMBEDDING_MODEL, 
-        api_key=settings.OPENAI_API_KEY
+    embeddings = CohereEmbeddings(
+        model=settings.COHERE_EMBEDDING_MODEL,
+        cohere_api_key=settings.COHERE_API_KEY,
     )
 
     print(f">>> 컬렉션 '{COLLECTION_NAME}' 초기화 중...")
