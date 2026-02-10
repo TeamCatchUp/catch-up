@@ -3,6 +3,7 @@ from typing import Annotated, Any, Literal, TypedDict, Optional
 from langchain_core.documents import Document
 from langgraph.graph.message import add_messages
 
+from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.structures import GraphDbSearchQuery, VectorDbSearchQuery
 
 
@@ -25,3 +26,5 @@ class AgentState(TypedDict):
     sources: list[dict[str, Any]]  # 최종 출처 목록
     
     retry_count: int  # 최대 2회 제한용
+    
+    global_context: GlobalContext

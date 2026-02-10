@@ -16,6 +16,7 @@ from catchup.chat.schemas import (
     StreamEvent,
 )
 from catchup.rag.graph import get_compiled_graph
+from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.sources import BaseSource
 from catchup.utils.redis import get_langgraph_checkpointer
 
@@ -68,19 +69,20 @@ class ChatService:
     @observe(name="chat-stream")
     async def chat_stream(
         self,
+        global_context: GlobalContext,
         session_id: str,
         query: str = None,
-        role: str = "user",
     ) -> AsyncGenerator[StreamEvent, None]:
         # Compiled Graph
         app = await self._get_app()
 
         # Checkpointer 설정
         config = self._setup_config(session_id)
-
+        
         inputs = {
             "messages": [HumanMessage(content=query)],
             "original_query": query,
+            "global_context": global_context
         }
 
         # 실행 시간 측정 시작
