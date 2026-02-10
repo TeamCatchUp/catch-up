@@ -29,8 +29,6 @@ async def rewrite_node(state: AgentState):
 
     grade_comment = state.get("grade_comment", "")
 
-    current_try_cnt = state.get("retry_count", 0)
-
     try:
         async with llm_semaphore:
             answer = await chain.ainvoke(
@@ -43,7 +41,7 @@ async def rewrite_node(state: AgentState):
 
     except Exception as e:
         logger.warning(f"Rewrite node failed: {e}")
-        return {"rewritten_query": original_query, "retry_count": current_try_cnt + 1}
+        return {"rewritten_query": original_query}
 
     logger.info(
         f"\n[Rewrite Result]"
@@ -52,7 +50,7 @@ async def rewrite_node(state: AgentState):
         f"\n3. 재작성: {answer}"
     )
 
-    return {"rewritten_query": answer, "retry_count": current_try_cnt + 1}
+    return {"rewritten_query": answer}
 
 
 def get_formatted_history_text(
