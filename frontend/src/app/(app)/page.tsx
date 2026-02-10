@@ -52,12 +52,30 @@ export default function Home() {
 
       {/* Query Section */}
       <div className="flex flex-col items-center gap-4 self-stretch pt-18 pb-18">
-        {/* Hero */}
-        <div className="flex h-24 flex-col items-center justify-center gap-3 text-gray-50">
-          <h1 className="text-display-xlarge text-normal-normal">반갑습니다, {user?.name ?? ''}님!</h1>
-          <p className="text-heading-large text-normal-alternative">
-            무엇을 도와드릴까요? 필요한 업무정보를 찾아보세요.
-          </p>
+        {/* TEXT */}
+        <div className="grid h-24 place-items-center">
+          <div
+            className={`[grid-area:1/1] flex flex-col items-center gap-3 transition-opacity duration-300 ${
+              input.isFocused ? 'pointer-events-none opacity-0' : 'opacity-100'
+            }`}
+          >
+            <h1 className="text-display-xlarge text-normal-normal">반갑습니다, {user?.name ?? ''}님!</h1>
+            <p className="text-heading-large text-normal-alternative">
+              무엇을 도와드릴까요? 필요한 업무정보를 찾아보세요.
+            </p>
+          </div>
+          <div
+            className={`[grid-area:1/1] flex flex-col items-center text-center transition-opacity duration-300 ${
+              input.isFocused ? 'opacity-100' : 'pointer-events-none opacity-0'
+            }`}
+          >
+            <h1 className="text-display-xlarge text-normal-normal">
+              사내 AI 탐색으로
+              <br />
+              <span className="text-blue-50">필요한 업무 자료를 </span>
+              바로 찾아보세요
+            </h1>
+          </div>
         </div>
 
         {/* Query Box */}
