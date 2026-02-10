@@ -25,19 +25,9 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
   return (
     <div className="flex items-center gap-1.5 self-stretch overflow-x-scroll px-1.5 whitespace-nowrap">
       <div className="flex items-center gap-2">
-        <SearchOptionButton
-          Icon={IconJira}
-          label={filters.labels.jira}
-          selected={filters.selectedJiraItems.length > 0}
-          onClick={filters.handleJiraClick}
-        />
-        <SearchOptionButton
-          Icon={IconGithub}
-          label={filters.labels.git}
-          selected={filters.selectedGithubItems.length > 0}
-          onClick={filters.handleGithubClick}
-        />
-        <SearchOptionDisabledButton Icon={IconSlack} label="Slack" />
+        <SearchOptionButton Icon={IconJira} label="Jira" selected={filters.selectedSources.includes('jira')} onClick={() => filters.toggleSource('jira')} />
+        <SearchOptionButton Icon={IconGithub} label="Github" selected={filters.selectedSources.includes('github')} onClick={() => filters.toggleSource('github')} />
+        <SearchOptionButton Icon={IconSlack} label="Slack" selected={filters.selectedSources.includes('slack')} onClick={() => filters.toggleSource('slack')} />
         <SearchOptionDisabledButton Icon={IconLock} label="Wiki" />
         
       </div>
