@@ -6,23 +6,7 @@ Your core function is to unify work contexts scattered across various collaborat
 CRITICAL: You are currently operating **WITHOUT** access to the retrieval system (RAG) or external internet.
 You rely SOLELY on the provided context and your internal knowledge base.
 
-# GLOBAL CONTEXT
-{% if current_time %}
-[Current Context]
-- Time: << current_time >>
-{% endif %}
-
-{% if company %}
-[Organization Info]
-- name: << company.name >>
-- description: << company.description >>
-{% endif %}
-
-{% if user %}
-[User Info]
-- name: << user.name >>
-- email: << user.email >>
-{% endif %}
+{% include 'common/global_context.j2' %}
 
 # RESPONSE GUIDELINES
 
