@@ -217,8 +217,15 @@ class GitHubTransformer:
             LangChain Document
         """
         doc_id = f"github:issue:{owner}/{repo}:{issue.number}"
-        page_content = self._build_issue_content(issue)
+
+        # page_content: 임베딩용 (의미 중심 텍스트)
+        page_content = self._build_issue_embedding_content(issue)
+
+        # display_content: LLM 답변 생성용 (기존 포맷)
+        display_content = self._build_issue_display_content(issue)
+
         metadata = self._build_issue_metadata(issue, owner, repo, installation_id)
+        metadata["display_content"] = display_content
 
         return Document(
             id=doc_id,
@@ -226,8 +233,32 @@ class GitHubTransformer:
             metadata=metadata,
         )
 
-    def _build_issue_content(self, issue: GitHubIssue) -> str:
-        """Issue page_content 생성"""
+    def _build_issue_embedding_content(self, issue: GitHubIssue) -> str:
+        """
+        Issue용 임베딩 텍스트 생성 (의미 중심)
+
+        포함: title, body, comments(본문만)
+        제외: 메타데이터(Status, Labels, Assignees 등), 포맷 마커
+        """
+        parts = []
+
+        # 1. Title
+        if issue.title:
+            parts.append(issue.title)
+
+        # 2. Body
+        if issue.body:
+            parts.append(clean_markdown(issue.body))
+
+        # 3. Comments (본문만, author 제외)
+        for comment in issue.comments:
+            if comment.body:
+                parts.append(comment.body)
+
+        return "\n\n".join(parts)
+
+    def _build_issue_display_content(self, issue: GitHubIssue) -> str:
+        """Issue display_content 생성 - LLM 답변 생성용"""
         lines = []
 
         # 제목
@@ -528,8 +559,15 @@ class GitHubTransformer:
             LangChain Document
         """
         doc_id = f"github:pr:{owner}/{repo}:{pr.number}"
-        page_content = self._build_pr_content(pr)
+
+        # page_content: 임베딩용 (의미 중심 텍스트)
+        page_content = self._build_pr_embedding_content(pr)
+
+        # display_content: LLM 답변 생성용 (기존 포맷)
+        display_content = self._build_pr_display_content(pr)
+
         metadata = self._build_pr_metadata(pr, owner, repo, installation_id)
+        metadata["display_content"] = display_content
 
         return Document(
             id=doc_id,
@@ -537,8 +575,42 @@ class GitHubTransformer:
             metadata=metadata,
         )
 
-    def _build_pr_content(self, pr: GitHubPullRequest) -> str:
-        """PR page_content 생성"""
+    def _build_pr_embedding_content(self, pr: GitHubPullRequest) -> str:
+        """
+        PR용 임베딩 텍스트 생성 (의미 중심)
+
+        포함: title, body, commits(메시지만), reviews(본문만), comments(본문만)
+        제외: 메타데이터(Status, Author, Branch, Labels 등), 포맷 마커
+        """
+        parts = []
+
+        # 1. Title
+        if pr.title:
+            parts.append(pr.title)
+
+        # 2. Body
+        if pr.body:
+            parts.append(clean_markdown(pr.body))
+
+        # 3. Commits (메시지만)
+        for commit in pr.commits:
+            if commit.message:
+                parts.append(commit.message)
+
+        # 4. Reviews (본문만, author 제외)
+        for review in pr.reviews:
+            if review.body:
+                parts.append(review.body)
+
+        # 5. Comments (본문만, author 제외)
+        for comment in pr.comments:
+            if comment.body:
+                parts.append(comment.body)
+
+        return "\n\n".join(parts)
+
+    def _build_pr_display_content(self, pr: GitHubPullRequest) -> str:
+        """PR display_content 생성 - LLM 답변 생성용"""
         lines = []
 
         # 제목
@@ -812,8 +884,15 @@ class GitHubTransformer:
         """
         short_sha = commit.sha[:7]
         doc_id = f"github:commit:{owner}/{repo}:{short_sha}"
-        page_content = self._build_commit_content(commit)
+
+        # page_content: 임베딩용 (의미 중심 텍스트)
+        page_content = self._build_commit_embedding_content(commit)
+
+        # display_content: LLM 답변 생성용 (기존 포맷)
+        display_content = self._build_commit_display_content(commit)
+
         metadata = self._build_commit_metadata(commit, owner, repo, installation_id)
+        metadata["display_content"] = display_content
 
         return Document(
             id=doc_id,
@@ -821,8 +900,17 @@ class GitHubTransformer:
             metadata=metadata,
         )
 
-    def _build_commit_content(self, commit: GitHubCommit) -> str:
-        """Commit page_content 생성"""
+    def _build_commit_embedding_content(self, commit: GitHubCommit) -> str:
+        """
+        Commit용 임베딩 텍스트 생성 (의미 중심)
+
+        포함: message
+        제외: 메타데이터(Author, Date, PR, Changes stats 등), 포맷 마커
+        """
+        return commit.message if commit.message else ""
+
+    def _build_commit_display_content(self, commit: GitHubCommit) -> str:
+        """Commit display_content 생성 - LLM 답변 생성용"""
         lines = []
         short_sha = commit.sha[:7]
 

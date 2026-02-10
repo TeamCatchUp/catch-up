@@ -33,6 +33,7 @@ from catchup.connectors.jira.client import (
 from catchup.connectors.jira.field_mapper import JiraFieldMapper
 from catchup.connectors.jira.transformers import JiraTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
 from catchup.db.models import JiraEntityType, JiraSyncState, JiraSyncStatus
 from catchup.db import jira_entities
@@ -61,6 +62,7 @@ class JiraIngestionService:
         cloud_id: str,
         access_token: str,
         site_url: str,
+        enable_summarization: bool = True,
     ):
         """
         JiraIngestionService 초기화
@@ -69,15 +71,18 @@ class JiraIngestionService:
             cloud_id: Jira Cloud 인스턴스 ID (JiraOAuthToken에서 조회)
             access_token: OAuth access token
             site_url: Jira 사이트 URL (예: "https://catchup.atlassian.net")
+            enable_summarization: 임베딩 전 LLM 요약 활성화 여부
         """
         self.cloud_id = cloud_id
         self.site_url = site_url.rstrip("/")
+        self.enable_summarization = enable_summarization
 
         # 컴포넌트 초기화
         self.client = JiraApiClient(cloud_id, access_token)
         self.field_mapper = JiraFieldMapper(self.client)
         self.transformer: JiraTransformer | None = None
         self.repository = PGVectorRepository()
+        self.summarizer: SummarizerService | None = None
 
         self._initialized = False
 
@@ -98,6 +103,11 @@ class JiraIngestionService:
 
         # Transformer 생성 (field_mapper 필요)
         self.transformer = JiraTransformer(self.field_mapper)
+
+        # Summarizer 초기화 (요약 활성화 시)
+        if self.enable_summarization:
+            self.summarizer = get_summarizer_service()
+            logger.info("Summarization enabled for embedding optimization")
 
         # PGVector 초기화
         await self.repository.initialize()
@@ -343,6 +353,9 @@ class JiraIngestionService:
 
                 # PGVector에 Upsert (기존 문서 업데이트, 없으면 추가)
                 if documents:
+                    # 요약 적용 (summarizer가 활성화된 경우)
+                    if self.summarizer:
+                        documents = await self._summarize_documents(documents)
                     await self.repository.upsert_documents(documents, doc_ids)
 
                 # 마지막 페이지면 종료
@@ -364,6 +377,43 @@ class JiraIngestionService:
 
         logger.info(f"Issue sync completed: {results}")
         return results
+
+    async def _summarize_documents(
+        self,
+        documents: list[Document],
+    ) -> list[Document]:
+        """
+        문서들의 page_content를 LLM으로 요약하여 교체
+
+        display_content(구조화된 정보 포함)를 요약 입력으로 사용하여
+        더 풍부한 컨텍스트 기반 요약 생성.
+
+        Args:
+            documents: 요약할 Document 리스트
+
+        Returns:
+            page_content가 요약된 Document 리스트
+        """
+        if not self.summarizer or not documents:
+            return documents
+
+        # SummarizeRequest 리스트 생성 (source + entity_type → source_type)
+        requests = []
+        for doc in documents:
+            content = doc.metadata.get("display_content", doc.page_content)
+            entity_type = doc.metadata.get("entity_type", "issue")
+            source_type = f"jira_{entity_type}"  # jira_issue, jira_epic, jira_sprint
+            requests.append(SummarizeRequest(content=content, source_type=source_type))
+
+        # 일괄 요약
+        summarized = await self.summarizer.summarize_batch(requests)
+
+        # 요약된 텍스트로 교체
+        for doc, summary in zip(documents, summarized):
+            doc.page_content = summary
+
+        logger.debug(f"Summarized {len(documents)} documents for embedding")
+        return documents
 
     async def _sync_all_projects(
         self,

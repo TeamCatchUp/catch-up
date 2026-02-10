@@ -74,8 +74,15 @@ class SlackTransformer:
         Returns:
             LangChain Document with page_content and metadata
         """
-        page_content = self._build_message_content(message)
+        # page_content: 임베딩용 (의미 중심 텍스트)
+        page_content = self._build_message_embedding_content(message)
+
+        # display_content: LLM 답변 생성용 (기존 포맷)
+        display_content = self._build_message_display_content(message)
+
         metadata = self._build_message_metadata(message, workspace_id)
+        metadata["display_content"] = display_content
+
         doc_id = f"slack:message:{workspace_id}:{message.channel_id}:{message.ts}"
 
         return Document(
@@ -84,9 +91,31 @@ class SlackTransformer:
             id=doc_id,
         )
 
-    def _build_message_content(self, message: SlackMessage) -> str:
+    def _build_message_embedding_content(self, message: SlackMessage) -> str:
         """
-        메시지 page_content 생성
+        Message용 임베딩 텍스트 생성 (의미 중심)
+
+        포함: text(본문), replies(본문만)
+        제외: 시간, Author, Channel, Replies 수, Mentioned, Reacted, Attached, Links
+        """
+        parts = []
+
+        # 1. 메시지 본문
+        text = self._parse_slack_markdown(message.text)
+        if text:
+            parts.append(text)
+
+        # 2. Replies 본문 (author 제외)
+        for reply in message.replies:
+            reply_text = self._parse_slack_markdown(reply.text)
+            if reply_text:
+                parts.append(reply_text)
+
+        return "\n\n".join(parts)
+
+    def _build_message_display_content(self, message: SlackMessage) -> str:
+        """
+        메시지 display_content 생성 - LLM 답변 생성용
 
         Format (Context 먼저, 본문 나중):
             [2024-02-05 09:30:00]
