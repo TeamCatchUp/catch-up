@@ -50,7 +50,7 @@ export function CompleteStep({ data, isAdmin }: CompleteStepProps) {
 
   useEffect(() => {
     submitOnboarding();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [submitOnboarding]);
 
   return (
     <div className="flex size-full items-center justify-center">
