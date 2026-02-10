@@ -34,9 +34,9 @@ def get_compiled_graph(
     workflow.add_node("search_vector_db", search_vector_db_node)
     workflow.add_node("rerank", rerank_node)
     workflow.add_node("grade", grade_node)
-    workflow.add_node("expand_graph_context", expand_graph_context_node)
-    workflow.add_node("fetch_details_after_graph_context_expansion", fetch_details_after_graph_context_expansion_node)
-    workflow.add_node("fallback_cypher_query", fallback_cypher_query_node)
+    # workflow.add_node("expand_graph_context", expand_graph_context_node)
+    # workflow.add_node("fetch_details_after_graph_context_expansion", fetch_details_after_graph_context_expansion_node)
+    # workflow.add_node("fallback_cypher_query", fallback_cypher_query_node)
     workflow.add_node("generate_final_answer", generate_final_answer_node)
 
     # Edges
@@ -60,13 +60,13 @@ def get_compiled_graph(
         {
             "generate_final_answer": "generate_final_answer",
             "rewrite": "rewrite",
-            "expand_graph_context": "expand_graph_context",
-            "fallback_cypher_query": "fallback_cypher_query"
+            # "expand_graph_context": "expand_graph_context",
+            # "fallback_cypher_query": "fallback_cypher_query"
         }
     )
-    workflow.add_edge("expand_graph_context", "fetch_details_after_graph_context_expansion")
-    workflow.add_edge("fetch_details_after_graph_context_expansion", "generate_final_answer")
-    workflow.add_edge("fallback_cypher_query", "generate_final_answer")
+    # workflow.add_edge("expand_graph_context", "fetch_details_after_graph_context_expansion")
+    # workflow.add_edge("fetch_details_after_graph_context_expansion", "generate_final_answer")
+    # workflow.add_edge("fallback_cypher_query", "generate_final_answer")
     workflow.add_edge("generate_final_answer", END)
 
     # Thread(session)-level 단기 영속성
