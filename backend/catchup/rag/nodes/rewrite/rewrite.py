@@ -5,7 +5,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.rag.nodes.rewrite.prompt import REWRITE_PROMPT
+from catchup.rag.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import (
     get_conversation_history,
     llm_semaphore,
@@ -18,25 +18,30 @@ logger = logging.getLogger(__name__)
 
 @log_node
 async def rewrite_node(state: AgentState):
-    llm = get_llm_service(LlmProvider.OPENAI).get_llm()
-    prompt = ChatPromptTemplate.from_template(REWRITE_PROMPT)
-    chain = prompt | llm | StrOutputParser()
-
-    original_query = state["original_query"]
-
     conversation_history = get_conversation_history(state["messages"])
     history_text = get_formatted_history_text(conversation_history)
-
+    
+    original_query = state["original_query"]
+    
     grade_comment = state.get("grade_comment", "")
+    
+    global_context = state["global_context"].model_dump()
+    
+    prompt = prompt_loader.get_prompt(
+        "rewrite",
+        history=history_text,
+        feedback=grade_comment,
+        original_query=original_query,
+        **global_context
+    )
+    
+    llm = get_llm_service(LlmProvider.OPENAI).get_llm()
+    chain = llm | StrOutputParser()
 
     try:
         async with llm_semaphore:
             answer = await chain.ainvoke(
-                input={
-                    "history": history_text,
-                    "original_query": original_query,
-                    "feedback": grade_comment if grade_comment else "None",
-                }
+                input=[HumanMessage(content=prompt)]
             )
 
     except Exception as e:
