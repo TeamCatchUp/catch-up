@@ -12,7 +12,6 @@ import { OnboardingLayout } from './OnboardingLayout';
 import { ConnectorStep } from './steps/ConnectorStep';
 import { OrgInfoStep } from './steps/OrgInfoStep';
 import { ProfileStep } from './steps/ProfileStep';
-import { WelcomeStep } from './steps/WelcomeStep';
 
 export function OnboardingFunnel() {
   const user = useUserStore((s) => s.user);
@@ -24,27 +23,12 @@ export function OnboardingFunnel() {
 
   const funnel = useFunnel<OnboardingSteps>({
     id: 'onboarding',
-    initial: { step: 'Welcome', context: {} },
+    initial: { step: 'Profile', context: {} },
   });
-
-  if (funnel.step === 'Welcome') {
-    return (
-      <funnel.Render
-        Welcome={({ history }) => (
-          <WelcomeStep onStart={() => history.push('Profile', {})} />
-        )}
-        Profile={() => null}
-        OrgInfo={() => null}
-        Connector={() => null}
-        Complete={() => null}
-      />
-    );
-  }
 
   return (
     <OnboardingLayout>
       <funnel.Render
-        Welcome={() => null}
         Profile={({ context, history }) => (
           <ProfileStep
             isAdmin={isAdmin}
@@ -62,7 +46,6 @@ export function OnboardingFunnel() {
                 history.push('Connector', { ...data, ...cachedConnector.current });
               }
             }}
-            onBack={() => history.back()}
           />
         )}
         OrgInfo={({ context, history }) => (
