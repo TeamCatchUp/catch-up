@@ -54,7 +54,7 @@ const SourceCard = ({ source, showCount = true, count }: Props) => {
               source.source_type === 'jira' ? 'bg-green-10' : 'bg-blue-5',
             )}
           >
-            <Icon className="h-4 w-4" />
+            {Icon && <Icon className="h-4 w-4" />}
             {showCount && <span className="text-body-xsmall text-gray-70 relative top-px">{count ?? 0}</span>}
           </div>
           <div className="flex w-90 cursor-pointer px-1.5 py-1">
