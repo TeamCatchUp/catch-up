@@ -1,10 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 
 import HowToUse from '@/features/home/components/HowToUse';
 import LinkTool from '@/features/home/components/LinkTool';
-import TaskRecentlyCheckedModal from '@/features/home/components/TaskRecentlyCheckedModal';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import ExplorerPanel from '@/shared/components/query/ExplorerPanel';
 import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
@@ -18,8 +17,6 @@ import { useUserStore } from '@/shared/store/userStore';
 
 export default function Home() {
   const user = useUserStore((state) => state.user);
-  const [selectedTask, setSelectedTask] = useState<TaskRecentlyCheckedCard | null>(null);
-  const [isClosing, setIsClosing] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -37,14 +34,6 @@ export default function Home() {
     input.setIsFocused(false);
     inputRef.current?.blur();
   });
-
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setSelectedTask(null);
-      setIsClosing(false);
-    }, 200);
-  };
 
   return (
     <div className="bg-home-gradient flex flex-col">
@@ -97,25 +86,9 @@ export default function Home() {
       </div>
 
       <div className="flex flex-col items-center gap-16 px-16 pt-10 pb-30">
-        {/* <TaskRecentlyChecked onClickCard={setSelectedTask} /> */}
         <HowToUse />
         <LinkTool />
       </div>
-
-      {selectedTask && (
-        <div
-          className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'opacity-100'
-            }`}
-        >
-          <div onClick={handleClose} className="absolute inset-0 bg-white/50 transition-opacity duration-200" />
-          <div
-            className={`relative z-10 transition-all duration-200 ${isClosing ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
-              }`}
-          >
-            <TaskRecentlyCheckedModal task={selectedTask} onClose={handleClose} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
