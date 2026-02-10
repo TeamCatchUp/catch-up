@@ -87,7 +87,7 @@ export default function Home() {
           <QueryInput input={input} inputRef={inputRef} />
 
           {input.isFocused && (
-            <div className="border-neutral-4 mt-1 flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden border-t pt-2">
+            <div className="animate-in fade-in-0 slide-in-from-top-3 duration-300 border-neutral-4 mt-1 flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden border-t pt-2">
               <FilterBar filters={filters} inputRef={inputRef} />
               <SelectedFilterChips chips={filters.allSelectedChips} onReset={filters.handleResetAll} />
               <ExplorerPanel filters={filters} />
