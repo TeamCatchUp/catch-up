@@ -18,6 +18,12 @@ export function CompleteStep({ data, isAdmin }: CompleteStepProps) {
   useEffect(() => {
     complete(
       {
+        name: data.name ?? '',
+        position: data.position ?? '',
+        rank: data.rank ?? '',
+        department: data.department,
+        company_name: data.company_name,
+        team_size: data.team_size,
         connectors: {
           jira_account_id: data.jira_account_id,
           github_account_id: data.github_account_id,
