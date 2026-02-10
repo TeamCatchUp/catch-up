@@ -26,64 +26,76 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
   const handleBoxClick = () => {
     inputRef.current?.focus();
   };
+
+  const searchPlaceholder = `${title.replace(' 선택', '')} 검색`;
+
   return (
     <>
-      {' '}
-      <div className="flex flex-col items-start gap-2.5 self-stretch px-2.5">
+      {/* Search box */}
+      <div className="flex flex-col items-start self-stretch px-2.5">
         <div
           onClick={handleBoxClick}
-          className="bg-neutral-1 border-neutral-2 focus-within:border-blue-30 relative flex min-h-10 w-full cursor-text flex-wrap items-center gap-1.5 rounded-xl border px-2 py-1.5 transition-all"
+          className="flex min-h-10 max-h-60 w-full cursor-text items-start gap-1.5 overflow-hidden rounded-lg border border-transparent bg-neutral-1 px-3 py-2 focus-within:border-blue-30"
         >
-          {selected.length > 0 && (
-            <div className="flex w-full flex-wrap gap-1.5">
-              {selected.map((name) => (
-                <div
-                  key={name}
-                  className="border-neutral-5 rounded-rounded flex h-[37px] shrink-0 items-center gap-1 border bg-white p-1.5"
-                >
-                  <div className="bg-gray-60 rounded-rounded h-6.25 w-6.25" />
-                  <span className="text-body-small text-gray-80 ml-0.5 truncate">{name}</span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggle(name);
-                    }}
-                    className="hover:text-blue-80"
-                    onMouseDown={(e) => e.preventDefault()}
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+            {/* Selected chips */}
+            {selected.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {selected.map((name) => (
+                  <div
+                    key={name}
+                    className="border-neutral-5 flex h-9 shrink-0 items-center gap-1 rounded-full border bg-white px-1.5"
                   >
-                    <IconCloseSmall className="h-5 w-5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+                    <div className="flex items-center gap-1.5 px-0.5">
+                      <div className="border-neutral-1 bg-neutral-2 flex size-6.25 shrink-0 items-center justify-center rounded-full border">
+                        <Icon className="size-3.5 text-gray-50" />
+                      </div>
+                      <span className="text-body-small text-gray-80 max-w-37.5 truncate">{name}</span>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggle(name);
+                      }}
+                      className="hover:text-gray-60 cursor-pointer text-gray-40 p-0.5"
+                      onMouseDown={(e) => e.preventDefault()}
+                    >
+                      <IconCloseSmall className="size-5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
-          <div className="relative flex w-full items-center">
+            {/* Input */}
             <input
               ref={inputRef}
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={selected.length === 0 ? `${title} 검색` : ''}
-              className="text-body-small h-8 w-full bg-transparent outline-none"
+              placeholder={searchPlaceholder}
+              className="text-body-small placeholder:text-gray-30 h-6 w-full bg-transparent tracking-tight outline-none"
             />
-
-            {searchTerm.length > 0 && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSearchTerm('');
-                }}
-                className="text-gray-40 hover:text-gray-60 absolute right-0"
-                onMouseDown={(e) => e.preventDefault()}
-              >
-                <IconCloseCircle className="h-5 w-5" />
-              </button>
-            )}
           </div>
+
+          {/* Clear button */}
+          {searchTerm.length > 0 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setSearchTerm('');
+              }}
+              className="shrink-0 cursor-pointer text-gray-30"
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <IconCloseCircle className="size-5" />
+            </button>
+          )}
         </div>
       </div>
-      <div className="no-scrollbar flex h-[288] flex-col gap-1 self-stretch overflow-y-auto px-1.5">
+
+      {/* Options list */}
+      <div className="no-scrollbar flex min-h-0 flex-1 flex-col gap-1 self-stretch overflow-y-auto px-1.5">
         <ul className="flex w-full flex-col">
           {options
             .filter((option) => option.name.includes(searchTerm))
@@ -93,26 +105,27 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
               return (
                 <li key={uniqueKey} className="w-full">
                   <button
-                    className={`flex h-11 w-full items-center gap-3 rounded-lg px-2 py-1.5 transition-colors ${
+                    className={`flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors ${
                       isSelected ? 'bg-blue-5' : 'hover:bg-neutral-1 bg-white'
                     }`}
                     onClick={() => onToggle(option.name)}
                   >
-                    <div className="border-neutral-3 bg-neutral-1 rounded-rounded flex shrink-0 items-center justify-center border p-1.5">
-                      <Icon className={`h-5 w-5 ${isSelected ? 'text-blue-55' : 'text-gray-70'}`} />
+                    <div className="border-neutral-1 bg-neutral-1 flex size-7 shrink-0 items-center justify-center rounded-full border">
+                      <Icon className={`size-4.5 ${isSelected ? 'text-blue-55' : 'text-gray-50'}`} />
                     </div>
 
                     <div
                       className={`text-body-small flex-1 truncate text-left ${
-                        isSelected ? 'text-blue-55 font-medium' : 'text-gray-80'
+                        isSelected ? 'text-blue-55' : 'text-gray-80'
                       }`}
                     >
                       {option.name}
                     </div>
                     {option.position && (
-                      <div className="text-body-xsmall text-gray-30 max-w-18 min-w-7.5 shrink-0">{option.position}</div>
+                      <div className="text-body-xsmall text-gray-30 max-w-18 min-w-7.5 shrink-0 truncate">
+                        {option.position}
+                      </div>
                     )}
-                    {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-blue-50" />}
                   </button>
                 </li>
               );
