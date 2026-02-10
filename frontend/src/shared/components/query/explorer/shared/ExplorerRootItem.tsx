@@ -48,8 +48,8 @@ export function ExplorerRootItem<T extends BaseTreeNode>({
         </div>
         <div className="flex items-center gap-2 pr-1">
           <div className="text-body-xsmall text-gray-30">
-            {node.isPublic !== undefined && <>{node.isPublic ? 'Public' : 'Private'} ∙ </>}
-            {node.lastEdited}
+            {node.is_public !== undefined && <>{node.is_public ? 'Public' : 'Private'} ∙ </>}
+            {node.last_edited}
           </div>
           <div className="hover:bg-neutral-2 flex h-9 w-9 items-center justify-center rounded-lg p-1.5">
             <IconArrowRight className="text-gray-70 h-6 w-6 shrink-0" />

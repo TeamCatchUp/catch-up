@@ -11,8 +11,8 @@ import { INDENT_WIDTH } from './explorerConstants';
 export interface BaseTreeNode {
   id: string;
   name: string;
-  isPublic?: boolean;
-  lastEdited?: string;
+  is_public?: boolean;
+  last_edited?: string;
   children?: BaseTreeNode[];
 }
 
@@ -114,8 +114,8 @@ export function ExplorerChildItem<T extends BaseTreeNode>({
 
         {/* 메타데이터 */}
         <div className="text-body-xsmall text-gray-30 shrink-0">
-          {node.isPublic !== undefined && <>{node.isPublic ? 'Public' : 'Private'} ∙ </>}
-          {node.lastEdited}
+          {node.is_public !== undefined && <>{node.is_public ? 'Public' : 'Private'} ∙ </>}
+          {node.last_edited}
         </div>
       </div>
 
