@@ -152,7 +152,7 @@ const RagAnswer = ({
                       onClick={() => setFilterOpenMap((prev) => ({ ...prev, [answerId]: true }))}
                       className="cursor-pointer"
                     >
-                      <ToggleOff />
+                      <ToggleOff className="h-5 w-9" />
                     </button>
                   </div>
                 </div>
@@ -209,7 +209,7 @@ const RagAnswer = ({
           {currentQA.answer.content ? (
             <>
               {/* 마크다운 답변 */}
-              <div className="markdown-body max-w-192.75 break-words">
+              <div className="markdown-body max-w-192.75 wrap-break-words">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm, remarkBreaks]}
                   components={MarkDownComponents(currentQA.answer.sources)}
@@ -234,8 +234,8 @@ const RagAnswer = ({
               <div ref={feedbackRef}>
                 <FeedbackSection
                   messageId={currentQA.answer.id}
-                  chatHistoryId={currentQA.answer.chatHistoryId}
-                  hasFeedback={currentQA.answer.hasFeedback}
+                  chatHistoryId={currentQA.answer.chat_history_id}
+                  hasFeedback={currentQA.answer.has_feedback}
                   feedbackVisibleMap={feedbackVisibleMap}
                   setFeedbackVisibleMap={setFeedbackVisibleMap}
                   onFeedbackSubmitted={onFeedbackSubmitted}
@@ -246,7 +246,7 @@ const RagAnswer = ({
             <AnswerError
               icons={ANSWER_ICONS}
               messageId={`error_${sessionId}`}
-              hasFeedback={currentQA.answer.hasFeedback}
+              hasFeedback={currentQA.answer.has_feedback}
               feedbackVisibleMap={feedbackVisibleMap}
               setFeedbackVisibleMap={setFeedbackVisibleMap}
             />

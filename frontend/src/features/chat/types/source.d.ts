@@ -3,27 +3,28 @@ type BackendSourceType = 0 | 1 | 2 | 3;
 
 interface BackendSource {
   index: number;
-  isCited: boolean;
-  sourceType: BackendSourceType;
-  relevanceScore: number;
-  htmlUrl?: string;
+  is_cited: boolean;
+  source_type: BackendSourceType;
+  relevance_score: number;
+  html_url?: string;
   content: string;
   owner: string;
 
   // github
   repo?: string;
-  filePath?: string;
+  file_path?: string;
+  days_ago?: number;
   title?: string;
-  prNumber?: number;
-  createdAt?: number;
+  pr_number?: number;
+  created_at?: number;
   author?: string;
 
   // jira
-  issueKey?: string;
+  issue_key?: string;
   summary?: string;
-  projectName?: string;
-  parentKey?: string;
-  parentSummary?: string;
-  assigneeName?: string;
-  statusId?: number;
+  project_name?: string;
+  parent_key?: string;
+  parent_summary?: string;
+  assignee_name?: string;
+  status_id?: number;
 }

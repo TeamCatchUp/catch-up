@@ -5,7 +5,6 @@ import { useState } from 'react';
 import { cn } from '@/shared/utils/cn';
 
 import Connector from '/public/icons/icon/connector.svg';
-import DefaultProfile from '/public/icons/icon/default_profile.svg';
 import LastConnector from '/public/icons/icon/last_connector.svg';
 import Link from '/public/icons/icon/link.svg';
 import LoadingProfile from '/public/icons/icon/loading_profile.svg';
@@ -110,7 +109,7 @@ const CommentsTabContent = () => {
             onClick={() => toggleReplies(commentId)}
             className="group text-button-primary-blue flex cursor-pointer items-center justify-center px-1.5 py-1"
           >
-            <span className="text-body-xsmall text-blue-55 group-active:!text-blue-60">
+            <span className="text-body-xsmall text-blue-55 group-active:text-blue-60!">
               {replies.length}개의 답글 더보기
             </span>
           </button>

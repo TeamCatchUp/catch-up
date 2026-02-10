@@ -3,7 +3,7 @@ import type { Components } from 'react-markdown';
 
 import { renderWithBadges } from './renderWithBadges';
 
-const processChildren = (children: any, sources?: ChatSource[]) => {
+const processChildren = (children: React.ReactNode, sources?: ChatSource[]) => {
   return React.Children.map(children, (child) => {
     if (typeof child === 'string') {
       return renderWithBadges(child, sources);
@@ -16,9 +16,9 @@ export const MarkDownComponents = (sources?: ChatSource[]): Components => {
   console.log('MarkDownComponents initialized with sources:', sources);
 
   return {
-    table: ({ node, ...props }) => (
+    table: ({ children }) => (
       <div className="table-wrapper">
-        <table {...props} />
+        <table>{children}</table>
       </div>
     ),
 
@@ -40,32 +40,20 @@ export const MarkDownComponents = (sources?: ChatSource[]): Components => {
       );
     },
 
-    strong: ({ node, children, ...props }) => {
-      return (
-        <strong {...props} style={{ fontWeight: 600 }}>
-          {processChildren(children, sources)}
-        </strong>
-      );
-    },
+    strong: ({ children }) => (
+      <strong style={{ fontWeight: 600 }}>
+        {processChildren(children, sources)}
+      </strong>
+    ),
 
-    p: ({ node, children, ...props }) => {
-      return <p {...props}>{processChildren(children, sources)}</p>;
-    },
+    p: ({ children }) => <p>{processChildren(children, sources)}</p>,
 
-    li: ({ node, children, ...props }) => {
-      return <li {...props}>{processChildren(children, sources)}</li>;
-    },
+    li: ({ children }) => <li>{processChildren(children, sources)}</li>,
 
-    h1: ({ node, children, ...props }) => {
-      return <h1 {...props}>{processChildren(children, sources)}</h1>;
-    },
+    h1: ({ children }) => <h1>{processChildren(children, sources)}</h1>,
 
-    h2: ({ node, children, ...props }) => {
-      return <h2 {...props}>{processChildren(children, sources)}</h2>;
-    },
+    h2: ({ children }) => <h2>{processChildren(children, sources)}</h2>,
 
-    h3: ({ node, children, ...props }) => {
-      return <h3 {...props}>{processChildren(children, sources)}</h3>;
-    },
+    h3: ({ children }) => <h3>{processChildren(children, sources)}</h3>,
   };
 };

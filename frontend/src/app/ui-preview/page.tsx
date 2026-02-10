@@ -14,13 +14,13 @@ import DownloadIcon from '@/public/icons/icon/download.svg';
 import EditIcon from '@/public/icons/icon/edit_pencil.svg';
 import FilterIcon from '@/public/icons/icon/filter.svg';
 import HomeIcon from '@/public/icons/icon/home.svg';
+import TagIcon from '@/public/icons/icon/icon_type.svg';
 import InventoryIcon from '@/public/icons/icon/inventory.svg';
 import KebabIcon from '@/public/icons/icon/kebab.svg';
 import LinkIcon from '@/public/icons/icon/link.svg';
 import SearchIcon from '@/public/icons/icon/search.svg';
 import SettingsIcon from '@/public/icons/icon/settings.svg';
 import ShareIcon from '@/public/icons/icon/share.svg';
-import TagIcon from '@/public/icons/icon/icon_type.svg';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
@@ -66,7 +66,7 @@ import {
 import { Separator } from '@/shared/components/ui/separator';
 import { Switch } from '@/shared/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 
 /* ─────────────────────────────────────────────
  * Figma icon size constant
@@ -150,6 +150,7 @@ export default function UIPreviewPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   return (
+    <TooltipProvider>
     <div className="flex min-h-screen bg-white">
       {/* ── Sticky sidebar nav ── */}
       <nav className="sticky top-0 h-screen w-56 shrink-0 overflow-y-auto border-r border-neutral-3 bg-white p-4">
@@ -378,14 +379,14 @@ export default function UIPreviewPage() {
 
             <SubSection title="Solid (Purple / Lightblue)">
               <StateRow label="Default">
-                <Button variant="capsule-outline-purple" size="sm"><AddSmallIcon className={IC} />Text</Button>
-                <Button variant="capsule-outline-light-blue" size="sm"><AddSmallIcon className={IC} />Text</Button>
+                <Button variant="capsule-solid-purple" size="sm"><AddSmallIcon className={IC} />Text</Button>
+                <Button variant="capsule-solid-light-blue" size="sm"><AddSmallIcon className={IC} />Text</Button>
               </StateRow>
             </SubSection>
 
             <SubSection title="Epic / Task 칩 예시">
               <div className="flex items-center gap-3">
-                <Button variant="capsule-outline-purple" size="sm">일본 시장 진출 리서치 범위 및 방향 정의</Button>
+                <Button variant="capsule-solid-purple" size="sm">일본 시장 진출 리서치 범위 및 방향 정의</Button>
                 <Button variant="capsule-outline-blue" size="sm">일본 진출 가설 검증 결과 정리</Button>
               </div>
             </SubSection>
@@ -696,22 +697,22 @@ export default function UIPreviewPage() {
             <p className="text-body-xsmall text-gray-50 mb-2">
               (TooltipProvider가 필요합니다. 아래는 Tooltip이 적용될 SNB 아이콘 예시입니다.)
             </p>
-            <div className="flex items-center gap-6">
-              {[
-                { icon: <HomeIcon className={IC} />, label: '홈' },
-                { icon: <SearchIcon className={IC} />, label: '캐치스턴트 AI' },
-                { icon: <SettingsIcon className={IC} />, label: '업무 대시보드' },
-              ].map((item) => (
-                <Tooltip key={item.label}>
-                  <TooltipTrigger asChild>
-                    <div className="flex size-10 cursor-pointer items-center justify-center rounded-lg text-gray-50 hover:bg-neutral-2">
-                      {item.icon}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">{item.label}</TooltipContent>
-                </Tooltip>
-              ))}
-            </div>
+              <div className="flex items-center gap-6">
+                {[
+                  { icon: <HomeIcon className={IC} />, label: '홈' },
+                  { icon: <SearchIcon className={IC} />, label: '캐치스턴트 AI' },
+                  { icon: <SettingsIcon className={IC} />, label: '업무 대시보드' },
+                ].map((item) => (
+                  <Tooltip key={item.label}>
+                    <TooltipTrigger asChild>
+                      <div className="flex size-10 cursor-pointer items-center justify-center rounded-lg text-gray-50 hover:bg-neutral-2">
+                        {item.icon}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">{item.label}</TooltipContent>
+                  </Tooltip>
+                ))}
+              </div>
           </Section>
         </div>
 
@@ -1037,5 +1038,6 @@ export default function UIPreviewPage() {
         <div className="h-20" />
       </main>
     </div>
+    </TooltipProvider>
   );
 }

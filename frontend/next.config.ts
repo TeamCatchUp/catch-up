@@ -8,11 +8,6 @@ const nextConfig = {
     unoptimized: true,
   },
 
-  experimental: {
-    // @ts-expect-error Next 16 turbo option
-    turbo: false,
-  },
-
   output: 'standalone',
 
   async rewrites() {
@@ -29,13 +24,20 @@ const nextConfig = {
 
   webpack(config) {
     const fileLoaderRule = config.module.rules.find(
-      (rule: any) => rule?.test instanceof RegExp && rule.test.test('.svg'),
+      (rule: { test?: RegExp }) => rule?.test instanceof RegExp && rule.test.test('.svg'),
     );
 
     config.module.rules.push({
       test: /\.svg$/i,
       issuer: fileLoaderRule.issuer,
-      use: ['@svgr/webpack'],
+      use: [
+        {
+          loader: '@svgr/webpack',
+          options: {
+            dimensions: false,
+          },
+        },
+      ],
     });
 
     // fileLoaderRule.exclude = /\.svg$/i;

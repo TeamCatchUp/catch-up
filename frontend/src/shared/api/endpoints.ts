@@ -33,4 +33,8 @@ export const API = {
     status: '/api/v1/auth/slack/status',
     uninstall: '/api/v1/auth/slack/uninstall',
   },
+  onboarding: {
+    complete: '/api/v1/onboarding/complete',
+    connectors: '/api/v1/onboarding/connectors',
+  },
 } as const;

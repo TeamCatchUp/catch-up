@@ -1,5 +1,7 @@
 // Data imports
-import { MOCK_JWT_TOKENS,MOCK_USER } from './auth/data';
+import type { UserStatus } from '@/shared/queries/auth.types';
+
+import { MOCK_JWT_TOKENS, MOCK_USER } from './auth/data';
 import delay from './delay';
 import { MOCK_FEEDBACK_RESPONSE } from './feedback/data';
 import { DEFAULT_FILE_TREE,MOCK_FILE_TREES, MOCK_REPOSITORIES } from './github/data';
@@ -91,9 +93,9 @@ const mockHandlers: MockHandler[] = [
     pattern: /^\/api\/chat$/,
     method: 'post',
     handler: async (_, data) => {
-      const requestData = data as { sessionId?: string } | undefined;
+      const requestData = data as { session_id?: string } | undefined;
       return {
-        sessionId: requestData?.sessionId || 'mock-session',
+        session_id: requestData?.session_id || 'mock-session',
         answer: '답변 생성을 시작합니다.',
         sources: [],
       };
@@ -103,13 +105,43 @@ const mockHandlers: MockHandler[] = [
     pattern: /^\/api\/chat\/stream\/resume$/,
     method: 'post',
     handler: async (_, data) => {
-      const requestData = data as { sessionId?: string } | undefined;
+      const requestData = data as { session_id?: string } | undefined;
       return {
-        sessionId: requestData?.sessionId || 'mock-session',
+        session_id: requestData?.session_id || 'mock-session',
         answer: '답변 생성을 재개합니다.',
         sources: [],
       };
     },
+  },
+
+  // ═══════════════════════════════════════
+  // Onboarding
+  // ═══════════════════════════════════════
+  {
+    pattern: /^\/api\/v1\/onboarding\/complete$/,
+    method: 'post',
+    handler: async (_, data) => {
+      console.log('[Mock] 온보딩 완료:', data);
+      const nextStatus: UserStatus = MOCK_USER.role === 'admin' ? 'active' : 'pending';
+      MOCK_USER.status = nextStatus;
+      return { success: true };
+    },
+  },
+  {
+    pattern: /^\/api\/v1\/onboarding\/connectors$/,
+    method: 'get',
+    handler: async () => ({
+      jira: [
+        { id: '5b10ac8d14c9e6', name: '김개발', email: 'dev@catchup.io', picture: null },
+        { id: '6a21bd9e25d0f7', name: '김개발', email: 'dev2@catchup.io', picture: null },
+      ],
+      github: [
+        { id: 'kimdev', name: '김개발', email: 'dev@catchup.io', picture: null },
+      ],
+      slack: [
+        { id: 'U04ABC12DEF', name: '김개발', email: 'dev@catchup.io', picture: null },
+      ],
+    }),
   },
 
   // ═══════════════════════════════════════
@@ -119,10 +151,10 @@ const mockHandlers: MockHandler[] = [
     pattern: /^\/api\/chat\/feedback$/,
     method: 'post',
     handler: async (_, data) => {
-      const requestData = data as { chatHistoryId?: string; tags?: string[]; detail?: string } | undefined;
+      const requestData = data as { chat_history_id?: string; tags?: string[]; detail?: string } | undefined;
       return {
         ...MOCK_FEEDBACK_RESPONSE,
-        chatHistoryId: requestData?.chatHistoryId || 'mock-history',
+        chat_history_id: requestData?.chat_history_id || 'mock-history',
         tags: requestData?.tags || [],
         detail: requestData?.detail || '',
       };

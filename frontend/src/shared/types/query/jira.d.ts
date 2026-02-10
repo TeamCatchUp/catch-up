@@ -2,7 +2,7 @@ export interface JiraNode {
   id: string;
   name: string;
   type: 'project' | 'board' | 'ticket';
-  isPublic: boolean;
-  lastEdited: string;
+  is_public: boolean;
+  last_edited: string;
   children?: JiraNode[];
 }

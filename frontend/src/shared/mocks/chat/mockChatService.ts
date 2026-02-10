@@ -3,42 +3,42 @@ import delay from '@/shared/mocks/delay';
 const MOCK_SOURCES: BackendSource[] = [
   {
     index: 1,
-    isCited: true,
-    sourceType: 1,
-    relevanceScore: 0.95,
-    htmlUrl: 'https://github.com/example/repo/pull/42',
+    is_cited: true,
+    source_type: 1,
+    relevance_score: 0.95,
+    html_url: 'https://github.com/example/repo/pull/42',
     content: 'feat: 로그인 토큰 갱신 로직 개선',
     owner: 'example',
     repo: 'CatchUp-BE',
     title: 'feat: 로그인 토큰 갱신 로직 개선',
-    prNumber: 42,
-    createdAt: Date.now() - 86400000,
+    pr_number: 42,
+    created_at: Date.now() - 86400000,
     author: 'developer',
   },
   {
     index: 2,
-    isCited: true,
-    sourceType: 0,
-    relevanceScore: 0.88,
-    htmlUrl: 'https://github.com/example/repo/blob/main/src/auth/service.ts',
+    is_cited: true,
+    source_type: 0,
+    relevance_score: 0.88,
+    html_url: 'https://github.com/example/repo/blob/main/src/auth/service.ts',
     content: 'export class AuthService { ... }',
     owner: 'example',
     repo: 'CatchUp-BE',
-    filePath: 'src/auth/service.ts',
+    file_path: 'src/auth/service.ts',
     author: 'developer',
   },
   {
     index: 3,
-    isCited: true,
-    sourceType: 3,
-    relevanceScore: 0.82,
-    htmlUrl: 'https://catchup.atlassian.net/browse/CAT-101',
+    is_cited: true,
+    source_type: 3,
+    relevance_score: 0.82,
+    html_url: 'https://catchup.atlassian.net/browse/CAT-101',
     content: '로그인 관련 이슈',
     owner: 'catchup',
-    issueKey: 'CAT-101',
+    issue_key: 'CAT-101',
     summary: '로그인 시 토큰 만료 처리 개선',
-    projectName: 'CatchUp',
-    assigneeName: '홍길동',
+    project_name: 'CatchUp',
+    assignee_name: '홍길동',
   },
 ];
 
@@ -153,7 +153,6 @@ const mockChatService = {
     query: string,
     sessionId: string,
     onEvent: (event: StreamEvent) => void,
-    _signal?: AbortSignal,
   ) => {
     console.log('[mockChatService] streamChat:', { query, sessionId });
 
@@ -170,16 +169,15 @@ const mockChatService = {
       type: 'result',
       answer: buildMockAnswer(query),
       sources: MOCK_SOURCES,
-      chatHistoryId: `mock-history-${Date.now()}`,
-      hasFeedback: false,
+      chat_history_id: `mock-history-${Date.now()}`,
+      has_feedback: false,
     });
   },
 
   resumeStream: async (
     sessionId: string,
-    selectedPRs: { prNumber: number; repoName: string; owner: string }[],
+    selectedPRs: { pr_number: number; repo_name: string; owner: string }[],
     onEvent: (event: StreamEvent) => void,
-    _signal?: AbortSignal,
   ) => {
     console.log('[mockChatService] resumeStream:', { sessionId, selectedPRs });
 
@@ -188,10 +186,10 @@ const mockChatService = {
     await delay(500);
     onEvent({
       type: 'result',
-      answer: `## PR 기반 답변\n\nPR ${selectedPRs.map((p) => `#${p.prNumber}`).join(', ')}을 분석한 결과입니다.\n\n### 변경 사항 요약\n- 선택된 PR의 코드 변경사항을 반영한 답변입니다.\n- 관련 컨텍스트를 포함하여 생성되었습니다.\n\n> **참고**: Mock 데이터 기반 답변입니다.`,
+      answer: `## PR 기반 답변\n\nPR ${selectedPRs.map((p) => `#${p.pr_number}`).join(', ')}을 분석한 결과입니다.\n\n### 변경 사항 요약\n- 선택된 PR의 코드 변경사항을 반영한 답변입니다.\n- 관련 컨텍스트를 포함하여 생성되었습니다.\n\n> **참고**: Mock 데이터 기반 답변입니다.`,
       sources: MOCK_SOURCES.slice(0, 1),
-      chatHistoryId: `mock-history-${Date.now()}`,
-      hasFeedback: false,
+      chat_history_id: `mock-history-${Date.now()}`,
+      has_feedback: false,
     });
   },
 };

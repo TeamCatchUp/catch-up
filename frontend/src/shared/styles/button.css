@@ -34,11 +34,11 @@
     @apply border-blue-30 bg-blue-1 hover:bg-blue-5 active:bg-blue-5 active:border-blue-45 disabled:text-gray-30 disabled:bg-neutral-1 disabled:border-neutral-2 rounded-full border;
   }
 
-  .capsule-button-outline-purple {
+  .capsule-button-solid-purple {
     @apply bg-violet-5 rounded-full;
   }
 
-  .capsule-button-outline-light-blue {
+  .capsule-button-solid-light-blue {
     @apply bg-light-blue-5 rounded-full;
   }
 

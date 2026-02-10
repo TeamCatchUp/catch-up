@@ -14,7 +14,6 @@ import { formatFullDate } from '@/shared/utils/formatDate';
 import Add from '/public/icons/icon/add_small.svg';
 import AI from '/public/icons/icon/ai.svg';
 import Close from '/public/icons/icon/cancel.svg';
-import Chat from '/public/icons/icon/chat.svg';
 import Search from '/public/icons/icon/search.svg';
 
 interface RecentQuestionsModalProps {
@@ -32,9 +31,9 @@ const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
     if (!data?.content) return [];
     return data.content.map((item) => ({
       query: item.query,
-      sessionId: item.sessionId,
-      date: formatFullDate(item.createdAt),
-      rawDate: new Date(item.createdAt),
+      session_id: item.session_id,
+      date: formatFullDate(item.created_at),
+      rawDate: new Date(item.created_at),
     }));
   }, [data]);
 

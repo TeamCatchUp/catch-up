@@ -1,8 +1,13 @@
 import { create } from 'zustand';
 
+import type { UserRole, UserStatus } from '@/shared/queries/auth.types';
+
 interface User {
   name: string;
   email: string;
+  picture?: string;
+  role: UserRole;
+  status: UserStatus;
 }
 
 interface UserStore {

@@ -1,6 +1,3 @@
-import type { GithubNode } from '@/shared/types/query/github';
-import type { JiraNode } from '@/shared/types/query/jira';
-
 /** Popover 타입 */
 export type PopoverType = 'person' | 'department' | 'project' | null;
 
@@ -27,7 +24,7 @@ export interface FilterLabels {
 /** 검색 쿼리 (최근 검색 기록) */
 export interface SearchQuery {
   query: string;
-  sessionId: string;
+  session_id: string;
   date: string;
   rawDate?: Date;
 }

@@ -70,4 +70,11 @@
   .bg-rag-github-pr-mcp {
     background: linear-gradient(180deg, #fff 30.97%, #f7fbff 100%);
   }
+
+  .bg-onboarding-gradient {
+    background:
+      linear-gradient(180deg, var(--color-white) 0%, transparent 50%, color-mix(in srgb, var(--color-blue-5) 50%, transparent) 100%),
+      radial-gradient(ellipse at 50% 85%, color-mix(in srgb, var(--color-blue-30) 20%, transparent), transparent 70%),
+      var(--color-white);
+  }
 }

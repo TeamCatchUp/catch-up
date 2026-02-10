@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Command as CommandPrimitive } from 'cmdk';
 
-import SearchIcon from '@/public/icons/icon/search.svg';
+import TextfieldDelete from '@/public/icons/icon/TextfiledDelete.svg';
 import { cn } from '@/shared/utils/cn';
 
 const Command = React.forwardRef<
@@ -24,19 +24,46 @@ Command.displayName = CommandPrimitive.displayName;
 const CommandInput = React.forwardRef<
   React.ComponentRef<typeof CommandPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
->(({ className, ...props }, ref) => (
-  <div className="flex items-center gap-2 border-b border-neutral-3 px-3" cmdk-input-wrapper="">
-    <SearchIcon className="size-4 shrink-0 text-gray-50" />
-    <CommandPrimitive.Input
-      ref={ref}
-      className={cn(
-        'flex h-10 w-full bg-transparent text-body-small text-gray-80 placeholder:text-gray-30 outline-none disabled:cursor-not-allowed disabled:opacity-50',
-        className,
+>(({ className, onValueChange, value: controlledValue, ...props }, ref) => {
+  const [search, setSearch] = React.useState('');
+
+  const value = controlledValue ?? search;
+
+  const handleValueChange = (v: string) => {
+    setSearch(v);
+    onValueChange?.(v);
+  };
+
+  const handleClear = () => {
+    setSearch('');
+    onValueChange?.('');
+  };
+
+  return (
+    <div className="flex min-h-[40px] items-center gap-1.5 rounded-lg border border-transparent bg-neutral-1 px-3 py-2 focus-within:border-blue-30" cmdk-input-wrapper="">
+      <CommandPrimitive.Input
+        ref={ref}
+        value={value}
+        onValueChange={handleValueChange}
+        className={cn(
+          'flex w-full bg-transparent text-body-small tracking-tight text-gray-80 placeholder:text-gray-30 outline-none disabled:cursor-not-allowed disabled:opacity-50',
+          className,
+        )}
+        {...props}
+      />
+      {value && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleClear}
+          className="shrink-0 cursor-pointer text-gray-30"
+        >
+          <TextfieldDelete className="size-5" />
+        </button>
       )}
-      {...props}
-    />
-  </div>
-));
+    </div>
+  );
+});
 CommandInput.displayName = CommandPrimitive.Input.displayName;
 
 const CommandList = React.forwardRef<
@@ -97,7 +124,7 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex h-10 cursor-pointer select-none items-center gap-2.5 rounded-lg px-2 text-body-small text-gray-80 outline-none data-[selected=true]:bg-neutral-2 data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50',
+      'relative flex cursor-pointer select-none items-center gap-2.5 rounded-lg px-2 py-2 text-body-small text-gray-80 outline-none data-[selected=true]:bg-neutral-2 data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50',
       className,
     )}
     {...props}

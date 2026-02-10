@@ -93,7 +93,7 @@ const RagInput = ({
       .filter((item) => {
         const isParentSelected = filters.selectedGithubItems.some((potentialParent) => {
           if (potentialParent.id === item.id) return false;
-          return potentialParent.children?.some((child: any) => child.id === item.id);
+          return potentialParent.children?.some((child: { id: string }) => child.id === item.id);
         });
         return !isParentSelected;
       })
@@ -107,7 +107,7 @@ const RagInput = ({
       .filter((item) => {
         const isParentSelected = filters.selectedJiraItems.some((potentialParent) => {
           if (potentialParent.id === item.id) return false;
-          return potentialParent.children?.some((child: any) => child.id === item.id);
+          return potentialParent.children?.some((child: { id: string }) => child.id === item.id);
         });
         return !isParentSelected;
       })
@@ -236,7 +236,7 @@ const RagInput = ({
             style={{ height: '26px', maxHeight: '156px' }}
           />
 
-          <div className="flex flex-shrink-0 items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3">
             {!newInput.trim() && !isLoading && (
               <div
                 onClick={filters.toggleFilter}
@@ -245,7 +245,7 @@ const RagInput = ({
                   filters.isFilterOpen && 'bg-blue-5 border-blue-20',
                 )}
               >
-                <Filter className="relative top-0.5 h-4.5 w-4.5" />
+                <Filter className="h-4.5 w-4.5" />
                 <span className="text-body-xsmall text-gray-50">필터</span>
               </div>
             )}

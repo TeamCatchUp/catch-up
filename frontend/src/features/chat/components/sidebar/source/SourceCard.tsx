@@ -14,7 +14,7 @@ interface Props {
   count?: number;
 }
 
-const SOURCE_ICON_MAP: Record<ChatSource['sourceType'], React.FC<any>> = {
+const SOURCE_ICON_MAP: Record<ChatSource['source_type'], React.FC<React.SVGProps<SVGSVGElement>>> = {
   // file: File,
   // wiki: Wiki,
   // url: Link,
@@ -29,14 +29,14 @@ const SOURCE_ICON_MAP: Record<ChatSource['sourceType'], React.FC<any>> = {
 
 const SourceCard = ({ source, showCount = true, count }: Props) => {
   const handleClick = () => {
-    if (!source.htmlUrl) {
+    if (!source.html_url) {
       return;
     }
 
-    window.open(source.htmlUrl, '_blank', 'noopener,noreferrer');
+    window.open(source.html_url, '_blank', 'noopener,noreferrer');
   };
 
-  const Icon = SOURCE_ICON_MAP[source.sourceType];
+  const Icon = SOURCE_ICON_MAP[source.source_type];
 
   const dateText = source.date?.trim() ? source.date : '-';
   const authorText = source.author?.trim() ? source.author : '-';
@@ -51,7 +51,7 @@ const SourceCard = ({ source, showCount = true, count }: Props) => {
           <div
             className={cn(
               'relative right-px flex items-center gap-1.5 rounded-full px-2 py-1',
-              source.sourceType === 'jira' ? 'bg-green-10' : 'bg-blue-5',
+              source.source_type === 'jira' ? 'bg-green-10' : 'bg-blue-5',
             )}
           >
             <Icon className="h-4 w-4" />

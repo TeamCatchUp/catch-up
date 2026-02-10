@@ -19,11 +19,11 @@ interface GithubPRStepSkeletonProps {
   onRefetch?: () => void; // 다시 찾기
 }
 
-const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSkeletonProps) => {
+const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps) => {
   const [selectedPrNumbers, setSelectedPrNumbers] = useState<number[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const allPrNumbers = useMemo(() => prList.map((pr) => pr.prNumber), [prList]);
+  const allPrNumbers = useMemo(() => prList.map((pr) => pr.pr_number), [prList]);
 
   const toggleSelect = (prNumber: number) => {
     setSelectedPrNumbers((prev) =>
@@ -32,7 +32,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
   };
 
   const toggleAll = () => {
-    const isAllSelected = prList.every((pr) => selectedPrNumbers.includes(pr.prNumber));
+    const isAllSelected = prList.every((pr) => selectedPrNumbers.includes(pr.pr_number));
     setSelectedPrNumbers(isAllSelected ? [] : allPrNumbers);
   };
 
@@ -51,14 +51,14 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
         {/* 헤더 */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-5">
-            <SearchData />
+            <SearchData className="h-6 w-6" />
             <span className="text-heading-large text-gray-90">잠시만요! 정확한 답변을 위해 확인이 필요해요.</span>
             <button
               onClick={() => onContinue([])}
               className="text-button-primary-blue flex cursor-pointer items-center gap-0.5 px-1.5 py-1"
             >
               <span className="text-body-small text-blue-55">건너뛰기</span>
-              <FastForward />
+              <FastForward className="h-6 w-6" />
             </button>
           </div>
           <span className="text-body-small text-gray-70 flex items-center gap-1">
@@ -76,15 +76,15 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
                 onClick={toggleAll}
                 className="icon-button-outline-gray flex h-7.5 cursor-pointer items-center gap-1 px-2 py-1"
               >
-                <CheckCircle className="text-gray-70 relative bottom-px h-5 w-5 flex-shrink-0" />
-                <span className="text-body-xsmall text-gray-80 flex-shrink-0">전체 선택</span>
+                <CheckCircle className="text-gray-70 relative bottom-px h-6 w-6 shrink-0" />
+                <span className="text-body-xsmall text-gray-80 shrink-0">전체 선택</span>
               </button>
               <button
                 // onClick={() => onRefetch?.()}
                 className="icon-button-outline-gray flex h-7.5 cursor-pointer items-center gap-1 px-2 py-1"
               >
-                <Rotate className="text-gray-70 relative bottom-px h-5 w-5 flex-shrink-0" />
-                <span className="text-body-xsmall text-gray-80 flex-shrink-0">다시 찾기</span>
+                <Rotate className="text-gray-70 relative bottom-px h-6 w-6 shrink-0" />
+                <span className="text-body-xsmall text-gray-80 shrink-0">다시 찾기</span>
               </button>
             </div>
             <button
@@ -104,24 +104,24 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
           {/* 선택 리스트 */}
           <div className="flex w-180.75 flex-col gap-4">
             {prList.map((pr, idx) => {
-              const isSelected = selectedPrNumbers.includes(pr.prNumber);
+              const isSelected = selectedPrNumbers.includes(pr.pr_number);
 
               return (
-                <div key={`${pr.owner}/${pr.repoName}#${pr.prNumber}`}>
+                <div key={`${pr.owner}/${pr.repo_name}#${pr.pr_number}`}>
                   <div className="flex h-28.75 w-full gap-6">
                     <div className="flex h-28.75 items-center">
                       <button
-                        onClick={() => toggleSelect(pr.prNumber)}
+                        onClick={() => toggleSelect(pr.pr_number)}
                         className={cn(
                           'flex h-8.5 w-8.5 cursor-pointer items-center justify-center rounded-lg border',
                           isSelected ? 'bg-blue-1 border-blue-45' : 'border-neutral-3 bg-neutral-1',
                         )}
                       >
-                        <Check className={cn('h-5.5 w-5.5', isSelected ? 'text-blue-50' : 'text-gray-30')} />
+                        <Check className={cn('h-6 w-6', isSelected ? 'text-blue-50' : 'text-gray-30')} />
                       </button>
                     </div>
                     <div
-                      onClick={() => toggleSelect(pr.prNumber)}
+                      onClick={() => toggleSelect(pr.pr_number)}
                       className={cn(
                         'flex h-28.75 w-166.25 cursor-pointer flex-col gap-1.5 rounded-2xl border bg-white px-5 py-4',
                         isSelected ? 'border-blue-30' : 'border-neutral-2',
@@ -129,21 +129,21 @@ const GithubPRStepSkeleton = ({ prList, onContinue, onRefetch }: GithubPRStepSke
                     >
                       {/* 제목 */}
                       <div className="flex w-156 items-center gap-1.5">
-                        <GithubIcon className="h-5.5 w-5.5" />
+                        <GithubIcon className="h-6 w-6" />
                         <span className="text-body-medium text-gray-70 truncate">{pr.title}</span>
                       </div>
                       {/* 설명 */}
                       <div className="flex w-156 items-center gap-1.5">
-                        <span className="text-heading-small text-gray-80 flex-shrink-0">설명:</span>
+                        <span className="text-heading-small text-gray-80 shrink-0">설명:</span>
                         <span className="text-body-small text-gray-70 max-w-147.25 truncate">
                           {pr.summary || '설명 없음'}
                         </span>
                       </div>
                       {/* 부가정보 */}
                       <div className="text-body-xsmall flex w-156 items-center gap-1.5 text-gray-50">
-                        <span className="max-w-95 truncate">{pr.repoName}</span>
+                        <span className="max-w-95 truncate">{pr.repo_name}</span>
                         <div className="bg-neutral-3 h-3.75 w-px" />
-                        <span>{formatDate(pr.createdAt)}</span>
+                        <span>{formatDate(pr.created_at)}</span>
                         <div className="bg-neutral-3 h-3.75 w-px" />
                         <span>{pr.owner}</span>
                       </div>

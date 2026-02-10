@@ -13,8 +13,8 @@ export default function ToolPage() {
     <div className="flex items-start gap-6 self-stretch px-16 pt-6 pb-30">
       <div className="flex cursor-pointer flex-col items-start gap-3">
         <div className="border-blue-30 bg-whit flex w-[325px] items-center gap-5 rounded-xl border-2 p-4">
-          <div className="border-0.5 border-neutral-5 flex h-10.5 w-10.5 shrink-0 flex-col justify-center gap-2.5 rounded-xl px-4 py-[5px]">
-            <IconJira />
+          <div className="h-10.5 w-10.5 flex justify-center items-center">
+            <IconJira className="h-8 w-8" />
           </div>
           <div className="flex flex-[1_0_0] flex-col items-start gap-1">
             <div className="text-heading-large text-gray-70">Jira</div>
@@ -74,10 +74,10 @@ export default function ToolPage() {
               </div>
               <div
                 onClick={() => window.open('https://id.atlassian.com/manage-profile/profile-and-visibility', '_blank')}
-                className="box-button-outline-gray !border-neutral-4 flex cursor-pointer flex-col items-start gap-2.5 rounded-xl border px-3 py-2"
+                className="box-button-outline-gray border-neutral-4! flex cursor-pointer flex-col items-start gap-2.5 rounded-xl border px-3 py-2"
               >
                 <div className="flex items-center gap-4">
-                  <IconAT />
+                  <IconAT className="h-5 w-5" />
                   <div className="flex w-[334px] flex-col items-start">
                     <div className="text-gray-80 text-body-xsmall">Atlassian account</div>
                     <div className="text-body-xsmall text-gray-50">
@@ -92,9 +92,9 @@ export default function ToolPage() {
                 <div className="text-gray-80 text-heading-medium">2. 보안 설정 이동 및 토큰 생성</div>
                 <Image src={ImgAPItoken1} alt="apitoken" />
                 <div className="text-body-small text-gray-70">
-                  1) 상단 메뉴 또는 페이지 내에서 '보안(Security)' 탭을 클릭합니다.
+                  1) 상단 메뉴 또는 페이지 내에서 &apos;보안(Security)&apos; 탭을 클릭합니다.
                   <br />
-                  2) 'API 토큰 만들기 및 관리(Create and manage API tokens)' 항목을 찾아 클릭합니다. <br />
+                  2) &apos;API 토큰 만들기 및 관리(Create and manage API tokens)&apos; 항목을 찾아 클릭합니다. <br />
                   3) 페이지 상단의 [API 토큰 만들기] 버튼을 누릅니다.
                 </div>
                 <Image src={ImgAPItoken} alt="apitoken" />

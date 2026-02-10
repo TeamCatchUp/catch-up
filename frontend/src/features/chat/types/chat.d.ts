@@ -1,49 +1,49 @@
 interface SourceResponse {
-  sourceType: 'file' | 'wiki' | 'url' | 'github' | 'slack' | 'comment';
+  source_type: 'file' | 'wiki' | 'url' | 'github' | 'slack' | 'comment';
   content: string;
-  filePath?: string;
-  htmlUrl?: string;
+  file_path?: string;
+  html_url?: string;
   language?: string;
 }
 
 interface ChatSource {
   id: string;
-  // sourceType: SourceResponse['sourceType'];
-  sourceType: 'code' | 'pr' | 'github_issue' | 'jira';
-  isCited: boolean;
+  // source_type: SourceResponse['source_type'];
+  source_type: 'code' | 'pr' | 'github_issue' | 'jira';
+  is_cited: boolean;
 
   repo: string; // 아이콘 옆 문구
   title: string;
   content: string;
   date: string;
   author: string;
-  htmlUrl: string;
+  html_url: string;
 
-  sourceIndex: number;
+  source_index: number;
 }
 
 interface PRPayload {
-  prNumber: number;
+  pr_number: number;
   title: string;
-  repoName: string;
+  repo_name: string;
   summary: string;
   owner: string;
-  createdAt: number;
+  created_at: number;
 }
 
 interface Message {
   id: string;
-  chatHistoryId?: string;
+  chat_history_id?: string;
   role: 'user' | 'assistant';
   content: string;
   sources?: ChatSource[];
-  detailedTasks?: JiraTask[];
+  detailed_tasks?: JiraTask[];
   timestamp: string;
-  hasFeedback?: boolean;
+  has_feedback?: boolean;
 }
 
 interface ChatData {
-  sessionId: string;
+  session_id: string;
   title: string;
   repo: string;
   messages: Message[];
@@ -52,47 +52,47 @@ interface ChatData {
 // 채팅 요청 (/api/chat)
 interface ChatRequest {
   query: string;
-  sessionId: string;
-  indexList: string[];
+  session_id: string;
+  index_list: string[];
 }
 
 interface ChatResponse {
-  sessionId: string;
+  session_id: string;
   answer: string;
   sources: SourceResponse[];
 }
 
 // 답변 생성 재개 요청 (/api/chat/resume)
 interface ResumeRequest {
-  sessionId: string;
-  userSelectedPullRequests: {
-    prNumber: number;
-    repoName: string;
+  session_id: string;
+  user_selected_pull_requests: {
+    pr_number: number;
+    repo_name: string;
     owner: string;
   }[];
 }
 
 interface ResumeResponse {
-  sessionId: string;
+  session_id: string;
   answer: string;
   sources: SourceResponse[];
 }
 
 // SSE 연결 요청 (/api/notification/subscribe)
 interface RagNotificationData {
-  sessionId: string;
+  session_id: string;
   type: 'status' | 'interrupt' | 'result';
   node: string;
   message?: string;
   payload?: PRPayload[];
   response?: {
-    sessionId: string;
+    session_id: string;
     answer: string;
     sources: BackendSource[];
-    chatHistoryId: string;
-    hasFeedback?: boolean;
+    chat_history_id: string;
+    has_feedback?: boolean;
   };
-  relatedJiraIssues?: BackendSource[];
+  related_jira_issues?: BackendSource[];
 }
 
 interface RagNotification {
@@ -110,23 +110,23 @@ type StreamEvent =
       type: 'result';
       answer: string;
       sources: BackendSource[];
-      chatHistoryId?: string;
-      hasFeedback?: boolean;
-      relatedJiraIssues?: BackendSource[];
+      chat_history_id?: string;
+      has_feedback?: boolean;
+      related_jira_issues?: BackendSource[];
     }
   | { type: 'ping' };
 
 interface JiraSubTask {
   id: string;
   title: string;
-  issueKey?: string;
-  htmlUrl?: string;
+  issue_key?: string;
+  html_url?: string;
 }
 
 interface JiraTask {
   id: string;
   title: string;
-  parentKey?: string;
-  parentSummary?: string;
+  parent_key?: string;
+  parent_summary?: string;
   subtasks: JiraSubTask[];
 }
