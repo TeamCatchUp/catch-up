@@ -28,7 +28,7 @@ const RagHeader = ({ title, onSelectQuestion }: RagHeaderProps) => {
     router.push(`/search`);
 
     setIsCatchModalOpen(false);
-    setIsCatchModalOpen(false);
+    setIsQuestionsListOpen(false);
   };
 
   return (
