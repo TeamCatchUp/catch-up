@@ -196,7 +196,7 @@ const RagInput = ({
 
           <div className="flex shrink-0 items-center gap-3">
             {!newInput.trim() && !isLoading && (
-              <div
+              <button
                 onClick={filters.toggleFilter}
                 className={cn(
                   'box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1',
@@ -205,7 +205,7 @@ const RagInput = ({
               >
                 <Filter className="h-4.5 w-4.5" />
                 <span className="text-body-xsmall text-gray-50">필터</span>
-              </div>
+              </button>
             )}
 
             {isLoading ? (
