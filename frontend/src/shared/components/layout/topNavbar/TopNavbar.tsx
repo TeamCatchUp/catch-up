@@ -49,11 +49,9 @@ const TopNavbar = ({ pageType }: TopNavbarProps) => {
     <nav aria-label="메인 네비게이션" className="border-neutral-3 sticky top-0 z-50 h-full w-full border-b bg-white">
       <div className="flex justify-between px-16 py-2">
         <div className="flex items-center justify-center">
-          <Link href={config.href}>
-            <button className="text-gray-80 flex cursor-pointer gap-2">
-              <IconComponent className="h-6 w-6" />
-              <span className="text-heading-medium relative top-[0.5px]">{config.label}</span>
-            </button>
+          <Link href={config.href} className="text-gray-80 flex cursor-pointer gap-2">
+            <IconComponent className="h-6 w-6" />
+            <span className="text-heading-medium relative top-[0.5px]">{config.label}</span>
           </Link>
         </div>
         <ul className="flex items-center justify-center gap-2">

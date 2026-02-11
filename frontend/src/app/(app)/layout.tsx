@@ -32,7 +32,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
             activePanel === 'inbox' ? 'w-[418px]' : 'w-0',
           )}
         >
-          <InboxPanel />
+          {activePanel === 'inbox' && <InboxPanel />}
         </div>
         <div
           className={cn(
@@ -40,7 +40,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
             activePanel === 'settings' ? 'w-60' : 'w-0',
           )}
         >
-          <SettingsPanel />
+          {activePanel === 'settings' && <SettingsPanel />}
         </div>
         <div className="flex flex-1 flex-col">
           <main className="flex-1 overflow-auto">{children}</main>

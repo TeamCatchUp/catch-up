@@ -142,8 +142,8 @@ const SideNavBar = () => {
           {isOpen && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button className="icon-button-only-gray flex items-center justify-center rounded-full! p-0.5">
-                  <Close onClick={() => setIsOpen(false)} className="h-6 w-6 cursor-pointer text-gray-50" />
+                <button onClick={() => setIsOpen(false)} className="icon-button-only-gray flex cursor-pointer items-center justify-center rounded-full! p-0.5">
+                  <Close className="h-6 w-6 text-gray-50" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>사이드바 닫기</TooltipContent>
