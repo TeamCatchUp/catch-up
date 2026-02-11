@@ -33,7 +33,7 @@ def get_latest_query(messages: Annotated[list, add_messages]):
 def get_context_text_from_documents(documents: list[Document]):
     return "\n\n".join(
         [
-            f"[{i}] (Source: {doc.metadata.get('source_type', 'unknown')})\n{doc.metadata.get('display_content', '')}"
+            f"[{i}] (Source: {doc.metadata.get('source_type', 'unknown')})\n{doc.metadata.get('contextual_content', '')}"
             for i, doc in enumerate(documents, start=1)
         ]
     )

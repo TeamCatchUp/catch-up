@@ -32,18 +32,13 @@ from catchup.connectors.github.schemas import (
     PRComment,
 )
 from catchup.connectors.github.transformers import GitHubTransformer
-from catchup.connectors.github.service import (
-    GitHubIngestionService,
-    GithubService,
-)
 from catchup.connectors.github.auth import (
     GitHubAppService,
     get_github_app_service,
 )
-from catchup.connectors.github.factory import (
-    get_github_service,
-    create_github_ingestion_service,
-)
+# Note: service, factory는 순환 import 방지를 위해 직접 import 필요
+# from catchup.connectors.github.service import GitHubIngestionService
+# from catchup.connectors.github.factory import get_github_service
 
 __all__ = [
     # Client
@@ -68,16 +63,7 @@ __all__ = [
     "PRComment",
     # Transformer
     "GitHubTransformer",
-    # Service
-    "GitHubIngestionService",
-    "GithubService",
     # Auth
     "GitHubAppService",
     "get_github_app_service",
-    # Webhook Schemas
-    "InstallationWebhookPayload",
-    "InstallationRepositoriesWebhookPayload",
-    # Factory
-    "get_github_service",
-    "create_github_ingestion_service",
 ]

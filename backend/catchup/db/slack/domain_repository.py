@@ -11,6 +11,11 @@ from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 
+from catchup.connectors.slack.schemas import (
+    SlackChannel as SlackChannelSchema,
+    SlackUserProfile as SlackUserProfileSchema,
+    SlackWorkspace as SlackWorkspaceSchema,
+)
 from catchup.db.models import SlackWorkspace, SlackChannel, SlackChannelType, SlackUser
 
 
@@ -18,47 +23,41 @@ from catchup.db.models import SlackWorkspace, SlackChannel, SlackChannelType, Sl
 # Workspace CRUD
 # ============================================================
 
-def upsert_workspace(
-    db: Session,
-    workspace_id: str,
-    name: str,
-    domain: str,
-    url: str,
-    email_domain: str | None = None,
-    icon_url: str | None = None,
-    enterprise_id: str | None = None,
-    enterprise_name: str | None = None,
-) -> SlackWorkspace:
+def upsert_workspace(db: Session, workspace: SlackWorkspaceSchema) -> SlackWorkspace:
     """
     워크스페이스 Upsert (Insert or Update)
+
+    Args:
+        db: SQLAlchemy 세션
+        workspace: SlackWorkspace Pydantic 스키마
     """
     stmt = insert(SlackWorkspace).values(
-        id=workspace_id,
-        name=name,
-        domain=domain,
-        url=url,
-        email_domain=email_domain,
-        icon_url=icon_url,
-        enterprise_id=enterprise_id,
-        enterprise_name=enterprise_name,
+        id=workspace.id,
+        name=workspace.name,
+        domain=workspace.domain,
+        url=workspace.url,
+        email_domain=workspace.email_domain,
+        icon_url=workspace.icon_url,
+        enterprise_id=workspace.enterprise_id,
+        enterprise_name=workspace.enterprise_name,
         synced_at=datetime.now(timezone.utc),
     ).on_conflict_do_update(
         index_elements=["id"],
         set_={
-            "name": name,
-            "domain": domain,
-            "url": url,
-            "email_domain": email_domain,
-            "icon_url": icon_url,
-            "enterprise_id": enterprise_id,
-            "enterprise_name": enterprise_name,
+            "name": workspace.name,
+            "domain": workspace.domain,
+            "url": workspace.url,
+            "email_domain": workspace.email_domain,
+            "icon_url": workspace.icon_url,
+            "enterprise_id": workspace.enterprise_id,
+            "enterprise_name": workspace.enterprise_name,
             "synced_at": datetime.now(timezone.utc),
         }
     )
     db.execute(stmt)
     db.commit()
 
-    return get_workspace(db, workspace_id)
+    return get_workspace(db, workspace.id)
 
 
 def get_workspace(db: Session, workspace_id: str) -> SlackWorkspace | None:
@@ -79,68 +78,18 @@ def delete_workspace(db: Session, workspace_id: str) -> int:
 # Channel CRUD
 # ============================================================
 
-def upsert_channel(
-    db: Session,
-    channel_id: str,
-    team_id: str,
-    name: str,
-    channel_type: SlackChannelType,
-    topic: str | None = None,
-    purpose: str | None = None,
-    creator_id: str | None = None,
-    member_count: int = 0,
-    is_archived: bool = False,
-    is_private: bool = False,
-    created_at: datetime | None = None,
-) -> SlackChannel:
-    """
-    채널 Upsert (Insert or Update)
-    """
-    now = datetime.now(timezone.utc)
-    created_at = created_at or now
-
-    stmt = insert(SlackChannel).values(
-        id=channel_id,
-        team_id=team_id,
-        name=name,
-        channel_type=channel_type,
-        topic=topic,
-        purpose=purpose,
-        creator_id=creator_id,
-        member_count=member_count,
-        is_archived=is_archived,
-        is_private=is_private,
-        created_at=created_at,
-        synced_at=now,
-    ).on_conflict_do_update(
-        index_elements=["id"],
-        set_={
-            "name": name,
-            "channel_type": channel_type,
-            "topic": topic,
-            "purpose": purpose,
-            "member_count": member_count,
-            "is_archived": is_archived,
-            "is_private": is_private,
-            "synced_at": now,
-        }
-    )
-    db.execute(stmt)
-    db.commit()
-
-    return get_channel(db, channel_id)
-
-
 def upsert_channels_bulk(
     db: Session,
-    channels: list[dict],
+    team_id: str,
+    channels: list[SlackChannelSchema],
 ) -> int:
     """
     채널 벌크 Upsert
 
     Args:
         db: SQLAlchemy Session
-        channels: 채널 데이터 딕셔너리 리스트
+        team_id: Slack 워크스페이스 ID
+        channels: SlackChannel Pydantic 스키마 리스트
 
     Returns:
         처리된 채널 수
@@ -149,12 +98,25 @@ def upsert_channels_bulk(
         return 0
 
     now = datetime.now(timezone.utc)
-    for channel in channels:
-        channel["synced_at"] = now
-        if "created_at" not in channel or channel["created_at"] is None:
-            channel["created_at"] = now
+    channels_data = [
+        {
+            "id": ch.id,
+            "team_id": team_id,
+            "name": ch.name,
+            "channel_type": SlackChannelType(ch.channel_type),
+            "topic": ch.topic,
+            "purpose": ch.purpose,
+            "creator_id": ch.creator_id,
+            "member_count": ch.member_count,
+            "is_archived": ch.is_archived,
+            "is_private": ch.is_private,
+            "created_at": ch.created_at or now,
+            "synced_at": now,
+        }
+        for ch in channels
+    ]
 
-    stmt = insert(SlackChannel).values(channels)
+    stmt = insert(SlackChannel).values(channels_data)
     stmt = stmt.on_conflict_do_update(
         index_elements=["id"],
         set_={
@@ -210,87 +172,18 @@ def delete_channels_by_team(db: Session, team_id: str) -> int:
 # User CRUD
 # ============================================================
 
-def upsert_user(
-    db: Session,
-    team_id: str,
-    user_id: str,
-    name: str,
-    real_name: str,
-    display_name: str,
-    deleted: bool = False,
-    email: str | None = None,
-    avatar_url: str | None = None,
-    title: str | None = None,
-    phone: str | None = None,
-    tz: str | None = None,
-    tz_label: str | None = None,
-    is_bot: bool = False,
-    is_admin: bool = False,
-    is_owner: bool = False,
-    is_restricted: bool = False,
-    updated_at: datetime | None = None,
-) -> SlackUser:
-    """
-    사용자 Upsert (Insert or Update)
-    """
-    now = datetime.now(timezone.utc)
-
-    stmt = insert(SlackUser).values(
-        team_id=team_id,
-        user_id=user_id,
-        name=name,
-        real_name=real_name,
-        display_name=display_name,
-        deleted=deleted,
-        email=email,
-        avatar_url=avatar_url,
-        title=title,
-        phone=phone,
-        tz=tz,
-        tz_label=tz_label,
-        is_bot=is_bot,
-        is_admin=is_admin,
-        is_owner=is_owner,
-        is_restricted=is_restricted,
-        updated_at=updated_at,
-        synced_at=now,
-    ).on_conflict_do_update(
-        index_elements=["team_id", "user_id"],
-        set_={
-            "name": name,
-            "real_name": real_name,
-            "display_name": display_name,
-            "deleted": deleted,
-            "email": email,
-            "avatar_url": avatar_url,
-            "title": title,
-            "phone": phone,
-            "tz": tz,
-            "tz_label": tz_label,
-            "is_bot": is_bot,
-            "is_admin": is_admin,
-            "is_owner": is_owner,
-            "is_restricted": is_restricted,
-            "updated_at": updated_at,
-            "synced_at": now,
-        }
-    )
-    db.execute(stmt)
-    db.commit()
-
-    return get_user(db, team_id, user_id)
-
-
 def upsert_users_bulk(
     db: Session,
-    users: list[dict],
+    team_id: str,
+    users: list[SlackUserProfileSchema],
 ) -> int:
     """
     사용자 벌크 Upsert
 
     Args:
         db: SQLAlchemy Session
-        users: 사용자 데이터 딕셔너리 리스트
+        team_id: Slack 워크스페이스 ID
+        users: SlackUserProfile Pydantic 스키마 리스트
 
     Returns:
         처리된 사용자 수
@@ -299,10 +192,31 @@ def upsert_users_bulk(
         return 0
 
     now = datetime.now(timezone.utc)
-    for user in users:
-        user["synced_at"] = now
+    users_data = [
+        {
+            "team_id": team_id,
+            "user_id": u.id,
+            "name": u.name,
+            "real_name": u.real_name or u.name,
+            "display_name": u.display_name or u.name,
+            "deleted": u.deleted,
+            "email": u.email,
+            "avatar_url": u.avatar_url,
+            "title": u.title,
+            "phone": u.phone,
+            "tz": u.tz,
+            "tz_label": u.tz_label,
+            "is_bot": u.is_bot,
+            "is_admin": u.is_admin,
+            "is_owner": u.is_owner,
+            "is_restricted": u.is_restricted,
+            "updated_at": u.updated_at,
+            "synced_at": now,
+        }
+        for u in users
+    ]
 
-    stmt = insert(SlackUser).values(users)
+    stmt = insert(SlackUser).values(users_data)
     stmt = stmt.on_conflict_do_update(
         index_elements=["team_id", "user_id"],
         set_={

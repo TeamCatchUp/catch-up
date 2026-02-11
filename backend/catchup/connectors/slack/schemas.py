@@ -3,10 +3,6 @@ Slack 엔티티 Pydantic 스키마
 
 Slack API 응답을 파싱하고, PGVector Document로 변환하기 위한 중간 모델.
 Transformer에서 이 스키마들을 사용하여 LangChain Document를 생성.
-
-우선순위:
-- P0 (필수): Message, Channel
-- P1 (권장): User, File, Workspace
 """
 
 from datetime import datetime

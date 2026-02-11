@@ -10,7 +10,12 @@ from datetime import datetime, timezone
 from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 
-from catchup.db.models import SlackSyncState, SlackEntityType, SlackSyncStatus
+from catchup.db.models import (
+    SlackSyncState,
+    SlackChannelSyncState,
+    SlackEntityType,
+    SlackSyncStatus,
+)
 
 
 def get_sync_state(
@@ -214,6 +219,207 @@ def delete_sync_states(db: Session, team_id: str) -> int:
         삭제된 레코드 수
     """
     stmt = delete(SlackSyncState).where(SlackSyncState.team_id == team_id)
+    result = db.execute(stmt)
+    db.commit()
+    return result.rowcount
+
+
+# ============================================================
+# Channel Sync State CRUD (채널별 동기화 상태)
+# ============================================================
+
+
+def get_channel_sync_state(
+    db: Session,
+    team_id: str,
+    channel_id: str,
+) -> SlackChannelSyncState | None:
+    """특정 채널의 동기화 상태 조회"""
+    stmt = select(SlackChannelSyncState).where(
+        SlackChannelSyncState.team_id == team_id,
+        SlackChannelSyncState.channel_id == channel_id,
+    )
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def get_all_channel_sync_states(
+    db: Session,
+    team_id: str,
+) -> list[SlackChannelSyncState]:
+    """팀의 모든 채널 동기화 상태 조회"""
+    stmt = (
+        select(SlackChannelSyncState)
+        .where(SlackChannelSyncState.team_id == team_id)
+        .order_by(SlackChannelSyncState.channel_name)
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
+def start_channel_sync(
+    db: Session,
+    team_id: str,
+    channel_id: str,
+    channel_name: str | None = None,
+    oldest_ts: str | None = None,
+) -> SlackChannelSyncState:
+    """
+    채널 동기화 시작 (상태 생성 또는 업데이트)
+
+    Args:
+        db: SQLAlchemy Session
+        team_id: Slack Team/Workspace ID
+        channel_id: Slack Channel ID
+        channel_name: 채널명 (디버깅용)
+        oldest_ts: 동기화 시작 timestamp
+
+    Returns:
+        생성 또는 업데이트된 SlackChannelSyncState
+    """
+    state = get_channel_sync_state(db, team_id, channel_id)
+    now = datetime.now(timezone.utc)
+
+    if state:
+        # 기존 상태 업데이트
+        state.last_sync_at = now
+        state.last_sync_status = SlackSyncStatus.IN_PROGRESS
+        state.last_sync_error = None
+        if channel_name:
+            state.channel_name = channel_name
+        if oldest_ts is not None:
+            state.oldest_ts = oldest_ts
+    else:
+        # 새 상태 생성
+        state = SlackChannelSyncState(
+            team_id=team_id,
+            channel_id=channel_id,
+            channel_name=channel_name,
+            last_sync_at=now,
+            last_sync_status=SlackSyncStatus.IN_PROGRESS,
+            oldest_ts=oldest_ts,
+            synced_count=0,
+        )
+        db.add(state)
+
+    db.commit()
+    db.refresh(state)
+    return state
+
+
+def update_channel_sync_progress(
+    db: Session,
+    team_id: str,
+    channel_id: str,
+    synced_count: int,
+    latest_synced_ts: str | None = None,
+) -> SlackChannelSyncState | None:
+    """
+    채널 동기화 진행 상황 업데이트 (배치 완료 시 호출)
+
+    Args:
+        db: SQLAlchemy Session
+        team_id: Slack Team/Workspace ID
+        channel_id: Slack Channel ID
+        synced_count: 현재까지 동기화된 메시지 수
+        latest_synced_ts: 마지막으로 성공한 메시지 timestamp
+
+    Returns:
+        업데이트된 SlackChannelSyncState 또는 None
+    """
+    state = get_channel_sync_state(db, team_id, channel_id)
+    if not state:
+        return None
+
+    state.synced_count = synced_count
+    if latest_synced_ts is not None:
+        state.latest_synced_ts = latest_synced_ts
+
+    db.commit()
+    db.refresh(state)
+    return state
+
+
+def mark_channel_sync_completed(
+    db: Session,
+    team_id: str,
+    channel_id: str,
+    synced_count: int,
+) -> SlackChannelSyncState | None:
+    """
+    채널 동기화 완료 처리
+
+    Args:
+        db: SQLAlchemy Session
+        team_id: Slack Team/Workspace ID
+        channel_id: Slack Channel ID
+        synced_count: 최종 동기화된 메시지 수
+
+    Returns:
+        업데이트된 SlackChannelSyncState 또는 None
+    """
+    state = get_channel_sync_state(db, team_id, channel_id)
+    if not state:
+        return None
+
+    now = datetime.now(timezone.utc)
+    state.last_sync_status = SlackSyncStatus.SUCCESS
+    state.last_successful_sync_at = now
+    state.synced_count = synced_count
+    state.last_sync_error = None
+
+    db.commit()
+    db.refresh(state)
+    return state
+
+
+def mark_channel_sync_failed(
+    db: Session,
+    team_id: str,
+    channel_id: str,
+    error: str,
+    synced_count: int = 0,
+) -> SlackChannelSyncState | None:
+    """
+    채널 동기화 실패 처리
+
+    - last_successful_sync_at은 변경하지 않음 (재시도 기준점 유지)
+
+    Args:
+        db: SQLAlchemy Session
+        team_id: Slack Team/Workspace ID
+        channel_id: Slack Channel ID
+        error: 에러 메시지
+        synced_count: 실패 전까지 동기화된 메시지 수
+
+    Returns:
+        업데이트된 SlackChannelSyncState 또는 None
+    """
+    state = get_channel_sync_state(db, team_id, channel_id)
+    if not state:
+        return None
+
+    state.last_sync_status = SlackSyncStatus.FAILED
+    state.last_sync_error = error[:1000] if error else None
+    state.synced_count = synced_count
+
+    db.commit()
+    db.refresh(state)
+    return state
+
+
+def delete_channel_sync_states(db: Session, team_id: str) -> int:
+    """
+    팀의 모든 채널 동기화 상태 삭제
+
+    Args:
+        db: SQLAlchemy Session
+        team_id: Slack Team/Workspace ID
+
+    Returns:
+        삭제된 레코드 수
+    """
+    stmt = delete(SlackChannelSyncState).where(
+        SlackChannelSyncState.team_id == team_id
+    )
     result = db.execute(stmt)
     db.commit()
     return result.rowcount

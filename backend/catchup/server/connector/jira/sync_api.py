@@ -2,7 +2,7 @@
 Jira Sync API
 
 Jira 데이터 동기화 API 엔드포인트.
-전체/증분 동기화, 상태 조회, 검색 기능 제공.
+전체/증분 동기화, 상태 조회 기능 제공.
 """
 
 import logging
@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from catchup.connectors.jira.auth import get_jira_oauth_service, JiraOAuthService
 from catchup.connectors.jira.service import JiraIngestionService
 from catchup.db.dependencies import get_db
-from catchup.db import jira_oauth as jira_crud
+from catchup.db.jira import oauth_repository as jira_crud
 from catchup.db.models import JiraSyncState
 
 logger = logging.getLogger(__name__)
@@ -63,30 +63,6 @@ class SyncStatusResponse(BaseModel):
     last_successful_sync_at: str | None
     synced_entities: int
     last_sync_error: str | None
-
-
-class SearchRequest(BaseModel):
-    """검색 요청"""
-    query: str = Field(..., description="검색 쿼리 (자연어)")
-    k: int = Field(5, ge=1, le=50, description="반환할 결과 수")
-    entity_type: str | None = Field(
-        None,
-        description="엔티티 타입 필터 (issue, epic, project, sprint)",
-    )
-    project_key: str | None = Field(None, description="프로젝트 필터")
-
-
-class SearchResultItem(BaseModel):
-    """검색 결과 항목"""
-    id: str
-    content: str
-    metadata: dict[str, Any]
-
-
-class SearchResponse(BaseModel):
-    """검색 응답"""
-    results: list[SearchResultItem]
-    total: int
 
 
 # ================================================================
@@ -293,55 +269,3 @@ async def get_sync_status(
         )
         for state in sync_states
     ]
-
-
-@router.post("/search", response_model=SearchResponse)
-async def search_jira_documents(
-    request: SearchRequest,
-    cloud_id: str = Query(..., description="Jira Cloud ID"),
-    db: Session = Depends(get_db),
-    jira_service: JiraOAuthService = Depends(get_jira_oauth_service),
-):
-    """
-    Jira 문서 벡터 검색
-
-    PGVector에 저장된 Jira 데이터에서 시맨틱 검색 수행.
-    """
-    token_record = jira_crud.get_jira_token_by_cloud_id(db, cloud_id)
-    if not token_record:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Jira 연결을 찾을 수 없습니다: {cloud_id}",
-        )
-
-    try:
-        access_token = await jira_service.get_valid_access_token(db, token_record)
-        site_url = token_record.site_url or ""
-
-        service = JiraIngestionService(cloud_id, access_token, site_url)
-        await service.initialize()
-
-        documents = await service.search(
-            query=request.query,
-            k=request.k,
-            entity_type=request.entity_type,
-            project_key=request.project_key,
-        )
-
-        results = [
-            SearchResultItem(
-                id=doc.id or "",
-                content=doc.page_content[:500],
-                metadata=doc.metadata,
-            )
-            for doc in documents
-        ]
-
-        return SearchResponse(results=results, total=len(results))
-
-    except Exception as e:
-        logger.error(f"Search error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"검색 중 오류가 발생했습니다: {str(e)}",
-        )
