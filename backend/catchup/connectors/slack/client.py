@@ -250,87 +250,6 @@ class SlackApiClientWrapper:
                 logger.error(f"users_list failed: {e.response['error']}")
                 raise
 
-    async def get_user_info(self, user: str) -> dict[str, Any]:
-        """
-        사용자 상세 정보 조회
-
-        Args:
-            user: 사용자 ID
-
-        Returns:
-            user 정보 포함된 응답
-        """
-        async with self._semaphore:
-            try:
-                response = await self.client.users_info(user=user)
-                return response.data
-            except SlackApiError as e:
-                logger.error(f"users_info failed for {user}: {e.response['error']}")
-                raise
-
-    # ================================================================
-    # File APIs
-    # ================================================================
-
-    async def list_files(
-        self,
-        channel: str | None = None,
-        user: str | None = None,
-        ts_from: str | None = None,
-        ts_to: str | None = None,
-        types: str | None = None,
-        page: int = 1,
-        count: int = 100,
-    ) -> dict[str, Any]:
-        """
-        파일 목록 조회
-
-        Args:
-            channel: 특정 채널의 파일만 조회
-            user: 특정 사용자가 업로드한 파일만 조회
-            ts_from: 시작 timestamp
-            ts_to: 종료 timestamp
-            types: 파일 타입 필터 (spaces, snippets, images, gdocs, zips, pdfs 등)
-            page: 페이지 번호 (1부터 시작)
-            count: 페이지당 파일 수
-
-        Returns:
-            files, paging 정보 포함된 응답
-        """
-        async with self._semaphore:
-            try:
-                response = await self.client.files_list(
-                    channel=channel,
-                    user=user,
-                    ts_from=ts_from,
-                    ts_to=ts_to,
-                    types=types,
-                    page=page,
-                    count=count,
-                )
-                return response.data
-            except SlackApiError as e:
-                logger.error(f"files_list failed: {e.response['error']}")
-                raise
-
-    async def get_file_info(self, file: str) -> dict[str, Any]:
-        """
-        파일 상세 정보 조회
-
-        Args:
-            file: 파일 ID
-
-        Returns:
-            file 정보 포함된 응답
-        """
-        async with self._semaphore:
-            try:
-                response = await self.client.files_info(file=file)
-                return response.data
-            except SlackApiError as e:
-                logger.error(f"files_info failed for {file}: {e.response['error']}")
-                raise
-
     # ================================================================
     # Team API
     # ================================================================
@@ -353,28 +272,6 @@ class SlackApiClientWrapper:
     # ================================================================
     # Utility APIs
     # ================================================================
-
-    async def get_permalink(self, channel: str, message_ts: str) -> str:
-        """
-        메시지 Permalink 조회
-
-        Args:
-            channel: 채널 ID
-            message_ts: 메시지 timestamp
-
-        Returns:
-            메시지 permalink URL
-        """
-        async with self._semaphore:
-            try:
-                response = await self.client.chat_getPermalink(
-                    channel=channel,
-                    message_ts=message_ts,
-                )
-                return response.data.get("permalink", "")
-            except SlackApiError as e:
-                logger.warning(f"chat_getPermalink failed for {channel}/{message_ts}: {e.response['error']}")
-                return ""
 
     async def auth_test(self) -> dict[str, Any]:
         """

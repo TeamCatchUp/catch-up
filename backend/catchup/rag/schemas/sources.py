@@ -118,7 +118,7 @@ class BaseSource(BaseModel):
             "id": doc_id,
             "relevance_score": relevance_score,
             "is_cited": is_cited,
-            "text": doc.metadata.get('display_content', ''),
+            "text": doc.metadata.get('contextual_content', ''),
             "url": metadata.get("url"),
             "created_at": metadata.get("created_at"),
             "updated_at": updated_at,

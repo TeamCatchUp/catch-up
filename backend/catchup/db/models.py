@@ -586,6 +586,80 @@ class SlackSyncState(Base):
     )
 
 
+class SlackChannelSyncState(Base):
+    """
+    Slack 채널별 메시지 동기화 상태 추적을 위한 테이블
+
+    - 채널별로 동기화 상태 관리 -> 실패 시 해당 채널만 재시도 가능
+    - last_successful_sync_at 기준으로 재시도 시작점 결정
+    - SlackSyncState는 전체 동기화 상태, 이 테이블은 채널별 상세 상태
+    """
+    __tablename__ = "slack_channel_sync_states"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Slack Workspace 및 채널 식별
+    team_id: Mapped[str] = mapped_column(
+        String(128), nullable=False, index=True,
+        comment="Slack Team/Workspace ID"
+    )
+    channel_id: Mapped[str] = mapped_column(
+        String(128), nullable=False, index=True,
+        comment="Slack Channel ID"
+    )
+    channel_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True,
+        comment="채널명 (디버깅/로깅용)"
+    )
+
+    # 동기화 상태
+    last_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="마지막 동기화 시작 시간"
+    )
+    last_successful_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="마지막 성공적인 동기화 시간 (재시도 기준점)"
+    )
+    last_sync_status: Mapped[SlackSyncStatus | None] = mapped_column(
+        String(20), nullable=True,
+        comment="pending, in_progress, success, failed"
+    )
+    last_sync_error: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True,
+        comment="마지막 에러 메시지"
+    )
+
+    # 진행 상황
+    synced_count: Mapped[int] = mapped_column(
+        Integer, default=0,
+        comment="동기화 완료된 메시지 수"
+    )
+
+    # Slack timestamp 범위 (재시도 지원)
+    oldest_ts: Mapped[str | None] = mapped_column(
+        String(50), nullable=True,
+        comment="동기화 시작 Slack timestamp"
+    )
+    latest_synced_ts: Mapped[str | None] = mapped_column(
+        String(50), nullable=True,
+        comment="마지막으로 성공한 메시지의 timestamp (재시도 시작점)"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        # team_id + channel_id 복합 유니크 인덱스
+        {"comment": "채널별 동기화 상태 추적"},
+    )
+
+
 # ============================================================
 # GitHub Sync State
 # ============================================================

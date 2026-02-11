@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from catchup.connectors.slack.auth import get_slack_oauth_service
 from catchup.connectors.slack.service import SlackIngestionService
-from catchup.db import slack_oauth as slack_crud
+from catchup.db.slack import oauth_repository as slack_crud
 
 logger = logging.getLogger(__name__)
 
