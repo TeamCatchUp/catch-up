@@ -3,7 +3,7 @@
 import { useRef } from 'react';
 
 import HowToUse from '@/features/home/components/HowToUse';
-import LinkTool from '@/features/home/components/LinkTool';
+import QuestionTips from '@/features/home/components/QuestionTips';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import ExplorerPanel from '@/shared/components/query/ExplorerPanel';
 import FilterBar from '@/shared/components/query/FilterBar';
@@ -29,7 +29,7 @@ export default function Home() {
   });
 
   useOutsideClick(containerRef, () => {
-    if (input.hasText || filters.openPopover) return;
+    if (filters.openPopover) return;
     input.setIsFocused(false);
     inputRef.current?.blur();
   });
@@ -88,8 +88,14 @@ export default function Home() {
           input.isFocused ? 'pointer-events-none translate-y-4 opacity-0' : 'opacity-100'
         }`}
       >
+        <QuestionTips
+          onTipClick={(query) => {
+            input.setValue(query);
+            input.setIsFocused(true);
+            inputRef.current?.focus();
+          }}
+        />
         <HowToUse />
-        <LinkTool />
       </div>
     </div>
   );
