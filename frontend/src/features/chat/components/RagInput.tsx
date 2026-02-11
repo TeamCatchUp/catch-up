@@ -13,7 +13,6 @@ import IconJira from '@/public/icons/logo/Jira.svg';
 import IconSlack from '@/public/icons/logo/Slack.svg';
 import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown';
 import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
-import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/shared/mocks/search/filterOptions';
@@ -76,27 +75,6 @@ const RagInput = ({
       handleSendMessage();
     }
   };
-
-  const allSelectedChips = [
-    ...filters.selectedPeople.map((name) => ({
-      id: `person-${name}`,
-      name,
-      Icon: IconPerson,
-      onRemove: () => filters.togglePerson(name),
-    })),
-    ...filters.selectedDepts.map((name) => ({
-      id: `dept-${name}`,
-      name,
-      Icon: IconTag,
-      onRemove: () => filters.toggleDept(name),
-    })),
-    ...filters.selectedProjects.map((name) => ({
-      id: `project-${name}`,
-      name,
-      Icon: IconSpace,
-      onRemove: () => filters.toggleProject(name),
-    })),
-  ];
 
   return (
     <div className="w-full flex-none bg-white px-24 pt-4 pb-8">
@@ -187,9 +165,6 @@ const RagInput = ({
               </div>
             </div>
           </div>
-          {allSelectedChips.length > 0 && (
-            <SelectedFilterChips chips={allSelectedChips} onReset={filters.handleResetAll} />
-          )}
         </div>
 
         {/* Input Bar */}

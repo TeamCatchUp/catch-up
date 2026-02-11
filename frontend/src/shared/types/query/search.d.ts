@@ -1,14 +1,6 @@
 /** Popover 타입 */
 export type PopoverType = 'person' | 'department' | 'project' | null;
 
-/** 필터 칩 데이터 */
-export interface ChipData {
-  id: string;
-  name: string;
-  Icon: React.ComponentType<{ className?: string }>;
-  onRemove: () => void;
-}
-
 /** 필터 레이블 */
 export interface FilterLabels {
   person: string;

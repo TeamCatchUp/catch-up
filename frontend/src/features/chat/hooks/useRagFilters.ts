@@ -35,8 +35,6 @@ export interface UseRagFiltersReturn {
   deptLabel: string;
   projectLabel: string;
 
-  // Actions
-  handleResetAll: () => void;
 }
 
 export const useRagFilters = (): UseRagFiltersReturn => {
@@ -76,13 +74,6 @@ export const useRagFilters = (): UseRagFiltersReturn => {
     setSelectedProjects((p) => (p.includes(val) ? p.filter((i) => i !== val) : [...p, val]));
   }, []);
 
-  /** 전체 필터 초기화 */
-  const handleResetAll = useCallback(() => {
-    setSelectedPeople([]);
-    setSelectedDepts([]);
-    setSelectedProjects([]);
-  }, []);
-
   // Labels
   const personLabel = selectedPeople.length > 0 ? `담당자: ${selectedPeople[0]} 외` : '담당자';
   const deptLabel = selectedDepts.length > 0 ? `부서: ${selectedDepts[0]} 외` : '부서';
@@ -104,7 +95,6 @@ export const useRagFilters = (): UseRagFiltersReturn => {
     personLabel,
     deptLabel,
     projectLabel,
-    handleResetAll,
   };
 };
 

@@ -7,10 +7,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 
-import IconPerson from '@/public/icons/icon/person.svg';
-import IconSpace from '@/public/icons/icon/space.svg';
-import IconTag from '@/public/icons/icon/tag.svg';
-import type { ChipData, FilterLabels, PopoverType } from '@/shared/types/query/search';
+import type { FilterLabels, PopoverType } from '@/shared/types/query/search';
 
 export type SourceType = 'jira' | 'github' | 'slack';
 
@@ -33,10 +30,6 @@ export interface UseSearchFiltersReturn {
 
   // Computed
   labels: FilterLabels;
-  allSelectedChips: ChipData[];
-
-  // Actions
-  handleResetAll: () => void;
 }
 
 export const useSearchFilters = (): UseSearchFiltersReturn => {
@@ -68,13 +61,6 @@ export const useSearchFilters = (): UseSearchFiltersReturn => {
     setSelectedProjects((p) => (p.includes(val) ? p.filter((i) => i !== val) : [...p, val]));
   }, []);
 
-  // Reset all
-  const handleResetAll = useCallback(() => {
-    setSelectedPeople([]);
-    setSelectedDepts([]);
-    setSelectedProjects([]);
-  }, []);
-
   // Computed: Labels
   const labels = useMemo<FilterLabels>(
     () => ({
@@ -84,30 +70,6 @@ export const useSearchFilters = (): UseSearchFiltersReturn => {
     }),
     [selectedPeople, selectedDepts, selectedProjects],
   );
-
-  // Computed: All selected chips
-  const allSelectedChips = useMemo<ChipData[]>(() => {
-    return [
-      ...selectedPeople.map((name) => ({
-        id: `person-${name}`,
-        name,
-        Icon: IconPerson,
-        onRemove: () => togglePerson(name),
-      })),
-      ...selectedDepts.map((name) => ({
-        id: `dept-${name}`,
-        name,
-        Icon: IconTag,
-        onRemove: () => toggleDept(name),
-      })),
-      ...selectedProjects.map((name) => ({
-        id: `project-${name}`,
-        name,
-        Icon: IconSpace,
-        onRemove: () => toggleProject(name),
-      })),
-    ];
-  }, [selectedPeople, selectedDepts, selectedProjects, togglePerson, toggleDept, toggleProject]);
 
   return {
     openPopover,
@@ -121,7 +83,5 @@ export const useSearchFilters = (): UseSearchFiltersReturn => {
     labels,
     selectedSources,
     toggleSource,
-    allSelectedChips,
-    handleResetAll,
   };
 };

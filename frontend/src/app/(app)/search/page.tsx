@@ -8,7 +8,6 @@ import Git from '@/public/image/aiGit.png';
 import Jira from '@/public/image/AIJIRA1.png';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import ExplorerPanel from '@/shared/components/query/ExplorerPanel';
-import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
 import FilterBar from '@/shared/components/query/FilterBar';
 import QueryInput from '@/shared/components/query/QueryInput';
 import { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
@@ -68,7 +67,6 @@ export default function Search() {
             {input.isFocused && (
               <div className="animate-in fade-in-0 slide-in-from-top-3 duration-300 border-neutral-4 mt-1 flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden border-t pt-2">
                 <FilterBar filters={filters} inputRef={inputRef} />
-                <SelectedFilterChips chips={filters.allSelectedChips} onReset={filters.handleResetAll} />
                 <ExplorerPanel />
               </div>
             )}
