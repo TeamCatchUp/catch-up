@@ -44,7 +44,9 @@ from catchup.connectors.github.transformers import GitHubTransformer
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
-from catchup.db import github_sync, github_entities, github_installation
+from catchup.db.github import sync_repository as github_sync
+from catchup.db.github import domain_repository as github_entities
+from catchup.db.github import installation_repository as github_installation
 from catchup.db.models import GitHubEntityType, GitHubSyncStatus, GithubInstallationType
 
 logger = logging.getLogger(__name__)
@@ -589,42 +591,6 @@ class GitHubIngestionService:
             logger.error(f"Incremental sync failed: {e}")
             raise
 
-    # ============================================================
-    # Search
-    # ============================================================
-
-    async def search(
-        self,
-        query: str,
-        k: int = 5,
-        entity_type: str | None = None,
-        repo: str | None = None,
-    ) -> list[Document]:
-        """
-        GitHub 데이터 검색
-
-        Args:
-            query: 검색 쿼리
-            k: 반환할 결과 수
-            entity_type: 필터링할 엔티티 타입 (issue, pr, commit)
-            repo: 필터링할 Repository (owner/repo)
-
-        Returns:
-            검색 결과 Document 리스트
-        """
-        filters = {
-            "source": "github",
-            "installation_id": self.installation_id,
-        }
-
-        if entity_type:
-            filters["entity_type"] = entity_type
-
-        if repo:
-            filters["full_name"] = repo
-
-        return await self.repository.search(query, k=k, filter=filters)
-
     async def _summarize_documents(
         self,
         documents: list[Document],
@@ -632,7 +598,7 @@ class GitHubIngestionService:
         """
         문서들의 page_content를 LLM으로 요약하여 교체
 
-        display_content(구조화된 정보 포함)를 요약 입력으로 사용하여
+        contextual_content(구조화된 정보 포함)를 요약 입력으로 사용하여
         더 풍부한 컨텍스트 기반 요약 생성.
 
         Args:
@@ -647,7 +613,7 @@ class GitHubIngestionService:
         # SummarizeRequest 리스트 생성 (source + entity_type → source_type)
         requests = []
         for doc in documents:
-            content = doc.metadata.get("display_content", doc.page_content)
+            content = doc.metadata.get("contextual_content", doc.page_content)
             entity_type = doc.metadata.get("entity_type", "issue")
             source_type = f"github_{entity_type}"  # github_issue, github_pr, github_commit
             requests.append(SummarizeRequest(content=content, source_type=source_type))

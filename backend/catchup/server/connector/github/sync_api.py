@@ -7,7 +7,6 @@ Endpoints:
 - POST /full: 전체 동기화
 - POST /incremental: 증분 동기화
 - GET /status/{installation_id}: 동기화 상태 조회
-- POST /search: 검색
 """
 
 import logging
@@ -18,9 +17,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from catchup.db.dependencies import get_db
-from catchup.db import github_sync, github_entities
+from catchup.db.github import sync_repository as github_sync
+from catchup.db.github import domain_repository as github_entities
 from catchup.db.models import GitHubEntityType
-from catchup.db.github_installation import get_installation_by_installation_id
+from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.service import GitHubIngestionService
 
@@ -57,21 +57,6 @@ class IncrementalSyncRequest(BaseModel):
     )
 
 
-class SearchRequest(BaseModel):
-    """검색 요청"""
-    installation_id: int = Field(..., description="GitHub App Installation ID")
-    query: str = Field(..., description="검색 쿼리")
-    k: int = Field(default=5, description="반환할 결과 수")
-    entity_type: str | None = Field(
-        default=None,
-        description="필터링할 엔티티 타입 (issue, pr, commit)"
-    )
-    repo: str | None = Field(
-        default=None,
-        description="필터링할 Repository (owner/repo)"
-    )
-
-
 class SyncResult(BaseModel):
     """동기화 결과"""
     synced: int
@@ -89,22 +74,6 @@ class SyncStateResponse(BaseModel):
     """동기화 상태 응답"""
     installation_id: int
     repositories: list[dict[str, Any]]
-
-
-class SearchResultItem(BaseModel):
-    """검색 결과 항목"""
-    id: str
-    entity_type: str
-    title: str
-    url: str
-    score: float | None = None
-    metadata: dict[str, Any]
-
-
-class SearchResponse(BaseModel):
-    """검색 응답"""
-    results: list[SearchResultItem]
-    total: int
 
 
 # ============================================================
@@ -258,50 +227,6 @@ async def get_sync_status(
         raise
     except Exception as e:
         logger.error(f"Failed to get sync status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/search", response_model=SearchResponse)
-async def search(
-    request: SearchRequest,
-    db: Session = Depends(get_db),
-):
-    """
-    GitHub 데이터 검색
-
-    PGVector에 저장된 GitHub 데이터를 검색합니다.
-    """
-    try:
-        service = await _get_ingestion_service(db, request.installation_id)
-
-        documents = await service.search(
-            query=request.query,
-            k=request.k,
-            entity_type=request.entity_type,
-            repo=request.repo,
-        )
-
-        results = []
-        for doc in documents:
-            metadata = doc.metadata or {}
-            results.append(SearchResultItem(
-                id=doc.id or "",
-                entity_type=metadata.get("entity_type", "unknown"),
-                title=metadata.get("summary", ""),
-                url=metadata.get("url", ""),
-                score=None,  # PGVector는 score를 별도로 반환
-                metadata=metadata,
-            ))
-
-        return SearchResponse(
-            results=results,
-            total=len(results),
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Search failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

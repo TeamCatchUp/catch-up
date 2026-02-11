@@ -33,9 +33,9 @@ from catchup.connectors.slack.transformers import SlackTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
-from catchup.db.models import SlackEntityType, SlackSyncStatus, SlackChannelType
-from catchup.db import slack_sync
-from catchup.db import slack_entities
+from catchup.db.models import SlackEntityType, SlackSyncStatus
+from catchup.db.slack import sync_repository as slack_sync
+from catchup.db.slack import domain_repository as slack_entities
 
 logger = logging.getLogger(__name__)
 
@@ -73,24 +73,22 @@ class SlackIngestionService:
         self.repository = PGVectorRepository()
         self.summarizer: SummarizerService | None = None
         self.user_cache: dict[str, SlackUser] = {}
+        self.workspace_domain: str | None = None  # Permalink 생성용
         self._initialized = False
 
     async def initialize(self) -> None:
         """
         서비스 초기화
 
-        User 캐시 빌드 및 PGVector Repository 초기화.
-        동기화 작업 전에 반드시 호출해야 함.
+        PGVector Repository 초기화.
+        User 캐시는 _sync_all_users()에서 갱신됨.
         """
         if self._initialized:
             return
 
         logger.info(f"Initializing SlackIngestionService for team_id={self.team_id}")
 
-        # User 캐시 빌드 (멘션 변환용)
-        await self._build_user_cache()
-
-        # Transformer 생성
+        # Transformer 생성 (user_cache는 _sync_all_users에서 in-place 갱신)
         self.transformer = SlackTransformer(self.user_cache)
 
         # Summarizer 초기화 (요약 활성화 시)
@@ -111,6 +109,17 @@ class SlackIngestionService:
                 "SlackIngestionService not initialized. "
                 "Call await service.initialize() first."
             )
+
+    def _build_permalink(self, channel_id: str, ts: str) -> str | None:
+        """
+        메시지 Permalink 생성 (API 호출 없이)
+
+        Format: https://{domain}.slack.com/archives/{channel_id}/p{ts without dot}
+        """
+        if not self.workspace_domain:
+            return None
+        ts_clean = ts.replace(".", "")
+        return f"https://{self.workspace_domain}.slack.com/archives/{channel_id}/p{ts_clean}"
 
     # ================================================================
     # 전체 동기화 (Full Sync)
@@ -150,7 +159,7 @@ class SlackIngestionService:
         """
         self._ensure_initialized()
 
-        # 기본값: 최근 N일
+        # 기본값: 최근 3년
         if oldest is None:
             days_ago = datetime.now(timezone.utc) - timedelta(days=settings.SLACK_DEFAULT_SYNC_DAYS)
             oldest = str(days_ago.timestamp())
@@ -253,60 +262,8 @@ class SlackIngestionService:
         )
 
     # ================================================================
-    # 검색
-    # ================================================================
-
-    async def search(
-        self,
-        query: str,
-        k: int = 5,
-        entity_type: str | None = None,
-        channel_id: str | None = None,
-    ) -> list[Document]:
-        """
-        벡터 시맨틱 검색
-        """
-        self._ensure_initialized()
-
-        filters = {"source": "slack", "team_id": self.team_id}
-        if entity_type:
-            filters["entity_type"] = entity_type
-        if channel_id:
-            filters["channel_id"] = channel_id
-
-        return await self.repository.search(query, k=k, filter=filters)
-
-    # ================================================================
     # 내부 동기화 메서드
     # ================================================================
-
-    async def _build_user_cache(self) -> None:
-        """모든 User 정보를 메모리에 캐싱"""
-        logger.info(f"Building user cache for team_id={self.team_id}")
-
-        cursor = None
-        total = 0
-
-        while True:
-            response = await self.client.list_users(cursor=cursor)
-            members = response.get("members", [])
-
-            for member in members:
-                if member.get("deleted"):
-                    continue
-                self.user_cache[member["id"]] = SlackUser(
-                    id=member["id"],
-                    name=member.get("name"),
-                    real_name=member.get("real_name"),
-                    display_name=member.get("profile", {}).get("display_name"),
-                )
-                total += 1
-
-            cursor = response.get("response_metadata", {}).get("next_cursor")
-            if not cursor:
-                break
-
-        logger.info(f"User cache built: {total} users")
 
     async def _sync_workspace(self, db: Session) -> dict[str, int]:
         """Workspace 동기화 (RDBMS 저장)"""
@@ -319,18 +276,11 @@ class SlackIngestionService:
             response = await self.client.get_team_info()
             workspace = self.transformer.parse_workspace(response)
 
+            # Permalink 생성용 domain 저장
+            self.workspace_domain = workspace.domain
+
             # RDBMS에 저장
-            slack_entities.upsert_workspace(
-                db,
-                workspace_id=workspace.id,
-                name=workspace.name,
-                domain=workspace.domain,
-                url=workspace.url,
-                email_domain=workspace.email_domain,
-                icon_url=workspace.icon_url,
-                enterprise_id=workspace.enterprise_id,
-                enterprise_name=workspace.enterprise_name,
-            )
+            slack_entities.upsert_workspace(db, workspace)
 
             slack_sync.mark_sync_completed(db, self.team_id, SlackEntityType.WORKSPACE, 1)
             return {"synced": 1, "errors": 0}
@@ -348,14 +298,14 @@ class SlackIngestionService:
             return {"synced": 0, "errors": 1}
 
     async def _sync_all_users(self, db: Session) -> dict[str, int]:
-        """모든 User를 RDBMS에 저장"""
+        """모든 User를 RDBMS에 저장 + 캐시 갱신"""
         try:
             slack_sync.create_or_update_sync_state(
                 db, self.team_id, SlackEntityType.USER,
                 SlackSyncStatus.IN_PROGRESS
             )
 
-            users_data = []
+            users = []
 
             cursor = None
             while True:
@@ -363,39 +313,34 @@ class SlackIngestionService:
                 members = response.get("members", [])
 
                 for member in members:
-                    user = self.transformer.parse_user(member)
-                    users_data.append({
-                        "team_id": self.team_id,
-                        "user_id": user.id,
-                        "name": user.name,
-                        "real_name": user.real_name or user.name,
-                        "display_name": user.display_name or user.name,
-                        "deleted": user.deleted,
-                        "email": user.email,
-                        "avatar_url": user.avatar_url,
-                        "title": user.title,
-                        "phone": user.phone,
-                        "tz": user.tz,
-                        "tz_label": user.tz_label,
-                        "is_bot": user.is_bot,
-                        "is_admin": user.is_admin,
-                        "is_owner": user.is_owner,
-                        "is_restricted": user.is_restricted,
-                        "updated_at": user.updated_at,
-                    })
+                    users.append(self.transformer.parse_user(member))
 
                 cursor = response.get("response_metadata", {}).get("next_cursor")
                 if not cursor:
                     break
 
             # RDBMS에 벌크 저장
-            if users_data:
-                slack_entities.upsert_users_bulk(db, users_data)
+            if users:
+                slack_entities.upsert_users_bulk(db, self.team_id, users)
+
+            # 캐시 갱신 (in-place 업데이트 - Transformer 참조 유지)
+            self.user_cache.clear()
+            self.user_cache.update({
+                u.id: SlackUser(
+                    id=u.id,
+                    name=u.name,
+                    real_name=u.real_name,
+                    display_name=u.display_name,
+                )
+                for u in users
+                if not u.deleted
+            })
+            logger.info(f"User cache refreshed: {len(self.user_cache)} users")
 
             slack_sync.mark_sync_completed(
-                db, self.team_id, SlackEntityType.USER, len(users_data)
+                db, self.team_id, SlackEntityType.USER, len(users)
             )
-            return {"synced": len(users_data), "errors": 0}
+            return {"synced": len(users), "errors": 0}
 
         except Exception as e:
             logger.error(f"User sync failed: {e}")
@@ -421,7 +366,7 @@ class SlackIngestionService:
                 SlackSyncStatus.IN_PROGRESS
             )
 
-            channels_data = []
+            channels = []
 
             cursor = None
             while True:
@@ -429,40 +374,25 @@ class SlackIngestionService:
                     types="public_channel,private_channel,mpim,im",
                     cursor=cursor,
                 )
-                channels = response.get("channels", [])
+                channels_response = response.get("channels", [])
 
-                for channel_data in channels:
-                    channel_id = channel_data.get("id")
-                    if channel_ids and channel_id not in channel_ids:
+                for channel_data in channels_response:
+                    if channel_ids and channel_data.get("id") not in channel_ids:
                         continue
-
-                    channel = self.transformer.parse_channel(channel_data)
-                    channels_data.append({
-                        "id": channel.id,
-                        "team_id": self.team_id,
-                        "name": channel.name,
-                        "channel_type": SlackChannelType(channel.channel_type),
-                        "topic": channel.topic,
-                        "purpose": channel.purpose,
-                        "creator_id": channel.creator_id,
-                        "member_count": channel.member_count,
-                        "is_archived": channel.is_archived,
-                        "is_private": channel.is_private,
-                        "created_at": channel.created_at,
-                    })
+                    channels.append(self.transformer.parse_channel(channel_data))
 
                 cursor = response.get("response_metadata", {}).get("next_cursor")
                 if not cursor:
                     break
 
             # RDBMS에 벌크 저장
-            if channels_data:
-                slack_entities.upsert_channels_bulk(db, channels_data)
+            if channels:
+                slack_entities.upsert_channels_bulk(db, self.team_id, channels)
 
             slack_sync.mark_sync_completed(
-                db, self.team_id, SlackEntityType.CHANNEL, len(channels_data)
+                db, self.team_id, SlackEntityType.CHANNEL, len(channels)
             )
-            return {"synced": len(channels_data), "errors": 0}
+            return {"synced": len(channels), "errors": 0}
 
         except Exception as e:
             logger.error(f"Channel sync failed: {e}")
@@ -520,6 +450,7 @@ class SlackIngestionService:
 
             for channel in channels_to_sync:
                 result = await self._sync_channel_messages(
+                    db,
                     channel["id"],
                     channel["name"],
                     oldest,
@@ -560,18 +491,54 @@ class SlackIngestionService:
 
     async def _sync_channel_messages(
         self,
+        db: Session,
         channel_id: str,
         channel_name: str,
         oldest: str | None,
         latest: str | None,
     ) -> dict[str, int]:
-        """단일 채널의 메시지 동기화"""
-        documents = []
-        doc_ids = []
+        """
+        단일 채널의 메시지 동기화 (채널별 상태 추적)
+
+        재시도 로직:
+        - 이전 동기화가 실패했으면 last_successful_sync_at 기준으로 재시도
+        - 성공 시 last_successful_sync_at 갱신
+        - Upsert 패턴으로 중복 안전
+        """
         errors = 0
+        synced_count = 0
 
         # 접근 불가 채널 에러 코드 (에러가 아닌 스킵으로 처리)
         SKIPPABLE_ERRORS = {"not_in_channel", "channel_not_found", "missing_scope"}
+
+        # 채널 동기화 상태 조회 및 effective_oldest 계산
+        channel_state = slack_sync.get_channel_sync_state(db, self.team_id, channel_id)
+        effective_oldest = oldest
+
+        if channel_state and channel_state.last_successful_sync_at:
+            # synced_count > 0: 실제로 메시지를 동기화한 적 있음 → 재시도 지원
+            # synced_count == 0: 스킵되었거나 메시지가 없었음 → 전체 동기화 필요
+            if channel_state.synced_count > 0:
+                prev_oldest_ts = str(channel_state.last_successful_sync_at.timestamp())
+
+                # oldest가 지정되지 않았거나, 이전 성공 시점이 더 최신이면 사용
+                if oldest is None or float(prev_oldest_ts) > float(oldest):
+                    effective_oldest = prev_oldest_ts
+                    logger.info(
+                        f"Channel {channel_name}: resuming from last_successful_sync_at "
+                        f"({channel_state.last_successful_sync_at})"
+                    )
+            else:
+                # 이전에 스킵되었던 채널 - 권한이 생겼을 수 있으므로 전체 동기화
+                logger.info(
+                    f"Channel {channel_name}: previously skipped (synced_count=0), "
+                    f"attempting full sync from oldest={oldest}"
+                )
+
+        # 채널 동기화 시작 상태 기록
+        slack_sync.start_channel_sync(
+            db, self.team_id, channel_id, channel_name, effective_oldest
+        )
 
         try:
             cursor = None
@@ -579,7 +546,7 @@ class SlackIngestionService:
                 try:
                     response = await self.client.get_conversation_history(
                         channel=channel_id,
-                        oldest=oldest,
+                        oldest=effective_oldest,
                         latest=latest,
                         cursor=cursor,
                         limit=settings.SLACK_MESSAGE_BATCH_SIZE,
@@ -590,10 +557,16 @@ class SlackIngestionService:
                         logger.info(
                             f"Skipping channel {channel_name} ({channel_id}): {error_code}"
                         )
+                        # 스킵된 채널도 성공으로 처리 (다음 동기화에서 다시 시도하지 않음)
+                        slack_sync.mark_channel_sync_completed(
+                            db, self.team_id, channel_id, 0
+                        )
                         return {"synced": 0, "errors": 0, "skipped": True}
                     raise
 
                 messages = response.get("messages", [])
+                batch_documents = []
+                batch_doc_ids = []
 
                 for msg_data in messages:
                     try:
@@ -604,8 +577,8 @@ class SlackIngestionService:
                                 channel_id, msg_data.get("ts")
                             )
 
-                        # Permalink 조회
-                        permalink = await self.client.get_permalink(
+                        # Permalink 생성 (API 호출 없이)
+                        permalink = self._build_permalink(
                             channel_id, msg_data.get("ts")
                         )
 
@@ -618,8 +591,8 @@ class SlackIngestionService:
                             replies,
                         )
                         doc = self.transformer.transform_message(message, self.team_id)
-                        documents.append(doc)
-                        doc_ids.append(doc.id)
+                        batch_documents.append(doc)
+                        batch_doc_ids.append(doc.id)
 
                     except Exception as e:
                         logger.warning(
@@ -627,27 +600,43 @@ class SlackIngestionService:
                         )
                         errors += 1
 
+                # 배치 저장 및 진행 상황 업데이트
+                if batch_documents:
+                    if self.summarizer:
+                        batch_documents = await self._summarize_documents(batch_documents)
+                    await self.repository.upsert_documents(batch_documents, batch_doc_ids)
+                    synced_count += len(batch_documents)
+
+                    # 배치 완료 시 진행 상황 기록 (마지막 메시지 ts 포함)
+                    latest_ts = messages[-1].get("ts") if messages else None
+                    slack_sync.update_channel_sync_progress(
+                        db, self.team_id, channel_id, synced_count, latest_ts
+                    )
+
                 if not response.get("has_more"):
                     break
                 cursor = response.get("response_metadata", {}).get("next_cursor")
                 if not cursor:
                     break
 
-            if documents:
-                # 요약 적용 (summarizer가 활성화된 경우)
-                if self.summarizer:
-                    documents = await self._summarize_documents(documents)
-                await self.repository.upsert_documents(documents, doc_ids)
+            # 채널 동기화 완료
+            slack_sync.mark_channel_sync_completed(
+                db, self.team_id, channel_id, synced_count
+            )
 
             logger.debug(
-                f"Channel {channel_name}: synced {len(documents)} messages, "
+                f"Channel {channel_name}: synced {synced_count} messages, "
                 f"{errors} errors"
             )
-            return {"synced": len(documents), "errors": errors}
+            return {"synced": synced_count, "errors": errors}
 
         except Exception as e:
             logger.error(f"Channel {channel_name} message sync failed: {e}")
-            return {"synced": len(documents), "errors": errors + 1}
+            # 실패 시 상태 기록 (last_successful_sync_at은 유지됨)
+            slack_sync.mark_channel_sync_failed(
+                db, self.team_id, channel_id, str(e)[:1000], synced_count
+            )
+            return {"synced": synced_count, "errors": errors + 1}
 
     async def _fetch_thread_replies(
         self,
@@ -691,7 +680,7 @@ class SlackIngestionService:
         """
         문서들의 page_content를 LLM으로 요약하여 교체
 
-        display_content(구조화된 정보 포함)를 요약 입력으로 사용하여
+        contextual_content(구조화된 정보 포함)를 요약 입력으로 사용하여
         더 풍부한 컨텍스트 기반 요약 생성.
 
         Args:
@@ -706,7 +695,7 @@ class SlackIngestionService:
         # SummarizeRequest 리스트 생성 (source + entity_type → source_type)
         requests = []
         for doc in documents:
-            content = doc.metadata.get("display_content", doc.page_content)
+            content = doc.metadata.get("contextual_content", doc.page_content)
             entity_type = doc.metadata.get("entity_type", "message")
             source_type = f"slack_{entity_type}"  # slack_message
             requests.append(SummarizeRequest(content=content, source_type=source_type))

@@ -17,7 +17,7 @@ from catchup.connectors.jira.auth import get_jira_oauth_service, JiraOAuthServic
 from catchup.connectors.jira.schemas import JiraInstallationStatus
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
-from catchup.db import jira_oauth as jira_crud
+from catchup.db.jira import oauth_repository as jira_crud
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
 
 logger = logging.getLogger(__name__)

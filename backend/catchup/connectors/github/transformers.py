@@ -218,24 +218,24 @@ class GitHubTransformer:
         """
         doc_id = f"github:issue:{owner}/{repo}:{issue.number}"
 
-        # page_content: 임베딩용 (의미 중심 텍스트)
-        page_content = self._build_issue_embedding_content(issue)
+        # semantic_content: 임베딩용 (의미 중심 텍스트)
+        semantic_content = self._build_issue_semantic_content(issue)
 
-        # display_content: LLM 답변 생성용 (기존 포맷)
-        display_content = self._build_issue_display_content(issue)
+        # contextual_content: LLM 답변 생성용 (기존 포맷)
+        contextual_content = self._build_issue_contextual_content(issue)
 
         metadata = self._build_issue_metadata(issue, owner, repo, installation_id)
-        metadata["display_content"] = display_content
+        metadata["contextual_content"] = contextual_content
 
         return Document(
             id=doc_id,
-            page_content=page_content,
+            page_content=semantic_content,
             metadata=metadata,
         )
 
-    def _build_issue_embedding_content(self, issue: GitHubIssue) -> str:
+    def _build_issue_semantic_content(self, issue: GitHubIssue) -> str:
         """
-        Issue용 임베딩 텍스트 생성 (의미 중심)
+        Issue용 semantic_content 생성 (의미 중심)
 
         포함: title, body, comments(본문만)
         제외: 메타데이터(Status, Labels, Assignees 등), 포맷 마커
@@ -257,8 +257,8 @@ class GitHubTransformer:
 
         return "\n\n".join(parts)
 
-    def _build_issue_display_content(self, issue: GitHubIssue) -> str:
-        """Issue display_content 생성 - LLM 답변 생성용"""
+    def _build_issue_contextual_content(self, issue: GitHubIssue) -> str:
+        """Issue contextual_content 생성 - LLM 답변 생성용"""
         lines = []
 
         # 제목
@@ -560,24 +560,24 @@ class GitHubTransformer:
         """
         doc_id = f"github:pr:{owner}/{repo}:{pr.number}"
 
-        # page_content: 임베딩용 (의미 중심 텍스트)
-        page_content = self._build_pr_embedding_content(pr)
+        # semantic_content: 임베딩용 (의미 중심 텍스트)
+        semantic_content = self._build_pr_semantic_content(pr)
 
-        # display_content: LLM 답변 생성용 (기존 포맷)
-        display_content = self._build_pr_display_content(pr)
+        # contextual_content: LLM 답변 생성용 (기존 포맷)
+        contextual_content = self._build_pr_contextual_content(pr)
 
         metadata = self._build_pr_metadata(pr, owner, repo, installation_id)
-        metadata["display_content"] = display_content
+        metadata["contextual_content"] = contextual_content
 
         return Document(
             id=doc_id,
-            page_content=page_content,
+            page_content=semantic_content,
             metadata=metadata,
         )
 
-    def _build_pr_embedding_content(self, pr: GitHubPullRequest) -> str:
+    def _build_pr_semantic_content(self, pr: GitHubPullRequest) -> str:
         """
-        PR용 임베딩 텍스트 생성 (의미 중심)
+        PR용 semantic_content 생성 (의미 중심)
 
         포함: title, body, commits(메시지만), reviews(본문만), comments(본문만)
         제외: 메타데이터(Status, Author, Branch, Labels 등), 포맷 마커
@@ -609,8 +609,8 @@ class GitHubTransformer:
 
         return "\n\n".join(parts)
 
-    def _build_pr_display_content(self, pr: GitHubPullRequest) -> str:
-        """PR display_content 생성 - LLM 답변 생성용"""
+    def _build_pr_contextual_content(self, pr: GitHubPullRequest) -> str:
+        """PR contextual_content 생성 - LLM 답변 생성용"""
         lines = []
 
         # 제목
@@ -885,32 +885,32 @@ class GitHubTransformer:
         short_sha = commit.sha[:7]
         doc_id = f"github:commit:{owner}/{repo}:{short_sha}"
 
-        # page_content: 임베딩용 (의미 중심 텍스트)
-        page_content = self._build_commit_embedding_content(commit)
+        # semantic_content: 임베딩용 (의미 중심 텍스트)
+        semantic_content = self._build_commit_semantic_content(commit)
 
-        # display_content: LLM 답변 생성용 (기존 포맷)
-        display_content = self._build_commit_display_content(commit)
+        # contextual_content: LLM 답변 생성용 (기존 포맷)
+        contextual_content = self._build_commit_contextual_content(commit)
 
         metadata = self._build_commit_metadata(commit, owner, repo, installation_id)
-        metadata["display_content"] = display_content
+        metadata["contextual_content"] = contextual_content
 
         return Document(
             id=doc_id,
-            page_content=page_content,
+            page_content=semantic_content,
             metadata=metadata,
         )
 
-    def _build_commit_embedding_content(self, commit: GitHubCommit) -> str:
+    def _build_commit_semantic_content(self, commit: GitHubCommit) -> str:
         """
-        Commit용 임베딩 텍스트 생성 (의미 중심)
+        Commit용 semantic_content 생성 (의미 중심)
 
         포함: message
         제외: 메타데이터(Author, Date, PR, Changes stats 등), 포맷 마커
         """
         return commit.message if commit.message else ""
 
-    def _build_commit_display_content(self, commit: GitHubCommit) -> str:
-        """Commit display_content 생성 - LLM 답변 생성용"""
+    def _build_commit_contextual_content(self, commit: GitHubCommit) -> str:
+        """Commit contextual_content 생성 - LLM 답변 생성용"""
         lines = []
         short_sha = commit.sha[:7]
 

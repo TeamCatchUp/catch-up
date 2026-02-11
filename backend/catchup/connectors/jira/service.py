@@ -36,7 +36,7 @@ from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
 from catchup.db.models import JiraEntityType, JiraSyncState, JiraSyncStatus
-from catchup.db import jira_entities
+from catchup.db.jira import domain_repository as jira_entities
 
 logger = logging.getLogger(__name__)
 
@@ -385,7 +385,7 @@ class JiraIngestionService:
         """
         문서들의 page_content를 LLM으로 요약하여 교체
 
-        display_content(구조화된 정보 포함)를 요약 입력으로 사용하여
+        contextual_content(구조화된 정보 포함)를 요약 입력으로 사용하여
         더 풍부한 컨텍스트 기반 요약 생성.
 
         Args:
@@ -400,7 +400,7 @@ class JiraIngestionService:
         # SummarizeRequest 리스트 생성 (source + entity_type → source_type)
         requests = []
         for doc in documents:
-            content = doc.metadata.get("display_content", doc.page_content)
+            content = doc.metadata.get("contextual_content", doc.page_content)
             entity_type = doc.metadata.get("entity_type", "issue")
             source_type = f"jira_{entity_type}"  # jira_issue, jira_epic, jira_sprint
             requests.append(SummarizeRequest(content=content, source_type=source_type))
@@ -811,43 +811,3 @@ class JiraIngestionService:
             sync_state.last_successful_sync_at = now
 
         db.commit()
-
-    # ================================================================
-    # 검색 API
-    # ================================================================
-
-    async def search(
-        self,
-        query: str,
-        k: int = 5,
-        entity_type: str | None = None,
-        project_key: str | None = None,
-    ) -> list[Document]:
-        """
-        벡터 시맨틱 검색
-
-        Args:
-            query: 검색 쿼리 (자연어)
-            k: 반환할 결과 수
-            entity_type: 엔티티 타입 필터 ("issue", "epic", "project", "sprint")
-            project_key: 프로젝트 필터
-
-        Returns:
-            관련성 높은 Document 리스트
-        """
-        self._ensure_initialized()
-
-        # 메타데이터 필터 구성
-        filter_dict: dict[str, Any] = {"source": "jira"}
-
-        if entity_type:
-            filter_dict["entity_type"] = entity_type
-
-        if project_key:
-            filter_dict["project_key"] = project_key
-
-        return await self.repository.search(
-            query=query,
-            k=k,
-            filter=filter_dict if len(filter_dict) > 1 else None,
-        )

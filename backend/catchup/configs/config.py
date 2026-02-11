@@ -105,9 +105,9 @@ class Settings(BaseSettings):
     # Slack Sync Settings
     SLACK_SYNC_MAX_CONCURRENT_REQUESTS: int = 10  # 동시 요청 수
     SLACK_API_RATE_LIMIT_DELAY: float = 0.1  # 요청 간 딜레이 (초)
-    SLACK_THREAD_REPLY_LIMIT: int = 10  # 부모 메시지에 포함할 최근 Reply 수
+    SLACK_MIN_TEXT_LENGTH: int = 5  # 이 길이 이하의 텍스트는 제외 (Reply 등)
     SLACK_MESSAGE_BATCH_SIZE: int = 200  # 한 번에 가져올 메시지 수
-    SLACK_DEFAULT_SYNC_DAYS: int = 30  # 기본 동기화 기간 (일)
+    SLACK_DEFAULT_SYNC_DAYS: int = 1095  # 기본 동기화 기간 (3년 = 1095일)
 
     # GitHub Sync Settings
     GITHUB_SYNC_MAX_CONCURRENT_REQUESTS: int = 10  # 동시 요청 수 (5,000 req/hour 제한)

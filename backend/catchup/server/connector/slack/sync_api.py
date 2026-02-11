@@ -2,13 +2,12 @@
 Slack Sync API
 
 Slack 데이터 동기화 API 엔드포인트.
-전체/증분 동기화, 상태 조회, 검색 기능 제공.
+전체/증분 동기화, 상태 조회 기능 제공.
 
 사용법:
     POST /api/v1/slack/sync/full?team_id=T123ABC
     POST /api/v1/slack/sync/incremental?team_id=T123ABC
     GET  /api/v1/slack/sync/status?team_id=T123ABC
-    POST /api/v1/slack/sync/search?team_id=T123ABC
 """
 
 import logging
@@ -87,26 +86,6 @@ class SlackSyncStatusResponse(BaseModel):
     last_sync_error: str | None
     oldest_ts: str | None = None
     latest_ts: str | None = None
-
-
-class SlackSearchRequest(BaseModel):
-    """검색 요청 (Message만 Vector Store에 저장됨)"""
-    query: str = Field(..., description="검색 쿼리 (자연어)")
-    k: int = Field(5, ge=1, le=50, description="반환할 결과 수")
-    channel_id: str | None = Field(None, description="채널 필터")
-
-
-class SearchResultItem(BaseModel):
-    """검색 결과 항목"""
-    id: str
-    content: str
-    metadata: dict[str, Any]
-
-
-class SlackSearchResponse(BaseModel):
-    """검색 응답"""
-    results: list[SearchResultItem]
-    total: int
 
 
 # ================================================================
@@ -279,13 +258,13 @@ class ChannelAccessResponse(BaseModel):
     channels: list[ChannelAccessInfo]
 
 
-@router.get("/debug/channels", response_model=ChannelAccessResponse)
+@router.get("/accessible/channels", response_model=ChannelAccessResponse)
 async def debug_channel_access(
-    team_id: str = Query(..., description="Slack Team/Workspace ID"),
+    team_id: str = Query(..., description="Slack Team/ㄴWorkspace ID"),
     db: Session = Depends(get_db),
 ):
     """
-    [디버그] Bot이 접근 가능한 채널 목록 조회
+    Bot이 접근 권한이 있는 채널 목록 조회
 
     각 채널별로:
     - channel_type: public, private, dm, mpim
@@ -345,47 +324,4 @@ async def debug_channel_access(
         raise HTTPException(
             status_code=500,
             detail=f"채널 조회 중 오류가 발생했습니다: {str(e)}",
-        )
-
-
-@router.post("/search", response_model=SlackSearchResponse)
-async def search_slack_documents(
-    request: SlackSearchRequest,
-    team_id: str = Query(..., description="Slack Team/Workspace ID"),
-    db: Session = Depends(get_db),
-):
-    """
-    Slack 메시지 벡터 검색
-
-    PGVector에 저장된 Slack 메시지에서 시맨틱 검색 수행.
-    (Workspace, Channel, User는 RDBMS에 저장되어 벡터 검색 대상 아님)
-    """
-    try:
-        service = await create_slack_ingestion_service(db, team_id)
-
-        documents = await service.search(
-            query=request.query,
-            k=request.k,
-            entity_type="message",  # 메시지만 Vector Store에 저장
-            channel_id=request.channel_id,
-        )
-
-        results = [
-            SearchResultItem(
-                id=doc.id or "",
-                content=doc.page_content[:500],  # 500자로 제한
-                metadata=doc.metadata,
-            )
-            for doc in documents
-        ]
-
-        return SlackSearchResponse(results=results, total=len(results))
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Search error for team_id={team_id}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"검색 중 오류가 발생했습니다: {str(e)}",
         )

@@ -13,8 +13,8 @@ from catchup.connectors.github.client import GitHubApiClient
 from catchup.configs.config import auth_settings, settings
 from catchup.db.dependencies import get_db
 from catchup.db.engine import SessionLocal
-from catchup.db import github_installation as installation_crud
-from catchup.db import github_entities
+from catchup.db.github import installation_repository as installation_crud
+from catchup.db.github import domain_repository as github_entities
 from catchup.db.models import GithubInstallationType
 
 logger = logging.getLogger(__name__)

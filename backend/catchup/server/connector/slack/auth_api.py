@@ -14,7 +14,7 @@ from catchup.connectors.slack.schemas import (
 )
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
-from catchup.db import slack_oauth as slack_crud
+from catchup.db.slack import oauth_repository as slack_crud
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
 
 logger = logging.getLogger(__name__)
