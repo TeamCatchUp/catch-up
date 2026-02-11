@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import type { SearchQuery } from '@/shared/types/query/search';
-import { formatShortDate } from '@/shared/utils/formatDate';
+import { formatFullDate } from '@/shared/utils/formatDate';
 
 import { RecentSearchList } from './RecentSearchList';
 
@@ -17,7 +17,7 @@ export const RecentActivityExplorer = () => {
     return queriesQuery.data.content.map((item) => ({
       query: item.query,
       session_id: item.session_id,
-      date: formatShortDate(item.created_at),
+      date: formatFullDate(item.created_at),
     }));
   }, [queriesQuery.data]);
 
