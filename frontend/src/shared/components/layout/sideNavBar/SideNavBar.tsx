@@ -82,8 +82,8 @@ const SideNavBar = () => {
 
   // SNB item (메뉴 상태별 스타일 CSS)
   const defaultClass =
-    'border-transparent bg-white hover:bg-neutral-2 hover:border-neutral-2 active:bg-neutral-3 active:border active:border-neutral-3';
-  const selectedClass = 'border-neutral-2 border bg-blue-1 hover:border-neutral-2 hover:bg-blue-5';
+    'bg-white hover:bg-neutral-2 active:bg-neutral-3 active:ring-1 active:ring-neutral-3';
+  const selectedClass = 'ring-1 ring-neutral-2 bg-blue-1 hover:bg-blue-5';
 
   return (
     <>
