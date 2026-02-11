@@ -10,6 +10,7 @@ import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/Use
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent,TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
+import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { useUserStore } from '@/shared/store/userStore';
 import { cn } from '@/shared/utils/cn';
 
@@ -17,9 +18,11 @@ import AI from '/public/icons/icon/ai.svg';
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
 import Close from '/public/icons/icon/close.svg';
 import Home from '/public/icons/icon/home.svg';
+import Inbox from '/public/icons/icon/inbox.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
 import Open from '/public/icons/icon/open.svg';
 import Profile from '/public/icons/icon/profile.svg';
+import Settings from '/public/icons/icon/settings.svg';
 import UnfoldMore from '/public/icons/icon/unfold_more.svg';
 import CatchupLogo from '/public/icons/logo/logo_catchup.svg';
 import CatchupLogoLetter from '/public/icons/logo/logo_catchup_letter.svg';
@@ -29,21 +32,20 @@ interface ChatRoomQuery {
   session_id: string;
 }
 
+const UNREAD_COUNT = 3; // mock
+
 const navItems = [
   { name: '홈', href: '/', Icon: Home, tooltipOpen: '최근 업무 보기', tooltipClosed: '홈' },
-  {
-    name: '캐치스턴트 AI',
-    href: '/search',
-    Icon: AI,
-    tooltipOpen: '사내 지식 물어보기',
-    tooltipClosed: '캐치스턴트 AI',
-  },
+  { name: '캐치스턴트 AI', href: '/search', Icon: AI, tooltipOpen: '사내 지식 물어보기', tooltipClosed: '캐치스턴트 AI' },
+  { name: '수신함', panel: 'inbox' as const, Icon: Inbox, tooltipOpen: '수신함', tooltipClosed: '수신함' },
+  { name: '설정', panel: 'settings' as const, Icon: Settings, tooltipOpen: '설정', tooltipClosed: '설정' },
 ];
 
 const SideNavBar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { activePanel, togglePanel, setActivePanel } = useSidebarStore();
   const isRagAnswerPage = pathname.startsWith('/chat');
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
   const [isCatchModalOpen, setIsCatchModalOpen] = useState(false);
@@ -133,7 +135,7 @@ const SideNavBar = () => {
                   isOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-2 opacity-0',
                 )}
               >
-                <CatchupLogoLetter />
+                <CatchupLogoLetter className="h-5 w-auto" />
               </div>
             )}
           </div>
@@ -152,13 +154,17 @@ const SideNavBar = () => {
         {/* 메뉴 */}
         <div className={`flex flex-col ${isOpen ? 'gap-1' : 'gap-2'}`}>
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = item.href
+              ? pathname === item.href
+              : activePanel === item.panel;
 
             const handleClick = () => {
-              if (item.href === '/search') {
-                router.push(`/search`);
+              if (item.panel) {
+                if (item.panel === 'settings' && isOpen) setIsOpen(false);
+                togglePanel(item.panel);
               } else {
-                router.push(item.href);
+                setActivePanel(null);
+                router.push(item.href!);
               }
             };
 
@@ -169,26 +175,36 @@ const SideNavBar = () => {
                     <button
                       onClick={handleClick}
                       className={cn(
-                        'flex h-10 cursor-pointer items-center rounded-lg',
+                        'relative flex h-10 cursor-pointer items-center rounded-lg',
                         isActive ? selectedClass : defaultClass,
-                        isOpen ? 'w-56.5 gap-3 px-2.5 py-2' : 'w-10 items-center justify-center',
+                        isOpen ? 'w-full gap-3 px-2.5 py-2' : 'w-10 items-center justify-center',
                       )}
                     >
                       <item.Icon
                         className={cn(
-                          isOpen ? 'h-5.5 w-5.5' : 'h-7 w-7',
+                          isOpen ? 'h-6 w-6' : 'h-7 w-7',
                           isActive ? 'text-blue-50 group-hover:text-blue-50' : 'text-gray-70',
                         )}
                       />
                       {isOpen && (
                         <span
                           className={cn(
-                            'text-body-small relative',
+                            'text-left text-body-small relative flex-1',
                             isActive ? 'text-blue-55 group-hover:text-blue-55' : 'text-gray-80',
                           )}
                         >
                           {item.name}
                         </span>
+                      )}
+                      {/* 수신함 배지 (열림) */}
+                      {isOpen && item.panel === 'inbox' && UNREAD_COUNT > 0 && (
+                        <span className="bg-blue-1 border-blue-40 text-blue-40 text-body-small min-w-[23px] rounded-md border-[0.5px] px-0.5 text-center">
+                          {UNREAD_COUNT}
+                        </span>
+                      )}
+                      {/* 수신함 blue dot (닫힘) */}
+                      {!isOpen && item.panel === 'inbox' && UNREAD_COUNT > 0 && (
+                        <span className="bg-blue-40 absolute right-1 top-1.25 h-1.5 w-1.5 rounded-full" />
                       )}
                     </button>
                   </TooltipTrigger>
