@@ -27,7 +27,7 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
       <div className="flex items-center gap-2.5">
         <SearchOptionButton Icon={IconJira} label="Jira" selected={filters.selectedSources.includes('jira')} onClick={() => filters.toggleSource('jira')} />
         <SearchOptionButton Icon={IconGithub} label="Github" selected={filters.selectedSources.includes('github')} onClick={() => filters.toggleSource('github')} />
-        <SearchOptionButton Icon={IconSlack} label="Slack" selected={filters.selectedSources.includes('slack')} onClick={() => filters.toggleSource('slack')} />        
+        <SearchOptionButton Icon={IconSlack} label="Slack" selected={filters.selectedSources.includes('slack')} onClick={() => filters.toggleSource('slack')} />
       </div>
       <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
       <div className="flex items-center gap-2.5">
