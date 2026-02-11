@@ -108,21 +108,13 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
       <div className="no-scrollbar flex min-h-0 flex-1 flex-col gap-1 self-stretch overflow-y-auto px-1.5">
         <ul className="flex w-full flex-col">
           {options
-            .filter((option) => option.name.includes(searchTerm))
-            .sort((a, b) => {
-              const aSelected = selected.includes(a.name) ? 0 : 1;
-              const bSelected = selected.includes(b.name) ? 0 : 1;
-              return aSelected - bSelected;
-            })
+            .filter((option) => !selected.includes(option.name) && option.name.includes(searchTerm))
             .map((option, idx) => {
               const uniqueKey = `${option.name}-${idx}`;
-              const isSelected = selected.includes(option.name);
               return (
                 <li key={uniqueKey} className="w-full">
                   <button
-                    className={`flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors hover:bg-[#F4F4F5] ${
-                      isSelected ? 'bg-blue-1' : 'bg-white'
-                    }`}
+                    className="flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl bg-white px-2 py-1 transition-colors hover:bg-[#F4F4F5]"
                     onClick={() => onToggle(option.name)}
                   >
                     {option.profile_image ? (

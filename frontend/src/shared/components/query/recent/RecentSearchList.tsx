@@ -11,8 +11,7 @@ interface RecentSearchListProps {
 }
 
 export function RecentSearchList({ title, querys }: RecentSearchListProps) {
-  const displayedQuerys = querys.slice(0, 3);
-  if (!displayedQuerys || displayedQuerys.length === 0)
+  if (!querys || querys.length === 0)
     return (
       <div className="flex w-full flex-col gap-2.5">
         <span className="text-body-xsmall px-1.5 font-medium text-gray-50">{title}</span>
@@ -27,7 +26,7 @@ export function RecentSearchList({ title, querys }: RecentSearchListProps) {
     <div className="flex w-full flex-col gap-2.5">
       <span className="text-body-xsmall px-1.5 font-medium text-gray-50">{title}</span>
       <div className="flex flex-col gap-1">
-        {displayedQuerys.map((item, index) => (
+        {querys.slice(0, 5).map((item, index) => (
           <Link
             href={`/chat/${item.session_id}`}
             key={`recent-query-${index}`}
