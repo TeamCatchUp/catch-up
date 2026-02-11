@@ -117,7 +117,7 @@ const InboxPanel = () => {
     activeTab === '모두' ? MOCK_INBOX_ITEMS : MOCK_INBOX_ITEMS.filter((item) => item.category === activeTab);
 
   return (
-    <div className="border-neutral-3 flex h-screen w-[418px] shrink-0 flex-col gap-4 border-r bg-white py-5 shadow-[7px_0px_6.5px_0px_rgba(126,126,126,0.08)]">
+    <div className="border-neutral-3 flex h-screen w-[418px] shrink-0 flex-col gap-4 border-r bg-white py-5 shadow-panel">
       {/* 헤더 */}
       <div className="flex items-center justify-between px-4">
         <span className="text-heading-large text-gray-80">수신함</span>
