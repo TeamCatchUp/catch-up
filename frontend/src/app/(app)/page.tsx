@@ -69,13 +69,13 @@ export default function Home() {
         {/* Query Box */}
         <div
           ref={containerRef}
-          className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center gap-1.5 border border-solid bg-white ${input.isFocused ? 'h-125.5 max-h-135 min-h-92.5 overflow-hidden rounded-[28px] p-3' : 'rounded-rounded h-auto p-3'
+          className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center gap-1.5 border border-solid bg-white ${input.isFocused ? 'min-h-92.5 max-h-135 overflow-hidden rounded-[28px] p-3' : 'rounded-rounded h-auto p-3'
             }`}
         >
           <QueryInput input={input} inputRef={inputRef} />
 
           {input.isFocused && (
-            <div className="animate-in fade-in-0 slide-in-from-top-3 duration-300 border-neutral-4 mt-1 flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden border-t pt-2">
+            <div className="animate-in fade-in-0 slide-in-from-top-3 duration-300 border-neutral-4 mt-1 flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden border-t pt-3">
               <FilterBar filters={filters} inputRef={inputRef} />
               <ExplorerPanel />
             </div>
