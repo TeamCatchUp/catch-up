@@ -4,8 +4,7 @@ import type { UserStatus } from '@/shared/queries/auth.types';
 import { MOCK_JWT_TOKENS, MOCK_USER } from './auth/data';
 import delay from './delay';
 import { MOCK_FEEDBACK_RESPONSE } from './feedback/data';
-import { DEFAULT_FILE_TREE,MOCK_FILE_TREES, MOCK_REPOSITORIES } from './github/data';
-import { MOCK_CHATROOMS, MOCK_JIRA_TICKETS,MOCK_RECENT_QUERIES } from './search/data';
+import { MOCK_CHATROOMS, MOCK_RECENT_QUERIES } from './search/data';
 
 type MockHandler = {
   pattern: RegExp;
@@ -56,34 +55,6 @@ const mockHandlers: MockHandler[] = [
     pattern: /^\/api\/chatrooms\/[^/]+\/queries$/,
     method: 'get',
     handler: async () => MOCK_RECENT_QUERIES,
-  },
-
-  // ═══════════════════════════════════════
-  // GitHub
-  // ═══════════════════════════════════════
-  {
-    pattern: /^\/api\/v1\/github\/installations$/,
-    method: 'get',
-    handler: async () => MOCK_REPOSITORIES,
-  },
-  {
-    pattern: /^\/api\/github\/read\/repositories\/(\d+)\/files$/,
-    method: 'get',
-    handler: async (url) => {
-      // URL에서 repoId 추출: /api/github/read/repositories/123/files
-      const match = url.match(/\/api\/github\/read\/repositories\/(\d+)\/files/);
-      const repoId = match ? parseInt(match[1], 10) : 0;
-      return MOCK_FILE_TREES[repoId] || DEFAULT_FILE_TREE;
-    },
-  },
-
-  // ═══════════════════════════════════════
-  // Jira
-  // ═══════════════════════════════════════
-  {
-    pattern: /^\/api\/jira\/issues$/,
-    method: 'get',
-    handler: async () => MOCK_JIRA_TICKETS,
   },
 
   // ═══════════════════════════════════════

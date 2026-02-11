@@ -1,0 +1,18 @@
+import { create } from 'zustand';
+
+type PanelType = 'inbox' | 'settings' | null;
+
+interface SidebarState {
+  activePanel: PanelType;
+  setActivePanel: (panel: PanelType) => void;
+  togglePanel: (panel: 'inbox' | 'settings') => void;
+}
+
+export const useSidebarStore = create<SidebarState>((set) => ({
+  activePanel: null,
+  setActivePanel: (panel) => set({ activePanel: panel }),
+  togglePanel: (panel) =>
+    set((state) => ({
+      activePanel: state.activePanel === panel ? null : panel,
+    })),
+}));

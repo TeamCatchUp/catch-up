@@ -1,27 +1,21 @@
 'use client';
 
-import { useRef,useState } from 'react';
+import { useRef, useState } from 'react';
 
 import type { UseRagFiltersReturn } from '@/features/chat/hooks/useRagFilters';
 import IconDivider from '@/public/icons/icon/divider.svg';
-import IconFile from '@/public/icons/icon/file_filled.svg';
-import IconFolder from '@/public/icons/icon/folder_blue.svg';
 import IconLock from '@/public/icons/icon/lock_filled.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconSpace from '@/public/icons/icon/space.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
-import IconJiraSprint from '@/public/icons/jira/Epic.svg';
-import IconJiraTicket from '@/public/icons/jira/Task.svg';
 import IconGithub from '@/public/icons/logo/GitHub.svg';
 import IconJira from '@/public/icons/logo/Jira.svg';
-import { GithubExplorer } from '@/shared/components/query/explorer/GithubExplorer';
-import { JiraExplorer } from '@/shared/components/query/explorer/JiraExplorer';
+import IconSlack from '@/public/icons/logo/Slack.svg';
 import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown';
 import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
-import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
 import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
-import { Tooltip, TooltipContent,TooltipTrigger } from '@/shared/components/ui/ToolTip';
-import { PERSON_OPTIONS } from '@/shared/mocks/search/filterOptions';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/shared/mocks/search/filterOptions';
 import { cn } from '@/shared/utils/cn';
 
 import Add from '/public/icons/icon/add_small.svg';
@@ -82,75 +76,9 @@ const RagInput = ({
     }
   };
 
-  const allSelectedChips = [
-    ...filters.selectedPeople.map((name) => ({
-      id: name,
-      name,
-      Icon: IconPerson,
-      onRemove: () => filters.togglePerson(name),
-    })),
-    ...filters.selectedGithubItems
-      .filter((item) => {
-        const isParentSelected = filters.selectedGithubItems.some((potentialParent) => {
-          if (potentialParent.id === item.id) return false;
-          return potentialParent.children?.some((child: { id: string }) => child.id === item.id);
-        });
-        return !isParentSelected;
-      })
-      .map((item) => ({
-        id: item.id,
-        name: item.name,
-        Icon: item.type === 'repo' ? IconGithub : item.type === 'tree' ? IconFolder : IconFile,
-        onRemove: () => filters.toggleGithubItem(item),
-      })),
-    ...filters.selectedJiraItems
-      .filter((item) => {
-        const isParentSelected = filters.selectedJiraItems.some((potentialParent) => {
-          if (potentialParent.id === item.id) return false;
-          return potentialParent.children?.some((child: { id: string }) => child.id === item.id);
-        });
-        return !isParentSelected;
-      })
-      .map((item) => ({
-        id: item.id,
-        name: item.name,
-        Icon: item.type === 'project' ? IconJira : item.type === 'board' ? IconJiraSprint : IconJiraTicket,
-        onRemove: () => filters.toggleJiraItem(item),
-      })),
-  ];
-
   return (
     <div className="w-full flex-none bg-white px-24 pt-4 pb-8">
       <div className="mx-auto w-193.25">
-        {/* Explorer Panel */}
-        <div
-          className={cn(
-            'border-neutral-2 mb-3 w-160 overflow-hidden rounded-2xl border bg-transparent',
-            filters.activeExplorer ? 'shadow-dropdown-menu h-95 opacity-100' : 'max-h-0 border-none opacity-0',
-          )}
-        >
-          <div className="h-80 overflow-y-auto p-4">
-            <SelectedFilterChips chips={allSelectedChips} onReset={filters.handleResetAll} />
-            {filters.activeExplorer === 'github' ? (
-              <GithubExplorer
-                selectedItems={filters.selectedGithubItems.map((i) => i.id)}
-                onToggleItem={filters.toggleGithubItem}
-                currentRepo={filters.currentRepo}
-                onNavigate={filters.setCurrentRepo}
-                onClickBack={filters.handleGithubClick}
-              />
-            ) : filters.activeExplorer === 'jira' ? (
-              <JiraExplorer
-                selectedItems={filters.selectedJiraItems.map((i) => i.id)}
-                onToggleItem={filters.toggleJiraItem}
-                currentProject={filters.currentJiraProject}
-                onNavigate={filters.setCurrentJiraProject}
-                onClickBack={filters.handleJiraClick}
-              />
-            ) : null}
-          </div>
-        </div>
-
         {/* Filter Bar */}
         <div
           className={cn(
@@ -162,20 +90,10 @@ const RagInput = ({
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5 self-stretch overflow-x-scroll px-1.5 whitespace-nowrap">
                 <div className="flex items-center gap-2">
-                  <SearchOptionButton
-                    Icon={IconJira}
-                    label={filters.jiraLabel}
-                    selected={filters.selectedJiraItems.length > 0}
-                    onClick={filters.handleJiraClick}
-                  />
-                  <SearchOptionButton
-                    Icon={IconGithub}
-                    label={filters.gitLabel}
-                    selected={filters.selectedGithubItems.length > 0}
-                    onClick={filters.handleGithubClick}
-                  />
+                  <SearchOptionButton Icon={IconJira} label="Jira" selected={filters.selectedSources.includes('jira')} onClick={() => filters.toggleSource('jira')} />
+                  <SearchOptionButton Icon={IconGithub} label="Github" selected={filters.selectedSources.includes('github')} onClick={() => filters.toggleSource('github')} />
+                  <SearchOptionButton Icon={IconSlack} label="Slack" selected={filters.selectedSources.includes('slack')} onClick={() => filters.toggleSource('slack')} />
                   <SearchOptionDisabledButton Icon={IconLock} label="Wiki" />
-                  <SearchOptionDisabledButton Icon={IconLock} label="Slack" />
                 </div>
                 <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
 
@@ -201,8 +119,48 @@ const RagInput = ({
                       Icon={IconPerson}
                     />
                   </FilterDropdown>
-                  <SearchOptionButton Icon={IconTag} label="부서" onMouseDown={(e) => e.preventDefault()} />
-                  <SearchOptionButton Icon={IconSpace} label="프로젝트" onMouseDown={(e) => e.preventDefault()} />
+                  <FilterDropdown
+                    open={filters.openPopover === 'department'}
+                    onOpenChange={(o) => filters.setOpenPopover(o ? 'department' : null)}
+                    trigger={
+                      <SearchOptionButton
+                        Icon={IconTag}
+                        label={filters.deptLabel}
+                        selected={filters.selectedDepts.length > 0}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => filters.setOpenPopover('department')}
+                      />
+                    }
+                  >
+                    <FilterOptionList
+                      title="부서 선택"
+                      options={DEPARTMENT_OPTIONS}
+                      selected={filters.selectedDepts}
+                      onToggle={filters.toggleDept}
+                      Icon={IconTag}
+                    />
+                  </FilterDropdown>
+                  <FilterDropdown
+                    open={filters.openPopover === 'project'}
+                    onOpenChange={(o) => filters.setOpenPopover(o ? 'project' : null)}
+                    trigger={
+                      <SearchOptionButton
+                        Icon={IconSpace}
+                        label={filters.projectLabel}
+                        selected={filters.selectedProjects.length > 0}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => filters.setOpenPopover('project')}
+                      />
+                    }
+                  >
+                    <FilterOptionList
+                      title="프로젝트 선택"
+                      options={PROJECT_OPTIONS}
+                      selected={filters.selectedProjects}
+                      onToggle={filters.toggleProject}
+                      Icon={IconSpace}
+                    />
+                  </FilterDropdown>
                 </div>
               </div>
             </div>
@@ -238,7 +196,7 @@ const RagInput = ({
 
           <div className="flex shrink-0 items-center gap-3">
             {!newInput.trim() && !isLoading && (
-              <div
+              <button
                 onClick={filters.toggleFilter}
                 className={cn(
                   'box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1',
@@ -247,7 +205,7 @@ const RagInput = ({
               >
                 <Filter className="h-4.5 w-4.5" />
                 <span className="text-body-xsmall text-gray-50">필터</span>
-              </div>
+              </button>
             )}
 
             {isLoading ? (

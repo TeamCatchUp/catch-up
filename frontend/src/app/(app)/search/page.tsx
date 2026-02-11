@@ -8,7 +8,6 @@ import Git from '@/public/image/aiGit.png';
 import Jira from '@/public/image/AIJIRA1.png';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import ExplorerPanel from '@/shared/components/query/ExplorerPanel';
-import { SelectedFilterChips } from '@/shared/components/query/filter/SelectedFilterChips';
 import FilterBar from '@/shared/components/query/FilterBar';
 import QueryInput from '@/shared/components/query/QueryInput';
 import { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
@@ -24,7 +23,7 @@ export default function Search() {
   const [activeCard, setActiveCard] = useState<'jira' | 'git' | null>(null);
 
   const filters = useSearchFilters();
-  const input = useSearchInput({ currentRepo: filters.currentRepo, inputRef });
+  const input = useSearchInput({ inputRef });
 
   useEscapeKey(() => {
     input.setIsFocused(false);
@@ -45,7 +44,7 @@ export default function Search() {
     <div className="bg-home-gradient flex flex-[1_0_0] flex-col items-start self-stretch">
       <TopNavbar pageType="home" />
 
-      <div className="felx min-h-screen flex-col items-start self-stretch">
+      <div className="flex min-h-screen flex-col items-start self-stretch">
         {/* Query Section */}
         <div className="flex flex-col items-center gap-4 self-stretch pt-18 pb-18">
           {/* Hero */}
@@ -60,23 +59,26 @@ export default function Search() {
           <div
             ref={containerRef}
             className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center gap-1.5 border border-solid bg-white ${
-              input.isFocused ? 'h-125.5 max-h-135 min-h-92.5 overflow-hidden rounded-[28px] p-3' : 'rounded-rounded h-auto p-3'
+              input.isFocused ? 'min-h-92.5 max-h-135 overflow-hidden rounded-[28px] p-3' : 'rounded-rounded h-auto p-3'
             }`}
           >
             <QueryInput input={input} inputRef={inputRef} />
 
             {input.isFocused && (
-              <div className="border-neutral-4 mt-1 flex min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden border-t pt-2">
+              <div className="animate-in fade-in-0 slide-in-from-top-3 duration-300 border-neutral-4 mt-1 flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden border-t pt-3">
                 <FilterBar filters={filters} inputRef={inputRef} />
-                <SelectedFilterChips chips={filters.allSelectedChips} onReset={filters.handleResetAll} />
-                <ExplorerPanel filters={filters} />
+                <ExplorerPanel />
               </div>
             )}
           </div>
         </div>
 
         {/* AI Guide Section */}
-        <div className="flex flex-col items-center gap-4 self-stretch px-52 pt-10 pb-30">
+        <div
+          className={`flex flex-col items-center gap-4 self-stretch px-52 pt-10 pb-30 transition-all duration-300 ${
+            input.isFocused ? 'pointer-events-none translate-y-4 opacity-0' : 'opacity-100'
+          }`}
+        >
           <div className="flex w-190 flex-col items-center gap-3">
             <div className="flex items-center justify-between self-stretch">
               <div className="flex items-center gap-2">

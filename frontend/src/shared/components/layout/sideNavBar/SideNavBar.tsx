@@ -6,26 +6,23 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
 import RecentQuestionsModal from '@/shared/components/layout/sideNavBar/modal/RecentQuestionsModal';
-import { TeamSpaceDropDownContent } from '@/shared/components/layout/sideNavBar/modal/TeamSpaceDropDownModal';
-import { TeamSpaceMoreContent } from '@/shared/components/layout/sideNavBar/modal/TeamSpaceMoreModal';
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
-import { Popover, PopoverTrigger } from '@/shared/components/ui/popover';
 import { Tooltip, TooltipContent,TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
+import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { useUserStore } from '@/shared/store/userStore';
 import { cn } from '@/shared/utils/cn';
 
 import AI from '/public/icons/icon/ai.svg';
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
 import Close from '/public/icons/icon/close.svg';
-import Dropdown from '/public/icons/icon/dropdown_down.svg';
 import Home from '/public/icons/icon/home.svg';
+import Inbox from '/public/icons/icon/inbox.svg';
 import Kebeb from '/public/icons/icon/kebeb 2.svg';
-import Necessary from '/public/icons/icon/necessary.svg';
 import Open from '/public/icons/icon/open.svg';
 import Profile from '/public/icons/icon/profile.svg';
-import TeamSpace from '/public/icons/icon/teamspace.svg';
+import Settings from '/public/icons/icon/settings.svg';
 import UnfoldMore from '/public/icons/icon/unfold_more.svg';
 import CatchupLogo from '/public/icons/logo/logo_catchup.svg';
 import CatchupLogoLetter from '/public/icons/logo/logo_catchup_letter.svg';
@@ -35,28 +32,20 @@ interface ChatRoomQuery {
   session_id: string;
 }
 
-const TEAM_SPACES = [
-  { id: 'fe', name: 'Catch Up | FE' },
-  { id: 'be', name: 'Catch Up | BE' },
-  { id: 'pm', name: 'Catch Up | 기획' },
-  { id: 'design', name: 'Catch Up | Design' },
-] as const;
+const UNREAD_COUNT = 3; // mock
 
 const navItems = [
   { name: '홈', href: '/', Icon: Home, tooltipOpen: '최근 업무 보기', tooltipClosed: '홈' },
-  {
-    name: '캐치스턴트 AI',
-    href: '/search',
-    Icon: AI,
-    tooltipOpen: '사내 지식 물어보기',
-    tooltipClosed: '캐치스턴트 AI',
-  },
+  { name: '캐치스턴트 AI', href: '/search', Icon: AI, tooltipOpen: '사내 지식 물어보기', tooltipClosed: '캐치스턴트 AI' },
+  { name: '수신함', panel: 'inbox' as const, Icon: Inbox, tooltipOpen: '수신함', tooltipClosed: '수신함' },
+  { name: '설정', panel: 'settings' as const, Icon: Settings, tooltipOpen: '설정', tooltipClosed: '설정' },
 ];
 
 const SideNavBar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { activePanel, togglePanel, setActivePanel } = useSidebarStore();
   const isRagAnswerPage = pathname.startsWith('/chat');
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
   const [isCatchModalOpen, setIsCatchModalOpen] = useState(false);
@@ -74,9 +63,6 @@ const SideNavBar = () => {
   }, [chatroomData]);
 
   const user = useUserStore((state) => state.user);
-
-  const [selectedTeamSpaceId, setSelectedTeamSpaceId] = useState<string>(TEAM_SPACES[0].id);
-  const selectedTeamSpace = TEAM_SPACES.find((t) => t.id === selectedTeamSpaceId) ?? TEAM_SPACES[0];
 
   // isRagAnswerPage 변경 시 사이드바 상태 동기화 (adjusting state during render)
   const [prevIsRagAnswerPage, setPrevIsRagAnswerPage] = useState(isRagAnswerPage);
@@ -96,8 +82,8 @@ const SideNavBar = () => {
 
   // SNB item (메뉴 상태별 스타일 CSS)
   const defaultClass =
-    'border-transparent bg-white hover:bg-neutral-2 hover:border-neutral-2 active:bg-neutral-3 active:border active:border-neutral-3';
-  const selectedClass = 'border-neutral-2 border bg-blue-1 hover:border-neutral-2 hover:bg-blue-5';
+    'bg-white hover:bg-neutral-2 active:bg-neutral-3 active:ring-1 active:ring-neutral-3';
+  const selectedClass = 'ring-1 ring-neutral-2 bg-blue-1 hover:bg-blue-5';
 
   return (
     <>
@@ -149,15 +135,15 @@ const SideNavBar = () => {
                   isOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-2 opacity-0',
                 )}
               >
-                <CatchupLogoLetter />
+                <CatchupLogoLetter className="h-5 w-auto" />
               </div>
             )}
           </div>
           {isOpen && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button className="icon-button-only-gray flex items-center justify-center rounded-full! p-0.5">
-                  <Close onClick={() => setIsOpen(false)} className="h-6 w-6 cursor-pointer text-gray-50" />
+                <button onClick={() => setIsOpen(false)} className="icon-button-only-gray flex cursor-pointer items-center justify-center rounded-full! p-0.5">
+                  <Close className="h-6 w-6 text-gray-50" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>사이드바 닫기</TooltipContent>
@@ -165,99 +151,20 @@ const SideNavBar = () => {
           )}
         </div>
 
-        {/* 팀스페이스 (열린 모드) */}
-        {isOpen && (
-          <div className="group/teamspace border-neutral-3 flex cursor-default flex-col justify-center gap-1.5 rounded-xl! border px-2.5 py-2 hover:bg-neutral-2 has-data-[state=open]:bg-neutral-2">
-            <span className="flex items-center justify-between">
-              <span className="text-body-xsmall text-gray-50">팀스페이스</span>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="h-4 w-4 cursor-pointer rounded-full text-gray-50 opacity-0 transition-opacity hover:bg-neutral-3 active:bg-neutral-4 group-hover/teamspace:opacity-100 data-[state=open]:bg-neutral-3 data-[state=open]:opacity-100"
-                  >
-                    <Dropdown className="h-4 w-4" />
-                  </button>
-                </PopoverTrigger>
-                <TeamSpaceDropDownContent
-                  teamSpaces={[...TEAM_SPACES]}
-                  selectedId={selectedTeamSpaceId}
-                  onSelect={(team) => setSelectedTeamSpaceId(team.id)}
-                />
-              </Popover>
-            </span>
-            <div className="flex">
-              <div className="flex items-center">
-                <div className="bg-neutral-3 h-6 w-6 rounded-md">
-                  <TeamSpace className="text-gray-70 h-6 w-6" />
-                </div>
-                <div className="relative right-1.25 bottom-2.75">
-                  <Necessary className="h-2 w-2" />
-                </div>
-              </div>
-
-              <div className="relative min-w-0 flex-1">
-                <div className="text-body-small text-gray-80 relative top-px left-1 max-w-42 truncate group-hover/teamspace:max-w-36">
-                  {selectedTeamSpace.name}
-                </div>
-                <div className="absolute top-0 right-0">
-                  <Tooltip>
-                    <DropdownMenu>
-                      <TooltipTrigger asChild>
-                        <DropdownMenuTrigger asChild>
-                          <button className="ml-3 flex h-5.5 w-5.5 cursor-pointer items-center justify-center rounded-full p-0.5 opacity-0 transition-opacity hover:bg-neutral-3 active:bg-neutral-4 group-hover/teamspace:opacity-100 data-[state=open]:bg-neutral-3 data-[state=open]:opacity-100">
-                            <Kebeb className="h-4.5 w-4.5 text-gray-50" />
-                          </button>
-                        </DropdownMenuTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent side="right">팀원 추가 및 설정</TooltipContent>
-                      <TeamSpaceMoreContent />
-                    </DropdownMenu>
-                  </Tooltip>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 팀스페이스 (닫힌 모드) */}
-        {!isOpen && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className="group border-neutral-3 shadow-blue-bottom flex h-10 w-14.5 cursor-pointer items-center justify-center rounded-xl border bg-white p-1.5 hover:bg-neutral-2 data-[state=open]:bg-neutral-2">
-                <div className="flex items-center gap-1.5">
-                  <div className="relative flex">
-                    <div className="text-body-small rounded-md2 flex h-6 w-6 items-center justify-center bg-neutral-2 text-gray-50 group-hover:bg-neutral-3 group-data-[state=open]:bg-neutral-3">
-                      {selectedTeamSpace.name.trim().charAt(0)}
-                    </div>
-                    <div className="absolute bottom-4.75 left-4.5">
-                      <Necessary className="h-2 w-2" />
-                    </div>
-                  </div>
-                  <div className="h-4 w-4">
-                    <Dropdown className="text-gray-50 h-4 w-4" />
-                  </div>
-                </div>
-              </button>
-            </PopoverTrigger>
-            <TeamSpaceDropDownContent
-              teamSpaces={[...TEAM_SPACES]}
-              selectedId={selectedTeamSpaceId}
-              onSelect={(team) => setSelectedTeamSpaceId(team.id)}
-            />
-          </Popover>
-        )}
-
         {/* 메뉴 */}
         <div className={`flex flex-col ${isOpen ? 'gap-1' : 'gap-2'}`}>
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = item.href
+              ? pathname === item.href
+              : activePanel === item.panel;
 
             const handleClick = () => {
-              if (item.href === '/search') {
-                router.push(`/search`);
+              if (item.panel) {
+                if (item.panel === 'settings' && isOpen) setIsOpen(false);
+                togglePanel(item.panel);
               } else {
-                router.push(item.href);
+                setActivePanel(null);
+                router.push(item.href!);
               }
             };
 
@@ -268,31 +175,36 @@ const SideNavBar = () => {
                     <button
                       onClick={handleClick}
                       className={cn(
-                        'flex h-10 cursor-pointer items-center rounded-lg',
+                        'relative flex h-10 cursor-pointer items-center rounded-lg',
                         isActive ? selectedClass : defaultClass,
-                        isOpen ? 'w-56.5 gap-3 px-2.5 py-2' : 'w-10 items-center justify-center',
+                        isOpen ? 'w-full gap-3 px-2.5 py-2' : 'w-10 items-center justify-center',
                       )}
                     >
                       <item.Icon
                         className={cn(
-                          isOpen ? 'h-5.5 w-5.5' : 'h-7 w-7',
+                          isOpen ? 'h-6 w-6' : 'h-7 w-7',
                           isActive ? 'text-blue-50 group-hover:text-blue-50' : 'text-gray-70',
                         )}
                       />
                       {isOpen && (
                         <span
                           className={cn(
-                            'text-body-small relative',
+                            'text-left text-body-small relative flex-1',
                             isActive ? 'text-blue-55 group-hover:text-blue-55' : 'text-gray-80',
                           )}
                         >
                           {item.name}
                         </span>
                       )}
-                      {isOpen && item.name === '수신함' && (
-                        <div className="rounded-md2 bg-blue-1 border-blue-30 ml-auto flex h-5.75 w-5.75 items-center justify-center border-[0.5px] px-0.5">
-                          <span className="text-body-small text-blue-40">2</span>
-                        </div>
+                      {/* 수신함 배지 (열림) */}
+                      {isOpen && item.panel === 'inbox' && UNREAD_COUNT > 0 && (
+                        <span className="bg-blue-1 border-blue-40 text-blue-40 text-body-small min-w-[23px] rounded-md border-[0.5px] px-0.5 text-center">
+                          {UNREAD_COUNT}
+                        </span>
+                      )}
+                      {/* 수신함 blue dot (닫힘) */}
+                      {!isOpen && item.panel === 'inbox' && UNREAD_COUNT > 0 && (
+                        <span className="bg-blue-40 absolute right-1 top-1.25 h-1.5 w-1.5 rounded-full" />
                       )}
                     </button>
                   </TooltipTrigger>
@@ -300,11 +212,6 @@ const SideNavBar = () => {
                     {isOpen ? item.tooltipOpen : item.tooltipClosed}
                   </TooltipContent>
                 </Tooltip>
-                {!isOpen && item.name === '수신함' && (
-                  <div className="relative bottom-9 left-7.5">
-                    <Necessary className="h-2 w-2" />
-                  </div>
-                )}
               </div>
             );
           })}
