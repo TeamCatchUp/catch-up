@@ -57,10 +57,10 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                         e.stopPropagation();
                         onToggle(name);
                       }}
-                      className="hover:text-gray-60 cursor-pointer text-gray-40 p-0.5"
+                      className="flex size-5 cursor-pointer items-center justify-center rounded-full text-gray-50 hover:bg-[#EAEBEC]"
                       onMouseDown={(e) => e.preventDefault()}
                     >
-                      <IconCloseSmall className="size-5" />
+                      <IconCloseSmall className="size-4.5" />
                     </button>
                   </div>
                 ))}
@@ -79,11 +79,12 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
           </div>
 
           {/* Clear button */}
-          {searchTerm.length > 0 && (
+          {(searchTerm.length > 0 || selected.length > 0) && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setSearchTerm('');
+                selected.forEach((name) => onToggle(name));
               }}
               className="shrink-0 cursor-pointer text-gray-30"
               onMouseDown={(e) => e.preventDefault()}
@@ -99,26 +100,27 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
         <ul className="flex w-full flex-col">
           {options
             .filter((option) => option.name.includes(searchTerm))
+            .sort((a, b) => {
+              const aSelected = selected.includes(a.name) ? 0 : 1;
+              const bSelected = selected.includes(b.name) ? 0 : 1;
+              return aSelected - bSelected;
+            })
             .map((option, idx) => {
               const uniqueKey = `${option.name}-${idx}`;
               const isSelected = selected.includes(option.name);
               return (
                 <li key={uniqueKey} className="w-full">
                   <button
-                    className={`flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors ${
-                      isSelected ? 'bg-blue-5' : 'hover:bg-neutral-1 bg-white'
+                    className={`flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors hover:bg-[#F4F4F5] ${
+                      isSelected ? 'bg-blue-1' : 'bg-white'
                     }`}
                     onClick={() => onToggle(option.name)}
                   >
                     <div className="border-neutral-1 bg-neutral-1 flex size-7 shrink-0 items-center justify-center rounded-full border">
-                      <Icon className={`size-4.5 ${isSelected ? 'text-blue-55' : 'text-gray-50'}`} />
+                      <Icon className="size-4.5 text-gray-50" />
                     </div>
 
-                    <div
-                      className={`text-body-small flex-1 truncate text-left ${
-                        isSelected ? 'text-blue-55' : 'text-gray-80'
-                      }`}
-                    >
+                    <div className="text-body-small text-gray-80 flex-1 truncate text-left">
                       {option.name}
                     </div>
                     {option.position && (
