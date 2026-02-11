@@ -12,10 +12,7 @@ from catchup.rag.state import AgentState
 
 logger = logging.getLogger(__name__)
 
-FALLBACK_ANSWER = (
-    "죄송합니다. 잠시 대화 연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요."
-)
-
+FALLBACK_ANSWER = "죄송합니다. 잠시 대화 연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요."
 
 @log_node
 async def chitchat_node(state: AgentState):
