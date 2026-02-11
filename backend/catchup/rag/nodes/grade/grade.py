@@ -1,10 +1,11 @@
 import logging
 
+from langchain.messages import HumanMessage
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.rag.nodes.grade.prompt import DOCUMENT_GRADE_PROMPT
+from catchup.rag.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import (
     get_context_text_from_documents,
     llm_semaphore,
@@ -35,24 +36,26 @@ async def grade_node(state: AgentState):
     context_text = get_context_text_from_documents(retrieved_docs)
 
     llm = get_llm_service(LlmProvider.OPENAI).get_llm()
-    prompt = ChatPromptTemplate.from_template(DOCUMENT_GRADE_PROMPT)
-    chain = prompt | llm.with_structured_output(
+    structured_llm = llm.with_structured_output(
         GradeDocuments, method="function_calling"
     )
 
+    prompt = prompt_loader.get_prompt(
+        "grade",
+        query=query,
+        context=context_text
+    )
+    
     try:
         async with llm_semaphore:
-            grade_result: GradeDocuments = await chain.ainvoke(
-                input={
-                    "query": query,
-                    "context": context_text
-                }
+            grade_result: GradeDocuments = await structured_llm.ainvoke(
+                input=prompt
             )
 
     except Exception as e:
         logger.warning(f"Grade node failed: {e}")
         grade_result = GradeDocuments(
-            binary_score="yes",
+            binary_score="no",
             explanation=f"문서 유효성 검사 실패: {str(e)}"
         )
 
