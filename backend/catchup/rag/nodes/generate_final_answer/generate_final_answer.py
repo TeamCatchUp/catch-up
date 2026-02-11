@@ -1,5 +1,7 @@
+import json
 import logging
 import re
+from re import DOTALL
 
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
@@ -22,7 +24,7 @@ async def generate_final_answer_node(state: AgentState):
     trimmer = llm_service.get_trimmer()
 
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
-    context_text, final_sources = _prepare_fixed_context_and_sources(retrieved_docs)
+    context_text = _prepare_context_text(retrieved_docs)
     
     global_context = state["global_context"].model_dump()
     query = state["rewritten_query"]
@@ -40,7 +42,6 @@ async def generate_final_answer_node(state: AgentState):
 
     chain = llm | StrOutputParser()
 
-    full_answer = ""
     try:
         async with llm_semaphore:
             full_answer = await chain.ainvoke(input=messages)
@@ -52,59 +53,74 @@ async def generate_final_answer_node(state: AgentState):
             "messages": [AIMessage(content=FALLBACK_ANSWER)],
             "sources": []
         }
+    
+    answer_body, citations = _parse_citation(full_answer)
+    
+    candidate_sources = [
+        BaseSource.from_document(
+            index=i,
+            doc=document
+        ) 
+        for i, document in enumerate(retrieved_docs, start=1)
+    ]
+        
+    final_sources = _mark_citations(candidate_sources, citations)
 
-    cited_indices = _extract_citation(full_answer)
-    _mark_citations(final_sources, cited_indices)
-
+    sorted_indices = sorted(citations.keys(), key=int)
     logger.info(
-        f"LLM이 인용한 문서 인덱스: {cited_indices} / 전체 소스: {len(final_sources)}개"
+        f"LLM이 인용한 문서 인덱스: {sorted_indices} / 전체 소스: {len(final_sources)}개"
     )
 
     return {
-        "messages": [AIMessage(content=full_answer)],
+        "messages": [AIMessage(content=answer_body)],
         "sources": final_sources
     }
 
 
-def _prepare_fixed_context_and_sources(
-    documents: list[Document],
-) -> tuple[str, list[BaseSource]]:
+def _prepare_context_text(documents: list[Document]) -> str:
     context_lines = []
-    sources = []
-
+    
     for i, document in enumerate(documents, start=1):
-        
-        source_dto = BaseSource.from_document(
-            index=i,
-            doc=document
-        )
-
         if document.metadata.get("db_origin") == "graph":
             line = f"[{i}] [Graph Data] {document.metadata.get('display_content', '')}"
-            
         else:
             source_type = document.metadata.get("source", "Document")
             line = f"[{i}] (Source: {source_type}\n{document.metadata.get('display_content', '')})"
-
         context_lines.append(line)
-        sources.append(source_dto)
-
-    return "\n\n".join(context_lines), sources
-
-
-def _extract_citation(text: str) -> set[int]:
-    matches = re.findall(r"\[(\d+(?:,\s*\d+)*)\]", text)
-    indices = set()
-    for match in matches:
-        for num_str in match.split(","):
-            if num_str.strip().isdigit():
-                indices.add(int(num_str.strip()))
-    return indices
+        
+    return "\n\n".join(context_lines)
 
 
-def _mark_citations(sources: list[BaseSource], cited_indices: set[int]) -> None:
-    for source in sources:
-        if source.index in cited_indices:
+def _parse_citation(full_answer: str) -> tuple[str, dict[str, str]]:
+    body_part = full_answer
+    citation_dict = {}
+    
+    match = re.search(r"<citations>(.*?)</citations>", full_answer, DOTALL)
+    if match:
+        body_part = full_answer[:match.start()].strip()
+        try:
+            citation_dict = json.loads(match.group(1).strip())
+        except json.JSONDecodeError:
+            logger.warning("Citations JSON parsing failed.")
+    
+    return body_part, citation_dict
+
+
+def _mark_citations(
+    candidate_sources: list[BaseSource],
+    citations: dict[str, str]
+) -> list[BaseSource]:
+    
+    final_sources = []
+    
+    for source in candidate_sources:
+        idx = str(source.index)  # JSON Key -> str
+        if idx in citations:
             source.is_cited = True
+            source.citation_rationale = citations[idx]
         else:
             source.is_cited = False
+
+        final_sources.append(source)
+    
+    return final_sources
