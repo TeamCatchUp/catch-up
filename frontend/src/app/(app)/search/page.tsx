@@ -44,7 +44,7 @@ export default function Search() {
     <div className="bg-home-gradient flex flex-[1_0_0] flex-col items-start self-stretch">
       <TopNavbar pageType="home" />
 
-      <div className="felx min-h-screen flex-col items-start self-stretch">
+      <div className="flex min-h-screen flex-col items-start self-stretch">
         {/* Query Section */}
         <div className="flex flex-col items-center gap-4 self-stretch pt-18 pb-18">
           {/* Hero */}
