@@ -2,6 +2,8 @@ from typing import Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 
+import pytz
+
 from catchup.db.models import User
 
     
@@ -32,7 +34,7 @@ class GlobalContext(BaseModel):
     company: Optional[GlobalCompanyContext] = None
     # 상대적 시간 표현을 해석하기 위한 기준점 ('오늘', '어제' 등)
     current_time: str = Field(
-        default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
+        default_factory=lambda: datetime.now(pytz.timezone('Asia/Seoul')).strftime("%Y-%m-%d %H:%M (%A)")
     )
     
     
