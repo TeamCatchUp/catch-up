@@ -50,7 +50,7 @@ class PromptLoader:
             raise FileNotFoundError(f"프롬프트 파일을 찾을 수 없습니다: {self.template_dir / file_name}")
         
         except Exception as e:
-            raise RuntimeError(f"프롬프트 렌더링 중 오류 발생 (file_nmae): {e}")
+            raise RuntimeError(f"프롬프트 렌더링 중 오류 발생 {file_name}: {e}")
 
 
 prompt_loader = PromptLoader()

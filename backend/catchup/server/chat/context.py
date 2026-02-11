@@ -8,9 +8,7 @@ from catchup.rag.schemas.context import GlobalContext, GlobalUserContext
 async def get_full_global_context(
     db_user: User = Depends(get_current_user),
 ) -> GlobalContext:
-    
-    print(db_user)
-    
+        
     user_context = GlobalUserContext.from_db_user(db_user)
 
     # --- [최종 조립] ---
