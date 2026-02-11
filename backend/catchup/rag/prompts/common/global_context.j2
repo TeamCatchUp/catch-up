@@ -1,0 +1,17 @@
+# GLOBAL CONTEXT
+{% if current_time %}
+[Current Context]
+- Time: << current_time >>
+{% endif %}
+
+{% if company %}
+[Organization Info]
+- name: << company.name >>
+- description: << company.description >>
+{% endif %}
+
+{% if user %}
+[User Info]
+- name: << user.name >>
+- email: << user.email >>
+{% endif %}

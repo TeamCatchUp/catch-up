@@ -2,22 +2,18 @@ import logging
 import re
 
 from langchain_core.documents import Document
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.rag.nodes.generate_final_answer.prompt import (
-    FALLBACK_ANSWER,
-    SYSTEM_ASSISTANT_PROMPT,
-)
+from catchup.rag.constants import FALLBACK_ANSWER
+from catchup.rag.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.state import AgentState
 
 
 logger = logging.getLogger(__name__)
-
 
 @log_node
 async def generate_final_answer_node(state: AgentState):
@@ -28,38 +24,34 @@ async def generate_final_answer_node(state: AgentState):
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
     context_text, final_sources = _prepare_fixed_context_and_sources(retrieved_docs)
     
+    global_context = state["global_context"].model_dump()
     query = state["rewritten_query"]
-    forced_query = _build_forced_query(query)
 
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", SYSTEM_ASSISTANT_PROMPT),
-            MessagesPlaceholder(variable_name="history"),
-            ("human", "{query}"),
-        ]
+    prompt = prompt_loader.get_prompt(
+        "generate_final_answer",
+        context=context_text,
+        **global_context
     )
 
-    conversation_hiostory = get_conversation_history(state["messages"])
-    trimmed_history = trimmer.invoke(conversation_hiostory)
+    conversation_history = get_conversation_history(state["messages"])
+    trimmed_history = trimmer.invoke(conversation_history)
+    
+    messages = [SystemMessage(content=prompt)] + trimmed_history + [HumanMessage(content=query)]
 
-    chain = prompt | llm | StrOutputParser()
+    chain = llm | StrOutputParser()
 
     full_answer = ""
     try:
         async with llm_semaphore:
-            full_answer = await chain.ainvoke(
-                input={
-                    "history": trimmed_history,
-                    "context": context_text,
-                    "query": forced_query,
-                    "role": state.get("role", "user"),
-                }
-            )
+            full_answer = await chain.ainvoke(input=messages)
             logger.info(f"full_answer: {full_answer}")
 
     except Exception as e:
         logger.warning(f"Generate final answer failed: {e}")
-        return {"messages": [AIMessage(content=FALLBACK_ANSWER)], "sources": []}
+        return {
+            "messages": [AIMessage(content=FALLBACK_ANSWER)],
+            "sources": []
+        }
 
     cited_indices = _extract_citation(full_answer)
     _mark_citations(final_sources, cited_indices)
@@ -68,17 +60,10 @@ async def generate_final_answer_node(state: AgentState):
         f"LLM이 인용한 문서 인덱스: {cited_indices} / 전체 소스: {len(final_sources)}개"
     )
 
-    return {"messages": [AIMessage(content=full_answer)], "sources": final_sources}
-
-
-def _build_forced_query(query: str) -> str:
-    return (
-        f"{query}\n\n"
-        "---\n"
-        "1. **[포맷 엄수]**: 모든 출처는 반드시 **문장 끝 마침표 바로 앞**에 한 칸 띄우고 표기하세요. (예: `...로직입니다 [1].`)\n"
-        "2. **[코드 근거]**: 코드 블록을 보여줄 때는, 바로 윗 문장에 반드시 해당 코드의 출처(파일/PR)를 명시해야 합니다.\n"
-        "3. **[무관용 원칙]**: [Context]에 근거가 없어 출처 번호를 붙일 수 없는 문장은 절대 작성하지 마세요."
-    )
+    return {
+        "messages": [AIMessage(content=full_answer)],
+        "sources": final_sources
+    }
 
 
 def _prepare_fixed_context_and_sources(

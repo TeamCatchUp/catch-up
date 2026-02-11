@@ -13,10 +13,7 @@ if settings.ENABLE_LANGFUSE:
         from langfuse import get_client
         from langfuse.langchain import CallbackHandler
 
-        langfuse = get_client(
-            max_retries=1,
-            timeout=3
-        )
+        langfuse = get_client()
         langfuse_handler = CallbackHandler()
         logger.info("Langfuse logging is enabled.")
         

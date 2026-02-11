@@ -18,10 +18,16 @@ async def search_vector_db_node(state: AgentState):
 
     if not queries:
         logger.warning("검색 계획 없음. rewritten query를 사용하여 검색 수행.")
-        queries.append(VectorDbSearchQuery(query=state["rewritten_query"]))
+        queries.append(VectorDbSearchQuery(
+            query=state["rewritten_query"],
+            reasoning="No generated queries found. Fallback to rewritten query."
+        ))
 
     results: list[list[Document]] = await _get_hybrid_search_results(
-        provider=VectorDbProvider.PGVECTOR, queries=queries, k=100, weights=[0.6, 0.4]
+        provider=VectorDbProvider.PGVECTOR,
+        queries=queries,
+        k=100,
+        weights=[0.6, 0.4]
     )
 
     unique_results = _deduplicate_search_results(results)

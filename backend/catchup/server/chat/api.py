@@ -6,6 +6,8 @@ from fastapi.responses import StreamingResponse
 from catchup.chat.factory import get_chat_service
 from catchup.chat.schemas import ChatRequest, ChatResponse
 from catchup.chat.service import ChatService
+from catchup.rag.schemas.context import GlobalContext
+from catchup.server.chat.context import get_full_global_context
 
 logger = logging.getLogger()
 
@@ -25,13 +27,15 @@ async def chat_response(
 
 @router.post("/api/chat/stream")
 async def chat_response_stream(
-    request: ChatRequest, service: ChatService = Depends(get_chat_service)
-):
+    request: ChatRequest, 
+    service: ChatService = Depends(get_chat_service),
+    global_context: GlobalContext = Depends(get_full_global_context)
+):    
     async def event_generator():
         async for chunk in service.chat_stream(
             query=request.query,
-            role=request.role,
             session_id=request.session_id,
+            global_context=global_context
         ):
             yield f"data: {chunk.model_dump_json(ensure_ascii=False)}\n\n"
 

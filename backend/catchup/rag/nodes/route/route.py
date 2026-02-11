@@ -1,11 +1,11 @@
+import datetime
 import logging
-from langchain_core.messages import AIMessage, HumanMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from typing import Literal
+from langchain_core.output_parsers import StrOutputParser
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.rag.nodes.route.prompt import SYSTEM_QUERY_ROUTER_PROMPT
+from catchup.rag.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
-from catchup.rag.schemas.structures import RouteQuery
 from catchup.rag.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -15,35 +15,32 @@ logger = logging.getLogger(__name__)
 async def route_node(state: AgentState):
     query = state["original_query"]
 
-    conversation_history = get_conversation_history(state["messages"])
-
     llm = get_llm_service(LlmProvider.OPENAI).get_llm()
-    structured_llm = llm.with_structured_output(RouteQuery, method="function_calling")
-
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", SYSTEM_QUERY_ROUTER_PROMPT),
-            MessagesPlaceholder(variable_name="history"),
-            ("human", "{query}"),
-        ]
+    
+    global_context = state["global_context"].model_dump()
+    
+    prompt = prompt_loader.get_prompt(
+        node_name="route",
+        query=query,
+        **global_context, 
     )
 
-    chain = prompt | structured_llm
+    chain = llm | StrOutputParser()
 
     try:
         async with llm_semaphore:
-            answer: RouteQuery = await chain.ainvoke(
-                input={"query": query, "history": conversation_history}
-            )
+            raw_response: str = await chain.ainvoke(input=prompt)
+            
+        intent = _refine_response(raw_response)
 
-    except Exception as e:
+    except Exception as e:  
         logger.warning(f"Router node failed: {e}")
         return {"intent": "search_pipeline"}
 
-    logger.info(f"intent: {answer.intent}")
+    logger.info(f"intent: {intent}")
 
     return {
-        "intent": answer.intent,
+        "intent": intent,
         "retry_count": 0,
         "grade_comment": None,
         "grade_status": None,
@@ -51,3 +48,15 @@ async def route_node(state: AgentState):
         "graph_search_queries": [],
         "retrieved_docs": [],
     }
+
+
+def _refine_response(response: str) -> str:
+    
+    cleaned_response = response.strip().lower()
+    
+    if "chitchat" in cleaned_response:
+        intent: Literal["chitchat", "search_pipeline"] = "chitchat"
+    else:
+        intent: Literal["chitchat", "search_pipeline"] = "search_pipeline"
+        
+    return intent

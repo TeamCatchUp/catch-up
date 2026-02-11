@@ -40,7 +40,7 @@ class PullRequestUserSelected(BaseModel):
 
 # Search Plan
 class BaseSearchQuery(BaseModel):
-    reasoning: Optional[str] = Field(default="", description="이 검색이 필요한 이유")
+    reasoning: str = Field(default="", description="이 검색이 필요한 이유")
 
 
 class VectorDbSearchQuery(BaseSearchQuery):
@@ -76,17 +76,4 @@ class GradeDocuments(BaseModel):
     )
     explanation: str = Field(
         description="이 점수를 부여한 이유에 대한 간략한 설명 (예: '문서에 관련 키워드는 있으나 구체적인 해결책이 없음')"
-    )
-
-
-# 정보 검색이 필요한지, 일상 대화인지 여부에 대한 쿼리 라우터
-class RouteQuery(BaseModel):
-    intent: Literal["chitchat", "search_pipeline"] = Field(
-        ...,
-        description=(
-            "질문의 성격에 따라 다음 단계로 라우팅합니다:\n"
-            "1. 'chitchat': 단순 인사, 날씨, 안부, 자기소개 등 검색이 필요 없는 일상 대화.\n"
-            "2. 'search_pipeline': 코드, 버그, 지라(Jira), Pull Request, 기능 구현, 에러 원인 분석 등 "
-            "소프트웨어 개발 프로젝트와 관련된 모든 기술적인 질문"
-        ),
     )
