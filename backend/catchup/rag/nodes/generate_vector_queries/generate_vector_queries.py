@@ -1,8 +1,5 @@
 import logging
 
-from langchain.messages import HumanMessage
-from langchain_core.prompts import ChatPromptTemplate
-
 from catchup.components.llm.factory import get_llm_service, LlmProvider
 from catchup.rag.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import llm_semaphore, log_node
@@ -32,7 +29,7 @@ async def generate_vector_queries_node(state: AgentState):
     try:
         async with llm_semaphore:
             plan: VectorDbSearchPlan = await structured_llm.ainvoke(
-                input=[HumanMessage(content=prompt)]
+                input=prompt
             )
 
         _print_search_plan_log(plan)

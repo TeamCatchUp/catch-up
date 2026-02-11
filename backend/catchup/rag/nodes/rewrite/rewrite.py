@@ -2,7 +2,6 @@ import logging
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
 from catchup.rag.prompts.loader import prompt_loader
@@ -40,9 +39,7 @@ async def rewrite_node(state: AgentState):
 
     try:
         async with llm_semaphore:
-            answer = await chain.ainvoke(
-                input=[HumanMessage(content=prompt)]
-            )
+            answer = await chain.ainvoke(input=prompt)
 
     except Exception as e:
         logger.warning(f"Rewrite node failed: {e}")

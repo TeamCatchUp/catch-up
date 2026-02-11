@@ -1,6 +1,5 @@
 import logging
 
-from langchain.messages import HumanMessage
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 

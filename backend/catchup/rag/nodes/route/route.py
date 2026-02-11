@@ -1,9 +1,7 @@
 import datetime
 import logging
 from typing import Literal
-from langchain.messages import HumanMessage
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import BaseChatPromptTemplate, ChatPromptTemplate, MessagesPlaceholder
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
 from catchup.rag.prompts.loader import prompt_loader
@@ -31,9 +29,7 @@ async def route_node(state: AgentState):
 
     try:
         async with llm_semaphore:
-            raw_response: str = await chain.ainvoke(
-                input=[HumanMessage(content=prompt)]
-            )
+            raw_response: str = await chain.ainvoke(input=prompt)
             
         intent = _refine_response(raw_response)
 
