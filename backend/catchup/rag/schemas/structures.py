@@ -40,7 +40,7 @@ class PullRequestUserSelected(BaseModel):
 
 # Search Plan
 class BaseSearchQuery(BaseModel):
-    reasoning: Optional[str] = Field(default="", description="이 검색이 필요한 이유")
+    reasoning: str = Field(default="", description="이 검색이 필요한 이유")
 
 
 class VectorDbSearchQuery(BaseSearchQuery):
