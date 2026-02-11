@@ -1,18 +1,17 @@
 import logging
 
-from langchain.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages import AIMessage
 from langchain_core.output_parsers import StrOutputParser
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
+from catchup.rag.constants import FALLBACK_ANSWER
 from catchup.rag.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
 from catchup.rag.state import AgentState
 
 
 logger = logging.getLogger(__name__)
-
-FALLBACK_ANSWER = "죄송합니다. 잠시 대화 연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요."
 
 @log_node
 async def chitchat_node(state: AgentState):
