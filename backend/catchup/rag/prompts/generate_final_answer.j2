@@ -32,5 +32,19 @@ The following documents have been retrieved:
 {{ context }}
 ---------------------
 
+# STRICT OUTPUT FORMAT
+1. **Main Answer:** First, provide your natural language response using the citation rules above.
+2. **Rationale Block:** Immediately after the answer, provide the `<citations>` block containing the JSON rationale.
+
+**Example Output:**
+...최근 배포된 v2.1 업데이트에서 해당 버그(NPE)가 수정되었습니다 [1]. 이는 Jira 티켓 코멘트에서 개발자가 직접 확인한 내용입니다 [2].
+
+<citations>
+{
+  "1": "GitHub PR #405의 변경 내역(Diff)을 통해 Null Pointer Exception을 방지하는 코드가 실제로 병합되었음을 검증했습니다.",
+  "2": "Jira CAT-102 티켓에서 '해결(Resolved)' 상태로 변경된 시점과 담당자의 배포 완료 코멘트를 통해 수정 사실을 확정했습니다."
+}
+</citations>
+
 # INSTRUCTION
-Synthesize the context above to answer the user's question.
+Synthesize the context above to answer the user's question following the **STRICT OUTPUT FORMAT**.

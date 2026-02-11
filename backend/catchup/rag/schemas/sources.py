@@ -1,6 +1,6 @@
 from enum import StrEnum
 import logging
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal, Optional, Union
 
 from langchain_core.documents import Document
 from pydantic import BaseModel, Field
@@ -60,6 +60,7 @@ class BaseSource(BaseModel):
     index: int | None = Field(None, description="LLM이 답변에 활용한 출처 번호")
     relevance_score: float = Field(default=0.0, description="검색 관련성 점수")
     is_cited: bool = Field(default=False, description="LLM 인용 여부")
+    citation_rationale: Optional[str] = Field(default="", description="LLM이 문서를 인용한 이유")
 
     @classmethod
     def from_document(
