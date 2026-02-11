@@ -57,15 +57,15 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
       {/* 메뉴 */}
       <DropdownMenuItem onSelect={() => router.push('/mypage/settings')}>
         <Person className="h-6 w-6 text-gray-70" />
-        <span>마이페이지</span>
+        <span>개인 맞춤 설정</span>
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
         <AdminPanelSettings className="h-6 w-6 text-gray-70" />
-        <span>권한 설정</span>
+        <span>권한 관리</span>
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
         <Settings className="h-6 w-6 text-gray-70" />
-        <span>환경 설정</span>
+        <span>설정</span>
       </DropdownMenuItem>
 
       {/* 라이트/다크 모드 토글 */}

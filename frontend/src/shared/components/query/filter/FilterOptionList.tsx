@@ -54,9 +54,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                       {chipOption?.profile_image ? (
                         <Image src={chipOption.profile_image} alt={name} width={25} height={25} className="size-6.25 shrink-0 rounded-full object-cover" />
                       ) : (
-                      <div className="border-neutral-1 bg-neutral-2 flex size-6.25 shrink-0 items-center justify-center rounded-full border">
-                        <Icon className="size-3.5 text-gray-50" />
-                      </div>
+                      <Icon className="size-6.25 shrink-0 rounded-full" />
                       )}
                       <span className="text-body-small text-gray-80 max-w-37.5 truncate">{name}</span>
                     </div>
@@ -120,9 +118,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                     {option.profile_image ? (
                       <Image src={option.profile_image} alt={option.name} width={28} height={28} className="size-7 shrink-0 rounded-full object-cover" />
                     ) : (
-                    <div className="border-neutral-1 bg-neutral-1 flex size-7 shrink-0 items-center justify-center rounded-full border">
-                      <Icon className="size-4.5 text-gray-50" />
-                    </div>
+                    <Icon className="size-7 shrink-0 rounded-full" />
                     )}
 
                     <div className="text-body-small text-gray-80 flex-1 truncate text-left">

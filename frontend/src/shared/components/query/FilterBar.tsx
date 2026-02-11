@@ -2,8 +2,8 @@
 
 import { RefObject } from 'react';
 
+import IconProfile from '@/public/icons/icon/default_profile.svg';
 import IconDivider from '@/public/icons/icon/divider.svg';
-import IconLock from '@/public/icons/icon/lock_filled.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconSpace from '@/public/icons/icon/space.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
@@ -12,7 +12,7 @@ import IconJira from '@/public/icons/logo/Jira.svg';
 import IconSlack from '@/public/icons/logo/Slack.svg'
 import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown';
 import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
-import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
+import { SearchOptionButton } from '@/shared/components/SearchOptionButton';
 import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
 import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/shared/mocks/search/filterOptions';
 
@@ -52,7 +52,7 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
             options={PERSON_OPTIONS}
             selected={filters.selectedPeople}
             onToggle={filters.togglePerson}
-            Icon={IconPerson}
+            Icon={IconProfile}
           />
         </FilterDropdown>
         <FilterDropdown
