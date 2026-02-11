@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import Image from 'next/image';
 
 import IconCloseSmall from '@/public/icons/icon/cancel_small.svg';
 import IconCloseCircle from '@/public/icons/icon/TextfiledDelete.svg';
@@ -9,6 +10,7 @@ interface OptionItem {
   id?: string | number;
   name: string;
   position?: string;
+  profile_image?: string | null;
 }
 
 interface FilterOptionListProps {
@@ -41,15 +43,21 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
             {/* Selected chips */}
             {selected.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
-                {selected.map((name) => (
+                {selected.map((name) => {
+                  const chipOption = options.find((o) => o.name === name);
+                  return (
                   <div
                     key={name}
                     className="border-neutral-5 flex h-9 shrink-0 items-center gap-1 rounded-full border bg-white px-1.5"
                   >
                     <div className="flex items-center gap-1.5 px-0.5">
+                      {chipOption?.profile_image ? (
+                        <Image src={chipOption.profile_image} alt={name} width={25} height={25} className="size-6.25 shrink-0 rounded-full object-cover" />
+                      ) : (
                       <div className="border-neutral-1 bg-neutral-2 flex size-6.25 shrink-0 items-center justify-center rounded-full border">
                         <Icon className="size-3.5 text-gray-50" />
                       </div>
+                      )}
                       <span className="text-body-small text-gray-80 max-w-37.5 truncate">{name}</span>
                     </div>
                     <button
@@ -63,7 +71,8 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                       <IconCloseSmall className="size-4.5" />
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -116,9 +125,13 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                     }`}
                     onClick={() => onToggle(option.name)}
                   >
+                    {option.profile_image ? (
+                      <Image src={option.profile_image} alt={option.name} width={28} height={28} className="size-7 shrink-0 rounded-full object-cover" />
+                    ) : (
                     <div className="border-neutral-1 bg-neutral-1 flex size-7 shrink-0 items-center justify-center rounded-full border">
                       <Icon className="size-4.5 text-gray-50" />
                     </div>
+                    )}
 
                     <div className="text-body-small text-gray-80 flex-1 truncate text-left">
                       {option.name}
