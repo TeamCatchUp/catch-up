@@ -23,14 +23,14 @@ interface FilterBarProps {
 
 export default function FilterBar({ filters, inputRef }: FilterBarProps) {
   return (
-    <div className="flex items-center gap-1.5 self-stretch overflow-x-scroll px-1.5 whitespace-nowrap">
-      <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2.5 self-stretch overflow-x-scroll px-1.5 whitespace-nowrap">
+      <div className="flex items-center gap-2.5">
         <SearchOptionButton Icon={IconJira} label="Jira" selected={filters.selectedSources.includes('jira')} onClick={() => filters.toggleSource('jira')} />
         <SearchOptionButton Icon={IconGithub} label="Github" selected={filters.selectedSources.includes('github')} onClick={() => filters.toggleSource('github')} />
         <SearchOptionButton Icon={IconSlack} label="Slack" selected={filters.selectedSources.includes('slack')} onClick={() => filters.toggleSource('slack')} />        
       </div>
       <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
         <FilterDropdown
           open={filters.openPopover === 'person'}
           onOpenChange={(o) => {
