@@ -25,14 +25,18 @@ export default function Search() {
   const { shouldShowNoHistoryBox } = useQuestionHistoryGate();
   const [isNoHistoryExpanded, setIsNoHistoryExpanded] = useState(true);
 
+  // ESC 입력 시 QueryBox 포커스를 해제하고, no-history 패널도 함께 닫는다.
   useEscapeKey(() => {
     input.setIsFocused(false);
     inputRef.current?.blur();
+    if (shouldShowNoHistoryBox) {
+      setIsNoHistoryExpanded(false);
+    }
   });
 
+  // QueryBox/Popover 바깥 클릭 시 동일하게 포커스를 해제하고, no-history 패널을 닫는다.
   useOutsideClick(containerRef, () => {
     if (filters.openPopover) return;
-    if (!shouldShowNoHistoryBox && input.hasText) return;
     input.setIsFocused(false);
     inputRef.current?.blur();
     if (shouldShowNoHistoryBox) {
