@@ -66,7 +66,7 @@ const SourceCard = ({ source, showCount = true, count }: Props) => {
     <button
       type="button"
       onClick={handleClick}
-      className="hover:bg-neutral-2 flex w-full cursor-pointer flex-col gap-2.5 rounded-xl bg-white px-1 py-2.5 text-left transition-colors"
+      className="flex w-full cursor-pointer flex-col gap-2.5 rounded-xl bg-white px-1 py-2.5 text-left"
     >
       <div className="flex h-6 items-center gap-1.5">
         <div className="bg-neutral-2 flex h-6 min-w-6.5 items-center justify-center gap-1 rounded-full px-1.5 py-0.5">
@@ -78,13 +78,13 @@ const SourceCard = ({ source, showCount = true, count }: Props) => {
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-body-xsmall truncate text-gray-50">
+          <div className="text-body-xsmall truncate text-gray-50 hover:underline">
             {repoText}
           </div>
         </div>
       </div>
 
-      <div className="text-heading-small text-gray-80 line-clamp-2 wrap-break-word">
+      <div className="text-heading-small text-gray-80 line-clamp-2 wrap-break-word hover:underline">
         {titleText}
       </div>
 

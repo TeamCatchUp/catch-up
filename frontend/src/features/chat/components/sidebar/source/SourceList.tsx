@@ -116,8 +116,7 @@ const SourceList = ({ sources, isLoading, isError }: Props) => {
                       <SourceCard
                         key={source.id}
                         source={source}
-                        showCount
-                        count={source.source_index}
+                        showCount={false}
                       />
                     ))}
                   </div>
