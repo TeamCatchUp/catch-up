@@ -4,7 +4,6 @@ import { useRef, useState } from 'react';
 
 import type { UseRagFiltersReturn } from '@/features/chat/hooks/useRagFilters';
 import IconDivider from '@/public/icons/icon/divider.svg';
-import IconLock from '@/public/icons/icon/lock_filled.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconSpace from '@/public/icons/icon/space.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
@@ -13,14 +12,13 @@ import IconJira from '@/public/icons/logo/Jira.svg';
 import IconSlack from '@/public/icons/logo/Slack.svg';
 import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown';
 import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
-import { SearchOptionButton, SearchOptionDisabledButton } from '@/shared/components/SearchOptionButton';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { SearchOptionButton } from '@/shared/components/SearchOptionButton';
 import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/shared/mocks/search/filterOptions';
 import { cn } from '@/shared/utils/cn';
 
-import Add from '/public/icons/icon/add_small.svg';
 import ArrowSend from '/public/icons/icon/arrow_send.svg';
-import Filter from '/public/icons/icon/filter-2.svg';
+import DropdownDown from '/public/icons/icon/dropdown_down.svg';
+import DropdownUp from '/public/icons/icon/dropdown_up.svg';
 import Stop from '/public/icons/icon/stop.svg';
 
 interface RagInputProps {
@@ -39,17 +37,14 @@ const RagInput = ({
   onNewMessage,
 }: RagInputProps) => {
   const [newInput, setNewInput] = useState('');
-  const [isMultiLine, setIsMultiLine] = useState(false);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNewInput(e.target.value);
 
     e.target.style.height = 'auto';
-    const newHeight = Math.min(e.target.scrollHeight, 156);
+    const newHeight = Math.min(e.target.scrollHeight, 230);
     e.target.style.height = newHeight + 'px';
-
-    setIsMultiLine(e.target.scrollHeight > 26);
   };
 
   const handleSendMessage = async () => {
@@ -57,7 +52,6 @@ const RagInput = ({
 
     const message = newInput;
     setNewInput('');
-    setIsMultiLine(false);
 
     if (textAreaRef.current) {
       textAreaRef.current.style.height = '26px';
@@ -75,112 +69,98 @@ const RagInput = ({
   };
 
   return (
-    <div className="w-full flex-none bg-white px-24 pt-4 pb-8">
-      <div className="mx-auto w-193.25">
-        {/* Filter Bar */}
+    <div className="bg-gradient-to-b from-transparent to-white px-24 py-8 backdrop-blur-[10px]">
+      <div className="shadow-rag-bar border-neutral-4 flex w-full flex-col rounded-3xl border bg-white px-3 py-4">
+        {/* Filter Bar (카드 내부 상단) */}
         <div
           className={cn(
             'overflow-hidden transition-all duration-300 ease-in-out',
-            filters.isFilterOpen ? 'mb-3 max-h-40 opacity-100' : 'mb-0 max-h-0 opacity-0',
+            filters.isFilterOpen ? 'mb-2.5 max-h-40 opacity-100' : 'max-h-0 opacity-0',
           )}
         >
-          <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto rounded-2xl p-2 whitespace-nowrap">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 self-stretch overflow-x-scroll px-1.5 whitespace-nowrap">
-                <div className="flex items-center gap-2">
-                  <SearchOptionButton Icon={IconJira} label="Jira" selected={filters.selectedSources.includes('jira')} onClick={() => filters.toggleSource('jira')} />
-                  <SearchOptionButton Icon={IconGithub} label="Github" selected={filters.selectedSources.includes('github')} onClick={() => filters.toggleSource('github')} />
-                  <SearchOptionButton Icon={IconSlack} label="Slack" selected={filters.selectedSources.includes('slack')} onClick={() => filters.toggleSource('slack')} />
-                  <SearchOptionDisabledButton Icon={IconLock} label="Wiki" />
-                </div>
-                <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
-
-                <div className="flex items-center gap-2">
-                  <FilterDropdown
-                    open={filters.openPopover === 'person'}
-                    onOpenChange={(o) => filters.setOpenPopover(o ? 'person' : null)}
-                    trigger={
-                      <SearchOptionButton
-                        Icon={IconPerson}
-                        label={filters.personLabel}
-                        selected={filters.selectedPeople.length > 0}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => filters.setOpenPopover('person')}
-                      />
-                    }
-                  >
-                    <FilterOptionList
-                      title="담당자 선택"
-                      options={PERSON_OPTIONS}
-                      selected={filters.selectedPeople}
-                      onToggle={filters.togglePerson}
-                      Icon={IconPerson}
-                    />
-                  </FilterDropdown>
-                  <FilterDropdown
-                    open={filters.openPopover === 'department'}
-                    onOpenChange={(o) => filters.setOpenPopover(o ? 'department' : null)}
-                    trigger={
-                      <SearchOptionButton
-                        Icon={IconTag}
-                        label={filters.deptLabel}
-                        selected={filters.selectedDepts.length > 0}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => filters.setOpenPopover('department')}
-                      />
-                    }
-                  >
-                    <FilterOptionList
-                      title="부서 선택"
-                      options={DEPARTMENT_OPTIONS}
-                      selected={filters.selectedDepts}
-                      onToggle={filters.toggleDept}
-                      Icon={IconTag}
-                    />
-                  </FilterDropdown>
-                  <FilterDropdown
-                    open={filters.openPopover === 'project'}
-                    onOpenChange={(o) => filters.setOpenPopover(o ? 'project' : null)}
-                    trigger={
-                      <SearchOptionButton
-                        Icon={IconSpace}
-                        label={filters.projectLabel}
-                        selected={filters.selectedProjects.length > 0}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => filters.setOpenPopover('project')}
-                      />
-                    }
-                  >
-                    <FilterOptionList
-                      title="프로젝트 선택"
-                      options={PROJECT_OPTIONS}
-                      selected={filters.selectedProjects}
-                      onToggle={filters.toggleProject}
-                      Icon={IconSpace}
-                    />
-                  </FilterDropdown>
-                </div>
-              </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={filters.toggleFilter}
+              className="text-button-secondary-mono text-body-xsmall text-gray-70 shrink-0 cursor-pointer px-1.5 py-1"
+            >
+              접기
+            </button>
+            <div className="flex items-center gap-2.5">
+              <SearchOptionButton Icon={IconJira} label="Jira" selected={filters.selectedSources.includes('jira')} onClick={() => filters.toggleSource('jira')} />
+              <SearchOptionButton Icon={IconGithub} label="Github" selected={filters.selectedSources.includes('github')} onClick={() => filters.toggleSource('github')} />
+              <SearchOptionButton Icon={IconSlack} label="Slack" selected={filters.selectedSources.includes('slack')} onClick={() => filters.toggleSource('slack')} />
+            </div>
+            <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
+            <div className="flex items-center gap-2.5">
+              <FilterDropdown
+                open={filters.openPopover === 'person'}
+                onOpenChange={(o) => filters.setOpenPopover(o ? 'person' : null)}
+                trigger={
+                  <SearchOptionButton
+                    Icon={IconPerson}
+                    label={filters.personLabel}
+                    selected={filters.selectedPeople.length > 0}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => filters.setOpenPopover('person')}
+                  />
+                }
+              >
+                <FilterOptionList
+                  title="담당자 선택"
+                  options={PERSON_OPTIONS}
+                  selected={filters.selectedPeople}
+                  onToggle={filters.togglePerson}
+                  Icon={IconPerson}
+                />
+              </FilterDropdown>
+              <FilterDropdown
+                open={filters.openPopover === 'department'}
+                onOpenChange={(o) => filters.setOpenPopover(o ? 'department' : null)}
+                trigger={
+                  <SearchOptionButton
+                    Icon={IconTag}
+                    label={filters.deptLabel}
+                    selected={filters.selectedDepts.length > 0}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => filters.setOpenPopover('department')}
+                  />
+                }
+              >
+                <FilterOptionList
+                  title="부서 선택"
+                  options={DEPARTMENT_OPTIONS}
+                  selected={filters.selectedDepts}
+                  onToggle={filters.toggleDept}
+                  Icon={IconTag}
+                />
+              </FilterDropdown>
+              <FilterDropdown
+                open={filters.openPopover === 'project'}
+                onOpenChange={(o) => filters.setOpenPopover(o ? 'project' : null)}
+                trigger={
+                  <SearchOptionButton
+                    Icon={IconSpace}
+                    label={filters.projectLabel}
+                    selected={filters.selectedProjects.length > 0}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => filters.setOpenPopover('project')}
+                  />
+                }
+              >
+                <FilterOptionList
+                  title="프로젝트 선택"
+                  options={PROJECT_OPTIONS}
+                  selected={filters.selectedProjects}
+                  onToggle={filters.toggleProject}
+                  Icon={IconSpace}
+                />
+              </FilterDropdown>
             </div>
           </div>
         </div>
 
-        {/* Input Bar */}
-        <div
-          className={cn(
-            'border-neutral-4 shadow-rag-bar flex gap-2 border bg-white px-3 py-2.5',
-            isMultiLine ? 'items-end rounded-3xl' : 'items-center rounded-full',
-          )}
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button className="icon-button-only-gray shrink-0 cursor-pointer rounded-full! p-1.5">
-                <Add className="text-gray-70 h-7 w-7" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>파일 추가 및 기타</TooltipContent>
-          </Tooltip>
-
+        {/* Textarea */}
+        <div className="px-1">
           <textarea
             ref={textAreaRef}
             placeholder="업무 흐름이나 인수인계 내용을 질문해보세요"
@@ -188,46 +168,51 @@ const RagInput = ({
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             rows={1}
-            className="text-body-medium placeholder:text-gray-30 flex-1 resize-none overflow-y-auto pr-2.5 outline-none"
-            style={{ height: '26px', maxHeight: '156px' }}
+            className="text-body-medium text-gray-80 placeholder:text-gray-30 w-full resize-none overflow-y-auto outline-none"
+            style={{ height: '26px', maxHeight: '230px' }}
           />
+        </div>
 
-          <div className="flex shrink-0 items-center gap-3">
-            {!newInput.trim() && !isLoading && (
-              <button
-                onClick={filters.toggleFilter}
-                className={cn(
-                  'box-button-outline-gray flex h-7 cursor-pointer items-center justify-center gap-1 px-1.5 py-1',
-                  filters.isFilterOpen && 'bg-blue-5 border-blue-20',
-                )}
-              >
-                <Filter className="h-4.5 w-4.5" />
-                <span className="text-body-xsmall text-gray-50">필터</span>
-              </button>
+        {/* 하단 컨트롤 바 */}
+        <div className="mt-2.5 flex h-8 items-center justify-between">
+          {/* 상세 검색 토글 */}
+          <button
+            onClick={filters.toggleFilter}
+            className={cn(
+              'flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1',
+              filters.isFilterOpen && 'bg-neutral-3',
             )}
-
-            {isLoading ? (
-              <button
-                onClick={onStop}
-                className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full"
-              >
-                <Stop className="text-gray-70 relative left-px h-6 w-6 cursor-pointer" />
-              </button>
+          >
+            <span className="text-body-small text-gray-70">상세 검색</span>
+            {filters.isFilterOpen ? (
+              <DropdownUp className="text-gray-70 h-4.5 w-4.5" />
             ) : (
-              <button
-                onClick={handleSendMessage}
-                disabled={isLoading || !newInput.trim()}
-                className={cn(
-                  'cursor-pointer rounded-full p-2 transition-colors',
-                  newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border',
-                )}
-              >
-                <ArrowSend
-                  className={cn('h-6 w-6 cursor-pointer', newInput.trim() ? 'brightness-0 invert' : 'text-gray-30')}
-                />
-              </button>
+              <DropdownDown className="text-gray-70 h-4.5 w-4.5" />
             )}
-          </div>
+          </button>
+
+          {/* 전송 / 중지 버튼 */}
+          {isLoading ? (
+            <button
+              onClick={onStop}
+              className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full"
+            >
+              <Stop className="text-gray-70 relative left-px h-6 w-6 cursor-pointer" />
+            </button>
+          ) : (
+            <button
+              onClick={handleSendMessage}
+              disabled={isLoading || !newInput.trim()}
+              className={cn(
+                'cursor-pointer rounded-full p-2 transition-colors',
+                newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border',
+              )}
+            >
+              <ArrowSend
+                className={cn('h-6 w-6 cursor-pointer', newInput.trim() ? 'brightness-0 invert' : 'text-gray-30')}
+              />
+            </button>
+          )}
         </div>
       </div>
     </div>
