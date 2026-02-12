@@ -1,34 +1,23 @@
-import { cn } from '@/shared/utils/cn';
+import Help from '/public/icons/icon/help.svg';
 
 interface Props {
-  activeTab: 'source' | 'detail';
-  onChange: (tab: 'source' | 'detail') => void;
   sourceCount: number;
 }
 
-const SidebarHeader = ({ activeTab, onChange, sourceCount }: Props) => {
+const SidebarHeader = ({ sourceCount }: Props) => {
   return (
-    <div className="sticky top-0 z-100 flex bg-white">
-      <div className={`border-b-neutral-3 flex w-full items-center justify-center border-b px-4 py-1.5`}>
-        <div className="border-neutral-1 bg-neutral-1 flex gap-0.5 rounded-full border p-0.5">
-          <button
-            onClick={() => onChange('source')}
-            className={cn(
-              'text-heading-small text-gray-70 cursor-pointer rounded-full px-7 py-1.5 transition',
-              activeTab === 'source' ? 'shadow-button border-neutral-3 bg-white' : 'bg-neutral-1',
-            )}
-          >
-            출처 {sourceCount}개
-          </button>
-          <button
-            onClick={() => onChange('detail')}
-            className={cn(
-              'text-heading-small text-gray-70 cursor-pointer rounded-full px-7 py-1.5 transition',
-              activeTab === 'detail' ? 'shadow-button border-neutral-3 bg-white' : 'bg-neutral-1',
-            )}
-          >
-            Jira 티켓
-          </button>
+    <div className="border-b-neutral-3 flex h-13 items-center justify-between border-b bg-white px-4 py-1.5">
+      <div className="text-heading-medium text-gray-70 flex items-center gap-1.5 whitespace-nowrap">
+        <span>출처</span>
+        <span>{sourceCount}개</span>
+      </div>
+
+      <div className="bg-neutral-2 flex items-center gap-1 rounded-md2 px-1.5 py-0.5">
+        <div className="flex h-6 w-6 items-center justify-center">
+          <Help className="h-4 w-4 text-gray-50" />
+        </div>
+        <div className="text-body-xsmall text-gray-50 truncate whitespace-nowrap">
+          AI 답변 근거 자료
         </div>
       </div>
     </div>
