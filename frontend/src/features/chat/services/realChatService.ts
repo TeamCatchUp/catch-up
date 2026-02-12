@@ -72,7 +72,7 @@ const realChatService = {
         session_id: sessionId,
         user_selected_pull_requests: selectedPRs.map((pr) => ({
           pr_number: pr.pr_number,
-          repo: pr.repo_name,
+          repo_name: pr.repo_name,
           owner: pr.owner,
         })),
       }),

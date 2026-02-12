@@ -5,9 +5,7 @@ import { useRef } from 'react';
 import HowToUse from '@/features/home/components/HowToUse';
 import QuestionTips from '@/features/home/components/QuestionTips';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
-import ExplorerPanel from '@/shared/components/query/ExplorerPanel';
-import FilterBar from '@/shared/components/query/FilterBar';
-import QueryInput from '@/shared/components/query/QueryInput';
+import QueryBox from '@/shared/components/query/QueryBox';
 import { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
 import { useSearchInput } from '@/shared/hooks/query/useSearchInput';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
@@ -67,20 +65,7 @@ export default function Home() {
         </div>
 
         {/* Query Box */}
-        <div
-          ref={containerRef}
-          className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center gap-1.5 border border-solid bg-white ${input.isFocused ? 'min-h-92.5 max-h-135 overflow-hidden rounded-[28px] p-3' : 'rounded-rounded h-auto p-3'
-            }`}
-        >
-          <QueryInput input={input} inputRef={inputRef} />
-
-          {input.isFocused && (
-            <div className="animate-in fade-in-0 slide-in-from-top-3 duration-300 border-neutral-4 mt-1 flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden border-t pt-3">
-              <FilterBar filters={filters} inputRef={inputRef} />
-              <ExplorerPanel />
-            </div>
-          )}
-        </div>
+        <QueryBox containerRef={containerRef} inputRef={inputRef} input={input} filters={filters} />
       </div>
 
       <div
