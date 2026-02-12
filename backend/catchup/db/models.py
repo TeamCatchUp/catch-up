@@ -664,14 +664,14 @@ class SlackChannelSyncState(Base):
 # GitHub Sync State
 # ============================================================
 
-class GitHubSyncStatus(StrEnum):
+class GithubSyncStatus(StrEnum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     SUCCESS = "success"
     FAILED = "failed"
 
 
-class GitHubEntityType(StrEnum):
+class GithubEntityType(StrEnum):
     ISSUE = "issue"
     PULL_REQUEST = "pull_request"
     COMMIT = "commit"
@@ -679,7 +679,7 @@ class GitHubEntityType(StrEnum):
     USER = "user"
 
 
-class GitHubSyncState(Base):
+class GithubSyncState(Base):
     """
     GitHub 엔티티 동기화 상태 추적을 위한 테이블
 
@@ -700,7 +700,7 @@ class GitHubSyncState(Base):
         String(255), nullable=False, index=True,
         comment="Repository full name (owner/repo)"
     )
-    entity_type: Mapped[GitHubEntityType] = mapped_column(
+    entity_type: Mapped[GithubEntityType] = mapped_column(
         String(50), nullable=False,
         comment="issue, pull_request, commit, repository"
     )
@@ -714,7 +714,7 @@ class GitHubSyncState(Base):
         DateTime(timezone=True), nullable=True,
         comment="마지막 성공적인 동기화 시간 (증분 동기화 기준)"
     )
-    last_sync_status: Mapped[GitHubSyncStatus | None] = mapped_column(
+    last_sync_status: Mapped[GithubSyncStatus | None] = mapped_column(
         String(20), nullable=True,
         comment="pending, in_progress, success, failed"
     )
@@ -742,7 +742,7 @@ class GitHubSyncState(Base):
     )
 
 
-class GitHubRepository(Base):
+class GithubRepository(Base):
     """
     GitHub Repository 정보 (정적 데이터, RDBMS 저장)
     - Installation에 연결된 Repository 목록 관리

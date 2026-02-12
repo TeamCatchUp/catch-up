@@ -398,3 +398,13 @@ class PullRequestWebhookPayload(BaseModel):
     repository: dict
     installation: dict
     sender: GitHubSender
+
+# =================================================================
+#                 Sync Request Schema
+# =================================================================
+
+class IncrementalSyncRequest(BaseModel):
+    repo_ids: list[int] | None = Field(default=None)
+    entity_types: set[str] | None = Field(default=None)
+    update_repos: bool = Field(default=False)
+    
