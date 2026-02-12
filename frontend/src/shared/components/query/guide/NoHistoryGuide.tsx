@@ -1,6 +1,7 @@
 'use client';
 
-import IconLightbulb from '/public/icons/icon/lightbulb.svg';
+import IconArrowForward from '@/public/icons/icon/arrow_forward.svg';
+import IconLightbulb from '@/public/icons/icon/lightbulb.svg';
 
 interface NoHistoryStep {
   title: string;
@@ -82,9 +83,10 @@ export const NoHistoryGuide = ({ onExampleClick }: NoHistoryGuideProps) => {
             <button
               key={example}
               onClick={() => onExampleClick?.(example)}
-              className="hover:bg-neutral-2 text-body-small text-gray-80 h-10 cursor-pointer rounded-xl px-2 text-left transition-colors"
+              className="group hover:bg-neutral-2 text-body-small text-gray-80 flex h-10 cursor-pointer items-center rounded-xl px-2 text-left transition-colors"
             >
-              {example}
+              <span className="flex-1">{example}</span>
+              <IconArrowForward className="text-gray-50 ml-2 h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
             </button>
           ))}
         </div>
