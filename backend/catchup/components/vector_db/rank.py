@@ -24,7 +24,7 @@ def weighted_reciprocal_rank(
         
         for rank, doc in enumerate(doc_list):
             # 문서 식별
-            doc_key = doc.metadata.get('contextual_content', '') 
+            doc_key = doc.id if doc.id else doc.metadata.get('id')
             if doc_key not in doc_map:
                 doc_map[doc_key] = doc
             
