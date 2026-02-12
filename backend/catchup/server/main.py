@@ -14,6 +14,7 @@ from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
 from catchup.server.connector.github.auth_api import router as github_auth_router
 from catchup.server.connector.github.sync_api import router as github_sync_router
+from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
 from catchup.utils.redis import init_langgraph_checkpointer
 from catchup.server.connector.jira.auth_api import router as jira_auth_router
 from catchup.server.connector.jira.sync_api import router as jira_sync_router
@@ -25,7 +26,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="(%(asctime)s) %(name)s.%(funcName)s:%(lineno)d: [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
-)
+) 
 logger = logging.getLogger(__name__)
 
 
@@ -71,7 +72,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.critical(f"Failed to create Redis langgraph checkpointer: {e}")
 
+    #Scheduler 초기화
+    try:
+        init_scheduler()
+        logger.info("APScheduler initiated Successfully !")
+    except Exception as e:
+        logger.critical(f"Failed to initialize APScheduler : {e}")
+        
     yield
+
+    #Scheduler Shutdown
+    try:
+        shutdown_scheduler()
+    except Exception as e:
+        logger.error(f"Failed to Shut Down Scheduler")
 
 
 # MAIN

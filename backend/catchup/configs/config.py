@@ -117,6 +117,12 @@ class Settings(BaseSettings):
     GITHUB_SYNC_REVIEWS_LIMIT: int = 10  # PR에 포함할 최근 리뷰 수
     GITHUB_SYNC_DEFAULT_DAYS: int = 90  # 기본 동기화 기간 (일)
 
+    # Wehbhook Event Buffering & Scheduler Settings
+    WEBHOOK_BUFFER_TTL: int = 3900 # 65분 : Buffer 60분
+    WEBHOOK_FLUSH_INTERVAL_HOURS: int = 1  
+    WEBHOOK_ENABLE_AUTO_SYNC: bool = True
+    
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

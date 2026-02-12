@@ -23,6 +23,7 @@ from catchup.db.models import GitHubEntityType
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.service import GitHubIngestionService
+from catchup.utils.scheduler import flush_github_events
 
 logger = logging.getLogger(__name__)
 
@@ -327,4 +328,28 @@ async def refresh_repositories(
         raise
     except Exception as e:
         logger.error(f"Failed to refresh repositories: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/test/flush-webhook-events")
+async def test_flush_webhook_events():
+    """
+    테스트용: Webhook 이벤트 버퍼를 즉시 Flush하고 Incremental Sync 실행
+
+    스케줄러가 1시간마다 자동으로 수행하는 작업을 수동으로 트리거합니다.
+    디버깅 및 테스트 목적으로 사용하세요.
+
+    주의: 프로덕션 환경에서는 비활성화하는 것을 권장합니다.
+    """
+    try:
+        logger.info("Manual webhook flush triggered via test endpoint")
+        await flush_github_events()
+
+        return {
+            "success": True,
+            "message": "Webhook events flushed and incremental sync completed"
+        }
+
+    except Exception as e:
+        logger.error(f"Manual webhook flush failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

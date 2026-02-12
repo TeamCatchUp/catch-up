@@ -7,7 +7,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, 
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from catchup.connectors.github.schemas import InstallationRepositoriesWebhookPayload, InstallationWebhookPayload
+from catchup.connectors.github.schemas import(
+     InstallationRepositoriesWebhookPayload, InstallationWebhookPayload,
+     IssueWebhookPayload, PullRequestWebhookPayload
+)
+from catchup.utils.webhook_buffer import get_webhook_buffer
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.client import GitHubApiClient
 from catchup.configs.config import auth_settings, settings
@@ -64,6 +68,12 @@ async def handle_github_webhook(
 
     if x_github_event == "installation_repositories":
         return await _handle_installation_repositories_event(payload, db)
+    
+    if x_github_event == "issues":
+        return await _handle_issue_event(payload)
+    
+    if x_github_event == "pull_request":
+        return await _handle_pull_request_event(payload)
 
     logger.warning(f"Unhandled webhook event: {x_github_event}")
     return {"status": "ignored", "event": x_github_event}
@@ -358,3 +368,73 @@ async def _handle_installation_repositories_event(
         "added": len(data.repositories_added),
         "removed": len(data.repositories_removed),
     }
+
+async def _handle_issue_event(payload: dict) -> dict:
+    """
+    수신된 Github Issue 웹훅 이벤트를 Redis에 버퍼링
+
+    Args:
+        payload : Github Issue Webhook Payload
+
+    Returns:
+        처리 결과 Dict
+    """
+
+    data = IssueWebhookPayload(**payload)
+
+    # opened, edited, closed, reopened, deleted 만 처리
+    if data.action not in ["opened", "edited", "closed", "reopened", "deleted"]:
+        return {"status": "ignored", "action": data.action}
+    
+    buffer = get_webhook_buffer()
+    await buffer.buffer_github_event(
+        installation_id = data.installation["id"],
+        repo_id = data.repository["id"],
+        entity_type = "issue",
+        entity_id = data.issue["number"],
+        action= data.action,
+    )
+
+    logger.info(
+        f"Buffered Github Issue Event: "
+        f"installation={data.installation['id']}, "
+        f"repo={data.repository['id']}, "
+        f"issue={data.issue['number']}, "
+        f"action={data.action}"
+    )
+
+    return {"status": "buffered", "event_type": "issue"}
+
+async def _handle_pull_request_event(payload: dict) -> dict:
+    """
+    수신된 Github Pull Request 웹훅 이벤트를 Redis에 버퍼링
+
+    Args:
+        payload : Github Issue Webhook Payload
+
+    Returns:
+        처리 결과 Dict
+    """
+    data = PullRequestWebhookPayload(**payload)
+
+    if data.action not in ["opened", "edited", "closed", "reopened", "synchronize"]:
+        return {"status": "ignored", "action": data.action}
+    
+    buffer = get_webhook_buffer()
+    await buffer.buffer_github_event(
+        installation_id=data.installation["id"],
+        repo_id=data.repository["id"],
+        entity_type="pull_request",
+        entity_id=data.pull_request["number"],
+        action=data.action,
+    )
+
+    logger.info(
+        f"Buffered GitHub PR event: "
+        f"installation={data.installation['id']}, "
+        f"repo={data.repository['id']}, "
+        f"pr={data.pull_request['number']}, "
+        f"action={data.action}"
+    )
+
+    return {"status": "buffered", "event_type": "pull_request"}
