@@ -49,6 +49,7 @@ const FeedbackSection = ({
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailText, setDetailText] = useState('');
   const [showThanks, setShowThanks] = useState(false);
+  const [selectedChipId, setSelectedChipId] = useState<number | null>(null);
   const isSubmitting = feedbackMutation.isPending;
   const [localHasFeedback, setLocalHasFeedback] = useState(hasFeedback);
 
@@ -85,6 +86,7 @@ const FeedbackSection = ({
       setIsDetailOpen(false);
       setDetailText('');
       setShowThanks(false);
+      setSelectedChipId(null);
       feedbackMutationRef.current.reset();
     }, SECTION_ANIM_MS);
 
@@ -366,11 +368,12 @@ const FeedbackSection = ({
                   });
                   return;
                 }
+                setSelectedChipId(feedbackItem.id);
                 submitFeedback(feedbackItem.content);
               }}
               className={cn(
                 'text-xsmall text-gray-80 cursor-pointer rounded-lg px-2 py-1',
-                feedbackItem.id === DETAIL_ID && isDetailOpen
+                (feedbackItem.id === DETAIL_ID && isDetailOpen) || feedbackItem.id === selectedChipId
                   ? 'bg-neutral-3 border-neutral-5'
                   : 'box-button-outline-gray',
               )}
