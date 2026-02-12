@@ -1,6 +1,7 @@
 interface IconItem {
   name: string;
   icon: React.FC<React.SVGProps<SVGElement>>;
+  activeIcon?: React.FC<React.SVGProps<SVGElement>>;
 }
 
 interface AnswerActionButtonsProps {

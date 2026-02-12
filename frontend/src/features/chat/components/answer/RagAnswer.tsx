@@ -15,14 +15,15 @@ import AnswerError from './actions/AnswerError';
 import FeedbackSection from './actions/FeedbackSection';
 import { MarkDownComponents } from './markdown/MarkDownComponents';
 
+import Bookmark from '/public/icons/icon/bookmark.svg';
+import BookmarkFilled from '/public/icons/icon/bookmark_filled.svg';
 import Copy from '/public/icons/icon/copy.svg';
 import Rotate from '/public/icons/icon/rotate.svg';
-import Share from '/public/icons/icon/share_2.svg';
 import ThumbsDown from '/public/icons/icon/thumbs-down.svg';
 
 const ANSWER_ICONS = [
   { name: 'Copy', icon: Copy },
-  { name: 'Share', icon: Share },
+  { name: 'Bookmark', icon: Bookmark, activeIcon: BookmarkFilled },
   { name: 'ThumbsDown', icon: ThumbsDown },
   { name: 'Rotate', icon: Rotate },
 ];
