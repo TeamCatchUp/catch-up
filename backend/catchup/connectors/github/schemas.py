@@ -380,3 +380,21 @@ class InstallationRepositoriesWebhookPayload(BaseModel):
     repositories_added: list = Field(default_factory=list)
     repositories_removed: list = Field(default_factory=list)
     sender: GitHubSender
+
+# =================================================================
+#                 Webhook Event Payload Schema
+# =================================================================
+
+class IssueWebhookPayload(BaseModel):
+    action: str
+    issue: dict
+    repository: dict
+    installation: dict
+    sender: GitHubSender
+
+class PullRequestWebhookPayload(BaseModel):
+    action: str
+    pull_request: dict
+    repository: dict
+    installation: dict
+    sender: GitHubSender
