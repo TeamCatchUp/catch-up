@@ -28,8 +28,7 @@ interface RagInputProps {
   isLoading: boolean;
   onSendMessage: (message: string) => Promise<void>;
   onStop: () => void;
-  qaPairsLength: number;
-  goToNewPage: (index: number) => void;
+  onNewMessage: () => void;
 }
 
 const RagInput = ({
@@ -37,8 +36,7 @@ const RagInput = ({
   isLoading,
   onSendMessage,
   onStop,
-  qaPairsLength,
-  goToNewPage,
+  onNewMessage,
 }: RagInputProps) => {
   const [newInput, setNewInput] = useState('');
   const [isMultiLine, setIsMultiLine] = useState(false);
@@ -65,7 +63,7 @@ const RagInput = ({
       textAreaRef.current.style.height = '26px';
     }
 
-    goToNewPage(qaPairsLength);
+    onNewMessage();
     await onSendMessage(message);
   };
 

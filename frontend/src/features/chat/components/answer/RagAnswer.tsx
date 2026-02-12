@@ -48,8 +48,6 @@ interface RagAnswerProps {
   onPRContinue: (selectedPrNumbers: number[]) => Promise<void>;
   onPRRefetch: () => Promise<void>;
   onFeedbackSubmitted: (messageId: string) => void;
-  answerScrollRef: React.RefObject<HTMLDivElement | null>;
-  feedbackRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const RagAnswer = ({
@@ -63,8 +61,6 @@ const RagAnswer = ({
   onPRContinue,
   onPRRefetch,
   onFeedbackSubmitted,
-  answerScrollRef,
-  feedbackRef,
 }: RagAnswerProps) => {
   // 섹션 로컬 UI 상태
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<Record<string, boolean>>({});
@@ -100,8 +96,7 @@ const RagAnswer = ({
     const isSpaceOpen = spaceDropDownOpenMap?.[answerId];
 
     return (
-      <div ref={answerScrollRef} className="flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2">
           {/* 필터/팀스페이스 드롭다운 */}
           {currentQA.answer.content && (
             <div className="mb-3 rounded-xl">
@@ -231,8 +226,7 @@ const RagAnswer = ({
               />
 
               {/* 피드백 */}
-              <div ref={feedbackRef}>
-                <FeedbackSection
+              <FeedbackSection
                   messageId={currentQA.answer.id}
                   chatHistoryId={currentQA.answer.chat_history_id}
                   hasFeedback={currentQA.answer.has_feedback}
@@ -240,7 +234,6 @@ const RagAnswer = ({
                   setFeedbackVisibleMap={setFeedbackVisibleMap}
                   onFeedbackSubmitted={onFeedbackSubmitted}
                 />
-              </div>
             </>
           ) : (
             <AnswerError
@@ -252,13 +245,12 @@ const RagAnswer = ({
             />
           )}
         </div>
-      </div>
     );
   }
 
   // 답변이 없는 경우 (로딩/PR선택/에러)
   return (
-    <div ref={answerScrollRef} className="flex-1 overflow-y-auto">
+    <div>
       {showPRSelection && (
         <GithubPRStepSkeleton
           onContinue={onPRContinue}
