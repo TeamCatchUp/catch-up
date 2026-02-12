@@ -29,7 +29,14 @@ export default function RagAnswerPage() {
     initialQuery: initialQuery ?? null,
   });
 
-  const scroll = useRagScroll({
+  const {
+    qaPairs,
+    qaRefs,
+    scrollContainerCallbackRef,
+    scrollContainerHeight,
+    scrollToLatest,
+    activePairIndex,
+  } = useRagScroll({
     messages: chat.chatData?.messages ?? [],
   });
 
@@ -46,23 +53,24 @@ export default function RagAnswerPage() {
 
         {/* 스크롤 가능한 콘텐츠 영역 */}
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
-          <div className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9">
+          <div ref={scrollContainerCallbackRef} className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9">
             {/* 날짜 구분선 */}
             <DateDivider className="mb-8 w-192.75" />
 
             {/* 모든 Q&A 쌍을 순서대로 렌더링 */}
-            <div className="mx-auto w-193.25 space-y-12">
-              {scroll.qaPairs.map((qaPair, index) => {
-                const isLastPair = index === scroll.qaPairs.length - 1;
+            <div className="mx-auto flex w-193.25 flex-1 flex-col gap-12">
+              {qaPairs.map((qaPair, index) => {
+                const isLastPair = index === qaPairs.length - 1;
 
                 return (
                   <div
                     key={qaPair.question.id}
                     ref={(el) => {
-                      scroll.qaRefs.current.set(index, el);
+                      qaRefs.current.set(index, el);
                       el?.setAttribute('data-qa-index', String(index));
                     }}
                     className="flex flex-col gap-6"
+                    style={isLastPair ? { minHeight: scrollContainerHeight } : undefined}
                   >
                     {/* 질문 영역 */}
                     <div className="flex-none">
@@ -99,13 +107,13 @@ export default function RagAnswerPage() {
           isLoading={chat.isLoading}
           onSendMessage={chat.sendMessage}
           onStop={chat.handleStop}
-          onNewMessage={scroll.scrollToLatest}
+          onNewMessage={scrollToLatest}
         />
       </div>
 
       {/* 사이드바 */}
       <RagSidebar
-        currentQA={scroll.qaPairs[scroll.activePairIndex]}
+        currentQA={qaPairs[activePairIndex]}
         isLoading={chat.isLoading}
         isError={chat.isError}
       />

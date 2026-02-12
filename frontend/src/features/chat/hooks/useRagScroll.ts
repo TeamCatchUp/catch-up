@@ -17,6 +17,8 @@ interface UseRagScrollOptions {
 interface UseRagScrollReturn {
   qaPairs: QAPair[];
   qaRefs: React.MutableRefObject<Map<number, HTMLDivElement | null>>;
+  scrollContainerCallbackRef: (node: HTMLDivElement | null) => void;
+  scrollContainerHeight: number;
   scrollToLatest: () => void;
   activePairIndex: number;
 }
@@ -24,8 +26,27 @@ interface UseRagScrollReturn {
 export const useRagScroll = ({ messages }: UseRagScrollOptions): UseRagScrollReturn => {
   const qaPairs = useMemo(() => extractQAPairs(messages), [messages]);
   const qaRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
+  const [scrollContainerHeight, setScrollContainerHeight] = useState(0);
   const [activePairIndex, setActivePairIndex] = useState(0);
   const pendingScrollRef = useRef(false);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+
+  // 스크롤 컨테이너 높이 측정 (callback ref)
+  const scrollContainerCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    if (resizeObserverRef.current) {
+      resizeObserverRef.current.disconnect();
+      resizeObserverRef.current = null;
+    }
+    if (node) {
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          setScrollContainerHeight(entry.contentRect.height);
+        }
+      });
+      observer.observe(node);
+      resizeObserverRef.current = observer;
+    }
+  }, []);
 
   // Intersection Observer: 뷰포트에 보이는 QA 감지 → 사이드바 연동
   useEffect(() => {
@@ -82,6 +103,8 @@ export const useRagScroll = ({ messages }: UseRagScrollOptions): UseRagScrollRet
   return {
     qaPairs,
     qaRefs,
+    scrollContainerCallbackRef,
+    scrollContainerHeight,
     scrollToLatest,
     activePairIndex,
   };
