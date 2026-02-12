@@ -33,12 +33,10 @@ const QueryBox = ({
   noHistoryExpanded = true,
 }: QueryBoxProps) => {
   const isNoHistory = variant === 'no-history';
-  const isNoHistoryExpanded = isNoHistory ? noHistoryExpanded : false;
-
-  const showPanel = isNoHistory ? isNoHistoryExpanded : input.isFocused;
+  const showPanel = isNoHistory ? noHistoryExpanded : input.isFocused;
 
   const containerClassName =
-    isNoHistory && isNoHistoryExpanded
+    isNoHistory && noHistoryExpanded
       ? 'gap-3 min-h-92.5 max-h-135 overflow-hidden rounded-[30px] pt-3 px-4 pb-4'
       : !isNoHistory && input.isFocused
         ? 'gap-1.5 min-h-92.5 max-h-135 overflow-hidden rounded-[30px] p-3'
