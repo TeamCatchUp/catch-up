@@ -71,7 +71,7 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
       {/* 라이트/다크 모드 토글 */}
       <div className="px-1 py-0.5">
         <Tabs value={theme} onValueChange={setTheme}>
-          <TabsList className="h-10 w-full border border-neutral-2">
+          <TabsList className="w-full">
             <TabsTrigger value="light" className="flex-1">라이트 모드</TabsTrigger>
             <TabsTrigger value="dark" className="flex-1">다크 모드</TabsTrigger>
           </TabsList>
