@@ -153,6 +153,137 @@ export const MOCK_RELATED_JIRA_ISSUES: ClientJiraIssueSource[] = [
   },
 ];
 
+/**
+ * 다중 QA 테스트용 초기 메시지 (3쌍)
+ * 연속 스크롤 검증에 사용
+ */
+export const MOCK_INITIAL_MESSAGES: Message[] = [
+  {
+    id: 'mock-q1',
+    role: 'user',
+    content: '로그인 인증 흐름을 설명해주세요',
+    timestamp: '2026-02-12T09:00:00Z',
+  },
+  {
+    id: 'mock-a1',
+    chat_history_id: 'mock-history-001',
+    role: 'assistant',
+    content: MOCK_RAG_ANSWER,
+    sources: MOCK_SOURCES as unknown as ChatSource[],
+    detailed_tasks: [],
+    timestamp: '2026-02-12T09:00:05Z',
+    has_feedback: false,
+  },
+  {
+    id: 'mock-q2',
+    role: 'user',
+    content: 'Refresh Token 갱신 로직은 어떻게 구현되어 있나요?',
+    timestamp: '2026-02-12T09:01:00Z',
+  },
+  {
+    id: 'mock-a2',
+    chat_history_id: 'mock-history-002',
+    role: 'assistant',
+    content: `## Refresh Token 갱신 로직
+
+### 갱신 흐름
+1. Access Token 만료 시 클라이언트가 \`/api/auth/refresh\` 엔드포인트 호출
+2. 서버에서 Refresh Token 유효성 검증
+3. 새로운 Access Token + Refresh Token 발급 (Rotation 방식)
+
+### 코드 구현
+\`\`\`java
+@PostMapping("/refresh")
+public ResponseEntity<TokenDto> refresh(@CookieValue String refreshToken) {
+    // 1. Refresh Token 검증
+    Claims claims = jwtProvider.validateToken(refreshToken);
+
+    // 2. 토큰 블랙리스트 확인
+    if (tokenBlacklist.contains(refreshToken)) {
+        throw new InvalidTokenException("이미 사용된 토큰입니다");
+    }
+
+    // 3. 새 토큰 쌍 발급
+    TokenDto newTokens = authService.rotateTokens(claims.getSubject());
+
+    // 4. 기존 Refresh Token 블랙리스트 등록
+    tokenBlacklist.add(refreshToken);
+
+    return ResponseEntity.ok(newTokens);
+}
+\`\`\`
+
+### 보안 사항
+- **Token Rotation**: 갱신 시마다 새 Refresh Token 발급, 기존 토큰 무효화
+- **블랙리스트**: Redis로 관리, Refresh Token 유효기간(7일) 후 자동 삭제
+- **동시 요청 처리**: 분산 락으로 동일 Refresh Token 동시 사용 방지`,
+    sources: MOCK_SOURCES as unknown as ChatSource[],
+    detailed_tasks: [],
+    timestamp: '2026-02-12T09:01:05Z',
+    has_feedback: false,
+  },
+  {
+    id: 'mock-q3',
+    role: 'user',
+    content: 'OAuth 2.0 소셜 로그인 연동 방법을 알려주세요',
+    timestamp: '2026-02-12T09:02:00Z',
+  },
+  {
+    id: 'mock-a3',
+    chat_history_id: 'mock-history-003',
+    role: 'assistant',
+    content: `## OAuth 2.0 소셜 로그인 연동
+
+### 지원 Provider
+- **Google**: 메인 로그인 (필수)
+- **GitHub**: 개발자 계정 연동 (선택)
+
+### 인증 흐름 (Authorization Code Grant)
+
+\`\`\`
+사용자 → 프론트엔드 → OAuth Provider → 백엔드 → DB
+  1. 로그인 버튼 클릭
+  2. OAuth Provider 로그인 페이지 리다이렉트
+  3. 사용자 인증 + 동의
+  4. Authorization Code 발급
+  5. 백엔드에서 Code → Access Token 교환
+  6. Provider API로 사용자 정보 조회
+  7. 자체 JWT 토큰 발급
+\`\`\`
+
+### 백엔드 구현
+\`\`\`java
+@GetMapping("/oauth2/callback/{provider}")
+public ResponseEntity<Void> oauthCallback(
+    @PathVariable String provider,
+    @RequestParam String code
+) {
+    // Provider별 토큰 교환
+    OAuthTokenResponse token = oauthClient.exchangeCode(provider, code);
+
+    // 사용자 정보 조회
+    OAuthUserInfo userInfo = oauthClient.getUserInfo(provider, token);
+
+    // 회원 가입/조회 + JWT 발급
+    TokenDto jwt = authService.processOAuthLogin(userInfo);
+
+    return ResponseEntity.ok().header("Set-Cookie", jwt.toCookie()).build();
+}
+\`\`\`
+
+### 프론트엔드 구현
+\`\`\`typescript
+const handleGoogleLogin = () => {
+  window.location.href = \`\${API_BASE}/oauth2/authorize/google\`;
+};
+\`\`\``,
+    sources: MOCK_SOURCES as unknown as ChatSource[],
+    detailed_tasks: [],
+    timestamp: '2026-02-12T09:02:05Z',
+    has_feedback: false,
+  },
+];
+
 export const MOCK_PR_CANDIDATES = [
   {
     pr_number: 42,

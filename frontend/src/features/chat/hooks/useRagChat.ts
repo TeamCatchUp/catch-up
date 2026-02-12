@@ -12,6 +12,8 @@ import { getStorageKeys, NODE_TO_UI_STEP } from '@/features/chat/constants/confi
 import { useRagStream } from '@/features/chat/hooks/useRagStream';
 import { normalizeSources } from '@/features/chat/utils/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/features/chat/utils/normalizeRelatedJiraIssues';
+import { MOCK_INITIAL_MESSAGES } from '@/shared/mocks/chat/data';
+import { USE_MOCK } from '@/shared/mocks/config';
 
 interface UseRagChatOptions {
   sessionId: string;
@@ -98,6 +100,14 @@ export const useRagChat = ({
         ],
       };
     }
+    if (USE_MOCK) {
+      return {
+        session_id: sessionId,
+        title: '로그인 인증 흐름을 설명해주세요',
+        repo: repo || '',
+        messages: MOCK_INITIAL_MESSAGES,
+      };
+    }
     return { session_id: sessionId, title: '', repo: repo || '', messages: [] };
   });
   const [isLoading, setIsLoading] = useState(
@@ -137,6 +147,14 @@ export const useRagChat = ({
         ],
       });
       setIsLoading(true);
+    } else if (USE_MOCK) {
+      setChatData({
+        session_id: sessionId,
+        title: '로그인 인증 흐름을 설명해주세요',
+        repo: repo || '',
+        messages: MOCK_INITIAL_MESSAGES,
+      });
+      setIsLoading(false);
     } else {
       setChatData({ session_id: sessionId, title: '', repo: repo || '', messages: [] });
       setIsLoading(false);
