@@ -1,7 +1,7 @@
 'use client';
 
-import InboxPanel from '@/shared/components/layout/sideNavBar/InboxPanel';
-import SettingsPanel from '@/shared/components/layout/sideNavBar/SettingsPanel';
+import InboxPanel from '@/shared/components/layout/panels/InboxPanel';
+import SettingsPanel from '@/shared/components/layout/panels/SettingsPanel';
 import SideNavBar from '@/shared/components/layout/sideNavBar/SideNavBar';
 import { TooltipProvider } from '@/shared/components/ui/ToolTip';
 import { useCurrentUser } from '@/shared/hooks/useCurrentUser';
@@ -29,7 +29,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         <div
           className={cn(
             'shrink-0 overflow-hidden transition-[width] duration-300 ease-out',
-            activePanel === 'inbox' ? 'w-[418px]' : 'w-0',
+            activePanel === 'inbox' ? 'w-104.5' : 'w-0',
           )}
         >
           {activePanel === 'inbox' && <InboxPanel />}
