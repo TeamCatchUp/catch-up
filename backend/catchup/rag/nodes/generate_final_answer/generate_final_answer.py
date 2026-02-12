@@ -24,9 +24,7 @@ async def generate_final_answer_node(state: AgentState):
     trimmer = llm_service.get_trimmer()
 
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
-    
-    logger.info(f"답변 생성에 제공된 문서 목록:\n\n{retrieved_docs}")
-    
+        
     if not retrieved_docs:
         logger.warning("검색된 문서가 없음 -> Fallback 답변 반환")
         return {
@@ -52,7 +50,7 @@ async def generate_final_answer_node(state: AgentState):
         [SystemMessage(content=prompt)]
         + trimmed_history
         + [HumanMessage(content=query)]
-        + [SystemMessage(content=CITATION_POLICY_MESSAGE)]
+        + [CITATION_POLICY_MESSAGE]
     )
 
     chain = llm | StrOutputParser()
