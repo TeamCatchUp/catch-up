@@ -91,7 +91,8 @@ class ChatService:
         
         stream_state = {
             "buffer": "",
-            "is_citation_reached": False
+            "is_citation_reached": False,
+            "has_streamed": False
         }
 
         try:
@@ -137,7 +138,7 @@ class ChatService:
 
         # 3. 노드 종료 (현재는 최종 답변 생성 노드만 관여)
         elif kind == "on_chain_end":
-            async for res in self._handle_node_end(event, session_id):
+            async for res in self._handle_node_end(event, session_id, stream_state):
                 yield res
     
     async def _handle_node_start(
@@ -179,6 +180,8 @@ class ChatService:
         is_target_node = node in ("chitchat", "generate_final_answer")
         if not (is_target_node and chunk and chunk.content):
             return
+        
+        stream_state["has_streamed"] = True
 
         token = chunk.content
         
@@ -215,7 +218,8 @@ class ChatService:
     async def _handle_node_end(
             self,
             event: dict,
-            session_id: str
+            session_id: str,
+            stream_state: dict
         ):
         """
             그래프 종료 시점.
@@ -225,14 +229,28 @@ class ChatService:
         
         if name == "generate_final_answer":
             output = event["data"].get("output")
-            # 결과에 sources가 포함되어 있다면 전송 (JSON 파싱 성공 시)
             if output and isinstance(output, dict) and "sources" in output:
-                final_sources = output["sources"]
-                if final_sources:
-                    logger.info("Sending final sources with rationale.")
-                    yield ChatStreamingSourceResponse(
-                        session_id=session_id, sources=final_sources
-                    )
+                
+                # case 1: Fallback 처리: 모델 자체 스트리밍 없이 종료된 경우 메시지 내용 전송
+                if not stream_state.get("has_streamed", False):
+                    messages = output.get("messages", [])
+                    if messages:
+                        last_msg = messages[-1]
+                        fallback_content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                        logger.warning("Fallback Answer 전송 (Streaming 미감지)")
+                        yield ChatStreamingTokenResponse(
+                            session_id=session_id,
+                            token=fallback_content
+                        )
+                
+                # case 2: 인용 사유를 포함한 최종 소스 전송
+                if "sources" in output:
+                    final_sources = output["sources"]
+                    if final_sources:
+                        logger.info("Sending final sources with rationale.")
+                        yield ChatStreamingSourceResponse(
+                            session_id=session_id, sources=final_sources
+                        )
 
     def _setup_config(self, session_id: str):
         default_config = {"configurable": {"thread_id": session_id}}

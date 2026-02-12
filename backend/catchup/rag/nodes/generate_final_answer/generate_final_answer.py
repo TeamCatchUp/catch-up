@@ -24,6 +24,16 @@ async def generate_final_answer_node(state: AgentState):
     trimmer = llm_service.get_trimmer()
 
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
+    
+    logger.info(f"답변 생성에 제공된 문서 목록:\n\n{retrieved_docs}")
+    
+    if not retrieved_docs:
+        logger.warning("검색된 문서가 없음 -> Fallback 답변 반환")
+        return {
+            "messages": [AIMessage(content=FALLBACK_ANSWER)],
+            "sources": []
+        }
+    
     context_text = _prepare_context_text(retrieved_docs)
     
     global_context = state["global_context"].model_dump()
