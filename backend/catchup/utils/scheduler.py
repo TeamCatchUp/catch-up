@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from catchup.db.engine import SessionLocal
 from catchup.utils.webhook_buffer import get_webhook_buffer
 from catchup.connectors.github.factory import create_github_ingestion_service
+from catchup.connectors.github.schemas import IncrementalSyncRequest
 from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.db.github.installation_repository import get_all_installations
 from catchup.db.slack.oauth_repository import get_all_slack_tokens
@@ -76,12 +77,17 @@ async def flush_github_events():
                             logger.info(f"Cleared {event_count} {entity_type} events for repo {repo_id}")
 
                         # Repository 단위로 Incremental Sync 수행
-                        result = await service.incremental_sync(db,repo_ids=[repo_id])
-                        logger.info(f"Github Incremental Sync Result for repo {repo_id} : {result}")
-                                            
+                        sync_request = IncrementalSyncRequest(
+                            repo_ids=[repo_id],
+                            entity_types=entity_types,
+                            update_repos=False,
+                        )
+                        result = await service.incremental_sync(db, sync_request)
+                        logger.info(f"Github Incremental Sync Result for repo {repo_id}: {result}")
+
                     # Repository 단위 Error Handling
                     except Exception as e:
-                        logger.error(f"Failed to Sync Repo {repo_id} : {e}", exc_info=True)
+                        logger.error(f"Failed to Sync Repo {repo_id}: {e}", exc_info=True)
             
             # Installation 단위 Error Handling
             except Exception as e:

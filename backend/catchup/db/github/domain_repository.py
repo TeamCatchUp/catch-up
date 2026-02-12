@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from catchup.db.models import (
-    GitHubRepository as GitHubRepositoryModel,
+    GithubRepository as GitHubRepositoryModel,
     GitHubUser as GitHubUserModel,
     GitHubOrganizationRole,
 )
