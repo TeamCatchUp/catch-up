@@ -14,7 +14,7 @@ export const useQuestionHistoryGate = (): UseQuestionHistoryGateReturn => {
 
   const content = recentQueriesQuery.data?.content;
 
-  // Keep existing UI for all non-empty/error/invalid states.
+  // 비어있지 않은/에러/비정상 응답은 모두 기존 UI 유지
   const shouldShowNoHistoryBox =
     !recentQueriesQuery.isError && Array.isArray(content) && content.length === 0;
 
