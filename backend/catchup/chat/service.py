@@ -37,7 +37,12 @@ class ChatService:
             ChatService._app = get_compiled_graph(checkpointer)
         return ChatService._app
 
-    async def chat(self, query: str, role: str, session_id: str) -> ChatResponse:
+    async def chat(
+            self,
+            global_context: GlobalContext,
+            query: str,
+            session_id: str,
+    ) -> ChatResponse:
         app = await self._get_app()
 
         config = self._setup_config(session_id)
@@ -45,6 +50,7 @@ class ChatService:
         inputs = {
             "messages": [HumanMessage(content=query)],
             "original_query": query,
+            "global_context": global_context
         }
 
         start = time.perf_counter()
