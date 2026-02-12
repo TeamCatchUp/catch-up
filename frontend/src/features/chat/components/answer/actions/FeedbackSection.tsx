@@ -381,12 +381,12 @@ const FeedbackSection = ({
         })}
       </div>
 
-      {/* 더 자세히 모달 */}
+      {/* 더 자세히 입력 */}
       {detailMounted && (
         <div
           ref={detailRef}
           className={cn(
-            'text-body-medium border-blue-30 flex w-184.75 flex-col rounded-2xl border bg-white px-3 py-2.5',
+            'border-blue-30 flex w-full flex-col gap-2.5 rounded-2xl border bg-white px-4.5 py-2.5',
             'transition-all duration-200 ease-out will-change-[transform,opacity]',
             detailEntered ? 'translate-y-0 scale-100 opacity-100' : '-translate-y-1 scale-[0.99] opacity-0',
           )}
@@ -405,20 +405,28 @@ const FeedbackSection = ({
                 submitFeedback();
               }
             }}
-            className="text-gray-80 placeholder:text-gray-30 resize-none overflow-y-hidden outline-none"
+            className="text-body-medium text-gray-80 placeholder:text-gray-30 w-full resize-none overflow-y-hidden outline-none"
             style={{ maxHeight: `${TEXTAREA_MAX_HEIGHT}px` }}
             rows={1}
           />
-          <button
-            disabled={!detailText.trim() || isSubmitting}
-            onClick={() => submitFeedback()}
-            className={cn(
-              'capsule-button-solid-primary h-9 w-12.5 items-end self-end px-3 py-1.5',
-              detailText.trim() ? 'cursor-pointer' : '',
-            )}
-          >
-            <span className="text-body-small">제출</span>
-          </button>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={() => setIsDetailOpen(false)}
+              className="capsule-button-outline-mono flex shrink-0 cursor-pointer items-center justify-center px-3 py-1.5"
+            >
+              <span className="text-body-small text-gray-80">취소</span>
+            </button>
+            <button
+              disabled={!detailText.trim() || isSubmitting}
+              onClick={() => submitFeedback()}
+              className={cn(
+                'capsule-button-solid-primary flex shrink-0 items-center justify-center px-3 py-1.5',
+                detailText.trim() ? 'cursor-pointer' : '',
+              )}
+            >
+              <span className="text-body-small">제출</span>
+            </button>
+          </div>
         </div>
       )}
     </div>
