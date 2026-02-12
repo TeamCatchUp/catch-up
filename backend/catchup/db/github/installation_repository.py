@@ -4,8 +4,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from catchup.connectors.github.schemas import InstallationWebhookPayload
-from catchup.db.models import GithubInstallation
+from catchup.db.models import GithubInstallation, GithubInstallationType, GithubRepositorySelection
 
 
 def get_installation_info_by_id(db: Session, id: int) -> Optional[GithubInstallation]:
@@ -26,8 +25,23 @@ def get_all_installations(db: Session) -> list[GithubInstallation]:
 
 def create_installation(
         db: Session,
-        payload: InstallationWebhookPayload) -> GithubInstallation:
-    installation = GithubInstallation.from_webhook_payload(payload)
+        installation_id: int,
+        account_type: GithubInstallationType,
+        account_id: int,
+        account_login: str,
+        account_avatar_url: str | None = None,
+        repository_selection: GithubRepositorySelection | None = None,
+        suspended_at : datetime | None = None,
+) -> GithubInstallation:
+    installation = GithubInstallation(
+        installation_id = installation_id,
+        account_type = account_type,
+        account_id = account_id,
+        account_login = account_login,
+        account_avatar_url = account_avatar_url,
+        repository_selection = repository_selection,
+        suspended_at = suspended_at,
+    )
     db.add(installation)
     db.commit()
     db.refresh(installation)

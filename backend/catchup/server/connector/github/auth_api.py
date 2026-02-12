@@ -12,14 +12,14 @@ from catchup.connectors.github.schemas import(
      IssueWebhookPayload, PullRequestWebhookPayload
 )
 from catchup.utils.webhook_buffer import get_webhook_buffer
-from catchup.connectors.github.auth import get_github_app_service
-from catchup.connectors.github.client import GitHubApiClient
+from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.configs.config import auth_settings, settings
 from catchup.db.dependencies import get_db
 from catchup.db.engine import SessionLocal
 from catchup.db.github import installation_repository as installation_crud
 from catchup.db.github import domain_repository as github_entities
-from catchup.db.models import GithubInstallationType
+from catchup.db.github.domain_repository import RepositoryUpsertData
+from catchup.db.models import GithubInstallationType, GithubRepositorySelection
 
 logger = logging.getLogger(__name__)
 
@@ -185,63 +185,12 @@ async def _sync_installation_metadata(installation_id: int) -> None:
     - User인 경우: 해당 User + Repository 목록
     """
     try:
-        logger.info(f"Starting metadata sync for installation {installation_id}")
-
-        github_app_service = get_github_app_service()
-        access_token = await github_app_service.get_installation_access_token(installation_id)
-        client = GitHubApiClient(access_token)
-
         with SessionLocal() as db:
-            # Installation 정보 조회
-            installation = installation_crud.get_installation_by_installation_id(db, installation_id)
-            if not installation:
-                logger.warning(f"Installation {installation_id} not found in DB")
-                return
-
-            account_login = installation.account_login
-            account_type = installation.account_type
-
-            # 1. User 동기화
-            users_data = []
-            if account_type == GithubInstallationType.ORGANIZATION:
-                try:
-                    members = await client.list_org_members_graphql(account_login)
-                    users_data.extend(members)
-                    logger.info(f"Found {len(members)} members in organization '{account_login}'")
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to fetch org members for '{account_login}': {e}. "
-                        "Organization members permission may be required."
-                    )
-            else:
-                try:
-                    user_info = await client.get_user(account_login)
-                    if user_info:
-                        users_data.append({
-                            "database_id": user_info.get("id"),
-                            "login": user_info.get("login"),
-                            "name": user_info.get("name"),
-                            "email": user_info.get("email"),
-                            "avatar_url": user_info.get("avatar_url"),
-                            "org_role": None,
-                        })
-                        logger.info(f"Found user '{account_login}'")
-                except Exception as e:
-                    logger.warning(f"Failed to fetch user '{account_login}': {e}")
-
-            if users_data:
-                user_count = github_entities.upsert_users_bulk(db, users_data)
-                logger.info(f"Saved {user_count} users for installation {installation_id}")
-
-            # 2. Repository 동기화
-            repos_data = await client.list_installation_repos()
-            logger.info(f"Found {len(repos_data)} repositories for installation {installation_id}")
-
-            repo_count = github_entities.upsert_repositories_bulk(db, installation_id, repos_data)
-            logger.info(f"Saved {repo_count} repositories for installation {installation_id}")
-
+            service = await create_github_ingestion_service(db, installation_id)
+            await service.sync_installation_metadata(db)
+    
     except Exception as e:
-        logger.error(f"Failed to sync metadata for installation {installation_id}: {e}")
+        logger.error(f"Failed to Sync User+Repository metadata for installation {installation_id} : {e}")
 
 
 # =============================================================================
@@ -280,7 +229,24 @@ async def _handle_installation_created(
         logger.info(f"Installation already exists: installation_id={installation.id}")
         return {"status": "exists", "installation_id": installation.id}
 
-    new_installation = installation_crud.create_installation(db=db, payload=data)
+    account = data.installation.account
+    installation_info = data.installation
+
+    repo_selection = None
+    if installation_info.repository_selection:
+        repo_selection = GithubRepositorySelection(installation_info.repository_selection)
+
+    new_installation = installation_crud.create_installation(
+    db=db,
+    installation_id=installation_info.id,
+    account_type=GithubInstallationType(account.type.lower()),
+    account_id=account.id,
+    account_login=account.login,
+    account_avatar_url=account.avatar_url,
+    repository_selection=repo_selection,
+    suspended_at=installation_info.suspended_at,
+)
+
     logger.info(
         f"Installation Created: id={new_installation.installation_id}, "
         f"account={new_installation.account_login}"
@@ -351,9 +317,30 @@ async def _handle_installation_repositories_event(
     )
 
     if data.repositories_added:
-        github_entities.upsert_repositories_bulk(
-            db, installation_id, data.repositories_added
-        )
+        repos_dto = [
+            RepositoryUpsertData(
+                repo_id=repo.get("id", 0),
+                owner=repo.get("owner", {}).get("login", "") if isinstance(repo.get("owner"), dict) else "",
+                name=repo.get("name", ""),
+                full_name=repo.get("full_name", ""),
+                html_url=repo.get("html_url", ""),
+                description=repo.get("description"),
+                default_branch=repo.get("default_branch", "main"),
+                language=repo.get("language"),
+                topics=repo.get("topics", []),
+                stargazers_count=repo.get("stargazers_count", 0),
+                forks_count=repo.get("forks_count", 0),
+                open_issues_count=repo.get("open_issues_count", 0),
+                private=repo.get("private", False),
+                archived=repo.get("archived", False),
+                disabled=repo.get("disabled", False),
+                pushed_at=repo.get("pushed_at"),
+                repo_created_at=repo.get("created_at"),
+                repo_updated_at=repo.get("updated_at"),
+            )
+            for repo in data.repositories_added
+        ]
+        github_entities.upsert_repositories_bulk(db, installation_id, repos_dto)
         logger.info(f"Added {len(data.repositories_added)} repositories")
 
     for repo in data.repositories_removed:

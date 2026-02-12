@@ -304,28 +304,6 @@ class GithubInstallation(Base):
         onupdate=func.now()
     )
 
-    @classmethod
-    def from_webhook_payload(cls, payload: "InstallationWebhookPayload") -> "GithubInstallation":
-        from catchup.connectors.github.schemas import InstallationWebhookPayload
-
-        account = payload.installation.account
-        installation = payload.installation
-
-        # repository_selection 변환
-        repo_selection = None
-        if installation.repository_selection:
-            repo_selection = GithubRepositorySelection(installation.repository_selection)
-
-        return cls(
-            installation_id=installation.id,
-            account_type=GithubInstallationType(account.type.lower()),
-            account_id=account.id,
-            account_login=account.login,
-            account_avatar_url=account.avatar_url,
-            repository_selection=repo_selection,
-            suspended_at=installation.suspended_at,
-        )
-
 class JiraOAuthToken(Base):
     __tablename__ = "jira_oauth_tokens"
 

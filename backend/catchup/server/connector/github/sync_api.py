@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from catchup.db.dependencies import get_db
 from catchup.db.github import sync_repository as github_sync
 from catchup.db.github import domain_repository as github_entities
+from catchup.db.github.domain_repository import RepositoryUpsertData
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.service import GitHubIngestionService
@@ -254,9 +255,32 @@ async def refresh_repositories(
         service = await _get_ingestion_service(db, installation_id)
 
         # GitHub API에서 레포 목록 조회
-        repos_data = await service.client.list_installation_repos()
+        raw_repos = await service.client.list_installation_repos()
 
-        # RDBMS에 벌크 저장
+        # dict → DTO 변환 후 RDBMS에 벌크 저장
+        repos_data = [
+            RepositoryUpsertData(
+                repo_id=repo.get("id", 0),
+                owner=repo.get("owner", {}).get("login", ""),
+                name=repo.get("name", ""),
+                full_name=repo.get("full_name", ""),
+                html_url=repo.get("html_url", ""),
+                description=repo.get("description"),
+                default_branch=repo.get("default_branch", "main"),
+                language=repo.get("language"),
+                topics=repo.get("topics", []),
+                stargazers_count=repo.get("stargazers_count", 0),
+                forks_count=repo.get("forks_count", 0),
+                open_issues_count=repo.get("open_issues_count", 0),
+                private=repo.get("private", False),
+                archived=repo.get("archived", False),
+                disabled=repo.get("disabled", False),
+                pushed_at=repo.get("pushed_at"),
+                repo_created_at=repo.get("created_at"),
+                repo_updated_at=repo.get("updated_at"),
+            )
+            for repo in raw_repos
+        ]
         count = github_entities.upsert_repositories_bulk(db, installation_id, repos_data)
 
         logger.info(f"Refreshed {count} repositories for installation {installation_id}")
