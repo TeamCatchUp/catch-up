@@ -37,10 +37,10 @@ const QueryBox = ({
 
   const containerClassName =
     isNoHistory && noHistoryExpanded
-      ? 'gap-3 min-h-92.5 max-h-135 overflow-hidden rounded-[30px] pt-3 px-4 pb-4'
+      ? 'gap-3 min-h-92.5 max-h-135 overflow-hidden rounded-[30px] px-4 py-3'
       : !isNoHistory && input.isFocused
-        ? 'gap-1.5 min-h-92.5 max-h-135 overflow-hidden rounded-[30px] p-3'
-        : 'gap-1.5 rounded-rounded h-auto p-3';
+        ? 'gap-1.5 min-h-92.5 max-h-135 overflow-hidden rounded-[30px] px-4 py-3'
+        : 'gap-1.5 rounded-rounded h-auto px-4 py-3';
 
   const handleExampleClick = (query: string) => {
     input.setValue(query);
