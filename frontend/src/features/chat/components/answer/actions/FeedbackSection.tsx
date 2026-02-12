@@ -326,7 +326,7 @@ const FeedbackSection = ({
   if (!mounted) return null;
 
   const rootClass = cn(
-    'border-neutral-4 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4',
+    'border-neutral-3 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4',
     'transition-all duration-200 ease-out will-change-[transform,opacity]',
     entered ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0',
   );
