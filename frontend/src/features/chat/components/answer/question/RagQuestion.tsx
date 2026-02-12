@@ -38,17 +38,17 @@ const RagQuestion = ({ currentQA, isLastPage, onSubmitEdit }: RagQuestionProps) 
   }
 
   return (
-    <div className="group relative max-w-full">
-      <span className="text-heading-xlarge text-gray-70 mr-5">
+    <div className="group relative flex max-w-full items-start gap-1">
+      <p className="text-heading-xlarge text-gray-70">
         {currentQA.question.content}
-      </span>
+      </p>
       {isLastPage && (
         <button
           onClick={() => setEditingMessageId(currentQA.question.id)}
           className={cn(
             'border-neutral-3 box-button-outline-gray',
-            'hidden group-hover:inline-flex',
-            'translate-y-1 cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1',
+            'hidden shrink-0 group-hover:inline-flex',
+            'cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1',
           )}
         >
           <EditPencil className="text-gray-70 h-5 w-5" />
