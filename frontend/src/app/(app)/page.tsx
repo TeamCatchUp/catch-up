@@ -1,11 +1,12 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
 import HowToUse from '@/features/home/components/HowToUse';
 import QuestionTips from '@/features/home/components/QuestionTips';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import QueryBox from '@/shared/components/query/QueryBox';
+import { useQuestionHistoryGate } from '@/shared/hooks/query/useQuestionHistoryGate';
 import { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
 import { useSearchInput } from '@/shared/hooks/query/useSearchInput';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
@@ -20,6 +21,8 @@ export default function Home() {
 
   const filters = useSearchFilters();
   const input = useSearchInput({ inputRef });
+  const { shouldShowNoHistoryBox } = useQuestionHistoryGate();
+  const [isNoHistoryExpanded, setIsNoHistoryExpanded] = useState(true);
 
   useEscapeKey(() => {
     input.setIsFocused(false);
@@ -30,6 +33,9 @@ export default function Home() {
     if (filters.openPopover) return;
     input.setIsFocused(false);
     inputRef.current?.blur();
+    if (shouldShowNoHistoryBox) {
+      setIsNoHistoryExpanded(false);
+    }
   });
 
   return (
@@ -65,7 +71,14 @@ export default function Home() {
         </div>
 
         {/* Query Box */}
-        <QueryBox containerRef={containerRef} inputRef={inputRef} input={input} filters={filters} />
+        <QueryBox
+          containerRef={containerRef}
+          inputRef={inputRef}
+          input={input}
+          filters={filters}
+          variant={shouldShowNoHistoryBox ? 'no-history' : 'default'}
+          noHistoryExpanded={isNoHistoryExpanded || input.isFocused}
+        />
       </div>
 
       <div

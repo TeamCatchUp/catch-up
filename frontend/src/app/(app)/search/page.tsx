@@ -9,6 +9,7 @@ import Git from '@/public/image/aiGit.png';
 import Jira from '@/public/image/AIJIRA1.png';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import QueryBox from '@/shared/components/query/QueryBox';
+import { useQuestionHistoryGate } from '@/shared/hooks/query/useQuestionHistoryGate';
 import { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
 import { useSearchInput } from '@/shared/hooks/query/useSearchInput';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
@@ -21,6 +22,8 @@ export default function Search() {
 
   const filters = useSearchFilters();
   const input = useSearchInput({ inputRef });
+  const { shouldShowNoHistoryBox } = useQuestionHistoryGate();
+  const [isNoHistoryExpanded, setIsNoHistoryExpanded] = useState(true);
 
   useEscapeKey(() => {
     input.setIsFocused(false);
@@ -28,9 +31,13 @@ export default function Search() {
   });
 
   useOutsideClick(containerRef, () => {
-    if (input.hasText || filters.openPopover) return;
+    if (filters.openPopover) return;
+    if (!shouldShowNoHistoryBox && input.hasText) return;
     input.setIsFocused(false);
     inputRef.current?.blur();
+    if (shouldShowNoHistoryBox) {
+      setIsNoHistoryExpanded(false);
+    }
   });
 
   const toggleCard = (type: 'jira' | 'git') => {
@@ -53,7 +60,14 @@ export default function Search() {
           </div>
 
           {/* Query Box */}
-          <QueryBox containerRef={containerRef} inputRef={inputRef} input={input} filters={filters} />
+          <QueryBox
+            containerRef={containerRef}
+            inputRef={inputRef}
+            input={input}
+            filters={filters}
+            variant={shouldShowNoHistoryBox ? 'no-history' : 'default'}
+            noHistoryExpanded={isNoHistoryExpanded || input.isFocused}
+          />
         </div>
 
         {/* AI Guide Section */}
