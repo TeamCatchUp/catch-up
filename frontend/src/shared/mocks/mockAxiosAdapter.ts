@@ -4,7 +4,13 @@ import type { UserStatus } from '@/shared/queries/auth.types';
 import { MOCK_JWT_TOKENS, MOCK_USER } from './auth/data';
 import delay from './delay';
 import { MOCK_FEEDBACK_RESPONSE } from './feedback/data';
-import { MOCK_CHATROOMS, MOCK_RECENT_QUERIES } from './search/data';
+import {
+  MOCK_CHATROOMS,
+  MOCK_RECENT_QUERIES,
+  MOCK_RECENT_QUERIES_EMPTY,
+} from './search/data';
+
+const USE_EMPTY_RECENT_QUERIES = process.env.NEXT_PUBLIC_MOCK_RECENT_QUERIES_EMPTY === 'true';
 
 type MockHandler = {
   pattern: RegExp;
@@ -49,12 +55,12 @@ const mockHandlers: MockHandler[] = [
   {
     pattern: /^\/api\/chatrooms\/queries$/,
     method: 'get',
-    handler: async () => MOCK_RECENT_QUERIES,
+    handler: async () => (USE_EMPTY_RECENT_QUERIES ? MOCK_RECENT_QUERIES_EMPTY : MOCK_RECENT_QUERIES),
   },
   {
     pattern: /^\/api\/chatrooms\/[^/]+\/queries$/,
     method: 'get',
-    handler: async () => MOCK_RECENT_QUERIES,
+    handler: async () => (USE_EMPTY_RECENT_QUERIES ? MOCK_RECENT_QUERIES_EMPTY : MOCK_RECENT_QUERIES),
   },
 
   // ═══════════════════════════════════════
