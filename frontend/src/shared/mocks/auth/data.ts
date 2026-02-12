@@ -23,6 +23,6 @@ export const MOCK_USER: MemberInfoResponse = {
 };
 
 export const MOCK_JWT_TOKENS = {
-  accessToken: 'mock-access-token',
-  refreshToken: 'mock-refresh-token',
+  access_token: 'mock-access-token',
+  refresh_token: 'mock-refresh-token',
 };
