@@ -1,14 +1,15 @@
 /**
  * useRagChat
- * fetch ReadableStream SSE, 메시지 전송/수신, 채팅 상태 관리
+ * 채팅 상태 관리 + 메시지 전송/수신 오케스트레이션
+ * SSE 스트림 lifecycle은 useRagStream에 위임
  */
 
 'use client';
 
-import { useCallback, useEffect,useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import { getStorageKeys,NODE_TO_UI_STEP } from '@/features/chat/constants/config';
-import chatService from '@/features/chat/services/chatService';
+import { getStorageKeys, NODE_TO_UI_STEP } from '@/features/chat/constants/config';
+import { useRagStream } from '@/features/chat/hooks/useRagStream';
 import { normalizeSources } from '@/features/chat/utils/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/features/chat/utils/normalizeRelatedJiraIssues';
 
@@ -75,6 +76,9 @@ export const useRagChat = ({
   // Storage Keys
   const storageKeys = getStorageKeys(sessionId);
 
+  // SSE Stream
+  const stream = useRagStream(sessionId);
+
   // Chat State - initialize from localStorage
   const [chatData, setChatData] = useState<ChatData | null>(() => {
     const saved = loadSavedChat(storageKeys.chat);
@@ -105,10 +109,6 @@ export const useRagChat = ({
   // PR Selection State
   const [prList, setPrList] = useState<PRPayload[]>([]);
   const [showPRSelection, setShowPRSelection] = useState(false);
-
-  // Refs
-  const abortRef = useRef<AbortController | null>(null);
-  const stoppedRef = useRef(false);
 
   // Handle session change (adjusting state during render)
   const [prevSessionId, setPrevSessionId] = useState(sessionId);
@@ -143,23 +143,14 @@ export const useRagChat = ({
     }
   }
 
-  /** 스트림 중단 */
-  const abortStream = useCallback(() => {
-    if (abortRef.current) {
-      console.log('[useRagChat] 스트림 중단');
-      abortRef.current.abort();
-      abortRef.current = null;
-    }
-  }, []);
-
   /** 답변 로딩 시작 */
   const beginAnswerLoading = useCallback(() => {
-    stoppedRef.current = false;
+    stream.resetStopped();
     setIsLoading(true);
     setIsError(false);
     setShowPRSelection(false);
     setCurrentStep('router');
-  }, []);
+  }, [stream]);
 
   /** 어시스턴트 답변 추가 */
   const appendAssistantAnswer = useCallback(
@@ -213,7 +204,7 @@ export const useRagChat = ({
   /** StreamEvent 핸들러 */
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
-      if (stoppedRef.current) return;
+      if (stream.isStopped()) return;
 
       switch (event.type) {
         case 'status': {
@@ -230,7 +221,7 @@ export const useRagChat = ({
           setPrList(event.payload);
           setShowPRSelection(true);
           setIsLoading(false);
-          abortStream();
+          stream.abortStream();
           break;
         }
 
@@ -255,24 +246,7 @@ export const useRagChat = ({
           break;
       }
     },
-    [appendAssistantAnswer, abortStream],
-  );
-
-  /** 스트림 채팅 전송 */
-  const streamAndSendQuery = useCallback(
-    async (query: string, isResume = false, resumePayload?: { pr_number: number; repo_name: string; owner: string }[]) => {
-      abortStream();
-
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      if (isResume && resumePayload) {
-        await chatService.resumeStream(sessionId, resumePayload, handleStreamEvent, controller.signal);
-      } else {
-        await chatService.streamChat(query, sessionId, handleStreamEvent, controller.signal);
-      }
-    },
-    [sessionId, handleStreamEvent, abortStream],
+    [appendAssistantAnswer, stream],
   );
 
   /** 메시지 전송 */
@@ -297,7 +271,7 @@ export const useRagChat = ({
       beginAnswerLoading();
 
       try {
-        await streamAndSendQuery(message);
+        await stream.streamChat(message, handleStreamEvent);
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
         console.error('[useRagChat] sendMessage Error:', err);
@@ -305,7 +279,7 @@ export const useRagChat = ({
         setIsLoading(false);
       }
     },
-    [isLoading, chatData, storageKeys.chat, beginAnswerLoading, streamAndSendQuery],
+    [isLoading, chatData, storageKeys.chat, beginAnswerLoading, stream, handleStreamEvent],
   );
 
   /** 메시지 수정 제출 */
@@ -334,7 +308,7 @@ export const useRagChat = ({
       beginAnswerLoading();
 
       try {
-        await streamAndSendQuery(newContent);
+        await stream.streamChat(newContent, handleStreamEvent);
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
         console.error('[useRagChat] submitEdit Error:', err);
@@ -342,7 +316,7 @@ export const useRagChat = ({
         setIsLoading(false);
       }
     },
-    [chatData, beginAnswerLoading, streamAndSendQuery],
+    [chatData, beginAnswerLoading, stream, handleStreamEvent],
   );
 
   /** PR 선택 후 계속 진행 */
@@ -363,7 +337,7 @@ export const useRagChat = ({
         }));
 
       try {
-        await streamAndSendQuery('', true, selectedPRs);
+        await stream.resumeStream(selectedPRs, handleStreamEvent);
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
         console.error('[useRagChat] handlePRContinue Error:', err);
@@ -371,7 +345,7 @@ export const useRagChat = ({
         setIsLoading(false);
       }
     },
-    [prList, beginAnswerLoading, streamAndSendQuery],
+    [prList, beginAnswerLoading, stream, handleStreamEvent],
   );
 
   /** PR 목록 다시 가져오기 */
@@ -382,33 +356,33 @@ export const useRagChat = ({
     const query = lastUser?.content?.trim();
     if (!query) return;
 
-    abortStream();
+    stream.abortStream();
     beginAnswerLoading();
 
     try {
-      await streamAndSendQuery(query);
+      await stream.streamChat(query, handleStreamEvent);
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
       console.error('[useRagChat] handlePRRefetch Error:', err);
       setIsError(true);
       setIsLoading(false);
     }
-  }, [chatData, abortStream, beginAnswerLoading, streamAndSendQuery]);
+  }, [chatData, stream, beginAnswerLoading, handleStreamEvent]);
 
   /** 응답 생성 중지 */
   const handleStop = useCallback(() => {
     if (!isLoading) return;
 
-    stoppedRef.current = true;
+    stream.markStopped();
 
     setIsLoading(false);
     setIsError(false);
     setShowPRSelection(false);
     setCurrentStep('router');
 
-    abortStream();
+    stream.abortStream();
     appendAssistantAnswer('\n', [], []);
-  }, [isLoading, appendAssistantAnswer, abortStream]);
+  }, [isLoading, appendAssistantAnswer, stream]);
 
   /** 메시지 피드백 상태 업데이트 */
   const updateMessageFeedback = useCallback(
@@ -436,11 +410,11 @@ export const useRagChat = ({
   useEffect(() => {
     if (localStorage.getItem(storageKeys.chat) || !initialQuery) return;
 
-    stoppedRef.current = false;
+    stream.resetStopped();
 
     const runStream = async () => {
       try {
-        await streamAndSendQuery(initialQuery);
+        await stream.streamChat(initialQuery, handleStreamEvent);
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
         console.error('[useRagChat] fetchFirstAnswer Error:', err);
@@ -449,14 +423,7 @@ export const useRagChat = ({
       }
     };
     runStream();
-  }, [sessionId, initialQuery, storageKeys.chat, streamAndSendQuery]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      abortStream();
-    };
-  }, [abortStream]);
+  }, [sessionId, initialQuery, storageKeys.chat, stream, handleStreamEvent]);
 
   return {
     chatData,
