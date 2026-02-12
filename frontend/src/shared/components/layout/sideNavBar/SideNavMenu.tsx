@@ -16,7 +16,7 @@ import Home from '/public/icons/icon/home.svg';
 import Inbox from '/public/icons/icon/inbox.svg';
 import Settings from '/public/icons/icon/settings.svg';
 
-const UNREAD_COUNT = 3; // mock
+const UNREAD_COUNT = 100; // mock
 
 /** 메뉴 아이템 정의 (href: 페이지 이동, panel: 사이드 패널 토글) */
 const navItems = [
@@ -89,7 +89,7 @@ export default function SideNavMenu({ isOpen, setIsOpen }: SideNavMenuProps) {
                   {/* 수신함 배지 (열림) */}
                   {isOpen && item.panel === 'inbox' && UNREAD_COUNT > 0 && (
                     <span className="bg-blue-1 border-blue-40 text-blue-40 text-body-small min-w-[23px] rounded-md border-[0.5px] px-0.5 text-center">
-                      {UNREAD_COUNT}
+                      {UNREAD_COUNT > 99 ? '99+' : UNREAD_COUNT}
                     </span>
                   )}
                   {/* 수신함 blue dot (닫힘) */}
