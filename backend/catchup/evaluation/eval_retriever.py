@@ -8,10 +8,9 @@ from datetime import datetime
 from tqdm import tqdm
 
 
-current_dir = os.path.dirname(os.path.abspath(__file__))  # scripts
-eval_dir = os.path.dirname(current_dir)                   # evaluation
-catchup_dir = os.path.dirname(eval_dir)                   # catchup
-backend_dir = os.path.dirname(catchup_dir)                # backend (ROOT)
+current_dir = os.path.dirname(os.path.abspath(__file__))  # evaluation
+catchup_dir = os.path.dirname(current_dir)                   # catchup
+backend_dir = os.path.dirname(catchup_dir)                   # backend (ROOT)
 
 if backend_dir not in sys.path:
     sys.path.append(backend_dir)
@@ -21,8 +20,8 @@ from catchup.components.vector_db.factory import VectorDbProvider, get_vector_db
 vector_service = get_vector_db_service(VectorDbProvider.PGVECTOR)
 
 # CSV & Data Paths
-CSV_FILE_PATH = os.path.join(eval_dir, "evaluation_history.csv")
-DATA_DIR = os.path.join(eval_dir, "data")
+CSV_FILE_PATH = os.path.join(current_dir, "evaluation_history.csv")
+DATA_DIR = os.path.join(current_dir, "data")
 
 def save_result_to_csv(filename, s_weight, k_weight, top_k, metrics):
     file_exists = os.path.isfile(CSV_FILE_PATH)
