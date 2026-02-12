@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.rag.constants import FALLBACK_ANSWER
+from catchup.rag.policies import CITATION_POLICY_MESSAGE, FALLBACK_ANSWER
 from catchup.rag.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
 from catchup.rag.schemas.sources import BaseSource
@@ -35,7 +35,7 @@ async def generate_final_answer_node(state: AgentState):
         }
     
     context_text = _prepare_context_text(retrieved_docs)
-    
+        
     global_context = state["global_context"].model_dump()
     query = state["rewritten_query"]
 
@@ -44,11 +44,16 @@ async def generate_final_answer_node(state: AgentState):
         context=context_text,
         **global_context
     )
-
+    
     conversation_history = get_conversation_history(state["messages"])
     trimmed_history = trimmer.invoke(conversation_history)
     
-    messages = [SystemMessage(content=prompt)] + trimmed_history + [HumanMessage(content=query)]
+    messages = (
+        [SystemMessage(content=prompt)]
+        + trimmed_history
+        + [HumanMessage(content=query)]
+        + [SystemMessage(content=CITATION_POLICY_MESSAGE)]
+    )
 
     chain = llm | StrOutputParser()
 
