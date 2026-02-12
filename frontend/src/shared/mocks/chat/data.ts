@@ -39,7 +39,52 @@ interface ClientJiraIssueSource extends ClientSourceBase {
 
 type ClientSource = ClientCodeSource | ClientPullRequestSource | ClientJiraIssueSource;
 
-// Mock Source 데이터
+// UI용 Mock Source 데이터 (ChatSource 형태, SourceList 렌더링용)
+const MOCK_CHAT_SOURCES: ChatSource[] = [
+  {
+    id: 'mock-src-1',
+    source_type: 'code',
+    is_cited: true,
+    repo: 'CatchUp-BE',
+    title: 'AuthController.java',
+    content: `public class AuthController {
+  @PostMapping("/login")
+  public ResponseEntity<TokenDto> login(@RequestBody LoginRequest request) {
+    return authService.authenticate(request);
+  }
+}`,
+    date: '3일 전 변경',
+    author: '김백엔드',
+    html_url: 'https://github.com/TeamCatchUp/CatchUp-BE/blob/main/src/AuthController.java',
+    source_index: 0,
+  },
+  {
+    id: 'mock-src-2',
+    source_type: 'pr',
+    is_cited: true,
+    repo: 'CatchUp-FE',
+    title: 'feat: 로그인 페이지 리뉴얼',
+    content: `## 변경사항\n- 로그인 폼 UI 개선\n- 에러 메시지 표시 개선\n- 로딩 상태 추가`,
+    date: '2026.01.12',
+    author: '이프론트',
+    html_url: 'https://github.com/TeamCatchUp/CatchUp-FE/pull/42',
+    source_index: 1,
+  },
+  {
+    id: 'mock-src-3',
+    source_type: 'jira',
+    is_cited: true,
+    repo: '',
+    title: '소셜 로그인 버그 수정',
+    content: '소셜 로그인 시 간헐적으로 토큰이 발급되지 않는 버그가 발생합니다.',
+    date: '2026.01.10',
+    author: '최QA',
+    html_url: 'https://jira.catchup.io/browse/CATCH-101',
+    source_index: 2,
+  },
+];
+
+// 백엔드 응답 형태 Mock Source 데이터 (SSE 시뮬레이터용)
 export const MOCK_SOURCES: ClientSource[] = [
   {
     index: 0,
@@ -169,7 +214,7 @@ export const MOCK_INITIAL_MESSAGES: Message[] = [
     chat_history_id: 'mock-history-001',
     role: 'assistant',
     content: MOCK_RAG_ANSWER,
-    sources: MOCK_SOURCES as unknown as ChatSource[],
+    sources: MOCK_CHAT_SOURCES,
     detailed_tasks: [],
     timestamp: '2026-02-12T09:00:05Z',
     has_feedback: false,
@@ -217,7 +262,7 @@ public ResponseEntity<TokenDto> refresh(@CookieValue String refreshToken) {
 - **Token Rotation**: 갱신 시마다 새 Refresh Token 발급, 기존 토큰 무효화
 - **블랙리스트**: Redis로 관리, Refresh Token 유효기간(7일) 후 자동 삭제
 - **동시 요청 처리**: 분산 락으로 동일 Refresh Token 동시 사용 방지`,
-    sources: MOCK_SOURCES as unknown as ChatSource[],
+    sources: MOCK_CHAT_SOURCES,
     detailed_tasks: [],
     timestamp: '2026-02-12T09:01:05Z',
     has_feedback: false,
@@ -277,7 +322,7 @@ const handleGoogleLogin = () => {
   window.location.href = \`\${API_BASE}/oauth2/authorize/google\`;
 };
 \`\`\``,
-    sources: MOCK_SOURCES as unknown as ChatSource[],
+    sources: MOCK_CHAT_SOURCES,
     detailed_tasks: [],
     timestamp: '2026-02-12T09:02:05Z',
     has_feedback: false,
