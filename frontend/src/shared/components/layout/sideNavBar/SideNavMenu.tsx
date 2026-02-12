@@ -1,3 +1,8 @@
+/**
+ * SideNavMenu
+ * 사이드바 메뉴 아이템 (홈, AI, 수신함, 설정)
+ */
+
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
@@ -13,6 +18,7 @@ import Settings from '/public/icons/icon/settings.svg';
 
 const UNREAD_COUNT = 3; // mock
 
+/** 메뉴 아이템 정의 (href: 페이지 이동, panel: 사이드 패널 토글) */
 const navItems = [
   { name: '홈', href: '/', Icon: Home, tooltipOpen: '최근 업무 보기', tooltipClosed: '홈' },
   { name: '캐치스턴트 AI', href: '/search', Icon: AI, tooltipOpen: '사내 지식 물어보기', tooltipClosed: '캐치스턴트 AI' },
@@ -20,6 +26,7 @@ const navItems = [
   { name: '설정', panel: 'settings' as const, Icon: Settings, tooltipOpen: '설정', tooltipClosed: '설정' },
 ];
 
+// 메뉴 상태별 스타일
 const defaultClass =
   'bg-white hover:bg-neutral-2 active:bg-neutral-3 active:ring-1 active:ring-neutral-3';
 const selectedClass = 'ring-1 ring-neutral-2 bg-blue-1 hover:bg-blue-5';

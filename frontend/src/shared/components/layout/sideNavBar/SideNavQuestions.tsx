@@ -1,3 +1,8 @@
+/**
+ * SideNavQuestions
+ * 사이드바 최근 질문 목록 + 채팅방 데이터 조회
+ */
+
 'use client';
 
 import { useEffect, useMemo } from 'react';
@@ -16,6 +21,7 @@ interface ChatRoomQuery {
   session_id: string;
 }
 
+// 질문 아이템 상태별 스타일
 const defaultClass =
   'bg-white hover:bg-neutral-2 active:bg-neutral-3 active:ring-1 active:ring-neutral-3';
 const selectedClass = 'ring-1 ring-neutral-2 bg-blue-1 hover:bg-blue-5';

@@ -1,3 +1,8 @@
+/**
+ * SideNavUser
+ * 사이드바 하단 유저 프로필 + 드롭다운 메뉴
+ */
+
 'use client';
 
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';

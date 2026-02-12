@@ -58,17 +58,20 @@ export const useRagStream = (sessionId: string): UseRagStreamReturn => {
     [sessionId, abortStream],
   );
 
+  /** 사용자가 응답 중지를 요청했음을 표시 */
   const markStopped = useCallback(() => {
     stoppedRef.current = true;
   }, []);
 
+  /** 중지 상태 초기화 (새 스트림 시작 전) */
   const resetStopped = useCallback(() => {
     stoppedRef.current = false;
   }, []);
 
+  /** 현재 중지 상태 확인 */
   const isStopped = useCallback(() => stoppedRef.current, []);
 
-  // Cleanup on unmount
+  // 언마운트 시 스트림 정리
   useEffect(() => {
     return () => {
       abortStream();
