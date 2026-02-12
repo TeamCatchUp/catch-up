@@ -21,6 +21,7 @@ from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.service import GitHubIngestionService
+from catchup.connectors.github.schemas import FullSyncRequest as ServiceFullSyncRequest
 from catchup.utils.scheduler import flush_github_events
 
 logger = logging.getLogger(__name__)
@@ -110,13 +111,17 @@ async def full_sync(
     try:
         service = await _get_ingestion_service(db, request.installation_id)
 
-        results = await service.full_sync(
-            db=db,
+        # API Request를 Service Request로 변환
+        service_request = ServiceFullSyncRequest(
             repo_ids=request.repo_ids,
             sync_issues=request.sync_issues,
             sync_prs=request.sync_prs,
+            sync_repos=True,  # API에서는 항상 True
+            sync_users=False,  # API에서는 기본 False
             branch=request.branch,
         )
+
+        results = await service.full_sync(db=db, request=service_request)
 
         return SyncResponse(
             success=True,
