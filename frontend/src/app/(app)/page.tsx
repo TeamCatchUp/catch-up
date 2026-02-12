@@ -44,7 +44,7 @@ export default function Home() {
   });
 
   return (
-    <div className="bg-home-gradient flex flex-col">
+    <div className={`bg-home-gradient flex flex-col ${input.isFocused ? 'h-full overflow-hidden' : ''}`}>
       <TopNavbar pageType="home" />
 
       {/* Query Section */}
