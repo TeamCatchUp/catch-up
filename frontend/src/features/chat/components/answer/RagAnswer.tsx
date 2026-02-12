@@ -16,7 +16,6 @@ import FeedbackSection from './actions/FeedbackSection';
 import { MarkDownComponents } from './markdown/MarkDownComponents';
 
 import Copy from '/public/icons/icon/copy.svg';
-import Kebeb from '/public/icons/icon/kebeb 2.svg';
 import Rotate from '/public/icons/icon/rotate.svg';
 import Share from '/public/icons/icon/share_2.svg';
 import ThumbsDown from '/public/icons/icon/thumbs-down.svg';
@@ -26,7 +25,6 @@ const ANSWER_ICONS = [
   { name: 'Share', icon: Share },
   { name: 'ThumbsDown', icon: ThumbsDown },
   { name: 'Rotate', icon: Rotate },
-  { name: 'Kebeb', icon: Kebeb },
 ];
 
 interface RagAnswerProps {
