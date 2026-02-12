@@ -5,7 +5,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.output_parsers import StrOutputParser
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.rag.constants import FALLBACK_ANSWER
+from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
 from catchup.rag.state import AgentState

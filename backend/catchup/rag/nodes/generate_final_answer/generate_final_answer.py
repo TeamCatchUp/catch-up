@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.rag.constants import FALLBACK_ANSWER
+from catchup.rag.policies import CITATION_POLICY_MESSAGE, FALLBACK_ANSWER
 from catchup.rag.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
 from catchup.rag.schemas.sources import BaseSource
@@ -24,9 +24,7 @@ async def generate_final_answer_node(state: AgentState):
     trimmer = llm_service.get_trimmer()
 
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
-    
-    logger.info(f"답변 생성에 제공된 문서 목록:\n\n{retrieved_docs}")
-    
+        
     if not retrieved_docs:
         logger.warning("검색된 문서가 없음 -> Fallback 답변 반환")
         return {
@@ -35,7 +33,7 @@ async def generate_final_answer_node(state: AgentState):
         }
     
     context_text = _prepare_context_text(retrieved_docs)
-    
+        
     global_context = state["global_context"].model_dump()
     query = state["rewritten_query"]
 
@@ -44,11 +42,16 @@ async def generate_final_answer_node(state: AgentState):
         context=context_text,
         **global_context
     )
-
+    
     conversation_history = get_conversation_history(state["messages"])
     trimmed_history = trimmer.invoke(conversation_history)
     
-    messages = [SystemMessage(content=prompt)] + trimmed_history + [HumanMessage(content=query)]
+    messages = (
+        [SystemMessage(content=prompt)]
+        + trimmed_history
+        + [HumanMessage(content=query)]
+        + [CITATION_POLICY_MESSAGE]
+    )
 
     chain = llm | StrOutputParser()
 
