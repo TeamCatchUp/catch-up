@@ -39,7 +39,7 @@ export default function Search() {
 
   return (
     <div className="bg-home-gradient flex flex-[1_0_0] flex-col items-start self-stretch">
-      <TopNavbar pageType="home" />
+      <TopNavbar pageType="search" />
 
       <div className="flex min-h-screen flex-col items-start self-stretch">
         {/* Query Section */}

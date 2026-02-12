@@ -7,11 +7,12 @@ import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdo
 import { MoreButtonContent } from './MoreButtonModal';
 
 import Settings from '/public/icons/icon/admin_panel_settings.svg';
+import AI from '/public/icons/icon/ai.svg';
 import Home from '/public/icons/icon/home.svg';
 import Kebeb_2 from '/public/icons/icon/kebeb 2.svg';
 import MyPage from '/public/icons/icon/person.svg';
 
-type PageType = 'home' | 'mypage' | 'settings';
+type PageType = 'home' | 'search' | 'mypage' | 'settings';
 
 interface PageConfig {
   icon: React.ComponentType<{ className?: string }>;
@@ -24,6 +25,11 @@ const pageConfigs: Record<PageType, PageConfig> = {
     icon: Home,
     label: '홈',
     href: '/',
+  },
+  search: {
+    icon: AI,
+    label: '캐치스턴트 AI',
+    href: '/search',
   },
   mypage: {
     icon: MyPage,
