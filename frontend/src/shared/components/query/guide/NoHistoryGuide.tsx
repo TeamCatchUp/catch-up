@@ -79,7 +79,7 @@ export const NoHistoryGuide = ({ onExampleClick }: NoHistoryGuideProps) => {
       <div className="flex flex-col gap-2.5">
         <span className="text-body-xsmall text-gray-50 px-1">질문 예시</span>
         <div className="flex flex-col gap-1">
-          {NO_HISTORY_EXAMPLES.map((example) => (
+          {NO_HISTORY_EXAMPLES.slice(0, 3).map((example) => (
             <button
               key={example}
               onClick={() => onExampleClick?.(example)}
