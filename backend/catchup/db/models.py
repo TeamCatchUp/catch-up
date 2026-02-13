@@ -1,10 +1,9 @@
 from datetime import datetime
-from email.policy import default
-from enum import StrEnum, auto, unique
-import time
+from enum import StrEnum
 
-from sqlalchemy import func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import ForeignKey, func, text
+from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import String, Boolean, Integer, BigInteger, DateTime
 
 
@@ -17,6 +16,33 @@ class UserRole(StrEnum):
     ADMIN = "admin"
 
 
+class Company(Base):
+    __tablename__ = "companies"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    description: Mapped[str] = mapped_column(String(255), nullable=True)
+    location: Mapped[str] = mapped_column(String(255), nullable=True)
+    logo_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    
+    workspaces: Mapped[list["Workspace"]] = relationship(back_populates="company")
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    
+    company: Mapped["Company"] = relationship(back_populates="workspaces")
+    user_links: Mapped[list["UserWorkspace"]] = relationship(
+        back_populates="workspace",
+        cascade="all, delete-orphan"
+    )
+    users: Mapped[list["User"]] = association_proxy("user_links", "user")
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -27,10 +53,30 @@ class User(Base):
     family_name: Mapped[str] = mapped_column(String(50), nullable=True)
     picture: Mapped[str] = mapped_column(String(500), nullable=True)
     role: Mapped[UserRole] = mapped_column(
-        String(20), default=UserRole.USER, server_default=str(UserRole.USER)
+        String(20),
+        default=UserRole.USER,
+        server_default=text(f"'{UserRole.USER}'")
     )
     provider: Mapped[str] = mapped_column(String(20), nullable=False)
     refresh_token: Mapped[str] = mapped_column(String(500), nullable=True)
+ 
+    workspace_links: Mapped[list["UserWorkspace"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    workspaces: Mapped[list["Workspace"]] = association_proxy("workspace_links", "workspace")
+    
+    
+class UserWorkspace(Base):
+    __tablename__ = "user_workspaces"
+    
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), primary_key=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    
+    user: Mapped["User"] = relationship(back_populates="workspace_links")
+    workspace: Mapped["Workspace"] = relationship(back_populates="user_links")
+
 
 class JiraAccountType(StrEnum):
     ATLASSIAN = "atlassian" # 일반 사용자
