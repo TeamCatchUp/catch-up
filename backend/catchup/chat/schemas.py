@@ -1,7 +1,8 @@
+from datetime import datetime
 import uuid
 from typing import Annotated, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from catchup.db.models import UserRole
 from catchup.rag.schemas.sources import SourceResponse
@@ -80,3 +81,12 @@ StreamEvent = Annotated[
 #     session_id: str
 #     node: str
 #     payload: Any
+
+
+class ChatRoomResponse(BaseModel):
+    session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
+    title: str = Field(..., description="채팅방 이름")
+    created_at: datetime = Field(..., description="생성 시각")
+    updated_at: datetime = Field(..., description="최근 활동 시각")
+    
+    model_config = ConfigDict(from_attributes=True)

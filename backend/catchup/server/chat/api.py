@@ -16,7 +16,7 @@ logger = logging.getLogger()
 router = APIRouter(prefix="/api/v1")
 
 
-@router.post("chat")
+@router.post("/chat")
 async def chat_response(
     request: ChatRequest, service: ChatService = Depends(get_chat_service)
 ) -> ChatResponse:

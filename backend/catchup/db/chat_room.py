@@ -1,6 +1,6 @@
 from typing import Optional
 import uuid
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from catchup.db.models import ChatHistory, ChatRoom, SenderType
@@ -53,3 +53,32 @@ def add_message(
     db.add(message)
     db.commit()
     return message
+
+
+def get_chat_rooms(
+    db: Session,
+    user_id: int,
+    skip: int = 0,  # 앞에서 몇 개 건너뛸지
+    limit: int = 20  # 몇 개 갸져올지
+) -> tuple[list[ChatRoom], int]:  # (목록, 전체 개수)
+    """채팅방 목록 조회"""
+    
+    filter_query = (ChatRoom.user_id == user_id)
+    
+    total_count = db.scalar(
+        select(func.count())
+        .select_from(ChatRoom)
+        .where(filter_query)
+    ) or 0
+        
+    stmt = (
+        select(ChatRoom)
+        .where(filter_query)
+        .order_by(ChatRoom.updated_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    
+    items = db.scalars(stmt).all()
+    
+    return list(items), total_count
