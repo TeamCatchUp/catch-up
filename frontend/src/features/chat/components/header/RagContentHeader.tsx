@@ -34,7 +34,7 @@ const RagHeader = ({ title, onSelectQuestion }: RagHeaderProps) => {
 
   return (
     <>
-      <div className="border-r-neutral-3 border-b-neutral-3 border-r-0.5 sticky top-0 z-10 flex min-w-240.75 justify-between border-b bg-white px-16 py-2">
+      <div className="h-13 border-r-neutral-3 border-b-neutral-3 border-r-0.5 sticky top-0 z-10 flex min-w-240.75 justify-between border-b bg-white px-16 py-2">
         {/* 좌측 메뉴 */}
         <div className="relative flex items-center">
           <button
