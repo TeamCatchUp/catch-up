@@ -15,6 +15,7 @@ const AnswerActionButtons = ({
   icons,
   messageId,
   answerContent,
+  hasFeedback,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
 }: AnswerActionButtonsProps) => {
@@ -24,6 +25,7 @@ const AnswerActionButtons = ({
     <div className="flex gap-1">
       {icons.map((item, i) => {
         const isThumbsDown = item.name === 'ThumbsDown';
+        if (isThumbsDown && hasFeedback) return null;
         const isBookmark = item.name === 'Bookmark';
         const isThumbsDownActive = isThumbsDown && feedbackVisibleMap[messageId];
         const tooltipLabel = TOOLTIP_LABELS[item.name];

@@ -81,6 +81,7 @@ const RagAnswer = ({
                 icons={ANSWER_ICONS}
                 messageId={currentQA.answer.id}
                 answerContent={currentQA.answer.content}
+                hasFeedback={currentQA.answer.has_feedback}
                 feedbackVisibleMap={feedbackVisibleMap}
                 setFeedbackVisibleMap={setFeedbackVisibleMap}
               />

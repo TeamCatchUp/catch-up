@@ -8,6 +8,7 @@ interface AnswerActionButtonsProps {
   icons: IconItem[];
   messageId: string;
   answerContent: string;
+  hasFeedback?: boolean;
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
 }
