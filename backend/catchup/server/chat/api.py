@@ -7,7 +7,7 @@ from catchup.chat.factory import get_chat_service
 from catchup.chat.schemas import ChatRequest, ChatResponse
 from catchup.chat.service import ChatService
 from catchup.rag.schemas.context import GlobalContext
-from catchup.server.chat.context import get_full_global_context
+from catchup.rag.dependencies import get_rag_global_context
 
 logger = logging.getLogger()
 
@@ -29,7 +29,7 @@ async def chat_response(
 async def chat_response_stream(
     request: ChatRequest, 
     service: ChatService = Depends(get_chat_service),
-    global_context: GlobalContext = Depends(get_full_global_context)
+    global_context: GlobalContext = Depends(get_rag_global_context)
 ):    
     async def event_generator():
         async for chunk in service.chat_stream(
