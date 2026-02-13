@@ -1,4 +1,6 @@
-import { MOCK_RAG_ANSWER, MOCK_RELATED_JIRA_ISSUES,MOCK_SOURCES } from './data';
+import type { BackendSource } from '@/features/chat/types/source';
+
+import { MOCK_RAG_ANSWER, MOCK_RELATED_JIRA_ISSUES, MOCK_SOURCES } from './data';
 
 interface MockSSEOptions {
   sessionId: string;

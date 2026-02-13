@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { getStorageKeys, NODE_TO_UI_STEP } from '@/features/chat/constants/config';
 import { useRagStream } from '@/features/chat/hooks/useRagStream';
+import type { BackendSource } from '@/features/chat/types/source';
 import { normalizeSources } from '@/features/chat/utils/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/features/chat/utils/normalizeRelatedJiraIssues';
 import { MOCK_INITIAL_MESSAGES } from '@/shared/mocks/chat/data';
