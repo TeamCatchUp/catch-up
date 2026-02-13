@@ -3,11 +3,10 @@
 import { useState } from 'react';
 
 import type { QAPair } from '@/features/chat/utils/chat';
-import { cn } from '@/shared/utils/cn';
 
+import CollapsibleQuestionText from './CollapsibleQuestionText';
 import EditMessageInput from './EditMessageInput';
-
-import EditPencil from '/public/icons/icon/edit_pencil.svg';
+import QuestionEditButton from './QuestionEditButton';
 
 interface RagQuestionProps {
   currentQA: QAPair | undefined;
@@ -18,19 +17,22 @@ interface RagQuestionProps {
 const RagQuestion = ({ currentQA, isLastPage, onSubmitEdit }: RagQuestionProps) => {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  if (!currentQA) return null;
+  const questionId = currentQA?.question.id ?? null;
+  const questionContent = currentQA?.question.content ?? '';
+  const questionRenderKey = `${questionId}:${questionContent}`;
+  const isEditing = questionId !== null && editingMessageId === questionId;
 
-  const isEditing = editingMessageId === currentQA.question.id;
+  if (!currentQA || !questionId) return null;
 
   if (isEditing) {
     const handleSubmit = async (newContent: string) => {
-      await onSubmitEdit(currentQA.question.id, newContent);
+      await onSubmitEdit(questionId, newContent);
       setEditingMessageId(null);
     };
 
     return (
       <EditMessageInput
-        initialContent={currentQA.question.content}
+        initialContent={questionContent}
         onCancel={() => setEditingMessageId(null)}
         onSubmit={handleSubmit}
       />
@@ -39,21 +41,12 @@ const RagQuestion = ({ currentQA, isLastPage, onSubmitEdit }: RagQuestionProps) 
 
   return (
     <div className="group relative flex max-w-full items-start gap-1">
-      <p className="text-heading-xlarge text-gray-70">
-        {currentQA.question.content}
-      </p>
+      <div className="relative min-w-0 flex-1">
+        <CollapsibleQuestionText key={questionRenderKey} content={questionContent} />
+      </div>
+
       {isLastPage && (
-        <button
-          onClick={() => setEditingMessageId(currentQA.question.id)}
-          className={cn(
-            'border-neutral-3 box-button-outline-gray',
-            'hidden shrink-0 group-hover:inline-flex',
-            'cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1',
-          )}
-        >
-          <EditPencil className="text-gray-70 h-5 w-5" />
-          <span className="text-body-xsmall text-gray-80 whitespace-nowrap">수정하기</span>
-        </button>
+        <QuestionEditButton onClick={() => setEditingMessageId(questionId)} />
       )}
     </div>
   );
