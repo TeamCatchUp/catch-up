@@ -1,7 +1,7 @@
 """
-GitHub Transformer
+Github Transformer
 
-GitHub API 응답을 LangChain Document로 변환.
+Github API 응답을 LangChain Document로 변환.
 
 Document 구조:
 - id: github:{entity_type}:{owner/repo}:{identifier}
@@ -18,21 +18,15 @@ from langchain_core.documents import Document
 
 from catchup.connectors.base import clean_markdown
 from catchup.connectors.github.schemas import (
-    GitHubUser,
-    GitHubLabel,
-    GitHubMilestone,
-    GitHubReaction,
-    GitHubIssue,
-    GitHubIssueComment,
-    GitHubPullRequest,
-    GitHubPRReview,
-    GitHubPRComment,
-    GitHubPRCommitInfo,
-    GitHubCommit,
-    GitHubCommitFile,
-    GitHubRepository,
-    PRFileContext,
-    PRComment,
+    GithubUser,
+    GithubIssue,
+    GithubIssueComment,
+    GithubPullRequest,
+    GithubPRReview,
+    GithubPRComment,
+    GithubPRCommitInfo,
+    GithubCommit,
+    GithubCommitFile,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,18 +53,18 @@ CLOSING_PATTERNS = [
 REFERENCE_PATTERN = re.compile(r"(?<![/\w])#(\d+)(?!\d)")
 
 
-class GitHubTransformer:
+class GithubTransformer:
     """
-    GitHub API 응답을 LangChain Document로 변환하는 트랜스포머
+    Github API 응답을 LangChain Document로 변환하는 트랜스포머
 
     변환 흐름:
         API Response (dict) → parse_*() → Schema → transform_*() → Document
     """
 
-    def __init__(self, user_cache: dict[str, GitHubUser] | None = None):
+    def __init__(self, user_cache: dict[str, GithubUser] | None = None):
         """
         Args:
-            user_cache: 사용자 ID -> GitHubUser 매핑 (멘션 변환용)
+            user_cache: 사용자 ID -> GithubUser 매핑 (멘션 변환용)
         """
         self.user_cache = user_cache or {}
 
@@ -82,136 +76,75 @@ class GitHubTransformer:
         self,
         data: dict[str, Any],
         comments: list[dict[str, Any]] | None = None,
-    ) -> GitHubIssue:
+    ) -> GithubIssue:
         """
-        API 응답을 GitHubIssue 스키마로 파싱
+        API 응답을 GithubIssue 스키마로 파싱
 
         Args:
-            data: GitHub Issues API 응답
-            comments: Issue comments API 응답
+            data: GraphQL Issue 노드
 
         Returns:
-            GitHubIssue 스키마 객체
+            GithubIssue 스키마 객체
         """
-        # 작성자
-        author = None
-        if data.get("user"):
-            author = GitHubUser(
-                id=data["user"]["id"],
-                login=data["user"]["login"],
-                avatar_url=data["user"].get("avatar_url"),
-                html_url=data["user"].get("html_url"),
-            )
+        # User 파싱 (GraphQL Actor → GithubUser)
+        author = self._parse_graphql_user(data.get("author"))
 
-        # 담당자 목록
+        # Assignees 파싱
         assignees = []
-        for assignee in data.get("assignees", []):
-            assignees.append(GitHubUser(
-                id=assignee["id"],
-                login=assignee["login"],
-                avatar_url=assignee.get("avatar_url"),
-            ))
+        assignees_nodes = (data.get("assignees", {}).get("nodes") or [])
+        for node in assignees_nodes:
+            user = self._parse_graphql_user(node)
+            if user:
+                assignees.append(user)
 
-        # 라벨
-        labels = []
-        for label in data.get("labels", []):
-            labels.append(GitHubLabel(
-                id=label["id"],
-                name=label["name"],
-                color=label.get("color"),
-                description=label.get("description"),
-            ))
+        # Comments 파싱 (GraphQL 중첩 구조)
+        comments = []
+        comments_nodes = (data.get("comments", {}).get("nodes") or [])
+        for comment_node in comments_nodes:
+            comment_author = self._parse_graphql_user(comment_node.get("author"))
 
-        # 마일스톤
-        milestone = None
-        if data.get("milestone"):
-            ms = data["milestone"]
-            milestone = GitHubMilestone(
-                id=ms["id"],
-                number=ms["number"],
-                title=ms["title"],
-                state=ms["state"],
-                description=ms.get("description"),
-                due_on=self._parse_datetime(ms.get("due_on")),
-            )
-
-        # 리액션
-        reactions = None
-        if data.get("reactions"):
-            r = data["reactions"]
-            reactions = GitHubReaction(
-                total_count=r.get("total_count", 0),
-                **{"+1": r.get("+1", 0), "-1": r.get("-1", 0)},
-                laugh=r.get("laugh", 0),
-                hooray=r.get("hooray", 0),
-                confused=r.get("confused", 0),
-                heart=r.get("heart", 0),
-                rocket=r.get("rocket", 0),
-                eyes=r.get("eyes", 0),
-            )
-
-        # 코멘트 파싱
-        parsed_comments = []
-        for comment in (comments or []):
-            comment_author = None
-            if comment.get("user"):
-                comment_author = GitHubUser(
-                    id=comment["user"]["id"],
-                    login=comment["user"]["login"],
-                    avatar_url=comment["user"].get("avatar_url"),
-                )
-            parsed_comments.append(GitHubIssueComment(
-                id=comment["id"],
+            comments.append(GithubIssueComment(
                 author=comment_author,
-                body=comment.get("body", ""),
-                created_at=self._parse_datetime(comment["created_at"]),
-                updated_at=self._parse_datetime(comment.get("updated_at")),
+                body=comment_node.get("body", ""),
+                created_at=self._parse_datetime(comment_node.get("createdAt")),
+                updated_at=self._parse_datetime(comment_node.get("updatedAt")),
             ))
 
-        # body에서 관계 추출
-        body = data.get("body") or ""
-        linked_prs = self._extract_linked_issues(body)  # PR 참조도 동일한 형식
-        referenced = self._extract_referenced_issues(body)
+        # GraphQL state 정규화 (OPEN/CLOSED → open/closed)
+        raw_state = data.get("state", "OPEN")
+        state = raw_state.lower()
 
-        return GitHubIssue(
+        return GithubIssue(
             number=data["number"],
-            id=data["id"],
-            node_id=data.get("node_id"),
-            url=data["url"],
-            html_url=data["html_url"],
-            title=data["title"],
-            body=body,
-            state=data["state"],
-            state_reason=data.get("state_reason"),
+            html_url=data.get("url", ""),
+            title=data.get("title", ""),
+            body=data.get("body"),
+            state=state,
+            state_reason=data.get("stateReason"),
             author=author,
             assignees=assignees,
-            labels=labels,
-            milestone=milestone,
-            created_at=self._parse_datetime(data["created_at"]),
-            updated_at=self._parse_datetime(data["updated_at"]),
-            closed_at=self._parse_datetime(data.get("closed_at")),
-            comments_count=data.get("comments", 0),
-            comments=parsed_comments,
-            reactions=reactions,
-            linked_pr_numbers=linked_prs,
-            referenced_issues=referenced,
+            created_at=self._parse_datetime(data.get("createdAt")),
+            updated_at=self._parse_datetime(data.get("updatedAt")),
+            closed_at=self._parse_datetime(data.get("closedAt")),
+            comments_count=len(comments),
+            comments=comments,
         )
 
     def transform_issue(
         self,
-        issue: GitHubIssue,
+        issue: GithubIssue,
         owner: str,
         repo: str,
         installation_id: int,
     ) -> Document:
         """
-        GitHubIssue를 LangChain Document로 변환
+        GithubIssue를 LangChain Document로 변환
 
         Args:
             issue: 파싱된 Issue 스키마
             owner: Repository owner
             repo: Repository name
-            installation_id: GitHub App Installation ID
+            installation_id: Github App Installation ID
 
         Returns:
             LangChain Document
@@ -233,7 +166,7 @@ class GitHubTransformer:
             metadata=metadata,
         )
 
-    def _build_issue_semantic_content(self, issue: GitHubIssue) -> str:
+    def _build_issue_semantic_content(self, issue: GithubIssue) -> str:
         """
         Issue용 semantic_content 생성 (의미 중심)
 
@@ -257,7 +190,7 @@ class GitHubTransformer:
 
         return "\n\n".join(parts)
 
-    def _build_issue_contextual_content(self, issue: GitHubIssue) -> str:
+    def _build_issue_contextual_content(self, issue: GithubIssue) -> str:
         """Issue contextual_content 생성 - LLM 답변 생성용"""
         lines = []
 
@@ -266,11 +199,7 @@ class GitHubTransformer:
         lines.append("")
 
         # 상태 정보
-        status_parts = [f"Status: {issue.state}"]
-        if issue.labels:
-            label_names = ", ".join(l.name for l in issue.labels)
-            status_parts.append(f"Labels: {label_names}")
-        lines.append(" | ".join(status_parts))
+        lines.append(f"Status: {issue.state}")
 
         # 담당자 정보
         people_parts = []
@@ -282,12 +211,8 @@ class GitHubTransformer:
         if people_parts:
             lines.append(" | ".join(people_parts))
 
-        # 마일스톤 및 생성일
-        meta_parts = []
-        if issue.milestone:
-            meta_parts.append(f"Milestone: {issue.milestone.title}")
-        meta_parts.append(f"Created: {issue.created_at.strftime('%Y-%m-%d')}")
-        lines.append(" | ".join(meta_parts))
+        # 생성일
+        lines.append(f"Created: {issue.created_at.strftime('%Y-%m-%d')}")
 
         lines.append("")
 
@@ -306,28 +231,20 @@ class GitHubTransformer:
                 lines.append(f"[{date_str} @{author_name}]: {comment.body}")
             lines.append("")
 
-        # 관련 항목
-        related = []
-        if issue.linked_pr_numbers:
-            for pr_num in issue.linked_pr_numbers:
-                related.append(f"- Referenced in PR #{pr_num}")
-        if issue.referenced_issues:
-            for ref_num in issue.referenced_issues:
-                related.append(f"- References Issue #{ref_num}")
-        if related:
-            lines.append("Related:")
-            lines.extend(related)
-
         return "\n".join(lines)
 
     def _build_issue_metadata(
         self,
-        issue: GitHubIssue,
+        issue: GithubIssue,
         owner: str,
         repo: str,
         installation_id: int,
     ) -> dict[str, Any]:
-        """Issue metadata 생성"""
+        """Issue metadata 생성 (간소화 - PR과 동일한 패턴)"""
+
+        def _user_info(user: GithubUser) -> dict[str, str | None]:
+            return {"login": user.login, "name": user.name, "email": user.email}
+
         return {
             # 공통 필수
             "source": "github",
@@ -339,9 +256,7 @@ class GitHubTransformer:
             "installation_id": installation_id,
             "owner": owner,
             "repo": repo,
-            "full_name": f"{owner}/{repo}",
             "number": issue.number,
-            "issue_id": issue.id,
 
             # 시간
             "created_at": issue.created_at.isoformat(),
@@ -352,15 +267,10 @@ class GitHubTransformer:
             # 필터링용
             "state": issue.state,
             "state_reason": issue.state_reason,
-            "author": issue.author.login if issue.author else None,
-            "assignees": [a.login for a in issue.assignees],
-            "labels": [l.name for l in issue.labels],
-            "milestone": issue.milestone.title if issue.milestone else None,
+            "author": _user_info(issue.author) if issue.author else None,
+            "assignees": [_user_info(a) for a in issue.assignees],
             "comments_count": issue.comments_count,
-
-            # Graph 연계용 관계 정보
-            "linked_prs": issue.linked_pr_numbers,
-            "referenced_issues": issue.referenced_issues,
+            # Note: closed_by는 GitHub GraphQL API에서 지원하지 않음 (PR만 지원)
         }
 
     # ============================================================
@@ -370,184 +280,116 @@ class GitHubTransformer:
     def parse_pull_request(
         self,
         data: dict[str, Any],
-        reviews: list[dict[str, Any]] | None = None,
-        comments: list[dict[str, Any]] | None = None,
-        commits: list[dict[str, Any]] | None = None,
-    ) -> GitHubPullRequest:
+    ) -> GithubPullRequest:
         """
-        API 응답을 GitHubPullRequest 스키마로 파싱
+        GraphQL Response Node를 GithubPullRequest로 파싱
 
         Args:
-            data: GitHub Pulls List API 응답
-            reviews: PR reviews API 응답
-            comments: PR review comments API 응답 (인라인 코멘트)
-            commits: PR commits API 응답
+            data: GraphQL PR Node
 
         Returns:
-            GitHubPullRequest 스키마 객체
+            GithubPullRequest 스키마 객체
         """
-        # 작성자
-        author = None
-        if data.get("user"):
-            author = GitHubUser(
-                id=data["user"]["id"],
-                login=data["user"]["login"],
-                avatar_url=data["user"].get("avatar_url"),
-                html_url=data["user"].get("html_url"),
-            )
+        author = self._parse_graphql_user(data.get("author"))
+        merged_by = self._parse_graphql_user(data.get("mergedBy"))
 
-        # 담당자 목록
-        assignees = []
-        for assignee in data.get("assignees", []):
-            assignees.append(GitHubUser(
-                id=assignee["id"],
-                login=assignee["login"],
-                avatar_url=assignee.get("avatar_url"),
-            ))
+        assignees = [
+            user for node in (data.get("assignees", {}).get("nodes") or [])
+            if (user := self._parse_graphql_user(node)) is not None
+        ]
 
-        # 리뷰어 목록
         reviewers = []
-        for reviewer in data.get("requested_reviewers", []):
-            reviewers.append(GitHubUser(
-                id=reviewer["id"],
-                login=reviewer["login"],
-                avatar_url=reviewer.get("avatar_url"),
-            ))
-
-        # 라벨
-        labels = []
-        for label in data.get("labels", []):
-            labels.append(GitHubLabel(
-                id=label["id"],
-                name=label["name"],
-                color=label.get("color"),
-                description=label.get("description"),
-            ))
-
-        # 마일스톤
-        milestone = None
-        if data.get("milestone"):
-            ms = data["milestone"]
-            milestone = GitHubMilestone(
-                id=ms["id"],
-                number=ms["number"],
-                title=ms["title"],
-                state=ms["state"],
-                description=ms.get("description"),
-                due_on=self._parse_datetime(ms.get("due_on")),
+        for node in (data.get("reviewRequests", {}).get("nodes") or []):
+            reviewer = self._parse_graphql_user(
+                node.get("requestedReviewer") if node else None
             )
+            if reviewer:
+                reviewers.append(reviewer)
 
         # 리뷰 파싱
         parsed_reviews = []
-        for review in (reviews or []):
-            review_author = None
-            if review.get("user"):
-                review_author = GitHubUser(
-                    id=review["user"]["id"],
-                    login=review["user"]["login"],
-                    avatar_url=review["user"].get("avatar_url"),
-                )
-            parsed_reviews.append(GitHubPRReview(
-                id=review["id"],
-                author=review_author,
-                state=review.get("state", "PENDING"),
-                body=review.get("body"),
-                submitted_at=self._parse_datetime(review.get("submitted_at")),
+        for node in (data.get("reviews", {}).get("nodes") or []):
+            if not node:
+                continue
+            parsed_reviews.append(GithubPRReview(
+                author=self._parse_graphql_user(node.get("author")),
+                state=node.get("state"),
+                body=node.get("body"),
+                submitted_at=self._parse_datetime(node.get("submittedAt")),
             ))
 
-        # 리뷰 코멘트 파싱 (인라인 코멘트)
+        # 리뷰 코멘트 파싱 (reviewThreads → comments)
         parsed_comments = []
-        for comment in (comments or []):
-            comment_author = None
-            if comment.get("user"):
-                comment_author = GitHubUser(
-                    id=comment["user"]["id"],
-                    login=comment["user"]["login"],
-                    avatar_url=comment["user"].get("avatar_url"),
-                )
-            parsed_comments.append(GitHubPRComment(
-                id=comment["id"],
-                author=comment_author,
-                body=comment.get("body", ""),
-                path=comment.get("path"),
-                line=comment.get("line"),
-                original_line=comment.get("original_line"),
-                diff_hunk=comment.get("diff_hunk"),
-                created_at=self._parse_datetime(comment["created_at"]),
-                updated_at=self._parse_datetime(comment.get("updated_at")),
-            ))
+        for thread in (data.get("reviewThreads", {}).get("nodes") or []):
+            if not thread:
+                continue
+            for comment_node in (thread.get("comments", {}).get("nodes") or []):
+                if not comment_node:
+                    continue
+                parsed_comments.append(GithubPRComment(
+                    author=self._parse_graphql_user(comment_node.get("author")),
+                    body=comment_node.get("body", ""),
+                    path=comment_node.get("path"),
+                    line=comment_node.get("line"),
+                    original_line=comment_node.get("originalLine"),
+                    diff_hunk=comment_node.get("diffHunk"),
+                    created_at=self._parse_datetime(comment_node.get("createdAt")),
+                    updated_at=self._parse_datetime(comment_node.get("updatedAt")),
+                ))
 
         # 커밋 파싱
         parsed_commits = []
-        for commit in (commits or []):
-            commit_data = commit.get("commit", {})
-            author_data = commit_data.get("author", {})
-            committer_data = commit_data.get("committer", {})
-
-            # GitHub 계정 연결된 author
-            author_login = None
-            if commit.get("author"):
-                author_login = commit["author"].get("login")
-
-            parsed_commits.append(GitHubPRCommitInfo(
-                sha=commit["sha"],
-                message=commit_data.get("message", ""),
-                author_name=author_data.get("name"),
-                author_login=author_login,
-                committed_at=self._parse_datetime(committer_data.get("date")),
+        for node in (data.get("commits", {}).get("nodes") or []):
+            if not node:
+                continue
+            commit = node.get("commit", {})
+            commit_author = commit.get("author", {})
+            parsed_commits.append(GithubPRCommitInfo(
+                sha=commit.get("oid", ""),
+                message=commit.get("message", ""),
+                author_name=commit_author.get("name"),
+                author_login=(commit_author.get("user") or {}).get("login"),
+                committed_at=self._parse_datetime(commit.get("committedDate")),
             ))
 
-        # body에서 관계 추출
-        body = data.get("body") or ""
-        linked_issues = self._extract_closing_issues(body)
+        # GraphQL state: OPEN/CLOSED/MERGED → open/closed
+        raw_state = data.get("state", "OPEN")
+        state = raw_state.lower() if raw_state in ("OPEN", "CLOSED") else "closed"
 
-        # 브랜치 정보
-        base = data.get("base", {})
-        head = data.get("head", {})
-
-        return GitHubPullRequest(
-            number=data["number"],
-            id=data["id"],
-            node_id=data.get("node_id"),
-            url=data["url"],
-            html_url=data["html_url"],
-            title=data["title"],
-            body=body,
-            state=data["state"],
-            draft=data.get("draft", False),
+        return GithubPullRequest(
+            number=data.get("number", 0),
+            url=data.get("url", ""),
+            html_url=data.get("url", ""),
+            title=data.get("title", ""),
+            body=data.get("body"),
+            state=state,
             merged=data.get("merged", False),
-            base_ref=base.get("ref", ""),
-            head_ref=head.get("ref", ""),
-            base_sha=base.get("sha"),
-            head_sha=head.get("sha"),
+            base_ref=data.get("baseRefName", ""),
+            head_ref=data.get("headRefName", ""),
             author=author,
             assignees=assignees,
-            requested_reviewers=reviewers,
-            labels=labels,
-            milestone=milestone,
-            created_at=self._parse_datetime(data["created_at"]),
-            updated_at=self._parse_datetime(data["updated_at"]),
-            merged_at=self._parse_datetime(data.get("merged_at")),
-            closed_at=self._parse_datetime(data.get("closed_at")),
-            additions=data.get("additions", 0),
-            deletions=data.get("deletions", 0),
-            changed_files=data.get("changed_files", 0),
-            commits_count=data.get("commits", 0),
+            reviewers=reviewers,
+            merged_by=merged_by,
+            created_at=self._parse_datetime(data.get("createdAt")),
+            updated_at=self._parse_datetime(data.get("updatedAt")),
+            merged_at=self._parse_datetime(data.get("mergedAt")),
+            closed_at=self._parse_datetime(data.get("closedAt")),
+            changed_files=data.get("changedFiles", 0),
+            commits_count=len(parsed_commits),
             reviews=parsed_reviews,
             comments=parsed_comments,
             commits=parsed_commits,
-            linked_issue_numbers=linked_issues,
         )
 
     def transform_pull_request(
         self,
-        pr: GitHubPullRequest,
+        pr: GithubPullRequest,
         owner: str,
         repo: str,
         installation_id: int,
     ) -> Document:
         """
-        GitHubPullRequest를 LangChain Document로 변환
+        GithubPullRequest를 LangChain Document로 변환
 
         Args:
             pr: 파싱된 PR 스키마
@@ -575,7 +417,7 @@ class GitHubTransformer:
             metadata=metadata,
         )
 
-    def _build_pr_semantic_content(self, pr: GitHubPullRequest) -> str:
+    def _build_pr_semantic_content(self, pr: GithubPullRequest) -> str:
         """
         PR용 semantic_content 생성 (의미 중심)
 
@@ -609,7 +451,7 @@ class GitHubTransformer:
 
         return "\n\n".join(parts)
 
-    def _build_pr_contextual_content(self, pr: GitHubPullRequest) -> str:
+    def _build_pr_contextual_content(self, pr: GithubPullRequest) -> str:
         """PR contextual_content 생성 - LLM 답변 생성용"""
         lines = []
 
@@ -627,16 +469,10 @@ class GitHubTransformer:
         # 브랜치 정보
         lines.append(f"Base: {pr.base_ref} <- Head: {pr.head_ref}")
 
-        # 라벨 및 리뷰어
-        meta_parts = []
-        if pr.labels:
-            label_names = ", ".join(l.name for l in pr.labels)
-            meta_parts.append(f"Labels: {label_names}")
-        if pr.requested_reviewers:
-            reviewer_names = ", ".join(f"@{r.login}" for r in pr.requested_reviewers)
-            meta_parts.append(f"Reviewers: {reviewer_names}")
-        if meta_parts:
-            lines.append(" | ".join(meta_parts))
+        # 리뷰어
+        if pr.reviewers:
+            reviewer_names = ", ".join(f"@{r.login}" for r in pr.reviewers)
+            lines.append(f"Reviewers: {reviewer_names}")
 
         lines.append("")
 
@@ -647,13 +483,7 @@ class GitHubTransformer:
             lines.append("")
 
         # 코드 변경 통계
-        lines.append(f"Changes: +{pr.additions} -{pr.deletions} ({pr.changed_files} files, {len(pr.commits)} commits)")
-
-        # 연결된 Issue
-        if pr.linked_issue_numbers:
-            closes = ", ".join(f"#{n}" for n in pr.linked_issue_numbers)
-            lines.append(f"Closes: {closes}")
-
+        lines.append(f"Changes: {pr.changed_files} files, {len(pr.commits)} commits")
         lines.append("")
 
         # 커밋 목록
@@ -661,7 +491,6 @@ class GitHubTransformer:
             lines.append(f"Commits ({len(pr.commits)}):")
             for commit in pr.commits[:10]:  # 최대 10개
                 short_sha = commit.sha[:7]
-                # 커밋 메시지 첫 줄만
                 message_first_line = commit.message.split("\n")[0] if commit.message else ""
                 author = commit.author_login or commit.author_name or "unknown"
                 lines.append(f"- [{short_sha}] {message_first_line} (@{author})")
@@ -688,7 +517,6 @@ class GitHubTransformer:
                 author_name = comment.author.login if comment.author else "unknown"
                 date_str = comment.created_at.strftime("%Y-%m-%d") if comment.created_at else ""
 
-                # 파일 및 라인 정보
                 location_info = ""
                 if comment.path:
                     location_info = f"{comment.path}"
@@ -699,13 +527,11 @@ class GitHubTransformer:
 
                 lines.append(f"--- @{author_name} ({date_str}) on {location_info} ---")
 
-                # diff_hunk에서 변경 라인 정보 추출 (코드 전체 대신 요약)
                 if comment.diff_hunk:
                     hunk_summary = self._summarize_diff_hunk(comment.diff_hunk)
                     if hunk_summary:
                         lines.append(f"[{hunk_summary}]")
 
-                # 코멘트 본문 (전체)
                 if comment.body:
                     lines.append(comment.body)
 
@@ -715,7 +541,7 @@ class GitHubTransformer:
 
     def _build_pr_metadata(
         self,
-        pr: GitHubPullRequest,
+        pr: GithubPullRequest,
         owner: str,
         repo: str,
         installation_id: int,
@@ -734,6 +560,9 @@ class GitHubTransformer:
             else:
                 review_state = "pending"
 
+        def _user_info(user: GithubUser) -> dict[str, str | None]:
+            return {"login": user.login, "name": user.name, "email": user.email}
+
         return {
             # 공통 필수
             "source": "github",
@@ -745,9 +574,7 @@ class GitHubTransformer:
             "installation_id": installation_id,
             "owner": owner,
             "repo": repo,
-            "full_name": f"{owner}/{repo}",
             "number": pr.number,
-            "pr_id": pr.id,
 
             # 시간
             "created_at": pr.created_at.isoformat(),
@@ -758,19 +585,15 @@ class GitHubTransformer:
 
             # 필터링용
             "state": "merged" if pr.merged else pr.state,
-            "draft": pr.draft,
             "merged": pr.merged,
             "base_ref": pr.base_ref,
             "head_ref": pr.head_ref,
-            "author": pr.author.login if pr.author else None,
-            "assignees": [a.login for a in pr.assignees],
-            "reviewers": [r.login for r in pr.requested_reviewers],
-            "labels": [l.name for l in pr.labels],
-            "milestone": pr.milestone.title if pr.milestone else None,
+            "author": _user_info(pr.author) if pr.author else None,
+            "assignees": [_user_info(a) for a in pr.assignees],
+            "reviewers": [_user_info(r) for r in pr.reviewers],
+            "merged_by": _user_info(pr.merged_by) if pr.merged_by else None,
 
             # 코드 변경 통계
-            "additions": pr.additions,
-            "deletions": pr.deletions,
             "changed_files": pr.changed_files,
             "commits_count": len(pr.commits),
             "comments_count": len(pr.comments),
@@ -778,9 +601,8 @@ class GitHubTransformer:
             # 리뷰 상태
             "review_state": review_state,
 
-            # Graph 연계용 관계 정보
-            "linked_issue_numbers": pr.linked_issue_numbers,
-            "commit_shas": [c.sha for c in pr.commits],  # Graph DB 연결용
+            # Graph 연계용
+            "commit_shas": [c.sha for c in pr.commits],
         }
 
     # ============================================================
@@ -791,16 +613,16 @@ class GitHubTransformer:
         self,
         data: dict[str, Any],
         pr_number: int | None = None,
-    ) -> GitHubCommit:
+    ) -> GithubCommit:
         """
-        API 응답을 GitHubCommit 스키마로 파싱
+        API 응답을 GithubCommit 스키마로 파싱
 
         Args:
             data: GitHub Commits API 응답
             pr_number: 연결된 PR 번호 (있는 경우)
 
         Returns:
-            GitHubCommit 스키마 객체
+            GithubCommit 스키마 객체
         """
         commit_data = data.get("commit", {})
         author_data = commit_data.get("author", {})
@@ -809,7 +631,7 @@ class GitHubTransformer:
         # GitHub 계정 연결된 author
         author = None
         if data.get("author"):
-            author = GitHubUser(
+            author = GithubUser(
                 id=data["author"]["id"],
                 login=data["author"]["login"],
                 avatar_url=data["author"].get("avatar_url"),
@@ -818,7 +640,7 @@ class GitHubTransformer:
         # GitHub 계정 연결된 committer
         committer = None
         if data.get("committer"):
-            committer = GitHubUser(
+            committer = GithubUser(
                 id=data["committer"]["id"],
                 login=data["committer"]["login"],
                 avatar_url=data["committer"].get("avatar_url"),
@@ -830,7 +652,7 @@ class GitHubTransformer:
         # 파일 변경
         files = []
         for file in data.get("files", []):
-            files.append(GitHubCommitFile(
+            files.append(GithubCommitFile(
                 filename=file["filename"],
                 status=file["status"],
                 additions=file.get("additions", 0),
@@ -843,7 +665,7 @@ class GitHubTransformer:
         # 부모 커밋
         parent_shas = [p["sha"] for p in data.get("parents", [])]
 
-        return GitHubCommit(
+        return GithubCommit(
             sha=data["sha"],
             url=data["url"],
             html_url=data["html_url"],
@@ -865,13 +687,13 @@ class GitHubTransformer:
 
     def transform_commit(
         self,
-        commit: GitHubCommit,
+        commit: GithubCommit,
         owner: str,
         repo: str,
         installation_id: int,
     ) -> Document:
         """
-        GitHubCommit를 LangChain Document로 변환
+        GithubCommit를 LangChain Document로 변환
 
         Args:
             commit: 파싱된 Commit 스키마
@@ -900,7 +722,7 @@ class GitHubTransformer:
             metadata=metadata,
         )
 
-    def _build_commit_semantic_content(self, commit: GitHubCommit) -> str:
+    def _build_commit_semantic_content(self, commit: GithubCommit) -> str:
         """
         Commit용 semantic_content 생성 (의미 중심)
 
@@ -909,7 +731,7 @@ class GitHubTransformer:
         """
         return commit.message if commit.message else ""
 
-    def _build_commit_contextual_content(self, commit: GitHubCommit) -> str:
+    def _build_commit_contextual_content(self, commit: GithubCommit) -> str:
         """Commit contextual_content 생성 - LLM 답변 생성용"""
         lines = []
         short_sha = commit.sha[:7]
@@ -953,7 +775,7 @@ class GitHubTransformer:
 
     def _build_commit_metadata(
         self,
-        commit: GitHubCommit,
+        commit: GithubCommit,
         owner: str,
         repo: str,
         installation_id: int,
@@ -997,6 +819,18 @@ class GitHubTransformer:
     # ============================================================
     # 유틸리티 메서드
     # ============================================================
+
+    def _parse_graphql_user(self, data: dict[str, Any] | None) -> GithubUser | None:
+        """GraphQL User/Actor 노드를 GithubUser로 변환"""
+        if not data or not data.get("login"):
+            return None
+        return GithubUser(
+            id=0,
+            login=data["login"],
+            name=data.get("name"),
+            email=data.get("email"),
+            avatar_url=data.get("avatarUrl"),
+        )
 
     def _parse_datetime(self, value: str | datetime | None) -> datetime | None:
         """ISO 8601 문자열 또는 datetime 객체를 datetime으로 변환"""

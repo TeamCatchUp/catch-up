@@ -304,28 +304,6 @@ class GithubInstallation(Base):
         onupdate=func.now()
     )
 
-    @classmethod
-    def from_webhook_payload(cls, payload: "InstallationWebhookPayload") -> "GithubInstallation":
-        from catchup.connectors.github.schemas import InstallationWebhookPayload
-
-        account = payload.installation.account
-        installation = payload.installation
-
-        # repository_selection 변환
-        repo_selection = None
-        if installation.repository_selection:
-            repo_selection = GithubRepositorySelection(installation.repository_selection)
-
-        return cls(
-            installation_id=installation.id,
-            account_type=GithubInstallationType(account.type.lower()),
-            account_id=account.id,
-            account_login=account.login,
-            account_avatar_url=account.avatar_url,
-            repository_selection=repo_selection,
-            suspended_at=installation.suspended_at,
-        )
-
 class JiraOAuthToken(Base):
     __tablename__ = "jira_oauth_tokens"
 
@@ -664,14 +642,14 @@ class SlackChannelSyncState(Base):
 # GitHub Sync State
 # ============================================================
 
-class GitHubSyncStatus(StrEnum):
+class GithubSyncStatus(StrEnum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     SUCCESS = "success"
     FAILED = "failed"
 
 
-class GitHubEntityType(StrEnum):
+class GithubEntityType(StrEnum):
     ISSUE = "issue"
     PULL_REQUEST = "pull_request"
     COMMIT = "commit"
@@ -679,7 +657,7 @@ class GitHubEntityType(StrEnum):
     USER = "user"
 
 
-class GitHubSyncState(Base):
+class GithubSyncState(Base):
     """
     GitHub 엔티티 동기화 상태 추적을 위한 테이블
 
@@ -700,7 +678,7 @@ class GitHubSyncState(Base):
         String(255), nullable=False, index=True,
         comment="Repository full name (owner/repo)"
     )
-    entity_type: Mapped[GitHubEntityType] = mapped_column(
+    entity_type: Mapped[GithubEntityType] = mapped_column(
         String(50), nullable=False,
         comment="issue, pull_request, commit, repository"
     )
@@ -714,7 +692,7 @@ class GitHubSyncState(Base):
         DateTime(timezone=True), nullable=True,
         comment="마지막 성공적인 동기화 시간 (증분 동기화 기준)"
     )
-    last_sync_status: Mapped[GitHubSyncStatus | None] = mapped_column(
+    last_sync_status: Mapped[GithubSyncStatus | None] = mapped_column(
         String(20), nullable=True,
         comment="pending, in_progress, success, failed"
     )
@@ -742,7 +720,7 @@ class GitHubSyncState(Base):
     )
 
 
-class GitHubRepository(Base):
+class GithubRepository(Base):
     """
     GitHub Repository 정보 (정적 데이터, RDBMS 저장)
     - Installation에 연결된 Repository 목록 관리

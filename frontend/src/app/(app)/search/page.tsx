@@ -9,6 +9,7 @@ import Git from '@/public/image/aiGit.png';
 import Jira from '@/public/image/AIJIRA1.png';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import QueryBox from '@/shared/components/query/QueryBox';
+import { useQuestionHistoryGate } from '@/shared/hooks/query/useQuestionHistoryGate';
 import { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
 import { useSearchInput } from '@/shared/hooks/query/useSearchInput';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
@@ -21,16 +22,23 @@ export default function Search() {
 
   const filters = useSearchFilters();
   const input = useSearchInput({ inputRef });
+  const { shouldShowNoHistoryBox } = useQuestionHistoryGate();
+  const [isNoHistoryExpanded, setIsNoHistoryExpanded] = useState(true);
 
-  useEscapeKey(() => {
+  // QueryBox 포커스 해제 + no-history 패널 닫기 공통 로직
+  const handleClose = () => {
     input.setIsFocused(false);
     inputRef.current?.blur();
-  });
+    if (shouldShowNoHistoryBox) {
+      setIsNoHistoryExpanded(false);
+    }
+  };
+
+  useEscapeKey(handleClose);
 
   useOutsideClick(containerRef, () => {
-    if (input.hasText || filters.openPopover) return;
-    input.setIsFocused(false);
-    inputRef.current?.blur();
+    if (filters.openPopover) return;
+    handleClose();
   });
 
   const toggleCard = (type: 'jira' | 'git') => {
@@ -38,7 +46,7 @@ export default function Search() {
   };
 
   return (
-    <div className="bg-home-gradient flex flex-[1_0_0] flex-col items-start self-stretch">
+    <div className={`bg-home-gradient flex flex-[1_0_0] flex-col items-start self-stretch ${input.isFocused ? 'h-full overflow-hidden' : ''}`}>
       <TopNavbar pageType="search" />
 
       <div className="flex min-h-screen flex-col items-start self-stretch">
@@ -53,7 +61,14 @@ export default function Search() {
           </div>
 
           {/* Query Box */}
-          <QueryBox containerRef={containerRef} inputRef={inputRef} input={input} filters={filters} />
+          <QueryBox
+            containerRef={containerRef}
+            inputRef={inputRef}
+            input={input}
+            filters={filters}
+            variant={shouldShowNoHistoryBox ? 'no-history' : 'default'}
+            noHistoryExpanded={isNoHistoryExpanded || input.isFocused}
+          />
         </div>
 
         {/* AI Guide Section */}

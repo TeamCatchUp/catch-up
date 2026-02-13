@@ -149,3 +149,7 @@ export const MOCK_RECENT_QUERIES: { content: RecentQueryResponse[] } = {
     },
   ],
 };
+
+export const MOCK_RECENT_QUERIES_EMPTY: { content: RecentQueryResponse[] } = {
+  content: [],
+};

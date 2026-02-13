@@ -27,7 +27,7 @@ interface FilterBarProps {
 
 export default function FilterBar({ filters, inputRef }: FilterBarProps) {
   return (
-    <div className="flex items-center gap-2.5 self-stretch overflow-x-scroll px-1.5 whitespace-nowrap">
+    <div className="flex items-center gap-2.5 self-stretch overflow-x-scroll py-0.5 whitespace-nowrap">
       <div className="flex items-center gap-2.5">
         <SearchOptionButton Icon={IconJira} label="Jira" selected={filters.selectedSources.includes('jira')} onClick={() => filters.toggleSource('jira')} />
         <SearchOptionButton Icon={IconGithub} label="Github" selected={filters.selectedSources.includes('github')} onClick={() => filters.toggleSource('github')} />

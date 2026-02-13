@@ -7,6 +7,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { getStorageKeys, NODE_TO_UI_STEP } from '@/features/chat/constants/config';
 import { useRagStream } from '@/features/chat/hooks/useRagStream';
@@ -81,6 +82,7 @@ export const useRagChat = ({
 
   // SSE Stream
   const stream = useRagStream(sessionId);
+  const queryClient = useQueryClient();
 
   // Chat State - initialize from localStorage
   const [chatData, setChatData] = useState<ChatData | null>(() => {
@@ -246,6 +248,7 @@ export const useRagChat = ({
 
         case 'result': {
           window.dispatchEvent(new Event('refresh_sidebar'));
+          void queryClient.invalidateQueries({ queryKey: chatQueries.lists() });
           console.log('[useRagChat] result received');
 
           appendAssistantAnswer(
@@ -265,7 +268,7 @@ export const useRagChat = ({
           break;
       }
     },
-    [appendAssistantAnswer, stream],
+    [appendAssistantAnswer, queryClient, stream],
   );
 
   /** 메시지 전송 */

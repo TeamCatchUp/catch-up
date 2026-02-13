@@ -1,12 +1,12 @@
 """
-GitHub Connector
+Github Connector
 
-GitHub 데이터 수집 및 PGVector 적재를 위한 커넥터.
+Github 데이터 수집 및 PGVector 적재를 위한 커넥터.
 
 주요 컴포넌트:
-- GitHubApiClient: GitHub REST API 클라이언트
-- GitHubTransformer: API 응답 → LangChain Document 변환
-- GitHubIngestionService: 데이터 동기화 서비스
+- GitHubApiClient: Github REST API 클라이언트
+- GithubTransformer: API 응답 → LangChain Document 변환
+- GithubIngestionService: 데이터 동기화 서비스
 """
 
 from catchup.connectors.github.client import (
@@ -17,27 +17,24 @@ from catchup.connectors.github.client import (
     GitHubNotFoundError,
 )
 from catchup.connectors.github.schemas import (
-    GitHubUser,
-    GitHubLabel,
-    GitHubMilestone,
-    GitHubReaction,
-    GitHubIssue,
-    GitHubIssueComment,
-    GitHubPullRequest,
-    GitHubPRReview,
-    GitHubCommit,
-    GitHubCommitFile,
-    GitHubRepository,
+    GithubUser,
+    GithubIssue,
+    GithubIssueComment,
+    GithubPullRequest,
+    GithubPRReview,
+    GithubCommit,
+    GithubCommitFile,
+    GithubRepository,
     PRFileContext,
     PRComment,
 )
-from catchup.connectors.github.transformers import GitHubTransformer
+from catchup.connectors.github.transformers import GithubTransformer
 from catchup.connectors.github.auth import (
     GitHubAppService,
     get_github_app_service,
 )
 # Note: service, factory는 순환 import 방지를 위해 직접 import 필요
-# from catchup.connectors.github.service import GitHubIngestionService
+# from catchup.connectors.github.service import GithubIngestionService
 # from catchup.connectors.github.factory import get_github_service
 
 __all__ = [
@@ -48,21 +45,18 @@ __all__ = [
     "GitHubAuthError",
     "GitHubNotFoundError",
     # Schemas
-    "GitHubUser",
-    "GitHubLabel",
-    "GitHubMilestone",
-    "GitHubReaction",
-    "GitHubIssue",
-    "GitHubIssueComment",
-    "GitHubPullRequest",
-    "GitHubPRReview",
-    "GitHubCommit",
-    "GitHubCommitFile",
-    "GitHubRepository",
+    "GithubUser",
+    "GithubIssue",
+    "GithubIssueComment",
+    "GithubPullRequest",
+    "GithubPRReview",
+    "GithubCommit",
+    "GithubCommitFile",
+    "GithubRepository",
     "PRFileContext",
     "PRComment",
     # Transformer
-    "GitHubTransformer",
+    "GithubTransformer",
     # Auth
     "GitHubAppService",
     "get_github_app_service",
