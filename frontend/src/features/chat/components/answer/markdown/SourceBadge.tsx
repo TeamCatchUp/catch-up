@@ -1,11 +1,13 @@
 import Github from '/public/icons/logo/GitHub.svg';
 import Jira from '/public/icons/logo/Jira.svg';
+import Slack from '/public/icons/logo/Slack.svg';
 
-export type SourceType = 'jira' | 'github';
+export type SourceType = 'jira' | 'github' | 'slack';
 
 const SOURCE_LOGO: Record<SourceType, React.FC<React.SVGProps<SVGElement>>> = {
   github: Github,
   jira: Jira,
+  slack: Slack,
 };
 
 const SourceBadge = ({ n, sourceType }: { n: string; sourceType: SourceType }) => {
