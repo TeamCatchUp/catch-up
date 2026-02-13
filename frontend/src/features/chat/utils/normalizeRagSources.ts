@@ -1,75 +1,118 @@
-/** 백엔드 소스 데이터를 UI용으로 정규화 */
-
 import type { BackendSource } from '@/features/chat/types/source';
-import { formatDate } from '@/shared/utils/formatDate';
+import { formatDate, formatFullDate } from '@/shared/utils/formatDate';
 
-/** 백엔드 source + entity_type 조합을 UI source_type으로 변환 */
-const getUiSourceType = (source: string, entityType: string): ChatSource['source_type'] => {
+const getUiSourceType = (source: BackendSource['source'], entityType: string): ChatSource['source_type'] => {
   if (source === 'github') {
     if (entityType === 'code') return 'code';
     if (entityType === 'pr') return 'pr';
-    if (entityType === 'issue') return 'github_issue';
+    if (entityType === 'issue' || entityType === 'comment') return 'github_issue';
   }
+
   if (source === 'slack' && entityType === 'message') return 'slack';
   if (source === 'jira') return 'jira';
 
-  // fallback
   return 'code';
 };
 
-/** 파일 경로에서 마지막 파일명 추출 */
 const getLastPath = (path?: string) => {
   if (!path) return '';
   const cleaned = path.replace(/\+$/, '');
   return cleaned.split('/').pop() ?? cleaned;
 };
 
-/** 코드 변경일 포맷팅 */
 const formatDaysAgo = (daysAgo?: number) => {
   if (typeof daysAgo !== 'number') return '';
   return `${daysAgo}일 전 변경`;
 };
 
-/** 백엔드 소스 배열을 UI용 ChatSource로 변환 */
+const formatCreatedAt = (createdAt?: number | string) => {
+  if (createdAt === null || createdAt === undefined || createdAt === '') return '';
+
+  if (typeof createdAt === 'number') {
+    return formatDate(createdAt);
+  }
+
+  const trimmed = createdAt.trim();
+  if (!trimmed) return '';
+
+  const asNumber = Number(trimmed);
+  if (!Number.isNaN(asNumber) && Number.isFinite(asNumber)) {
+    return formatDate(asNumber);
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+
+  return formatFullDate(parsed.toISOString());
+};
+
+const getSourceLink = (source: BackendSource) => source.html_url ?? source.url ?? '';
+
+const getSourceContent = (source: BackendSource) =>
+  source.citation_rationale?.trim() || source.content?.trim() || source.text?.trim() || '';
+
+const getRepoText = (source: BackendSource, sourceType: ChatSource['source_type']) => {
+  if (sourceType === 'slack') {
+    return source.channel_name ?? source.repo ?? '';
+  }
+
+  if (source.owner && source.repo) {
+    return `${source.owner}/${source.repo}`;
+  }
+
+  return source.repo ?? '';
+};
+
+const getTitleText = (source: BackendSource, sourceType: ChatSource['source_type']) => {
+  if (sourceType === 'pr') {
+    return source.title ?? (source.number ? `PR #${source.number}` : '');
+  }
+
+  if (sourceType === 'jira') {
+    if (source.issue_key && source.summary) {
+      return `[${source.issue_key}] ${source.summary}`;
+    }
+    return source.title ?? source.summary ?? source.issue_key ?? '';
+  }
+
+  if (sourceType === 'code') {
+    return getLastPath(source.file_path) || source.title || '';
+  }
+
+  if (sourceType === 'slack') {
+    return source.title ?? 'Slack 메시지';
+  }
+
+  return source.title ?? (source.number ? `Issue #${source.number}` : '');
+};
+
 export const normalizeSources = (sources: BackendSource[]): ChatSource[] => {
-  return (sources ?? [])
-    .filter((s) => !!s.html_url)
-    .map((s) => {
-      const sourceType = getUiSourceType(s.source, s.entity_type);
+  return (sources ?? []).map((source, index) => {
+    const sourceType = getUiSourceType(source.source, source.entity_type);
 
-      // repo
-      const repo = sourceType === 'slack' ? (s.channel_name ?? s.repo ?? '') : (s.repo ?? '');
+    const date =
+      sourceType === 'code'
+        ? formatDaysAgo(source.days_ago) || formatCreatedAt(source.created_at)
+        : formatCreatedAt(source.created_at);
 
-      // title
-      const title =
-        sourceType === 'pr'
-          ? (s.title ?? '')
-          : sourceType === 'jira'
-            ? (s.summary ?? '')
-            : sourceType === 'code'
-              ? getLastPath(s.file_path) || ''
-              : sourceType === 'slack'
-                ? 'Slack 메시지'
-                : '';
+    const author =
+      sourceType === 'code'
+        ? source.author ?? ''
+        : source.assignee_name ?? source.assignee ?? source.author ?? '';
 
-      // date
-      const date =
-        sourceType === 'code' ? formatDaysAgo(s.days_ago) : s.created_at ? formatDate(s.created_at) : '';
-
-      // author
-      const author = sourceType === 'code' ? (s.author ?? '') : (s.assignee_name ?? s.author ?? '');
-
-      return {
-        id: crypto.randomUUID(),
-        source_type: sourceType,
-        is_cited: s.is_cited,
-        repo,
-        title,
-        content: s.content ?? '',
-        date,
-        author,
-        html_url: s.html_url ?? '',
-        source_index: s.index,
-      };
-    });
+    return {
+      id: crypto.randomUUID(),
+      source_type: sourceType,
+      is_cited: source.is_cited ?? false,
+      repo: getRepoText(source, sourceType),
+      title: getTitleText(source, sourceType),
+      content: getSourceContent(source),
+      date,
+      author,
+      html_url: getSourceLink(source),
+      source_index: typeof source.index === 'number' ? source.index : index + 1,
+    };
+  });
 };

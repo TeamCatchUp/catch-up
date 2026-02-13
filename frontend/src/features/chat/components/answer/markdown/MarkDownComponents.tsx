@@ -13,8 +13,6 @@ const processChildren = (children: React.ReactNode, sources?: ChatSource[]) => {
 };
 
 export const MarkDownComponents = (sources?: ChatSource[]): Components => {
-  console.log('MarkDownComponents initialized with sources:', sources);
-
   return {
     // 표 관련 컴포넌트
     table: ({ children }) => (

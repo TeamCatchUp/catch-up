@@ -1,32 +1,40 @@
 import SourceBadge, { SourceType } from './SourceBadge';
 
-export const renderWithBadges = (text: string, sources?: ChatSource[]): React.ReactNode => {
-  if (!sources?.length) {
-    return text;
+const CITATION_PATTERN = /\[(\d+)\]/g;
+
+const getCitationDisplayOrderMap = (text: string) => {
+  const map = new Map<number, number>();
+  const matches = text.matchAll(CITATION_PATTERN);
+
+  for (const match of matches) {
+    const sourceIndex = Number(match[1]);
+    if (!Number.isFinite(sourceIndex) || map.has(sourceIndex)) continue;
+    map.set(sourceIndex, map.size + 1);
   }
 
+  return map;
+};
+
+export const renderWithBadges = (text: string, sources?: ChatSource[]): React.ReactNode => {
+  if (!sources?.length) return text;
+
   const sourceMap = new Map<number, ChatSource>();
-  sources.forEach((s) => {
-    sourceMap.set(s.source_index, s);
+  sources.forEach((source) => {
+    sourceMap.set(source.source_index, source);
   });
 
+  const displayOrderMap = getCitationDisplayOrderMap(text);
   const parts = text.split(/(\[\d+\])/g);
 
   return (
     <>
-      {parts.map((part, i) => {
+      {parts.map((part, index) => {
         const match = part.match(/^\[(\d+)\]$/);
+        if (!match) return <span key={index}>{part}</span>;
 
-        if (!match) {
-          return <span key={i}>{part}</span>;
-        }
-
-        const num = Number(match[1]);
-        const source = sourceMap.get(num);
-
-        if (!source) {
-          return <span key={i}>{part}</span>;
-        }
+        const sourceIndex = Number(match[1]);
+        const source = sourceMap.get(sourceIndex);
+        if (!source) return <span key={index}>{part}</span>;
 
         const badgeType: SourceType =
           source.source_type === 'jira'
@@ -35,7 +43,13 @@ export const renderWithBadges = (text: string, sources?: ChatSource[]): React.Re
               ? 'slack'
               : 'github';
 
-        return <SourceBadge key={i} n={String(num)} sourceType={badgeType} />;
+        return (
+          <SourceBadge
+            key={index}
+            n={String(displayOrderMap.get(sourceIndex) ?? sourceIndex)}
+            sourceType={badgeType}
+          />
+        );
       })}
     </>
   );

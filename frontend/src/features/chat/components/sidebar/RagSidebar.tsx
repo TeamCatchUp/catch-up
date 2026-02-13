@@ -14,6 +14,7 @@ interface RagSidebarProps {
 const RagSidebar = ({ currentQA, isLoading, isError }: RagSidebarProps) => {
   const sourceCount = currentQA?.answer?.sources?.length ?? 0;
   const sources = currentQA?.answer?.sources ?? [];
+  const answerContent = currentQA?.answer?.content ?? '';
 
   return (
     <div className="border-neutral-3 flex w-100 flex-none flex-col border-l bg-white">
@@ -21,6 +22,7 @@ const RagSidebar = ({ currentQA, isLoading, isError }: RagSidebarProps) => {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <SourceList
           sources={sources}
+          answerContent={answerContent}
           isLoading={isLoading}
           isError={isError}
         />
