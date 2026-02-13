@@ -137,7 +137,7 @@ const MOCK_CHAT_SOURCES: ChatSource[] = [
  */
 export const MOCK_SOURCES: MockSource[] = [
   {
-    index: 0,
+    index: 1,
     is_cited: true,
     source: 'github',
     entity_type: 'code',
@@ -168,7 +168,7 @@ export const MOCK_SOURCES: MockSource[] = [
     language: 'typescript',
   },
   {
-    index: 1,
+    index: 2,
     is_cited: true,
     source: 'slack',
     entity_type: 'message',
@@ -198,7 +198,7 @@ mockChatService에서는 일단 콘솔 로그만 찍히게 해뒀어요.`,
     ts: '1738324800',
   },
   {
-    index: 2,
+    index: 3,
     is_cited: true,
     source: 'jira',
     entity_type: 'issue',
@@ -247,37 +247,25 @@ const documents = await this.vectorStore.search(query, { limit: 10 });
 
 팀원들 간의 논의 내용[2]을 보면, \`is_cited\` 플래그로 cited/uncited를 구분하여 상단에는 강조 표시, 하단에는 회색으로 표시하도록 구현되었습니다.
 
+### 5. 개발 진행 상황
+
+현재 CatchUp RAG 기능의 개발 진행 상황은 다음과 같습니다[3]:
+
+| 기능 | 상태 | 담당자 | 참조 |
+|------|:----:|-------:|:----:|
+| 벡터 검색 | 완료 | 정성훈 | [1] |
+| Reranker 통합 | 완료 | 정성훈 | [1] |
+| 답변 생성 | 완료 | 팀원C | [1] |
+| UI 렌더링 | 완료 | 팀원E | [2] |
+| Cited/Uncited 구분 | 완료 | 팀원E | [3] |
+| 피드백 수집 | 진행 중 | 팀원E | [2] |
+| 테이블 렌더링 지원 | 테스트 중 | - | - |
+
 ### 참고사항
 - 벡터 검색 모델: OpenAI text-embedding-3-large
 - Reranker 모델: Cohere rerank-multilingual-v3.0
 - LLM: GPT-4 Turbo
 `;
-
-/**
- * 관련 Jira 이슈 Mock 데이터 (MockSource[] 타입, 1개 항목)
- * PR 선택 후 재질문 시나리오 테스트용
- *
- * 사용처:
- * - 현재 미사용 (향후 PR 컨텍스트 기반 재질문 기능에서 활용 예정)
- */
-export const MOCK_RELATED_JIRA_ISSUES: MockSource[] = [
-  {
-    index: 0,
-    is_cited: true,
-    source: 'jira',
-    entity_type: 'issue',
-    relevance_score: 0.9,
-    html_url: 'https://jira.catchup.io/browse/CATCH-100',
-    content: '인증 시스템 전반 개선 - OAuth 2.0 적용, 토큰 갱신 로직 개선, 보안 강화',
-    owner: 'CATCH',
-    repo: '',
-    summary: '인증 시스템 개선',
-    project_name: 'CatchUp',
-    issue_key: 'CATCH-100',
-    parent_key: 'CATCH-EPIC-01',
-    parent_summary: '보안 강화 에픽',
-  },
-];
 
 /**
  * 다중 QA 테스트용 초기 메시지 (3쌍)
