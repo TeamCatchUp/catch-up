@@ -1,7 +1,7 @@
 """
-GitHub Sync API Endpoints
+Github Sync API Endpoints
 
-GitHub 데이터 동기화 API.
+Github 데이터 동기화 API.
 
 Endpoints:
 - POST /full: 전체 동기화
@@ -18,9 +18,10 @@ from sqlalchemy.orm import Session
 from catchup.db.dependencies import get_db
 from catchup.db.github import sync_repository as github_sync
 from catchup.db.github import domain_repository as github_entities
+from catchup.db.github.domain_repository import RepositoryUpsertData
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
-from catchup.connectors.github.service import GitHubIngestionService
+from catchup.connectors.github.service import GithubIngestionService
 from catchup.connectors.github.schemas import FullSyncRequest as ServiceFullSyncRequest
 from catchup.utils.scheduler import flush_github_events
 
@@ -35,7 +36,7 @@ router = APIRouter(prefix="/api/v1/github/sync", tags=["github-sync"])
 
 class FullSyncRequest(BaseModel):
     """전체 동기화 요청"""
-    installation_id: int = Field(..., description="GitHub App Installation ID")
+    installation_id: int = Field(..., description="Github App Installation ID")
     repo_ids: list[int] | None = Field(
         default=None,
         description="동기화할 Repository ID 목록. None이면 모든 접근 가능 레포"
@@ -73,14 +74,14 @@ class SyncStateResponse(BaseModel):
 async def _get_ingestion_service(
     db: Session,
     installation_id: int,
-) -> GitHubIngestionService:
-    """GitHubIngestionService 인스턴스 생성"""
+) -> GithubIngestionService:
+    """GithubIngestionService 인스턴스 생성"""
     # Installation 정보 확인
     installation = get_installation_by_installation_id(db, installation_id)
     if not installation:
         raise HTTPException(
             status_code=404,
-            detail=f"GitHub Installation not found: {installation_id}"
+            detail=f"Github Installation not found: {installation_id}"
         )
 
     # Installation Access Token 발급
@@ -88,7 +89,7 @@ async def _get_ingestion_service(
     access_token = await github_app_service.get_installation_access_token(installation_id)
 
     # Service 인스턴스 생성 및 초기화
-    service = GitHubIngestionService(installation_id, access_token)
+    service = GithubIngestionService(installation_id, access_token)
     await service.initialize()
 
     return service
@@ -254,9 +255,32 @@ async def refresh_repositories(
         service = await _get_ingestion_service(db, installation_id)
 
         # GitHub API에서 레포 목록 조회
-        repos_data = await service.client.list_installation_repos()
+        raw_repos = await service.client.list_installation_repos()
 
-        # RDBMS에 벌크 저장
+        # dict → DTO 변환 후 RDBMS에 벌크 저장
+        repos_data = [
+            RepositoryUpsertData(
+                repo_id=repo.get("id", 0),
+                owner=repo.get("owner", {}).get("login", ""),
+                name=repo.get("name", ""),
+                full_name=repo.get("full_name", ""),
+                html_url=repo.get("html_url", ""),
+                description=repo.get("description"),
+                default_branch=repo.get("default_branch", "main"),
+                language=repo.get("language"),
+                topics=repo.get("topics", []),
+                stargazers_count=repo.get("stargazers_count", 0),
+                forks_count=repo.get("forks_count", 0),
+                open_issues_count=repo.get("open_issues_count", 0),
+                private=repo.get("private", False),
+                archived=repo.get("archived", False),
+                disabled=repo.get("disabled", False),
+                pushed_at=repo.get("pushed_at"),
+                repo_created_at=repo.get("created_at"),
+                repo_updated_at=repo.get("updated_at"),
+            )
+            for repo in raw_repos
+        ]
         count = github_entities.upsert_repositories_bulk(db, installation_id, repos_data)
 
         logger.info(f"Refreshed {count} repositories for installation {installation_id}")

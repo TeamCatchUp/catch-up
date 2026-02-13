@@ -1,7 +1,7 @@
 """
-GitHub Ingestion Service
+Github Ingestion Service
 
-GitHub 데이터 동기화 및 PGVector 적재를 담당하는 서비스.
+Github 데이터 동기화 및 PGVector 적재를 담당하는 서비스.
 
 동기화 순서:
 1. Repositories → RDBMS (Installation 접근 가능 레포 목록)
@@ -19,7 +19,9 @@ Note:
 """
 
 import asyncio
+import httpx
 import logging
+import traceback
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
@@ -34,20 +36,22 @@ from catchup.connectors.github.client import (
     GitHubNotFoundError,
 )
 from catchup.connectors.github.schemas import (
-    GitHubUser,
-    GitHubIssue,
-    GitHubPullRequest,
-    GitHubCommit,
+    GithubUser,
+    GithubIssue,
+    GithubPullRequest,
+    GithubCommit,
     PRFileContext,
+    PRComment,
     FullSyncRequest,
-    IncrementalSyncRequest
+    IncrementalSyncRequest,
 )
-from catchup.connectors.github.transformers import GitHubTransformer
+from catchup.connectors.github.transformers import GithubTransformer
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
 from catchup.db.github import sync_repository as github_sync
 from catchup.db.github import domain_repository as github_entities
+from catchup.db.github.domain_repository import RepositoryUpsertData, UserUpsertData
 from catchup.db.github import installation_repository as github_installation
 from catchup.db.models import GithubEntityType, GithubSyncStatus, GithubInstallationType
 
@@ -76,12 +80,39 @@ class SyncOperation:
     PR_SYNC = "PR_SYNC"
 
 
-class GitHubIngestionService:
+def _convert_repos_to_dto(raw_repos: list[dict]) -> list[RepositoryUpsertData]:
+    """GitHub API 응답 dict 리스트를 RepositoryUpsertData DTO 리스트로 변환"""
+    return [
+        RepositoryUpsertData(
+            repo_id=repo.get("id", 0),
+            owner=repo.get("owner", {}).get("login", ""),
+            name=repo.get("name", ""),
+            full_name=repo.get("full_name", ""),
+            html_url=repo.get("html_url", ""),
+            description=repo.get("description"),
+            default_branch=repo.get("default_branch", "main"),
+            language=repo.get("language"),
+            topics=repo.get("topics", []),
+            stargazers_count=repo.get("stargazers_count", 0),
+            forks_count=repo.get("forks_count", 0),
+            open_issues_count=repo.get("open_issues_count", 0),
+            private=repo.get("private", False),
+            archived=repo.get("archived", False),
+            disabled=repo.get("disabled", False),
+            pushed_at=repo.get("pushed_at"),
+            repo_created_at=repo.get("created_at"),
+            repo_updated_at=repo.get("updated_at"),
+        )
+        for repo in raw_repos
+    ]
+
+
+class GithubIngestionService:
     """
-    GitHub 데이터 수집 및 PGVector 적재 서비스
+    Github 데이터 수집 및 PGVector 적재 서비스
 
     Usage:
-        service = GitHubIngestionService(installation_id, access_token)
+        service = GithubIngestionService(installation_id, access_token)
         await service.initialize()
         result = await service.full_sync(db, repo_ids=[12345, 67890])
     """
@@ -94,7 +125,7 @@ class GitHubIngestionService:
     ):
         """
         Args:
-            installation_id: GitHub App Installation ID
+            installation_id: Github App Installation ID
             access_token: Installation Access Token
             enable_summarization: 임베딩 전 LLM 요약 활성화 여부
         """
@@ -103,12 +134,12 @@ class GitHubIngestionService:
         self.enable_summarization = enable_summarization
 
         self.client = GitHubApiClient(access_token)
-        self.transformer: GitHubTransformer | None = None
+        self.transformer: GithubTransformer | None = None
         self.repository = PGVectorRepository()
         self.summarizer: SummarizerService | None = None
 
         # 사용자 캐시 (멘션 변환용)
-        self.user_cache: dict[str, GitHubUser] = {}
+        self.user_cache: dict[str, GithubUser] = {}
 
     async def initialize(self) -> None:
         """
@@ -119,14 +150,14 @@ class GitHubIngestionService:
         - Summarizer 초기화 (요약 활성화 시)
         """
         await self.repository.initialize()
-        self.transformer = GitHubTransformer(self.user_cache)
+        self.transformer = GithubTransformer(self.user_cache)
 
         # Summarizer 초기화 (요약 활성화 시)
         if self.enable_summarization:
             self.summarizer = get_summarizer_service()
             logger.info("Summarization enabled for embedding optimization")
 
-        logger.info(f"GitHubIngestionService initialized for installation {self.installation_id}")
+        logger.info(f"GithubIngestionService initialized for installation {self.installation_id}")
 
     # ============================================================
     # Sync Status Management Helpers
@@ -201,13 +232,13 @@ class GitHubIngestionService:
             f"(retry after {error.retry_after}s)"
         )
 
-    def _update_user_cache(self, users_data: list[dict]) -> None:
+    def _update_user_cache(self, users_data: list[UserUpsertData]) -> None:
         """User 캐시 업데이트 (멘션 변환용)"""
         for user in users_data:
-            self.user_cache[user["login"]] = GitHubUser(
-                id=user["database_id"],
-                login=user["login"],
-                avatar_url=user.get("avatar_url"),
+            self.user_cache[user.login] = GithubUser(
+                id=user.database_id,
+                login=user.login,
+                avatar_url=user.avatar_url,
             )
         logger.debug(f"[GITHUB][{SyncOperation.USER_SYNC}] Updated user cache: {len(users_data)} users")
 
@@ -324,7 +355,17 @@ class GitHubIngestionService:
                         f"[GITHUB][{SyncOperation.USER_SYNC}] Found {len(members)} members "
                         f"in organization '{account_login}'"
                     )
-                    users_data.extend(members)
+                    users_data.extend([
+                        UserUpsertData(
+                            database_id=m.get("database_id"),
+                            login=m.get("login", ""),
+                            name=m.get("name"),
+                            email=m.get("email"),
+                            avatar_url=m.get("avatar_url"),
+                            org_role=m.get("org_role"),
+                        )
+                        for m in members
+                    ])
                 except GitHubApiError as e:
                     error_msg = (
                         f"Failed to fetch org members for '{account_login}': {e}. "
@@ -339,14 +380,14 @@ class GitHubIngestionService:
                 try:
                     user_info = await self.client.get_user(account_login)
                     if user_info:
-                        users_data.append({
-                            "database_id": user_info.get("id"),
-                            "login": user_info.get("login"),
-                            "name": user_info.get("name"),
-                            "email": user_info.get("email"),
-                            "avatar_url": user_info.get("avatar_url"),
-                            "org_role": None,
-                        })
+                        users_data.append(UserUpsertData(
+                            database_id=user_info.get("id"),
+                            login=user_info.get("login", ""),
+                            name=user_info.get("name"),
+                            email=user_info.get("email"),
+                            avatar_url=user_info.get("avatar_url"),
+                            org_role=None,
+                        ))
                         logger.info(f"[GITHUB][{SyncOperation.USER_SYNC}] Found user '{account_login}'")
                 except GitHubApiError as e:
                     logger.warning(f"[GITHUB][{SyncOperation.USER_SYNC}] Failed to fetch user '{account_login}': {e}")
@@ -371,6 +412,26 @@ class GitHubIngestionService:
             logger.error(f"[GITHUB][{SyncOperation.USER_SYNC}] Unexpected error: {e}", exc_info=True)
             self._fail_sync(db, repo_full_name, GithubEntityType.USER, str(e), SyncOperation.USER_SYNC)
             return {"synced": 0, "errors": 1}
+        
+    async def sync_installation_metadata(self, db : Session) -> dict[str, Any]:
+        """
+        Installtion 메타데이터 동기화 (Users + Repository)
+        """
+        logger.info(
+            f"[GITHUB][INSTALLATION] Starting User + Repository Sync "
+            f"for installation {self.installation_id}"
+        )
+
+        users_result = await self._sync_users(db)
+        repo_names = await self._sync_repositories(db)
+
+        logger.info(
+            f"[GITHUB][INSTALLATION] Completed User + Repository Sync "
+            f"users : {users_result}, repositories {repo_names}"
+        )
+
+        return {"users": users_result, "repositories": repo_names}
+
 
     async def _sync_repositories(self, db: Session) -> list[str]:
         """
@@ -385,8 +446,11 @@ class GitHubIngestionService:
             # 동기화 시작
             self._start_sync(db, repo_full_name, GithubEntityType.REPOSITORY, SyncOperation.REPO_SYNC)
 
-            repos_data = await self.client.list_installation_repos()
-            logger.info(f"[GITHUB][{SyncOperation.REPO_SYNC}] Found {len(repos_data)} accessible repositories")
+            raw_repos = await self.client.list_installation_repos()
+            logger.info(f"[GITHUB][{SyncOperation.REPO_SYNC}] Found {len(raw_repos)} accessible repositories")
+
+            # dict → DTO 변환
+            repos_data = _convert_repos_to_dto(raw_repos)
 
             # RDBMS에 벌크 저장
             github_entities.upsert_repositories_bulk(
@@ -395,7 +459,7 @@ class GitHubIngestionService:
 
             # 동기화 완료
             self._complete_sync(db, repo_full_name, GithubEntityType.REPOSITORY, len(repos_data), SyncOperation.REPO_SYNC)
-            return [repo["full_name"] for repo in repos_data]
+            return [repo.full_name for repo in repos_data]
 
         except GitHubRateLimitError as e:
             self._handle_rate_limit(db, repo_full_name, GithubEntityType.REPOSITORY, e, SyncOperation.REPO_SYNC)
@@ -458,23 +522,18 @@ class GitHubIngestionService:
             # 동기화 시작
             self._start_sync(db, full_name, GithubEntityType.ISSUE, SyncOperation.ISSUE_SYNC)
 
-            # Issue 목록 조회
-            issues_data = await self.client.list_all_issues(
-                owner=owner, repo=repo, state="all", since=since
+            # Issue 목록 조회 (GraphQL - 코멘트 포함)
+            issues_data = await self.client.list_issues_graphql(
+                owner=owner,
+                repo=repo,
+                since=since,
             )
             logger.info(f"[GITHUB][{SyncOperation.ISSUE_SYNC}] Found {len(issues_data)} issues in {full_name}")
 
             for issue_data in issues_data:
                 try:
-                    # 코멘트 조회
-                    comments = []
-                    if issue_data.get("comments", 0) > 0:
-                        comments = await self.client.get_issue_comments(
-                            owner, repo, issue_data["number"]
-                        )
-
-                    # 파싱 및 변환
-                    issue = self.transformer.parse_issue(issue_data, comments)
+                    # 파싱 및 변환 (GraphQL 응답에 코멘트 이미 포함됨)
+                    issue = self.transformer.parse_issue(issue_data)
                     doc = self.transformer.transform_issue(
                         issue, owner, repo, self.installation_id
                     )
@@ -546,10 +605,7 @@ class GitHubIngestionService:
             prs_data = await self.client.list_pull_requests_graphql(
                 owner=owner,
                 repo=repo,
-                states=None,  # 모든 상태
                 since=since,
-                reviews_limit=settings.GITHUB_SYNC_REVIEWS_LIMIT,
-                commits_limit=100,
             )
             logger.info(f"[GITHUB][{SyncOperation.PR_SYNC}] Found {len(prs_data)} pull requests in {full_name} (GraphQL batch)")
 
@@ -559,13 +615,8 @@ class GitHubIngestionService:
                     if (idx + 1) % 50 == 0:
                         logger.info(f"[GITHUB][{SyncOperation.PR_SYNC}] Processing PR {idx + 1}/{len(prs_data)} in {full_name}")
 
-                    # GraphQL 응답에 포함된 상세 정보 추출
-                    reviews = pr_data.pop("_reviews", [])
-                    comments = pr_data.pop("_comments", [])
-                    commits = pr_data.pop("_commits", [])
-
-                    # 파싱 및 변환
-                    pr = self.transformer.parse_pull_request(pr_data, reviews, comments, commits)
+                    # GraphQL 노드를 직접 파싱
+                    pr = self.transformer.parse_pull_request(pr_data)
                     doc = self.transformer.transform_pull_request(
                         pr, owner, repo, self.installation_id
                     )
@@ -573,7 +624,6 @@ class GitHubIngestionService:
                     doc_ids.append(doc.id)
 
                 except Exception as e:
-                    import traceback
                     logger.warning(f"[GITHUB][{SyncOperation.PR_SYNC}] Failed to process PR #{pr_data.get('number')}: {e}")
                     logger.debug(f"PR processing error traceback:\n{traceback.format_exc()}")
                     errors += 1
@@ -630,7 +680,8 @@ class GitHubIngestionService:
             # 0. Repository 동기화
             if request.update_repos:
                 try:
-                    repos_data = await self.client.list_installation_repos()
+                    raw_repos = await self.client.list_installation_repos()
+                    repos_data = _convert_repos_to_dto(raw_repos)
                     github_entities.upsert_repositories_bulk(
                         db, self.installation_id, repos_data
                     )
@@ -837,7 +888,6 @@ class GithubService:
     """
 
     def __init__(self):
-        import httpx
         self.token = settings.GITHUB_TOKEN
         self.base_url = settings.GITHUB_BASE_URL
         self.headers = {
@@ -849,8 +899,6 @@ class GithubService:
     async def get_pr_context(
         self, owner: str, repo: str, pr_number: int
     ) -> list[PRFileContext]:
-        import httpx
-
         async with httpx.AsyncClient(headers=self.headers, timeout=20.0) as client:
             try:
                 base_path = f"{self.base_url}/{owner}/{repo}/pulls/{pr_number}"
@@ -885,8 +933,6 @@ class GithubService:
     def _merge_files_and_comments(
         self, files_data: list[dict[str, Any]], comments_data: list[dict[str, Any]]
     ) -> list[PRFileContext]:
-        from catchup.connectors.github.schemas import PRComment
-
         merged_files: dict[str, dict] = {}
 
         for file in files_data:
