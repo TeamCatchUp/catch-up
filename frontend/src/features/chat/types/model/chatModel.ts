@@ -30,7 +30,7 @@ export interface PRPayloadModel {
   repo_name: string;
   summary: string;
   owner: string;
-  created_at: number;
+  created_at: string;
 }
 
 /**

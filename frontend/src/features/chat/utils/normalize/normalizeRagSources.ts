@@ -1,5 +1,5 @@
 import type { BackendSource, ChatSource } from '@/features/chat/types';
-import { formatDate, formatFullDate } from '@/shared/utils/formatDate';
+import { formatFullDate } from '@/shared/utils/formatDate';
 
 /**
  * source/entity_type을 UI용 source_type으로 변환
@@ -62,20 +62,10 @@ const formatDaysAgo = (daysAgo?: number) => {
  * @param createdAt - Unix timestamp 또는 ISO 문자열
  * @returns 포맷된 날짜 또는 빈 문자열
  */
-const formatCreatedAt = (createdAt?: number | string) => {
-  if (createdAt === null || createdAt === undefined || createdAt === '') return '';
-
-  if (typeof createdAt === 'number') {
-    return formatDate(createdAt);
-  }
-
+const formatCreatedAt = (createdAt?: string) => {
+  if (!createdAt) return '';
   const trimmed = createdAt.trim();
   if (!trimmed) return '';
-
-  const asNumber = Number(trimmed);
-  if (!Number.isNaN(asNumber) && Number.isFinite(asNumber)) {
-    return formatDate(asNumber);
-  }
 
   const parsed = new Date(trimmed);
   if (Number.isNaN(parsed.getTime())) {

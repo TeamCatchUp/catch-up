@@ -53,8 +53,8 @@ export interface BackendSourceApi {
   title?: string;
   pr_number?: number;
   number?: number;
-  created_at?: number | string;
-  updated_at?: number | string;
+  created_at?: string;
+  updated_at?: string;
   author?: string;
 
   // jira

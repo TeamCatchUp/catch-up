@@ -1,3 +1,5 @@
+import { formatFullDate } from '@/shared/utils/formatDate';
+
 import type { MockChatSource, MockMessage, MockSource } from './types';
 
 export const MOCK_STREAM_STATUS_STEPS: Array<{ node: string; message: string }> = [
@@ -23,7 +25,7 @@ export const MOCK_SOURCES: MockSource[] = [
     repo: 'CatchUp-BE',
     title: '[CAT-317] 채팅 스트리밍 이벤트(status/sources/token) 적용',
     pr_number: 52,
-    created_at: 1739260800000,
+    created_at: '2025-02-11T08:00:00.000Z',
     author: '백엔드팀',
   },
   {
@@ -40,7 +42,7 @@ export const MOCK_SOURCES: MockSource[] = [
     project_name: 'CatchUp',
     assignee_name: '기획팀',
     status_id: 3,
-    created_at: 1739347200000,
+    created_at: '2025-02-12T08:00:00.000Z',
   },
   {
     index: 3,
@@ -56,7 +58,7 @@ export const MOCK_SOURCES: MockSource[] = [
     ts: '1739433600.000100',
     title: '프론트/백엔드 스트리밍 동기화 메모',
     author: '프론트엔드팀',
-    created_at: 1739433600000,
+    created_at: '2025-02-13T08:00:00.000Z',
   },
   {
     index: 4,
@@ -73,7 +75,7 @@ export const MOCK_SOURCES: MockSource[] = [
     title: 'useRagChat: token 누적 및 종료 처리',
     author: '프론트엔드팀',
     days_ago: 1,
-    created_at: 1739516400000,
+    created_at: '2025-02-14T07:00:00.000Z',
   },
   {
     index: 5,
@@ -89,7 +91,7 @@ export const MOCK_SOURCES: MockSource[] = [
     project_name: 'CatchUp',
     assignee_name: '백엔드팀',
     status_id: 1,
-    created_at: 1739520000000,
+    created_at: '2025-02-14T08:00:00.000Z',
   },
 ];
 
@@ -134,11 +136,11 @@ const toSourceTitle = (source: MockSource) => {
 };
 
 const formatSourceDate = (source: MockSource) => {
-  if (typeof source.created_at === 'number') {
-    return new Date(source.created_at).toISOString().slice(0, 10);
-  }
   if (typeof source.days_ago === 'number') {
-    return `${source.days_ago}d ago`;
+    return `${source.days_ago}일 전 변경`;
+  }
+  if (typeof source.created_at === 'string' && source.created_at.trim()) {
+    return formatFullDate(source.created_at);
   }
   return '';
 };

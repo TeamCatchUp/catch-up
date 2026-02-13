@@ -4,7 +4,7 @@ import { useEffect, useMemo,useRef, useState } from 'react';
 
 import type { PRPayload } from '@/features/chat/types';
 import { cn } from '@/shared/utils/cn';
-import { formatDate } from '@/shared/utils/formatDate';
+import { formatFullDate } from '@/shared/utils/formatDate';
 
 import ArrowForward from '/public/icons/icon/arrow_forward.svg';
 import Check from '/public/icons/icon/check.svg';
@@ -144,7 +144,7 @@ const GithubPRStepSkeleton = ({ prList, onContinue }: GithubPRStepSkeletonProps)
                       <div className="text-body-xsmall flex w-156 items-center gap-1.5 text-gray-50">
                         <span className="max-w-95 truncate">{pr.repo_name}</span>
                         <div className="bg-neutral-3 h-3.75 w-px" />
-                        <span>{formatDate(pr.created_at)}</span>
+                        <span>{formatFullDate(pr.created_at)}</span>
                         <div className="bg-neutral-3 h-3.75 w-px" />
                         <span>{pr.owner}</span>
                       </div>

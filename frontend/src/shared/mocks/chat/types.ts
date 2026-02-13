@@ -52,8 +52,8 @@ export interface MockSource {
   pr_number?: number;
   /** PR 상태 (open, merged, closed) */
   state?: string;
-  /** 생성 시각 (Unix timestamp) */
-  created_at?: number;
+  /** 생성 시각 (ISO 8601 문자열) */
+  created_at?: string;
   /** 작성자 */
   author?: string;
 
@@ -157,7 +157,7 @@ export interface MockPRPayload {
   repo_name: string;
   summary: string;
   owner: string;
-  created_at: number;
+  created_at: string;
 }
 
 /**

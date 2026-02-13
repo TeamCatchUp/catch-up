@@ -10,8 +10,14 @@ const TOKEN_CHUNK_SIZE = 3; // 토큰을 몇 글자씩 나눌지
 const STATUS_DELAY_MS = 500; // status 이벤트 간격
 const SOURCE_DELAY_MS = 180; // sources 이벤트 지연
 const TOKEN_DELAY_MS = 28; // token 이벤트 간격 (실시간 타이핑 효과)
-const TURN_SUFFIX_DAY_MS = 24 * 60 * 60 * 1000; // 턴별 시간차 (1일)
 const DUPLICATE_REQUEST_WINDOW_MS = 1500; // 중복 요청 감지 시간 윈도우
+
+const addDaysToIsoString = (isoString: string, days: number) => {
+  const parsed = new Date(isoString);
+  if (Number.isNaN(parsed.getTime())) return isoString;
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString();
+};
 
 /**
  * 세션별 턴 상태 추적
@@ -131,7 +137,9 @@ const buildSourcesForTurn = (turn: number): typeof MOCK_SOURCES => {
     // turn2 이후 cited 인덱스: [2], [4], [5]
     const isCitedInTurn2 = index === 1 || index === 3 || index === 4;
     const createdAt =
-      typeof source.created_at === 'number' ? source.created_at + TURN_SUFFIX_DAY_MS : source.created_at;
+      typeof source.created_at === 'string'
+        ? addDaysToIsoString(source.created_at, turn - 1)
+        : source.created_at;
 
     return {
       ...source,
