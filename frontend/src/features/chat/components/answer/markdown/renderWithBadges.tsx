@@ -4,7 +4,7 @@ import SourceBadge, { SourceType } from './SourceBadge';
 
 const CITATION_PATTERN = /\[(\d+)\]/g;
 
-const getCitationDisplayOrderMap = (text: string) => {
+export const getCitationDisplayOrderMap = (text: string) => {
   const map = new Map<number, number>();
   const matches = text.matchAll(CITATION_PATTERN);
 
@@ -17,7 +17,11 @@ const getCitationDisplayOrderMap = (text: string) => {
   return map;
 };
 
-export const renderWithBadges = (text: string, sources?: ChatSource[]): React.ReactNode => {
+export const renderWithBadges = (
+  text: string,
+  sources?: ChatSource[],
+  citationOrderMap?: Map<number, number>,
+): React.ReactNode => {
   if (!sources?.length) return text;
 
   const sourceMap = new Map<number, ChatSource>();
@@ -25,7 +29,7 @@ export const renderWithBadges = (text: string, sources?: ChatSource[]): React.Re
     sourceMap.set(source.source_index, source);
   });
 
-  const displayOrderMap = getCitationDisplayOrderMap(text);
+  const displayOrderMap = citationOrderMap ?? getCitationDisplayOrderMap(text);
   const parts = text.split(/(\[\d+\])/g);
 
   return (

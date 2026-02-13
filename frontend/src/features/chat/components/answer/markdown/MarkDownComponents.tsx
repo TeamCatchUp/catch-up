@@ -5,16 +5,23 @@ import type { ChatSource } from '@/features/chat/types';
 
 import { renderWithBadges } from './renderWithBadges';
 
-const processChildren = (children: React.ReactNode, sources?: ChatSource[]) => {
+const processChildren = (
+  children: React.ReactNode,
+  sources?: ChatSource[],
+  citationOrderMap?: Map<number, number>,
+) => {
   return React.Children.map(children, (child) => {
     if (typeof child === 'string') {
-      return renderWithBadges(child, sources);
+      return renderWithBadges(child, sources, citationOrderMap);
     }
     return child;
   });
 };
 
-export const MarkDownComponents = (sources?: ChatSource[]): Components => {
+export const MarkDownComponents = (
+  sources?: ChatSource[],
+  citationOrderMap?: Map<number, number>,
+): Components => {
   return {
     // 표 관련 컴포넌트
     table: ({ children }) => (
@@ -22,15 +29,15 @@ export const MarkDownComponents = (sources?: ChatSource[]): Components => {
         <table>{children}</table>
       </div>
     ),
-    caption: ({ children }) => <caption>{processChildren(children, sources)}</caption>,
+    caption: ({ children }) => <caption>{processChildren(children, sources, citationOrderMap)}</caption>,
     thead: ({ children }) => <thead>{children}</thead>,
     tbody: ({ children }) => <tbody>{children}</tbody>,
     tr: ({ children }) => <tr>{children}</tr>,
     th: ({ children, style }) => (
-      <th style={style}>{processChildren(children, sources)}</th>
+      <th style={style}>{processChildren(children, sources, citationOrderMap)}</th>
     ),
     td: ({ children, style }) => (
-      <td style={style}>{processChildren(children, sources)}</td>
+      <td style={style}>{processChildren(children, sources, citationOrderMap)}</td>
     ),
 
     code: ({ className, children, ...props }) => {
@@ -39,7 +46,7 @@ export const MarkDownComponents = (sources?: ChatSource[]): Components => {
       if (!isCodeBlock) {
         return (
           <code className={className} {...props}>
-            {processChildren(children, sources)}
+            {processChildren(children, sources, citationOrderMap)}
           </code>
         );
       }
@@ -53,18 +60,18 @@ export const MarkDownComponents = (sources?: ChatSource[]): Components => {
 
     strong: ({ children }) => (
       <strong style={{ fontWeight: 600 }}>
-        {processChildren(children, sources)}
+        {processChildren(children, sources, citationOrderMap)}
       </strong>
     ),
 
-    p: ({ children }) => <p>{processChildren(children, sources)}</p>,
+    p: ({ children }) => <p>{processChildren(children, sources, citationOrderMap)}</p>,
 
-    li: ({ children }) => <li>{processChildren(children, sources)}</li>,
+    li: ({ children }) => <li>{processChildren(children, sources, citationOrderMap)}</li>,
 
-    h1: ({ children }) => <h1>{processChildren(children, sources)}</h1>,
+    h1: ({ children }) => <h1>{processChildren(children, sources, citationOrderMap)}</h1>,
 
-    h2: ({ children }) => <h2>{processChildren(children, sources)}</h2>,
+    h2: ({ children }) => <h2>{processChildren(children, sources, citationOrderMap)}</h2>,
 
-    h3: ({ children }) => <h3>{processChildren(children, sources)}</h3>,
+    h3: ({ children }) => <h3>{processChildren(children, sources, citationOrderMap)}</h3>,
   };
 };

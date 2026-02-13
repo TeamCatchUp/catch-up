@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
@@ -15,6 +15,7 @@ import AnswerActionButtons from './actions/AnswerActionButtons';
 import AnswerError from './actions/AnswerError';
 import FeedbackSection from './actions/FeedbackSection';
 import { MarkDownComponents } from './markdown/MarkDownComponents';
+import { getCitationDisplayOrderMap } from './markdown/renderWithBadges';
 
 import Bookmark from '/public/icons/icon/bookmark.svg';
 import BookmarkFilled from '/public/icons/icon/bookmark_filled.svg';
@@ -56,6 +57,14 @@ const RagAnswer = ({
 }: RagAnswerProps) => {
   // 섹션 로컬 UI 상태
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<Record<string, boolean>>({});
+  const formattedAnswerContent = useMemo(
+    () => formatMarkdownString(currentQA?.answer?.content ?? ''),
+    [currentQA?.answer?.content],
+  );
+  const citationOrderMap = useMemo(
+    () => getCitationDisplayOrderMap(formattedAnswerContent),
+    [formattedAnswerContent],
+  );
 
   // 답변이 있는 경우
   if (currentQA?.answer) {
@@ -67,9 +76,9 @@ const RagAnswer = ({
               <div className="markdown-body max-w-192.75 wrap-break-words">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm, remarkBreaks]}
-                  components={MarkDownComponents(currentQA.answer.sources)}
+                  components={MarkDownComponents(currentQA.answer.sources, citationOrderMap)}
                 >
-                  {formatMarkdownString(currentQA.answer.content)}
+                  {formattedAnswerContent}
                 </ReactMarkdown>
               </div>
 
