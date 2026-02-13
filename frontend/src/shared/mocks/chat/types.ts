@@ -85,3 +85,131 @@ export interface MockSource {
   /** 스레드 부모 TS */
   thread_ts?: string;
 }
+
+/**
+ * Mock UI 출처 타입.
+ * ChatSource 구조와 호환되도록 정의.
+ */
+export type MockChatSourceType = 'code' | 'pr' | 'github_issue' | 'jira' | 'slack';
+
+/**
+ * Mock UI 출처 모델.
+ * @interface MockChatSource
+ */
+export interface MockChatSource {
+  id: string;
+  source_type: MockChatSourceType;
+  is_cited: boolean;
+  repo: string;
+  title: string;
+  content: string;
+  date: string;
+  author: string;
+  html_url: string;
+  source_index: number;
+}
+
+/**
+ * Mock Jira 서브태스크 모델.
+ * @interface MockJiraSubTask
+ */
+export interface MockJiraSubTask {
+  id: string;
+  title: string;
+  issue_key?: string;
+  html_url?: string;
+}
+
+/**
+ * Mock Jira 태스크 모델.
+ * @interface MockJiraTask
+ */
+export interface MockJiraTask {
+  id: string;
+  title: string;
+  parent_key?: string;
+  parent_summary?: string;
+  subtasks: MockJiraSubTask[];
+}
+
+/**
+ * Mock 메시지 모델.
+ * @interface MockMessage
+ */
+export interface MockMessage {
+  id: string;
+  chat_history_id?: string;
+  role: 'user' | 'assistant';
+  content: string;
+  sources?: MockChatSource[];
+  detailed_tasks?: MockJiraTask[];
+  timestamp: string;
+  has_feedback?: boolean;
+}
+
+/**
+ * Mock PR payload 모델.
+ * @interface MockPRPayload
+ */
+export interface MockPRPayload {
+  pr_number: number;
+  title: string;
+  repo_name: string;
+  summary: string;
+  owner: string;
+  created_at: number;
+}
+
+/**
+ * Mock 스트림 이벤트 타입.
+ */
+export type MockStreamEvent =
+  | { type: 'status'; session_id?: string; node: string; message: string }
+  | { type: 'sources'; session_id?: string; sources?: MockSource[] }
+  | { type: 'source_candidates'; session_id?: string; message_id?: string; sources?: MockSource[] }
+  | { type: 'token'; session_id?: string; token: string }
+  | { type: 'delta'; session_id?: string; message_id?: string; delta: string; sequence?: number }
+  | { type: 'interrupt'; payload: MockPRPayload[] }
+  | {
+      type: 'result';
+      session_id?: string;
+      message_id?: string;
+      answer?: string;
+      sources?: MockSource[];
+      chat_history_id?: string;
+      has_feedback?: boolean;
+      related_jira_issues?: MockSource[];
+    }
+  | { type: 'error'; session_id?: string; message: string; retryable?: boolean }
+  | { type: 'ping' };
+
+/**
+ * Mock notification 데이터 타입.
+ * @interface MockRagNotificationData
+ */
+export interface MockRagNotificationData {
+  session_id: string;
+  type: 'status' | 'interrupt' | 'result';
+  node: string;
+  message?: string;
+  payload?: MockPRPayload[];
+  response?: {
+    session_id: string;
+    answer: string;
+    sources: MockSource[];
+    chat_history_id: string;
+    has_feedback?: boolean;
+  };
+  related_jira_issues?: MockSource[];
+}
+
+/**
+ * Mock notification 타입.
+ * @interface MockRagNotification
+ */
+export interface MockRagNotification {
+  target: 'CHAT' | 'MESSAGE';
+  type: 'CONNECT' | 'RAG_IN_PROGRESS' | 'RAG_INTERRUPT' | 'RAG_DONE';
+  message: string | null;
+  data: MockRagNotificationData | null;
+}

@@ -1,10 +1,9 @@
-import type { BackendSource } from '@/features/chat/types/source';
-
 import { MOCK_RAG_ANSWER, MOCK_RELATED_JIRA_ISSUES, MOCK_SOURCES } from './data';
+import type { MockRagNotification } from './types';
 
 interface MockSSEOptions {
   sessionId: string;
-  onMessage: (notification: RagNotification) => void;
+  onMessage: (notification: MockRagNotification) => void;
   onError?: (error: Event) => void;
   onOpen?: () => void;
   stepDelay?: number;
@@ -94,11 +93,11 @@ const createMockSSE = (options: MockSSEOptions): EventSource => {
                 response: {
                   session_id: sessionId,
                   answer: MOCK_RAG_ANSWER,
-                  sources: MOCK_SOURCES as unknown as BackendSource[],
+                  sources: MOCK_SOURCES,
                   chat_history_id: `mock-history-${Date.now()}`,
                   has_feedback: false,
                 },
-                related_jira_issues: MOCK_RELATED_JIRA_ISSUES as unknown as BackendSource[],
+                related_jira_issues: MOCK_RELATED_JIRA_ISSUES,
               },
             });
           }, stepDelay);
