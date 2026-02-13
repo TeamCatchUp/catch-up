@@ -83,7 +83,7 @@ class WebhookEventBuffer:
         # Set TTL (65분)
         await redis.expire(key, EVENT_BUFFER_TTL)
 
-        logger.info(
+        logger.debug(
             f"Buffered GitHub {entity_type} event: "
             f"installation={installation_id}, repo={repo_id}, id={entity_id}, action={action}"
         )
@@ -179,12 +179,13 @@ class WebhookEventBuffer:
         await redis.sadd(key, event_data)
         await redis.expire(key, EVENT_BUFFER_TTL)
 
-        logger.info(
+        logger.debug(
             f"Buffered Slack message event: team={team_id}, channel={channel_id}, ts={message_ts}"
         )
 
     async def get_slack_buffered_channels(
-        self, team_id: str
+        self, 
+        team_id: str
     ) -> list[str]:
         """
         버퍼링된 이벤트가 있는 Channel 목록 조회
@@ -266,7 +267,7 @@ class WebhookEventBuffer:
         await redis.sadd(key, event_data)
         await redis.expire(key, EVENT_BUFFER_TTL)
 
-        logger.info(
+        logger.debug(
             f"Buffered Jira issue event: cloud={cloud_id}, project={project_key}, issue={issue_key}"
         )
 

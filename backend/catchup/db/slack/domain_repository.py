@@ -7,7 +7,7 @@ SlackWorkspace, SlackChannel, SlackUser 테이블에 대한 CRUD 작업 수행.
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 
@@ -16,7 +16,7 @@ from catchup.connectors.slack.schemas import (
     SlackUserProfile as SlackUserProfileSchema,
     SlackWorkspace as SlackWorkspaceSchema,
 )
-from catchup.db.models import SlackWorkspace, SlackChannel, SlackChannelType, SlackUser
+from catchup.db.models import SlackChannelMember, SlackWorkspace, SlackChannel, SlackChannelType, SlackUser
 
 
 # ============================================================
@@ -167,6 +167,49 @@ def delete_channels_by_team(db: Session, team_id: str) -> int:
     db.commit()
     return result.rowcount
 
+def upsert_channel_from_event(
+        db: Session,
+        team_id: str,
+        channel_id: str,
+        name: str,
+        is_private: bool = False,
+        creator_id: str | None = None,
+) -> None:
+    """
+    Webhook Channel Event으로 단일 채널 Upsert
+    """
+    now = datetime.now(timezone.utc)
+    channel_type = SlackChannelType.PRIVATE if is_private else SlackChannelType.PUBLIC
+
+    stmt = insert(SlackChannel).values(
+        id=channel_id,
+        team_id=team_id,
+        name=name,
+        channel_type=channel_type,
+        creator_id=creator_id,
+        is_private=is_private,
+        created_at=now,
+        synced_at=now,
+    ).on_conflict_do_update(
+        index_elements=["id"],
+        set_={
+            "name": name,
+            "is_private": is_private,
+            "synced_at":now
+        }
+    )
+    db.execute(stmt)
+    db.commit()
+
+def update_channel_archive(db:Session, channel_id:str, is_archived: bool)->None:
+    """채널 Archive 상태 업데이트"""
+    stmt = (
+        update(SlackChannel)
+        .where(SlackChannel.id == channel_id)
+        .values(is_archived=is_archived, synced_at=datetime.now(timezone.utc))
+    )
+    db.execute(stmt)
+    db.commit()
 
 # ============================================================
 # User CRUD
@@ -301,3 +344,64 @@ def delete_users_by_team(db: Session, team_id: str) -> int:
     result = db.execute(stmt)
     db.commit()
     return result.rowcount
+
+# ============================================================
+# Channel Member CRUD
+# ============================================================
+def replace_channel_members(
+    db: Session,
+    team_id: str,
+    channel_id: str,
+    user_ids: list[str],
+) -> int:
+    db.execute(
+        delete(SlackChannelMember).where(
+            SlackChannelMember.team_id == team_id,
+            SlackChannelMember.channel_id == channel_id,
+        )
+    )
+
+    if not user_ids:
+        db.commit()
+        return 0
+    
+    now = datetime.now(timezone.utc)
+    members_data = [
+        {
+            "team_id": team_id,
+            "channel_id": channel_id, 
+            "user_id": uid,
+            "synced_at": now,
+        }
+        for uid in user_ids
+    ]
+
+    db.execute(insert(SlackChannelMember).values(members_data))
+    db.commit()
+    
+    return len(user_ids)
+
+def delete_channel_members_by_team(db:Session, team_id:str) -> int:
+    stmt = delete(SlackChannelMember).where(SlackChannelMember.team_id == team_id)
+    result = db.execute(stmt)
+    db.commit()
+    return result.rowcount
+
+def add_channel_member(db:Session, team_id:str, channel_id:str, user_id:str)->None:
+    stmt = insert(SlackChannelMember).values(
+        team_id=team_id,
+        channel_id=channel_id,
+        user_id=user_id,
+        synced_at=datetime.now(timezone.utc),
+    ).on_conflict_do_nothing()
+    db.execute(stmt)
+    db.commit()
+
+def remove_channel_member(db:Session, team_id:str, channel_id:str, user_id:str)->None:
+    stmt = delete(SlackChannelMember).where(
+        SlackChannelMember.team_id == team_id,
+        SlackChannelMember.channel_id == channel_id,
+        SlackChannelMember.user_id == user_id,
+    )
+    db.execute(stmt)
+    db.commit()

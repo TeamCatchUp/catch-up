@@ -2,7 +2,7 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from httpx import HTTPStatusError, RequestError
 from sqlalchemy.orm import Session
@@ -16,6 +16,9 @@ from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
 from catchup.db.slack import oauth_repository as slack_crud
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
+from catchup.connectors.slack.factory import create_slack_ingestion_service
+from catchup.db.engine import SessionLocal
+
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +43,7 @@ async def slack_oauth_callback(
     error: str | None = None,
     db: Session = Depends(get_db),
     slack_service: SlackOAuthService = Depends(get_slack_oauth_service),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     """
     Slack OAuth 콜백 처리
@@ -48,7 +52,7 @@ async def slack_oauth_callback(
     """
     # 에러 처리 (사용자가 취소한 경우)
     if error:
-        logger.warning(f"Slack OAuth 에러: {error}")
+        logger.warning(f"[SLACK][AUTH] OAuth error: {error}")
         return RedirectResponse(
             url=f"{auth_settings.FRONTEND_REDIRECT_URI}?slack_installed=false&reason={error}"
         )
@@ -60,14 +64,14 @@ async def slack_oauth_callback(
 
     # State 파라미터 검증 (CSRF 방지)
     if not state:
-        logger.warning("Slack OAuth state 파라미터 누락")
+        logger.warning("[SLACK][AUTH] Missing OAuth state parameter")
         return RedirectResponse(
             url=f"{auth_settings.FRONTEND_REDIRECT_URI}?slack_installed=false&reason=missing_state"
         )
 
     is_valid_state = await validate_oauth_state(state, provider="slack")
     if not is_valid_state:
-        logger.warning(f"Slack OAuth state 검증 실패: {state}")
+        logger.warning(f"[SLACK][AUTH] OAuth state validation failed: {state}")
         return RedirectResponse(
             url=f"{auth_settings.FRONTEND_REDIRECT_URI}?slack_installed=false&reason=invalid_state"
         )
@@ -95,9 +99,12 @@ async def slack_oauth_callback(
         incoming_webhook_channel=tokens.incoming_webhook.channel if tokens.incoming_webhook else None,
     )
 
-    logger.info(f"Slack 설치 완료: Team ID = {tokens.team.id}, Name = {tokens.team.name}")
+    logger.info(f"[SLACK][AUTH] Installation completed: team_id={tokens.team.id}, name={tokens.team.name}")
 
-    # 4. 프론트엔드로 리다이렉트
+    # 4. 메타데이터 동기화 (BackgroundTask)
+    background_tasks.add_task(_sync_workspace_metadata, tokens.team.id)
+
+    # 5. 프론트엔드로 리다이렉트
     return RedirectResponse(
         url=f"{auth_settings.FRONTEND_REDIRECT_URI}?slack_installed=true&team_name={tokens.team.name}"
     )
@@ -129,7 +136,7 @@ async def slack_installation_status(
                 connected_at=token.created_at,
             ))
         except HTTPException as e:
-            logger.warning(f"Slack 상태 조회 실패 (Team: {token.team_id}): {e.detail}")
+            logger.warning(f"[SLACK][AUTH] Status check failed (team={token.team_id}): {e.detail}")
             # 토큰이 유효하지 않더라도 연결된 것으로 표시
             workspaces.append(SlackWorkspaceInfo(
                 team_id=token.team_id,
@@ -139,7 +146,7 @@ async def slack_installation_status(
                 connected_at=token.created_at,
             ))
         except (HTTPStatusError, RequestError) as e:
-            logger.warning(f"Slack API 요청 실패 (Team: {token.team_id}): {e}")
+            logger.warning(f"[SLACK][AUTH] API request failed (team={token.team_id}): {e}")
             workspaces.append(SlackWorkspaceInfo(
                 team_id=token.team_id,
                 team_name=token.team_name or "",
@@ -167,14 +174,37 @@ async def slack_uninstall(
     if revoke_token:
         try:
             await slack_service.revoke_token(token.bot_access_token)
-            logger.info(f"Slack Token 취소 완료: Team ID = {team_id}")
+            logger.info(f"[SLACK][AUTH] Token revoked: team_id={team_id}")
         except HTTPException as e:
-            logger.warning(f"Slack Token 취소 실패: {e.detail}")
+            logger.warning(f"[SLACK][AUTH] Token revocation failed: {e.detail}")
         except (HTTPStatusError, RequestError) as e:
-            logger.warning(f"Slack API 요청 실패 (Token 취소): {e}")
+            logger.warning(f"[SLACK][AUTH] Token revocation API failed: {e}")
 
     deleted = slack_crud.delete_slack_token(db, team_id)
     if deleted:
         return {"status": "success", "message": "Slack 연결이 해제되었습니다."}
 
     return {"status": "error", "message": "연결 해제 중 오류가 발생했습니다."}
+
+
+# =============================================================================
+# Private Helper Functions
+# =============================================================================
+
+async def _sync_workspace_metadata(team_id: str) -> None:
+    """
+    OAuth 설치 직후 메타데이터 동기화 (BackgroundTask)
+
+    독립 DB 세션으로 Workspace, Users, Channels, Channel Members 수집.
+    """
+    logger.info(f"[SLACK][AUTH] Starting background metadata sync: team_id={team_id}")
+
+    db = SessionLocal()
+    try:
+        service = await create_slack_ingestion_service(db, team_id)
+        results = await service.sync_metadata(db)
+        logger.info(f"[SLACK][AUTH] Background metadata sync completed: team_id={team_id}, results={results}")
+    except Exception as e:
+        logger.error(f"[SLACK][AUTH] Background metadata sync failed: team_id={team_id}, error={e}")
+    finally:
+        db.close()
