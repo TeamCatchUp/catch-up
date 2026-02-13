@@ -4,7 +4,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.rag.prompts.loader import prompt_loader
+from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import (
     get_conversation_history,
     llm_semaphore,
@@ -27,7 +27,7 @@ async def rewrite_node(state: AgentState):
     global_context = state["global_context"].model_dump()
     
     prompt = prompt_loader.get_prompt(
-        "rewrite",
+        "rag/rewrite",
         history=history_text,
         feedback=grade_comment,
         original_query=original_query,

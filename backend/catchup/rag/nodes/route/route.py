@@ -4,7 +4,7 @@ from typing import Literal
 from langchain_core.output_parsers import StrOutputParser
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.rag.prompts.loader import prompt_loader
+from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
 from catchup.rag.state import AgentState
 
@@ -20,7 +20,7 @@ async def route_node(state: AgentState):
     global_context = state["global_context"].model_dump()
     
     prompt = prompt_loader.get_prompt(
-        node_name="route",
+        "rag/route",
         query=query,
         **global_context, 
     )

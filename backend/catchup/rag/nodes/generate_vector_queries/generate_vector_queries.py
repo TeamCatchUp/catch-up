@@ -1,7 +1,7 @@
 import logging
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.rag.prompts.loader import prompt_loader
+from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import llm_semaphore, log_node
 from catchup.rag.schemas.structures import VectorDbSearchPlan, VectorDbSearchQuery
 from catchup.rag.state import AgentState
@@ -21,7 +21,7 @@ async def generate_vector_queries_node(state: AgentState):
     global_context = state["global_context"].model_dump()
     
     prompt = prompt_loader.get_prompt(
-        "generate_vector_queries",
+        "rag/generate_vector_queries",
         query=rewritten_query,
         **global_context
     )
