@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import SideNavMenu from '@/shared/components/layout/sideNavBar/SideNavMenu';
@@ -21,12 +21,10 @@ const SideNavBar = () => {
   const isRagAnswerPage = pathname.startsWith('/chat');
   const { isSidebarOpen, setSidebarOpen } = useSidebarStore();
 
-  // isRagAnswerPage 변경 시 사이드바 상태 동기화 (adjusting state during render)
-  const [prevIsRagAnswerPage, setPrevIsRagAnswerPage] = useState(isRagAnswerPage);
-  if (prevIsRagAnswerPage !== isRagAnswerPage) {
-    setPrevIsRagAnswerPage(isRagAnswerPage);
+  // isRagAnswerPage 변경 시 사이드바 상태 동기화
+  useEffect(() => {
     setSidebarOpen(!isRagAnswerPage);
-  }
+  }, [isRagAnswerPage, setSidebarOpen]);
 
   const isOpen = isSidebarOpen;
 
