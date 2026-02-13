@@ -1,9 +1,13 @@
+import uuid
 from datetime import datetime
-from enum import StrEnum, auto, unique
+from enum import StrEnum
+from typing import Any, Optional
 
-from sqlalchemy import func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.types import String, Boolean, Integer, BigInteger, DateTime
+from sqlalchemy import ForeignKey, func, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.types import String, Boolean, Integer, BigInteger, DateTime, Text
 
 
 class Base(DeclarativeBase):
