@@ -14,7 +14,11 @@ import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown'
 import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
 import { SearchOptionButton } from '@/shared/components/SearchOptionButton';
 import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
-import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/shared/mocks/search/filterOptions';
+import {
+  MOCK_DEPARTMENT_FILTER_OPTIONS,
+  MOCK_PERSON_FILTER_OPTIONS,
+  MOCK_PROJECT_FILTER_OPTIONS,
+} from '@/shared/mocks/search/filterOptions';
 
 interface FilterBarProps {
   filters: UseSearchFiltersReturn;
@@ -49,7 +53,7 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
         >
           <FilterOptionList
             title="담당자 선택"
-            options={PERSON_OPTIONS}
+            options={MOCK_PERSON_FILTER_OPTIONS}
             selected={filters.selectedPeople}
             onToggle={filters.togglePerson}
             Icon={IconProfile}
@@ -73,7 +77,7 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
         >
           <FilterOptionList
             title="부서 선택"
-            options={DEPARTMENT_OPTIONS}
+            options={MOCK_DEPARTMENT_FILTER_OPTIONS}
             selected={filters.selectedDepts}
             onToggle={filters.toggleDept}
             Icon={IconTag}
@@ -97,7 +101,7 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
         >
           <FilterOptionList
             title="프로젝트 선택"
-            options={PROJECT_OPTIONS}
+            options={MOCK_PROJECT_FILTER_OPTIONS}
             selected={filters.selectedProjects}
             onToggle={filters.toggleProject}
             Icon={IconSpace}

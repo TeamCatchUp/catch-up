@@ -13,7 +13,11 @@ import IconSlack from '@/public/icons/logo/Slack.svg';
 import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown';
 import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
 import { SearchOptionButton } from '@/shared/components/SearchOptionButton';
-import { DEPARTMENT_OPTIONS, PERSON_OPTIONS, PROJECT_OPTIONS } from '@/shared/mocks/search/filterOptions';
+import {
+  MOCK_DEPARTMENT_FILTER_OPTIONS,
+  MOCK_PERSON_FILTER_OPTIONS,
+  MOCK_PROJECT_FILTER_OPTIONS,
+} from '@/shared/mocks/search/filterOptions';
 import { cn } from '@/shared/utils/cn';
 
 import ArrowSend from '/public/icons/icon/arrow_send.svg';
@@ -107,7 +111,7 @@ const RagInput = ({
               >
                 <FilterOptionList
                   title="담당자 선택"
-                  options={PERSON_OPTIONS}
+                  options={MOCK_PERSON_FILTER_OPTIONS}
                   selected={filters.selectedPeople}
                   onToggle={filters.togglePerson}
                   Icon={IconPerson}
@@ -128,7 +132,7 @@ const RagInput = ({
               >
                 <FilterOptionList
                   title="부서 선택"
-                  options={DEPARTMENT_OPTIONS}
+                  options={MOCK_DEPARTMENT_FILTER_OPTIONS}
                   selected={filters.selectedDepts}
                   onToggle={filters.toggleDept}
                   Icon={IconTag}
@@ -149,7 +153,7 @@ const RagInput = ({
               >
                 <FilterOptionList
                   title="프로젝트 선택"
-                  options={PROJECT_OPTIONS}
+                  options={MOCK_PROJECT_FILTER_OPTIONS}
                   selected={filters.selectedProjects}
                   onToggle={filters.toggleProject}
                   Icon={IconSpace}
