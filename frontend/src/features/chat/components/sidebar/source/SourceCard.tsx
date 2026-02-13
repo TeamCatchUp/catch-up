@@ -27,10 +27,7 @@ const SourceCard = ({ source, showCount = true, count }: Props) => {
       return 'jira';
     }
 
-    // Backend type에 slack이 아직 없어도 source 정보에 slack이 들어오면 로고를 맞춰서 렌더링한다.
-    const lowerRepo = source.repo?.toLowerCase() ?? '';
-    const lowerTitle = source.title?.toLowerCase() ?? '';
-    if (lowerRepo.includes('slack') || lowerTitle.includes('slack')) {
+    if (source.source_type === 'slack') {
       return 'slack';
     }
 

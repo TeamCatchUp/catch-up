@@ -32,10 +32,12 @@ const SourceList = ({ sources, isLoading, isError }: Props) => {
     setActiveFilter(type);
   };
 
-  const getSourceCategory = (t: ChatSource['source_type']): Exclude<FilterType, 'all' | 'slack'> => {
+  const getSourceCategory = (t: ChatSource['source_type']): Exclude<FilterType, 'all'> => {
     switch (t) {
       case 'jira':
         return 'jira';
+      case 'slack':
+        return 'slack';
       case 'code':
       case 'pr':
       case 'github_issue':
