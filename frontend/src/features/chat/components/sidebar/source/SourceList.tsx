@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 
 import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
+import type { ChatSource } from '@/features/chat/types';
 import { cn } from '@/shared/utils/cn';
 
 import SourceCard from './SourceCard';
@@ -12,6 +13,7 @@ import AddCircle from '/public/icons/icon/add_circle.svg';
 
 interface Props {
   sources: ChatSource[];
+  answerContent?: string;
   isLoading?: boolean;
   isError?: boolean;
 }
@@ -25,15 +27,29 @@ const filterCategory = [
 
 type FilterType = (typeof filterCategory)[number]['type'];
 
-const SourceList = ({ sources, isLoading, isError }: Props) => {
+const CITATION_PATTERN = /\[(\d+)\]/g;
+
+const getCitationOrderMap = (answerContent?: string) => {
+  const map = new Map<number, number>();
+  if (!answerContent) return map;
+
+  const matches = answerContent.matchAll(CITATION_PATTERN);
+  for (const match of matches) {
+    const index = Number(match[1]);
+    if (!Number.isFinite(index) || map.has(index)) continue;
+    map.set(index, map.size + 1);
+  }
+
+  return map;
+};
+
+const SourceList = ({ sources, answerContent, isLoading, isError }: Props) => {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
-  const toggleFilter = (type: FilterType) => {
-    setActiveFilter(type);
-  };
+  const citationOrderMap = useMemo(() => getCitationOrderMap(answerContent), [answerContent]);
 
-  const getSourceCategory = (t: ChatSource['source_type']): Exclude<FilterType, 'all'> => {
-    switch (t) {
+  const getSourceCategory = (type: ChatSource['source_type']): Exclude<FilterType, 'all'> => {
+    switch (type) {
       case 'jira':
         return 'jira';
       case 'slack':
@@ -46,20 +62,22 @@ const SourceList = ({ sources, isLoading, isError }: Props) => {
   };
 
   const filteredSources = useMemo(() => {
-    if (activeFilter === 'all') {
-      return sources;
-    }
-
-    if (activeFilter === 'slack') {
-      return [];
-    }
-
+    if (activeFilter === 'all') return sources;
     return sources.filter((source) => getSourceCategory(source.source_type) === activeFilter);
   }, [activeFilter, sources]);
 
   const citedSources = filteredSources
     .filter((source) => source.is_cited)
-    .sort((a, b) => a.source_index - b.source_index);
+    .sort((a, b) => {
+      const orderA = citationOrderMap.get(a.source_index);
+      const orderB = citationOrderMap.get(b.source_index);
+
+      if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
+      if (orderA !== undefined) return -1;
+      if (orderB !== undefined) return 1;
+      return a.source_index - b.source_index;
+    });
+
   const recommendedSources = filteredSources.filter((source) => !source.is_cited);
 
   return (
@@ -72,7 +90,7 @@ const SourceList = ({ sources, isLoading, isError }: Props) => {
             <button
               key={category.id}
               type="button"
-              onClick={() => toggleFilter(category.type)}
+              onClick={() => setActiveFilter(category.type)}
               className={cn(
                 'text-body-small flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-full border px-3 py-1.5 leading-none whitespace-nowrap transition',
                 isActive
@@ -93,7 +111,7 @@ const SourceList = ({ sources, isLoading, isError }: Props) => {
           </div>
         ) : isLoading ? (
           <div className="px-4">
-            <RagSourceSkeleton message={'출처를 분석하는 중입니다.'} />
+            <RagSourceSkeleton message="출처를 분석하는 중입니다." />
           </div>
         ) : (
           <>
@@ -103,17 +121,18 @@ const SourceList = ({ sources, isLoading, isError }: Props) => {
                   key={source.id}
                   source={source}
                   showCount
-                  count={source.source_index}
+                  count={citationOrderMap.get(source.source_index) ?? source.source_index}
                 />
               ))}
             </div>
+
             {recommendedSources.length > 0 && (
               <>
                 <div className="bg-neutral-3 mt-1 h-px w-full" />
                 <div className="flex flex-col gap-2.5 px-4 pb-6">
                   <div className="flex items-center gap-1.5 px-1.5">
                     <AddCircle className="text-gray-70 h-5 w-5" />
-                    <span className="text-body-small text-gray-70">참고하면 좋은 문서들</span>
+                    <span className="text-body-small text-gray-70">참고하면 좋은 문서</span>
                   </div>
                   <div className="flex flex-col gap-2.5">
                     {recommendedSources.map((source) => (

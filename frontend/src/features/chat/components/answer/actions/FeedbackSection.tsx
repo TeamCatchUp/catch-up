@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-import { useAnimatedMount } from '@/features/chat/hooks/useAnimatedMount';
-import { useScrollIntoContainer } from '@/features/chat/hooks/useScrollIntoContainer';
+import { useScrollIntoContainer } from '@/features/chat/hooks/scroll/useScrollIntoContainer';
+import { useAnimatedMount } from '@/features/chat/hooks/ui/useAnimatedMount';
 import { chatMutations } from '@/features/chat/mutations';
+import type { FeedbackSectionProps } from '@/features/chat/types/props/actionProps';
 import { cn } from '@/shared/utils/cn';
 
 import FeedbackDetailInput from './FeedbackDetailInput';

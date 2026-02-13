@@ -1,6 +1,6 @@
 /** Jira 이슈를 부모-자식 계층 구조로 정규화 */
 
-import type { BackendSource } from '@/features/chat/types/source';
+import type { BackendSource, JiraTask } from '@/features/chat/types';
 
 const safeSummary = (s?: string) => (s ?? '').trim();
 

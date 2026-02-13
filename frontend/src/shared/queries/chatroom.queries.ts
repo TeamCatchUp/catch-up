@@ -29,7 +29,6 @@ export const chatQueries = {
         const res = await api.get<RecentQueriesResponse>(API.chatrooms.queries);
         return res.data;
       },
-      staleTime: 1000 * 60 * 5,
     }),
 
   sessionQueries: (id: string) =>

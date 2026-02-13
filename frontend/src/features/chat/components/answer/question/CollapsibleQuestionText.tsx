@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 
-import { useIsOverflowingLines } from '@/features/chat/hooks/useIsOverflowingLines';
+import { useIsOverflowingLines } from '@/features/chat/hooks/ui/useIsOverflowingLines';
 import { cn } from '@/shared/utils/cn';
 
 import DropdownDown from '/public/icons/icon/dropdown_down.svg';

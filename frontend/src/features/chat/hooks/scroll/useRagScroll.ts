@@ -8,7 +8,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { extractQAPairs, type QAPair } from '@/features/chat/utils/chat';
+import type { Message } from '@/features/chat/types';
+import { extractQAPairs, type QAPair } from '@/features/chat/utils/render/chat';
 
 interface UseRagScrollOptions {
   messages: Message[];

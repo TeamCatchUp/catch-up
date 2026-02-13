@@ -55,6 +55,58 @@
 }
 
 @layer utilities {
+  @property --skeleton-border-angle {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 0deg;
+  }
+
+  @keyframes skeleton-border-flow {
+    to {
+      --skeleton-border-angle: 360deg;
+    }
+  }
+
+  .skeleton-loading-card {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background: #f7fbff;
+    box-shadow:
+      0 4px 4px 0 rgba(157, 142, 252, 0.1),
+      0 2px 10.9px 0 rgba(105, 165, 255, 0.3);
+  }
+
+  .skeleton-loading-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(
+      from var(--skeleton-border-angle),
+      rgba(30, 105, 255, 0.12) 0deg,
+      rgba(30, 105, 255, 0.92) 52deg,
+      rgba(105, 165, 255, 0.42) 96deg,
+      rgba(157, 142, 252, 0.2) 140deg,
+      rgba(30, 105, 255, 0.12) 220deg,
+      rgba(30, 105, 255, 0.08) 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: skeleton-border-flow 3.2s linear infinite;
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton-loading-card::before {
+      animation: none;
+    }
+  }
+
   .bg-home-gradient {
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 55%, rgba(241, 244, 250, 0.5) 100%),

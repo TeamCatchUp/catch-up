@@ -1,14 +1,10 @@
-// Data imports
 import type { UserStatus } from '@/shared/queries/auth.types';
 
+import { buildStreamingMockAnswer, MOCK_SOURCES } from './chat/data';
 import { MOCK_JWT_TOKENS, MOCK_USER } from './auth/data';
 import delay from './delay';
 import { MOCK_FEEDBACK_RESPONSE } from './feedback/data';
-import {
-  MOCK_CHATROOMS,
-  MOCK_RECENT_QUERIES,
-  MOCK_RECENT_QUERIES_EMPTY,
-} from './search/data';
+import { MOCK_CHATROOMS, MOCK_RECENT_QUERIES, MOCK_RECENT_QUERIES_EMPTY } from './search/data';
 
 const USE_EMPTY_RECENT_QUERIES = process.env.NEXT_PUBLIC_MOCK_RECENT_QUERIES_EMPTY === 'true';
 
@@ -18,16 +14,8 @@ type MockHandler = {
   handler: (url: string, data?: unknown) => Promise<unknown>;
 };
 
-/**
- * Mock 핸들러 목록
- * - pattern: URL 매칭용 정규식
- * - method: HTTP 메서드
- * - handler: Mock 데이터 반환 함수
- */
 const mockHandlers: MockHandler[] = [
-  // ═══════════════════════════════════════
   // Auth
-  // ═══════════════════════════════════════
   {
     pattern: /^\/api\/v1\/auth\/me$/,
     method: 'get',
@@ -44,9 +32,7 @@ const mockHandlers: MockHandler[] = [
     handler: async () => MOCK_JWT_TOKENS,
   },
 
-  // ═══════════════════════════════════════
   // Chatrooms
-  // ═══════════════════════════════════════
   {
     pattern: /^\/api\/chatrooms$/,
     method: 'get',
@@ -63,42 +49,42 @@ const mockHandlers: MockHandler[] = [
     handler: async () => (USE_EMPTY_RECENT_QUERIES ? MOCK_RECENT_QUERIES_EMPTY : MOCK_RECENT_QUERIES),
   },
 
-  // ═══════════════════════════════════════
-  // Chat (REST 부분만 - SSE는 서비스 레이어)
-  // ═══════════════════════════════════════
+  // Chat REST (SSE stream is mocked in chat/mockChatService.ts)
   {
     pattern: /^\/api\/chat$/,
     method: 'post',
     handler: async (_, data) => {
-      const requestData = data as { session_id?: string } | undefined;
+      const requestData = data as { query?: string } | undefined;
+      const query = requestData?.query?.trim() || 'mock query';
+
       return {
-        session_id: requestData?.session_id || 'mock-session',
-        answer: '답변 생성을 시작합니다.',
-        sources: [],
+        answer: buildStreamingMockAnswer(query),
+        sources: MOCK_SOURCES,
+        process_time: 0.31,
       };
     },
+  },
+  {
+    pattern: /^\/api\/chat\/stream$/,
+    method: 'post',
+    handler: async () => ({
+      message: 'SSE stream is not served by axios mock adapter. Use chatService.streamChat().',
+    }),
   },
   {
     pattern: /^\/api\/chat\/stream\/resume$/,
     method: 'post',
-    handler: async (_, data) => {
-      const requestData = data as { session_id?: string } | undefined;
-      return {
-        session_id: requestData?.session_id || 'mock-session',
-        answer: '답변 생성을 재개합니다.',
-        sources: [],
-      };
-    },
+    handler: async () => ({
+      message: 'SSE resume is not served by axios mock adapter. Use chatService.resumeStream().',
+    }),
   },
 
-  // ═══════════════════════════════════════
   // Onboarding
-  // ═══════════════════════════════════════
   {
     pattern: /^\/api\/v1\/onboarding\/complete$/,
     method: 'post',
     handler: async (_, data) => {
-      console.log('[Mock] 온보딩 완료:', data);
+      console.log('[Mock] onboarding complete:', data);
       const nextStatus: UserStatus = MOCK_USER.role === 'admin' ? 'active' : 'pending';
       MOCK_USER.status = nextStatus;
       return { success: true };
@@ -109,21 +95,15 @@ const mockHandlers: MockHandler[] = [
     method: 'get',
     handler: async () => ({
       jira: [
-        { id: '5b10ac8d14c9e6', name: '김개발', email: 'dev@catchup.io', picture: null },
-        { id: '6a21bd9e25d0f7', name: '김개발', email: 'dev2@catchup.io', picture: null },
+        { id: '5b10ac8d14c9e6', name: 'Kim Dev', email: 'dev@catchup.io', picture: null },
+        { id: '6a21bd9e25d0f7', name: 'Lee Dev', email: 'dev2@catchup.io', picture: null },
       ],
-      github: [
-        { id: 'kimdev', name: '김개발', email: 'dev@catchup.io', picture: null },
-      ],
-      slack: [
-        { id: 'U04ABC12DEF', name: '김개발', email: 'dev@catchup.io', picture: null },
-      ],
+      github: [{ id: 'kimdev', name: 'Kim Dev', email: 'dev@catchup.io', picture: null }],
+      slack: [{ id: 'U04ABC12DEF', name: 'Kim Dev', email: 'dev@catchup.io', picture: null }],
     }),
   },
 
-  // ═══════════════════════════════════════
   // Feedback
-  // ═══════════════════════════════════════
   {
     pattern: /^\/api\/chat\/feedback$/,
     method: 'post',
@@ -139,40 +119,19 @@ const mockHandlers: MockHandler[] = [
   },
 ];
 
-/**
- * 요청 URL과 메서드에 맞는 Mock 핸들러 찾기
- * mockHandlers 배열을 순회하며 pattern.test(url)로 매칭
- */
 export const findMockHandler = (method: string, url: string): MockHandler | undefined => {
-  return mockHandlers.find(
-    (h) => h.method === method.toLowerCase() && h.pattern.test(url)
-  );
+  return mockHandlers.find((handler) => handler.method === method.toLowerCase() && handler.pattern.test(url));
 };
 
-/**
- * Mock 응답 생성 함수 (axios interceptor에서 호출)
- *
- * 동작 흐름:
- * 1. findMockHandler로 URL/메서드에 맞는 핸들러 검색
- * 2. 핸들러가 없으면 null 반환 → 실제 API 호출로 진행
- * 3. 핸들러가 있으면 100-300ms 지연 후 Mock 데이터 반환
- *
- * @param method - HTTP 메서드 (get, post 등)
- * @param url - 요청 URL (/api/me 등)
- * @param data - POST 요청 시 body 데이터
- * @returns Mock 응답 { data, status } 또는 null
- */
 export const createMockResponse = async (
   method: string,
   url: string,
-  data?: unknown
+  data?: unknown,
 ): Promise<{ data: unknown; status: number } | null> => {
   const handler = findMockHandler(method, url);
   if (!handler) return null;
 
-  // 실제 API처럼 보이도록 랜덤 지연
   await delay(100 + Math.random() * 200);
-
   const mockData = await handler.handler(url, data);
   return { data: mockData, status: 200 };
 };
