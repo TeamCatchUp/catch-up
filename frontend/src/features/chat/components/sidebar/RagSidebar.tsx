@@ -1,6 +1,6 @@
 'use client';
 
-import type { QAPair } from '@/features/chat/utils/chat';
+import type { QAPair } from '@/features/chat/utils/render/chat';
 
 import SidebarHeader from './SidebarHeader';
 import SourceList from './source/SourceList';
@@ -12,8 +12,8 @@ interface RagSidebarProps {
 }
 
 const RagSidebar = ({ currentQA, isLoading, isError }: RagSidebarProps) => {
-  const sourceCount = currentQA?.answer?.sources?.length ?? 0;
   const sources = currentQA?.answer?.sources ?? [];
+  const sourceCount = sources.filter((source) => source.is_cited).length;
   const answerContent = currentQA?.answer?.content ?? '';
 
   return (
