@@ -1,15 +1,19 @@
 'use client';
 
-import { useCallback,useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
+import { useAnimatedMount } from '@/features/chat/hooks/useAnimatedMount';
+import { useScrollIntoContainer } from '@/features/chat/hooks/useScrollIntoContainer';
 import { chatMutations } from '@/features/chat/mutations';
 import { cn } from '@/shared/utils/cn';
 
+import FeedbackDetailInput from './FeedbackDetailInput';
+
 import Cancel from '/public/icons/icon/cancel.svg';
 
-const feedback = [
+const FEEDBACK_CHIPS = [
   { id: 1, content: '존재하지 않는 자료를 참고했어요' },
   { id: 2, content: '최신 내용이 반영되지 않았어요' },
   { id: 3, content: '답변의 출처가 없어요' },
@@ -21,11 +25,7 @@ const feedback = [
 ];
 
 const DETAIL_ID = 8;
-const TEXTAREA_MAX_HEIGHT = 114;
-const THANKS_MESSAGE_DURATION = 3000;
-// 애니메이션 지속 시간 (tailwind duration과 맞춤)
-const SECTION_ANIM_MS = 200;
-const DETAIL_ANIM_MS = 200;
+const ANIM_MS = 200;
 
 const FeedbackSection = ({
   messageId,
@@ -37,306 +37,120 @@ const FeedbackSection = ({
 }: FeedbackSectionProps) => {
   const feedbackRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // 뮤테이션
   const feedbackMutation = useMutation({
     ...chatMutations.sendFeedback(),
     meta: { skipGlobalErrorHandler: true },
   });
-  // ref로 안정화 (useMutation 반환값은 매 렌더 새 객체 → deps에 넣으면 무한 루프)
   const feedbackMutationRef = useRef(feedbackMutation);
   feedbackMutationRef.current = feedbackMutation;
 
+  // 상태
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailText, setDetailText] = useState('');
-  const [showThanks, setShowThanks] = useState(false);
   const [selectedChipId, setSelectedChipId] = useState<number | null>(null);
-  const isSubmitting = feedbackMutation.isPending;
   const [localHasFeedback, setLocalHasFeedback] = useState(hasFeedback);
 
-  // 애니메이션을 위한 상태 (마운트 유지)
+  const isSubmitting = feedbackMutation.isPending;
   const isVisible = !!feedbackVisibleMap[messageId];
-  const [mounted, setMounted] = useState(isVisible); // 렌더 유지용
-  const [entered, setEntered] = useState(false); // 트랜지션 상태
-  // detail panel 닫힐 때 애니메이션 (마운트 유지)
-  const [detailMounted, setDetailMounted] = useState(false);
-  const [detailEntered, setDetailEntered] = useState(false);
 
-  // hasFeedback prop 변경 되면 로컬 상태도 업데이트
+  // 애니메이션
+  const section = useAnimatedMount(isVisible, ANIM_MS);
+  const detail = useAnimatedMount(isDetailOpen, ANIM_MS);
+
+  // 스크롤
+  const scrollSection = useScrollIntoContainer(feedbackRef, 80);
+  const scrollDetail = useScrollIntoContainer(detailRef, 100);
+
+  // hasFeedback prop 동기화
   useEffect(() => {
     setLocalHasFeedback(hasFeedback);
   }, [hasFeedback]);
 
-  // FeedbackSection 열고/닫을 때 마운트 & enter 제어
-  useEffect(() => {
-    if (isVisible) {
-      setMounted(true);
-      // 다음 프레임에 enter 켜야 transition이 먹음
-      requestAnimationFrame(() => setEntered(true));
-      return;
-    }
-
-    // 닫기: enter 끄고 애니메이션 끝난 뒤 언마운트
-    setEntered(false);
-
-    // 닫힐 때 detail도 같이 정리(애니메이션 포함)
-    setDetailEntered(false);
-    const t = setTimeout(() => {
-      setMounted(false);
-      setDetailMounted(false);
-      setIsDetailOpen(false);
-      setDetailText('');
-      setShowThanks(false);
-      setSelectedChipId(null);
-      feedbackMutationRef.current.reset();
-    }, SECTION_ANIM_MS);
-
-    return () => clearTimeout(t);
-  }, [isVisible]);
-
-  // textarea 자동 높이 조절
-  const resizeTextarea = useCallback(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-
-    el.style.height = 'auto';
-    const next = Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT);
-    el.style.height = `${next}px`;
-
-    // max 넘어가면 내부 스크롤
-    el.style.overflowY = el.scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
-  }, []);
-
-  // text 변경 시 resize
-  useEffect(() => {
-    if (!isDetailOpen) return;
-    resizeTextarea();
-  }, [detailText, isDetailOpen, resizeTextarea]);
-
-  // 피드백 섹션이나 detail이 열렸을 때만 스크롤
-  const scrollToBottom = useCallback(() => {
-    // DOM 반영 이후에 측정/스크롤하려고 rAF 두 번
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (!feedbackRef.current) return;
-
-        // 부모 스크롤 컨테이너 찾기 (answerScrollRef)
-        const scrollContainer = feedbackRef.current.closest('.overflow-y-auto');
-        if (!scrollContainer) {
-          // fallback: 일반 scrollIntoView
-          feedbackRef.current.scrollIntoView({
-            behavior: 'smooth',
-            block: 'end',
-          });
-          return;
-        }
-
-        // 부모 컨테이너 내에서만 스크롤
-        const containerRect = scrollContainer.getBoundingClientRect();
-        const elementRect = feedbackRef.current.getBoundingClientRect();
-        const scrollOffset = elementRect.bottom - containerRect.bottom + 80; // 80px 여유
-
-        if (scrollOffset > 0) {
-          scrollContainer.scrollBy({
-            top: scrollOffset,
-            behavior: 'smooth',
-          });
-        }
-      });
-    });
-  }, []);
-
-  // 피드백 섹션 열릴 때 스크롤
-  useEffect(() => {
-    if (!mounted || !entered) return;
-    scrollToBottom();
-  }, [mounted, entered, scrollToBottom]);
-
-  // detail 모달 열릴 때 스크롤
-  useEffect(() => {
-    if (detailMounted && detailEntered && detailRef.current) {
-      setTimeout(() => {
-        if (!detailRef.current) return;
-
-        // 부모 스크롤 컨테이너 찾기 (answerScrollRef)
-        const scrollContainer = detailRef.current.closest('.overflow-y-auto');
-        if (!scrollContainer) {
-          detailRef.current.scrollIntoView({
-            behavior: 'smooth',
-            block: 'end',
-          });
-          return;
-        }
-
-        // 부모 컨테이너 내에서만 스크롤
-        const containerRect = scrollContainer.getBoundingClientRect();
-        const elementRect = detailRef.current.getBoundingClientRect();
-        const scrollOffset = elementRect.bottom - containerRect.bottom + 100; // 100px 여유
-
-        if (scrollOffset > 0) {
-          scrollContainer.scrollBy({
-            top: scrollOffset,
-            behavior: 'smooth',
-          });
-        }
-      }, DETAIL_ANIM_MS + 50);
-    }
-  }, [detailMounted, detailEntered]);
-
-  // feedbackSection 닫히면 detail 입력 초기화
+  // 섹션 닫힐 때 상태 초기화
   useEffect(() => {
     if (!isVisible) {
       setIsDetailOpen(false);
       setDetailText('');
-      setShowThanks(false);
+      setSelectedChipId(null);
       feedbackMutationRef.current.reset();
     }
-  }, [isVisible, messageId]);
+  }, [isVisible]);
 
-  // detail panel 열고/닫을 때 마운트/enter 제어
+  // 섹션 열릴 때 스크롤
   useEffect(() => {
-    if (isDetailOpen) {
-      setDetailMounted(true);
-      requestAnimationFrame(() => setDetailEntered(true));
-      return;
+    if (section.mounted && section.entered) scrollSection();
+  }, [section.mounted, section.entered, scrollSection]);
+
+  // detail 열릴 때 스크롤
+  useEffect(() => {
+    if (detail.mounted && detail.entered) {
+      setTimeout(scrollDetail, ANIM_MS + 50);
     }
+  }, [detail.mounted, detail.entered, scrollDetail]);
 
-    setDetailEntered(false);
-    const t = setTimeout(() => {
-      setDetailMounted(false);
-      setDetailText('');
-    }, DETAIL_ANIM_MS);
-    return () => clearTimeout(t);
-  }, [isDetailOpen]);
-
-  // 피드백 제출 완 -> 자동 감사 UI
-  useEffect(() => {
-    if (hasFeedback && isVisible) {
-      setShowThanks(true);
-
-      const timer = setTimeout(() => {
-        setShowThanks(false);
-        setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
-      }, THANKS_MESSAGE_DURATION);
-
-      return () => clearTimeout(timer);
-    }
-  }, [hasFeedback, isVisible, messageId, setFeedbackVisibleMap]);
-
-  // 감사 UI 자동 하단 스크롤
-  useEffect(() => {
-    if (!mounted || !entered) return;
-    if (!(showThanks || localHasFeedback)) return;
-
-    // 감사 UI가 나타나면서 높이 변화가 생길 수 있으니 다시 하단 정렬
-    scrollToBottom();
-  }, [mounted, entered, showThanks, localHasFeedback, scrollToBottom]);
-
+  // 닫기
   const closeSection = useCallback(() => {
     setIsDetailOpen(false);
     setDetailText('');
     setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
   }, [messageId, setFeedbackVisibleMap]);
 
+  // 제출 성공 처리
+  const handleSubmitSuccess = useCallback(() => {
+    setLocalHasFeedback(true);
+    onFeedbackSubmitted?.(messageId);
+    toast('피드백을 주셔서 감사합니다.');
+    closeSection();
+  }, [messageId, onFeedbackSubmitted, closeSection]);
+
+  // 피드백 제출
   const submitFeedback = useCallback(
     async (selectedContent?: string) => {
       if (!chatHistoryId) {
         console.warn('[feedback] chatHistoryId missing');
-        setLocalHasFeedback(true);
-        setShowThanks(true);
-
-        setTimeout(() => {
-          setShowThanks(false);
-          setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
-        }, THANKS_MESSAGE_DURATION);
-
+        handleSubmitSuccess();
         return;
       }
 
       if (isSubmitting || localHasFeedback) return;
 
       const isDetail = isDetailOpen;
-
       const tags = selectedContent ? [selectedContent] : [];
-      const detail = isDetail ? detailText.trim() : '';
+      const detailValue = isDetail ? detailText.trim() : '';
 
-      // detail 모드인데 비어있으면 제출 막기
-      if (isDetail && !detail) return;
+      if (isDetail && !detailValue) return;
 
       try {
-        console.log('[submitFeedback] send', {
-          chatHistoryId,
-          tags,
-          detail,
-        });
-
         await feedbackMutationRef.current.mutateAsync({
           chat_history_id: chatHistoryId,
           tags,
-          detail,
+          detail: detailValue,
         });
 
-        setLocalHasFeedback(true);
-
-        // 부모 컴포넌트에 알림
-        if (onFeedbackSubmitted) {
-          onFeedbackSubmitted(messageId);
-        }
-
-        toast('피드백을 주셔서 감사합니다.');
-        setShowThanks(true);
-
-        setTimeout(() => {
-          setShowThanks(false);
-          setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
-        }, THANKS_MESSAGE_DURATION);
+        handleSubmitSuccess();
       } catch (e) {
         console.error('[feedback] submit failed', e);
-        // 실패 시에도 이미 제출된 경우라면 감사 메시지 표시
         const error = e as { response?: { status?: number } };
         if (error?.response?.status === 500) {
           // 500 에러 = 이미 제출된 피드백
-          console.warn('[feedback] Already submitted, showing thanks message');
-          setLocalHasFeedback(true);
-
-          if (onFeedbackSubmitted) {
-            onFeedbackSubmitted(messageId);
-          }
-
-          setShowThanks(true);
-
-          setTimeout(() => {
-            setShowThanks(false);
-            setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
-          }, THANKS_MESSAGE_DURATION);
+          handleSubmitSuccess();
         }
-        // 그 외 에러는 사용자가 다시 시도할 수 있도록 유지
       } finally {
         feedbackMutationRef.current.reset();
       }
     },
-    [
-      chatHistoryId,
-      detailText,
-      isDetailOpen,
-      isSubmitting,
-      localHasFeedback,
-      onFeedbackSubmitted,
-      messageId,
-      setFeedbackVisibleMap,
-    ],
+    [chatHistoryId, detailText, isDetailOpen, isSubmitting, localHasFeedback, handleSubmitSuccess],
   );
 
-  if (!mounted) return null;
+  if (!section.mounted || localHasFeedback) return null;
 
   const rootClass = cn(
     'border-neutral-3 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4',
     'transition-all duration-200 ease-out will-change-[transform,opacity]',
-    entered ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0',
+    section.entered ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0',
   );
-
-  // 이미 피드백 제출 완료 → 섹션 숨김 (toast가 알림 담당)
-  if (localHasFeedback || showThanks) return null;
 
   return (
     <div ref={feedbackRef} className={rootClass}>
@@ -350,82 +164,43 @@ const FeedbackSection = ({
         </div>
       </div>
       <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">
-        {feedback.map((feedbackItem) => {
-          return (
-            <button
-              key={feedbackItem.id}
-              disabled={isSubmitting}
-              onClick={() => {
-                if (feedbackItem.id === DETAIL_ID) {
-                  setIsDetailOpen((prev) => {
-                    const next = !prev;
-                    if (!next) setDetailText(''); // 닫히면 입력 초기화
-                    return next;
-                  });
-                  return;
-                }
-                setSelectedChipId(feedbackItem.id);
-                submitFeedback(feedbackItem.content);
-              }}
-              className={cn(
-                'text-xsmall text-gray-80 cursor-pointer rounded-lg px-2 py-1',
-                (feedbackItem.id === DETAIL_ID && isDetailOpen) || feedbackItem.id === selectedChipId
-                  ? 'bg-neutral-3 border-neutral-5'
-                  : 'box-button-outline-gray',
-              )}
-            >
-              {feedbackItem.content}
-            </button>
-          );
-        })}
+        {FEEDBACK_CHIPS.map((chip) => (
+          <button
+            key={chip.id}
+            disabled={isSubmitting}
+            onClick={() => {
+              if (chip.id === DETAIL_ID) {
+                setIsDetailOpen((prev) => {
+                  if (prev) setDetailText('');
+                  return !prev;
+                });
+                return;
+              }
+              setSelectedChipId(chip.id);
+              submitFeedback(chip.content);
+            }}
+            className={cn(
+              'text-xsmall text-gray-80 cursor-pointer rounded-lg px-2 py-1',
+              (chip.id === DETAIL_ID && isDetailOpen) || chip.id === selectedChipId
+                ? 'bg-neutral-3 border-neutral-5'
+                : 'box-button-outline-gray',
+            )}
+          >
+            {chip.content}
+          </button>
+        ))}
       </div>
 
-      {/* 더 자세히 입력 */}
-      {detailMounted && (
-        <div
-          ref={detailRef}
-          className={cn(
-            'border-blue-30 flex w-full flex-col gap-2.5 rounded-2xl border bg-white px-4.5 py-2.5',
-            'transition-all duration-200 ease-out will-change-[transform,opacity]',
-            detailEntered ? 'translate-y-0 scale-100 opacity-100' : '-translate-y-1 scale-[0.99] opacity-0',
-          )}
-        >
-          <textarea
-            ref={textareaRef}
-            placeholder="자세한 피드백을 남겨주세요."
-            value={detailText}
-            onChange={(e) => {
-              setDetailText(e.target.value);
-              requestAnimationFrame(resizeTextarea);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                submitFeedback();
-              }
-            }}
-            className="text-body-medium text-gray-80 placeholder:text-gray-30 w-full resize-none overflow-y-hidden outline-none"
-            style={{ maxHeight: `${TEXTAREA_MAX_HEIGHT}px` }}
-            rows={1}
+      {detail.mounted && (
+        <div ref={detailRef}>
+          <FeedbackDetailInput
+            detailText={detailText}
+            onDetailChange={setDetailText}
+            onSubmit={() => submitFeedback()}
+            onCancel={() => setIsDetailOpen(false)}
+            isSubmitting={isSubmitting}
+            entered={detail.entered}
           />
-          <div className="flex items-center justify-end gap-2">
-            <button
-              onClick={() => setIsDetailOpen(false)}
-              className="capsule-button-outline-mono flex shrink-0 cursor-pointer items-center justify-center px-3 py-1.5"
-            >
-              <span className="text-body-small text-gray-80">취소</span>
-            </button>
-            <button
-              disabled={!detailText.trim() || isSubmitting}
-              onClick={() => submitFeedback()}
-              className={cn(
-                'capsule-button-solid-primary flex shrink-0 items-center justify-center px-3 py-1.5',
-                detailText.trim() ? 'cursor-pointer' : '',
-              )}
-            >
-              <span className="text-body-small">제출</span>
-            </button>
-          </div>
         </div>
       )}
     </div>
