@@ -9,10 +9,10 @@ import DateDivider from '@/features/chat/components/DateDivider';
 import RagContentHeader from '@/features/chat/components/header/RagContentHeader';
 import RagInput from '@/features/chat/components/RagInput';
 import RagSidebar from '@/features/chat/components/sidebar/RagSidebar';
+import useRagFilters from '@/features/chat/hooks/filter/useRagFilters';
+import useRagScroll from '@/features/chat/hooks/scroll/useRagScroll';
 // Hooks
 import useRagChat from '@/features/chat/hooks/useRagChat';
-import useRagFilters from '@/features/chat/hooks/useRagFilters';
-import useRagScroll from '@/features/chat/hooks/useRagScroll';
 
 export default function RagAnswerPage() {
   const params = useParams();
@@ -97,6 +97,26 @@ export default function RagAnswerPage() {
                   </div>
                 );
               })}
+
+              {qaPairs.length === 0 && (chat.isLoading || chat.isError) && (
+                <div
+                  className="flex flex-col gap-6"
+                  style={{ minHeight: scrollContainerHeight }}
+                >
+                  <RagAnswer
+                    currentQA={undefined}
+                    sessionId={sessionId}
+                    isLoading={chat.isLoading}
+                    isError={chat.isError}
+                    currentStep={chat.currentStep}
+                    showPRSelection={chat.showPRSelection}
+                    prList={chat.prList}
+                    onPRContinue={chat.handlePRContinue}
+                    onPRRefetch={chat.handlePRRefetch}
+                    onFeedbackSubmitted={chat.updateMessageFeedback}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
