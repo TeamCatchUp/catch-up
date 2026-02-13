@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import type { AnswerActionButtonsProps } from '@/features/chat/types/props/actionProps';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import { cn } from '@/shared/utils/cn';
 

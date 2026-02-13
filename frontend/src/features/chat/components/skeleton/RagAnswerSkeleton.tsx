@@ -2,6 +2,7 @@
 
 import RagStepSkeleton from '@/features/chat/components/skeleton/RagStepSkeleton';
 import { RAG_UI_STEPS } from '@/features/chat/constants/steps';
+import type { RagUIStepKey } from '@/features/chat/types';
 
 interface Props {
   currentStep: RagUIStepKey;

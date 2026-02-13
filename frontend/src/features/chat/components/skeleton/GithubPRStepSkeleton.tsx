@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo,useRef, useState } from 'react';
 
+import type { PRPayload } from '@/features/chat/types';
 import { cn } from '@/shared/utils/cn';
 import { formatDate } from '@/shared/utils/formatDate';
 

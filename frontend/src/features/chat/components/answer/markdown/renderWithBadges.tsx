@@ -1,3 +1,5 @@
+import type { ChatSource } from '@/features/chat/types';
+
 import SourceBadge, { SourceType } from './SourceBadge';
 
 const CITATION_PATTERN = /\[(\d+)\]/g;

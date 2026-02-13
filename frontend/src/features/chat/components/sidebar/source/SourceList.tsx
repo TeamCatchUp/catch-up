@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 
 import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
+import type { ChatSource } from '@/features/chat/types';
 import { cn } from '@/shared/utils/cn';
 
 import SourceCard from './SourceCard';

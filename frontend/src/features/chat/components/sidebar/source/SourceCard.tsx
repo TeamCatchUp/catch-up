@@ -1,3 +1,5 @@
+import type { ChatSource } from '@/features/chat/types';
+
 import LightbulbFilled from '/public/icons/icon/lightbulb_filled.svg';
 import Github from '/public/icons/logo/GitHub.svg';
 import Jira from '/public/icons/logo/Jira.svg';

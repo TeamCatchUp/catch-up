@@ -1,4 +1,7 @@
-type RagStepKey =
+/**
+ * 백엔드 노드 기준 RAG 전체 단계 키.
+ */
+export type RagStepKeyModel =
   | 'route'
   | 'router'
   | 'rewrite'
@@ -15,4 +18,14 @@ type RagStepKey =
   | 'generate_final_answer'
   | 'generate'
   | 'chitchat';
-type RagUIStepKey = 'router' | 'retrieve' | 'rerank' | 'manage_pr_context' | 'grade' | 'generate';
+
+/**
+ * 프론트 UI에서 노출하는 축약 단계 키.
+ */
+export type RagUIStepKeyModel =
+  | 'router'
+  | 'retrieve'
+  | 'rerank'
+  | 'manage_pr_context'
+  | 'grade'
+  | 'generate';

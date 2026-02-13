@@ -1,6 +1,8 @@
 import React from 'react';
 import type { Components } from 'react-markdown';
 
+import type { ChatSource } from '@/features/chat/types';
+
 import { renderWithBadges } from './renderWithBadges';
 
 const processChildren = (children: React.ReactNode, sources?: ChatSource[]) => {
