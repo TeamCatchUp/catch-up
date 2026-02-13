@@ -9,7 +9,7 @@ from langchain_core.output_parsers import StrOutputParser
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
 from catchup.rag.policies import CITATION_POLICY_MESSAGE, FALLBACK_ANSWER
-from catchup.rag.prompts.loader import prompt_loader
+from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.state import AgentState
@@ -38,7 +38,7 @@ async def generate_final_answer_node(state: AgentState):
     query = state["rewritten_query"]
 
     prompt = prompt_loader.get_prompt(
-        "generate_final_answer",
+        "rag/generate_final_answer",
         context=context_text,
         **global_context
     )

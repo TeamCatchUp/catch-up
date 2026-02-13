@@ -8,6 +8,7 @@ from fastapi.concurrency import run_in_threadpool
 from langchain_core.messages import HumanMessage
 from sqlalchemy.orm import Session
 
+from catchup.chat.chat_room import generate_chat_room_title
 from catchup.configs.config import settings
 from catchup.db.chat_room import add_message, create_chat_room, get_chat_room
 from catchup.observability.langfuse import observe
@@ -312,7 +313,7 @@ class ChatService:
         
         # 새로운 채팅 세션일 경우
         if not room:
-            initial_title = query[:30] + "..." if len(query) > 20 else query
+            initial_title = await generate_chat_room_title(query)
             room = await run_in_threadpool(
                 create_chat_room,
                 db,

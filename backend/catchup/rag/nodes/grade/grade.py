@@ -4,7 +4,7 @@ from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
-from catchup.rag.prompts.loader import prompt_loader
+from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import (
     get_context_text_from_documents,
     llm_semaphore,
@@ -40,7 +40,7 @@ async def grade_node(state: AgentState):
     )
 
     prompt = prompt_loader.get_prompt(
-        "grade",
+        "rag/grade",
         query=query,
         context=context_text
     )
