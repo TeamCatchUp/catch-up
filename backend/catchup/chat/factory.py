@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from catchup.chat.service import ChatService
+from catchup.chat.engine import ChatService
 
 
 @lru_cache(maxsize=1)

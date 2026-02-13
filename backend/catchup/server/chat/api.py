@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 
 from catchup.chat.factory import get_chat_service
 from catchup.chat.schemas import ChatRequest, ChatResponse
-from catchup.chat.service import ChatService
+from catchup.chat.engine import ChatService
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.dependencies import get_rag_global_context
 
