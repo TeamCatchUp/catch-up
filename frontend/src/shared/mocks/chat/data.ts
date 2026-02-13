@@ -397,3 +397,5 @@ const handleGoogleLogin = () => {
     has_feedback: false,
   },
 ];
+
+export const MOCK_RELATED_JIRA_ISSUES: MockSource[] = [];
