@@ -5,18 +5,27 @@
  * 사용처:
  * - MOCK_SOURCES (SSE 응답 시뮬레이션)
  * - MOCK_RELATED_JIRA_ISSUES (관련 Jira 이슈)
+ *
+ * 백엔드 RAG 타입 체계:
+ * - source: "jira" | "slack" | "github" | "unknown"
+ * - entity_type: "issue" | "epic" | "message" | "pr" | "comment" | "code"
  */
 
-/** 소스 타입: 0 = 코드, 1 = PR, 2 = Github 이슈, 3 = Jira 이슈 */
-export type MockSourceType = 0 | 1 | 2 | 3;
+/** 소스 플랫폼 */
+export type MockSource_Source = 'jira' | 'slack' | 'github' | 'unknown';
+
+/** 엔티티 타입 */
+export type MockSource_EntityType = 'issue' | 'epic' | 'message' | 'pr' | 'comment' | 'code';
 
 export interface MockSource {
   /** 소스 인덱스 */
   index: number;
   /** 답변에서 인용 여부 */
   is_cited: boolean;
-  /** 소스 타입 */
-  source_type: MockSourceType;
+  /** 소스 플랫폼 */
+  source: MockSource_Source;
+  /** 엔티티 타입 */
+  entity_type: MockSource_EntityType;
   /** 관련도 점수 */
   relevance_score: number;
   /** 소스 URL */
@@ -65,4 +74,14 @@ export interface MockSource {
   assignee_name?: string;
   /** 상태 ID */
   status_id?: number;
+
+  // Slack 관련 필드
+  /** 채널명 */
+  channel_name?: string;
+  /** 워크스페이스 ID */
+  team_id?: string;
+  /** 타임스탬프 */
+  ts?: string;
+  /** 스레드 부모 TS */
+  thread_ts?: string;
 }

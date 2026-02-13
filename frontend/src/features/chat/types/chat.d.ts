@@ -9,7 +9,7 @@ interface SourceResponse {
 interface ChatSource {
   id: string;
   // source_type: SourceResponse['source_type'];
-  source_type: 'code' | 'pr' | 'github_issue' | 'jira';
+  source_type: 'code' | 'pr' | 'github_issue' | 'jira' | 'slack';
   is_cited: boolean;
 
   repo: string; // 아이콘 옆 문구
