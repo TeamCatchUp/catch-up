@@ -21,6 +21,8 @@ const AnswerError = ({
         <AnswerActionButtons
           icons={icons}
           messageId={messageId}
+          answerContent=""
+          hasFeedback={hasFeedback}
           feedbackVisibleMap={feedbackVisibleMap}
           setFeedbackVisibleMap={setFeedbackVisibleMap}
         />

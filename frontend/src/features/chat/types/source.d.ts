@@ -1,10 +1,24 @@
-// backend 응답 타입 (0 = 코드, 1 = PR, 2 = Github 이슈 3 = Jira 이슈)
-type BackendSourceType = 0 | 1 | 2 | 3;
+/**
+ * Backend source types
+ * Used for SSE response parsing and API communication
+ * Feature-specific types for chat domain
+ *
+ * 백엔드 RAG 타입 체계 (catchup/rag/schemas/sources.py)
+ * - source: "jira" | "slack" | "github" | "unknown"
+ * - entity_type: "issue" | "epic" | "message" | "pr" | "comment" | "code"
+ */
 
-interface BackendSource {
+/** 소스 플랫폼 (backend SourceType StrEnum) */
+export type BackendSource_Source = 'jira' | 'slack' | 'github' | 'unknown';
+
+/** 엔티티 타입 (backend EntityType StrEnum + code) */
+export type BackendSource_EntityType = 'issue' | 'epic' | 'message' | 'pr' | 'comment' | 'code';
+
+export interface BackendSource {
   index: number;
   is_cited: boolean;
-  source_type: BackendSourceType;
+  source: BackendSource_Source;
+  entity_type: BackendSource_EntityType;
   relevance_score: number;
   html_url?: string;
   content: string;
@@ -27,4 +41,10 @@ interface BackendSource {
   parent_summary?: string;
   assignee_name?: string;
   status_id?: number;
+
+  // slack
+  channel_name?: string;
+  team_id?: string;
+  ts?: string;
+  thread_ts?: string;
 }

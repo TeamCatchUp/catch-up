@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { chatQueries } from '@/shared/queries/chatroom.queries';
+import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
 
 import ArrowRight from '/public/icons/icon/arrow_right.svg';
@@ -26,13 +27,10 @@ const defaultClass =
   'bg-white hover:bg-neutral-2 active:bg-neutral-3 active:ring-1 active:ring-neutral-3';
 const selectedClass = 'ring-1 ring-neutral-2 bg-blue-1 hover:bg-blue-5';
 
-interface SideNavQuestionsProps {
-  onOpenModal: () => void;
-}
-
-export default function SideNavQuestions({ onOpenModal }: SideNavQuestionsProps) {
+export default function SideNavQuestions() {
   const pathname = usePathname();
   const queryClient = useQueryClient();
+  const { togglePanel } = useSidebarStore();
 
   const { data: chatroomData } = useQuery(chatQueries.recentRooms());
 
@@ -57,7 +55,7 @@ export default function SideNavQuestions({ onOpenModal }: SideNavQuestionsProps)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <button onClick={onOpenModal} className="h-7 w-fit cursor-pointer items-center">
+      <button onClick={() => togglePanel('questionsHistory')} className="h-7 w-fit cursor-pointer items-center">
         <div className="text-button-secondary-mono flex items-center px-2.5 py-1">
           <span className="text-body-xsmall text-gray-70">내 질문</span>
           <ArrowRight className="relative bottom-px h-5 w-5 text-gray-50" />

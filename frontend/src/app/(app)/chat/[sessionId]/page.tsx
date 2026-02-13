@@ -1,6 +1,5 @@
 'use client';
 
-import { useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 
 // Chat Components
@@ -8,15 +7,12 @@ import RagQuestion from '@/features/chat/components/answer/question/RagQuestion'
 import RagAnswer from '@/features/chat/components/answer/RagAnswer';
 import DateDivider from '@/features/chat/components/DateDivider';
 import RagContentHeader from '@/features/chat/components/header/RagContentHeader';
-import PageIndicator from '@/features/chat/components/PageIndicator';
 import RagInput from '@/features/chat/components/RagInput';
 import RagSidebar from '@/features/chat/components/sidebar/RagSidebar';
 // Hooks
 import useRagChat from '@/features/chat/hooks/useRagChat';
 import useRagFilters from '@/features/chat/hooks/useRagFilters';
-import useRagPagination from '@/features/chat/hooks/useRagPagination';
-import useWheelNavigation from '@/features/chat/hooks/useWheelNavigation';
-import { cn } from '@/shared/utils/cn';
+import useRagScroll from '@/features/chat/hooks/useRagScroll';
 
 export default function RagAnswerPage() {
   const params = useParams();
@@ -26,11 +22,6 @@ export default function RagAnswerPage() {
   const repo = searchParams.get('repo');
   const initialQuery = searchParams.get('q');
 
-  // Refs
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const answerScrollRef = useRef<HTMLDivElement>(null);
-  const feedbackRef = useRef<HTMLDivElement>(null);
-
   // Core hooks
   const chat = useRagChat({
     sessionId,
@@ -38,24 +29,18 @@ export default function RagAnswerPage() {
     initialQuery: initialQuery ?? null,
   });
 
-  const pagination = useRagPagination({
-    sessionId,
+  const {
+    qaPairs,
+    qaRefs,
+    scrollContainerCallbackRef,
+    scrollContainerHeight,
+    scrollToLatest,
+    activePairIndex,
+  } = useRagScroll({
     messages: chat.chatData?.messages ?? [],
-    isLoading: chat.isLoading,
   });
 
   const filters = useRagFilters();
-
-  // 휠 네비게이션
-  useWheelNavigation({
-    containerRef: scrollRef,
-    excludeRefs: [answerScrollRef, feedbackRef],
-    totalPages: pagination.qaPairs.length,
-    currentPage: pagination.currentPage,
-    disabled: chat.isLoading,
-    onPageChange: pagination.setCurrentPage,
-    onSlideDirectionChange: pagination.setSlideDirection,
-  });
 
   return (
     <div className="flex h-screen w-full">
@@ -63,68 +48,56 @@ export default function RagAnswerPage() {
       <div className="flex min-w-0 flex-1 flex-col">
         <RagContentHeader
           title={chat.chatData?.title ?? ''}
-          onSelectQuestion={pagination.goToQuestion}
+          onSelectQuestion={() => {}}
         />
 
         {/* 스크롤 가능한 콘텐츠 영역 */}
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
-          <div
-            ref={scrollRef}
-            className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
-          >
+          <div ref={scrollContainerCallbackRef} className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9">
             {/* 날짜 구분선 */}
             <DateDivider className="mb-8 w-192.75" />
 
-            {/* 슬라이드 애니메이션 영역 */}
-            <div
-              className={cn(
-                'mx-auto w-193.25 flex-1 overflow-hidden transition-all duration-300',
-                pagination.slideDirection === 'down'
-                  ? 'translate-y-full opacity-0'
-                  : pagination.slideDirection === 'up'
-                    ? '-translate-y-full opacity-0'
-                    : 'translate-y-0 opacity-100',
-              )}
-            >
-              <div className="flex h-full flex-col gap-6">
-                {/* 질문 영역 */}
-                <div className="flex-none">
-                  <RagQuestion
-                    currentQA={pagination.currentQA}
-                    isLastPage={pagination.currentPage === pagination.qaPairs.length - 1}
-                    onSubmitEdit={chat.submitEdit}
-                  />
-                </div>
+            {/* 모든 Q&A 쌍을 순서대로 렌더링 */}
+            <div className="mx-auto flex w-193.25 flex-1 flex-col gap-12">
+              {qaPairs.map((qaPair, index) => {
+                const isLastPair = index === qaPairs.length - 1;
 
-                {/* 답변 영역 */}
-                <RagAnswer
-                  currentQA={pagination.currentQA}
-                  sessionId={sessionId}
-                  isLoading={chat.isLoading}
-                  isError={chat.isError}
-                  currentStep={chat.currentStep}
-                  showPRSelection={chat.showPRSelection}
-                  prList={chat.prList}
-                  onPRContinue={chat.handlePRContinue}
-                  onPRRefetch={chat.handlePRRefetch}
-                  onFeedbackSubmitted={chat.updateMessageFeedback}
-                  answerScrollRef={answerScrollRef}
-                  feedbackRef={feedbackRef}
-                />
-              </div>
+                return (
+                  <div
+                    key={qaPair.question.id}
+                    ref={(el) => {
+                      qaRefs.current.set(index, el);
+                      el?.setAttribute('data-qa-index', String(index));
+                    }}
+                    className="flex flex-col gap-6"
+                    style={isLastPair ? { minHeight: scrollContainerHeight } : undefined}
+                  >
+                    {/* 질문 영역 */}
+                    <div className="flex-none">
+                      <RagQuestion
+                        currentQA={qaPair}
+                        isLastPage={isLastPair}
+                        onSubmitEdit={chat.submitEdit}
+                      />
+                    </div>
+
+                    {/* 답변 영역 */}
+                    <RagAnswer
+                      currentQA={qaPair}
+                      sessionId={sessionId}
+                      isLoading={chat.isLoading && isLastPair}
+                      isError={chat.isError && isLastPair}
+                      currentStep={chat.currentStep}
+                      showPRSelection={chat.showPRSelection && isLastPair}
+                      prList={chat.prList}
+                      onPRContinue={chat.handlePRContinue}
+                      onPRRefetch={chat.handlePRRefetch}
+                      onFeedbackSubmitted={chat.updateMessageFeedback}
+                    />
+                  </div>
+                );
+              })}
             </div>
-
-            {/* 페이지 인디케이터 */}
-            {pagination.qaPairs.length > 1 && (
-              <PageIndicator
-                total={pagination.qaPairs.length}
-                current={pagination.currentPage}
-                disabled={chat.isLoading}
-                onSelect={pagination.goToPage}
-                variant="bar"
-                className="mt-10"
-              />
-            )}
           </div>
         </div>
 
@@ -134,14 +107,13 @@ export default function RagAnswerPage() {
           isLoading={chat.isLoading}
           onSendMessage={chat.sendMessage}
           onStop={chat.handleStop}
-          qaPairsLength={pagination.qaPairs.length}
-          goToNewPage={pagination.goToNewPage}
+          onNewMessage={scrollToLatest}
         />
       </div>
 
       {/* 사이드바 */}
       <RagSidebar
-        currentQA={pagination.currentQA}
+        currentQA={qaPairs[activePairIndex]}
         isLoading={chat.isLoading}
         isError={chat.isError}
       />

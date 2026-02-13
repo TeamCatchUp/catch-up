@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 
-import ChatIcon from '@/public/icons/icon/chat.svg';
 import type { SearchQuery } from '@/shared/types/query/search';
+import { formatRelativeDate } from '@/shared/utils/formatDate';
 
 interface RecentlySearchProps {
   querys: (SearchQuery & { rawDate: Date })[];
@@ -56,28 +56,32 @@ export function SearchHistory({ querys, isModal = false, onItemClick }: Recently
   const visibleSections = sections.filter((s) => s.data.length > 0);
 
   return (
-    <div className="flex w-full flex-col">
+    <div className="flex w-full flex-col gap-2">
       {visibleSections.map((section, idx) => (
-        <div key={section.key}>
-          <span className="text-body-xsmall block px-1.5 py-2 font-medium text-gray-50">{section.key}</span>
+        <div key={section.key} className="flex flex-col gap-1 rounded-lg bg-white px-1.5 py-2.5">
+          <div className="px-2">
+            <span className="text-body-xsmall font-medium text-gray-50">{section.key}</span>
+          </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-2">
             {section.data.map((item, i) => (
               <Link
                 href={`/chat/${item.session_id}`}
                 onClick={() => onItemClick?.()}
                 key={item.session_id + i}
-                className="hover:bg-neutral-2 group flex h-10 w-full items-center gap-2 rounded-xl bg-white px-2 py-1 transition-colors"
+                className="hover:bg-neutral-2 group flex h-10 w-full items-center gap-2 rounded-lg bg-white px-2 py-1 transition-colors"
               >
-                <div className="border-neutral-3 bg-neutral-1 rounded-rounded flex shrink-0 items-center justify-center border p-1.5">
-                  <ChatIcon className="text-gray-60 h-4 w-4" />
-                </div>
                 <div className="text-gray-80 text-body-small flex-1 truncate text-left">{item.query}</div>
-                <div className="text-body-xsmall text-gray-30 w-18 shrink-0 text-right">{item.date}</div>
+                {section.key !== '오늘' && (
+                  <div className="text-body-xsmall text-gray-30 shrink-0 text-right">
+                    {section.key === '최근 7일'
+                      ? formatRelativeDate((item as any).rawDate.toISOString())
+                      : item.date}
+                  </div>
+                )}
               </Link>
             ))}
           </div>
-          {!isModal && idx < visibleSections.length - 1 && <hr className="border-neutral-4 my-6 w-full border-t" />}
         </div>
       ))}
     </div>

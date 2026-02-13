@@ -1,46 +1,5 @@
 import delay from '@/shared/mocks/delay';
-
-const MOCK_SOURCES: BackendSource[] = [
-  {
-    index: 1,
-    is_cited: true,
-    source_type: 1,
-    relevance_score: 0.95,
-    html_url: 'https://github.com/example/repo/pull/42',
-    content: 'feat: 로그인 토큰 갱신 로직 개선',
-    owner: 'example',
-    repo: 'CatchUp-BE',
-    title: 'feat: 로그인 토큰 갱신 로직 개선',
-    pr_number: 42,
-    created_at: Date.now() - 86400000,
-    author: 'developer',
-  },
-  {
-    index: 2,
-    is_cited: true,
-    source_type: 0,
-    relevance_score: 0.88,
-    html_url: 'https://github.com/example/repo/blob/main/src/auth/service.ts',
-    content: 'export class AuthService { ... }',
-    owner: 'example',
-    repo: 'CatchUp-BE',
-    file_path: 'src/auth/service.ts',
-    author: 'developer',
-  },
-  {
-    index: 3,
-    is_cited: true,
-    source_type: 3,
-    relevance_score: 0.82,
-    html_url: 'https://catchup.atlassian.net/browse/CAT-101',
-    content: '로그인 관련 이슈',
-    owner: 'catchup',
-    issue_key: 'CAT-101',
-    summary: '로그인 시 토큰 만료 처리 개선',
-    project_name: 'CatchUp',
-    assignee_name: '홍길동',
-  },
-];
+import { MOCK_SOURCES } from './data';
 
 const buildMockAnswer = (query: string) =>
   `# H1: "${query}"에 대한 답변

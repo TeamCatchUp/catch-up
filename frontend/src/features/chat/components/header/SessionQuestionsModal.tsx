@@ -8,8 +8,6 @@ import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 
-import List from '/public/icons/icon/list.svg';
-
 interface SessionQuestionsModalProps {
   onClose: () => void;
   onSelect: (query: string) => void;
@@ -30,25 +28,23 @@ const SessionQuestionsModal = ({ onClose, onSelect }: SessionQuestionsModalProps
   return (
     <div
       ref={modalRef}
-      className="shadow-dropdown-menu border-neutral-5 flex max-h-125 w-95 flex-col gap-4 rounded-2xl border bg-white py-4"
+      className="shadow-dropdown-menu border-neutral-5 flex max-h-125 w-95 flex-col gap-1.5 overflow-hidden rounded-xl border bg-white py-4"
     >
       {/* 헤더 */}
-      <div className="flex items-center gap-2 px-5">
-        <List className="text-gray-70 h-6 w-6" />
-        <span className="text-heading-medium text-gray-80 relative top-px">대화 내 질문 목록</span>
-        <span className="text-heading-medium text-blue-55 relative top-px">{isLoading ? '-' : allQueries.length}</span>
+      <div className="px-5">
+        <span className="text-body-small text-gray-50">대화 내 질문 목록</span>
       </div>
 
       {/* 질문 목록 */}
-      <div className="border-t-neutral-3 custom-scrollbar overflow-y-auto border-t pt-3">
-        <div className="flex flex-col gap-2 px-4">
+      <div className="max-h-109.75 w-full overflow-y-auto px-3 py-1.5">
+        <div className="flex flex-col gap-1.5">
           {isLoading ? (
             <div className="text-body-small text-gray-40 py-10 text-center">질문을 불러오는 중...</div>
           ) : allQueries.length > 0 ? (
             allQueries.map((item, idx) => (
               <button
                 key={idx}
-                className="hover:bg-neutral-1 rounded-md2 flex h-10 w-full cursor-pointer items-center px-2.5 py-1 transition-colors"
+                className="hover:bg-neutral-2 flex h-10 w-full cursor-pointer items-center rounded-xl px-2 py-1 transition-colors"
                 onClick={() => {
                   onSelect(item.query);
                   onClose();
