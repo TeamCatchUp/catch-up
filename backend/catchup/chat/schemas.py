@@ -3,6 +3,7 @@ from typing import Annotated, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
+from catchup.db.models import UserRole
 from catchup.rag.schemas.sources import SourceResponse
 
 
@@ -23,12 +24,8 @@ NODE_STATUS_MAP = {
 
 class ChatRequest(BaseModel):
     query: str = Field(..., description="사용자 질문")
-    role: Optional[str] = Field(
-        default="user", description="사용자 역할"
-    )  # TODO: 추후 RBAC 혹은 페르소나에 사용 (논의 필요)
-    session_id: str = Field(
-        default_factory=lambda: str(uuid.uuid4()), description="대화 세션 ID"
-    )
+    role: Optional[str] = Field(defualt=UserRole.USER, description="사용자 역할 (admin 또는 user)") # TODO: 직군으로 바꿔야 하나?
+    session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
 
 
 class ChatResponse(BaseModel):
@@ -43,7 +40,7 @@ class ChatStreamingStatusResponse(BaseModel):
     """답변 생성 단계 스트리밍"""
 
     type: Literal["status"] = "status"
-    session_id: str
+    session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
     node: str
     message: str
 
@@ -52,13 +49,13 @@ class ChatStreamingSourceResponse(BaseModel):
     """출처 정보 전송 (답변 생성 전 먼저 전송)"""
 
     type: Literal["sources"] = "sources"
-    session_id: str
+    session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
     sources: Optional[list[SourceResponse]]
 
 
 class ChatStreamingTokenResponse(BaseModel):
     type: Literal["token"] = "token"
-    session_id: str
+    session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
     token: str
 
 

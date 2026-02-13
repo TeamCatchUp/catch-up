@@ -25,7 +25,7 @@ class GlobalUserContext(BaseModel):
 
 class GlobalCompanyContext(BaseModel):
     id: int = Field(..., description="DB 조회를 위한 고유 ID")
-    name: str = Field(..., description="회사명")
+    name: str = Field(..., description="회사 이름")
     description: Optional[str] = Field(default="", description="조직 설명")
     
     @classmethod
@@ -36,9 +36,14 @@ class GlobalCompanyContext(BaseModel):
             description=db_company.description
         )
     
+class GlobalWorkspaceContext(BaseModel):
+    id: int = Field(..., description="DB 조회를 위한 고유 ID")
+    name: str = Field(..., description="워크스페이스 이름")
+
 
 class GlobalContext(BaseModel):
     user: GlobalUserContext = Field(..., description="사용자 정보")
+    workspace: GlobalWorkspaceContext = Field(..., description="워크스페이스 정보")
     company: GlobalCompanyContext = Field(..., description="조직 및 비즈니스 맥락")
     current_time: str = Field(
         default_factory=lambda: datetime.now(pytz.timezone("Asia/Seoul")).strftime("%Y-%m-%d %H:%M (%A)")

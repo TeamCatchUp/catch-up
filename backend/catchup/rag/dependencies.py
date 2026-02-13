@@ -5,7 +5,7 @@ from catchup.auth.dependencies import get_current_user
 from catchup.db.dependencies import get_db
 from catchup.db.models import User
 from catchup.db.users import get_user_with_full_context
-from catchup.rag.schemas.context import GlobalCompanyContext, GlobalContext, GlobalUserContext
+from catchup.rag.schemas.context import GlobalCompanyContext, GlobalContext, GlobalUserContext, GlobalWorkspaceContext
 
 
 async def get_rag_global_context(
@@ -22,10 +22,12 @@ async def get_rag_global_context(
         )
     
     user_context = GlobalUserContext.from_db_user(db_user_full)
-    company_context = _extract_company_context(db_user_full)    
-
+    company_context = _extract_company_context(db_user_full)
+    workspace_context = _extract_workspace_context(db_user_full)
+    
     return GlobalContext(
         user=user_context,
+        workspace=workspace_context,
         company=company_context
     )
 
@@ -41,4 +43,19 @@ def _extract_company_context(user: User) -> GlobalCompanyContext:
         id=0, 
         name="Unknown", 
         description="No company context available"
+    )
+
+def _extract_workspace_context(user: User) -> GlobalWorkspaceContext:
+    """User로부터 Workspace 정보를 추출하는 과정"""
+    if user.workspace_links:
+        workspace = user.workspace_links[0].workspace
+        return GlobalWorkspaceContext(
+            id=workspace.id,
+            name=workspace.name
+        )
+    
+    # Fallback (워크스페이스가 없는 경우에 대한 처리가 필요하다면)
+    return GlobalWorkspaceContext(
+        id=0,
+        name="Default Workspace" 
     )

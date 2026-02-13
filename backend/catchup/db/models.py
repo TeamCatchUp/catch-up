@@ -1,7 +1,10 @@
 from datetime import datetime
 from enum import StrEnum
+from typing import Any, Optional
+import uuid
 
-from sqlalchemy import ForeignKey, func, text
+from sqlalchemy import UUID, ForeignKey, Text, func, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import String, Boolean, Integer, BigInteger, DateTime
@@ -859,3 +862,73 @@ class GithubRepository(Base):
     synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    
+# ===========
+# RAG Chat
+# ===========
+class ChatRoom(Base):
+    __tablename__ = "chat_rooms"
+    
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), nullable=False)
+    
+    title: Mapped[str] = mapped_column(String(50), nullable=False)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+    
+    chat_histories: Mapped[list["ChatHistory"]] = relationship(
+        back_populates="chat_room",
+        cascade="all, delete-orphan",
+        order_by="ChatHistory.created_at"
+    )
+
+
+class SenderType(StrEnum):
+    HUMAN = "human"
+    ASSISTANT = "assistant"
+
+
+class ChatHistory(Base):
+    __tablename__ = "chat_histories"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    chat_room_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("chat_rooms.session_id"), 
+        nullable=False
+    )
+    
+    content: Mapped[str] = mapped_column(Text, nullable=True)
+    sender_type: Mapped[SenderType] = mapped_column(String(20), nullable=False)
+    sources: Mapped[Optional[list[dict[str,Any]]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        server_default=text("'[]'::jsonb")
+    )
+    
+    feedback_string: Mapped[str] = mapped_column(String(127), nullable=True)
+    
+    is_displayed: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default=text("true"),
+        nullable=False,
+        comment="사용자가 수정한 쿼리인 경우에만 False이며 화면에 노출되지 않음."
+    )
+    
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
+    outpu_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    
+    chat_room: Mapped["ChatRoom"] = relationship(back_populates="chat_histories")
+    
