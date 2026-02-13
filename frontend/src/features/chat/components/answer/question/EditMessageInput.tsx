@@ -58,11 +58,10 @@ const EditMessageInput = ({ initialContent, onCancel, onSubmit }: EditMessageInp
             e.preventDefault();
             handleSubmit();
           } else if (e.key === 'Escape') {
-            onCancel();
+            onCancel(); 
           }
         }}
-        style={{ height: '26px' }}
-        className="text-body-medium text-gray-80 box-border w-full resize-none overflow-y-auto px-1 outline-none"
+        className="h-6.5 text-body-medium text-gray-80 box-border w-full resize-none overflow-y-auto px-1 outline-none"
       />
       <div className="flex items-center justify-end gap-2">
         <button

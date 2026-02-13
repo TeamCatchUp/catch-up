@@ -1,11 +1,14 @@
 interface IconItem {
   name: string;
   icon: React.FC<React.SVGProps<SVGElement>>;
+  activeIcon?: React.FC<React.SVGProps<SVGElement>>;
 }
 
 interface AnswerActionButtonsProps {
   icons: IconItem[];
   messageId: string;
+  answerContent: string;
+  hasFeedback?: boolean;
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
 }

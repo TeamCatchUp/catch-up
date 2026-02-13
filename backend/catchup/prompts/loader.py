@@ -33,13 +33,16 @@ class PromptLoader:
     
     def get_prompt(
         self,
-        node_name: str,
+        template_path: str,
         **kwargs
     ) -> str:
-        if not node_name.endswith('.j2'):
-            file_name = f"{node_name}.j2"
+        """
+            usage: get_prompt('rag/rewrite.j2') 
+        """
+        if not template_path.endswith('.j2'):
+            file_name = f"{template_path}.j2"
         else:
-            file_name = node_name
+            file_name = template_path
         
         try:
             template = self.env.get_template(file_name)

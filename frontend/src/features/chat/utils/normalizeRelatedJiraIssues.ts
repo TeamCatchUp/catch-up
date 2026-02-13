@@ -1,10 +1,12 @@
 /** Jira 이슈를 부모-자식 계층 구조로 정규화 */
 
+import type { BackendSource } from '@/features/chat/types/source';
+
 const safeSummary = (s?: string) => (s ?? '').trim();
 
 /** 백엔드 Jira 이슈 배열을 JiraTask 계층으로 변환 */
 export const normalizeRelatedJiraIssues = (issues: BackendSource[] = []): JiraTask[] => {
-  const jiraOnly = (issues ?? []).filter((i) => Number(i.source_type === 3));
+  const jiraOnly = (issues ?? []).filter((i) => i.source === 'jira');
 
   // parent_key 無 이슈 -> issue_key로 매핑
   const rootByIssueKey = new Map<string, BackendSource>();

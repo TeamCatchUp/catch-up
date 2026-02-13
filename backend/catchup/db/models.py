@@ -15,6 +15,33 @@ class UserRole(StrEnum):
     ADMIN = "admin"
 
 
+class Company(Base):
+    __tablename__ = "companies"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    description: Mapped[str] = mapped_column(String(255), nullable=True)
+    location: Mapped[str] = mapped_column(String(255), nullable=True)
+    logo_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    
+    workspaces: Mapped[list["Workspace"]] = relationship(back_populates="company")
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    
+    company: Mapped["Company"] = relationship(back_populates="workspaces")
+    user_links: Mapped[list["UserWorkspace"]] = relationship(
+        back_populates="workspace",
+        cascade="all, delete-orphan"
+    )
+    users: Mapped[list["User"]] = association_proxy("user_links", "user")
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -25,10 +52,30 @@ class User(Base):
     family_name: Mapped[str] = mapped_column(String(50), nullable=True)
     picture: Mapped[str] = mapped_column(String(500), nullable=True)
     role: Mapped[UserRole] = mapped_column(
-        String(20), default=UserRole.USER, server_default=str(UserRole.USER)
+        String(20),
+        default=UserRole.USER,
+        server_default=text(f"'{UserRole.USER}'")
     )
     provider: Mapped[str] = mapped_column(String(20), nullable=False)
     refresh_token: Mapped[str] = mapped_column(String(500), nullable=True)
+ 
+    workspace_links: Mapped[list["UserWorkspace"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    workspaces: Mapped[list["Workspace"]] = association_proxy("workspace_links", "workspace")
+    
+    
+class UserWorkspace(Base):
+    __tablename__ = "user_workspaces"
+    
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), primary_key=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    
+    user: Mapped["User"] = relationship(back_populates="workspace_links")
+    workspace: Mapped["Workspace"] = relationship(back_populates="user_links")
+
 
 class JiraAccountType(StrEnum):
     ATLASSIAN = "atlassian" # 일반 사용자
@@ -830,3 +877,73 @@ class GithubRepository(Base):
     synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    
+# ===========
+# RAG Chat
+# ===========
+class ChatRoom(Base):
+    __tablename__ = "chat_rooms"
+    
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), nullable=False)
+    
+    title: Mapped[str] = mapped_column(String(50), nullable=False)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+    
+    chat_histories: Mapped[list["ChatHistory"]] = relationship(
+        back_populates="chat_room",
+        cascade="all, delete-orphan",
+        order_by="ChatHistory.created_at"
+    )
+
+
+class SenderType(StrEnum):
+    HUMAN = "human"
+    ASSISTANT = "assistant"
+
+
+class ChatHistory(Base):
+    __tablename__ = "chat_histories"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    chat_room_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("chat_rooms.session_id"), 
+        nullable=False
+    )
+    
+    content: Mapped[str] = mapped_column(Text, nullable=True)
+    sender_type: Mapped[SenderType] = mapped_column(String(20), nullable=False)
+    sources: Mapped[Optional[list[dict[str,Any]]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        server_default=text("'[]'::jsonb")
+    )
+    
+    feedback_string: Mapped[str] = mapped_column(String(127), nullable=True)
+    
+    is_displayed: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default=text("true"),
+        nullable=False,
+        comment="사용자가 수정한 쿼리인 경우에만 False이며 화면에 노출되지 않음."
+    )
+    
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
+    outpu_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    
+    chat_room: Mapped["ChatRoom"] = relationship(back_populates="chat_histories")
+    

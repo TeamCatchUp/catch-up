@@ -1,12 +1,20 @@
 /** 백엔드 소스 데이터를 UI용으로 정규화 */
 
+import type { BackendSource } from '@/features/chat/types/source';
 import { formatDate } from '@/shared/utils/formatDate';
 
-const SOURCE_TYPE_MAP: Record<0 | 1 | 2 | 3, ChatSource['source_type']> = {
-  0: 'code',
-  1: 'pr',
-  2: 'github_issue',
-  3: 'jira',
+/** 백엔드 source + entity_type 조합을 UI source_type으로 변환 */
+const getUiSourceType = (source: string, entityType: string): ChatSource['source_type'] => {
+  if (source === 'github') {
+    if (entityType === 'code') return 'code';
+    if (entityType === 'pr') return 'pr';
+    if (entityType === 'issue') return 'github_issue';
+  }
+  if (source === 'slack' && entityType === 'message') return 'slack';
+  if (source === 'jira') return 'jira';
+
+  // fallback
+  return 'code';
 };
 
 /** 파일 경로에서 마지막 파일명 추출 */
@@ -27,10 +35,10 @@ export const normalizeSources = (sources: BackendSource[]): ChatSource[] => {
   return (sources ?? [])
     .filter((s) => !!s.html_url)
     .map((s) => {
-      const sourceType = SOURCE_TYPE_MAP[s.source_type];
+      const sourceType = getUiSourceType(s.source, s.entity_type);
 
       // repo
-      const repo = s.repo ?? '';
+      const repo = sourceType === 'slack' ? (s.channel_name ?? s.repo ?? '') : (s.repo ?? '');
 
       // title
       const title =
@@ -40,14 +48,16 @@ export const normalizeSources = (sources: BackendSource[]): ChatSource[] => {
             ? (s.summary ?? '')
             : sourceType === 'code'
               ? getLastPath(s.file_path) || ''
-              : '';
+              : sourceType === 'slack'
+                ? 'Slack 메시지'
+                : '';
 
       // date
       const date =
         sourceType === 'code' ? formatDaysAgo(s.days_ago) : s.created_at ? formatDate(s.created_at) : '';
 
       // author
-      const author = sourceType === 'code' ? (s.author ?? '') : (s.assignee_name ?? '');
+      const author = sourceType === 'code' ? (s.author ?? '') : (s.assignee_name ?? s.author ?? '');
 
       return {
         id: crypto.randomUUID(),

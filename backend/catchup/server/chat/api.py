@@ -2,19 +2,21 @@ import logging
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
 from catchup.chat.factory import get_chat_service
 from catchup.chat.schemas import ChatRequest, ChatResponse
-from catchup.chat.service import ChatService
+from catchup.chat.engine import ChatService
+from catchup.db.dependencies import get_db
 from catchup.rag.schemas.context import GlobalContext
-from catchup.server.chat.context import get_full_global_context
+from catchup.rag.dependencies import get_rag_global_context
 
 logger = logging.getLogger()
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1")
 
 
-@router.post("/api/chat")
+@router.post("/chat")
 async def chat_response(
     request: ChatRequest, service: ChatService = Depends(get_chat_service)
 ) -> ChatResponse:
@@ -25,14 +27,16 @@ async def chat_response(
     )
 
 
-@router.post("/api/chat/stream")
+@router.post("/chat/stream")
 async def chat_response_stream(
-    request: ChatRequest, 
+    request: ChatRequest,
+    db: Session = Depends(get_db),
     service: ChatService = Depends(get_chat_service),
-    global_context: GlobalContext = Depends(get_full_global_context)
+    global_context: GlobalContext = Depends(get_rag_global_context)
 ):    
     async def event_generator():
         async for chunk in service.chat_stream(
+            db=db,
             query=request.query,
             session_id=request.session_id,
             global_context=global_context

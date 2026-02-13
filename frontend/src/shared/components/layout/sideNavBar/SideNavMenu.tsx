@@ -36,7 +36,7 @@ interface SideNavMenuProps {
   setIsOpen: (open: boolean) => void;
 }
 
-export default function SideNavMenu({ isOpen, setIsOpen }: SideNavMenuProps) {
+export default function SideNavMenu({ isOpen, setIsOpen: setSidebarOpen }: SideNavMenuProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { activePanel, togglePanel, setActivePanel } = useSidebarStore();
@@ -50,7 +50,7 @@ export default function SideNavMenu({ isOpen, setIsOpen }: SideNavMenuProps) {
 
         const handleClick = () => {
           if (item.panel) {
-            if (item.panel === 'settings' && isOpen) setIsOpen(false);
+            if (item.panel === 'settings' && isOpen) setSidebarOpen(false);
             togglePanel(item.panel);
           } else {
             setActivePanel(null);

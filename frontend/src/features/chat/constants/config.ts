@@ -37,23 +37,6 @@ export const HARD_CODED_INDEX_LIST = [
   'cu_jira_issue',
 ] as const;
 
-/**
- * 휠 네비게이션 설정
- */
-export const WHEEL_CONFIG = {
-  /** 페이지 전환을 위한 휠 임계값 (트랙패드: 60~100, 마우스: 100~200) */
-  THRESHOLD: 75,
-  /** 휠 입력이 끝났다고 판단하는 시간 (ms) */
-  END_MS: 100,
-} as const;
-
-/**
- * 애니메이션 설정
- */
-export const ANIMATION_CONFIG = {
-  /** 슬라이드 전환 시간 (ms) */
-  SLIDE_DURATION_MS: 300,
-} as const;
 
 /**
  * SSE 설정
@@ -68,7 +51,6 @@ export const SSE_CONFIG = {
  */
 export const getStorageKeys = (sessionId: string) => ({
   chat: `chat_${sessionId}`,
-  page: `chat_${sessionId}_currentPage`,
 });
 
 /**

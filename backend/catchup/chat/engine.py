@@ -1,11 +1,16 @@
 import asyncio
 import logging
 import time
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Optional
+import uuid
 
+from fastapi.concurrency import run_in_threadpool
 from langchain_core.messages import HumanMessage
+from sqlalchemy.orm import Session
 
+from catchup.chat.chat_room import generate_chat_room_title
 from catchup.configs.config import settings
+from catchup.db.chat_room import add_message, create_chat_room, get_chat_room
 from catchup.observability.langfuse import observe
 from catchup.chat.schemas import (
     NODE_STATUS_MAP,
@@ -75,10 +80,19 @@ class ChatService:
     @observe(name="chat-stream")
     async def chat_stream(
         self,
+        db: Session,
         global_context: GlobalContext,
-        session_id: str,
+        session_id: uuid.UUID,
         query: str = None,
     ) -> AsyncGenerator[StreamEvent, None]:
+        
+        # 
+        await self._setup_chat_room(
+            db,
+            global_context,
+            session_id,
+            query
+        )
         
         # Compiled Graph
         app = await self._get_app()
@@ -86,6 +100,7 @@ class ChatService:
         # Checkpointer 설정
         config = self._setup_config(session_id)
         
+        # 초기 AgentState
         inputs = {
             "messages": [HumanMessage(content=query)],
             "original_query": query,
@@ -103,7 +118,7 @@ class ChatService:
 
         try:
             async for event in app.astream_events(inputs, config, version="v2"):
-                async for parsed_event in self._parse_stream_event(event, session_id, stream_state):
+                async for parsed_event in self._parse_stream_event(event, session_id, stream_state, db):
                     yield parsed_event
 
         except asyncio.CancelledError:
@@ -121,7 +136,8 @@ class ChatService:
         self,
         event: dict[str, Any],
         session_id: str,
-        stream_state: dict[str, Any]
+        stream_state: dict[str, Any],
+        db: Session
     ) -> AsyncGenerator[StreamEvent, None]:
         kind = event["event"]  # 이벤트 종류
         name = event["name"]  # 이벤트 이름
@@ -144,7 +160,7 @@ class ChatService:
 
         # 3. 노드 종료 (현재는 최종 답변 생성 노드만 관여)
         elif kind == "on_chain_end":
-            async for res in self._handle_node_end(event, session_id, stream_state):
+            async for res in self._handle_node_end(event, session_id, stream_state, db):
                 yield res
     
     async def _handle_node_start(
@@ -225,38 +241,112 @@ class ChatService:
             self,
             event: dict,
             session_id: str,
-            stream_state: dict
+            stream_state: dict,
+            db: Session
         ):
         """
             그래프 종료 시점.
             인용 사유를 포함한 최종 소스를 업데이트한다.
         """
-        name = event["name"]
+        if event["name"] != "generate_final_answer":
+            return
         
-        if name == "generate_final_answer":
-            output = event["data"].get("output")
-            if output and isinstance(output, dict) and "sources" in output:
-                
-                # case 1: Fallback 처리: 모델 자체 스트리밍 없이 종료된 경우 메시지 내용 전송
-                if not stream_state.get("has_streamed", False):
-                    messages = output.get("messages", [])
-                    if messages:
-                        last_msg = messages[-1]
-                        fallback_content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-                        logger.warning("Fallback Answer 전송 (Streaming 미감지)")
-                        yield ChatStreamingTokenResponse(
-                            session_id=session_id,
-                            token=fallback_content
-                        )
-                
-                # case 2: 인용 사유를 포함한 최종 소스 전송
-                if "sources" in output:
-                    final_sources = output["sources"]
-                    if final_sources:
-                        logger.info("Sending final sources with rationale.")
-                        yield ChatStreamingSourceResponse(
-                            session_id=session_id, sources=final_sources
-                        )
+        output = event["data"].get("output")
+        if not (output and isinstance(output, dict)):
+            return
+        
+        messages = output.get("messages", [])
+        sources = output.get("sources", [])
+        
+        last_msg = messages[-1] if messages else None
+        final_content = last_msg.content if last_msg and hasattr(last_msg, "content") else str(last_msg)
+        
+        final_sources_data = [
+            source.model_dump() if hasattr(source, "model_dump") else source
+            for source in sources
+        ]
+        
+        if final_content:
+            await self._save_message_content(
+                db,
+                session_id,
+                "assistant",
+                final_content,
+                final_sources_data
+            )
+            logger.info(f"({session_id}) Final answer & sources saved to DB.")
+        
+        # case 1: Fallback 처리: 모델 자체 스트리밍 없이 종료된 경우 메시지 내용 전송
+        if not stream_state.get("has_streamed", False):
+            messages = output.get("messages", [])
+            if messages:
+                last_msg = messages[-1]
+                fallback_content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                logger.warning("Fallback Answer 전송 (Streaming 미감지)")
+                yield ChatStreamingTokenResponse(
+                    session_id=session_id,
+                    token=fallback_content
+                )
+        
+        # case 2: 인용 사유를 포함한 최종 소스 전송
+        if "sources" in output:
+            final_sources = output["sources"]
+            if final_sources:
+                logger.info("Sending final sources with rationale.")
+                yield ChatStreamingSourceResponse(
+                    session_id=session_id, sources=final_sources
+                )
+                        
+    async def _setup_chat_room(
+        self,
+        db: Session,
+        global_context: GlobalContext,
+        session_id: uuid.UUID,
+        query: str
+    ):
+        # 채팅방 설정
+        room = await run_in_threadpool(
+            get_chat_room, 
+            db, 
+            session_id
+        )
+        
+        # 새로운 채팅 세션일 경우
+        if not room:
+            initial_title = await generate_chat_room_title(query)
+            room = await run_in_threadpool(
+                create_chat_room,
+                db,
+                session_id,
+                global_context.user.id,
+                global_context.workspace.id,
+                initial_title
+            )
+
+        # 사용자 쿼리 저장
+        await self._save_message_content(
+            db,
+            session_id,
+            "user",
+            query
+        )
+    
+    async def _save_message_content(
+        self,
+        db: Session,
+        session_id: uuid.UUID,
+        role: str,
+        content: str,
+        sources: Optional[list[dict[str, Any]]] = None
+    ):
+        await run_in_threadpool(
+            add_message,
+            db,
+            session_id,
+            role,
+            content,
+            sources
+        )
 
     def _setup_config(self, session_id: str):
         default_config = {"configurable": {"thread_id": session_id}}

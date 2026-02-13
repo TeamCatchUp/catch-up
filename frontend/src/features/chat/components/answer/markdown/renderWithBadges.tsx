@@ -28,7 +28,12 @@ export const renderWithBadges = (text: string, sources?: ChatSource[]): React.Re
           return <span key={i}>{part}</span>;
         }
 
-        const badgeType: SourceType = source.source_type === 'jira' ? 'jira' : 'github';
+        const badgeType: SourceType =
+          source.source_type === 'jira'
+            ? 'jira'
+            : source.source_type === 'slack'
+              ? 'slack'
+              : 'github';
 
         return <SourceBadge key={i} n={String(num)} sourceType={badgeType} />;
       })}

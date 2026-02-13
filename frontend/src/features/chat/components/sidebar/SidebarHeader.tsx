@@ -1,36 +1,44 @@
-import { cn } from '@/shared/utils/cn';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/shared/components/ui/ToolTip';
+
+import Help from '/public/icons/icon/help.svg';
 
 interface Props {
-  activeTab: 'source' | 'detail';
-  onChange: (tab: 'source' | 'detail') => void;
   sourceCount: number;
 }
 
-const SidebarHeader = ({ activeTab, onChange, sourceCount }: Props) => {
+const SidebarHeader = ({ sourceCount }: Props) => {
   return (
-    <div className="sticky top-0 z-100 flex bg-white">
-      <div className={`border-b-neutral-3 flex w-full items-center justify-center border-b px-4 py-1.5`}>
-        <div className="border-neutral-1 bg-neutral-1 flex gap-0.5 rounded-full border p-0.5">
-          <button
-            onClick={() => onChange('source')}
-            className={cn(
-              'text-heading-small text-gray-70 cursor-pointer rounded-full px-7 py-1.5 transition',
-              activeTab === 'source' ? 'shadow-button border-neutral-3 bg-white' : 'bg-neutral-1',
-            )}
-          >
-            출처 {sourceCount}개
-          </button>
-          <button
-            onClick={() => onChange('detail')}
-            className={cn(
-              'text-heading-small text-gray-70 cursor-pointer rounded-full px-7 py-1.5 transition',
-              activeTab === 'detail' ? 'shadow-button border-neutral-3 bg-white' : 'bg-neutral-1',
-            )}
-          >
-            Jira 티켓
-          </button>
-        </div>
+    <div className="border-b-neutral-3 flex h-13 items-center justify-between border-b bg-white px-4 py-1.5">
+      <div className="text-heading-medium text-gray-70 flex items-center gap-1.5 whitespace-nowrap">
+        <span>출처</span>
+        <span>{sourceCount}개</span>
       </div>
+
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="bg-neutral-2 flex items-center gap-1 rounded-md2 px-1.5 py-0.5 cursor-help">
+              <Help className="h-4 w-4 text-gray-50" />
+              <div className="text-body-xsmall text-gray-50 truncate whitespace-nowrap">
+                AI 답변 근거 자료
+              </div>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent size="lg" className="flex flex-col gap-1">
+            <div className="font-medium">AI 답변 근거 자료란?</div>
+            <div className="text-alpha-white-75 font-normal">
+              AI가 답변에 참고한 원문 자료입니다.
+              <br />
+              출처와 인용 이유를 확인하고, 원문으로 이동할 수 있습니다.
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 };
