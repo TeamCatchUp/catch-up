@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback,useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { useMutation } from '@tanstack/react-query';
 
 import { chatMutations } from '@/features/chat/mutations';
@@ -282,6 +283,7 @@ const FeedbackSection = ({
           onFeedbackSubmitted(messageId);
         }
 
+        toast('피드백을 주셔서 감사합니다.');
         setShowThanks(true);
 
         setTimeout(() => {
@@ -333,14 +335,8 @@ const FeedbackSection = ({
     entered ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0',
   );
 
-  // 이미 피드백 제출 / 방금 제출 -> 감사 UI
-  if (localHasFeedback || showThanks) {
-    return (
-      <div ref={feedbackRef} className={rootClass}>
-        <div className="text-body-small flex items-center justify-center text-gray-50">피드백을 주셔서 감사합니다!</div>
-      </div>
-    );
-  }
+  // 이미 피드백 제출 완료 → 섹션 숨김 (toast가 알림 담당)
+  if (localHasFeedback || showThanks) return null;
 
   return (
     <div ref={feedbackRef} className={rootClass}>

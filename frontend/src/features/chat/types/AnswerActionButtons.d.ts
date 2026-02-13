@@ -7,6 +7,7 @@ interface IconItem {
 interface AnswerActionButtonsProps {
   icons: IconItem[];
   messageId: string;
+  answerContent: string;
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
 }

@@ -80,6 +80,7 @@ const RagAnswer = ({
               <AnswerActionButtons
                 icons={ANSWER_ICONS}
                 messageId={currentQA.answer.id}
+                answerContent={currentQA.answer.content}
                 feedbackVisibleMap={feedbackVisibleMap}
                 setFeedbackVisibleMap={setFeedbackVisibleMap}
               />

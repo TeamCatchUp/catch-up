@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import { cn } from '@/shared/utils/cn';
@@ -13,6 +14,7 @@ const TOOLTIP_LABELS: Record<string, string> = {
 const AnswerActionButtons = ({
   icons,
   messageId,
+  answerContent,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
 }: AnswerActionButtonsProps) => {
@@ -31,6 +33,10 @@ const AnswerActionButtons = ({
           <button
             key={i}
             onClick={() => {
+              if (item.name === 'Copy') {
+                navigator.clipboard.writeText(answerContent);
+                toast('답변 내용이 복사되었습니다.');
+              }
               if (isThumbsDown) {
                 setFeedbackVisibleMap((prev) => ({
                   ...prev,
@@ -38,6 +44,7 @@ const AnswerActionButtons = ({
                 }));
               }
               if (isBookmark) {
+                if (!bookmarked) toast('답변 내용이 저장되었습니다.');
                 setBookmarked((prev) => !prev);
               }
             }}
