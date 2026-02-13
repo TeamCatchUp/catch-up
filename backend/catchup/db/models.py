@@ -1,7 +1,5 @@
 from datetime import datetime
-from email.policy import default
 from enum import StrEnum, auto, unique
-import time
 
 from sqlalchemy import func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -200,6 +198,25 @@ class SlackChannel(Base):
     is_private: Mapped[bool] = mapped_column(Boolean, default=False, comment="비공개 여부")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, comment="채널 생성 시간"
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+ 
+class SlackChannelMember(Base):
+    """
+    Slack Channel - User 매핑 테이블
+    """
+    __tablename__ = "slack_channel_members"
+
+    team_id: Mapped[str] = mapped_column(
+        String(20), primary_key=True, comment="WorkspaceID"
+    )
+    channel_id: Mapped[str] = mapped_column(
+        String(20), primary_key=True, comment="ChannelID"
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(20), primary_key=True, comment="UserID"
     )
     synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

@@ -1,91 +1,32 @@
-"""
-Slack Sync API
-
-Slack 데이터 동기화 API 엔드포인트.
-전체/증분 동기화, 상태 조회 기능 제공.
-
-사용법:
-    POST /api/v1/slack/sync/full?team_id=T123ABC
-    POST /api/v1/slack/sync/incremental?team_id=T123ABC
-    GET  /api/v1/slack/sync/status?team_id=T123ABC
-"""
-
+import hashlib
+import hmac
 import logging
-from typing import Any
+import time
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.connectors.slack.factory import create_slack_ingestion_service
+from catchup.connectors.slack.schemas import SlackEventWrapper, SlackMessageEvent
+from catchup.connectors.slack import webhook_service
+from catchup.configs.config import settings
+from catchup.server.connector.slack.schemas import (
+    ChannelAccessInfo,
+    ChannelAccessResponse,
+    SlackFlushResponse,
+    SlackFlushTeamResult,
+    SlackSyncResponse,
+    SlackSyncStatusResponse,
+    SyncResultDetail,
+)
 from catchup.db.dependencies import get_db
 from catchup.db.models import SlackSyncState
+from catchup.db.slack.oauth_repository import get_all_slack_tokens
+from catchup.utils.webhook_buffer import get_webhook_buffer
 
 logger = logging.getLogger(__name__)
-
-
-# ================================================================
-# Request/Response Schemas
-# ================================================================
-
-class SlackSyncRequest(BaseModel):
-    """
-    동기화 요청
-
-    저장소 분리:
-    - Message: PGVector (Vector Store) - 시맨틱 검색용
-    - Workspace, Channel, User: RDBMS - 정적 참조 데이터
-    - File: Message에 통합 (message_type="file_share")
-    """
-    oldest: str | None = Field(
-        None,
-        description="시작 Slack timestamp (이 시간 이후 메시지만)",
-        examples=["1704067200.000000"],
-    )
-    latest: str | None = Field(
-        None,
-        description="종료 Slack timestamp (이 시간 이전 메시지만)",
-    )
-    channel_ids: list[str] | None = Field(
-        None,
-        description="동기화할 채널 ID 목록 (None이면 전체)",
-        examples=[["C123ABC", "C456DEF"]],
-    )
-    sync_messages: bool = Field(True, description="메시지 동기화 여부 (Vector Store)")
-    sync_channels: bool = Field(True, description="채널 동기화 여부 (RDBMS)")
-    sync_users: bool = Field(True, description="사용자 동기화 여부 (RDBMS)")
-    sync_workspace: bool = Field(True, description="워크스페이스 동기화 여부 (RDBMS)")
-
-
-class SyncResultDetail(BaseModel):
-    """엔티티별 동기화 결과"""
-    synced: int = 0
-    errors: int = 0
-    skipped: int = 0
-
-
-class SlackSyncResponse(BaseModel):
-    """동기화 응답"""
-    status: str
-    message: str
-    team_id: str | None = None
-    results: dict[str, SyncResultDetail] | None = Field(
-        None,
-        description="엔티티별 동기화 결과 (messages, channels, users, workspace)",
-    )
-
-
-class SlackSyncStatusResponse(BaseModel):
-    """동기화 상태 응답"""
-    team_id: str
-    entity_type: str
-    last_sync_status: str | None
-    last_successful_sync_at: str | None
-    synced_entities: int
-    last_sync_error: str | None
-    oldest_ts: str | None = None
-    latest_ts: str | None = None
 
 
 # ================================================================
@@ -97,8 +38,8 @@ router = APIRouter(prefix="/api/v1/slack/sync", tags=["slack-sync"])
 
 @router.post("/full", response_model=SlackSyncResponse)
 async def trigger_full_sync(
-    request: SlackSyncRequest,
     team_id: str = Query(..., description="Slack Team/Workspace ID"),
+    sync_days: int | None = Query(None, description="수집 범위 (일), 기본값 3년"),
     db: Session = Depends(get_db),
 ):
     """
@@ -109,98 +50,195 @@ async def trigger_full_sync(
     """
     try:
         service = await create_slack_ingestion_service(db, team_id)
+        result = await service.full_sync(db, sync_days=sync_days)
 
-        result = await service.full_sync(
-            db,
-            oldest=request.oldest,
-            latest=request.latest,
-            channel_ids=request.channel_ids,
-            sync_messages=request.sync_messages,
-            sync_channels=request.sync_channels,
-            sync_users=request.sync_users,
-            sync_workspace=request.sync_workspace,
-        )
+        messages = result.get("messages", {})
+        synced = messages.get("synced", 0)
+        skipped = messages.get("skipped", 0)
 
-        # 결과 메시지 생성
-        summary_parts = []
-        skipped_count = 0
-        for entity_type, entity_result in result.items():
-            if entity_result.get("synced", 0) > 0 or entity_result.get("errors", 0) > 0:
-                summary_parts.append(f"{entity_type.capitalize()}={entity_result['synced']}")
-            skipped_count += entity_result.get("skipped", 0)
-
-        message = (
-            f"전체 동기화 완료: {', '.join(summary_parts)}"
-            if summary_parts
-            else "동기화할 데이터가 없습니다"
-        )
-        if skipped_count > 0:
-            message += f" (Skipped: {skipped_count} channels)"
-
+        message = f"Slack Full Sync 완료 : {synced}개 저장"
+        if skipped > 0:
+            message += f" {skipped}개 채널 권한 없음"
+        
         return SlackSyncResponse(
             status="success",
             message=message,
             team_id=team_id,
             results={
-                entity_type: SyncResultDetail(
-                    synced=entity_result.get("synced", 0),
-                    errors=entity_result.get("errors", 0),
-                    skipped=entity_result.get("skipped", 0),
+                "messages": SyncResultDetail(
+                    synced=messages.get("synced", 0),
+                    errors=messages.get("errors", 0),
+                    skipped=messages.get("skipped", 0),
                 )
-                for entity_type, entity_result in result.items()
             },
         )
-
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Full sync error for team_id={team_id}: {e}")
+        logger.error(f"[SLACK][FULL SYNC] Slack Full Sync Failed for team_id = {team_id} : {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"동기화 중 오류가 발생했습니다: {str(e)}",
+            status_code = 500,
+            detail = f"동기화 과정 중 오류 발생 : {str(e)}",
         )
 
 
-@router.post("/incremental", response_model=SlackSyncResponse)
-async def trigger_incremental_sync(
-    team_id: str = Query(..., description="Slack Team/Workspace ID"),
+@router.post("/flush", response_model=SlackFlushResponse)
+async def flush_all_slack_buffers(
     db: Session = Depends(get_db),
 ):
     """
-    증분 동기화 트리거
+    모든 Slack Workspace의 Redis 버퍼를 즉시 flush하고 증분 동기화
 
-    마지막 동기화 이후 업데이트된 데이터만 동기화.
-    이전 동기화 기록이 없으면 전체 동기화로 전환됩니다.
+    스케줄러가 정각에 자동으로 실행하는 작업을 수동으로 트리거합니다.
+    모든 연결된 Slack Workspace를 순회하며:
+    1. Redis에서 버퍼링된 이벤트가 있는 채널 조회
+    2. 각 채널별로 버퍼 클리어 및 이벤트 개수 카운트
+    3. Incremental Sync 실행
+    4. 팀별 결과 수집 및 전체 통계 반환
     """
-    try:
-        service = await create_slack_ingestion_service(db, team_id)
-        result = await service.incremental_sync(db)
+    logger.info("Starting manual Slack webhook flush for all teams")
 
-        # 결과 메시지 생성
-        summary_parts = []
-        for entity_type, entity_result in result.items():
-            if entity_result["synced"] > 0:
-                summary_parts.append(f"{entity_type.capitalize()}={entity_result['synced']}")
+    buffer = get_webhook_buffer()
+    results = []
+    total_events = 0
+    total_synced = 0
+    flushed_teams_count = 0
+
+    try:
+        # 모든 Slack Token 조회
+        tokens = get_all_slack_tokens(db)
+
+        if not tokens:
+            logger.info("No Slack tokens found")
+            return SlackFlushResponse(
+                status="success",
+                message="연결된 Slack Workspace가 없습니다",
+                total_teams=0,
+                flushed_teams=0,
+                total_events=0,
+                total_synced=0,
+            )
+
+        logger.info(f"Found {len(tokens)} Slack workspaces to process")
+
+        # 각 팀별로 처리
+        for token in tokens:
+            team_id = token.team_id
+            team_name = token.team_name
+
+            try:
+                # 버퍼링된 채널 조회
+                channels_with_events = await buffer.get_slack_buffered_channels(team_id)
+
+                if not channels_with_events:
+                    logger.debug(f"No buffered events for team {team_id}")
+                    results.append(SlackFlushTeamResult(
+                        team_id=team_id,
+                        team_name=team_name,
+                        flushed_channels=0,
+                        flushed_events=0,
+                        synced_messages=0,
+                        status="no_events",
+                    ))
+                    continue
+
+                logger.info(
+                    f"Flushing events for team {team_id}: "
+                    f"{len(channels_with_events)} channels affected"
+                )
+
+                # 채널별 버퍼 클리어
+                team_events = 0
+                for channel_id in channels_with_events:
+                    try:
+                        event_count = await buffer.clear_slack_buffer(team_id, channel_id)
+                        team_events += event_count
+                        logger.info(
+                            f"Cleared {event_count} events for channel {channel_id} "
+                            f"(team {team_id})"
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to clear buffer for channel {channel_id}: {e}",
+                            exc_info=True,
+                        )
+
+                try:
+                    service = await create_slack_ingestion_service(db, team_id)
+                    sync_result = await service.flush_message(db, channels_with_events)
+
+                    team_synced = sum(
+                        entity_result.get("synced", 0)
+                        for entity_result in sync_result.values()
+                    )
+
+                    total_events += team_events
+                    total_synced += team_synced
+                    flushed_teams_count += 1
+
+                    results.append(SlackFlushTeamResult(
+                        team_id=team_id,
+                        team_name=team_name,
+                        flushed_channels=len(channels_with_events),
+                        flushed_events=team_events,
+                        synced_messages=team_synced,
+                        status="success",
+                    ))
+
+                    logger.info(
+                        f"Successfully flushed team {team_id}: "
+                        f"{team_events} events, {team_synced} messages synced"
+                    )
+
+                except Exception as e:
+                    logger.error(f"Failed to sync team {team_id}: {e}", exc_info=True)
+                    results.append(SlackFlushTeamResult(
+                        team_id=team_id,
+                        team_name=team_name,
+                        flushed_channels=len(channels_with_events),
+                        flushed_events=team_events,
+                        synced_messages=0,
+                        status="error",
+                        error_message=str(e),
+                    ))
+
+            except Exception as e:
+                logger.error(
+                    f"Failed to process team {team_id}: {e}",
+                    exc_info=True,
+                )
+                results.append(SlackFlushTeamResult(
+                    team_id=team_id,
+                    team_name=team_name,
+                    flushed_channels=0,
+                    flushed_events=0,
+                    synced_messages=0,
+                    status="error",
+                    error_message=str(e),
+                ))
 
         message = (
-            f"증분 동기화 완료: {', '.join(summary_parts)}"
-            if summary_parts
-            else "동기화할 변경사항이 없습니다"
+            f"전체 flush 완료: {len(tokens)}개 팀 중 {flushed_teams_count}개 처리, "
+            f"{total_events}개 이벤트, {total_synced}개 메시지 동기화"
         )
 
-        return SlackSyncResponse(
+        logger.info(f"Slack flush completed: {message}")
+
+        return SlackFlushResponse(
             status="success",
             message=message,
-            team_id=team_id,
+            total_teams=len(tokens),
+            flushed_teams=flushed_teams_count,
+            total_events=total_events,
+            total_synced=total_synced,
+            results=results,
         )
 
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Incremental sync error for team_id={team_id}: {e}")
+        logger.error(f"Flush all error: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"동기화 중 오류가 발생했습니다: {str(e)}",
+            detail=f"전체 flush 중 오류가 발생했습니다: {str(e)}",
         )
 
 
@@ -240,27 +278,9 @@ async def get_sync_status(
     ]
 
 
-class ChannelAccessInfo(BaseModel):
-    """채널 접근 정보"""
-    id: str
-    name: str
-    channel_type: str
-    is_member: bool
-    is_private: bool
-    member_count: int | None = None
-
-
-class ChannelAccessResponse(BaseModel):
-    """채널 접근 권한 디버그 응답"""
-    team_id: str
-    total_channels: int
-    accessible_channels: int
-    channels: list[ChannelAccessInfo]
-
-
 @router.get("/accessible/channels", response_model=ChannelAccessResponse)
 async def debug_channel_access(
-    team_id: str = Query(..., description="Slack Team/ㄴWorkspace ID"),
+    team_id: str = Query(..., description="Slack Team/Workspace ID"),
     db: Session = Depends(get_db),
 ):
     """
@@ -325,3 +345,224 @@ async def debug_channel_access(
             status_code=500,
             detail=f"채널 조회 중 오류가 발생했습니다: {str(e)}",
         )
+
+
+# =============================================================================
+# Webhook Endpoints
+# =============================================================================
+
+@router.post("/webhooks", status_code=status.HTTP_200_OK)
+async def handle_slack_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+    x_slack_signature: Optional[str] = Header(None),
+    x_slack_request_timestamp: Optional[str] = Header(None),
+):
+    """
+    Slack Event Subscription Webhook 수신 엔드포인트
+    """
+    payload_body = await request.body()
+
+    # 0. Signature 검증
+    if not _verify_slack_signature(
+        payload_body,
+        x_slack_signature,
+        x_slack_request_timestamp,
+        settings.SLACK_SIGNING_SECRET
+    ):
+        logger.warning("[SLACK][EVENT] Invalid Slack Webhook Signature")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Slack Webhook Signature",
+        )
+
+    payload = await request.json()
+    event_wrapper = SlackEventWrapper(**payload)
+
+    # 1. URL Verification (최초 설정 시 수신)
+    if event_wrapper.type == "url_verification":
+        logger.info("[SLACK][EVENT] URL Verification Received")
+        return {"challenge": event_wrapper.challenge}
+
+    # 2. Event Callback 처리
+    if event_wrapper.type == "event_callback":
+        if not event_wrapper.event:
+            logger.warning("[SLACK][EVENT] Empty Event Callback Received")
+            return {"status": "ignored", "reason": "empty_event"}
+
+        if not event_wrapper.team_id:
+            logger.warning("[SLACK][EVENT] Event Callback without team_id")
+            return {"status": "ignored", "reason": "missing_team_id"}
+
+        event = event_wrapper.event
+        event_type = event.get("type")
+        event_subtype = event.get("subtype")
+        team_id = event_wrapper.team_id
+
+        logger.info(
+            f"[SLACK][EVENT] Received: type={event_type}, subtype={event_subtype}, team_id={team_id}"
+        )
+
+        # Message Event → Redis Buffer
+        if event_type == "message" and event_subtype is None:
+            return await _handle_message_event(team_id, event)
+
+        # Channel Created / Renamed (channel이 object)
+        if event_type in [
+            "channel_created", "channel_rename",
+            "group_created", "group_rename",
+        ]:
+            return _handle_channel_upsert_event(team_id, event, db)
+
+        # Channel Deleted (channel이 string ID)
+        if event_type in ["channel_deleted", "group_deleted"]:
+            return _handle_channel_deleted_event(team_id, event, db)
+
+        # Channel Archive / Unarchive (channel이 string ID)
+        if event_type in [
+            "channel_archive", "channel_unarchive",
+            "group_archive", "group_unarchive",
+        ]:
+            return _handle_channel_archive_event(team_id, event, db)
+
+        # 멤버십 이벤트
+        if event_type in ["member_joined_channel", "member_left_channel"]:
+            return _handle_member_event(team_id, event, db)
+
+        # 사용자 이벤트
+        if event_type in ["team_join", "user_change"]:
+            return _handle_user_event(team_id, event, db)
+        
+        # 처리하지 않는 이벤트
+        logger.debug(f"Unhandled Slack event: type={event_type}, subtype={event_subtype}")
+        return {"status": "ignored", "event_type": event_type}
+    
+    # 알 수 없는 타입
+    logger.warning(f"Unknown Slack webhook type: {event_wrapper.type}")
+    return {"status": "ignored", "wrapper_type": event_wrapper.type}
+
+
+# =============================================================================
+# Utility Functions
+# =============================================================================
+
+def _verify_slack_signature(
+    payload_body: bytes,
+    signature: Optional[str],
+    timestamp: Optional[str],
+    signing_secret: str,
+) -> bool:
+    """
+    Slack Webhook Signature 검증 (HMAC SHA256)
+    """
+    if not signature or not timestamp:
+        logger.warning("[SLACK][EVENT] Missing Signature or Timestamp Header")
+        return False
+
+    # TimeStamp 검증 (5분 이내 요청만 수락)
+    try:
+        request_time = int(timestamp)
+        current_time = int(time.time())
+        if abs(current_time - request_time) > 60 * 5:
+            logger.warning("[SLACK][EVENT] Rejecting Old Requests")
+            return False
+    except ValueError:
+        logger.warning(f"[SLACK][EVENT] Invalid timestamp format {timestamp}")
+        return False
+
+    # Signature 계산
+    sig_basestring = f"v0:{timestamp}:{payload_body.decode('utf-8')}"
+    expected_signature = "v0=" + hmac.new(
+        signing_secret.encode("utf-8"),
+        sig_basestring.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+
+    return hmac.compare_digest(expected_signature, signature)
+
+# =============================================================================
+# Private Helper Functions
+# =============================================================================
+
+async def _handle_message_event(team_id: str, event: dict) -> dict:
+    """
+    Message Event를 Redis Buffer에 저장
+    """
+    try:
+        data = SlackMessageEvent(**event)
+    except Exception as e:
+        logger.error(f"[SLACK][EVENT] Failed to Parse Message Event: {e}")
+        return {"status": "error", "reason": "parse_failed"}
+
+    if not data.user:
+        logger.debug(f"[SLACK][EVENT] Ignored bot message: channel={data.channel}, ts={data.ts}")
+        return {"status": "skipped", "reason": "bot_message"}
+
+    if data.subtype is not None:
+        logger.debug(f"[SLACK][EVENT] Ignored message with subtype: channel={data.channel}, ts={data.ts}")
+        return {"status": "skipped", "reason": "subtype_message"}
+
+    buffer = get_webhook_buffer()
+    await buffer.buffer_slack_event(
+        team_id=team_id,
+        channel_id=data.channel,
+        message_ts=data.ts,
+        event_type="message"
+    )
+
+    logger.info(
+        f"[SLACK][EVENT] Buffered Slack message: team={team_id}, "
+        f"channel={data.channel}, ts={data.ts}, user={data.user}"
+    )
+    return {"status": "buffered", "event_type": "message"}
+
+
+def _handle_channel_upsert_event(team_id: str, event: dict, db: Session) -> dict:
+    """채널 생성/이름변경 → webhook_service 위임"""
+    try:
+        webhook_service.handle_channel_upsert(db, team_id, event)
+        return {"status": "processed", "event_type": event.get("type")}
+    except Exception as e:
+        logger.error(f"[SLACK][EVENT] Channel upsert failed: {e}")
+        return {"status": "error", "reason": "processing_failed"}
+
+
+def _handle_channel_deleted_event(team_id: str, event: dict, db: Session) -> dict:
+    """채널 삭제 → webhook_service 위임"""
+    try:
+        webhook_service.handle_channel_delete(db, team_id, event)
+        return {"status": "processed", "event_type": event.get("type")}
+    except Exception as e:
+        logger.error(f"[SLACK][EVENT] Channel delete failed: {e}")
+        return {"status": "error", "reason": "processing_failed"}
+
+
+def _handle_channel_archive_event(team_id: str, event: dict, db: Session) -> dict:
+    """채널 아카이브/해제 → webhook_service 위임"""
+    try:
+        webhook_service.handle_channel_archive(db, team_id, event)
+        return {"status": "processed", "event_type": event.get("type")}
+    except Exception as e:
+        logger.error(f"[SLACK][EVENT] Channel archive failed: {e}")
+        return {"status": "error", "reason": "processing_failed"}
+
+
+def _handle_member_event(team_id: str, event: dict, db: Session) -> dict:
+    """멤버십 변경 → webhook_service 위임"""
+    try:
+        webhook_service.handle_member_event(db, team_id, event)
+        return {"status": "processed", "event_type": event.get("type")}
+    except Exception as e:
+        logger.error(f"[SLACK][EVENT] Member event failed: {e}")
+        return {"status": "error", "reason": "processing_failed"}
+
+
+def _handle_user_event(team_id: str, event: dict, db: Session) -> dict:
+    """사용자 변경 → webhook_service 위임"""
+    try:
+        webhook_service.handle_user_event(db, team_id, event)
+        return {"status": "processed", "event_type": event.get("type")}
+    except Exception as e:
+        logger.error(f"[SLACK][EVENT] User event failed: {e}")
+        return {"status": "error", "reason": "processing_failed"}
+

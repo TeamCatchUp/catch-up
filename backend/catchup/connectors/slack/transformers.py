@@ -53,7 +53,7 @@ class SlackTransformer:
         Args:
             user_cache: user_id → SlackUser 매핑 딕셔너리
         """
-        self.user_cache = user_cache or {}
+        self.user_cache = user_cache if user_cache is not None else {}
 
     # ================================================================
     # Message 변환
@@ -604,7 +604,7 @@ class SlackTransformer:
             user_id = match.group(1)
             user = self.user_cache.get(user_id)
             if user:
-                return f"@{user.name or user.real_name or user_id}"
+                return f"@{user.real_name or user.display_name or user.name or user_id}"
             return f"@{user_id}"
 
         result = re.sub(r"<@([A-Z0-9]+)>", replace_user_mention, result)

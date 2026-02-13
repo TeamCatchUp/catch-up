@@ -1,0 +1,83 @@
+from pydantic import BaseModel, Field
+
+
+# ================================================================
+# Sync Request/Response
+# ================================================================
+class SyncResultDetail(BaseModel):
+    """엔티티별 동기화 결과"""
+    synced: int = 0
+    errors: int = 0
+    skipped: int = 0
+
+
+class SlackSyncResponse(BaseModel):
+    """동기화 응답"""
+    status: str
+    message: str
+    team_id: str | None = None
+    results: dict[str, SyncResultDetail] | None = None
+
+
+# ================================================================
+# Sync Status
+# ================================================================
+
+class SlackSyncStatusResponse(BaseModel):
+    """동기화 상태 응답"""
+    team_id: str
+    entity_type: str
+    last_sync_status: str | None
+    last_successful_sync_at: str | None
+    synced_entities: int
+    last_sync_error: str | None
+    oldest_ts: str | None = None
+    latest_ts: str | None = None
+
+
+# ================================================================
+# Flush
+# ================================================================
+
+class SlackFlushTeamResult(BaseModel):
+    """팀별 Flush 결과"""
+    team_id: str
+    team_name: str | None = None
+    flushed_channels: int
+    flushed_events: int
+    synced_messages: int
+    status: str  # "success" | "no_events" | "error"
+    error_message: str | None = None
+
+
+class SlackFlushResponse(BaseModel):
+    """전체 Flush 응답"""
+    status: str
+    message: str
+    total_teams: int = Field(description="처리 대상 팀 수")
+    flushed_teams: int = Field(description="실제로 flush된 팀 수")
+    total_events: int = Field(description="총 flush된 이벤트 수")
+    total_synced: int = Field(description="총 동기화된 메시지 수")
+    results: list[SlackFlushTeamResult] = Field(default_factory=list)
+
+
+# ================================================================
+# Channel Access (Debug)
+# ================================================================
+
+class ChannelAccessInfo(BaseModel):
+    """채널 접근 정보"""
+    id: str
+    name: str
+    channel_type: str
+    is_member: bool
+    is_private: bool
+    member_count: int | None = None
+
+
+class ChannelAccessResponse(BaseModel):
+    """채널 접근 권한 디버그 응답"""
+    team_id: str
+    total_channels: int
+    accessible_channels: int
+    channels: list[ChannelAccessInfo]

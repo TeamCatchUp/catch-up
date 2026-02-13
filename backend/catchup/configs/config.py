@@ -81,6 +81,7 @@ class Settings(BaseSettings):
     SLACK_CLIENT_SECRET: str
     SLACK_REDIRECT_URI: str
     SLACK_BOT_SCOPES: str = "channels:read channels:history groups:read groups:history mpim:history mpim:read users:read users:read.email users.profile:read usergroups:read team:read app_mentions:read assistant:write chat:write chat:write.customize commands reactions:read reactions:write emoji:read files:read links:read im:read im:history"
+    SLACK_SIGNING_SECRET: str
 
     # Slack API URLs
     SLACK_AUTH_URL: str = "https://slack.com/oauth/v2/authorize"
@@ -98,7 +99,7 @@ class Settings(BaseSettings):
     JIRA_API_RATE_LIMIT_DELAY: float = 0.1  # Seconds between requests
     
     # Neo4j
-    NEO4J_USER: str
+    NEO4J_USER: str 
     NEO4J_PASSWORD: str
     NEO4J_URI: str
 

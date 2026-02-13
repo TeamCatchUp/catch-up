@@ -298,3 +298,165 @@ class SlackWorkspaceInfo(BaseModel):
 class SlackInstallationStatus(BaseModel):
     installed: bool
     workspaces: list[SlackWorkspaceInfo] = Field(default_factory=list)
+
+# ============================================================
+# Webhook Event Schemas (Event Subscriptions API)
+# ============================================================
+
+class SlackEventWrapper(BaseModel):
+    """
+    Slack Webhook Server에서 보내는 최상위 래퍼
+    - url_verification : 최초 설정시 검증 (team_id 없음)
+    - event_callback : 실제 이벤트 (team_id 있음)
+    """
+    type: str                                                               # url_verification / event_callback
+    token: str                                                              # Slack에서 보내긴 하지만, 인증목적으로 X-Slack-Signature 사용
+    team_id: str | None = None                                              # url_verification에는 없음
+    api_app_id: str | None = None
+    event: dict[str, Any] | None = None
+    event_id: str | None = None
+    event_time: int | None = None                                           # Unix Timestamp
+    challenge: str | None = None                                            # url_verification 일 경우에만 존재
+    authorizations: list[dict[str, Any]] = Field(default_factory=list)
+
+class SlackMessageEvent(BaseModel):
+    """
+    message.* 형식
+
+    - Public Channel : message.channels
+    - Private Channel : message.groups
+    - Personal DM : message.im
+    - Group DM : message.mpim
+    """
+    type: str
+    subtype: str | None = None
+    team: str
+    channel: str
+    user: str | None = None
+    text: str | None = None
+    ts: str
+    thread_ts: str | None = None
+    channel_type: str
+    event_ts: str
+
+    bot_id: str | None = None
+    blocks: list[dict[str, Any]] = Field(default_factory=list)
+    attachments: list[dict[str, Any]] = Field(default_factory=list)
+
+class SlackChannelEventData(BaseModel):
+    """
+    Channel Event에 포함된 Channel Data
+    """
+    id: str
+    name: str
+    name_normalized:str | None = None
+    created: int | None = None
+    creator: str | None = None
+    is_channel: bool | None = None
+    is_group: bool | None = None
+    is_mpim: bool | None = None
+    is_private: bool | None = None
+    is_archived: bool | None = None
+    is_general: bool | None = None
+    is_shared: bool | None = None
+    is_org_shared: bool | None = None
+    context_team_id: str | None = None
+    updated: int | None = None                   # Renamed 되었을 경우 시점
+    previous_name: str | None = None             # channel_rename 시 이전 이름
+
+class SlackChannelEvent(BaseModel):
+    """
+    채널 관련 이벤트
+    
+    이벤트 타입:
+    - channel_created: 새 퍼블릭 채널 생성
+    - channel_deleted: 채널 삭제
+    - channel_rename: 채널 이름 변경
+    - channel_archive: 채널 아카이브
+    - channel_unarchive: 채널 아카이브 해제
+    - group_* (프라이빗 채널도 동일 구조)
+    """
+    type: str                                    # "channel_created" 등
+    channel: SlackChannelEventData               # 채널 정보
+    event_ts: str                                # 이벤트 발생 시간
+
+class SlackMemberEvent(BaseModel):
+    """
+    채널 멤버십 변경 이벤트
+    
+    이벤트 타입:
+    - member_joined_channel: 사용자가 채널에 참여
+    - member_left_channel: 사용자가 채널에서 나감
+    """
+    type: str                                    # "member_joined_channel" | "member_left_channel"
+    user: str                                    # User ID
+    channel: str                                 # Channel ID
+    channel_type: str                            # "C" (public) | "G" (private)
+    team: str                                    # Team ID
+    inviter: str | None = None                   # 초대한 사용자 (joined일 때)
+    event_ts: str
+
+class SlackUserEventData(BaseModel):
+    """
+    사용자 이벤트에 포함된 user 객체
+    """
+    id: str
+    team_id: str
+    name: str
+    real_name: str | None = None
+    profile: dict[str, Any] = Field(default_factory=dict)  # 전체 프로필 정보
+    deleted: bool = False
+    is_bot: bool = False
+    is_admin: bool | None = None
+    is_owner: bool | None = None
+    is_primary_owner: bool | None = None
+    is_restricted: bool | None = None
+    is_ultra_restricted: bool | None = None
+    updated: int | None = None                   # Unix timestamp
+
+
+class SlackUserEvent(BaseModel):
+    """
+    사용자 관련 이벤트
+    
+    이벤트 타입:
+    - team_join: 새 멤버가 워크스페이스에 참여
+    - user_change: 사용자 프로필 변경
+    """
+    type: str                                    # "team_join" | "user_change"
+    user: SlackUserEventData                     # 사용자 정보
+    event_ts: str
+    cache_ts: int | None = None                  # user_change 시 캐시 무효화 시간
+
+
+class SlackReactionEvent(BaseModel):
+    """
+    리액션 이벤트
+    
+    이벤트 타입:
+    - reaction_added: 이모지 반응 추가
+    - reaction_removed: 이모지 반응 제거
+    """
+    type: str                                    # "reaction_added" | "reaction_removed"
+    user: str                                    # 반응한 사용자 ID
+    item: dict[str, Any]                         # {"type": "message", "channel": "C123", "ts": "1234.56"}
+    reaction: str                                # 이모지 이름 (예: "thumbsup")
+    item_user: str | None = None                 # 원본 아이템 작성자
+    event_ts: str
+
+
+class SlackFileEvent(BaseModel):
+    """
+    파일 이벤트
+    
+    이벤트 타입:
+    - file_created: 파일 생성
+    - file_shared: 파일 공유
+    - file_deleted: 파일 삭제
+    - file_change: 파일 수정
+    """
+    type: str                                    # "file_created" 등
+    file_id: str
+    file: dict[str, Any] | None = None           # 파일 정보 (deleted는 없음)
+    user_id: str | None = None
+    event_ts: str
