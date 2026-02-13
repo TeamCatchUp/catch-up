@@ -1,5 +1,5 @@
 """
-GitHub Connector Schemas
+Github Connector Schemas
 """
 
 from datetime import datetime
@@ -12,75 +12,38 @@ from pydantic import BaseModel, Field
 # 공통 서브 모델
 # ============================================================
 
-class GitHubUser(BaseModel):
-    """GitHub 사용자 정보"""
+class GithubUser(BaseModel):
+    """Github 사용자 정보"""
     id: int
     login: str
+    name: str | None = None
+    email: str | None = None
     avatar_url: str | None = None
     html_url: str | None = None
-
-
-class GitHubLabel(BaseModel):
-    """Issue/PR 라벨"""
-    id: int
-    name: str
-    color: str | None = None
-    description: str | None = None
-
-
-class GitHubMilestone(BaseModel):
-    """Milestone 정보"""
-    id: int
-    number: int
-    title: str
-    state: str  # open/closed
-    description: str | None = None
-    due_on: datetime | None = None
-
-
-class GitHubReaction(BaseModel):
-    """리액션 카운트"""
-    total_count: int = 0
-    plus_one: int = Field(default=0, alias="+1")
-    minus_one: int = Field(default=0, alias="-1")
-    laugh: int = 0
-    hooray: int = 0
-    confused: int = 0
-    heart: int = 0
-    rocket: int = 0
-    eyes: int = 0
-
-    class Config:
-        populate_by_name = True
 
 
 # ============================================================
 # Issue 관련 스키마
 # ============================================================
 
-class GitHubIssueComment(BaseModel):
-    """Issue 코멘트"""
-    id: int
-    author: GitHubUser | None = None
+class GithubIssueComment(BaseModel):
+    """Issue 코멘트 (간소화)"""
+    author: GithubUser | None = None
     body: str
     created_at: datetime
     updated_at: datetime | None = None
-    reactions: GitHubReaction | None = None
 
 
-class GitHubIssue(BaseModel):
+class GithubIssue(BaseModel):
     """
-    GitHub Issue
+    Github Issue (GraphQL 기반 간소화)
 
-    - API 응답에서 파싱하여 생성
+    - GraphQL API 응답에서 파싱하여 생성
     - PGVector에 저장할 Document로 변환 가능
     """
     # 기본 식별
     number: int
-    id: int
-    node_id: str | None = None
-    url: str  # API URL
-    html_url: str  # Web URL
+    html_url: str  # Web URL (API URL 제거)
 
     # 내용
     title: str
@@ -89,26 +52,18 @@ class GitHubIssue(BaseModel):
     state_reason: str | None = None  # completed/not_planned/reopened
 
     # 담당자
-    author: GitHubUser | None = None
-    assignees: list[GitHubUser] = Field(default_factory=list)
-
-    # 분류
-    labels: list[GitHubLabel] = Field(default_factory=list)
-    milestone: GitHubMilestone | None = None
+    author: GithubUser | None = None
+    assignees: list[GithubUser] = Field(default_factory=list)
+    # Note: GitHub GraphQL API의 Issue 타입에는 closedBy 필드가 없음 (PR만 지원)
 
     # 시간
     created_at: datetime
     updated_at: datetime
     closed_at: datetime | None = None
 
-    # 부가정보
+    # 코멘트
     comments_count: int = 0
-    comments: list[GitHubIssueComment] = Field(default_factory=list)
-    reactions: GitHubReaction | None = None
-
-    # 관계 (body에서 파싱)
-    linked_pr_numbers: list[int] = Field(default_factory=list)
-    referenced_issues: list[int] = Field(default_factory=list)
+    comments: list[GithubIssueComment] = Field(default_factory=list)
 
 
 # ============================================================
@@ -144,19 +99,17 @@ class PRFileContext(BaseModel):
     )
 
 
-class GitHubPRReview(BaseModel):
+class GithubPRReview(BaseModel):
     """PR 리뷰"""
-    id: int
-    author: GitHubUser | None = None
+    author: GithubUser | None = None
     state: str  # APPROVED/CHANGES_REQUESTED/COMMENTED/DISMISSED/PENDING
     body: str | None = None
     submitted_at: datetime | None = None
 
 
-class GitHubPRComment(BaseModel):
+class GithubPRComment(BaseModel):
     """PR 리뷰 코멘트 (파일별 인라인 코멘트)"""
-    id: int
-    author: GitHubUser | None = None
+    author: GithubUser | None = None
     body: str
     path: str | None = None  # 파일 경로
     line: int | None = None  # 코멘트가 달린 라인
@@ -166,7 +119,7 @@ class GitHubPRComment(BaseModel):
     updated_at: datetime | None = None
 
 
-class GitHubPRCommitInfo(BaseModel):
+class GithubPRCommitInfo(BaseModel):
     """PR에 포함된 커밋 정보 (간소화)"""
     sha: str
     message: str
@@ -175,17 +128,15 @@ class GitHubPRCommitInfo(BaseModel):
     committed_at: datetime | None = None
 
 
-class GitHubPullRequest(BaseModel):
+class GithubPullRequest(BaseModel):
     """
-    GitHub Pull Request
+    Github Pull Request
 
     - API 응답에서 파싱하여 생성
     - PGVector에 저장할 Document로 변환 가능
     """
     # 기본 식별
     number: int
-    id: int
-    node_id: str | None = None
     url: str  # API URL
     html_url: str  # Web URL
 
@@ -193,23 +144,17 @@ class GitHubPullRequest(BaseModel):
     title: str
     body: str | None = None
     state: str  # open/closed
-    draft: bool = False
     merged: bool = False
 
     # 브랜치 정보
     base_ref: str  # base branch (e.g., main)
     head_ref: str  # head branch (e.g., feat/new-feature)
-    base_sha: str | None = None
-    head_sha: str | None = None
 
-    # 담당자
-    author: GitHubUser | None = None
-    assignees: list[GitHubUser] = Field(default_factory=list)
-    requested_reviewers: list[GitHubUser] = Field(default_factory=list)
-
-    # 분류
-    labels: list[GitHubLabel] = Field(default_factory=list)
-    milestone: GitHubMilestone | None = None
+    # 사람
+    author: GithubUser | None = None
+    assignees: list[GithubUser] = Field(default_factory=list)
+    reviewers: list[GithubUser] = Field(default_factory=list)
+    merged_by: GithubUser | None = None
 
     # 시간
     created_at: datetime
@@ -218,29 +163,24 @@ class GitHubPullRequest(BaseModel):
     closed_at: datetime | None = None
 
     # 코드 변경 통계
-    additions: int = 0
-    deletions: int = 0
     changed_files: int = 0
     commits_count: int = 0
 
     # 리뷰 정보
-    reviews: list[GitHubPRReview] = Field(default_factory=list)
+    reviews: list[GithubPRReview] = Field(default_factory=list)
 
     # 리뷰 코멘트 (파일별 인라인 코멘트)
-    comments: list[GitHubPRComment] = Field(default_factory=list)
+    comments: list[GithubPRComment] = Field(default_factory=list)
 
     # PR에 포함된 커밋 목록
-    commits: list[GitHubPRCommitInfo] = Field(default_factory=list)
-
-    # 관계 (body에서 파싱: "closes #123", "fixes #456")
-    linked_issue_numbers: list[int] = Field(default_factory=list)
+    commits: list[GithubPRCommitInfo] = Field(default_factory=list)
 
 
 # ============================================================
 # Commit 관련 스키마
 # ============================================================
 
-class GitHubCommitFile(BaseModel):
+class GithubCommitFile(BaseModel):
     """Commit에서 변경된 파일"""
     filename: str
     status: str  # added/modified/removed/renamed
@@ -251,9 +191,9 @@ class GitHubCommitFile(BaseModel):
     previous_filename: str | None = None
 
 
-class GitHubCommit(BaseModel):
+class GithubCommit(BaseModel):
     """
-    GitHub Commit
+    Github Commit
 
     - API 응답에서 파싱하여 생성
     - PGVector에 저장할 Document로 변환 가능
@@ -267,10 +207,10 @@ class GitHubCommit(BaseModel):
     message: str
 
     # 작성자 정보
-    author: GitHubUser | None = None  # GitHub 계정 연결된 경우
+    author: GithubUser | None = None  # Github 계정 연결된 경우
     author_name: str | None = None  # Git 커밋 author name
     author_email: str | None = None  # Git 커밋 author email
-    committer: GitHubUser | None = None
+    committer: GithubUser | None = None
     committer_name: str | None = None
     committer_email: str | None = None
 
@@ -283,7 +223,7 @@ class GitHubCommit(BaseModel):
     total_changes: int = 0
 
     # 변경 파일
-    files: list[GitHubCommitFile] = Field(default_factory=list)
+    files: list[GithubCommitFile] = Field(default_factory=list)
 
     # 관계
     pr_number: int | None = None  # 연결된 PR
@@ -294,9 +234,9 @@ class GitHubCommit(BaseModel):
 # Repository 관련 스키마
 # ============================================================
 
-class GitHubRepository(BaseModel):
+class GithubRepository(BaseModel):
     """
-    GitHub Repository
+    Github Repository
 
     - RDBMS에 저장 (정적 참조 데이터)
     """
@@ -314,7 +254,7 @@ class GitHubRepository(BaseModel):
     default_branch: str = "main"
 
     # Owner 정보
-    owner: GitHubUser
+    owner: GithubUser
 
     # 통계
     stargazers_count: int = 0
@@ -336,38 +276,38 @@ class GitHubRepository(BaseModel):
 
 
 # ============================================================
-# Webhook Payload 스키마 (GitHub App 설치/관리 이벤트)
+# Webhook Payload 스키마 (Github App 설치/관리 이벤트)
 # ============================================================
 
-class GitHubAccount(BaseModel):
-    """GitHub App이 설치된 계정 (Organization 또는 User)"""
+class GithubAccount(BaseModel):
+    """Github App이 설치된 계정 (Organization 또는 User)"""
     id: int
     login: str
     type: str  # "Organization" or "User"
     avatar_url: Optional[str] = None
 
 
-class GitHubInstallationInfo(BaseModel):
+class GithubInstallationInfo(BaseModel):
     id: int
-    account: GitHubAccount
+    account: GithubAccount
     app_id: int
     repository_selection: Optional[str] = None  # "all" or "selected"
     suspended_at: Optional[datetime] = None
 
 
-class GitHubSender(BaseModel):
+class GithubSender(BaseModel):
     id: int
     login: str
 
 
 class InstallationWebhookPayload(BaseModel):
     """
-    GitHub App Installation Webhook Payload
+    Github App Installation Webhook Payload
     - action: created, deleted, suspend, unsuspend, new_permissions_accepted
     """
     action: str
-    installation: GitHubInstallationInfo
-    sender: GitHubSender
+    installation: GithubInstallationInfo
+    sender: GithubSender
 
 
 class InstallationRepositoriesWebhookPayload(BaseModel):
@@ -376,10 +316,10 @@ class InstallationRepositoriesWebhookPayload(BaseModel):
     - action: added, removed
     """
     action: str
-    installation: GitHubInstallationInfo
+    installation: GithubInstallationInfo
     repositories_added: list = Field(default_factory=list)
     repositories_removed: list = Field(default_factory=list)
-    sender: GitHubSender
+    sender: GithubSender
 
 # =================================================================
 #                 Webhook Event Payload Schema
@@ -390,14 +330,14 @@ class IssueWebhookPayload(BaseModel):
     issue: dict
     repository: dict
     installation: dict
-    sender: GitHubSender
+    sender: GithubSender
 
 class PullRequestWebhookPayload(BaseModel):
     action: str
     pull_request: dict
     repository: dict
     installation: dict
-    sender: GitHubSender
+    sender: GithubSender
 
 # =================================================================
 #                 Sync Request Schema

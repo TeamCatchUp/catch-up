@@ -114,7 +114,6 @@ class Settings(BaseSettings):
     GITHUB_SYNC_BATCH_SIZE: int = 100  # 한 번에 가져올 엔티티 수 (per_page)
     GITHUB_API_RATE_LIMIT_DELAY: float = 0.1  # 요청 간 딜레이 (초)
     GITHUB_SYNC_COMMENTS_LIMIT: int = 10  # Issue/PR에 포함할 최근 코멘트 수
-    GITHUB_SYNC_REVIEWS_LIMIT: int = 10  # PR에 포함할 최근 리뷰 수
     GITHUB_SYNC_DEFAULT_DAYS: int = 90  # 기본 동기화 기간 (일)
 
     # Wehbhook Event Buffering & Scheduler Settings

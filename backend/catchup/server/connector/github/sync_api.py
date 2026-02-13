@@ -1,7 +1,7 @@
 """
-GitHub Sync API Endpoints
+Github Sync API Endpoints
 
-GitHub 데이터 동기화 API.
+Github 데이터 동기화 API.
 
 Endpoints:
 - POST /full: 전체 동기화
@@ -21,7 +21,7 @@ from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.domain_repository import RepositoryUpsertData
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
-from catchup.connectors.github.service import GitHubIngestionService
+from catchup.connectors.github.service import GithubIngestionService
 from catchup.connectors.github.schemas import FullSyncRequest as ServiceFullSyncRequest
 from catchup.utils.scheduler import flush_github_events
 
@@ -36,7 +36,7 @@ router = APIRouter(prefix="/api/v1/github/sync", tags=["github-sync"])
 
 class FullSyncRequest(BaseModel):
     """전체 동기화 요청"""
-    installation_id: int = Field(..., description="GitHub App Installation ID")
+    installation_id: int = Field(..., description="Github App Installation ID")
     repo_ids: list[int] | None = Field(
         default=None,
         description="동기화할 Repository ID 목록. None이면 모든 접근 가능 레포"
@@ -74,14 +74,14 @@ class SyncStateResponse(BaseModel):
 async def _get_ingestion_service(
     db: Session,
     installation_id: int,
-) -> GitHubIngestionService:
-    """GitHubIngestionService 인스턴스 생성"""
+) -> GithubIngestionService:
+    """GithubIngestionService 인스턴스 생성"""
     # Installation 정보 확인
     installation = get_installation_by_installation_id(db, installation_id)
     if not installation:
         raise HTTPException(
             status_code=404,
-            detail=f"GitHub Installation not found: {installation_id}"
+            detail=f"Github Installation not found: {installation_id}"
         )
 
     # Installation Access Token 발급
@@ -89,7 +89,7 @@ async def _get_ingestion_service(
     access_token = await github_app_service.get_installation_access_token(installation_id)
 
     # Service 인스턴스 생성 및 초기화
-    service = GitHubIngestionService(installation_id, access_token)
+    service = GithubIngestionService(installation_id, access_token)
     await service.initialize()
 
     return service

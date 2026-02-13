@@ -282,3 +282,4 @@ def get_all_users(db: Session) -> list[GitHubUserModel]:
     """모든 User 조회"""
     stmt = select(GitHubUserModel).order_by(GitHubUserModel.login)
     return list(db.execute(stmt).scalars().all())
+  

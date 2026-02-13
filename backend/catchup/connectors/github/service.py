@@ -1,7 +1,7 @@
 """
-GitHub Ingestion Service
+Github Ingestion Service
 
-GitHub 데이터 동기화 및 PGVector 적재를 담당하는 서비스.
+Github 데이터 동기화 및 PGVector 적재를 담당하는 서비스.
 
 동기화 순서:
 1. Repositories → RDBMS (Installation 접근 가능 레포 목록)
@@ -36,16 +36,16 @@ from catchup.connectors.github.client import (
     GitHubNotFoundError,
 )
 from catchup.connectors.github.schemas import (
-    GitHubUser,
-    GitHubIssue,
-    GitHubPullRequest,
-    GitHubCommit,
+    GithubUser,
+    GithubIssue,
+    GithubPullRequest,
+    GithubCommit,
     PRFileContext,
     PRComment,
     FullSyncRequest,
     IncrementalSyncRequest,
 )
-from catchup.connectors.github.transformers import GitHubTransformer
+from catchup.connectors.github.transformers import GithubTransformer
 from catchup.components.vector_db.pgvector.repository import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
@@ -107,12 +107,12 @@ def _convert_repos_to_dto(raw_repos: list[dict]) -> list[RepositoryUpsertData]:
     ]
 
 
-class GitHubIngestionService:
+class GithubIngestionService:
     """
-    GitHub 데이터 수집 및 PGVector 적재 서비스
+    Github 데이터 수집 및 PGVector 적재 서비스
 
     Usage:
-        service = GitHubIngestionService(installation_id, access_token)
+        service = GithubIngestionService(installation_id, access_token)
         await service.initialize()
         result = await service.full_sync(db, repo_ids=[12345, 67890])
     """
@@ -125,7 +125,7 @@ class GitHubIngestionService:
     ):
         """
         Args:
-            installation_id: GitHub App Installation ID
+            installation_id: Github App Installation ID
             access_token: Installation Access Token
             enable_summarization: 임베딩 전 LLM 요약 활성화 여부
         """
@@ -134,12 +134,12 @@ class GitHubIngestionService:
         self.enable_summarization = enable_summarization
 
         self.client = GitHubApiClient(access_token)
-        self.transformer: GitHubTransformer | None = None
+        self.transformer: GithubTransformer | None = None
         self.repository = PGVectorRepository()
         self.summarizer: SummarizerService | None = None
 
         # 사용자 캐시 (멘션 변환용)
-        self.user_cache: dict[str, GitHubUser] = {}
+        self.user_cache: dict[str, GithubUser] = {}
 
     async def initialize(self) -> None:
         """
@@ -150,14 +150,14 @@ class GitHubIngestionService:
         - Summarizer 초기화 (요약 활성화 시)
         """
         await self.repository.initialize()
-        self.transformer = GitHubTransformer(self.user_cache)
+        self.transformer = GithubTransformer(self.user_cache)
 
         # Summarizer 초기화 (요약 활성화 시)
         if self.enable_summarization:
             self.summarizer = get_summarizer_service()
             logger.info("Summarization enabled for embedding optimization")
 
-        logger.info(f"GitHubIngestionService initialized for installation {self.installation_id}")
+        logger.info(f"GithubIngestionService initialized for installation {self.installation_id}")
 
     # ============================================================
     # Sync Status Management Helpers
@@ -235,7 +235,7 @@ class GitHubIngestionService:
     def _update_user_cache(self, users_data: list[UserUpsertData]) -> None:
         """User 캐시 업데이트 (멘션 변환용)"""
         for user in users_data:
-            self.user_cache[user.login] = GitHubUser(
+            self.user_cache[user.login] = GithubUser(
                 id=user.database_id,
                 login=user.login,
                 avatar_url=user.avatar_url,
@@ -522,23 +522,18 @@ class GitHubIngestionService:
             # 동기화 시작
             self._start_sync(db, full_name, GithubEntityType.ISSUE, SyncOperation.ISSUE_SYNC)
 
-            # Issue 목록 조회
-            issues_data = await self.client.list_all_issues(
-                owner=owner, repo=repo, state="all", since=since
+            # Issue 목록 조회 (GraphQL - 코멘트 포함)
+            issues_data = await self.client.list_issues_graphql(
+                owner=owner,
+                repo=repo,
+                since=since,
             )
             logger.info(f"[GITHUB][{SyncOperation.ISSUE_SYNC}] Found {len(issues_data)} issues in {full_name}")
 
             for issue_data in issues_data:
                 try:
-                    # 코멘트 조회
-                    comments = []
-                    if issue_data.get("comments", 0) > 0:
-                        comments = await self.client.get_issue_comments(
-                            owner, repo, issue_data["number"]
-                        )
-
-                    # 파싱 및 변환
-                    issue = self.transformer.parse_issue(issue_data, comments)
+                    # 파싱 및 변환 (GraphQL 응답에 코멘트 이미 포함됨)
+                    issue = self.transformer.parse_issue(issue_data)
                     doc = self.transformer.transform_issue(
                         issue, owner, repo, self.installation_id
                     )
@@ -610,10 +605,7 @@ class GitHubIngestionService:
             prs_data = await self.client.list_pull_requests_graphql(
                 owner=owner,
                 repo=repo,
-                states=None,  # 모든 상태
                 since=since,
-                reviews_limit=settings.GITHUB_SYNC_REVIEWS_LIMIT,
-                commits_limit=100,
             )
             logger.info(f"[GITHUB][{SyncOperation.PR_SYNC}] Found {len(prs_data)} pull requests in {full_name} (GraphQL batch)")
 
@@ -623,13 +615,8 @@ class GitHubIngestionService:
                     if (idx + 1) % 50 == 0:
                         logger.info(f"[GITHUB][{SyncOperation.PR_SYNC}] Processing PR {idx + 1}/{len(prs_data)} in {full_name}")
 
-                    # GraphQL 응답에 포함된 상세 정보 추출
-                    reviews = pr_data.pop("_reviews", [])
-                    comments = pr_data.pop("_comments", [])
-                    commits = pr_data.pop("_commits", [])
-
-                    # 파싱 및 변환
-                    pr = self.transformer.parse_pull_request(pr_data, reviews, comments, commits)
+                    # GraphQL 노드를 직접 파싱
+                    pr = self.transformer.parse_pull_request(pr_data)
                     doc = self.transformer.transform_pull_request(
                         pr, owner, repo, self.installation_id
                     )
