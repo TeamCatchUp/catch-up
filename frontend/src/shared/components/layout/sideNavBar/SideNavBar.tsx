@@ -7,6 +7,7 @@ import SideNavMenu from '@/shared/components/layout/sideNavBar/SideNavMenu';
 import SideNavQuestions from '@/shared/components/layout/sideNavBar/SideNavQuestions';
 import SideNavUser from '@/shared/components/layout/sideNavBar/SideNavUser';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
 
 import Close from '/public/icons/icon/close.svg';
@@ -18,14 +19,16 @@ const SideNavBar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const isRagAnswerPage = pathname.startsWith('/chat');
-  const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
+  const { isSidebarOpen, setSidebarOpen } = useSidebarStore();
 
   // isRagAnswerPage 변경 시 사이드바 상태 동기화 (adjusting state during render)
   const [prevIsRagAnswerPage, setPrevIsRagAnswerPage] = useState(isRagAnswerPage);
   if (prevIsRagAnswerPage !== isRagAnswerPage) {
     setPrevIsRagAnswerPage(isRagAnswerPage);
-    setIsOpen(!isRagAnswerPage);
+    setSidebarOpen(!isRagAnswerPage);
   }
+
+  const isOpen = isSidebarOpen;
 
   return (
     <>
@@ -57,7 +60,7 @@ const SideNavBar = () => {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        setIsOpen(true);
+                        setSidebarOpen(true);
                       }}
                       className="bg-neutral-2 active:bg-neutral-3 border-neutral-5 absolute inset-0 cursor-pointer rounded-xl border-[0.5px] p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
                     >
@@ -84,7 +87,7 @@ const SideNavBar = () => {
           {isOpen && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button onClick={() => setIsOpen(false)} className="icon-button-only-gray flex cursor-pointer items-center justify-center rounded-full! p-0.5">
+                <button onClick={() => setSidebarOpen(false)} className="icon-button-only-gray flex cursor-pointer items-center justify-center rounded-full! p-0.5">
                   <Close className="h-6 w-6 text-gray-50" />
                 </button>
               </TooltipTrigger>
@@ -93,7 +96,7 @@ const SideNavBar = () => {
           )}
         </div>
 
-        <SideNavMenu isOpen={isOpen} setIsOpen={setIsOpen} />
+        <SideNavMenu isOpen={isOpen} setIsOpen={setSidebarOpen} />
         {isOpen && <SideNavQuestions />}
         <SideNavUser isOpen={isOpen} />
       </nav>
