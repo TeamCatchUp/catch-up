@@ -57,7 +57,9 @@ const SourceList = ({ sources, isLoading, isError }: Props) => {
     return sources.filter((source) => getSourceCategory(source.source_type) === activeFilter);
   }, [activeFilter, sources]);
 
-  const citedSources = filteredSources.filter((source) => source.is_cited);
+  const citedSources = filteredSources
+    .filter((source) => source.is_cited)
+    .sort((a, b) => a.source_index - b.source_index);
   const recommendedSources = filteredSources.filter((source) => !source.is_cited);
 
   return (
