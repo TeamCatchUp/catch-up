@@ -1,6 +1,7 @@
 'use client';
 
 import InboxPanel from '@/shared/components/layout/panels/InboxPanel';
+import QuestionsHistoryPanel from '@/shared/components/layout/panels/QuestionsHistoryPanel';
 import SettingsPanel from '@/shared/components/layout/panels/SettingsPanel';
 import SideNavBar from '@/shared/components/layout/sideNavBar/SideNavBar';
 import Toast from '@/shared/components/ui/Toast';
@@ -42,6 +43,14 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
           )}
         >
           {activePanel === 'settings' && <SettingsPanel />}
+        </div>
+        <div
+          className={cn(
+            'shrink-0 overflow-hidden transition-[width] duration-300 ease-out',
+            activePanel === 'questionsHistory' ? 'w-95' : 'w-0',
+          )}
+        >
+          {activePanel === 'questionsHistory' && <QuestionsHistoryPanel />}
         </div>
         <div className="flex flex-1 flex-col">
           <main className="flex-1 overflow-auto">{children}</main>

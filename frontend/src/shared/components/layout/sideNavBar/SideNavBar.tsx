@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
-import RecentQuestionsModal from '@/shared/components/layout/sideNavBar/modal/RecentQuestionsModal';
 import SideNavMenu from '@/shared/components/layout/sideNavBar/SideNavMenu';
 import SideNavQuestions from '@/shared/components/layout/sideNavBar/SideNavQuestions';
 import SideNavUser from '@/shared/components/layout/sideNavBar/SideNavUser';
@@ -20,7 +19,6 @@ const SideNavBar = () => {
   const router = useRouter();
   const isRagAnswerPage = pathname.startsWith('/chat');
   const [isOpen, setIsOpen] = useState(() => !isRagAnswerPage);
-  const [isCatchModalOpen, setIsCatchModalOpen] = useState(false);
 
   // isRagAnswerPage 변경 시 사이드바 상태 동기화 (adjusting state during render)
   const [prevIsRagAnswerPage, setPrevIsRagAnswerPage] = useState(isRagAnswerPage);
@@ -96,17 +94,9 @@ const SideNavBar = () => {
         </div>
 
         <SideNavMenu isOpen={isOpen} setIsOpen={setIsOpen} />
-        {isOpen && <SideNavQuestions onOpenModal={() => setIsCatchModalOpen(true)} />}
+        {isOpen && <SideNavQuestions />}
         <SideNavUser isOpen={isOpen} />
       </nav>
-      {isCatchModalOpen && (
-        <div className="fixed inset-0 z-100 flex items-center justify-center">
-          <div className="absolute inset-0 bg-white/50" onClick={() => setIsCatchModalOpen(false)} />
-          <div className="relative z-10">
-            <RecentQuestionsModal onClose={() => setIsCatchModalOpen(false)} />
-          </div>
-        </div>
-      )}
     </>
   );
 };
