@@ -7,8 +7,9 @@ import remarkGfm from 'remark-gfm';
 
 import GithubPRStepSkeleton from '@/features/chat/components/skeleton/GithubPRStepSkeleton';
 import RagAnswerSkeleton from '@/features/chat/components/skeleton/RagAnswerSkeleton';
-import type { QAPair } from '@/features/chat/utils/chat';
-import { formatMarkdownString } from '@/features/chat/utils/markdown';
+import type { PRPayload, RagUIStepKey } from '@/features/chat/types';
+import type { QAPair } from '@/features/chat/utils/render/chat';
+import { formatMarkdownString } from '@/features/chat/utils/render/markdown';
 
 import AnswerActionButtons from './actions/AnswerActionButtons';
 import AnswerError from './actions/AnswerError';
