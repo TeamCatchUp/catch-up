@@ -104,16 +104,20 @@ interface RagNotification {
 
 /** 새 SSE 스트림 이벤트 (fetch ReadableStream 방식) */
 type StreamEvent =
-  | { type: 'status'; node: string; message: string }
+  | { type: 'status'; session_id?: string; node: string; message: string }
+  | { type: 'sources'; session_id?: string; sources?: BackendSource[] }
+  | { type: 'token'; session_id?: string; token: string }
   | { type: 'interrupt'; payload: PRPayload[] }
   | {
       type: 'result';
+      session_id?: string;
       answer: string;
       sources: BackendSource[];
       chat_history_id?: string;
       has_feedback?: boolean;
       related_jira_issues?: BackendSource[];
     }
+  | { type: 'error'; session_id?: string; message: string; retryable?: boolean }
   | { type: 'ping' };
 
 interface JiraSubTask {

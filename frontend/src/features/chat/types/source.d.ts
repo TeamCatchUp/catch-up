@@ -15,14 +15,17 @@ export type BackendSource_Source = 'jira' | 'slack' | 'github' | 'unknown';
 export type BackendSource_EntityType = 'issue' | 'epic' | 'message' | 'pr' | 'comment' | 'code';
 
 export interface BackendSource {
-  index: number;
-  is_cited: boolean;
+  index?: number;
+  is_cited?: boolean;
   source: BackendSource_Source;
   entity_type: BackendSource_EntityType;
-  relevance_score: number;
+  relevance_score?: number;
   html_url?: string;
-  content: string;
-  owner: string;
+  url?: string;
+  content?: string;
+  text?: string;
+  citation_rationale?: string;
+  owner?: string;
 
   // github
   repo?: string;
@@ -30,17 +33,22 @@ export interface BackendSource {
   days_ago?: number;
   title?: string;
   pr_number?: number;
-  created_at?: number;
+  number?: number;
+  created_at?: number | string;
+  updated_at?: number | string;
   author?: string;
 
   // jira
   issue_key?: string;
   summary?: string;
   project_name?: string;
+  project_key?: string;
   parent_key?: string;
   parent_summary?: string;
   assignee_name?: string;
+  assignee?: string;
   status_id?: number;
+  status?: string;
 
   // slack
   channel_name?: string;

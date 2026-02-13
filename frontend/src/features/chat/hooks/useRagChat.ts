@@ -1,12 +1,6 @@
-/**
- * useRagChat
- * 채팅 상태 관리 + 메시지 전송/수신 오케스트레이션
- * SSE 스트림 lifecycle은 useRagStream에 위임
- */
-
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { getStorageKeys, NODE_TO_UI_STEP } from '@/features/chat/constants/config';
@@ -16,6 +10,7 @@ import { normalizeSources } from '@/features/chat/utils/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/features/chat/utils/normalizeRelatedJiraIssues';
 import { MOCK_INITIAL_MESSAGES } from '@/shared/mocks/chat/data';
 import { USE_MOCK } from '@/shared/mocks/config';
+import { chatQueries } from '@/shared/queries/chatroom.queries';
 
 interface UseRagChatOptions {
   sessionId: string;
@@ -24,15 +19,12 @@ interface UseRagChatOptions {
 }
 
 interface UseRagChatReturn {
-  // State
   chatData: ChatData | null;
   isLoading: boolean;
   isError: boolean;
   currentStep: RagUIStepKey;
   prList: PRPayload[];
   showPRSelection: boolean;
-
-  // Actions
   sendMessage: (message: string) => Promise<void>;
   submitEdit: (messageId: string, newContent: string) => Promise<void>;
   handlePRContinue: (selectedPrNumbers: number[]) => Promise<void>;
@@ -42,8 +34,9 @@ interface UseRagChatReturn {
   updateMessageFeedback: (messageId: string) => void;
 }
 
-/** Read + repair saved chat from localStorage */
 const loadSavedChat = (key: string): ChatData | null => {
+  if (typeof window === 'undefined') return null;
+
   const saved = localStorage.getItem(key);
   if (!saved) return null;
 
@@ -51,7 +44,7 @@ const loadSavedChat = (key: string): ChatData | null => {
   const lastMessage = parsedData.messages[parsedData.messages.length - 1];
 
   if (lastMessage?.role === 'user') {
-    const errorData: ChatData = {
+    const repairedData: ChatData = {
       ...parsedData,
       messages: [
         ...parsedData.messages,
@@ -65,11 +58,48 @@ const loadSavedChat = (key: string): ChatData | null => {
         },
       ],
     };
-    localStorage.setItem(key, JSON.stringify(errorData));
-    return errorData;
+    localStorage.setItem(key, JSON.stringify(repairedData));
+    return repairedData;
   }
 
   return parsedData;
+};
+
+const buildInitialChatData = (
+  sessionId: string,
+  repo: string | null,
+  initialQuery: string | null,
+  storageKey: string,
+): ChatData => {
+  const saved = loadSavedChat(storageKey);
+  if (saved) return saved;
+
+  if (initialQuery) {
+    return {
+      session_id: sessionId,
+      title: initialQuery,
+      repo: repo || '',
+      messages: [
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: initialQuery,
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    };
+  }
+
+  if (USE_MOCK) {
+    return {
+      session_id: sessionId,
+      title: '로그인 인증 흐름을 설명해주세요',
+      repo: repo || '',
+      messages: MOCK_INITIAL_MESSAGES,
+    };
+  }
+
+  return { session_id: sessionId, title: '', repo: repo || '', messages: [] };
 };
 
 export const useRagChat = ({
@@ -77,103 +107,60 @@ export const useRagChat = ({
   repo,
   initialQuery,
 }: UseRagChatOptions): UseRagChatReturn => {
-  // Storage Keys
   const storageKeys = getStorageKeys(sessionId);
-
-  // SSE Stream
-  const stream = useRagStream(sessionId);
+  const { streamChat, resumeStream, abortStream, markStopped, resetStopped, isStopped } =
+    useRagStream(sessionId);
   const queryClient = useQueryClient();
 
-  // Chat State - initialize from localStorage
-  const [chatData, setChatData] = useState<ChatData | null>(() => {
-    const saved = loadSavedChat(storageKeys.chat);
-    if (saved) return saved;
-    if (initialQuery) {
-      return {
-        session_id: sessionId,
-        title: initialQuery,
-        repo: repo || '',
-        messages: [
-          {
-            id: crypto.randomUUID(),
-            role: 'user',
-            content: initialQuery,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      };
-    }
-    if (USE_MOCK) {
-      return {
-        session_id: sessionId,
-        title: '로그인 인증 흐름을 설명해주세요',
-        repo: repo || '',
-        messages: MOCK_INITIAL_MESSAGES,
-      };
-    }
-    return { session_id: sessionId, title: '', repo: repo || '', messages: [] };
-  });
-  const [isLoading, setIsLoading] = useState(
-    () => !localStorage.getItem(storageKeys.chat) && !!initialQuery,
+  const [chatData, setChatData] = useState<ChatData | null>(() =>
+    buildInitialChatData(sessionId, repo, initialQuery, storageKeys.chat),
   );
+  const [isLoading, setIsLoading] = useState<boolean>(() => !loadSavedChat(storageKeys.chat) && !!initialQuery);
   const [isError, setIsError] = useState(false);
   const [currentStep, setCurrentStep] = useState<RagUIStepKey>('router');
-
-  // PR Selection State
   const [prList, setPrList] = useState<PRPayload[]>([]);
   const [showPRSelection, setShowPRSelection] = useState(false);
-
-  // Handle session change (adjusting state during render)
   const [prevSessionId, setPrevSessionId] = useState(sessionId);
+
+  const streamingMessageIdRef = useRef<string | null>(null);
+  const hasStreamedTokenRef = useRef(false);
+  const hasResultEventRef = useRef(false);
+  const wasInterruptedRef = useRef(false);
+  const latestSourcesRef = useRef<BackendSource[]>([]);
+  const latestUiSourcesRef = useRef<ChatSource[]>([]);
+
+  const resetStreamStateRefs = useCallback(() => {
+    streamingMessageIdRef.current = null;
+    hasStreamedTokenRef.current = false;
+    hasResultEventRef.current = false;
+    wasInterruptedRef.current = false;
+    latestSourcesRef.current = [];
+    latestUiSourcesRef.current = [];
+  }, []);
+
   if (prevSessionId !== sessionId) {
     setPrevSessionId(sessionId);
+
     setIsError(false);
     setShowPRSelection(false);
     setCurrentStep('router');
 
-    const saved = loadSavedChat(storageKeys.chat);
-    if (saved) {
-      setChatData(saved);
-      setIsLoading(false);
-    } else if (initialQuery) {
-      setChatData({
-        session_id: sessionId,
-        title: initialQuery,
-        repo: repo || '',
-        messages: [
-          {
-            id: crypto.randomUUID(),
-            role: 'user',
-            content: initialQuery,
-            timestamp: new Date().toISOString(),
-          },
-        ],
-      });
-      setIsLoading(true);
-    } else if (USE_MOCK) {
-      setChatData({
-        session_id: sessionId,
-        title: '로그인 인증 흐름을 설명해주세요',
-        repo: repo || '',
-        messages: MOCK_INITIAL_MESSAGES,
-      });
-      setIsLoading(false);
-    } else {
-      setChatData({ session_id: sessionId, title: '', repo: repo || '', messages: [] });
-      setIsLoading(false);
-    }
+    const nextData = buildInitialChatData(sessionId, repo, initialQuery, storageKeys.chat);
+    setChatData(nextData);
+
+    const hasSaved = !!loadSavedChat(storageKeys.chat);
+    setIsLoading(!hasSaved && !!initialQuery);
   }
 
-  /** 답변 로딩 시작 */
   const beginAnswerLoading = useCallback(() => {
-    stream.resetStopped();
+    resetStopped();
+    resetStreamStateRefs();
     setIsLoading(true);
     setIsError(false);
     setShowPRSelection(false);
     setCurrentStep('router');
-  }, [stream]);
+  }, [resetStopped, resetStreamStateRefs]);
 
-  /** 어시스턴트 답변 추가 */
   const appendAssistantAnswer = useCallback(
     (
       answer: string,
@@ -185,15 +172,36 @@ export const useRagChat = ({
       setChatData((prev) => {
         if (!prev) return prev;
 
-        // 중복 체크: 마지막 메시지가 동일한 내용이면 무시
-        const lastMessage = prev.messages[prev.messages.length - 1];
-        if (lastMessage?.role === 'assistant' && lastMessage?.content === answer) {
-          console.warn('[useRagChat] 중복 답변 무시');
-          return prev;
-        }
-
         const uiSources = normalizeSources(sources);
         const detailedTasks = normalizeRelatedJiraIssues(relatedJiraIssues);
+        latestSourcesRef.current = sources;
+        latestUiSourcesRef.current = uiSources;
+
+        if (streamingMessageIdRef.current) {
+          const streamMessageIndex = prev.messages.findIndex((message) => message.id === streamingMessageIdRef.current);
+          if (streamMessageIndex >= 0) {
+            const messages = [...prev.messages];
+            const currentMessage = messages[streamMessageIndex];
+
+            messages[streamMessageIndex] = {
+              ...currentMessage,
+              content: answer || currentMessage.content,
+              sources: uiSources.length ? uiSources : currentMessage.sources ?? [],
+              detailed_tasks: detailedTasks,
+              chat_history_id: chatHistoryId ?? currentMessage.chat_history_id,
+              has_feedback: hasFeedback ?? currentMessage.has_feedback,
+            };
+
+            const finalData: ChatData = { ...prev, messages };
+            localStorage.setItem(storageKeys.chat, JSON.stringify(finalData));
+            return finalData;
+          }
+        }
+
+        const lastMessage = prev.messages[prev.messages.length - 1];
+        if (lastMessage?.role === 'assistant' && answer && lastMessage.content === answer) {
+          return prev;
+        }
 
         const assistantMessage: Message = {
           id: crypto.randomUUID(),
@@ -218,38 +226,165 @@ export const useRagChat = ({
       setIsLoading(false);
       setShowPRSelection(false);
       setCurrentStep('router');
+      streamingMessageIdRef.current = null;
     },
     [storageKeys.chat],
   );
 
-  /** StreamEvent 핸들러 */
+  const appendTokenToStreamingMessage = useCallback((token: string) => {
+    if (!token) return;
+
+    setChatData((prev) => {
+      if (!prev) return prev;
+
+      const currentStreamingMessageId = streamingMessageIdRef.current;
+      if (currentStreamingMessageId) {
+        const streamMessageIndex = prev.messages.findIndex((message) => message.id === currentStreamingMessageId);
+
+        if (streamMessageIndex >= 0) {
+          const messages = [...prev.messages];
+          const currentMessage = messages[streamMessageIndex];
+          messages[streamMessageIndex] = {
+            ...currentMessage,
+            content: `${currentMessage.content}${token}`,
+            sources: latestUiSourcesRef.current,
+            detailed_tasks: currentMessage.detailed_tasks ?? [],
+          };
+          return { ...prev, messages };
+        }
+      }
+
+      const messageId = crypto.randomUUID();
+      streamingMessageIdRef.current = messageId;
+
+      const assistantMessage: Message = {
+        id: messageId,
+        role: 'assistant',
+        content: token,
+        sources: latestUiSourcesRef.current,
+        detailed_tasks: [],
+        timestamp: new Date().toISOString(),
+      };
+
+      return {
+        ...prev,
+        messages: [...prev.messages, assistantMessage],
+      };
+    });
+  }, []);
+
+  const applyStreamingSources = useCallback((sources: BackendSource[] = []) => {
+    latestSourcesRef.current = sources;
+    latestUiSourcesRef.current = normalizeSources(sources);
+
+    const currentStreamingMessageId = streamingMessageIdRef.current;
+    if (!currentStreamingMessageId) return;
+
+    setChatData((prev) => {
+      if (!prev) return prev;
+
+      const streamMessageIndex = prev.messages.findIndex((message) => message.id === currentStreamingMessageId);
+      if (streamMessageIndex < 0) return prev;
+
+      const messages = [...prev.messages];
+      const currentMessage = messages[streamMessageIndex];
+      messages[streamMessageIndex] = {
+        ...currentMessage,
+        sources: latestUiSourcesRef.current,
+      };
+
+      return { ...prev, messages };
+    });
+  }, []);
+
+  const finalizeAfterStreamClose = useCallback(() => {
+    if (isStopped()) return;
+    if (wasInterruptedRef.current) return;
+
+    if (hasResultEventRef.current) {
+      streamingMessageIdRef.current = null;
+      return;
+    }
+
+    setChatData((prev) => {
+      if (!prev) return prev;
+
+      const currentStreamingMessageId = streamingMessageIdRef.current;
+      if (!currentStreamingMessageId) {
+        if (hasStreamedTokenRef.current) {
+          localStorage.setItem(storageKeys.chat, JSON.stringify(prev));
+        }
+        return prev;
+      }
+
+      const streamMessageIndex = prev.messages.findIndex((message) => message.id === currentStreamingMessageId);
+      if (streamMessageIndex < 0) {
+        if (hasStreamedTokenRef.current) {
+          localStorage.setItem(storageKeys.chat, JSON.stringify(prev));
+        }
+        return prev;
+      }
+
+      const messages = [...prev.messages];
+      const currentMessage = messages[streamMessageIndex];
+      messages[streamMessageIndex] = {
+        ...currentMessage,
+        sources: latestUiSourcesRef.current.length ? latestUiSourcesRef.current : currentMessage.sources ?? [],
+        detailed_tasks: currentMessage.detailed_tasks ?? [],
+      };
+
+      const finalData: ChatData = { ...prev, messages };
+      localStorage.setItem(storageKeys.chat, JSON.stringify(finalData));
+      return finalData;
+    });
+
+    if (hasStreamedTokenRef.current) {
+      window.dispatchEvent(new Event('refresh_sidebar'));
+      void queryClient.invalidateQueries({ queryKey: chatQueries.lists() });
+    }
+
+    setIsLoading(false);
+    setShowPRSelection(false);
+    setCurrentStep('router');
+    streamingMessageIdRef.current = null;
+  }, [isStopped, queryClient, storageKeys.chat]);
+
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
-      if (stream.isStopped()) return;
+      if (isStopped()) return;
 
       switch (event.type) {
         case 'status': {
           const mappedStep = NODE_TO_UI_STEP[event.node];
           if (mappedStep === null || mappedStep === undefined) return;
-
-          console.log('[useRagChat] Step update:', event.node, '->', mappedStep);
           setCurrentStep(mappedStep);
           break;
         }
 
+        case 'sources': {
+          applyStreamingSources(event.sources ?? []);
+          break;
+        }
+
+        case 'token': {
+          hasStreamedTokenRef.current = true;
+          appendTokenToStreamingMessage(event.token);
+          break;
+        }
+
         case 'interrupt': {
-          console.log('[useRagChat] interrupt payload length:', event.payload.length);
+          wasInterruptedRef.current = true;
           setPrList(event.payload);
           setShowPRSelection(true);
           setIsLoading(false);
-          stream.abortStream();
+          abortStream();
           break;
         }
 
         case 'result': {
+          hasResultEventRef.current = true;
           window.dispatchEvent(new Event('refresh_sidebar'));
           void queryClient.invalidateQueries({ queryKey: chatQueries.lists() });
-          console.log('[useRagChat] result received');
 
           appendAssistantAnswer(
             event.answer,
@@ -261,6 +396,13 @@ export const useRagChat = ({
           break;
         }
 
+        case 'error': {
+          console.error('[useRagChat] stream error event:', event.message);
+          setIsError(true);
+          setIsLoading(false);
+          break;
+        }
+
         case 'ping':
           break;
 
@@ -268,10 +410,16 @@ export const useRagChat = ({
           break;
       }
     },
-    [appendAssistantAnswer, queryClient, stream],
+    [
+      abortStream,
+      appendAssistantAnswer,
+      appendTokenToStreamingMessage,
+      applyStreamingSources,
+      isStopped,
+      queryClient,
+    ],
   );
 
-  /** 메시지 전송 */
   const sendMessage = useCallback(
     async (message: string) => {
       if (!message.trim() || isLoading || !chatData) return;
@@ -293,27 +441,34 @@ export const useRagChat = ({
       beginAnswerLoading();
 
       try {
-        await stream.streamChat(message, handleStreamEvent);
+        await streamChat(message, handleStreamEvent);
+        finalizeAfterStreamClose();
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
-        console.error('[useRagChat] sendMessage Error:', err);
+        console.error('[useRagChat] sendMessage error:', err);
         setIsError(true);
         setIsLoading(false);
       }
     },
-    [isLoading, chatData, storageKeys.chat, beginAnswerLoading, stream, handleStreamEvent],
+    [
+      beginAnswerLoading,
+      chatData,
+      finalizeAfterStreamClose,
+      handleStreamEvent,
+      isLoading,
+      storageKeys.chat,
+      streamChat,
+    ],
   );
 
-  /** 메시지 수정 제출 */
   const submitEdit = useCallback(
     async (messageId: string, newContent: string) => {
       if (!chatData) return;
 
-      const idx = chatData.messages.findIndex((m) => m.id === messageId);
-      if (idx === -1) return;
+      const targetIndex = chatData.messages.findIndex((message) => message.id === messageId);
+      if (targetIndex === -1) return;
 
-      const trimmed = chatData.messages.slice(0, idx);
-
+      const messagesBeforeTarget = chatData.messages.slice(0, targetIndex);
       const userMessage: Message = {
         id: crypto.randomUUID(),
         role: 'user',
@@ -323,34 +478,33 @@ export const useRagChat = ({
 
       const updated: ChatData = {
         ...chatData,
-        messages: [...trimmed, userMessage],
+        messages: [...messagesBeforeTarget, userMessage],
       };
       setChatData(updated);
+      localStorage.setItem(storageKeys.chat, JSON.stringify(updated));
 
       beginAnswerLoading();
 
       try {
-        await stream.streamChat(newContent, handleStreamEvent);
+        await streamChat(newContent, handleStreamEvent);
+        finalizeAfterStreamClose();
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
-        console.error('[useRagChat] submitEdit Error:', err);
+        console.error('[useRagChat] submitEdit error:', err);
         setIsError(true);
         setIsLoading(false);
       }
     },
-    [chatData, beginAnswerLoading, stream, handleStreamEvent],
+    [beginAnswerLoading, chatData, finalizeAfterStreamClose, handleStreamEvent, storageKeys.chat, streamChat],
   );
 
-  /** PR 선택 후 계속 진행 */
   const handlePRContinue = useCallback(
     async (selectedPrNumbers: number[]) => {
-      console.log('[useRagChat] PR Continue:', selectedPrNumbers);
-
       setShowPRSelection(false);
       beginAnswerLoading();
 
       const selectedPRs = selectedPrNumbers
-        .map((prNumber) => prList.find((p) => p.pr_number === prNumber))
+        .map((prNumber) => prList.find((pr) => pr.pr_number === prNumber))
         .filter((pr): pr is PRPayload => pr !== undefined)
         .map((pr) => ({
           pr_number: pr.pr_number,
@@ -359,61 +513,69 @@ export const useRagChat = ({
         }));
 
       try {
-        await stream.resumeStream(selectedPRs, handleStreamEvent);
+        await resumeStream(selectedPRs, handleStreamEvent);
+        finalizeAfterStreamClose();
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
-        console.error('[useRagChat] handlePRContinue Error:', err);
+        console.error('[useRagChat] handlePRContinue error:', err);
         setIsError(true);
         setIsLoading(false);
       }
     },
-    [prList, beginAnswerLoading, stream, handleStreamEvent],
+    [beginAnswerLoading, finalizeAfterStreamClose, handleStreamEvent, prList, resumeStream],
   );
 
-  /** PR 목록 다시 가져오기 */
   const handlePRRefetch = useCallback(async () => {
     if (!chatData) return;
 
-    const lastUser = [...chatData.messages].reverse().find((m) => m.role === 'user');
-    const query = lastUser?.content?.trim();
+    const lastUserMessage = [...chatData.messages].reverse().find((message) => message.role === 'user');
+    const query = lastUserMessage?.content?.trim();
     if (!query) return;
 
-    stream.abortStream();
+    abortStream();
     beginAnswerLoading();
 
     try {
-      await stream.streamChat(query, handleStreamEvent);
+      await streamChat(query, handleStreamEvent);
+      finalizeAfterStreamClose();
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
-      console.error('[useRagChat] handlePRRefetch Error:', err);
+      console.error('[useRagChat] handlePRRefetch error:', err);
       setIsError(true);
       setIsLoading(false);
     }
-  }, [chatData, stream, beginAnswerLoading, handleStreamEvent]);
+  }, [abortStream, beginAnswerLoading, chatData, finalizeAfterStreamClose, handleStreamEvent, streamChat]);
 
-  /** 응답 생성 중지 */
   const handleStop = useCallback(() => {
     if (!isLoading) return;
 
-    stream.markStopped();
+    markStopped();
+    abortStream();
 
     setIsLoading(false);
     setIsError(false);
     setShowPRSelection(false);
     setCurrentStep('router');
 
-    stream.abortStream();
-    appendAssistantAnswer('\n', [], []);
-  }, [isLoading, appendAssistantAnswer, stream]);
+    if (!streamingMessageIdRef.current) {
+      appendAssistantAnswer('\n', [], []);
+      return;
+    }
 
-  /** 메시지 피드백 상태 업데이트 */
+    setChatData((prev) => {
+      if (!prev) return prev;
+      localStorage.setItem(storageKeys.chat, JSON.stringify(prev));
+      return prev;
+    });
+  }, [abortStream, appendAssistantAnswer, isLoading, markStopped, storageKeys.chat]);
+
   const updateMessageFeedback = useCallback(
     (messageId: string) => {
       setChatData((prev) => {
         if (!prev) return prev;
 
-        const updatedMessages = prev.messages.map((msg) =>
-          msg.id === messageId ? { ...msg, has_feedback: true } : msg,
+        const updatedMessages = prev.messages.map((message) =>
+          message.id === messageId ? { ...message, has_feedback: true } : message,
         );
 
         const updatedData: ChatData = {
@@ -428,24 +590,39 @@ export const useRagChat = ({
     [storageKeys.chat],
   );
 
-  /** 초기 스트리밍 시작 (저장된 데이터 없고 initialQuery 있을 때만) */
+  useEffect(() => {
+    resetStreamStateRefs();
+    abortStream();
+  }, [abortStream, resetStreamStateRefs, sessionId]);
+
   useEffect(() => {
     if (localStorage.getItem(storageKeys.chat) || !initialQuery) return;
 
-    stream.resetStopped();
+    resetStopped();
+    resetStreamStateRefs();
 
     const runStream = async () => {
       try {
-        await stream.streamChat(initialQuery, handleStreamEvent);
+        await streamChat(initialQuery, handleStreamEvent);
+        finalizeAfterStreamClose();
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
-        console.error('[useRagChat] fetchFirstAnswer Error:', err);
+        console.error('[useRagChat] fetchFirstAnswer error:', err);
         setIsError(true);
         setIsLoading(false);
       }
     };
-    runStream();
-  }, [sessionId, initialQuery, storageKeys.chat, stream, handleStreamEvent]);
+
+    void runStream();
+  }, [
+    finalizeAfterStreamClose,
+    handleStreamEvent,
+    initialQuery,
+    resetStopped,
+    resetStreamStateRefs,
+    storageKeys.chat,
+    streamChat,
+  ]);
 
   return {
     chatData,
