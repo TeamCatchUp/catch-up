@@ -16,10 +16,21 @@ export const MarkDownComponents = (sources?: ChatSource[]): Components => {
   console.log('MarkDownComponents initialized with sources:', sources);
 
   return {
+    // 표 관련 컴포넌트
     table: ({ children }) => (
       <div className="table-wrapper">
         <table>{children}</table>
       </div>
+    ),
+    caption: ({ children }) => <caption>{processChildren(children, sources)}</caption>,
+    thead: ({ children }) => <thead>{children}</thead>,
+    tbody: ({ children }) => <tbody>{children}</tbody>,
+    tr: ({ children }) => <tr>{children}</tr>,
+    th: ({ children, style }) => (
+      <th style={style}>{processChildren(children, sources)}</th>
+    ),
+    td: ({ children, style }) => (
+      <td style={style}>{processChildren(children, sources)}</td>
     ),
 
     code: ({ className, children, ...props }) => {
