@@ -139,7 +139,8 @@ export const MOCK_SOURCES: MockSource[] = [
   {
     index: 0,
     is_cited: true,
-    source_type: 0,
+    source: 'github',
+    entity_type: 'code',
     relevance_score: 0.95,
     html_url: 'https://github.com/TeamCatchUp/CatchUp-BE/blob/main/src/rag/service/RagService.ts',
     content: `export class RagService {
@@ -169,33 +170,38 @@ export const MOCK_SOURCES: MockSource[] = [
   {
     index: 1,
     is_cited: true,
-    source_type: 1,
+    source: 'slack',
+    entity_type: 'message',
     relevance_score: 0.88,
-    html_url: 'https://github.com/TeamCatchUp/CatchUp-FE/pull/156',
-    content: `## 변경사항
-- RagAnswer 컴포넌트 구현 (마크다운 렌더링, 소스 인용)
-- SourceList UI 개선 (cited/uncited 구분 표시)
-- 피드백 버튼 추가 (좋아요/싫어요)
+    html_url: 'https://catchup.slack.com/archives/C08PQR7SGHT/p1738324800',
+    content: `**팀원E** 오후 3:25
+RAG 답변 UI 컴포넌트 구현 완료했습니다! 🎉
+마크다운 렌더링이랑 소스 인용 기능 모두 동작 확인했어요.
 
-## 스크린샷
-[이미지 첨부]
+**정성훈** 오후 3:27
+오 좋네요! cited/uncited 구분 표시는 어떻게 처리하셨나요?
 
-## 테스트
-- [x] 마크다운 렌더링 확인
-- [x] 소스 인용 [1], [2] 클릭 시 해당 소스로 스크롤
-- [x] 피드백 제출 정상 동작`,
+**팀원E** 오후 3:28
+is_cited 플래그로 구분해서 cited는 상단에 강조 표시하고, uncited는 하단에 회색으로 표시했습니다.
+SourceList 컴포넌트에서 filter로 나눠서 렌더링하도록 구현했어요.
+
+**팀원C** 오후 3:30
+피드백 버튼도 추가하셨다고 들었는데, API 연동은 어떻게 되나요?
+
+**팀원E** 오후 3:32
+POST /api/feedback 엔드포인트로 chat_history_id랑 is_helpful 보내도록 구현했습니다.
+mockChatService에서는 일단 콘솔 로그만 찍히게 해뒀어요.`,
     owner: 'TeamCatchUp',
-    repo: 'CatchUp-FE',
-    title: 'feat(chat): RAG 답변 UI 컴포넌트 구현',
-    pr_number: 156,
-    state: 'merged',
-    created_at: 1738454400,
-    author: '팀원E',
+    repo: '#frontend-dev',
+    channel_name: 'frontend-dev',
+    team_id: 'T08PQR7SGHT',
+    ts: '1738324800',
   },
   {
     index: 2,
     is_cited: true,
-    source_type: 3,
+    source: 'jira',
+    entity_type: 'issue',
     relevance_score: 0.82,
     html_url: 'https://jira.catchup.io/browse/CAT-296',
     content: 'RAG 답변 생성 시 인용 소스가 5개 이상일 경우 cited/uncited 영역 구분이 필요합니다. 현재는 모든 소스가 동일하게 표시되어 사용자가 실제 인용된 소스를 파악하기 어렵습니다.',
@@ -237,7 +243,9 @@ const documents = await this.vectorStore.search(query, { limit: 10 });
 선택된 문서를 컨텍스트로 LLM이 답변을 생성합니다. 이때 채팅 히스토리도 함께 참고하여 문맥을 유지합니다[1].
 
 ### 4. UI 렌더링
-생성된 답변은 마크다운 형태로 표시되며, 인용된 소스는 cited 영역에 강조 표시됩니다[2][3].
+생성된 답변은 마크다운 형태로 표시되며, 인용된 소스는 **cited 영역에 강조 표시**됩니다[2][3].
+
+팀원들 간의 논의 내용[2]을 보면, \`is_cited\` 플래그로 cited/uncited를 구분하여 상단에는 강조 표시, 하단에는 회색으로 표시하도록 구현되었습니다.
 
 ### 참고사항
 - 벡터 검색 모델: OpenAI text-embedding-3-large
@@ -256,7 +264,8 @@ export const MOCK_RELATED_JIRA_ISSUES: MockSource[] = [
   {
     index: 0,
     is_cited: true,
-    source_type: 3,
+    source: 'jira',
+    entity_type: 'issue',
     relevance_score: 0.9,
     html_url: 'https://jira.catchup.io/browse/CATCH-100',
     content: '인증 시스템 전반 개선 - OAuth 2.0 적용, 토큰 갱신 로직 개선, 보안 강화',
