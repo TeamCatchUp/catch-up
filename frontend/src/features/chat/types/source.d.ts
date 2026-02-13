@@ -1,7 +1,13 @@
-// backend 응답 타입 (0 = 코드, 1 = PR, 2 = Github 이슈 3 = Jira 이슈)
-type BackendSourceType = 0 | 1 | 2 | 3;
+/**
+ * Backend source types
+ * Used for SSE response parsing and API communication
+ * Feature-specific types for chat domain
+ */
 
-interface BackendSource {
+// backend 응답 타입 (0 = 코드, 1 = PR, 2 = Github 이슈 3 = Jira 이슈)
+export type BackendSourceType = 0 | 1 | 2 | 3;
+
+export interface BackendSource {
   index: number;
   is_cited: boolean;
   source_type: BackendSourceType;

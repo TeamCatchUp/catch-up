@@ -1,45 +1,12 @@
-interface ClientSourceBase {
-  index: number;
-  is_cited: boolean;
-  source_type: 0 | 1 | 3;
-  relevance_score: number;
-  html_url: string;
-  content: string;
-  owner: string;
-  repo: string;
-}
+import type { MockSource } from './types';
 
-interface ClientCodeSource extends ClientSourceBase {
-  source_type: 0;
-  file_path: string;
-  category?: string;
-  language?: string;
-}
-
-interface ClientPullRequestSource extends ClientSourceBase {
-  source_type: 1;
-  title: string;
-  pr_number: number;
-  state?: string;
-  created_at: number;
-  author: string;
-}
-
-interface ClientJiraIssueSource extends ClientSourceBase {
-  source_type: 3;
-  issueTypeName?: string;
-  summary: string;
-  project_name: string;
-  issue_key: string;
-  parent_key?: string;
-  parent_summary?: string;
-  status_id?: number;
-  assignee_name?: string;
-}
-
-type ClientSource = ClientCodeSource | ClientPullRequestSource | ClientJiraIssueSource;
-
-// UI용 Mock Source 데이터 (ChatSource 형태, SourceList 렌더링용)
+/**
+ * UI 렌더링용 Mock 소스 데이터 (ChatSource 형태, 9개 항목)
+ * SourceList 컴포넌트에서 시각적 레이아웃 테스트에 사용
+ *
+ * 사용처:
+ * - MOCK_INITIAL_MESSAGES의 답변에 포함 (sources 필드)
+ */
 const MOCK_CHAT_SOURCES: ChatSource[] = [
   {
     id: 'mock-src-1',
@@ -160,103 +127,132 @@ const MOCK_CHAT_SOURCES: ChatSource[] = [
   },
 ];
 
-// 백엔드 응답 형태 Mock Source 데이터 (SSE 시뮬레이터용)
-export const MOCK_SOURCES: ClientSource[] = [
+/**
+ * 백엔드 응답 형태 Mock 소스 데이터 (MockSource[] 타입, 3개 항목)
+ * SSE 응답 및 RAG 답변 생성 시뮬레이션에 사용
+ *
+ * 사용처:
+ * - mockChatService.ts - streamChat(), resumeStream()의 sources 응답
+ * - sseSimulator.ts - SSE 이벤트 스트림의 sources 데이터
+ */
+export const MOCK_SOURCES: MockSource[] = [
   {
     index: 0,
     is_cited: true,
     source_type: 0,
     relevance_score: 0.95,
-    html_url: 'https://github.com/TeamCatchUp/CatchUp-BE/blob/main/src/AuthController.java',
-    content: `public class AuthController {
-  @PostMapping("/login")
-  public ResponseEntity<TokenDto> login(@RequestBody LoginRequest request) {
-    return authService.authenticate(request);
-  }
+    html_url: 'https://github.com/TeamCatchUp/CatchUp-BE/blob/main/src/rag/service/RagService.ts',
+    content: `export class RagService {
+  async processQuery(query: string, sessionId: string): Promise<RagResponse> {
+    // 1. 벡터 검색으로 관련 문서 조회
+    const documents = await this.vectorStore.search(query, { limit: 10 });
 
-  @PostMapping("/refresh")
-  public ResponseEntity<TokenDto> refresh(@CookieValue String refreshToken) {
-    return authService.refreshToken(refreshToken);
+    // 2. Reranker로 관련도 재평가
+    const reranked = await this.reranker.rank(query, documents);
+
+    // 3. LLM으로 답변 생성
+    const answer = await this.llm.generate({
+      query,
+      context: reranked.slice(0, 5),
+      chatHistory: await this.getChatHistory(sessionId),
+    });
+
+    return { answer, sources: reranked };
   }
 }`,
     owner: 'TeamCatchUp',
     repo: 'CatchUp-BE',
-    file_path: 'src/main/java/AuthController.java',
-    category: 'controller',
-    language: 'java',
+    file_path: 'src/rag/service/RagService.ts',
+    category: 'service',
+    language: 'typescript',
   },
   {
     index: 1,
     is_cited: true,
     source_type: 1,
     relevance_score: 0.88,
-    html_url: 'https://github.com/TeamCatchUp/CatchUp-FE/pull/42',
+    html_url: 'https://github.com/TeamCatchUp/CatchUp-FE/pull/156',
     content: `## 변경사항
-- 로그인 폼 UI 개선
-- 에러 메시지 표시 개선
-- 로딩 상태 추가`,
+- RagAnswer 컴포넌트 구현 (마크다운 렌더링, 소스 인용)
+- SourceList UI 개선 (cited/uncited 구분 표시)
+- 피드백 버튼 추가 (좋아요/싫어요)
+
+## 스크린샷
+[이미지 첨부]
+
+## 테스트
+- [x] 마크다운 렌더링 확인
+- [x] 소스 인용 [1], [2] 클릭 시 해당 소스로 스크롤
+- [x] 피드백 제출 정상 동작`,
     owner: 'TeamCatchUp',
     repo: 'CatchUp-FE',
-    title: 'feat: 로그인 페이지 리뉴얼',
-    pr_number: 42,
+    title: 'feat(chat): RAG 답변 UI 컴포넌트 구현',
+    pr_number: 156,
     state: 'merged',
-    created_at: 1705056000,
-    author: '이프론트',
+    created_at: 1738454400,
+    author: '팀원E',
   },
   {
     index: 2,
     is_cited: true,
     source_type: 3,
     relevance_score: 0.82,
-    html_url: 'https://jira.catchup.io/browse/CATCH-101',
-    content: '소셜 로그인 시 간헐적으로 토큰이 발급되지 않는 버그가 발생합니다. 재현 단계: 1) 구글 로그인 클릭 2) OAuth 완료 후 리다이렉트 3) 토큰이 undefined로 설정됨',
+    html_url: 'https://jira.catchup.io/browse/CAT-296',
+    content: 'RAG 답변 생성 시 인용 소스가 5개 이상일 경우 cited/uncited 영역 구분이 필요합니다. 현재는 모든 소스가 동일하게 표시되어 사용자가 실제 인용된 소스를 파악하기 어렵습니다.',
     owner: 'CATCH',
     repo: '',
-    issueTypeName: 'Bug',
-    summary: '소셜 로그인 버그 수정',
+    issueTypeName: 'Story',
+    summary: 'RAG 답변 소스 cited/uncited 구분 표시',
     project_name: 'CatchUp',
-    issue_key: 'CATCH-101',
-    parent_key: 'CATCH-100',
-    parent_summary: '인증 시스템 개선',
+    issue_key: 'CAT-296',
+    parent_key: 'CAT-200',
+    parent_summary: 'Q1 RAG 기능 개선',
     status_id: 3,
-    assignee_name: '최QA',
+    assignee_name: '정성훈',
   },
 ];
 
-export const MOCK_RAG_ANSWER = `## 인증 흐름 설명
+/**
+ * RAG 답변 마크다운 예시 텍스트
+ * 소스 인용([1], [2], [3])과 마크다운 렌더링 테스트용
+ *
+ * 사용처:
+ * - MOCK_INITIAL_MESSAGES의 첫 번째 답변 content (mock-a1)
+ */
+export const MOCK_RAG_ANSWER = `## RAG 답변 생성 프로세스
 
-CatchUp 서비스의 인증 흐름은 다음과 같습니다:
+CatchUp의 RAG(Retrieval-Augmented Generation) 시스템은 다음과 같은 단계로 동작합니다:
 
-### 1. 로그인 요청
-사용자가 로그인 폼을 제출하면 **\`AuthController\`**[1]에서 요청을 처리합니다.
+### 1. 벡터 검색 (Retrieval)
+사용자 질문이 입력되면 **\`RagService\`**[1]에서 벡터 DB를 검색하여 관련 문서를 조회합니다.
 
-\`\`\`java
-@PostMapping("/login")
-public ResponseEntity<TokenDto> login(@RequestBody LoginRequest request) {
-    return authService.authenticate(request);
-}
+\`\`\`typescript
+const documents = await this.vectorStore.search(query, { limit: 10 });
 \`\`\`
 
-### 2. 토큰 발급
-인증 성공 시 JWT 토큰이 발급됩니다. 관련 PR[2]에서 토큰 갱신 로직이 개선되었습니다.
+### 2. 관련도 재평가 (Reranking)
+검색된 문서들을 Reranker 모델로 재평가하여 상위 5개를 선택합니다[1].
 
-### 3. 관련 이슈
-- 소셜 로그인 버그[3]가 최근 수정되었습니다
+### 3. 답변 생성 (Generation)
+선택된 문서를 컨텍스트로 LLM이 답변을 생성합니다. 이때 채팅 히스토리도 함께 참고하여 문맥을 유지합니다[1].
+
+### 4. UI 렌더링
+생성된 답변은 마크다운 형태로 표시되며, 인용된 소스는 cited 영역에 강조 표시됩니다[2][3].
 
 ### 참고사항
-- Access Token 유효기간: 30분
-- Refresh Token 유효기간: 7일
+- 벡터 검색 모델: OpenAI text-embedding-3-large
+- Reranker 모델: Cohere rerank-multilingual-v3.0
+- LLM: GPT-4 Turbo
 `;
 
-export const MOCK_RAG_RESPONSE = {
-  session_id: '',
-  answer: MOCK_RAG_ANSWER,
-  sources: MOCK_SOURCES,
-  chat_history_id: 'mock-chat-history-001',
-  has_feedback: false,
-};
-
-export const MOCK_RELATED_JIRA_ISSUES: ClientJiraIssueSource[] = [
+/**
+ * 관련 Jira 이슈 Mock 데이터 (MockSource[] 타입, 1개 항목)
+ * PR 선택 후 재질문 시나리오 테스트용
+ *
+ * 사용처:
+ * - 현재 미사용 (향후 PR 컨텍스트 기반 재질문 기능에서 활용 예정)
+ */
+export const MOCK_RELATED_JIRA_ISSUES: MockSource[] = [
   {
     index: 0,
     is_cited: true,
@@ -402,29 +398,5 @@ const handleGoogleLogin = () => {
     detailed_tasks: [],
     timestamp: '2026-02-12T09:02:05Z',
     has_feedback: false,
-  },
-];
-
-export const MOCK_PR_CANDIDATES = [
-  {
-    pr_number: 42,
-    title: 'feat: 로그인 페이지 리뉴얼',
-    repo_name: 'CatchUp-FE',
-    summary: '로그인 폼 UI 개선 및 에러 처리 강화',
-    owner: 'TeamCatchUp',
-  },
-  {
-    pr_number: 38,
-    title: 'fix: 토큰 갱신 버그 수정',
-    repo_name: 'CatchUp-BE',
-    summary: 'Refresh Token 만료 시 처리 로직 수정',
-    owner: 'TeamCatchUp',
-  },
-  {
-    pr_number: 55,
-    title: 'feat: OAuth 2.0 적용',
-    repo_name: 'CatchUp-BE',
-    summary: '구글, 깃허브 소셜 로그인 지원',
-    owner: 'TeamCatchUp',
   },
 ];
