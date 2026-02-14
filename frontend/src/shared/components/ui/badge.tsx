@@ -17,8 +17,8 @@ const badgeVariants = cva('inline-flex items-center rounded-full tracking-tight 
       red: 'bg-red-5 text-red-50',
     },
     size: {
-      md: 'px-3 py-1.5 text-body-xsmall',
-      sm: 'px-1.5 py-1.5 text-label-xsmall',
+      md: 'text-body-xsmall px-3 py-1.5',
+      sm: 'text-label-xsmall px-1.5 py-1.5',
     },
   },
   defaultVariants: {
