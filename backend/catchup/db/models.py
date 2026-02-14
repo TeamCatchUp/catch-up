@@ -930,7 +930,7 @@ class ChatHistory(Base):
     
     content: Mapped[str] = mapped_column(Text, nullable=True)
     sender_type: Mapped[SenderType] = mapped_column(String(20), nullable=False)
-    sources: Mapped[Optional[list[dict[str,Any]]]] = mapped_column(
+    sources: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
         JSONB,
         nullable=True,
         server_default=text("'[]'::jsonb")

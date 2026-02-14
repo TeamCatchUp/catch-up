@@ -1,11 +1,11 @@
 from datetime import datetime
 import uuid
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from catchup.db.models import SenderType, UserRole
-from catchup.rag.schemas.sources import SourceResponse
+from catchup.rag.schemas.sources import BaseSource, SourceResponse
 
 
 NODE_STATUS_MAP = {
@@ -98,5 +98,6 @@ class ChatHistoryResponse(BaseModel):
     sender_type: SenderType = Field(..., description="sender 유형 (user/assistant)")
     content: str = Field(..., description="메시지 내용")
     created_at: datetime = Field(..., description="메시지 생성 시각")
+    sources: Optional[list[BaseSource]] = Field(default_factory=list, description="출처 목록 (sender_type='assistant'인 경우에만 존재)")
 
     model_config = ConfigDict(from_attributes=True)
