@@ -67,5 +67,6 @@ def get_room_history(
         "page": page,
         "size": size,
         "items": items,
-        "title": room.title
+        "title": room.title,
+        "session_id": room.session_id
     }
