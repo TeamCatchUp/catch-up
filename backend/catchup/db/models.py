@@ -479,7 +479,6 @@ class JiraEntityType(StrEnum):
     EPIC = "epic"
     PROJECT = "project"
     SPRINT = "sprint"
-    COMPONENT = "component"
 
 
 class JiraSyncState(Base):
@@ -500,7 +499,7 @@ class JiraSyncState(Base):
     )
     entity_type: Mapped[JiraEntityType] = mapped_column(
         String(50), nullable=False,
-        comment="issue, epic, project, sprint, component"
+        comment="issue, epic, project, sprint"
     )
 
     # 동기화 상태

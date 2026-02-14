@@ -18,11 +18,10 @@ JiraApiClient, JiraFieldMapper, JiraTransformer, PGVectorRepository를 조합.
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from langchain_core.documents import Document
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.connectors.jira.client import (
@@ -35,8 +34,9 @@ from catchup.connectors.jira.transformers import JiraTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
-from catchup.db.models import JiraEntityType, JiraSyncState, JiraSyncStatus
+from catchup.db.models import JiraEntityType, JiraSyncStatus
 from catchup.db.jira import domain_repository as jira_entities
+from catchup.db.jira import sync_repository as jira_sync
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +123,37 @@ class JiraIngestionService:
                 "Call await service.initialize() first."
             )
 
+    async def sync_metadata(
+        self,
+        db: Session,
+        project_keys: list[str] | None = None,
+    ) -> dict[str, dict[str, int]]:
+        """
+        Jira App Installation 직후 메타데이터 동기화
+
+        Users + Projects(+ 선택적 Sprints)를 먼저 동기화하여
+        이후 Issue 동기화의 캐시 품질을 높임.
+        """
+        self._ensure_initialized()
+
+        results = {
+            "users": {"synced": 0, "errors": 0},
+            "projects": {"synced": 0, "errors": 0},
+            "sprints": {"synced": 0, "errors": 0},
+        }
+
+        user_results = await self._sync_all_users(db)
+        project_results = await self._sync_all_projects(db, project_keys)
+
+        results["users"] = user_results
+        results["projects"] = project_results
+
+        if await self.client.is_agile_available():
+            sprint_results = await self._sync_all_sprints(db)
+            results["sprints"] = sprint_results
+
+        return results
+
     # ================================================================
     # 전체 동기화 (Full Sync)
     # ================================================================
@@ -131,38 +162,18 @@ class JiraIngestionService:
         self,
         db: Session,
         project_keys: list[str] | None = None,
-        sync_issues: bool = True,
-        sync_projects: bool = True,
-        sync_sprints: bool = True,
     ) -> dict[str, Any]:
         """
         전체 동기화
 
-        지정된 프로젝트(또는 전체)의 모든 엔티티를 PGVector에 동기화.
-
-        Args:
-            db: SQLAlchemy Session (동기화 상태 저장용)
-            project_keys: 동기화할 프로젝트 키 목록 (None이면 전체 프로젝트)
-            sync_issues: 이슈/에픽 동기화 여부
-            sync_projects: 프로젝트 동기화 여부
-            sync_sprints: 스프린트 동기화 여부 (Agile API 필요)
-
-        Returns:
-            동기화 결과 통계
-            {
-                "issues": {"synced": 150, "errors": 2},
-                "epics": {"synced": 10, "errors": 0},
-                "projects": {"synced": 3, "errors": 0},
-                "sprints": {"synced": 12, "errors": 0},
-            }
+        툴 연동시 최초 1회 실행
+        Users -> Projects -> Sprints(Agile API 가능 시) -> Issues&Epics
         """
         self._ensure_initialized()
 
         logger.info(
-            f"Starting full sync for cloud_id={self.cloud_id}, "
-            f"projects={project_keys or 'all'}, "
-            f"sync_issues={sync_issues}, sync_projects={sync_projects}, "
-            f"sync_sprints={sync_sprints}"
+            f"[JIRA][FULL SYNC] Started for cloud_id = {self.cloud_id}"
+            f" projects={project_keys or 'all'}"
         )
 
         results = {
@@ -174,69 +185,73 @@ class JiraIngestionService:
         }
 
         try:
-            # 1. 사용자 동기화 (RDBMS)
-            # 사용자를 먼저 동기화하여 Issue에서 참조 가능
             user_results = await self._sync_all_users(db)
-            results["users"]["synced"] = user_results["synced"]
-            results["users"]["errors"] = user_results["errors"]
+            results["users"] = user_results
 
-            # 2. 프로젝트 동기화 (RDBMS + 선택적 PGVector)
-            if sync_projects:
-                project_results = await self._sync_all_projects(db, project_keys)
-                results["projects"]["synced"] = project_results["synced"]
-                results["projects"]["errors"] = project_results["errors"]
+            project_results = await self._sync_all_projects(db, project_keys)
+            results["projects"] = project_results
 
-                # 프로젝트 동기화 상태 업데이트
-                self._update_sync_state(
-                    db,
-                    JiraEntityType.PROJECT,
-                    JiraSyncStatus.SUCCESS,
-                    results["projects"]["synced"],
-                )
+            jira_sync.create_or_update_sync_state(
+                db,
+                cloud_id=self.cloud_id,
+                entity_type=JiraEntityType.PROJECT,
+                status = JiraSyncStatus.SUCCESS,
+                synced_count = results["projects"]["synced"]
+            )
 
-            # 3. 스프린트 동기화 (RDBMS + 선택적 PGVector, Agile API 필요)
-            # 스프린트를 먼저 동기화하여 Issue 동기화 시 캐시 활용
-            if sync_sprints and await self.client.is_agile_available():
+            if await self.client.is_agile_available():
                 sprint_results = await self._sync_all_sprints(db)
-                results["sprints"]["synced"] = sprint_results["synced"]
-                results["sprints"]["errors"] = sprint_results["errors"]
-
-                # 스프린트 동기화 상태 업데이트
-                self._update_sync_state(
+                results["sprints"] = sprint_results
+                jira_sync.create_or_update_sync_state(
                     db,
-                    JiraEntityType.SPRINT,
-                    JiraSyncStatus.SUCCESS,
-                    results["sprints"]["synced"],
+                    cloud_id = self.cloud_id,
+                    entity_type = JiraEntityType.SPRINT,
+                    status = JiraSyncStatus.SUCCESS,
+                    synced_count=results["sprints"]["synced"],
                 )
-            elif sync_sprints:
-                logger.info("Sprint sync skipped: Agile API not available")
+            else:
+                logger.info("[JIRA][FULL SYNC] Sprint Sync Skipped : Agile API Not Avaiable")
+            
+            issue_results = await self._sync_all_issues(db, project_keys)
+            results["issues"]["synced"] = issue_results["issues"]
+            results["epics"]["synced"] = issue_results["epics"]
+            results["issues"]["errors"] = issue_results["errors"]
 
-            # 4. 이슈 동기화 (Epic 포함, RDBMS 캐시 활용)
-            if sync_issues:
-                issue_results = await self._sync_all_issues(db, project_keys)
-                results["issues"]["synced"] = issue_results["issues"]
-                results["epics"]["synced"] = issue_results["epics"]
-                results["issues"]["errors"] = issue_results["errors"]
+            jira_sync.create_or_update_sync_state(
+                db = db,
+                cloud_id = self.cloud_id,
+                entity_type = JiraEntityType.ISSUE,
+                status = JiraSyncStatus.SUCCESS,
+                synced_count = results["issues"]["synced"],
+            )
+            jira_sync.create_or_update_sync_state(
+                db=db,
+                cloud_id=self.cloud_id,
+                entity_type=JiraEntityType.EPIC,
+                status=JiraSyncStatus.SUCCESS,
+                synced_count=results["epics"]["synced"],
+            )
 
-                # 이슈 동기화 상태 업데이트
-                self._update_sync_state(
-                    db,
-                    JiraEntityType.ISSUE,
-                    JiraSyncStatus.SUCCESS,
-                    results["issues"]["synced"] + results["epics"]["synced"],
-                )
-
-            logger.info(f"Full sync completed: {results}")
+            logger.info("[JIRA][FULL SYNC] Completed : {results}")
             return results
 
         except Exception as e:
-            logger.error(f"Full sync failed: {e}")
-            self._update_sync_state(
-                db,
-                JiraEntityType.ISSUE,
-                JiraSyncStatus.FAILED,
-                0,
-                str(e),
+            logger.error(f"[JIRA][FULL SYNC] Failed : {e}")
+            jira_sync.create_or_update_sync_state(
+                db=db,
+                cloud_id=self.cloud_id,
+                entity_type=JiraEntityType.ISSUE,
+                status=JiraSyncStatus.FAILED,
+                synced_count=0,
+                error=str(e)[:1000],
+            )
+            jira_sync.create_or_update_sync_state(
+                db=db,
+                cloud_id=self.cloud_id,
+                entity_type=JiraEntityType.EPIC,
+                status=JiraSyncStatus.FAILED,
+                synced_count=0,
+                error=str(e)[:1000],
             )
             raise
 
@@ -663,7 +678,7 @@ class JiraIngestionService:
 
         # 마지막 성공 동기화 시간 조회
         if since is None:
-            sync_state = self._get_sync_state(db, JiraEntityType.ISSUE)
+            sync_state = jira_sync.get_sync_state(db, self.cloud_id, JiraEntityType.ISSUE)
             if sync_state and sync_state.last_successful_sync_at:
                 since = sync_state.last_successful_sync_at
             else:
@@ -745,11 +760,19 @@ class JiraIngestionService:
                 await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
 
             # 성공 시 동기화 상태 업데이트
-            self._update_sync_state(
-                db,
-                JiraEntityType.ISSUE,
-                JiraSyncStatus.SUCCESS,
-                results["issues"] + results["epics"],
+            jira_sync.create_or_update_sync_state(
+                db=db,
+                cloud_id=self.cloud_id,
+                entity_type=JiraEntityType.ISSUE,
+                status=JiraSyncStatus.SUCCESS,
+                synced_count=results["issues"],
+            )
+            jira_sync.create_or_update_sync_state(
+                db=db,
+                cloud_id=self.cloud_id,
+                entity_type=JiraEntityType.EPIC,
+                status=JiraSyncStatus.SUCCESS,
+                synced_count=results["epics"],
             )
 
             logger.info(f"Incremental sync completed: {results}")
@@ -757,57 +780,20 @@ class JiraIngestionService:
 
         except Exception as e:
             logger.error(f"Incremental sync failed: {e}")
-            self._update_sync_state(
-                db,
-                JiraEntityType.ISSUE,
-                JiraSyncStatus.FAILED,
-                0,
-                str(e),
+            jira_sync.create_or_update_sync_state(
+                db=db,
+                cloud_id=self.cloud_id,
+                entity_type=JiraEntityType.ISSUE,
+                status=JiraSyncStatus.FAILED,
+                synced_count=0,
+                error=str(e)[:1000],
+            )
+            jira_sync.create_or_update_sync_state(
+                db=db,
+                cloud_id=self.cloud_id,
+                entity_type=JiraEntityType.EPIC,
+                status=JiraSyncStatus.FAILED,
+                synced_count=0,
+                error=str(e)[:1000],
             )
             raise
-
-    # ================================================================
-    # 동기화 상태 관리
-    # ================================================================
-
-    def _get_sync_state(
-        self,
-        db: Session,
-        entity_type: JiraEntityType,
-    ) -> JiraSyncState | None:
-        """동기화 상태 조회 (동기 메서드)"""
-        stmt = select(JiraSyncState).where(
-            JiraSyncState.cloud_id == self.cloud_id,
-            JiraSyncState.entity_type == entity_type,
-        )
-        result = db.execute(stmt)
-        return result.scalar_one_or_none()
-
-    def _update_sync_state(
-        self,
-        db: Session,
-        entity_type: JiraEntityType,
-        status: JiraSyncStatus,
-        synced_count: int,
-        error_message: str | None = None,
-    ) -> None:
-        """동기화 상태 업데이트 (동기 메서드)"""
-        sync_state = self._get_sync_state(db, entity_type)
-
-        now = datetime.now(timezone.utc)
-
-        if sync_state is None:
-            sync_state = JiraSyncState(
-                cloud_id=self.cloud_id,
-                entity_type=entity_type,
-            )
-            db.add(sync_state)
-
-        sync_state.last_sync_status = status
-        sync_state.synced_entities = synced_count
-        sync_state.last_sync_error = error_message
-
-        if status == JiraSyncStatus.SUCCESS:
-            sync_state.last_successful_sync_at = now
-
-        db.commit()

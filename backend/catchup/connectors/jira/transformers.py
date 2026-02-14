@@ -26,14 +26,11 @@ from catchup.connectors.jira.field_mapper import JiraFieldMapper
 from catchup.connectors.jira.schemas import (
     JiraAttachment,
     JiraComment,
-    JiraComponent,
     JiraEpic,
     JiraInlineAttachment,
     JiraIssue,
     JiraLinkedIssue,
     JiraMention,
-    JiraProject,
-    JiraSprint,
     JiraSprintInfo,
     JiraUser,
 )
@@ -503,140 +500,6 @@ class JiraTransformer:
         lines.append(f"- Target Version: {', '.join(issue.fix_versions) or 'None'}")
 
         return "\n".join(lines)
-
-    # ================================================================
-    # Project 변환
-    # ================================================================
-
-    def transform_project(
-        self,
-        project_data: dict[str, Any],
-        site_url: str,
-    ) -> Document:
-        """Jira Project → LangChain Document"""
-
-        key = project_data.get("key", "")
-        project_id = project_data.get("id", "")
-        name = project_data.get("name", "")
-        url = f"{site_url}/projects/{key}"
-
-        description = project_data.get("description", "")
-        project_type = project_data.get("projectTypeKey", "")
-
-        lead = self._parse_user(project_data.get("lead"))
-
-        components = [c.get("name") for c in project_data.get("components", []) if c.get("name")]
-        versions = [v.get("name") for v in project_data.get("versions", []) if v.get("name")]
-
-        # semantic_content: 임베딩용 (의미 중심)
-        semantic_parts = []
-        if name:
-            semantic_parts.append(name)
-        if description:
-            semantic_parts.append(description)
-        semantic_content = "\n\n".join(semantic_parts)
-
-        # contextual_content: LLM 답변 생성용 (기존 포맷)
-        contextual_lines = [
-            f"Project: {name} [{key}]",
-            "",
-            f"Description:",
-            description or "No description",
-            "",
-            f"Project Lead: {lead.display_name if lead else 'Unknown'}",
-            f"Project Type: {project_type}",
-            "",
-            f"Components: {', '.join(components) or 'None'}",
-            f"Versions: {', '.join(versions) or 'None'}",
-        ]
-        contextual_content = "\n".join(contextual_lines)
-
-        metadata = {
-            "source": "jira",
-            "entity_type": "project",
-            "project_key": key,
-            "project_id": project_id,
-            "project_name": name,
-            "url": url,
-            "project_type": project_type,
-            "project_lead": lead.display_name if lead else None,
-            "components": components,
-            "versions": versions,
-
-            # LLM 답변 생성용 (기존 포맷)
-            "contextual_content": contextual_content,
-
-            "synced_at": datetime.utcnow().isoformat(),
-        }
-
-        return Document(
-            page_content=semantic_content,
-            metadata=metadata,
-            id=f"jira:project:{key}",
-        )
-
-    # ================================================================
-    # Sprint 변환
-    # ================================================================
-
-    def transform_sprint(
-        self,
-        sprint_data: dict[str, Any],
-        project_key: str | None = None,
-    ) -> Document:
-        """Jira Sprint (Agile API) → LangChain Document"""
-
-        sprint_id = sprint_data.get("id")
-        name = sprint_data.get("name", "")
-        state = sprint_data.get("state", "")
-        goal = sprint_data.get("goal", "")
-
-        start_date = sprint_data.get("startDate")
-        end_date = sprint_data.get("endDate")
-        complete_date = sprint_data.get("completeDate")
-
-        # semantic_content: 임베딩용 (의미 중심)
-        semantic_parts = []
-        if name:
-            semantic_parts.append(name)
-        if goal:
-            semantic_parts.append(goal)
-        semantic_content = "\n\n".join(semantic_parts)
-
-        # contextual_content: LLM 답변 생성용 (기존 포맷)
-        contextual_lines = [
-            f"Sprint: {name} (ID: {sprint_id})",
-            "",
-            f"Status: {state}",
-            f"Start: {start_date or 'Not started'} | End: {end_date or 'Not set'}",
-        ]
-        if goal:
-            contextual_lines.extend(["", f"Goal: {goal}"])
-        contextual_content = "\n".join(contextual_lines)
-
-        metadata = {
-            "source": "jira",
-            "entity_type": "sprint",
-            "sprint_id": sprint_id,
-            "sprint_name": name,
-            "sprint_state": state,
-            "sprint_goal": goal,
-            "project_key": project_key,
-            "start_date": start_date,
-            "end_date": end_date,
-            "complete_date": complete_date,
-
-            # LLM 답변 생성용 (기존 포맷)
-            "contextual_content": contextual_content,
-
-            "synced_at": datetime.utcnow().isoformat(),
-        }
-
-        return Document(
-            page_content=semantic_content,
-            metadata=metadata,
-            id=f"jira:sprint:{sprint_id}",
-        )
 
     # ================================================================
     # 헬퍼 메서드
