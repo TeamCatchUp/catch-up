@@ -1,5 +1,6 @@
 import logging
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableWithMessageHistory
 from sqlalchemy.orm import Session
 from catchup.chat.exceptions import FeedbackImmutableError, LikedWithNegativeFeedbackError
 from catchup.chat.schemas import FeedbackRequest
@@ -41,8 +42,6 @@ def process_answer_feedback(
     if body.is_liked is True:
         if body.reasons or body.comment:
             raise LikedWithNegativeFeedbackError("긍정 피드백에 부정 피드백 사유를 포함할 수 없습니다.")
-        
-    body.reasons = []  # JSONB 안정성 확보
 
     return update_message_feedback(
         db=db,
@@ -51,4 +50,3 @@ def process_answer_feedback(
         reasons=body.reasons,
         comment=body.comment
     )
-    
