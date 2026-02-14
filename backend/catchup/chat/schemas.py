@@ -101,3 +101,12 @@ class ChatHistoryResponse(BaseModel):
     sources: Optional[list[BaseSource]] = Field(default_factory=list, description="출처 목록 (sender_type='assistant'인 경우에만 존재)")
 
     model_config = ConfigDict(from_attributes=True)
+    
+# 사용자 쿼리 목록
+class UserQueryResponse(BaseModel):
+    id: int = Field(..., description="메시지 고유 ID")
+    session_id: uuid.UUID = Field(..., description="사용자 쿼리가 속한 채팅방 세션 ID")
+    content: str = Field(..., description="메시지 내용")
+    created_at: datetime = Field(..., description="메시지 생성 시각")
+
+    model_config = ConfigDict(from_attributes=True)

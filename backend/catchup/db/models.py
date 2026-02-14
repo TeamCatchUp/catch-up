@@ -953,3 +953,6 @@ class ChatHistory(Base):
     
     chat_room: Mapped["ChatRoom"] = relationship(back_populates="chat_histories")
     
+    @property
+    def session_id(self) -> uuid.UUID:
+        return self.chat_room.session_id
