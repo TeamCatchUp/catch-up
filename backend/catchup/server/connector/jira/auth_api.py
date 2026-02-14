@@ -14,6 +14,7 @@ from httpx import HTTPStatusError, RequestError
 from sqlalchemy.orm import Session
 
 from catchup.connectors.jira.auth import get_jira_oauth_service, JiraOAuthService
+from catchup.connectors.jira.dynamic_webhook_service import get_jira_dynamic_webhook_service
 from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.connectors.jira.schemas import JiraInstallationStatus
 from catchup.configs.config import auth_settings
@@ -97,6 +98,7 @@ async def jira_oauth_callback(
             scopes=tokens.scope,
         )
         background_tasks.add_task(_sync_jira_metadata, resource.id)
+        background_tasks.add_task(_ensure_jira_dynamic_webhook, resource.id)
 
     logger.info(f"Jira 설치 완료: {len(resources)}개 사이트 연결")
 
@@ -155,6 +157,28 @@ async def _sync_jira_metadata(cloud_id: str) -> None:
     except Exception as e:
         logger.error(
             f"[JIRA][AUTH] Background metadata sync failed: cloud_id={cloud_id}, error={e}"
+        )
+    finally:
+        db.close()
+
+
+async def _ensure_jira_dynamic_webhook(cloud_id: str) -> None:
+    """
+    OAuth 설치 직후 Dynamic Webhook 등록 보장 (BackgroundTask)
+    """
+    logger.info(f"[JIRA][AUTH] Ensuring dynamic webhook: cloud_id={cloud_id}")
+
+    db = SessionLocal()
+    try:
+        dynamic_webhook_service = get_jira_dynamic_webhook_service()
+        result = await dynamic_webhook_service.ensure_registered(db=db, cloud_id=cloud_id)
+        logger.info(
+            f"[JIRA][AUTH] Dynamic webhook ensured: cloud_id={cloud_id}, result={result}"
+        )
+    except Exception as e:
+        logger.error(
+            f"[JIRA][AUTH] Dynamic webhook ensure failed: cloud_id={cloud_id}, error={e}",
+            exc_info=True,
         )
     finally:
         db.close()

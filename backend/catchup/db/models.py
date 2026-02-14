@@ -4,7 +4,7 @@ from enum import IntEnum, StrEnum
 from typing import Any, Optional
 
 from click import Option
-from sqlalchemy import ForeignKey, func, text
+from sqlalchemy import ForeignKey, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -397,6 +397,43 @@ class JiraOAuthToken(Base):
         nullable=False, 
         server_default=func.now(),
         onupdate=func.now()
+    )
+
+
+class JiraWebhookSubscription(Base):
+    """
+    Jira Dynamic Webhook 등록 상태 저장
+
+    cloud_id 단위로 등록된 webhook ID와 만료 시각을 관리한다.
+    """
+    __tablename__ = "jira_webhook_subscriptions"
+    __table_args__ = (
+        UniqueConstraint(
+            "cloud_id",
+            "webhook_id",
+            name="uq_jira_webhook_subscriptions_cloud_webhook",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    cloud_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    webhook_id: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    callback_url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    jql_filter: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    events_csv: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
 

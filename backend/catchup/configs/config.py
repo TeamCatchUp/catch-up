@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     JIRA_CLIENT_ID: str
     JIRA_CLIENT_SECRET: str
     JIRA_REDIRECT_URI: str
+    JIRA_WEBHOOK_CALLBACK_BASE_URL: str
+    JIRA_WEBHOOK_REFRESH_INTERVAL_HOURS: int = 6
+    JIRA_WEBHOOK_REFRESH_THRESHOLD_HOURS: int = 24
+    JIRA_WEBHOOK_JWT_LEEWAY_SECONDS: int = 30
     JIRA_SCOPES: str = "read:me read:jira-work read:jira-user manage:jira-webhook read:account offline_access"
 
     ATLASSIAN_AUTH_URL: str = "https://auth.atlassian.com/authorize"

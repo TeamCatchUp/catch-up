@@ -79,8 +79,6 @@ class WebhookVerifierProvider:
     def verify_jira(
         authorization: Optional[str],
         client_secret: str,
-        jwt_audience: Optional[str] = None,
-        jwt_issuer: Optional[str] = None,
         jwt_leeway_seconds: int = 30,
     ) -> VerifyResult:
         if not authorization or not authorization.startswith("Bearer "):
@@ -90,21 +88,14 @@ class WebhookVerifierProvider:
         if not token:
             return VerifyResult(ok=False, reason="empty_bearer_token")
 
-        options = {"verify_aud": bool(jwt_audience), "require": ["exp"]}
-        decode_kwargs = {
-            "jwt": token,
-            "key": client_secret,
-            "algorithms": ["HS256"],
-            "options": options,
-            "leeway": jwt_leeway_seconds,
-        }
-        if jwt_audience:
-            decode_kwargs["audience"] = jwt_audience
-        if jwt_issuer:
-            decode_kwargs["issuer"] = jwt_issuer
-
         try:
-            jwt.decode(**decode_kwargs)
+            jwt.decode(
+                jwt=token,
+                key=client_secret,
+                algorithms=["HS256"],
+                options={"verify_aud": False, "require": ["exp"]},
+                leeway=jwt_leeway_seconds,
+            )
         except InvalidTokenError as exc:
             return VerifyResult(
                 ok=False,
