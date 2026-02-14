@@ -1,5 +1,3 @@
-import hashlib
-import hmac
 import logging
 from typing import Optional
 
@@ -20,6 +18,7 @@ from catchup.db.github import installation_repository as installation_crud
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.domain_repository import RepositoryUpsertData
 from catchup.db.models import GithubInstallationType, GithubRepositorySelection
+from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +44,15 @@ async def handle_github_webhook(
     """
     payload_body = await request.body()
 
-    if not _verify_webhook_signature(
-        payload_body,
-        x_hub_signature_256,
-        settings.GITHUB_APP_WEBHOOK_SECRET
-    ):
-        logger.warning("Invalid Webhook Signature Recieved")
+    verify_result = WebhookVerifierProvider.verify_github(
+        payload_body=payload_body,
+        signature_header=x_hub_signature_256,
+        secret=settings.GITHUB_APP_WEBHOOK_SECRET,
+    )
+    if not verify_result.ok:
+        logger.warning(
+            f"[WEBHOOK][GITHUB][VERIFY] Failed: reason={verify_result.reason}"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Webhook Signature"
@@ -150,31 +152,6 @@ async def github_app_install_callback(
         )
 
     return RedirectResponse(url=redirect_url)
-
-
-# =============================================================================
-# Utility Functions
-# =============================================================================
-
-def _verify_webhook_signature(
-    payload_body: bytes,
-    signature_header: Optional[str],
-    secret: str,
-) -> bool:
-    """
-    Github Webhook Signature 검증
-    - X-Hub-Signature-256 헤더와 payload를 HMAC SHA256으로 비교
-    """
-    if not signature_header:
-        return False
-
-    expected_signature = "sha256=" + hmac.new(
-        secret.encode("utf-8"),
-        payload_body,
-        hashlib.sha256
-    ).hexdigest()
-
-    return hmac.compare_digest(expected_signature, signature_header)
 
 
 async def _sync_installation_metadata(installation_id: int) -> None:
