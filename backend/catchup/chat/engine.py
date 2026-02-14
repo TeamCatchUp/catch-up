@@ -250,7 +250,10 @@ class ChatService:
             그래프 종료 시점.
             인용 사유를 포함한 최종 소스를 업데이트한다.
         """
-        if event["name"] != "generate_final_answer":
+        
+        target_nodes = ("chitchat", "generate_final_answer")
+        
+        if event["name"] not in target_nodes:
             return
         
         output = event["data"].get("output")
@@ -264,7 +267,7 @@ class ChatService:
         final_content = last_msg.content if last_msg and hasattr(last_msg, "content") else str(last_msg)
         
         final_sources_data = [
-            source.model_dump() if hasattr(source, "model_dump") else source
+            source.model_dump(mode='json') if hasattr(source, "model_dump") else source
             for source in sources
         ]
         
