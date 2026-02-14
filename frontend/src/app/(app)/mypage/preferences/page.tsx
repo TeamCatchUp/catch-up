@@ -28,12 +28,10 @@ export default function PreferencesPage() {
   const [customPrompt, setCustomPrompt] = useState('');
 
   return (
-    <section className="mx-16 mb-25 mt-6 rounded-xl border border-neutral-3 bg-white p-6">
+    <section className="border-neutral-3 mx-16 mt-6 mb-25 rounded-xl border bg-white p-6">
       <div className="mb-6">
         <h1 className="text-heading-large text-gray-80">개인 맞춤 설정</h1>
-        <p className="text-body-small mt-2 text-gray-60">
-          답변 스타일과 프롬프트 지침을 개인 설정으로 저장합니다.
-        </p>
+        <p className="text-body-small text-gray-60 mt-2">답변 스타일과 프롬프트 지침을 개인 설정으로 저장합니다.</p>
       </div>
 
       <div className="flex flex-col gap-6">
@@ -47,9 +45,7 @@ export default function PreferencesPage() {
                 onClick={() => setTone(option)}
                 className={cn(
                   'text-body-small rounded-md border px-3 py-2',
-                  tone === option
-                    ? 'border-blue-40 bg-blue-1 text-blue-60'
-                    : 'border-neutral-3 bg-white text-gray-70',
+                  tone === option ? 'border-blue-40 bg-blue-1 text-blue-60' : 'border-neutral-3 text-gray-70 bg-white',
                 )}
               >
                 {option}
@@ -70,7 +66,7 @@ export default function PreferencesPage() {
                   'text-body-small rounded-md border px-3 py-2',
                   emojiLevel === option
                     ? 'border-blue-40 bg-blue-1 text-blue-60'
-                    : 'border-neutral-3 bg-white text-gray-70',
+                    : 'border-neutral-3 text-gray-70 bg-white',
                 )}
               >
                 {option}
@@ -83,9 +79,7 @@ export default function PreferencesPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-heading-small text-gray-80">커스텀 프롬프트 지침</div>
-              <div className="text-body-xsmall mt-1 text-gray-60">
-                응답에 반드시 반영할 개인 지침을 설정합니다.
-              </div>
+              <div className="text-body-xsmall text-gray-60 mt-1">응답에 반드시 반영할 개인 지침을 설정합니다.</div>
             </div>
             <Switch checked={useCustomPrompt} onCheckedChange={setUseCustomPrompt} />
           </div>
@@ -95,7 +89,7 @@ export default function PreferencesPage() {
             onChange={(e) => setCustomPrompt(e.target.value)}
             disabled={!useCustomPrompt}
             placeholder="예: 답변은 짧고 명확하게, 마지막에 체크리스트 형태로 정리"
-            className="border-neutral-3 text-body-small mt-3 h-32 w-full resize-none rounded-md border bg-white px-3 py-2 text-gray-80 disabled:bg-neutral-2"
+            className="border-neutral-3 text-body-small text-gray-80 disabled:bg-neutral-2 mt-3 h-32 w-full resize-none rounded-md border bg-white px-3 py-2"
           />
         </div>
       </div>
