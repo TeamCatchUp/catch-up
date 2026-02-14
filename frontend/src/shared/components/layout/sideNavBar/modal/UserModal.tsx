@@ -24,6 +24,10 @@ interface UserMenuContentProps {
   userEmail?: string;
 }
 
+/**
+ * 사용자 드롭다운 메뉴 내용을 렌더링
+ * 로그아웃, 개인 설정 이동 등 계정 액션을 제공
+ */
 export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -55,7 +59,7 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
       </DropdownMenuLabel>
 
       {/* 메뉴 */}
-      <DropdownMenuItem onSelect={() => router.push('/mypage/settings')}>
+      <DropdownMenuItem onSelect={() => router.push('/mypage/preferences')}>
         <Person className="text-gray-70 h-6 w-6" />
         <span>개인 맞춤 설정</span>
       </DropdownMenuItem>

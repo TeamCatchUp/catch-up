@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import {
   DropdownMenuContent,
@@ -19,6 +20,9 @@ import GithubLogo from '/public/icons/logo/GitHub.svg';
 import JiraLogo from '/public/icons/logo/Jira.svg';
 import SlackLogo from '/public/icons/logo/Slack.svg';
 
+/**
+ * 연동 가능한 외부 서비스 목록
+ */
 const linkServices = [
   { key: 'Jira', label: 'Jira', Icon: JiraLogo },
   { key: 'Confluence', label: 'Confluence', Icon: ConfluenceLogo },
@@ -28,7 +32,11 @@ const linkServices = [
 
 type LinkService = (typeof linkServices)[number]['key'];
 
+/**
+ * 상단 More 버튼 드롭다운 메뉴를 렌더링
+ */
 export function MoreButtonContent() {
+  const router = useRouter();
   const [linked, setLinked] = useState<Record<LinkService, boolean>>({
     Jira: true,
     Confluence: true,
@@ -36,7 +44,7 @@ export function MoreButtonContent() {
     Slack: false,
   });
 
-  const linkedList = linkServices.filter((s) => linked[s.key]);
+  const linkedList = linkServices.filter((service) => linked[service.key]);
 
   return (
     <DropdownMenuContent
@@ -45,7 +53,7 @@ export function MoreButtonContent() {
       className="flex w-[250px] flex-col gap-1 rounded-xl"
       onCloseAutoFocus={(e) => e.preventDefault()}
     >
-      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+      <DropdownMenuItem onSelect={() => router.push('/mypage/help')}>
         <Error className="h-6 w-6 shrink-0 text-gray-50" />
         <span>도움말</span>
       </DropdownMenuItem>
@@ -63,7 +71,7 @@ export function MoreButtonContent() {
           </div>
           <div className="text-body-xsmall flex items-center text-gray-50">
             {linkedList.length > 0 && (
-              <span className="max-w-19.5 truncate">{linkedList.map((s) => s.label).join(', ')}</span>
+              <span className="max-w-19.5 truncate">{linkedList.map((service) => service.label).join(', ')}</span>
             )}
             <ArrowRight className="text-gray-30 h-6 w-6" />
           </div>
