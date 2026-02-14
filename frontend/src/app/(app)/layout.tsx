@@ -23,11 +23,19 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
   const { activePanel, isSidebarOpen, setActivePanel } = useSidebarStore();
   const isSettingsRoute = pathname.startsWith('/mypage') || pathname.startsWith('/admin');
 
+  // mypage/admin 경로 진입 시 설정 패널을 기본 패널로 유지
   useEffect(() => {
     if (isSettingsRoute) {
       setActivePanel('settings');
     }
-  }, [isSettingsRoute, setActivePanel]);
+  }, [isSettingsRoute, pathname, setActivePanel]);
+
+  // mypage/admin 경로에서 패널이 닫히면(null) 설정 패널 자동 열림 (수신함이 여기에 해당)
+  useEffect(() => {
+    if (isSettingsRoute && activePanel === null) {
+      setActivePanel('settings');
+    }
+  }, [isSettingsRoute, activePanel, setActivePanel]);
 
   if (isLoading) {
     return (
