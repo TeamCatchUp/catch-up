@@ -13,10 +13,17 @@ from catchup.rag.dependencies import get_rag_global_context
 
 logger = logging.getLogger()
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter(
+    prefix="/api/v1/chat",
+    tags=["RAG Chat Service"]
+)
 
 
-@router.post("/chat")
+@router.post(
+    path="",
+    description="일반 채팅 (스트리밍 지원 X)",
+    deprecated=True
+)
 async def chat_response(
     request: ChatRequest, service: ChatService = Depends(get_chat_service)
 ) -> ChatResponse:
@@ -27,7 +34,10 @@ async def chat_response(
     )
 
 
-@router.post("/chat/stream")
+@router.post(
+    path="/stream",
+    description="스트리밍 기반 채팅"
+)
 async def chat_response_stream(
     request: ChatRequest,
     db: Session = Depends(get_db),
@@ -56,7 +66,7 @@ async def chat_response_stream(
 #             session_id=request.session_id,
 #             resume_data=request.user_selected_pull_requests,
 #         ):
-#             # ⭐ 위와 동일하게 깔끔하게 전송
+#             # 위와 동일하게 깔끔하게 전송
 #             yield f"data: {chunk.model_dump_json(ensure_ascii=False)}\n\n"
 
 #     return StreamingResponse(event_generator(), media_type="text/event-stream")
