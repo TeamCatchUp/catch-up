@@ -189,6 +189,9 @@ class JiraOAuthService:
 
         Raises:
             HTTPException(401): refresh_token 만료 시 (재인증 필요)
+
+        TODO:
+            scheduler에서 주기적으로 Refresh 필요.
         """
         buffer_time = timedelta(minutes=5)
         if jira_token.expires_at <= datetime.now(timezone.utc) + buffer_time:

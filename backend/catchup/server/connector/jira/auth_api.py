@@ -8,15 +8,17 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from httpx import HTTPStatusError, RequestError
 from sqlalchemy.orm import Session
 
 from catchup.connectors.jira.auth import get_jira_oauth_service, JiraOAuthService
+from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.connectors.jira.schemas import JiraInstallationStatus
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
+from catchup.db.engine import SessionLocal
 from catchup.db.jira import oauth_repository as jira_crud
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
 
@@ -50,6 +52,7 @@ async def jira_oauth_callback(
     state: str | None = None,
     db: Session = Depends(get_db),
     jira_service: JiraOAuthService = Depends(get_jira_oauth_service),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     """
     Jira OAuth 콜백 처리
@@ -93,6 +96,7 @@ async def jira_oauth_callback(
             expires_at=expires_at,
             scopes=tokens.scope,
         )
+        background_tasks.add_task(_sync_jira_metadata, resource.id)
 
     logger.info(f"Jira 설치 완료: {len(resources)}개 사이트 연결")
 
@@ -134,3 +138,23 @@ async def jira_uninstall(
     if deleted:
         return {"status": "success", "message": "Jira 연결이 해제되었습니다."}
     return {"status": "not_found", "message": "해당 Jira 연결을 찾을 수 없습니다."}
+
+
+async def _sync_jira_metadata(cloud_id: str) -> None:
+    """OAuth 설치 직후 메타데이터 동기화 (BackgroundTask)"""
+    logger.info(f"[JIRA][AUTH] Starting background metadata sync: cloud_id={cloud_id}")
+
+    db = SessionLocal()
+    try:
+        service = await create_jira_ingestion_service(db, cloud_id)
+        results = await service.sync_metadata(db)
+        logger.info(
+            f"[JIRA][AUTH] Background metadata sync completed: "
+            f"cloud_id={cloud_id}, results={results}"
+        )
+    except Exception as e:
+        logger.error(
+            f"[JIRA][AUTH] Background metadata sync failed: cloud_id={cloud_id}, error={e}"
+        )
+    finally:
+        db.close()

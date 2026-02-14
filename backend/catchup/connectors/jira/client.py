@@ -210,6 +210,7 @@ class JiraApiClient:
         method: str,
         url: str,
         params: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | None = None,
         max_retries: int = 3,
     ) -> dict[str, Any]:
         """
@@ -217,6 +218,7 @@ class JiraApiClient:
             method: HTTP 메서드 (GET, POST, PUT, DELETE)
             url: 전체 요청 URL
             params: 쿼리 파라미터 딕셔너리
+            json_body: JSON 요청 본문
             max_retries: 최대 재시도 횟수 (기본: 3)
                          429, 5xx, 타임아웃 시 재시도
 
@@ -243,7 +245,9 @@ class JiraApiClient:
                     async with httpx.AsyncClient(
                         headers=self._get_headers(), timeout=30.0
                     ) as client:
-                        response = await client.request(method, url, params=params)
+                        response = await client.request(
+                            method, url, params=params, json=json_body
+                        )
 
                         # Rate limit 초과 (429 Too Many Requests)
                         # Retry-After 헤더 값만큼 대기 후 재시도
@@ -290,73 +294,6 @@ class JiraApiClient:
                     raise JiraApiError("Request timeout after retries")
 
         # 이 코드에 도달하면 안 됨 (위에서 항상 return 또는 raise)
-        raise JiraApiError("Max retries exceeded")
-
-    async def _request_post(
-        self,
-        url: str,
-        body: dict[str, Any],
-        max_retries: int = 3,
-    ) -> dict[str, Any]:
-        """
-        POST 요청 실행 (JSON body 포함)
-
-        Args:
-            url: 전체 요청 URL
-            body: JSON 요청 본문
-            max_retries: 최대 재시도 횟수
-
-        Returns:
-            JSON 파싱된 응답 데이터
-
-        Raises:
-            JiraRateLimitError: 429 응답 후 재시도 횟수 초과
-            JiraAuthError: 401 응답 (토큰 만료/무효)
-            JiraApiError: 기타 4xx/5xx 에러 또는 타임아웃
-        """
-        async with self._semaphore:
-            for attempt in range(max_retries):
-                try:
-                    async with httpx.AsyncClient(
-                        headers=self._get_headers(), timeout=30.0
-                    ) as client:
-                        response = await client.post(url, json=body)
-
-                        if response.status_code == 429:
-                            retry_after = int(
-                                response.headers.get("Retry-After", 60)
-                            )
-                            if attempt < max_retries - 1:
-                                logger.warning(
-                                    f"Rate limited. Waiting {retry_after}s before retry..."
-                                )
-                                await asyncio.sleep(retry_after)
-                                continue
-                            raise JiraRateLimitError(retry_after)
-
-                        if response.status_code == 401:
-                            raise JiraAuthError()
-
-                        if response.status_code >= 400:
-                            raise JiraApiError(
-                                f"API error: {response.text}",
-                                response.status_code,
-                            )
-
-                        await asyncio.sleep(self._rate_limit_delay)
-                        return response.json()
-
-                except httpx.TimeoutException:
-                    if attempt < max_retries - 1:
-                        wait_time = 2 ** attempt
-                        logger.warning(
-                            f"Request timeout. Retrying in {wait_time}s... "
-                            f"({attempt + 1}/{max_retries})"
-                        )
-                        await asyncio.sleep(wait_time)
-                        continue
-                    raise JiraApiError("Request timeout after retries")
-
         raise JiraApiError("Max retries exceeded")
 
     # ============================================================
@@ -429,7 +366,11 @@ class JiraApiClient:
             body["nextPageToken"] = next_page_token
 
         logger.debug(f"Search issues request: URL={self.base_url}/search/jql, body={body}")
-        return await self._request_post(f"{self.base_url}/search/jql", body=body)
+        return await self._request(
+            "POST",
+            f"{self.base_url}/search/jql",
+            json_body=body,
+        )
 
     async def get_issue(
         self,

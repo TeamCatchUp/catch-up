@@ -171,10 +171,6 @@ async def flush_jira_events():
                     f"{len(projects_with_events)} projects affected"
                 )
 
-                # NOTE: Jira factory 함수가 아직 구현되지 않았으므로 주석 처리
-                # 구현 후 아래 주석을 해제하세요
-                # from catchup.connectors.jira.factory import create_jira_ingestion_service
-                # service = await create_jira_ingestion_service(db, cloud_id)
 
                 # Clear buffer for each project
                 for project_key in projects_with_events:
@@ -189,7 +185,6 @@ async def flush_jira_events():
                             exc_info=True
                         )
 
-                # TODO: Jira factory 구현 후 활성화
                 # try:
                 #     result = await service.incremental_sync(db)
                 #     logger.info(f"Jira incremental sync result for cloud {cloud_id}: {result}")
@@ -198,7 +193,7 @@ async def flush_jira_events():
 
                 logger.warning(
                     f"Jira incremental sync skipped for cloud {cloud_id}: "
-                    "Factory function not yet implemented"
+                    "Incremental sync path is disabled"
                 )
 
             except Exception as e:
@@ -225,6 +220,9 @@ def init_scheduler():
     _scheduler = AsyncIOScheduler()
 
     interval_hours = settings.WEBHOOK_FLUSH_INTERVAL_HOURS
+
+    # TODO:
+    # Jira token lifecycle 보장을 위해 별도 주기 작업 추가 필요
 
     _scheduler.add_job(
         flush_github_events,
