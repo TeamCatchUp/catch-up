@@ -19,15 +19,8 @@ def create_new_user(
     new_user = User(**user_create.model_dump())
 
     db.add(new_user)
-
-    try:
-        db.commit()
-        db.refresh(new_user)
-        return new_user
-
-    except Exception:
-        db.rollback()
-        raise
+    
+    return new_user
 
 
 def update_user_refresh_token(
@@ -36,8 +29,8 @@ def update_user_refresh_token(
     refresh_token: str | None
 ):
     stmt = update(User).where(User.id == user_id).values(refresh_token=refresh_token)
+    
     db.execute(stmt)
-    db.commit()
 
 
 def get_user_with_full_context(

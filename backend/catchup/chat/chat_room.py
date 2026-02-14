@@ -43,10 +43,14 @@ def process_answer_feedback(
         if body.reasons or body.comment:
             raise LikedWithNegativeFeedbackError("긍정 피드백에 부정 피드백 사유를 포함할 수 없습니다.")
 
-    return update_message_feedback(
+    message = update_message_feedback(
         db=db,
         message=message,
         is_liked=body.is_liked,
         reasons=body.reasons,
         comment=body.comment
     )
+    db.commit()
+    db.refresh(message)
+    
+    return message

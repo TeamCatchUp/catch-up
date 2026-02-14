@@ -71,8 +71,6 @@ def create_chat_room(
         title=title
     )
     db.add(room)
-    db.commit()
-    db.refresh(room)
     
     return room
 
@@ -92,7 +90,7 @@ def add_message(
         sources=sources or []
     )
     db.add(message)
-    db.commit()
+    
     return message
 
 
@@ -228,7 +226,5 @@ def update_message_feedback(
         message.feedback_comment = comment
     
     db.add(message)
-    db.commit()
-    db.refresh(message)
     
     return message

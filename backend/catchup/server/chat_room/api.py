@@ -2,6 +2,7 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import get_current_user
@@ -151,7 +152,8 @@ async def update_answer_feedback(
     message: ChatHistory = Depends(get_valid_message),
 ):
     try:
-        updated_message = process_answer_feedback(
+        updated_message = await run_in_threadpool(
+            process_answer_feedback,
             db=db,
             message=message,
             body=body
