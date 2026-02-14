@@ -16,10 +16,17 @@ from catchup.server.schemas import BasePagination, calculate_skip
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/rooms")
+router = APIRouter(
+    prefix="/api/v1/rooms",
+    tags=["Chat Rooms"]   
+)
 
 
-@router.get("", response_model=BasePagination[ChatRoomResponse])
+@router.get(
+    path="",
+    response_model=BasePagination[ChatRoomResponse],
+    description="채팅방 목록 조회"
+)
 def get_rooms(
     page: int = Query(1, ge=1, description="페이지 번호 (1부터 시작)"),
     size: int = Query(20, ge=1, le=100, description="페이지 크기"),
@@ -40,10 +47,43 @@ def get_rooms(
         "page": page,
         "size": size,
         "items": items
-    }    
+    }
+
+
+@router.get(
+    path="/queries",
+    response_model=BasePagination[UserQueryResponse],
+    description="특정 사용자가 모든 채팅방에 걸쳐 남긴 쿼리 목록 조회"
+)
+def get_query_history_by_user(
+    page: int = Query(1, ge=1, description="페이지 번호 (1부터 시작)"),
+    size: int = Query(20, ge=1, le=100, description="페이지 크기 (1 ~ 100)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    
+    skip = calculate_skip(page, size)
+    
+    items, total =get_queries_by_user(
+        db=db,
+        user_id=current_user.id,
+        skip=skip,
+        limit=size
+    )
+    
+    return {
+        "total": total,
+        "page": page,
+        "size": size,
+        "items": items,
+    }
     
     
-@router.get("/{session_id}/history", response_model=ChatHistoryListResponse)
+@router.get(
+    path="/{session_id}/history",
+    response_model=ChatHistoryListResponse,
+    description="특정 채팅방 내의 채팅 히스토리 조회"
+)
 def get_room_history(
     session_id: uuid.UUID,
     page: int = Query(1, ge=1, description="페이지 번호 (1부터 시작)"),
@@ -69,34 +109,13 @@ def get_room_history(
         "title": room.title,
         "session_id": room.session_id
     }
-
-
-@router.get("/queries", response_model=BasePagination[UserQueryResponse])
-def get_query_history_by_user(
-    page: int = Query(1, ge=1, description="페이지 번호 (1부터 시작)"),
-    size: int = Query(20, ge=1, le=100, description="페이지 크기 (1 ~ 100)"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    
-    skip = calculate_skip(page, size)
-    
-    items, total =get_queries_by_user(
-        db=db,
-        user_id=current_user.id,
-        skip=skip,
-        limit=size
-    )
-    
-    return {
-        "total": total,
-        "page": page,
-        "size": size,
-        "items": items,
-    }
     
 
-@router.get("/{session_id}/queries", response_model=BasePagination[UserQueryResponse])
+@router.get(
+    path="/{session_id}/queries",
+    response_model=BasePagination[UserQueryResponse],
+    description="특정 채팅방에서 사용자가 남긴 모든 쿼리 목록 조회"
+)
 def get_query_history_by_room(
     page: int = Query(1, ge=1, description="페이지 번호 (1부터 시작)"),
     size: int = Query(20, ge=1, le=100, description="페이지 크기 (1 ~ 100)"),
