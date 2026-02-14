@@ -46,7 +46,7 @@ class ChatService:
             self,
             global_context: GlobalContext,
             query: str,
-            session_id: str,
+            session_id: uuid.UUID,
     ) -> ChatResponse:
         app = await self._get_app()
 
@@ -167,7 +167,7 @@ class ChatService:
     async def _handle_node_start(
         self,
         event: dict,
-        session_id: str
+        session_id: uuid.UUID
     ):
         """노드 단위 답변 생성 과정 스트리밍"""
         name = event["name"]
@@ -192,7 +192,7 @@ class ChatService:
     async def _handle_token_stream(
         self,
         event: dict,
-        session_id: str,
+        session_id: uuid.UUID,
         stream_state: dict
     ): 
         """토큰 스트리밍"""
@@ -241,7 +241,7 @@ class ChatService:
     async def _handle_node_end(
             self,
             event: dict,
-            session_id: str,
+            session_id: uuid.UUID,
             room_id: int,
             stream_state: dict,
             db: Session
@@ -357,7 +357,7 @@ class ChatService:
             sources
         )
 
-    def _setup_config(self, session_id: str):
+    def _setup_config(self, session_id: uuid.UUID):
         default_config = {"configurable": {"thread_id": session_id}}
         if settings.ENABLE_LANGFUSE:
             from catchup.observability.langfuse import langfuse_handler

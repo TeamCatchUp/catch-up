@@ -1,7 +1,7 @@
 from typing import Optional
 import uuid
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from catchup.db.models import ChatHistory, ChatRoom, SenderType
 from catchup.rag.schemas.sources import BaseSource
@@ -99,7 +99,7 @@ def get_chat_room_messages(
     db: Session,
     room_id: int,
     skip: int = 0,
-    limit: int = 10
+    limit: int = 20
 ) -> tuple[list[ChatHistory], int]:
     """채팅 메시지 히스토리 조회"""
     
@@ -122,3 +122,70 @@ def get_chat_room_messages(
     items = db.scalars(stmt).all()
     
     return list(reversed(items)), total_count
+
+
+def get_queries_by_user(
+    db: Session,
+    user_id: int,
+    skip: int = 0,
+    limit: int = 20
+) -> tuple[list[ChatHistory], int]:
+    
+    """특정 사용자가 모든 채팅방에서 작성한 쿼리만 전체 조회 (최신 순)"""
+    
+    filter_query = (
+        (ChatRoom.user_id == user_id) &
+        (ChatHistory.sender_type == SenderType.HUMAN)
+    )
+    
+    total_count = db.scalar(
+        select(func.count())
+        .select_from(ChatHistory)
+        .join(ChatRoom, ChatHistory.chat_room_id == ChatRoom.id)
+        .where(filter_query)
+    ) or 0
+    
+    stmt = (
+        select(ChatHistory)
+        .join(ChatRoom, ChatHistory.chat_room_id == ChatRoom.id)
+        .options(joinedload(ChatHistory.chat_room))
+        .where(filter_query)
+        .order_by(ChatHistory.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    
+    items = db.scalars(stmt).all()
+    
+    return list(items), total_count
+
+
+def get_queries_by_chat_room(
+    db: Session,
+    room_id: int,
+    skip: int = 0,
+    limit: int = 20
+) -> tuple[list[ChatHistory], int]:
+    """특정 채팅방 내에서 사용자가 작성한 쿼리만 조회 (최신 순)"""
+    filter_query = (
+        (ChatHistory.chat_room_id == room_id) &
+        (ChatHistory.sender_type == SenderType.HUMAN)
+    )
+    
+    total_count = db.scalar(
+        select(func.count())
+        .select_from(ChatHistory)
+        .where(filter_query)
+    ) or 0
+    
+    stmt = (
+        select(ChatHistory)
+        .where(filter_query)
+        .order_by(ChatHistory.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    
+    items = db.scalars(stmt).all()
+    
+    return list(items), total_count

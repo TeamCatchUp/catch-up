@@ -14,7 +14,7 @@ async def get_valid_chat_room(
     session_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-) -> ChatRoom | None:
+) -> ChatRoom:
     """채팅방 존재 여부와 사용자의 소유권을 동시에 검증하는 종속성"""
     room = get_chat_room(
         db,
