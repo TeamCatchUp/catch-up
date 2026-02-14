@@ -103,7 +103,10 @@ def get_chat_room_messages(
 ) -> tuple[list[ChatHistory], int]:
     """채팅 메시지 히스토리 조회"""
     
-    filter_query = (ChatHistory.chat_room_id == room_id)
+    filter_query = (
+        (ChatHistory.chat_room_id == room_id) &
+        (ChatHistory.is_displayed == True)
+    )
         
     total_count = db.scalar(
         select(func.count())
@@ -135,7 +138,8 @@ def get_queries_by_user(
     
     filter_query = (
         (ChatRoom.user_id == user_id) &
-        (ChatHistory.sender_type == SenderType.HUMAN)
+        (ChatHistory.sender_type == SenderType.HUMAN) &
+        (ChatHistory.is_displayed == True)
     )
     
     total_count = db.scalar(
@@ -169,7 +173,8 @@ def get_queries_by_chat_room(
     """특정 채팅방 내에서 사용자가 작성한 쿼리만 조회 (최신 순)"""
     filter_query = (
         (ChatHistory.chat_room_id == room_id) &
-        (ChatHistory.sender_type == SenderType.HUMAN)
+        (ChatHistory.sender_type == SenderType.HUMAN) &
+        (ChatHistory.is_displayed == True)
     )
     
     total_count = db.scalar(
