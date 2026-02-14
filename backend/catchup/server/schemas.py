@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar
+from typing import Generic, Optional, TypeVar
 from pydantic import BaseModel, Field
 
 # 제네릭 선언
