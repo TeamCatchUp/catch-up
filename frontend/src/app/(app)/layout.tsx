@@ -1,5 +1,8 @@
 'use client';
 
+import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
+
 import InboxPanel from '@/shared/components/layout/panels/InboxPanel';
 import QuestionsHistoryPanel from '@/shared/components/layout/panels/QuestionsHistoryPanel';
 import SettingsPanel from '@/shared/components/layout/panels/SettingsPanel';
@@ -10,9 +13,21 @@ import { useCurrentUser } from '@/shared/hooks/useCurrentUser';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
 
+/**
+ * 로그인 이후 공통 레이아웃
+ * 설정 관련 경로에서는 설정 패널을 기본으로 열어 패널 상태를 유지
+ */
 export default function AfterLoginLayout({ children }: { children: React.ReactNode }) {
-  const { isLoading } = useCurrentUser(); // TanStack Query 기반 인증 체크
-  const { activePanel, isSidebarOpen } = useSidebarStore();
+  const pathname = usePathname();
+  const { isLoading } = useCurrentUser();
+  const { activePanel, isSidebarOpen, setActivePanel } = useSidebarStore();
+  const isSettingsRoute = pathname.startsWith('/mypage') || pathname.startsWith('/admin');
+
+  useEffect(() => {
+    if (isSettingsRoute) {
+      setActivePanel('settings');
+    }
+  }, [isSettingsRoute, setActivePanel]);
 
   if (isLoading) {
     return (
@@ -25,12 +40,12 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
   return (
     <TooltipProvider delayDuration={200}>
       <div className="relative flex h-full">
-        <aside>
+        <aside className="shrink-0">
           <SideNavBar />
         </aside>
         <div
           className={cn(
-            'absolute top-0 z-20 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
+            'absolute top-0 z-60 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
             isSidebarOpen ? 'left-60.25' : 'left-18',
             activePanel === 'inbox' ? 'w-104.5' : 'w-0',
           )}
@@ -39,8 +54,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         </div>
         <div
           className={cn(
-            'absolute top-0 z-20 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
-            isSidebarOpen ? 'left-60.25' : 'left-18',
+            'h-full shrink-0 overflow-hidden transition-[width] duration-300 ease-out',
             activePanel === 'settings' ? 'w-60' : 'w-0',
           )}
         >
@@ -48,14 +62,14 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         </div>
         <div
           className={cn(
-            'absolute top-0 z-20 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
+            'absolute top-0 z-60 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
             isSidebarOpen ? 'left-60.25' : 'left-18',
             activePanel === 'questionsHistory' ? 'w-95' : 'w-0',
           )}
         >
           <QuestionsHistoryPanel />
         </div>
-        <div className="relative z-10 flex flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col">
           <main className="flex-1 overflow-auto">{children}</main>
         </div>
       </div>
