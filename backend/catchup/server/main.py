@@ -12,7 +12,7 @@ from catchup.db.engine import engine
 from catchup.db.models import Base
 from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
-from catchup.server.chatroom.api import router as chatroom_router
+from catchup.server.chat_room.api import router as chatroom_router
 from catchup.server.connector.github.auth_api import router as github_auth_router
 from catchup.server.connector.github.sync_api import router as github_sync_router
 from catchup.utils.scheduler import init_scheduler, shutdown_scheduler

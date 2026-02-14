@@ -54,7 +54,7 @@ def _extract_workspace_context(user: User) -> GlobalWorkspaceContext:
             name=workspace.name
         )
     
-    # Fallback (워크스페이스가 없는 경우에 대한 처리가 필요하다면)
+    # Fallback
     return GlobalWorkspaceContext(
         id=0,
         name="Default Workspace" 
