@@ -19,6 +19,7 @@ from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
 from catchup.utils.redis import init_langgraph_checkpointer
 from catchup.server.connector.jira.auth_api import router as jira_auth_router
 from catchup.server.connector.jira.sync_api import router as jira_sync_router
+from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.sync_api import router as slack_sync_router
 
@@ -106,6 +107,7 @@ app.include_router(github_auth_router)
 app.include_router(github_sync_router)
 app.include_router(jira_auth_router)
 app.include_router(jira_sync_router)
+app.include_router(jira_webhook_router)
 app.include_router(slack_auth_router)
 app.include_router(slack_sync_router)
 
