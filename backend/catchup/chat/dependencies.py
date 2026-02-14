@@ -5,9 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import get_current_user
-from catchup.db.chat_room import get_chat_room
+from catchup.db.chat_room import get_chat_room, get_message
 from catchup.db.dependencies import get_db
-from catchup.db.models import ChatRoom, User
+from catchup.db.models import ChatHistory, ChatRoom, User
 
 
 async def get_valid_chat_room(
@@ -29,3 +29,25 @@ async def get_valid_chat_room(
         )
 
     return room
+
+
+async def get_valid_message(
+    message_id: int,
+    room: ChatRoom = Depends(get_valid_chat_room),
+    db: Session = Depends(get_db)
+) -> ChatHistory:
+    """메시지 존재 여부, 채팅방 귀속 여부, 사용자 소유권 검증"""
+    
+    message = get_message(
+        db=db,
+        room_id=room.id,
+        message_id=message_id
+    )
+    
+    if not message:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Message not found."
+        )
+    
+    return message    

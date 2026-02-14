@@ -4,7 +4,7 @@ from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from catchup.db.models import SenderType, UserRole
+from catchup.db.models import FeedbackLiteral, SenderType, UserRole
 from catchup.rag.schemas.sources import BaseSource, SourceResponse
 
 
@@ -110,3 +110,10 @@ class UserQueryResponse(BaseModel):
     created_at: datetime = Field(..., description="메시지 생성 시각")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FeedbackRequest(BaseModel):
+    is_liked: Optional[bool] = Field(default=None, description="사용자 긍정/부정 피드백")
+    reasons: Optional[list[FeedbackLiteral]] = Field(default_factory=list, description="부정 피드백 사유 목록")
+    comment: Optional[str] = Field(default=None, description="사용자가 직접 작성한 상세 피드백")
+    
