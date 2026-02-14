@@ -102,7 +102,7 @@ class ChatHistoryResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
     
-# 사용자 쿼리 목록
+# 사용자 쿼리 정보
 class UserQueryResponse(BaseModel):
     id: int = Field(..., description="메시지 고유 ID")
     session_id: uuid.UUID = Field(..., description="사용자 쿼리가 속한 채팅방 세션 ID")

@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 import uuid
 
 from fastapi import APIRouter, Depends, Query
@@ -8,7 +7,7 @@ from sqlalchemy.orm import Session
 from catchup.auth.dependencies import get_current_user
 from catchup.chat.dependencies import get_valid_chat_room
 from catchup.chat.schemas import ChatRoomResponse, UserQueryResponse
-from catchup.db.chat_room import get_chat_room_messages, get_chat_rooms, get_queries_by_user
+from catchup.db.chat_room import get_chat_room_messages, get_chat_rooms, get_queries_by_chat_room, get_queries_by_user
 from catchup.db.dependencies import get_db
 from catchup.db.models import ChatRoom, User
 from catchup.server.chat_room.schemas import ChatHistoryListResponse
@@ -97,6 +96,25 @@ def get_query_history_by_user(
     }
     
 
-@router.get("{session_id}/queries")
-def get_query_history_by_room():
-    pass
+@router.get("/{session_id}/queries", response_model=BasePagination[UserQueryResponse])
+def get_query_history_by_room(
+    page: int = Query(1, ge=1, description="페이지 번호 (1부터 시작)"),
+    size: int = Query(20, ge=1, le=100, description="페이지 크기 (1 ~ 100)"),
+    db: Session = Depends(get_db),
+    room: ChatRoom = Depends(get_valid_chat_room)
+):
+    skip = calculate_skip(page, size)
+    
+    items, total = get_queries_by_chat_room(
+        db=db,
+        room_id=room.id,
+        skip=skip,
+        limit=size
+    )
+    
+    return {
+        "total": total,
+        "page": page,
+        "size": size,
+        "items": items,
+    }
