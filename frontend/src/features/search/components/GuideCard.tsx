@@ -18,7 +18,7 @@ export function JiraGuideCard({ onClose }: GuideCardProps) {
             <IconHelp className="h-6 w-6 text-white" />
             <div className="text-heading-small">Jira 스페이스 선택 가이드</div>
           </div>
-          <button onClick={onClose} className="cursor-pointer flex h-7 w-7 items-center justify-center gap-2.5 p-0.5">
+          <button onClick={onClose} className="flex h-7 w-7 cursor-pointer items-center justify-center gap-2.5 p-0.5">
             <IconX className="h-7 w-7 text-gray-50" />
           </button>
         </div>
@@ -46,7 +46,7 @@ export function GithubGuideCard({ onClose }: GuideCardProps) {
             <IconHelp className="h-6 w-6 text-white" />
             <div className="text-heading-small">Github 스페이스 선택 가이드</div>
           </div>
-          <button onClick={onClose} className="cursor-pointer flex h-7 w-7 items-center justify-center gap-2.5 p-0.5">
+          <button onClick={onClose} className="flex h-7 w-7 cursor-pointer items-center justify-center gap-2.5 p-0.5">
             <IconX className="h-7 w-7 text-gray-50" />
           </button>
         </div>

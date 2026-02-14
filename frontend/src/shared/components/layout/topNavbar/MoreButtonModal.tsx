@@ -65,7 +65,7 @@ export function MoreButtonContent() {
             {linkedList.length > 0 && (
               <span className="max-w-19.5 truncate">{linkedList.map((s) => s.label).join(', ')}</span>
             )}
-            <ArrowRight className="h-6 w-6 text-gray-30" />
+            <ArrowRight className="text-gray-30 h-6 w-6" />
           </div>
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className="w-[250px]">
@@ -82,7 +82,7 @@ export function MoreButtonContent() {
               </div>
               <div className="text-body-xsmall flex items-center text-gray-50">
                 <span>{linked[key] ? '연동' : '미연동'}</span>
-                <ArrowRight className="h-6 w-6 text-gray-30" />
+                <ArrowRight className="text-gray-30 h-6 w-6" />
               </div>
             </DropdownMenuItem>
           ))}

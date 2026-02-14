@@ -46,13 +46,11 @@ const eslintConfig = defineConfig([
           patterns: [
             {
               group: ['@radix-ui/*'],
-              message:
-                '@radix-ui 직접 import 금지. @/shared/components/ui 의 래퍼 컴포넌트를 사용하세요.',
+              message: '@radix-ui 직접 import 금지. @/shared/components/ui 의 래퍼 컴포넌트를 사용하세요.',
             },
             {
               group: ['cmdk'],
-              message:
-                'cmdk 직접 import 금지. @/shared/components/ui/command 를 사용하세요.',
+              message: 'cmdk 직접 import 금지. @/shared/components/ui/command 를 사용하세요.',
             },
             {
               group: ['@headlessui/*'],

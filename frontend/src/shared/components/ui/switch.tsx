@@ -12,14 +12,14 @@ const Switch = React.forwardRef<
   <SwitchPrimitive.Root
     ref={ref}
     className={cn(
-      'peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-blue-50 data-[state=unchecked]:bg-gray-20',
+      'peer data-[state=unchecked]:bg-gray-20 inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-blue-50',
       className,
     )}
     {...props}
   >
     <SwitchPrimitive.Thumb
       className={cn(
-        'pointer-events-none block size-4 rounded-full bg-white shadow-button transition-transform data-[state=checked]:translate-x-[18px] data-[state=unchecked]:translate-x-0.5',
+        'shadow-button pointer-events-none block size-4 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[18px] data-[state=unchecked]:translate-x-0.5',
       )}
     />
   </SwitchPrimitive.Root>

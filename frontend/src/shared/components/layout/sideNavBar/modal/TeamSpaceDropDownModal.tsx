@@ -37,14 +37,12 @@ export function TeamSpaceDropDownContent({ teamSpaces, selectedId, onSelect }: T
                 type="button"
                 onClick={() => onSelect(team)}
                 className={cn(
-                  'flex h-10 cursor-pointer items-center gap-2.5 rounded-lg p-2 transition-colors hover:bg-neutral-2',
+                  'hover:bg-neutral-2 flex h-10 cursor-pointer items-center gap-2.5 rounded-lg p-2 transition-colors',
                   isSelected && 'bg-neutral-2',
                 )}
               >
-                <ArrowRight className="h-6 w-6 text-gray-70" />
-                <span className={cn('text-body-small text-gray-80', isSelected && 'font-semibold')}>
-                  {team.name}
-                </span>
+                <ArrowRight className="text-gray-70 h-6 w-6" />
+                <span className={cn('text-body-small text-gray-80', isSelected && 'font-semibold')}>{team.name}</span>
               </button>
             </PopoverClose>
           );
@@ -52,11 +50,11 @@ export function TeamSpaceDropDownContent({ teamSpaces, selectedId, onSelect }: T
       </div>
 
       {/* divider */}
-      <div className="h-px w-full bg-neutral-3" />
+      <div className="bg-neutral-3 h-px w-full" />
 
       {/* 팀스페이스 추가 */}
-      <button className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg p-2 transition-colors hover:bg-neutral-2">
-        <AddHome className="h-6 w-6 text-gray-70" />
+      <button className="hover:bg-neutral-2 flex w-full cursor-pointer items-center gap-2.5 rounded-lg p-2 transition-colors">
+        <AddHome className="text-gray-70 h-6 w-6" />
         <span className="text-body-small text-gray-80">팀스페이스 추가</span>
       </button>
     </PopoverContent>

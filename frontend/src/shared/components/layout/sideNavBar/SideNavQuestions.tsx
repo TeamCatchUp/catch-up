@@ -23,8 +23,7 @@ interface ChatRoomQuery {
 }
 
 // 질문 아이템 상태별 스타일
-const defaultClass =
-  'bg-white hover:bg-neutral-2 active:bg-neutral-3 active:ring-1 active:ring-neutral-3';
+const defaultClass = 'bg-white hover:bg-neutral-2 active:bg-neutral-3 active:ring-1 active:ring-neutral-3';
 const selectedClass = 'ring-1 ring-neutral-2 bg-blue-1 hover:bg-blue-5';
 
 export default function SideNavQuestions() {
@@ -69,14 +68,11 @@ export default function SideNavQuestions() {
             <Link
               href={`/chat/${chatroom.session_id}?q=${encodeURIComponent(chatroom.title)}`}
               key={chatroom.session_id}
-              className={cn(
-                'group flex cursor-pointer rounded-lg py-2',
-                isActive ? selectedClass : defaultClass,
-              )}
+              className={cn('group flex cursor-pointer rounded-lg py-2', isActive ? selectedClass : defaultClass)}
             >
               <span className={cn('text-body-small truncate px-2.5')}>{chatroom.title}</span>
               <span className="mr-2.5 ml-auto flex h-5 w-5 items-center opacity-0 transition-opacity group-hover:opacity-100">
-                <Kebeb className="text-gray-50 h-4.5 w-4.5" />
+                <Kebeb className="h-4.5 w-4.5 text-gray-50" />
               </span>
             </Link>
           );

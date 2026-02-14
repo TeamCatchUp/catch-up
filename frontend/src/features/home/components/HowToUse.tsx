@@ -33,11 +33,8 @@ const HowToUse = () => {
 
       <ul className="flex gap-6">
         {cardData.map((card, idx) => (
-          <li
-            key={idx}
-            className="border-neutral-3 flex flex-1 flex-col overflow-hidden rounded-2xl border bg-white"
-          >
-            <div className="relative h-[144px] w-full border-b border-neutral-3">
+          <li key={idx} className="border-neutral-3 flex flex-1 flex-col overflow-hidden rounded-2xl border bg-white">
+            <div className="border-neutral-3 relative h-[144px] w-full border-b">
               <Image src={card.image} alt={card.title} fill className="object-cover" />
             </div>
 
@@ -52,7 +49,7 @@ const HowToUse = () => {
                 className="border-neutral-3 active:border-neutral-5 active:bg-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 ml-auto flex h-[30px] cursor-pointer items-center gap-1 rounded-lg border bg-white px-2 py-1"
               >
                 <span className="text-body-xsmall text-gray-80 whitespace-nowrap">더 알아보기</span>
-                <ArrowRight className="h-6 w-6 text-gray-70" />
+                <ArrowRight className="text-gray-70 h-6 w-6" />
               </button>
             </div>
           </li>

@@ -56,15 +56,15 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
 
       {/* 메뉴 */}
       <DropdownMenuItem onSelect={() => router.push('/mypage/settings')}>
-        <Person className="h-6 w-6 text-gray-70" />
+        <Person className="text-gray-70 h-6 w-6" />
         <span>개인 맞춤 설정</span>
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-        <AdminPanelSettings className="h-6 w-6 text-gray-70" />
+        <AdminPanelSettings className="text-gray-70 h-6 w-6" />
         <span>권한 관리</span>
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-        <Settings className="h-6 w-6 text-gray-70" />
+        <Settings className="text-gray-70 h-6 w-6" />
         <span>설정</span>
       </DropdownMenuItem>
 
@@ -72,8 +72,12 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
       <div className="px-1 py-0.5">
         <Tabs value={theme} onValueChange={setTheme}>
           <TabsList className="w-full">
-            <TabsTrigger value="light" className="flex-1">라이트 모드</TabsTrigger>
-            <TabsTrigger value="dark" className="flex-1">다크 모드</TabsTrigger>
+            <TabsTrigger value="light" className="flex-1">
+              라이트 모드
+            </TabsTrigger>
+            <TabsTrigger value="dark" className="flex-1">
+              다크 모드
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -82,7 +86,7 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
 
       {/* 로그아웃 */}
       <DropdownMenuItem onSelect={() => logoutMutation.mutate()}>
-        <Logout className="h-6 w-6 text-gray-70" />
+        <Logout className="text-gray-70 h-6 w-6" />
         <span>로그아웃</span>
       </DropdownMenuItem>
     </DropdownMenuContent>

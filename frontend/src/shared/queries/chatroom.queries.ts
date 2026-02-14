@@ -2,11 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
-import type {
-  ChatroomsResponse,
-  RecentQueriesResponse,
-  SessionQueriesResponse,
-} from '@/shared/types/query/api';
+import type { ChatroomsResponse, RecentQueriesResponse, SessionQueriesResponse } from '@/shared/types/query/api';
 
 export const chatQueries = {
   all: () => ['chatrooms'] as const,

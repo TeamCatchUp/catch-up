@@ -105,9 +105,7 @@ const buildStreamRequestSignature = (query: string) => `chat:${query.trim()}`;
  * @param selectedPRs - 선택된 PR 목록
  * @returns 요청 시그니처 (resume:{owner}/{repo}#{pr_number},...)
  */
-const buildResumeRequestSignature = (
-  selectedPRs: { pr_number: number; repo_name: string; owner: string }[],
-) => {
+const buildResumeRequestSignature = (selectedPRs: { pr_number: number; repo_name: string; owner: string }[]) => {
   const normalized = [...selectedPRs]
     .sort((a, b) => {
       const left = `${a.owner}/${a.repo_name}#${a.pr_number}`;
@@ -137,9 +135,7 @@ const buildSourcesForTurn = (turn: number): typeof MOCK_SOURCES => {
     // turn2 이후 cited 인덱스: [2], [4], [5]
     const isCitedInTurn2 = index === 1 || index === 3 || index === 4;
     const createdAt =
-      typeof source.created_at === 'string'
-        ? addDaysToIsoString(source.created_at, turn - 1)
-        : source.created_at;
+      typeof source.created_at === 'string' ? addDaysToIsoString(source.created_at, turn - 1) : source.created_at;
 
     return {
       ...source,
@@ -173,7 +169,7 @@ const buildTurnTwoAnswer = (query: string) =>
     '> 답변2에서는 cited source를 [2], [4], [5] 기준으로 표시합니다.',
     '',
     '```ts',
-    "const citedOrder = [2, 4, 5] as const;",
+    'const citedOrder = [2, 4, 5] as const;',
     'const isCited = (index: number) => citedOrder.includes(index as 2 | 4 | 5);',
     '```',
     '',
@@ -299,10 +295,7 @@ const mockChatService = {
     onEvent: (event: MockStreamEvent) => void,
     signal?: AbortSignal,
   ) => {
-    const prLabel =
-      selectedPRs.length > 0
-        ? selectedPRs.map((pr) => `#${pr.pr_number}`).join(', ')
-        : 'no-selected-pr';
+    const prLabel = selectedPRs.length > 0 ? selectedPRs.map((pr) => `#${pr.pr_number}`).join(', ') : 'no-selected-pr';
     const query = `resume with ${prLabel}`;
     const turn = getTurnForRequest(sessionId, buildResumeRequestSignature(selectedPRs));
     await emitBackendLikeStream(query, sessionId, turn, onEvent, signal);

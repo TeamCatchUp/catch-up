@@ -19,10 +19,7 @@ export const MOCK_PERSON_FILTER_OPTIONS = [
   { name: '조예원', position: '디자인' },
 ];
 
-export const MOCK_DEPARTMENT_FILTER_OPTIONS = [
-  { name: 'EngineeringTeam' },
-  { name: 'SoccerTeam' },
-];
+export const MOCK_DEPARTMENT_FILTER_OPTIONS = [{ name: 'EngineeringTeam' }, { name: 'SoccerTeam' }];
 
 export const MOCK_PROJECT_FILTER_OPTIONS = [
   { name: '미국진출프로젝트' },

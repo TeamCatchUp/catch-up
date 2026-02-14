@@ -76,7 +76,7 @@ const SettingsPanel = () => {
       {SETTINGS_SECTIONS.map((section) => (
         <div key={section.label} className="flex flex-col gap-1.5">
           <div className="px-1">
-            <span className="text-body-xsmall font-medium text-gray-60">{section.label}</span>
+            <span className="text-body-xsmall text-gray-60 font-medium">{section.label}</span>
           </div>
           <div className="flex flex-col gap-1">
             {section.items.map((item) => {
@@ -90,12 +90,10 @@ const SettingsPanel = () => {
                     'flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 transition-colors',
                     isActive
                       ? 'border-neutral-2 bg-blue-1 border text-blue-50'
-                      : 'border border-transparent bg-white text-gray-80 hover:bg-neutral-2',
+                      : 'text-gray-80 hover:bg-neutral-2 border border-transparent bg-white',
                   )}
                 >
-                  <item.Icon
-                    className={cn('h-6 w-6 shrink-0', isActive ? 'text-blue-50' : 'text-gray-50')}
-                  />
+                  <item.Icon className={cn('h-6 w-6 shrink-0', isActive ? 'text-blue-50' : 'text-gray-50')} />
                   <span className="text-body-small">{item.name}</span>
                 </button>
               );

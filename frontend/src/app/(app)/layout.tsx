@@ -30,7 +30,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         </aside>
         <div
           className={cn(
-            'absolute top-0 h-full z-20 overflow-hidden transition-[width,left] duration-300 ease-out',
+            'absolute top-0 z-20 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
             isSidebarOpen ? 'left-60.25' : 'left-18',
             activePanel === 'inbox' ? 'w-104.5' : 'w-0',
           )}
@@ -39,7 +39,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         </div>
         <div
           className={cn(
-            'absolute top-0 h-full z-20 overflow-hidden transition-[width,left] duration-300 ease-out',
+            'absolute top-0 z-20 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
             isSidebarOpen ? 'left-60.25' : 'left-18',
             activePanel === 'settings' ? 'w-60' : 'w-0',
           )}
@@ -48,7 +48,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         </div>
         <div
           className={cn(
-            'absolute top-0 h-full z-20 overflow-hidden transition-[width,left] duration-300 ease-out',
+            'absolute top-0 z-20 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
             isSidebarOpen ? 'left-60.25' : 'left-18',
             activePanel === 'questionsHistory' ? 'w-95' : 'w-0',
           )}

@@ -34,7 +34,7 @@ const RagHeader = ({ title, onSelectQuestion }: RagHeaderProps) => {
 
   return (
     <>
-      <div className="h-13 border-r-neutral-3 border-b-neutral-3 border-r-0.5 sticky top-0 z-10 flex min-w-240.75 justify-between border-b bg-white px-16 py-2">
+      <div className="border-r-neutral-3 border-b-neutral-3 border-r-0.5 sticky top-0 z-10 flex h-13 min-w-240.75 justify-between border-b bg-white px-16 py-2">
         {/* 좌측 메뉴 */}
         <div className="relative flex items-center">
           <button
@@ -88,7 +88,7 @@ const RagHeader = ({ title, onSelectQuestion }: RagHeaderProps) => {
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="cursor-pointer rounded-lg border border-neutral-3 bg-white px-1.5 py-1.5 transition-colors hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 data-[state=open]:border-neutral-4 data-[state=open]:bg-neutral-2">
+              <button className="border-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 data-[state=open]:border-neutral-4 data-[state=open]:bg-neutral-2 cursor-pointer rounded-lg border bg-white px-1.5 py-1.5 transition-colors">
                 <Kebeb className="text-gray-70 h-6 w-6" />
               </button>
             </DropdownMenuTrigger>

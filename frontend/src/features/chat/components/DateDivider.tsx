@@ -34,11 +34,7 @@ const defaultFormatDate = (date: Date): string => {
 // Component
 // ============================================================
 
-const DateDivider = ({
-  date = new Date(),
-  formatDate = defaultFormatDate,
-  className,
-}: DateDividerProps) => {
+const DateDivider = ({ date = new Date(), formatDate = defaultFormatDate, className }: DateDividerProps) => {
   const formattedDate = formatDate(date);
 
   return (

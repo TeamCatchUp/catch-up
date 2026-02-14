@@ -58,7 +58,7 @@ const QueryBox = ({
       {showPanel && (
         <div
           className={cn(
-            'animate-in fade-in-0 duration-300 border-neutral-4 flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden border-t pt-3',
+            'animate-in fade-in-0 border-neutral-4 flex min-h-0 w-full flex-1 flex-col gap-3 overflow-hidden border-t pt-3 duration-300',
             !isNoHistory && 'slide-in-from-top-3 mt-1',
           )}
         >

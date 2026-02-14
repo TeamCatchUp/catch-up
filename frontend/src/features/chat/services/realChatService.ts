@@ -14,10 +14,7 @@ import { API } from '@/shared/api/endpoints';
  * @param onEvent - 파싱된 이벤트를 처리할 콜백
  * @throws HTTP 에러 또는 빈 응답 body
  */
-async function parseSSEStream(
-  res: Response,
-  onEvent: (event: StreamEvent) => void,
-) {
+async function parseSSEStream(res: Response, onEvent: (event: StreamEvent) => void) {
   if (!res.ok) throw new Error(`Stream error: ${res.status}`);
 
   if (!res.body) {
@@ -91,12 +88,7 @@ const realChatService = {
    * @param signal - 요청 취소용 AbortSignal (옵셔널)
    * @throws HTTP 에러 또는 네트워크 에러
    */
-  streamChat: async (
-    query: string,
-    sessionId: string,
-    onEvent: (event: StreamEvent) => void,
-    signal?: AbortSignal,
-  ) => {
+  streamChat: async (query: string, sessionId: string, onEvent: (event: StreamEvent) => void, signal?: AbortSignal) => {
     const res = await fetch(API.chat.stream, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

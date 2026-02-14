@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
-import { cva,type VariantProps } from 'class-variance-authority';
+import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/shared/utils/cn';
 
@@ -12,8 +12,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         /* ── Icon Buttons ── */
-        'icon-solid-blue':
-          'bg-blue-50 hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 rounded-lg text-white',
+        'icon-solid-blue': 'bg-blue-50 hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 rounded-lg text-white',
         'icon-outline-gray':
           'border border-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 disabled:border-neutral-2 disabled:text-gray-20 text-gray-70 rounded-lg bg-white',
         'icon-only-gray':
@@ -22,8 +21,7 @@ const buttonVariants = cva(
           'hover:bg-blue-5 active:bg-blue-10 active:text-blue-60 disabled:text-gray-20 text-blue-50 rounded-full',
 
         /* ── Box Buttons ── */
-        'box-solid-primary':
-          'bg-blue-50 hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 rounded-lg text-white',
+        'box-solid-primary': 'bg-blue-50 hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 rounded-lg text-white',
         'box-outline-gray':
           'border border-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 disabled:bg-neutral-1 disabled:text-gray-30 rounded-lg bg-white text-gray-70',
 
@@ -38,10 +36,8 @@ const buttonVariants = cva(
         'capsule-solid-light-blue': 'bg-light-blue-5 rounded-full',
 
         /* ── Text Buttons ── */
-        'text-primary-blue':
-          'hover:bg-blue-5 active:bg-blue-5 rounded-full text-blue-50',
-        'text-secondary-mono':
-          'hover:bg-neutral-2 active:bg-neutral-3 rounded-full text-gray-70',
+        'text-primary-blue': 'hover:bg-blue-5 active:bg-blue-5 rounded-full text-blue-50',
+        'text-secondary-mono': 'hover:bg-neutral-2 active:bg-neutral-3 rounded-full text-gray-70',
 
         /* ── FAB ── */
         'fab-primary': 'bg-neutral-80 rounded-full text-white shadow-button',

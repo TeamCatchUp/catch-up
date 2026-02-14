@@ -5,7 +5,7 @@ import { useFunnel } from '@use-funnel/browser';
 
 import { useUserStore } from '@/shared/store/userStore';
 
-import type { ConnectorFormData, OnboardingSteps,OrgInfoFormData } from '../types/onboarding';
+import type { ConnectorFormData, OnboardingSteps, OrgInfoFormData } from '../types/onboarding';
 import { CompleteStep } from './CompleteStep';
 import { OnboardingLayout } from './OnboardingLayout';
 import { ConnectorStep } from './steps/ConnectorStep';
@@ -80,9 +80,7 @@ export function OnboardingFunnel() {
             }}
           />
         )}
-        Complete={({ context }) => (
-          <CompleteStep data={context} isAdmin={isAdmin} />
-        )}
+        Complete={({ context }) => <CompleteStep data={context} isAdmin={isAdmin} />}
       />
     </OnboardingLayout>
   );

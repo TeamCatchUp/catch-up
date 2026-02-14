@@ -29,7 +29,7 @@ export function ShareButtonContent() {
         </label>
         <input
           id="share-input"
-          className="border-neutral-3 text-body-small placeholder-gray-30 h-10 w-62.5 rounded-xl border p-3 transition-colors outline-none focus:border-blue-30 focus:bg-neutral-1 focus:caret-blue-30"
+          className="border-neutral-3 text-body-small placeholder-gray-30 focus:border-blue-30 focus:bg-neutral-1 focus:caret-blue-30 h-10 w-62.5 rounded-xl border p-3 transition-colors outline-none"
           placeholder="이메일 또는 그룹을 입력하세요."
         />
         <button className="text-body-medium h-10 cursor-pointer rounded-lg border bg-blue-50 px-4 py-1.5 whitespace-nowrap text-white">
@@ -43,7 +43,7 @@ export function ShareButtonContent() {
           {members.map((member, index) => (
             <li
               key={index}
-              className="flex h-12.75 cursor-pointer items-center gap-4 rounded-lg p-1 hover:bg-neutral-2 focus:bg-neutral-2 focus:outline-none"
+              className="hover:bg-neutral-2 focus:bg-neutral-2 flex h-12.75 cursor-pointer items-center gap-4 rounded-lg p-1 focus:outline-none"
               tabIndex={0}
             >
               <LoadingProfile className="h-10 w-10" />

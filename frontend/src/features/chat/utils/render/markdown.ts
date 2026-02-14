@@ -10,10 +10,7 @@ export const formatMarkdownString = (text: string): string => {
   if (!text) return '';
 
   // \r\n, \r을 \n으로 통일
-  let normalized = text
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/\\n/g, '\n');
+  let normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\\n/g, '\n');
 
   // strong 안의 백틱 코드 앞/뒤에 바로 글자가 오는 경우 띄어쓰기 추가
   // 예: **`code`**글자 -> **`code`** 글자

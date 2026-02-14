@@ -49,7 +49,7 @@ export default function Home() {
         {/* TEXT */}
         <div className="grid h-24 place-items-center">
           <div
-            className={`[grid-area:1/1] flex flex-col items-center gap-3 transition-opacity duration-300 ${
+            className={`flex flex-col items-center gap-3 transition-opacity duration-300 [grid-area:1/1] ${
               input.isFocused ? 'pointer-events-none opacity-0' : 'opacity-100'
             }`}
           >
@@ -59,7 +59,7 @@ export default function Home() {
             </p>
           </div>
           <div
-            className={`[grid-area:1/1] flex flex-col items-center text-center transition-opacity duration-300 ${
+            className={`flex flex-col items-center text-center transition-opacity duration-300 [grid-area:1/1] ${
               input.isFocused ? 'opacity-100' : 'pointer-events-none opacity-0'
             }`}
           >

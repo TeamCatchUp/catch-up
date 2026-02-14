@@ -117,15 +117,15 @@ const InboxPanel = () => {
     activeTab === '모두' ? MOCK_INBOX_ITEMS : MOCK_INBOX_ITEMS.filter((item) => item.category === activeTab);
 
   return (
-    <div className="border-neutral-3 flex h-screen w-[418px] shrink-0 flex-col gap-4 border-r bg-white py-5 shadow-panel">
+    <div className="border-neutral-3 shadow-panel flex h-screen w-[418px] shrink-0 flex-col gap-4 border-r bg-white py-5">
       {/* 헤더 */}
       <div className="flex items-center justify-between px-4">
         <span className="text-heading-large text-gray-80">수신함</span>
         <div className="flex gap-1.5">
-          <button className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg hover:bg-neutral-2">
+          <button className="hover:bg-neutral-2 flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg">
             <FilterList className="h-6 w-6 text-gray-50" />
           </button>
-          <button className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg hover:bg-neutral-2">
+          <button className="hover:bg-neutral-2 flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg">
             <Kebab2 className="h-6 w-6 text-gray-50" />
           </button>
         </div>
@@ -143,7 +143,7 @@ const InboxPanel = () => {
                 'text-body-small h-9 shrink-0 cursor-pointer rounded-full px-3 py-1.5 transition-colors',
                 activeTab === tab
                   ? 'bg-neutral-80 text-white'
-                  : 'border-neutral-3 border bg-white text-gray-70 hover:bg-neutral-2',
+                  : 'border-neutral-3 text-gray-70 hover:bg-neutral-2 border bg-white',
               )}
             >
               {tab}
@@ -160,7 +160,7 @@ const InboxPanel = () => {
               <button
                 key={item.id}
                 className={cn(
-                  'border-neutral-3 flex w-full cursor-pointer gap-2.5 border-b px-4 py-3 text-left transition-colors hover:bg-neutral-2',
+                  'border-neutral-3 hover:bg-neutral-2 flex w-full cursor-pointer gap-2.5 border-b px-4 py-3 text-left transition-colors',
                   item.isRead ? 'bg-white' : 'bg-blue-1',
                 )}
               >
@@ -168,7 +168,7 @@ const InboxPanel = () => {
                 <div className="relative shrink-0">
                   <DefaultProfile className="border-neutral-2 h-10 w-10 rounded-full border" />
                   <div className="absolute top-7 -right-0.5 rounded-full bg-white p-0.5">
-                    <CategoryIcon className="h-4 w-4 text-blue-40" />
+                    <CategoryIcon className="text-blue-40 h-4 w-4" />
                   </div>
                 </div>
 
@@ -180,10 +180,10 @@ const InboxPanel = () => {
                       <span>{item.sender}</span>
                       <span>{item.title}</span>
                     </div>
-                    <span className="text-body-xsmall shrink-0 text-gray-30">{item.date}</span>
+                    <span className="text-body-xsmall text-gray-30 shrink-0">{item.date}</span>
                   </div>
                   {/* 미리보기 */}
-                  <p className="text-body-small line-clamp-2 text-gray-60">{item.preview}</p>
+                  <p className="text-body-small text-gray-60 line-clamp-2">{item.preview}</p>
                 </div>
               </button>
             );

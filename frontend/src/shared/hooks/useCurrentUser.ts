@@ -33,7 +33,10 @@ export const useCurrentUser = (redirectToLogin = true) => {
         router.replace('/pending');
       } else if (status === 'inactive' && pathname !== '/inactive') {
         router.replace('/inactive');
-      } else if (status === 'active' && (pathname === '/onboarding' || pathname === '/pending' || pathname === '/inactive')) {
+      } else if (
+        status === 'active' &&
+        (pathname === '/onboarding' || pathname === '/pending' || pathname === '/inactive')
+      ) {
         router.replace('/');
       }
     }

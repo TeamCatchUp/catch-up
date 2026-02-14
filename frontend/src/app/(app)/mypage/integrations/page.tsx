@@ -13,7 +13,7 @@ export default function ToolPage() {
     <div className="flex items-start gap-6 self-stretch px-16 pt-6 pb-30">
       <div className="flex cursor-pointer flex-col items-start gap-3">
         <div className="border-blue-30 bg-whit flex w-[325px] items-center gap-5 rounded-xl border-2 p-4">
-          <div className="h-10.5 w-10.5 flex justify-center items-center">
+          <div className="flex h-10.5 w-10.5 items-center justify-center">
             <IconJira className="h-8 w-8" />
           </div>
           <div className="flex flex-[1_0_0] flex-col items-start gap-1">

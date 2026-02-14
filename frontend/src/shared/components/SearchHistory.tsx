@@ -80,9 +80,7 @@ export function SearchHistory({ querys, isModal = false, onItemClick }: Recently
                 <div className="text-gray-80 text-body-small flex-1 truncate text-left">{item.query}</div>
                 {section.key !== '오늘' && (
                   <div className="text-body-xsmall text-gray-30 shrink-0 text-right">
-                    {section.key === '최근 7일'
-                      ? formatRelativeDate(item.rawDate.toISOString())
-                      : item.date}
+                    {section.key === '최근 7일' ? formatRelativeDate(item.rawDate.toISOString()) : item.date}
                   </div>
                 )}
               </Link>

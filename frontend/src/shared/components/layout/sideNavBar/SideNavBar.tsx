@@ -85,7 +85,10 @@ const SideNavBar = () => {
           {isOpen && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button onClick={() => setSidebarOpen(false)} className="icon-button-only-gray flex cursor-pointer items-center justify-center rounded-full! p-0.5">
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="icon-button-only-gray flex cursor-pointer items-center justify-center rounded-full! p-0.5"
+                >
                   <Close className="h-6 w-6 text-gray-50" />
                 </button>
               </TooltipTrigger>

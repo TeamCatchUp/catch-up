@@ -9,7 +9,7 @@ import IconSpace from '@/public/icons/icon/space.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import IconGithub from '@/public/icons/logo/GitHub.svg';
 import IconJira from '@/public/icons/logo/Jira.svg';
-import IconSlack from '@/public/icons/logo/Slack.svg'
+import IconSlack from '@/public/icons/logo/Slack.svg';
 import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown';
 import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
 import { SearchOptionButton } from '@/shared/components/SearchOptionButton';
@@ -29,9 +29,24 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
   return (
     <div className="flex items-center gap-2.5 self-stretch overflow-x-scroll py-0.5 whitespace-nowrap">
       <div className="flex items-center gap-2.5">
-        <SearchOptionButton Icon={IconJira} label="Jira" selected={filters.selectedSources.includes('jira')} onClick={() => filters.toggleSource('jira')} />
-        <SearchOptionButton Icon={IconGithub} label="Github" selected={filters.selectedSources.includes('github')} onClick={() => filters.toggleSource('github')} />
-        <SearchOptionButton Icon={IconSlack} label="Slack" selected={filters.selectedSources.includes('slack')} onClick={() => filters.toggleSource('slack')} />
+        <SearchOptionButton
+          Icon={IconJira}
+          label="Jira"
+          selected={filters.selectedSources.includes('jira')}
+          onClick={() => filters.toggleSource('jira')}
+        />
+        <SearchOptionButton
+          Icon={IconGithub}
+          label="Github"
+          selected={filters.selectedSources.includes('github')}
+          onClick={() => filters.toggleSource('github')}
+        />
+        <SearchOptionButton
+          Icon={IconSlack}
+          label="Slack"
+          selected={filters.selectedSources.includes('slack')}
+          onClick={() => filters.toggleSource('slack')}
+        />
       </div>
       <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
       <div className="flex items-center gap-2.5">

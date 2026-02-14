@@ -1,9 +1,4 @@
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 
 import Help from '/public/icons/icon/help.svg';
 
@@ -22,11 +17,9 @@ const SidebarHeader = ({ sourceCount }: Props) => {
       <TooltipProvider delayDuration={200}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="bg-neutral-2 flex cursor-help items-center gap-1 rounded-md2 px-1.5 py-0.5">
+            <div className="bg-neutral-2 rounded-md2 flex cursor-help items-center gap-1 px-1.5 py-0.5">
               <Help className="h-4 w-4 text-gray-50" />
-              <div className="text-body-xsmall text-gray-50 truncate whitespace-nowrap">
-                AI 답변 근거 자료
-              </div>
+              <div className="text-body-xsmall truncate whitespace-nowrap text-gray-50">AI 답변 근거 자료</div>
             </div>
           </TooltipTrigger>
           <TooltipContent size="lg" className="flex flex-col gap-1">

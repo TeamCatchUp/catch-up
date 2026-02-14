@@ -20,13 +20,7 @@ export type BackendSourceSourceApi = 'jira' | 'slack' | 'github' | 'unknown';
  * 백엔드 소스 엔티티 타입.
  * - catchup/rag/schemas/sources.py EntityType(+ code) 기준
  */
-export type BackendSourceEntityTypeApi =
-  | 'issue'
-  | 'epic'
-  | 'message'
-  | 'pr'
-  | 'comment'
-  | 'code';
+export type BackendSourceEntityTypeApi = 'issue' | 'epic' | 'message' | 'pr' | 'comment' | 'code';
 
 /**
  * 백엔드 RAG 소스 원본 타입.

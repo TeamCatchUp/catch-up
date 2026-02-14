@@ -95,7 +95,7 @@ const SourceList = ({ sources, answerContent, isLoading, isError }: Props) => {
                 'text-body-small flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-full border px-3 py-1.5 leading-none whitespace-nowrap transition',
                 isActive
                   ? 'border-neutral-80 bg-neutral-80 text-white'
-                  : 'border-neutral-3 bg-white text-gray-70 hover:bg-neutral-2',
+                  : 'border-neutral-3 text-gray-70 hover:bg-neutral-2 bg-white',
               )}
             >
               {category.category}
@@ -136,11 +136,7 @@ const SourceList = ({ sources, answerContent, isLoading, isError }: Props) => {
                   </div>
                   <div className="flex flex-col gap-2.5">
                     {recommendedSources.map((source) => (
-                      <SourceCard
-                        key={source.id}
-                        source={source}
-                        showCount={false}
-                      />
+                      <SourceCard key={source.id} source={source} showCount={false} />
                     ))}
                   </div>
                 </div>

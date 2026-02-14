@@ -64,7 +64,7 @@ const TopNavbar = ({ pageType }: TopNavbarProps) => {
           <li>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="cursor-pointer rounded-lg border border-neutral-3 bg-white px-1.5 py-1.5 transition-colors hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 data-[state=open]:border-neutral-4 data-[state=open]:bg-neutral-2">
+                <button className="border-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 data-[state=open]:border-neutral-4 data-[state=open]:bg-neutral-2 cursor-pointer rounded-lg border bg-white px-1.5 py-1.5 transition-colors">
                   <Kebeb_2 className="text-gray-70 h-6 w-6" />
                 </button>
               </DropdownMenuTrigger>

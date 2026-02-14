@@ -20,12 +20,7 @@ const RagSidebar = ({ currentQA, isLoading, isError }: RagSidebarProps) => {
     <div className="border-neutral-3 flex w-100 flex-none flex-col border-l bg-white">
       <SidebarHeader sourceCount={sourceCount} />
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <SourceList
-          sources={sources}
-          answerContent={answerContent}
-          isLoading={isLoading}
-          isError={isError}
-        />
+        <SourceList sources={sources} answerContent={answerContent} isLoading={isLoading} isError={isError} />
       </div>
     </div>
   );
