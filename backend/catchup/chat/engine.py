@@ -309,27 +309,37 @@ class ChatService:
         session_id: uuid.UUID,
         query: str
     ) -> int:
-        """이미 존재하는 채팅방을 조회하거나 세션을 생성한다. 사용자 쿼리를 저장한다. 채팅방 ID를 반환한다."""
-        # 채팅방 설정
+        """
+            채팅방이 없다면 세션을 생성한다.
+            사용자 쿼리를 저장한다.
+            채팅방 ID를 반환한다.
+        """
+
         room = await run_in_threadpool(
             get_chat_room, 
             db, 
-            session_id,
+            session_id, 
             global_context.user.id
         )
         
-        # 새로운 채팅 세션일 경우
         if not room:
             initial_title = await generate_chat_room_title(query)
-            room = await run_in_threadpool(
-                create_chat_room,
-                db,
-                session_id,
-                global_context.user.id,
-                global_context.workspace.id,
-                initial_title
-            )
-
+               
+            # 새로운 채팅 세션일 경우
+            def _create_room_sync():
+                new_room = create_chat_room(
+                    db=db,
+                    session_id=session_id,
+                    user_id=global_context.user.id,
+                    workspace_id=global_context.workspace.id,
+                    title=initial_title
+                )
+                db.commit()
+                db.refresh(new_room)
+                return new_room
+        
+            room = await run_in_threadpool(_create_room_sync)     
+               
         # 사용자 쿼리 저장
         await self._save_message_content(
             db,
@@ -348,14 +358,18 @@ class ChatService:
         content: str,
         sources: Optional[list[dict[str, Any]]] = None
     ):
-        await run_in_threadpool(
-            add_message,
-            db,
-            room_id,
-            role,
-            content,
-            sources
-        )
+        
+        def _save_sync():
+            add_message(
+                db=db,
+                room_id=room_id,
+                role=role,
+                content=content,
+                sources=sources
+            )
+            db.commit()
+            
+        await run_in_threadpool(_save_sync)
 
     def _setup_config(self, session_id: uuid.UUID):
         default_config = {"configurable": {"thread_id": session_id}}

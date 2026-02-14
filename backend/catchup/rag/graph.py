@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_compiled_graph(
-        checkpointer: BaseCheckpointSaver | None = None
+    checkpointer: Optional[BaseCheckpointSaver] = None
 ):
     workflow = StateGraph(AgentState)
 
