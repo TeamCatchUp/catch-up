@@ -1,7 +1,4 @@
-import hashlib
-import hmac
 import logging
-import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
@@ -24,6 +21,7 @@ from catchup.server.connector.slack.schemas import (
 from catchup.db.dependencies import get_db
 from catchup.db.models import SlackSyncState
 from catchup.db.slack.oauth_repository import get_all_slack_tokens
+from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 from catchup.utils.webhook_buffer import get_webhook_buffer
 
 logger = logging.getLogger(__name__)
@@ -364,13 +362,17 @@ async def handle_slack_webhook(
     payload_body = await request.body()
 
     # 0. Signature 검증
-    if not _verify_slack_signature(
-        payload_body,
-        x_slack_signature,
-        x_slack_request_timestamp,
-        settings.SLACK_SIGNING_SECRET
-    ):
-        logger.warning("[SLACK][EVENT] Invalid Slack Webhook Signature")
+    verify_result = WebhookVerifierProvider.verify_slack(
+        payload_body=payload_body,
+        signature=x_slack_signature,
+        timestamp=x_slack_request_timestamp,
+        signing_secret=settings.SLACK_SIGNING_SECRET,
+        tolerance_seconds=300,
+    )
+    if not verify_result.ok:
+        logger.warning(
+            f"[WEBHOOK][SLACK][VERIFY] Failed: reason={verify_result.reason}"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Slack Webhook Signature",
@@ -441,44 +443,6 @@ async def handle_slack_webhook(
     logger.warning(f"Unknown Slack webhook type: {event_wrapper.type}")
     return {"status": "ignored", "wrapper_type": event_wrapper.type}
 
-
-# =============================================================================
-# Utility Functions
-# =============================================================================
-
-def _verify_slack_signature(
-    payload_body: bytes,
-    signature: Optional[str],
-    timestamp: Optional[str],
-    signing_secret: str,
-) -> bool:
-    """
-    Slack Webhook Signature 검증 (HMAC SHA256)
-    """
-    if not signature or not timestamp:
-        logger.warning("[SLACK][EVENT] Missing Signature or Timestamp Header")
-        return False
-
-    # TimeStamp 검증 (5분 이내 요청만 수락)
-    try:
-        request_time = int(timestamp)
-        current_time = int(time.time())
-        if abs(current_time - request_time) > 60 * 5:
-            logger.warning("[SLACK][EVENT] Rejecting Old Requests")
-            return False
-    except ValueError:
-        logger.warning(f"[SLACK][EVENT] Invalid timestamp format {timestamp}")
-        return False
-
-    # Signature 계산
-    sig_basestring = f"v0:{timestamp}:{payload_body.decode('utf-8')}"
-    expected_signature = "v0=" + hmac.new(
-        signing_secret.encode("utf-8"),
-        sig_basestring.encode("utf-8"),
-        hashlib.sha256
-    ).hexdigest()
-
-    return hmac.compare_digest(expected_signature, signature)
 
 # =============================================================================
 # Private Helper Functions
@@ -565,4 +529,3 @@ def _handle_user_event(team_id: str, event: dict, db: Session) -> dict:
     except Exception as e:
         logger.error(f"[SLACK][EVENT] User event failed: {e}")
         return {"status": "error", "reason": "processing_failed"}
-
