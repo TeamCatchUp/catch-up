@@ -297,6 +297,62 @@ class JiraApiClient:
         raise JiraApiError("Max retries exceeded")
 
     # ============================================================
+    # Dynamic Webhook APIs (REST API v3)
+    # ============================================================
+
+    async def get_dynamic_webhooks(
+        self,
+        start_at: int = 0,
+        max_results: int = 100,
+    ) -> Any:
+        """
+        등록된 Dynamic Webhook 목록 조회
+        """
+        params = {
+            "startAt": start_at,
+            "maxResults": max_results,
+        }
+        return await self._request("GET", f"{self.base_url}/webhook", params=params)
+
+    async def register_dynamic_webhook(
+        self,
+        callback_url: str,
+        jql_filter: str,
+        events: list[str],
+    ) -> Any:
+        """
+        Dynamic Webhook 등록
+        """
+        body = {
+            "url": callback_url,
+            "webhooks": [
+                {
+                    "jqlFilter": jql_filter,
+                    "events": events,
+                }
+            ],
+        }
+        return await self._request(
+            "POST",
+            f"{self.base_url}/webhook",
+            json_body=body,
+        )
+
+    async def refresh_dynamic_webhook_life(
+        self,
+        webhook_ids: list[int],
+    ) -> Any:
+        """
+        Dynamic Webhook 만료 기간 연장 (30일)
+        """
+        body = {"webhookIds": webhook_ids}
+        return await self._request(
+            "PUT",
+            f"{self.base_url}/webhook/refresh",
+            json_body=body,
+        )
+
+    # ============================================================
     # Issue APIs (REST API v3)
     #
     # 이슈 검색, 조회, 코멘트, 변경 이력 관련 API.

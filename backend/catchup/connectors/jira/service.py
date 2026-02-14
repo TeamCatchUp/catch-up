@@ -652,6 +652,30 @@ class JiraIngestionService:
             return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
         except ValueError:
             return None
+        
+    async def delete_issue_documents(
+            self,
+            issue_keys: list[str],
+    ) -> int:
+        self._ensure_initialized()
+
+        unique_issue_keys = sorted({key for key in issue_keys if key})
+        if not unique_issue_keys:
+            return 0
+        
+        doc_ids:list[str] = []
+        for issue_key in unique_issue_keys:
+            doc_ids.append(f"jira:issue:{issue_key}")
+            doc_ids.append(f"jira:epic:{issue_key}")
+
+        await self.repository.delete_documents(doc_ids)
+
+        logger.info(
+            f"[JIRA][FLUSH] Deleted documents from issue_deleted events: "
+            f"cloud_id={self.cloud_id}, issue_count={len(unique_issue_keys)}, doc_count={len(doc_ids)}"
+        )
+        return len(doc_ids)
+            
 
     # ================================================================
     # 증분 동기화 (Incremental Sync)
@@ -661,6 +685,8 @@ class JiraIngestionService:
         self,
         db: Session,
         since: datetime | None = None,
+        project_keys: list[str] | None = None,
+        event_types: set[str] | None = None,
     ) -> dict[str, Any]:
         """
         증분 동기화
@@ -670,32 +696,50 @@ class JiraIngestionService:
         Args:
             db: SQLAlchemy Session
             since: 기준 시간 (None이면 마지막 성공 동기화 시간 사용)
+            project_keys: 동기화 대상 프로젝트 키 목록 (None이면 전체)
+            event_types: flush에서 관측된 이벤트 타입 집합 (로깅/추적용)
 
         Returns:
             동기화 결과 통계
         """
         self._ensure_initialized()
 
-        # 마지막 성공 동기화 시간 조회
+        normalized_event_types = {event for event in (event_types or set()) if event}
+
         if since is None:
             sync_state = jira_sync.get_sync_state(db, self.cloud_id, JiraEntityType.ISSUE)
             if sync_state and sync_state.last_successful_sync_at:
                 since = sync_state.last_successful_sync_at
             else:
-                # 첫 증분 동기화 → 전체 동기화로 전환
-                logger.info("No previous sync found, running full sync instead")
-                return await self.full_sync(db)
-
+                # 동기화 이력 없음 -> 프로젝트 단위 Full Sync
+                logger.info(
+                    f"[JIRA][INCREMENTAL SYNC] No previous sync state. "
+                    f"Running full sync: cloud_id={self.cloud_id}, projects={project_keys or 'all'}"
+                )
+                full_result = await self.full_sync(db, project_keys=project_keys)
+                return {
+                    "issues": full_result["issues"]["synced"],
+                    "epics": full_result["epics"]["synced"],
+                    "errors": full_result["issues"]["errors"] + full_result["epics"]["errors"],
+                }
+        
         logger.info(
-            f"Starting incremental sync for cloud_id={self.cloud_id}, since={since}"
+            f"[JIRA][INCREMENTAL SYNC] Started: "
+            f"cloud_id={self.cloud_id}, since={since}, projects={project_keys or 'all'}, "
+            f"event_types={sorted(normalized_event_types) if normalized_event_types else ['all']}"
         )
 
         results = {"issues": 0, "epics": 0, "errors": 0}
 
         try:
-            # 업데이트된 이슈만 조회
             since_str = since.strftime("%Y-%m-%d %H:%M")
-            jql = f'updated >= "{since_str}" ORDER BY updated DESC'
+
+            # 프로젝트 범위 + 시점 기반 JQL 구성
+            jql_parts = [f'updated >= "{since_str}"']
+            if project_keys:
+                projects_str = ", ".join(f'"{project_key}"' for project_key in project_keys)
+                jql_parts.append(f"project IN ({projects_str})")
+            jql = " AND ".join(jql_parts) + " ORDER BY updated DESC"
 
             next_page_token: str | None = None
             batch_size = settings.JIRA_SYNC_BATCH_SIZE
@@ -704,7 +748,7 @@ class JiraIngestionService:
             while True:
                 response = await self.client.search_issues(
                     jql=jql,
-                    fields=None,  # 모든 필드
+                    fields=None,
                     max_results=batch_size,
                     next_page_token=next_page_token,
                 )
@@ -717,8 +761,8 @@ class JiraIngestionService:
 
                 processed_count += len(issues)
                 logger.info(
-                    f"Incremental sync: processing {len(issues)} issues "
-                    f"(total processed: {processed_count})"
+                    f"[JIRA][INCREMENTAL SYNC] Processing batch: "
+                    f"cloud_id={self.cloud_id}, batch={len(issues)}, total={processed_count}"
                 )
 
                 documents: list[Document] = []
@@ -740,26 +784,23 @@ class JiraIngestionService:
 
                     except Exception as e:
                         logger.error(
-                            f"Failed to transform issue {issue_data.get('key')}: {e}"
+                            f"[JIRA][INCREMENTAL SYNC] Transform failed: "
+                            f"cloud_id={self.cloud_id}, issue_key={issue_data.get('key')}, error={e}"
                         )
                         results["errors"] += 1
 
-                # Upsert (기존 문서 업데이트)
                 if documents:
                     await self.repository.upsert_documents(documents, doc_ids)
 
-                # 마지막 페이지면 종료
                 if is_last:
                     break
 
-                # 다음 페이지 토큰
                 next_page_token = response.get("nextPageToken")
                 if not next_page_token:
                     break
 
                 await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
 
-            # 성공 시 동기화 상태 업데이트
             jira_sync.create_or_update_sync_state(
                 db=db,
                 cloud_id=self.cloud_id,
@@ -775,11 +816,11 @@ class JiraIngestionService:
                 synced_count=results["epics"],
             )
 
-            logger.info(f"Incremental sync completed: {results}")
+            logger.info(f"[JIRA][INCREMENTAL SYNC] Completed: cloud_id={self.cloud_id}, results={results}")
             return results
 
         except Exception as e:
-            logger.error(f"Incremental sync failed: {e}")
+            logger.error(f"[JIRA][INCREMENTAL SYNC] Failed: cloud_id={self.cloud_id}, error={e}")
             jira_sync.create_or_update_sync_state(
                 db=db,
                 cloud_id=self.cloud_id,

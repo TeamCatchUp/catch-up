@@ -296,6 +296,28 @@ class WebhookEventBuffer:
                 projects.append(project_key)
 
         return list(set(projects))  # 중복 제거
+    
+    async def get_jira_project_events(
+        self,
+        cloud_id: str,
+        project_key: str,
+    ) -> list[dict[str, Any]]:
+        redis = await self._get_redis()
+        key = f"{WEBHOOK_EVENT_PREFIX}:jira:{cloud_id}:{project_key}:issue"
+
+        raw_events = await redis.smembers(key)
+        events: list[dict[str, Any]] = []
+        
+        for raw_event in raw_events:
+            raw_str = raw_event.decode() if isinstance(raw_event, bytes) else raw_event
+            try:
+                events.append(json.loads(raw_str))
+            except json.JSONDecodeError:
+                logger.warning(
+                    f"[JIRA][WEBHOOK] Invalid event payload skipped: "
+                    f"cloud_id={cloud_id}, project_key={project_key}, raw={raw_str}"
+                )
+        return events
 
     async def clear_jira_buffer(
         self, cloud_id: str, project_key: str

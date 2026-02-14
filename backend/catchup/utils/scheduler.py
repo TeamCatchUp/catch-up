@@ -5,17 +5,20 @@ APScheduler for Hourly Sync
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from sqlalchemy.orm import Session
 
+from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
-from catchup.utils.webhook_buffer import get_webhook_buffer
 from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.connectors.github.schemas import IncrementalSyncRequest
+from catchup.connectors.jira.dynamic_webhook_service import get_jira_dynamic_webhook_service
+from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.db.github.installation_repository import get_all_installations
-from catchup.db.slack.oauth_repository import get_all_slack_tokens
+from catchup.db.jira import sync_repository as jira_sync
 from catchup.db.jira.oauth_repository import get_all_jira_tokens
-from catchup.configs.config import settings
+from catchup.db.models import JiraEntityType
+from catchup.db.slack.oauth_repository import get_all_slack_tokens
+from catchup.utils.webhook_buffer import get_webhook_buffer
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +153,7 @@ async def flush_slack_events():
 
 
 async def flush_jira_events():
-    logger.info("Starting Jira webhook flush job")
+    logger.info("[JIRA][FLUSH] Starting Jira webhook flush job")
     buffer = get_webhook_buffer()
 
     with SessionLocal() as db:
@@ -163,46 +166,128 @@ async def flush_jira_events():
                 projects_with_events = await buffer.get_jira_buffered_projects(cloud_id)
 
                 if not projects_with_events:
-                    logger.debug(f"No buffered events for Jira cloud {cloud_id}")
+                    logger.debug(f"[JIRA][FLUSH] No buffered events: cloud_id={cloud_id}")
                     continue
 
                 logger.info(
-                    f"Flushing Jira events for cloud {cloud_id}: "
-                    f"{len(projects_with_events)} projects affected"
+                    f"[JIRA][FLUSH] Buffered projects found: "
+                    f"cloud_id={cloud_id}, projects={len(projects_with_events)}"
                 )
 
+                issue_sync_state = jira_sync.get_sync_state(db, cloud_id, JiraEntityType.ISSUE)
+                base_since = (
+                    issue_sync_state.last_successful_sync_at
+                    if issue_sync_state and issue_sync_state.last_successful_sync_at
+                    else None
+                )
 
-                # Clear buffer for each project
+                service = await create_jira_ingestion_service(db, cloud_id)
+
                 for project_key in projects_with_events:
                     try:
-                        event_count = await buffer.clear_jira_buffer(cloud_id, project_key)
-                        logger.info(
-                            f"Cleared {event_count} issue events for project {project_key}"
+                        events = await buffer.get_jira_project_events(cloud_id, project_key)
+                        if not events:
+                            logger.debug(
+                                f"[JIRA][FLUSH] Empty project buffer: "
+                                f"cloud_id={cloud_id}, project_key={project_key}"
+                            )
+                            continue
+
+                        latest_event_by_issue: dict[str, dict] = {}
+                        for event in events:
+                            issue_key = event.get("key")
+                            event_type = event.get("type")
+                            if not issue_key or not event_type:
+                                continue
+
+                            event_ts = float(event.get("timestamp") or 0.0)
+                            previous = latest_event_by_issue.get(issue_key)
+                            if previous is None or event_ts >= previous["timestamp"]:
+                                latest_event_by_issue[issue_key] = {
+                                    "type": event_type,
+                                    "timestamp": event_ts,
+                                }
+
+                        if not latest_event_by_issue:
+                            logger.debug(
+                                f"[JIRA][FLUSH] No valid events after normalize: "
+                                f"cloud_id={cloud_id}, project_key={project_key}"
+                            )
+                            continue
+
+                        event_types = {
+                            value["type"] for value in latest_event_by_issue.values()
+                        }
+                        deleted_issue_keys = sorted(
+                            issue_key
+                            for issue_key, value in latest_event_by_issue.items()
+                            if value["type"] == "jira:issue_deleted"
                         )
+
+                        sync_result = await service.incremental_sync(
+                            db=db,
+                            since=base_since,
+                            project_keys=[project_key],
+                            event_types=event_types,
+                        )
+
+                        deleted_doc_count = 0
+                        if deleted_issue_keys:
+                            deleted_doc_count = await service.delete_issue_documents(deleted_issue_keys)
+
+                        cleared_event_count = await buffer.clear_jira_buffer(cloud_id, project_key)
+
+                        logger.info(
+                            f"[JIRA][FLUSH] Project synced: "
+                            f"cloud_id={cloud_id}, project_key={project_key}, "
+                            f"events={cleared_event_count}, event_types={sorted(event_types)}, "
+                            f"sync_result={sync_result}, deleted_docs={deleted_doc_count}"
+                        )
+
                     except Exception as e:
                         logger.error(
-                            f"Failed to clear buffer for project {project_key}: {e}",
-                            exc_info=True
+                            f"[JIRA][FLUSH] Project sync failed (buffer kept): "
+                            f"cloud_id={cloud_id}, project_key={project_key}, error={e}",
+                            exc_info=True,
                         )
-
-                # try:
-                #     result = await service.incremental_sync(db)
-                #     logger.info(f"Jira incremental sync result for cloud {cloud_id}: {result}")
-                # except Exception as e:
-                #     logger.error(f"Failed to sync Jira cloud {cloud_id}: {e}", exc_info=True)
-
-                logger.warning(
-                    f"Jira incremental sync skipped for cloud {cloud_id}: "
-                    "Incremental sync path is disabled"
-                )
 
             except Exception as e:
                 logger.error(
-                    f"Failed to flush events for Jira cloud {cloud_id}: {e}",
-                    exc_info=True
+                    f"[JIRA][FLUSH] Cloud flush failed: cloud_id={cloud_id}, error={e}",
+                    exc_info=True,
                 )
 
-    logger.info("Jira webhook flush job completed")
+    logger.info("[JIRA][FLUSH] Jira webhook flush job completed")
+
+
+async def refresh_jira_dynamic_webhooks():
+    """
+    Jira Dynamic Webhook 등록 상태 보장 및 만료 갱신
+    """
+    logger.info("[JIRA][WEBHOOK][DYNAMIC] Starting webhook refresh job")
+    dynamic_webhook_service = get_jira_dynamic_webhook_service()
+
+    with SessionLocal() as db:
+        tokens = get_all_jira_tokens(db)
+
+        for token in tokens:
+            cloud_id = token.cloud_id
+            try:
+                result = await dynamic_webhook_service.ensure_registered(
+                    db=db,
+                    cloud_id=cloud_id,
+                )
+                logger.info(
+                    f"[JIRA][WEBHOOK][DYNAMIC] Processed cloud: cloud_id={cloud_id}, result={result}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"[JIRA][WEBHOOK][DYNAMIC] Failed to process cloud: "
+                    f"cloud_id={cloud_id}, error={e}",
+                    exc_info=True,
+                )
+
+    logger.info("[JIRA][WEBHOOK][DYNAMIC] Webhook refresh job completed")
 
 
 def init_scheduler():
@@ -220,9 +305,6 @@ def init_scheduler():
     _scheduler = AsyncIOScheduler()
 
     interval_hours = settings.WEBHOOK_FLUSH_INTERVAL_HOURS
-
-    # TODO:
-    # Jira token lifecycle 보장을 위해 별도 주기 작업 추가 필요
 
     _scheduler.add_job(
         flush_github_events,
@@ -247,6 +329,16 @@ def init_scheduler():
         trigger=CronTrigger(hour=f"*/{interval_hours}", minute=0),
         id="jira_webhook_flush",
         name="Jira Webhook Event Flush",
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
+
+    jira_webhook_refresh_hours = settings.JIRA_WEBHOOK_REFRESH_INTERVAL_HOURS
+    _scheduler.add_job(
+        refresh_jira_dynamic_webhooks,
+        trigger=CronTrigger(hour=f"*/{jira_webhook_refresh_hours}", minute=10),
+        id="jira_dynamic_webhook_refresh",
+        name="Jira Dynamic Webhook Refresh",
         replace_existing=True,
         misfire_grace_time=300,
     )
