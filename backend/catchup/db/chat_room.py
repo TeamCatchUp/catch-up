@@ -9,50 +9,21 @@ from catchup.rag.schemas.sources import BaseSource
 
 def get_chat_room(
     db: Session,
-    session_id: uuid.UUID
+    session_id: uuid.UUID,
+    user_id: int
 ) -> ChatRoom | None:
+    """사용자 권한 확인을 포함한 세션 ID 기반 단일 채팅방 조회"""
+    
+    # 세션 ID 검증 및 사용자 권한 확인
+    filter_query = (
+        (ChatRoom.session_id == session_id) & 
+        (ChatRoom.user_id == user_id)
+    )
+    
     return db.scalar(
         select(ChatRoom)
-        .where(ChatRoom.session_id == session_id)
+        .where(filter_query)
     )
-
-
-def create_chat_room(
-    db: Session,
-    session_id: uuid.UUID,
-    user_id: int,
-    workspace_id: int,
-    title: str
-) -> ChatRoom:
-    room = ChatRoom(
-        session_id=session_id,
-        user_id=user_id,
-        workspace_id=workspace_id,
-        title=title
-    )
-    db.add(room)
-    db.commit()
-    db.refresh(room)
-    
-    return room
-
-
-def add_message(
-    db: Session,
-    room_id: uuid.UUID,
-    role: str,
-    content: str,
-    sources: Optional[list[BaseSource]]
-) -> ChatHistory:
-    message = ChatHistory(
-        chat_room_id=room_id,
-        sender_type=SenderType.HUMAN if role == "user" else SenderType.ASSISTANT,
-        content=content,
-        sources=sources or []
-    )
-    db.add(message)
-    db.commit()
-    return message
 
 
 def get_chat_rooms(
@@ -82,3 +53,72 @@ def get_chat_rooms(
     items = db.scalars(stmt).all()
     
     return list(items), total_count
+
+
+def create_chat_room(
+    db: Session,
+    session_id: uuid.UUID,
+    user_id: int,
+    workspace_id: int,
+    title: str
+) -> ChatRoom:
+    """채팅방 생성"""
+    room = ChatRoom(
+        session_id=session_id,
+        user_id=user_id,
+        workspace_id=workspace_id,
+        title=title
+    )
+    db.add(room)
+    db.commit()
+    db.refresh(room)
+    
+    return room
+
+
+def add_message(
+    db: Session,
+    room_id: int,
+    role: str,
+    content: str,
+    sources: Optional[list[BaseSource]]
+) -> ChatHistory:
+    """채팅 메시지 저장"""
+    message = ChatHistory(
+        chat_room_id=room_id,
+        sender_type=SenderType.HUMAN if role == "user" else SenderType.ASSISTANT,
+        content=content,
+        sources=sources or []
+    )
+    db.add(message)
+    db.commit()
+    return message
+
+
+def get_chat_room_messages(
+    db: Session,
+    room_id: int,
+    skip: int = 0,
+    limit: int = 10
+) -> tuple[list[ChatHistory], int]:
+    """채팅 메시지 히스토리 조회"""
+    
+    filter_query = (ChatHistory.chat_room_id == room_id)
+        
+    total_count = db.scalar(
+        select(func.count())
+        .select_from(ChatHistory)
+        .where(filter_query)
+    ) or 0
+    
+    stmt = (
+        select(ChatHistory)
+        .where(filter_query)
+        .order_by(ChatHistory.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    
+    items = db.scalars(stmt).all()
+    
+    return list(reversed(items)), total_count

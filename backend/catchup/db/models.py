@@ -888,9 +888,11 @@ class GithubRepository(Base):
 class ChatRoom(Base):
     __tablename__ = "chat_rooms"
     
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        primary_key=True,
+        unique=True,
+        index=True,
         default=uuid.uuid4
     )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
@@ -921,14 +923,14 @@ class ChatHistory(Base):
     __tablename__ = "chat_histories"
     
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    chat_room_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("chat_rooms.session_id"), 
+    chat_room_id: Mapped[int] = mapped_column(
+        ForeignKey("chat_rooms.id"), 
         nullable=False
     )
     
     content: Mapped[str] = mapped_column(Text, nullable=True)
     sender_type: Mapped[SenderType] = mapped_column(String(20), nullable=False)
-    sources: Mapped[Optional[list[dict[str,Any]]]] = mapped_column(
+    sources: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
         JSONB,
         nullable=True,
         server_default=text("'[]'::jsonb")

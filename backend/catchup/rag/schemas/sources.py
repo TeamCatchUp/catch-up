@@ -164,7 +164,7 @@ class BaseSource(BaseModel):
             )
 
         # 3. GitHub
-        elif source_str == "github":
+        elif source_str == "github":            
             full_name = metadata.get("full_name", "")
             owner, repo = (
                 full_name.split("/", 1)  # 최대 한 번만 분리
@@ -172,13 +172,18 @@ class BaseSource(BaseModel):
                 else (metadata.get("owner"), metadata.get("repo"))
             )
             
+            author_info = metadata.get("author")
+            author = ""
+            if author_info:
+                author = author_info.get("name") or author_info.get("login")
+            
             return GithubSource(
                 **base_data,
                 source=SourceType.GITHUB,
                 title=metadata.get(
                     "summary", f"{entity_type} #{metadata.get('number')}"
                 ),
-                author=metadata.get("author"),
+                author=author,
                 # Github Common
                 owner=owner,
                 repo=repo,
