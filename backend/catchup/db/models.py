@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from typing import Any, Optional
 
+from click import Option
 from sqlalchemy import ForeignKey, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.associationproxy import association_proxy
@@ -887,9 +888,11 @@ class GithubRepository(Base):
 class ChatRoom(Base):
     __tablename__ = "chat_rooms"
     
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        primary_key=True,
+        unique=True,
+        index=True,
         default=uuid.uuid4
     )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
@@ -916,24 +919,53 @@ class SenderType(StrEnum):
     ASSISTANT = "assistant"
 
 
+class FeedbackLiteral(StrEnum):
+    HALLUCINATION = "HALLUCINATION"
+    OUTDATED = "OUTDATED"
+    NO_CITATION = "NO_CITATION"
+    MISSING_INFO = "MISSING_INFO"
+    IRRELEVANT_SOURCE = "IRRELEVANT_SOURCE"
+    IRRELEVANT_ANSWER = "IRRELEVANT_ANSWER"
+    TOO_LONG = "TOO_LONG"
+    OTHER = "OTHER"    
+
+
 class ChatHistory(Base):
     __tablename__ = "chat_histories"
     
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    chat_room_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("chat_rooms.session_id"), 
+    chat_room_id: Mapped[int] = mapped_column(
+        ForeignKey("chat_rooms.id"), 
         nullable=False
     )
     
     content: Mapped[str] = mapped_column(Text, nullable=True)
     sender_type: Mapped[SenderType] = mapped_column(String(20), nullable=False)
-    sources: Mapped[Optional[list[dict[str,Any]]]] = mapped_column(
+    sources: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
         JSONB,
         nullable=True,
         server_default=text("'[]'::jsonb")
     )
     
-    feedback_string: Mapped[str] = mapped_column(String(127), nullable=True)
+    is_liked: Mapped[Optional[bool]] = mapped_column(
+        Boolean,
+        nullable=True,
+        default=None,
+        comment="True: 긍정, False: 부정, None: 평가 없음"
+    )
+    
+    feedback_reasons: Mapped[Optional[list[str]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        server_default=text("'[]'::jsonb"),
+        comment="사용자가 선택한 부정 피드백 사유 목록 (Json Array)"
+    )
+    
+    feedback_comment: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="사용자가 직접 작성한 상세 피드백 내용"
+    )
     
     is_displayed: Mapped[bool] = mapped_column(
         Boolean,
@@ -944,9 +976,12 @@ class ChatHistory(Base):
     )
     
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
-    outpu_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
     chat_room: Mapped["ChatRoom"] = relationship(back_populates="chat_histories")
     
+    @property
+    def session_id(self) -> uuid.UUID:
+        return self.chat_room.session_id

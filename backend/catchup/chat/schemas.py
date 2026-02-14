@@ -1,11 +1,11 @@
 from datetime import datetime
 import uuid
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from catchup.db.models import UserRole
-from catchup.rag.schemas.sources import SourceResponse
+from catchup.db.models import FeedbackLiteral, SenderType, UserRole
+from catchup.rag.schemas.sources import BaseSource, SourceResponse
 
 
 NODE_STATUS_MAP = {
@@ -83,6 +83,7 @@ StreamEvent = Annotated[
 #     payload: Any
 
 
+# 채팅방 목록
 class ChatRoomResponse(BaseModel):
     session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
     title: str = Field(..., description="채팅방 이름")
@@ -90,3 +91,29 @@ class ChatRoomResponse(BaseModel):
     updated_at: datetime = Field(..., description="최근 활동 시각")
     
     model_config = ConfigDict(from_attributes=True)
+    
+# 채팅 메시지 히스토리
+class ChatHistoryResponse(BaseModel):
+    id: int = Field(..., description="메시지 고유 ID")
+    sender_type: SenderType = Field(..., description="sender 유형 (user/assistant)")
+    content: str = Field(..., description="메시지 내용")
+    created_at: datetime = Field(..., description="메시지 생성 시각")
+    sources: Optional[list[BaseSource]] = Field(default_factory=list, description="출처 목록 (sender_type='assistant'인 경우에만 존재)")
+
+    model_config = ConfigDict(from_attributes=True)
+    
+# 사용자 쿼리 정보
+class UserQueryResponse(BaseModel):
+    id: int = Field(..., description="메시지 고유 ID")
+    session_id: uuid.UUID = Field(..., description="사용자 쿼리가 속한 채팅방 세션 ID")
+    content: str = Field(..., description="메시지 내용")
+    created_at: datetime = Field(..., description="메시지 생성 시각")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FeedbackRequest(BaseModel):
+    is_liked: Optional[bool] = Field(default=None, description="사용자 긍정/부정 피드백")
+    reasons: Optional[list[FeedbackLiteral]] = Field(default_factory=list, description="부정 피드백 사유 목록")
+    comment: Optional[str] = Field(default=None, description="사용자가 직접 작성한 상세 피드백")
+    

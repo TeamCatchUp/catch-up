@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar
+from typing import Generic, Optional, TypeVar
 from pydantic import BaseModel, Field
 
 # 제네릭 선언
@@ -9,3 +9,7 @@ class BasePagination(BaseModel, Generic[T]):
     page: int = Field(..., description="현재 페이지 번호")
     size: int = Field(..., description="페이지 당 아이템 개수")
     items: list[T] = Field(..., description="데이터 목록")
+    
+
+def calculate_skip(page: int, size: int) -> int:
+    return (page - 1) * size

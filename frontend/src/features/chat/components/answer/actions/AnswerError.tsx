@@ -1,3 +1,5 @@
+import type { ErrorResponseProps } from '@/features/chat/types/props/actionProps';
+
 import AnswerActionButtons from './AnswerActionButtons';
 import FeedbackSection from './FeedbackSection';
 

@@ -1,3 +1,5 @@
+import type { ChatSource } from '@/features/chat/types';
+
 import LightbulbFilled from '/public/icons/icon/lightbulb_filled.svg';
 import Github from '/public/icons/logo/GitHub.svg';
 import Jira from '/public/icons/logo/Jira.svg';
@@ -15,36 +17,20 @@ const REASON_PREVIEW_MAX_LENGTH = 120;
 
 const SourceCard = ({ source, showCount = true, count }: Props) => {
   const handleClick = () => {
-    if (!source.html_url) {
-      return;
-    }
-
+    if (!source.html_url) return;
     window.open(source.html_url, '_blank', 'noopener,noreferrer');
   };
 
   const getSourceLogoType = (): SourceLogoType => {
-    if (source.source_type === 'jira') {
-      return 'jira';
-    }
-
-    if (source.source_type === 'slack') {
-      return 'slack';
-    }
-
+    if (source.source_type === 'jira') return 'jira';
+    if (source.source_type === 'slack') return 'slack';
     return 'github';
   };
 
   const renderSourceLogo = () => {
     const sourceLogoType = getSourceLogoType();
-
-    if (sourceLogoType === 'jira') {
-      return <Jira className="h-4 w-4 shrink-0" />;
-    }
-
-    if (sourceLogoType === 'slack') {
-      return <Slack className="h-4 w-4 shrink-0" />;
-    }
-
+    if (sourceLogoType === 'jira') return <Jira className="h-4 w-4 shrink-0" />;
+    if (sourceLogoType === 'slack') return <Slack className="h-4 w-4 shrink-0" />;
     return <Github className="h-4 w-4 shrink-0" />;
   };
 
@@ -88,9 +74,7 @@ const SourceCard = ({ source, showCount = true, count }: Props) => {
       <div className="border-neutral-3 flex w-full flex-col gap-0.5 border-l-2 py-0.5 pl-3">
         <div className="flex items-center gap-1">
           <LightbulbFilled className="h-4 w-4 text-gray-20" />
-          <span className="text-body-xsmall text-gray-50 whitespace-nowrap">
-            이 출처가 사용된 이유
-          </span>
+          <span className="text-body-xsmall text-gray-50 whitespace-nowrap">이 출처가 사용된 이유</span>
         </div>
         <div className="text-body-small text-gray-50 line-clamp-2 wrap-break-word">
           {reasonPreview}

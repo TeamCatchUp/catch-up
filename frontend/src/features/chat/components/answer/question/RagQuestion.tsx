@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import type { QAPair } from '@/features/chat/utils/chat';
+import type { QAPair } from '@/features/chat/utils/render/chat';
 
 import CollapsibleQuestionText from './CollapsibleQuestionText';
 import EditMessageInput from './EditMessageInput';

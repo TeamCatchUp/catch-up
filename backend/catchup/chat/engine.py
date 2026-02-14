@@ -46,7 +46,7 @@ class ChatService:
             self,
             global_context: GlobalContext,
             query: str,
-            session_id: str,
+            session_id: uuid.UUID,
     ) -> ChatResponse:
         app = await self._get_app()
 
@@ -86,8 +86,8 @@ class ChatService:
         query: str = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         
-        # 
-        await self._setup_chat_room(
+        # 채팅 세션 획득
+        room_id: int = await self._setup_chat_room(
             db,
             global_context,
             session_id,
@@ -118,7 +118,7 @@ class ChatService:
 
         try:
             async for event in app.astream_events(inputs, config, version="v2"):
-                async for parsed_event in self._parse_stream_event(event, session_id, stream_state, db):
+                async for parsed_event in self._parse_stream_event(event, session_id, room_id, stream_state, db):
                     yield parsed_event
 
         except asyncio.CancelledError:
@@ -135,7 +135,8 @@ class ChatService:
     async def _parse_stream_event(
         self,
         event: dict[str, Any],
-        session_id: str,
+        session_id: uuid.UUID,
+        room_id: int,
         stream_state: dict[str, Any],
         db: Session
     ) -> AsyncGenerator[StreamEvent, None]:
@@ -160,13 +161,13 @@ class ChatService:
 
         # 3. 노드 종료 (현재는 최종 답변 생성 노드만 관여)
         elif kind == "on_chain_end":
-            async for res in self._handle_node_end(event, session_id, stream_state, db):
+            async for res in self._handle_node_end(event, session_id, room_id, stream_state, db):
                 yield res
     
     async def _handle_node_start(
         self,
         event: dict,
-        session_id: str
+        session_id: uuid.UUID
     ):
         """노드 단위 답변 생성 과정 스트리밍"""
         name = event["name"]
@@ -191,7 +192,7 @@ class ChatService:
     async def _handle_token_stream(
         self,
         event: dict,
-        session_id: str,
+        session_id: uuid.UUID,
         stream_state: dict
     ): 
         """토큰 스트리밍"""
@@ -240,7 +241,8 @@ class ChatService:
     async def _handle_node_end(
             self,
             event: dict,
-            session_id: str,
+            session_id: uuid.UUID,
+            room_id: int,
             stream_state: dict,
             db: Session
         ):
@@ -248,7 +250,10 @@ class ChatService:
             그래프 종료 시점.
             인용 사유를 포함한 최종 소스를 업데이트한다.
         """
-        if event["name"] != "generate_final_answer":
+        
+        target_nodes = ("chitchat", "generate_final_answer")
+        
+        if event["name"] not in target_nodes:
             return
         
         output = event["data"].get("output")
@@ -262,14 +267,14 @@ class ChatService:
         final_content = last_msg.content if last_msg and hasattr(last_msg, "content") else str(last_msg)
         
         final_sources_data = [
-            source.model_dump() if hasattr(source, "model_dump") else source
+            source.model_dump(mode='json') if hasattr(source, "model_dump") else source
             for source in sources
         ]
         
         if final_content:
             await self._save_message_content(
                 db,
-                session_id,
+                room_id,
                 "assistant",
                 final_content,
                 final_sources_data
@@ -303,52 +308,70 @@ class ChatService:
         global_context: GlobalContext,
         session_id: uuid.UUID,
         query: str
-    ):
-        # 채팅방 설정
+    ) -> int:
+        """
+            채팅방이 없다면 세션을 생성한다.
+            사용자 쿼리를 저장한다.
+            채팅방 ID를 반환한다.
+        """
+
         room = await run_in_threadpool(
             get_chat_room, 
             db, 
-            session_id
+            session_id, 
+            global_context.user.id
         )
         
-        # 새로운 채팅 세션일 경우
         if not room:
             initial_title = await generate_chat_room_title(query)
-            room = await run_in_threadpool(
-                create_chat_room,
-                db,
-                session_id,
-                global_context.user.id,
-                global_context.workspace.id,
-                initial_title
-            )
-
+               
+            # 새로운 채팅 세션일 경우
+            def _create_room_sync():
+                new_room = create_chat_room(
+                    db=db,
+                    session_id=session_id,
+                    user_id=global_context.user.id,
+                    workspace_id=global_context.workspace.id,
+                    title=initial_title
+                )
+                db.commit()
+                db.refresh(new_room)
+                return new_room
+        
+            room = await run_in_threadpool(_create_room_sync)     
+               
         # 사용자 쿼리 저장
         await self._save_message_content(
             db,
-            session_id,
+            room.id,
             "user",
             query
         )
+        
+        return room.id
     
     async def _save_message_content(
         self,
         db: Session,
-        session_id: uuid.UUID,
+        room_id: int,
         role: str,
         content: str,
         sources: Optional[list[dict[str, Any]]] = None
     ):
-        await run_in_threadpool(
-            add_message,
-            db,
-            session_id,
-            role,
-            content,
-            sources
-        )
+        
+        def _save_sync():
+            add_message(
+                db=db,
+                room_id=room_id,
+                role=role,
+                content=content,
+                sources=sources
+            )
+            db.commit()
+            
+        await run_in_threadpool(_save_sync)
 
-    def _setup_config(self, session_id: str):
+    def _setup_config(self, session_id: uuid.UUID):
         default_config = {"configurable": {"thread_id": session_id}}
         if settings.ENABLE_LANGFUSE:
             from catchup.observability.langfuse import langfuse_handler

@@ -2,6 +2,7 @@ import logging
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -47,12 +48,18 @@ async def google_callback(
 ):
     google_user = await oauth_service.get_google_user(code)
 
-    user = oauth_service.get_or_register_google_user(db, google_user)
+    def _handle_login_sync():
+        user = oauth_service.get_or_register_google_user(db, google_user)
 
-    access_token = create_access_token(data={"sub": user.email})
-    refresh_token = create_refresh_token(data={"sub": user.email})
+        access_token = create_access_token(data={"sub": user.email})
+        refresh_token = create_refresh_token(data={"sub": user.email})
 
-    update_user_refresh_token(db, user.id, refresh_token)
+        update_user_refresh_token(db, user.id, refresh_token)
+        db.commit()
+        
+        return access_token, refresh_token
+
+    access_token, refresh_token = await run_in_threadpool(_handle_login_sync)
 
     response = RedirectResponse(url=auth_settings.FRONTEND_REDIRECT_URI)
 
@@ -63,15 +70,24 @@ async def google_callback(
 
 @router.post("/refresh", response_model=TokenRefreshResponse)
 async def refresh_token(
-    request: Request, response: Response, db: Session = Depends(get_db)
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
 ):
-    refresh_token = request.headers.get("refresh_token")
+    refresh_token = request.cookies.get("refresh_token")
+    
+    if not refresh_token:
+        refresh_token = request.headers.get("refresh_token")
 
     payload = verify_token(refresh_token, "refresh")
 
     email = payload.get("sub")
 
-    user = get_user_by_email(db, email)
+    user = await run_in_threadpool(
+        get_user_by_email,
+        db,
+        email
+    )
 
     if not user or user.refresh_token != refresh_token:
         delete_auth_cookies(response)
@@ -97,7 +113,15 @@ async def logout(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    update_user_refresh_token(db, current_user.id, None)
+    def _update_user_refresh_token_sync():
+        update_user_refresh_token(
+            db=db,
+            user_id=current_user.id,
+            refresh_token=None
+        )
+        db.commit()
+    
+    await run_in_threadpool(_update_user_refresh_token_sync)
 
     delete_auth_cookies(response)
 
@@ -107,5 +131,7 @@ async def logout(
 @router.get("/me")
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return CurrentUserInfo(
-        email=current_user.email, name=current_user.name, role=current_user.role
+        email=current_user.email,
+        name=current_user.name,
+        role=current_user.role
     )

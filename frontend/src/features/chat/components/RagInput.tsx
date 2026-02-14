@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 
-import type { UseRagFiltersReturn } from '@/features/chat/hooks/useRagFilters';
+import type { UseRagFiltersReturn } from '@/features/chat/hooks/filter/useRagFilters';
 import IconDivider from '@/public/icons/icon/divider.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconSpace from '@/public/icons/icon/space.svg';

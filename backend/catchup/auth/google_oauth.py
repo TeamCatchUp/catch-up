@@ -17,7 +17,11 @@ class GoogleOAuthService:
             access_token = await self._get_access_token(client, code)
             return await self._fetch_user_info(client, access_token)
 
-    async def _get_access_token(self, client: httpx.AsyncClient, code: str) -> str:
+    async def _get_access_token(
+            self,
+            client: httpx.AsyncClient,
+            code: str
+        ) -> str:
         response = await client.post(
             self.TOKEN_URL,
             data={
@@ -38,10 +42,13 @@ class GoogleOAuthService:
         return response.json().get("access_token")
 
     async def _fetch_user_info(
-        self, client: httpx.AsyncClient, access_token: str
+        self,
+        client: httpx.AsyncClient,
+        access_token: str
     ) -> GoogleUserInfoResponse:
         response = await client.get(
-            self.USER_INFO_URL, headers={"Authorization": f"Bearer {access_token}"}
+            self.USER_INFO_URL,
+            headers={"Authorization": f"Bearer {access_token}"}
         )
 
         if response.status_code != 200:
@@ -62,7 +69,9 @@ class GoogleOAuthService:
         )
 
     def get_or_register_google_user(
-        self, db: Session, google_user: GoogleUserInfoResponse
+        self,
+        db: Session,
+        google_user: GoogleUserInfoResponse
     ) -> User:
         existing_user = get_user_by_email(db, google_user.email)
 
@@ -71,4 +80,8 @@ class GoogleOAuthService:
 
         new_user_data = UserCreate.from_google_user(google_user)
 
-        return create_new_user(db, new_user_data)
+        new_user = create_new_user(db, new_user_data)
+        
+        db.flush()  # commit은 상위 계층 이루어짐 (현재 라우터가 오케스트레이션하기 때문)
+        
+        return new_user

@@ -9,7 +9,10 @@ def get_user_by_email(
     db: Session,
     email: str
 ) -> User | None:
-    return db.execute(select(User).filter_by(email=email)).scalar_one_or_none()
+    return db.scalar(
+        select(User)
+        .filter_by(email=email)
+    )
 
 
 def create_new_user(
@@ -17,17 +20,8 @@ def create_new_user(
     user_create: UserCreate
 ) -> User:
     new_user = User(**user_create.model_dump())
-
     db.add(new_user)
-
-    try:
-        db.commit()
-        db.refresh(new_user)
-        return new_user
-
-    except Exception:
-        db.rollback()
-        raise
+    return new_user
 
 
 def update_user_refresh_token(
@@ -37,14 +31,12 @@ def update_user_refresh_token(
 ):
     stmt = update(User).where(User.id == user_id).values(refresh_token=refresh_token)
     db.execute(stmt)
-    db.commit()
 
 
 def get_user_with_full_context(
     db: Session,
     user_id: int
 ) -> User | None:
-
     stmt = (
         select(User)
         .where(User.id == user_id)
@@ -54,5 +46,4 @@ def get_user_with_full_context(
             .selectinload(Workspace.company)
         )
     )
-    
-    return db.scalars(stmt).one_or_none()
+    return db.scalar(stmt)
