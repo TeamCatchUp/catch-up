@@ -99,7 +99,7 @@ def get_chat_room_messages(
     db: Session,
     room_id: int,
     skip: int = 0,
-    limit: int = 10
+    limit: int = 20
 ) -> tuple[list[ChatHistory], int]:
     """채팅 메시지 히스토리 조회"""
     
@@ -122,3 +122,16 @@ def get_chat_room_messages(
     items = db.scalars(stmt).all()
     
     return list(reversed(items)), total_count
+
+
+def get_queries_by_user(
+    db: Session,
+    user_id: int
+):
+    pass
+
+def get_queries_by_chat_room(
+    db: Session,
+    room_id: int
+):
+    pass

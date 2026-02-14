@@ -947,7 +947,7 @@ class ChatHistory(Base):
     )
     
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
-    outpu_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
