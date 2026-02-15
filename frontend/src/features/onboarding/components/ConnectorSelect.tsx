@@ -5,18 +5,8 @@ import Image from 'next/image';
 
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import UnfoldMore from '@/public/icons/icon/unfold_more.svg';
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/shared/components/ui/command';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/shared/components/ui/popover';
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/shared/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
 import { cn } from '@/shared/utils/cn';
 
 import type { ConnectorAccount } from '../types/onboarding';
@@ -29,20 +19,14 @@ interface ConnectorSelectProps {
   onChange: (v: string) => void;
 }
 
-export function ConnectorSelect({
-  label,
-  placeholder,
-  accounts,
-  value,
-  onChange,
-}: ConnectorSelectProps) {
+export function ConnectorSelect({ label, placeholder, accounts, value, onChange }: ConnectorSelectProps) {
   const [open, setOpen] = useState(false);
 
   const selected = accounts.find((a) => a.id === value);
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="flex items-center gap-1 text-heading-medium tracking-tight text-gray-80">
+      <label className="text-heading-medium text-gray-80 flex items-center gap-1 tracking-tight">
         <span className="size-[5px] rounded-full bg-red-50" />
         {label}
       </label>
@@ -51,10 +35,10 @@ export function ConnectorSelect({
           <button
             type="button"
             className={cn(
-              'flex w-full items-center border bg-white tracking-tight cursor-pointer',
+              'flex w-full cursor-pointer items-center border bg-white tracking-tight',
               selected
-                ? 'gap-4 rounded-[10px] border-neutral-3 px-3 py-2.5'
-                : 'h-[46px] justify-between rounded-lg border-neutral-4 px-2.5 py-1.5 text-body-small',
+                ? 'border-neutral-3 gap-4 rounded-[10px] px-3 py-2.5'
+                : 'border-neutral-4 text-body-small h-[46px] justify-between rounded-lg px-2.5 py-1.5',
               open && 'bg-neutral-3',
             )}
           >
@@ -66,21 +50,21 @@ export function ConnectorSelect({
                     alt="프로필"
                     width={40}
                     height={40}
-                    className="size-10 shrink-0 rounded-full border border-neutral-1"
+                    className="border-neutral-1 size-10 shrink-0 rounded-full border"
                   />
                 ) : (
-                  <DefaultProfile className="size-10 shrink-0 rounded-full border border-neutral-1 text-gray-30" />
+                  <DefaultProfile className="border-neutral-1 text-gray-30 size-10 shrink-0 rounded-full border" />
                 )}
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="flex items-center gap-2.5">
-                    <span className="max-w-[133px] truncate text-heading-small tracking-tight text-gray-80">
+                    <span className="text-heading-small text-gray-80 max-w-[133px] truncate tracking-tight">
                       {selected.name}
                     </span>
-                    <span className="shrink-0 rounded-md2 bg-neutral-2 px-1.5 py-0.5 text-body-xsmall text-gray-50">
+                    <span className="rounded-md2 bg-neutral-2 text-body-xsmall shrink-0 px-1.5 py-0.5 text-gray-50">
                       {selected.id}
                     </span>
                   </div>
-                  <span className="text-left truncate text-body-xsmall tracking-tight text-gray-50">
+                  <span className="text-body-xsmall truncate text-left tracking-tight text-gray-50">
                     {selected.email}
                   </span>
                 </div>
@@ -95,7 +79,7 @@ export function ConnectorSelect({
           </button>
         </PopoverTrigger>
         <PopoverContent
-          className="rounded-lg border-neutral-5 p-0"
+          className="border-neutral-5 rounded-lg p-0"
           style={{ width: 'var(--radix-popover-trigger-width)' }}
           align="start"
         >
@@ -113,7 +97,7 @@ export function ConnectorSelect({
                     onChange(account.id);
                     setOpen(false);
                   }}
-                  className="gap-3 rounded-none border-b border-neutral-2 px-3 py-2"
+                  className="border-neutral-2 gap-3 rounded-none border-b px-3 py-2"
                 >
                   {account.picture ? (
                     <Image
@@ -121,23 +105,21 @@ export function ConnectorSelect({
                       alt=""
                       width={40}
                       height={40}
-                      className="size-10 shrink-0 rounded-full border border-neutral-1"
+                      className="border-neutral-1 size-10 shrink-0 rounded-full border"
                     />
                   ) : (
-                    <DefaultProfile className="size-10 shrink-0 rounded-full border border-neutral-1 text-gray-30" />
+                    <DefaultProfile className="border-neutral-1 text-gray-30 size-10 shrink-0 rounded-full border" />
                   )}
                   <div className="flex min-w-0 flex-col items-start gap-0.5">
                     <div className="flex items-center gap-2.5">
-                      <span className="max-w-[175px] truncate text-heading-small tracking-tight text-gray-80">
+                      <span className="text-heading-small text-gray-80 max-w-[175px] truncate tracking-tight">
                         {account.name}
                       </span>
-                      <span className="rounded-md2 bg-neutral-2 px-1.5 py-0.5 text-body-xsmall text-gray-50">
+                      <span className="rounded-md2 bg-neutral-2 text-body-xsmall px-1.5 py-0.5 text-gray-50">
                         {account.id}
                       </span>
                     </div>
-                    <span className="truncate text-label-xsmall tracking-tight text-gray-50">
-                      {account.email}
-                    </span>
+                    <span className="text-label-xsmall truncate tracking-tight text-gray-50">{account.email}</span>
                   </div>
                 </CommandItem>
               ))}

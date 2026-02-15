@@ -37,7 +37,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
       <div className="flex flex-col items-start self-stretch px-2.5">
         <div
           onClick={handleBoxClick}
-          className="flex min-h-10 max-h-60 w-full cursor-text items-start gap-1.5 overflow-hidden rounded-lg border border-transparent bg-neutral-1 px-3 py-2 focus-within:border-blue-30"
+          className="bg-neutral-1 focus-within:border-blue-30 flex max-h-60 min-h-10 w-full cursor-text items-start gap-1.5 overflow-hidden rounded-lg border border-transparent px-3 py-2"
         >
           <div className="flex min-w-0 flex-1 flex-col gap-1.5 overflow-y-auto">
             {/* Selected chips */}
@@ -46,29 +46,35 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                 {selected.map((name) => {
                   const chipOption = options.find((o) => o.name === name);
                   return (
-                  <div
-                    key={name}
-                    className="border-neutral-5 flex h-9 shrink-0 items-center gap-1 rounded-full border bg-white px-1.5"
-                  >
-                    <div className="flex items-center gap-1.5 px-0.5">
-                      {chipOption?.profile_image ? (
-                        <Image src={chipOption.profile_image} alt={name} width={25} height={25} className="size-6.25 shrink-0 rounded-full object-cover" />
-                      ) : (
-                      <Icon className="size-6.25 shrink-0 rounded-full" />
-                      )}
-                      <span className="text-body-small text-gray-80 max-w-37.5 truncate">{name}</span>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggle(name);
-                      }}
-                      className="flex size-5 cursor-pointer items-center justify-center rounded-full text-gray-50 hover:bg-[#EAEBEC]"
-                      onMouseDown={(e) => e.preventDefault()}
+                    <div
+                      key={name}
+                      className="border-neutral-5 flex h-9 shrink-0 items-center gap-1 rounded-full border bg-white px-1.5"
                     >
-                      <IconCloseSmall className="size-4.5" />
-                    </button>
-                  </div>
+                      <div className="flex items-center gap-1.5 px-0.5">
+                        {chipOption?.profile_image ? (
+                          <Image
+                            src={chipOption.profile_image}
+                            alt={name}
+                            width={25}
+                            height={25}
+                            className="size-6.25 shrink-0 rounded-full object-cover"
+                          />
+                        ) : (
+                          <Icon className="size-6.25 shrink-0 rounded-full" />
+                        )}
+                        <span className="text-body-small text-gray-80 max-w-37.5 truncate">{name}</span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggle(name);
+                        }}
+                        className="flex size-5 cursor-pointer items-center justify-center rounded-full text-gray-50 hover:bg-[#EAEBEC]"
+                        onMouseDown={(e) => e.preventDefault()}
+                      >
+                        <IconCloseSmall className="size-4.5" />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -93,7 +99,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                 setSearchTerm('');
                 selected.forEach((name) => onToggle(name));
               }}
-              className="shrink-0 cursor-pointer text-gray-30"
+              className="text-gray-30 shrink-0 cursor-pointer"
               onMouseDown={(e) => e.preventDefault()}
             >
               <IconCloseCircle className="size-5" />
@@ -116,14 +122,18 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                     onClick={() => onToggle(option.name)}
                   >
                     {option.profile_image ? (
-                      <Image src={option.profile_image} alt={option.name} width={28} height={28} className="size-7 shrink-0 rounded-full object-cover" />
+                      <Image
+                        src={option.profile_image}
+                        alt={option.name}
+                        width={28}
+                        height={28}
+                        className="size-7 shrink-0 rounded-full object-cover"
+                      />
                     ) : (
-                    <Icon className="size-7 shrink-0 rounded-full" />
+                      <Icon className="size-7 shrink-0 rounded-full" />
                     )}
 
-                    <div className="text-body-small text-gray-80 flex-1 truncate text-left">
-                      {option.name}
-                    </div>
+                    <div className="text-body-small text-gray-80 flex-1 truncate text-left">{option.name}</div>
                     {option.position && (
                       <div className="text-body-xsmall text-gray-30 max-w-18 min-w-7.5 shrink-0 truncate">
                         {option.position}

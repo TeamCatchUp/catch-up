@@ -61,77 +61,66 @@ const RagAnswer = ({
     () => formatMarkdownString(currentQA?.answer?.content ?? ''),
     [currentQA?.answer?.content],
   );
-  const citationOrderMap = useMemo(
-    () => getCitationDisplayOrderMap(formattedAnswerContent),
-    [formattedAnswerContent],
-  );
+  const citationOrderMap = useMemo(() => getCitationDisplayOrderMap(formattedAnswerContent), [formattedAnswerContent]);
 
   // 답변이 있는 경우
   if (currentQA?.answer) {
     return (
       <div className="flex flex-col gap-2">
-          {currentQA.answer.content ? (
-            <>
-              {/* 마크다운 답변 */}
-              <div className="markdown-body max-w-192.75 wrap-break-words">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkBreaks]}
-                  components={MarkDownComponents(currentQA.answer.sources, citationOrderMap)}
-                >
-                  {formattedAnswerContent}
-                </ReactMarkdown>
-              </div>
+        {currentQA.answer.content ? (
+          <>
+            {/* 마크다운 답변 */}
+            <div className="markdown-body wrap-break-words max-w-192.75">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkBreaks]}
+                components={MarkDownComponents(currentQA.answer.sources, citationOrderMap)}
+              >
+                {formattedAnswerContent}
+              </ReactMarkdown>
+            </div>
 
-              <div className="text-body-small text-gray-30">
-                질문과 연관된 {currentQA.answer.sources?.length || 0}개의 핵심 자료를 선별했어요.
-              </div>
+            <div className="text-body-small text-gray-30">
+              질문과 연관된 {currentQA.answer.sources?.length || 0}개의 핵심 자료를 선별했어요.
+            </div>
 
-              {/* 액션 버튼 */}
-              <AnswerActionButtons
-                icons={ANSWER_ICONS}
-                messageId={currentQA.answer.id}
-                answerContent={currentQA.answer.content}
-                hasFeedback={currentQA.answer.has_feedback}
-                feedbackVisibleMap={feedbackVisibleMap}
-                setFeedbackVisibleMap={setFeedbackVisibleMap}
-              />
-
-              {/* 피드백 */}
-              <FeedbackSection
-                  messageId={currentQA.answer.id}
-                  chatHistoryId={currentQA.answer.chat_history_id}
-                  hasFeedback={currentQA.answer.has_feedback}
-                  feedbackVisibleMap={feedbackVisibleMap}
-                  setFeedbackVisibleMap={setFeedbackVisibleMap}
-                  onFeedbackSubmitted={onFeedbackSubmitted}
-                />
-            </>
-          ) : (
-            <AnswerError
+            {/* 액션 버튼 */}
+            <AnswerActionButtons
               icons={ANSWER_ICONS}
-              messageId={`error_${sessionId}`}
+              messageId={currentQA.answer.id}
+              answerContent={currentQA.answer.content}
               hasFeedback={currentQA.answer.has_feedback}
               feedbackVisibleMap={feedbackVisibleMap}
               setFeedbackVisibleMap={setFeedbackVisibleMap}
             />
-          )}
-        </div>
+
+            {/* 피드백 */}
+            <FeedbackSection
+              messageId={currentQA.answer.id}
+              chatHistoryId={currentQA.answer.chat_history_id}
+              hasFeedback={currentQA.answer.has_feedback}
+              feedbackVisibleMap={feedbackVisibleMap}
+              setFeedbackVisibleMap={setFeedbackVisibleMap}
+              onFeedbackSubmitted={onFeedbackSubmitted}
+            />
+          </>
+        ) : (
+          <AnswerError
+            icons={ANSWER_ICONS}
+            messageId={`error_${sessionId}`}
+            hasFeedback={currentQA.answer.has_feedback}
+            feedbackVisibleMap={feedbackVisibleMap}
+            setFeedbackVisibleMap={setFeedbackVisibleMap}
+          />
+        )}
+      </div>
     );
   }
 
   // 답변이 없는 경우 (로딩/PR선택/에러)
   return (
     <div>
-      {showPRSelection && (
-        <GithubPRStepSkeleton
-          onContinue={onPRContinue}
-          prList={prList}
-          onRefetch={onPRRefetch}
-        />
-      )}
-      {isLoading && !currentQA?.answer && (
-        <RagAnswerSkeleton currentStep={currentStep} />
-      )}
+      {showPRSelection && <GithubPRStepSkeleton onContinue={onPRContinue} prList={prList} onRefetch={onPRRefetch} />}
+      {isLoading && !currentQA?.answer && <RagAnswerSkeleton currentStep={currentStep} />}
       {isError && (
         <AnswerError
           icons={ANSWER_ICONS}

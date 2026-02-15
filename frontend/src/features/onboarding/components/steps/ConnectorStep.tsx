@@ -42,14 +42,12 @@ export function ConnectorStep({ defaultValues, onSubmit, onBack }: ConnectorStep
         {/* 헤더 영역: 스텝 인디케이터 + 타이틀 + 설명 */}
         <div className="flex flex-col gap-4">
           <StepIndicator totalSteps={2} currentStep={2} />
-          <h1 className="text-display-large tracking-tight text-gray-80">
+          <h1 className="text-display-large text-gray-80 tracking-tight">
             협업 툴 연동을 위해
             <br />
             사용중인 계정을 선택해주세요
           </h1>
-          <p className="text-body-large tracking-tight text-gray-50">
-            선택해주신 계정을 기준으로 정보를 정리해드려요.
-          </p>
+          <p className="text-body-large tracking-tight text-gray-50">선택해주신 계정을 기준으로 정보를 정리해드려요.</p>
         </div>
 
         {/* 폼 영역 */}
@@ -79,11 +77,13 @@ export function ConnectorStep({ defaultValues, onSubmit, onBack }: ConnectorStep
       </div>
 
       <StepNavButtons
-        onBack={() => onBack({
-          jira_account_id: jiraAccountId || undefined,
-          github_account_id: githubAccountId || undefined,
-          slack_account_id: slackAccountId || undefined,
-        })}
+        onBack={() =>
+          onBack({
+            jira_account_id: jiraAccountId || undefined,
+            github_account_id: githubAccountId || undefined,
+            slack_account_id: slackAccountId || undefined,
+          })
+        }
         onNext={handleNext}
         isNextDisabled={!isComplete}
       />

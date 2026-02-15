@@ -60,7 +60,7 @@ const QuestionsHistoryPanel = () => {
   };
 
   return (
-    <div className="border-neutral-3 flex h-screen w-95 shrink-0 flex-col gap-2.5 border-r bg-neutral-1 px-2 pt-4 shadow-panel">
+    <div className="border-neutral-3 bg-neutral-1 shadow-panel flex h-screen w-95 shrink-0 flex-col gap-2.5 border-r px-2 pt-4">
       {/* Header: Title + Action Buttons */}
       <div className="flex items-center justify-between px-1">
         <h2 className="text-heading-medium text-gray-80">내 질문 기록</h2>
@@ -68,7 +68,7 @@ const QuestionsHistoryPanel = () => {
           {/* 새 질문 Button - Box button with icon + text per Figma */}
           <button
             onClick={handleNewQuestion}
-            className="cursor-pointer border-neutral-3 flex h-7.5 items-center gap-1 rounded-lg border bg-white px-2 py-1 hover:bg-neutral-2"
+            className="border-neutral-3 hover:bg-neutral-2 flex h-7.5 cursor-pointer items-center gap-1 rounded-lg border bg-white px-2 py-1"
             aria-label="새 질문"
           >
             <AddSmall className="h-5 w-5 text-gray-50" />
@@ -77,7 +77,7 @@ const QuestionsHistoryPanel = () => {
           {/* Close Icon Button */}
           <button
             onClick={handleClose}
-            className="cursor-pointer border-neutral-3 flex h-7.5 w-7.5 items-center justify-center rounded-md2 border bg-white hover:bg-neutral-2"
+            className="border-neutral-3 rounded-md2 hover:bg-neutral-2 flex h-7.5 w-7.5 cursor-pointer items-center justify-center border bg-white"
             aria-label="패널 닫기"
           >
             <Cancel className="h-5 w-5 text-gray-50" />
@@ -88,13 +88,13 @@ const QuestionsHistoryPanel = () => {
       {/* Search Input Field */}
       <div className="px-1">
         <div className="border-neutral-3 flex h-9 items-center gap-1 rounded-lg border bg-white px-2.5 py-1.5">
-          <Search className="h-5 w-5 shrink-0 text-gray-40" />
+          <Search className="text-gray-40 h-5 w-5 shrink-0" />
           <input
             type="text"
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
             placeholder="지난 질문 검색"
-            className="text-body-small w-full bg-transparent text-gray-80 outline-none placeholder:text-gray-30"
+            className="text-body-small text-gray-80 placeholder:text-gray-30 w-full bg-transparent outline-none"
           />
         </div>
       </div>
@@ -102,9 +102,7 @@ const QuestionsHistoryPanel = () => {
       {/* Question List - Scrollable Area */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1">
         {!USE_MOCK && isLoading ? (
-          <div className="flex items-center justify-center py-8 text-gray-30">
-            데이터를 불러오는 중입니다...
-          </div>
+          <div className="text-gray-30 flex items-center justify-center py-8">데이터를 불러오는 중입니다...</div>
         ) : (
           <SearchHistory querys={recentQueries} isModal={false} onItemClick={handleItemClick} />
         )}

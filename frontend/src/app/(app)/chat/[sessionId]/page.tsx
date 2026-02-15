@@ -29,16 +29,10 @@ export default function RagAnswerPage() {
     initialQuery: initialQuery ?? null,
   });
 
-  const {
-    qaPairs,
-    qaRefs,
-    scrollContainerCallbackRef,
-    scrollContainerHeight,
-    scrollToLatest,
-    activePairIndex,
-  } = useRagScroll({
-    messages: chat.chatData?.messages ?? [],
-  });
+  const { qaPairs, qaRefs, scrollContainerCallbackRef, scrollContainerHeight, scrollToLatest, activePairIndex } =
+    useRagScroll({
+      messages: chat.chatData?.messages ?? [],
+    });
 
   const filters = useRagFilters();
 
@@ -46,14 +40,14 @@ export default function RagAnswerPage() {
     <div className="flex h-screen w-full">
       {/* 메인 영역 */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <RagContentHeader
-          title={chat.chatData?.title ?? ''}
-          onSelectQuestion={() => {}}
-        />
+        <RagContentHeader title={chat.chatData?.title ?? ''} onSelectQuestion={() => {}} />
 
         {/* 스크롤 가능한 콘텐츠 영역 */}
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
-          <div ref={scrollContainerCallbackRef} className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9">
+          <div
+            ref={scrollContainerCallbackRef}
+            className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
+          >
             {/* 날짜 구분선 */}
             <DateDivider className="mb-8 w-192.75" />
 
@@ -74,11 +68,7 @@ export default function RagAnswerPage() {
                   >
                     {/* 질문 영역 */}
                     <div className="flex-none">
-                      <RagQuestion
-                        currentQA={qaPair}
-                        isLastPage={isLastPair}
-                        onSubmitEdit={chat.submitEdit}
-                      />
+                      <RagQuestion currentQA={qaPair} isLastPage={isLastPair} onSubmitEdit={chat.submitEdit} />
                     </div>
 
                     {/* 답변 영역 */}
@@ -99,10 +89,7 @@ export default function RagAnswerPage() {
               })}
 
               {qaPairs.length === 0 && (chat.isLoading || chat.isError) && (
-                <div
-                  className="flex flex-col gap-6"
-                  style={{ minHeight: scrollContainerHeight }}
-                >
+                <div className="flex flex-col gap-6" style={{ minHeight: scrollContainerHeight }}>
                   <RagAnswer
                     currentQA={undefined}
                     sessionId={sessionId}
@@ -132,11 +119,7 @@ export default function RagAnswerPage() {
       </div>
 
       {/* 사이드바 */}
-      <RagSidebar
-        currentQA={qaPairs[activePairIndex]}
-        isLoading={chat.isLoading}
-        isError={chat.isError}
-      />
+      <RagSidebar currentQA={qaPairs[activePairIndex]} isLoading={chat.isLoading} isError={chat.isError} />
     </div>
   );
 }

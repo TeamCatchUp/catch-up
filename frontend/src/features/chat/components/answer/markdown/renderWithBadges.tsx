@@ -43,18 +43,10 @@ export const renderWithBadges = (
         if (!source) return <span key={index}>{part}</span>;
 
         const badgeType: SourceType =
-          source.source_type === 'jira'
-            ? 'jira'
-            : source.source_type === 'slack'
-              ? 'slack'
-              : 'github';
+          source.source_type === 'jira' ? 'jira' : source.source_type === 'slack' ? 'slack' : 'github';
 
         return (
-          <SourceBadge
-            key={index}
-            n={String(displayOrderMap.get(sourceIndex) ?? sourceIndex)}
-            sourceType={badgeType}
-          />
+          <SourceBadge key={index} n={String(displayOrderMap.get(sourceIndex) ?? sourceIndex)} sourceType={badgeType} />
         );
       })}
     </>

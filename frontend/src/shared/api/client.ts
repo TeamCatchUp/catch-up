@@ -1,4 +1,4 @@
-import axios, { AxiosError,AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 
 import { API } from '@/shared/api/endpoints';
 import { USE_MOCK } from '@/shared/mocks/config';
@@ -21,31 +21,28 @@ interface MockError extends AxiosError {
 
 // Mock 모드일 때만 Interceptor 활성화
 if (USE_MOCK) {
+  api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+    const method = config.method || 'get';
+    const url = config.url || '';
 
-  api.interceptors.request.use(
-    async (config: InternalAxiosRequestConfig) => {
-      const method = config.method || 'get';
-      const url = config.url || '';
+    const mockResponse = await createMockResponse(method, url, config.data);
 
-      const mockResponse = await createMockResponse(method, url, config.data);
+    if (mockResponse) {
+      console.log(`[Mock] ${method.toUpperCase()} ${url} →`, mockResponse.data);
 
-      if (mockResponse) {
-        console.log(`[Mock] ${method.toUpperCase()} ${url} →`, mockResponse.data);
+      // Mock 응답을 에러로 던져서 response interceptor에서 처리
+      const mockError: MockError = {
+        __MOCK__: true,
+        mockData: mockResponse.data,
+        mockStatus: mockResponse.status,
+        originalConfig: config,
+      } as MockError;
 
-        // Mock 응답을 에러로 던져서 response interceptor에서 처리
-        const mockError: MockError = {
-          __MOCK__: true,
-          mockData: mockResponse.data,
-          mockStatus: mockResponse.status,
-          originalConfig: config,
-        } as MockError;
-
-        return Promise.reject(mockError);
-      }
-
-      return config;
+      return Promise.reject(mockError);
     }
-  );
+
+    return config;
+  });
 
   api.interceptors.response.use(
     (response: AxiosResponse) => response,
@@ -62,7 +59,7 @@ if (USE_MOCK) {
         } as AxiosResponse);
       }
       return Promise.reject(error);
-    }
+    },
   );
 }
 

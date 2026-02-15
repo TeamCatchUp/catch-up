@@ -54,29 +54,21 @@ const SourceCard = ({ source, showCount = true, count }: Props) => {
       <div className="flex h-6 items-center gap-1.5">
         <div className="bg-neutral-2 flex h-6 min-w-6.5 items-center justify-center gap-1 rounded-full px-1.5 py-0.5">
           {renderSourceLogo()}
-          {showCount && (
-            <span className="text-body-xsmall text-gray-70 whitespace-nowrap">
-              {count ?? 0}
-            </span>
-          )}
+          {showCount && <span className="text-body-xsmall text-gray-70 whitespace-nowrap">{count ?? 0}</span>}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-body-xsmall truncate text-gray-50 hover:underline">
-            {repoText}
-          </div>
+          <div className="text-body-xsmall truncate text-gray-50 hover:underline">{repoText}</div>
         </div>
       </div>
 
-      <div className="text-heading-small text-gray-80 line-clamp-2 wrap-break-word hover:underline">
-        {titleText}
-      </div>
+      <div className="text-heading-small text-gray-80 line-clamp-2 wrap-break-word hover:underline">{titleText}</div>
 
       <div className="border-neutral-3 flex w-full flex-col gap-0.5 border-l-2 py-0.5 pl-3">
         <div className="flex items-center gap-1">
-          <LightbulbFilled className="h-4 w-4 text-gray-20" />
-          <span className="text-body-xsmall text-gray-50 whitespace-nowrap">이 출처가 사용된 이유</span>
+          <LightbulbFilled className="text-gray-20 h-4 w-4" />
+          <span className="text-body-xsmall whitespace-nowrap text-gray-50">이 출처가 사용된 이유</span>
         </div>
-        <div className="text-body-small text-gray-50 line-clamp-2 wrap-break-word">
+        <div className="text-body-small line-clamp-2 wrap-break-word text-gray-50">
           {reasonPreview}
           {isReasonTrimmed && <span className="text-gray-30"> ...더보기</span>}
         </div>

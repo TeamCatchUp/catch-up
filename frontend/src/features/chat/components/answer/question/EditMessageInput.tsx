@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect,useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/shared/utils/cn';
 
@@ -58,10 +58,10 @@ const EditMessageInput = ({ initialContent, onCancel, onSubmit }: EditMessageInp
             e.preventDefault();
             handleSubmit();
           } else if (e.key === 'Escape') {
-            onCancel(); 
+            onCancel();
           }
         }}
-        className="h-6.5 text-body-medium text-gray-80 box-border w-full resize-none overflow-y-auto px-1 outline-none"
+        className="text-body-medium text-gray-80 box-border h-6.5 w-full resize-none overflow-y-auto px-1 outline-none"
       />
       <div className="flex items-center justify-end gap-2">
         <button

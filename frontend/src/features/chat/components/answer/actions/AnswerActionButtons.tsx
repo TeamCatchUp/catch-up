@@ -53,7 +53,12 @@ const AnswerActionButtons = ({
             }}
             className={`icon-button-only-gray cursor-pointer p-1.5 ${isThumbsDownActive ? 'bg-neutral-3 border-neutral-5' : ''}`}
           >
-            <Icon className={cn('h-6 w-6', isThumbsDownActive || bookmarked ? 'text-gray-70' : 'active:text-gray-70 text-gray-50')} />
+            <Icon
+              className={cn(
+                'h-6 w-6',
+                isThumbsDownActive || bookmarked ? 'text-gray-70' : 'active:text-gray-70 text-gray-50',
+              )}
+            />
           </button>
         );
 

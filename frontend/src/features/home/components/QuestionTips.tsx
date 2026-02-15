@@ -73,12 +73,7 @@ const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
                   <p className="text-body-small whitespace-pre-line text-gray-50">{tip.description}</p>
                 </div>
                 <div className="relative aspect-260/118 flex-[1_0_0] overflow-hidden">
-                  <Image
-                    src={tip.image}
-                    alt={tip.title}
-                    fill
-                    className="object-cover"
-                  />
+                  <Image src={tip.image} alt={tip.title} fill className="object-cover" />
                 </div>
               </button>
             ))}

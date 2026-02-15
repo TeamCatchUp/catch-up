@@ -4,10 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { getStorageKeys, NODE_TO_UI_STEP } from '@/features/chat/constants/config';
-import {
-  buildInitialChatData,
-  loadSavedChat,
-} from '@/features/chat/hooks/useRagChat.parts/chatStorage';
+import { buildInitialChatData, loadSavedChat } from '@/features/chat/hooks/useRagChat.parts/chatStorage';
 import {
   clearPendingInitialQuery,
   getEffectiveInitialQuery,
@@ -92,21 +89,18 @@ interface UseRagChatReturn {
  * @param options.initialQuery - 초기 질문
  * @returns RAG 채팅 상태 및 핸들러
  */
-export const useRagChat = ({
-  sessionId,
-  repo,
-  initialQuery,
-}: UseRagChatOptions): UseRagChatReturn => {
+export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions): UseRagChatReturn => {
   const storageKeys = getStorageKeys(sessionId);
   const effectiveInitialQuery = getEffectiveInitialQuery(initialQuery, sessionId);
-  const { streamChat, resumeStream, abortStream, markStopped, resetStopped, isStopped } =
-    useRagStream(sessionId);
+  const { streamChat, resumeStream, abortStream, markStopped, resetStopped, isStopped } = useRagStream(sessionId);
   const queryClient = useQueryClient();
 
   const [chatData, setChatData] = useState<ChatData | null>(() =>
     buildInitialChatData(sessionId, repo, effectiveInitialQuery, storageKeys.chat),
   );
-  const [isLoading, setIsLoading] = useState<boolean>(() => !loadSavedChat(storageKeys.chat) && !!effectiveInitialQuery);
+  const [isLoading, setIsLoading] = useState<boolean>(
+    () => !loadSavedChat(storageKeys.chat) && !!effectiveInitialQuery,
+  );
   const [isError, setIsError] = useState(false);
   const [currentStep, setCurrentStep] = useState<RagUIStepKey>('router');
   const [prList, setPrList] = useState<PRPayload[]>([]);
@@ -159,14 +153,7 @@ export const useRagChat = ({
       setChatData(nextData);
       setIsLoading(!hasSaved && !!effectiveInitialQuery);
     });
-  }, [
-    abortStream,
-    effectiveInitialQuery,
-    repo,
-    resetStreamStateRefs,
-    sessionId,
-    storageKeys.chat,
-  ]);
+  }, [abortStream, effectiveInitialQuery, repo, resetStreamStateRefs, sessionId, storageKeys.chat]);
 
   /**
    * 답변 생성 시작 시 상태 초기화
@@ -273,7 +260,7 @@ export const useRagChat = ({
             messages[streamMessageIndex] = {
               ...currentMessage,
               content: answer || currentMessage.content,
-              sources: uiSources.length ? uiSources : currentMessage.sources ?? [],
+              sources: uiSources.length ? uiSources : (currentMessage.sources ?? []),
               detailed_tasks: detailedTasks,
               chat_history_id: chatHistoryId ?? currentMessage.chat_history_id,
               has_feedback: hasFeedback ?? currentMessage.has_feedback,
@@ -416,7 +403,7 @@ export const useRagChat = ({
       const currentMessage = messages[streamMessageIndex];
       messages[streamMessageIndex] = {
         ...currentMessage,
-        sources: latestUiSourcesRef.current.length ? latestUiSourcesRef.current : currentMessage.sources ?? [],
+        sources: latestUiSourcesRef.current.length ? latestUiSourcesRef.current : (currentMessage.sources ?? []),
         detailed_tasks: currentMessage.detailed_tasks ?? [],
       };
 
@@ -814,9 +801,7 @@ export const useRagChat = ({
     if (streamInFlightRef.current) return;
 
     const hasAssistantContent =
-      chatData?.messages.some(
-        (message) => message.role === 'assistant' && Boolean(message.content?.trim()),
-      ) ?? false;
+      chatData?.messages.some((message) => message.role === 'assistant' && Boolean(message.content?.trim())) ?? false;
     if (hasAssistantContent) {
       clearPendingInitialQuery(sessionId);
       return;

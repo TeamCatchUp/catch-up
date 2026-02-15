@@ -32,7 +32,7 @@ export default function SideNavUser({ isOpen }: SideNavUserProps) {
                 className={cn(
                   'flex h-13.5 cursor-pointer items-center rounded-lg',
                   isOpen
-                    ? 'w-56.25 justify-between px-1.5 py-1 hover:bg-neutral-2 data-[state=open]:bg-neutral-2'
+                    ? 'hover:bg-neutral-2 data-[state=open]:bg-neutral-2 w-56.25 justify-between px-1.5 py-1'
                     : 'justify-center',
                 )}
               >

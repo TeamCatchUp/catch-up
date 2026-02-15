@@ -34,7 +34,6 @@ export interface UseRagFiltersReturn {
   personLabel: string;
   deptLabel: string;
   projectLabel: string;
-
 }
 
 export const useRagFilters = (): UseRagFiltersReturn => {

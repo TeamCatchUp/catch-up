@@ -7,7 +7,6 @@ import type { OnboardingCompleteRequest } from './types/onboarding';
 
 export function useCompleteOnboarding() {
   return useMutation({
-    mutationFn: (data: OnboardingCompleteRequest) =>
-      api.post(API.onboarding.complete, data),
+    mutationFn: (data: OnboardingCompleteRequest) => api.post(API.onboarding.complete, data),
   });
 }

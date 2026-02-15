@@ -33,13 +33,7 @@ interface RagInputProps {
   onNewMessage: () => void;
 }
 
-const RagInput = ({
-  filters,
-  isLoading,
-  onSendMessage,
-  onStop,
-  onNewMessage,
-}: RagInputProps) => {
+const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: RagInputProps) => {
   const [newInput, setNewInput] = useState('');
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -90,9 +84,24 @@ const RagInput = ({
               접기
             </button>
             <div className="flex items-center gap-2.5">
-              <SearchOptionButton Icon={IconJira} label="Jira" selected={filters.selectedSources.includes('jira')} onClick={() => filters.toggleSource('jira')} />
-              <SearchOptionButton Icon={IconGithub} label="Github" selected={filters.selectedSources.includes('github')} onClick={() => filters.toggleSource('github')} />
-              <SearchOptionButton Icon={IconSlack} label="Slack" selected={filters.selectedSources.includes('slack')} onClick={() => filters.toggleSource('slack')} />
+              <SearchOptionButton
+                Icon={IconJira}
+                label="Jira"
+                selected={filters.selectedSources.includes('jira')}
+                onClick={() => filters.toggleSource('jira')}
+              />
+              <SearchOptionButton
+                Icon={IconGithub}
+                label="Github"
+                selected={filters.selectedSources.includes('github')}
+                onClick={() => filters.toggleSource('github')}
+              />
+              <SearchOptionButton
+                Icon={IconSlack}
+                label="Slack"
+                selected={filters.selectedSources.includes('slack')}
+                onClick={() => filters.toggleSource('slack')}
+              />
             </div>
             <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
             <div className="flex items-center gap-2.5">
@@ -197,10 +206,7 @@ const RagInput = ({
 
           {/* 전송 / 중지 버튼 */}
           {isLoading ? (
-            <button
-              onClick={onStop}
-              className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full"
-            >
+            <button onClick={onStop} className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full">
               <Stop className="text-gray-70 relative left-px h-6 w-6 cursor-pointer" />
             </button>
           ) : (

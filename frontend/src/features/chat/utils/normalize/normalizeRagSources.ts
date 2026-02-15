@@ -181,9 +181,7 @@ export const normalizeSources = (sources: BackendSource[]): ChatSource[] => {
         : formatCreatedAt(source.created_at);
 
     const author =
-      sourceType === 'code'
-        ? source.author ?? ''
-        : source.assignee_name ?? source.assignee ?? source.author ?? '';
+      sourceType === 'code' ? (source.author ?? '') : (source.assignee_name ?? source.assignee ?? source.author ?? '');
 
     return {
       id: crypto.randomUUID(),

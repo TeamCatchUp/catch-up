@@ -46,7 +46,9 @@ export default function Search() {
   };
 
   return (
-    <div className={`bg-home-gradient flex flex-[1_0_0] flex-col items-start self-stretch ${input.isFocused ? 'h-full overflow-hidden' : ''}`}>
+    <div
+      className={`bg-home-gradient flex flex-[1_0_0] flex-col items-start self-stretch ${input.isFocused ? 'h-full overflow-hidden' : ''}`}
+    >
       <TopNavbar pageType="search" />
 
       <div className="flex min-h-screen flex-col items-start self-stretch">
@@ -80,7 +82,7 @@ export default function Search() {
           <div className="flex w-190 flex-col items-center gap-3">
             <div className="flex items-center justify-between self-stretch">
               <div className="flex items-center gap-2">
-                <IconLightbulb className="size-4.5 text-blue-30" />
+                <IconLightbulb className="text-blue-30 size-4.5" />
                 <div className="text-heading-small text-gray-50">캐치스턴트 AI에서 정확한 답변을 얻으려면</div>
               </div>
             </div>

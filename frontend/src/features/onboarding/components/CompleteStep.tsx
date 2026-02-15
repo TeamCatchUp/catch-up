@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback,useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
@@ -57,33 +57,22 @@ export function CompleteStep({ data, isAdmin }: CompleteStepProps) {
       <div className="flex flex-col items-center gap-4 text-center">
         {isPending && (
           <>
-            <div className="text-display-large tracking-tight text-gray-80">
-              온보딩을 완료하고 있습니다...
-            </div>
+            <div className="text-display-large text-gray-80 tracking-tight">온보딩을 완료하고 있습니다...</div>
             <p className="text-body-large tracking-tight text-gray-50">잠시만 기다려 주세요.</p>
           </>
         )}
         {isError && (
           <>
-            <div className="text-display-large tracking-tight text-gray-80">
-              온보딩 완료에 실패했습니다.
-            </div>
-            <p className="text-body-large tracking-tight text-gray-50">
-              네트워크 상태를 확인하고 다시 시도해주세요.
-            </p>
-            <Button
-              variant="box-solid-primary"
-              size="lg"
-              className="mt-4 h-[46px]"
-              onClick={submitOnboarding}
-            >
+            <div className="text-display-large text-gray-80 tracking-tight">온보딩 완료에 실패했습니다.</div>
+            <p className="text-body-large tracking-tight text-gray-50">네트워크 상태를 확인하고 다시 시도해주세요.</p>
+            <Button variant="box-solid-primary" size="lg" className="mt-4 h-[46px]" onClick={submitOnboarding}>
               다시 시도
             </Button>
           </>
         )}
         {!isPending && !isError && (
           <>
-            <div className="text-display-large tracking-tight text-gray-80">완료!</div>
+            <div className="text-display-large text-gray-80 tracking-tight">완료!</div>
             <p className="text-body-large tracking-tight text-gray-50">잠시만 기다려 주세요.</p>
           </>
         )}

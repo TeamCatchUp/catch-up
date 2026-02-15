@@ -4,13 +4,7 @@ import { useState } from 'react';
 
 import ErrorIcon from '@/public/icons/icon/error.svg';
 import { Input } from '@/shared/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/shared/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 
 import { TEAM_SIZE_OPTIONS } from '../../constants/onboarding';
 import type { OrgInfoFormData } from '../../types/onboarding';
@@ -53,7 +47,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
         {/* 헤더 영역: 스텝 인디케이터 + 타이틀 + 설명 */}
         <div className="flex flex-col gap-4">
           <StepIndicator totalSteps={2} currentStep={2} />
-          <h1 className="text-display-large tracking-tight text-gray-80">
+          <h1 className="text-display-large text-gray-80 tracking-tight">
             회사에 대해
             <br />
             조금만 알려주세요!
@@ -69,7 +63,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
         <div className="flex flex-col gap-6">
           {/* 회사명 */}
           <div className="flex flex-col gap-1.5">
-            <label className="flex items-center gap-1 text-heading-medium tracking-tight text-gray-80">
+            <label className="text-heading-medium text-gray-80 flex items-center gap-1 tracking-tight">
               <span className="size-[5px] rounded-full bg-red-50" />
               회사명을 알려주세요.
             </label>
@@ -87,9 +81,8 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
 
           {/* 팀 규모 */}
           <div className="flex flex-col gap-1.5">
-            <label className="flex items-center gap-1 text-heading-medium tracking-tight text-gray-80">
-              <span className="size-[5px] rounded-full bg-red-50" />
-              팀 규모는 어느 정도인가요?
+            <label className="text-heading-medium text-gray-80 flex items-center gap-1 tracking-tight">
+              <span className="size-[5px] rounded-full bg-red-50" />팀 규모는 어느 정도인가요?
             </label>
             <Select
               value={teamSize}

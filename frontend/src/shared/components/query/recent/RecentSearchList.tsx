@@ -33,7 +33,7 @@ export function RecentSearchList({ title, querys }: RecentSearchListProps) {
             className="hover:bg-neutral-2 group flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl bg-white px-2 py-1 transition-colors"
           >
             <div className="rounded-rounded border-neutral-3 bg-neutral-1 flex shrink-0 items-center justify-center gap-2.5 border p-1.5">
-              <ChatIcon className="text-gray-50 h-5 w-5" />
+              <ChatIcon className="h-5 w-5 text-gray-50" />
             </div>
             <div className="text-gray-80 text-body-small flex-1 truncate text-left">{item.query}</div>
             <div className="text-body-xsmall text-gray-30 w-18 shrink-0 text-right">{item.date}</div>

@@ -21,14 +21,19 @@ const UNREAD_COUNT = 100; // mock
 /** 메뉴 아이템 정의 (href: 페이지 이동, panel: 사이드 패널 토글) */
 const navItems = [
   { name: '홈', href: '/', Icon: Home, tooltipOpen: '최근 업무 보기', tooltipClosed: '홈' },
-  { name: '캐치스턴트 AI', href: '/search', Icon: AI, tooltipOpen: '사내 지식 물어보기', tooltipClosed: '캐치스턴트 AI' },
+  {
+    name: '캐치스턴트 AI',
+    href: '/search',
+    Icon: AI,
+    tooltipOpen: '사내 지식 물어보기',
+    tooltipClosed: '캐치스턴트 AI',
+  },
   { name: '수신함', panel: 'inbox' as const, Icon: Inbox, tooltipOpen: '수신함', tooltipClosed: '수신함' },
   { name: '설정', panel: 'settings' as const, Icon: Settings, tooltipOpen: '설정', tooltipClosed: '설정' },
 ];
 
 // 메뉴 상태별 스타일
-const defaultClass =
-  'bg-white hover:bg-neutral-2 active:bg-neutral-3 active:ring-1 active:ring-neutral-3';
+const defaultClass = 'bg-white hover:bg-neutral-2 active:bg-neutral-3 active:ring-1 active:ring-neutral-3';
 const selectedClass = 'ring-1 ring-neutral-2 bg-blue-1 hover:bg-blue-5';
 
 interface SideNavMenuProps {
@@ -44,9 +49,7 @@ export default function SideNavMenu({ isOpen, setIsOpen: setSidebarOpen }: SideN
   return (
     <div className={`flex flex-col ${isOpen ? 'gap-1' : 'gap-2'}`}>
       {navItems.map((item) => {
-        const isActive = item.href
-          ? pathname === item.href
-          : activePanel === item.panel;
+        const isActive = item.href ? pathname === item.href : activePanel === item.panel;
 
         const handleClick = () => {
           if (item.panel) {
@@ -79,7 +82,7 @@ export default function SideNavMenu({ isOpen, setIsOpen: setSidebarOpen }: SideN
                   {isOpen && (
                     <span
                       className={cn(
-                        'text-left text-body-small relative flex-1',
+                        'text-body-small relative flex-1 text-left',
                         isActive ? 'text-blue-55 group-hover:text-blue-55' : 'text-gray-80',
                       )}
                     >
@@ -94,13 +97,11 @@ export default function SideNavMenu({ isOpen, setIsOpen: setSidebarOpen }: SideN
                   )}
                   {/* 수신함 blue dot (닫힘) */}
                   {!isOpen && item.panel === 'inbox' && UNREAD_COUNT > 0 && (
-                    <span className="bg-blue-40 absolute right-1 top-1.25 h-1.5 w-1.5 rounded-full" />
+                    <span className="bg-blue-40 absolute top-1.25 right-1 h-1.5 w-1.5 rounded-full" />
                   )}
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right">
-                {isOpen ? item.tooltipOpen : item.tooltipClosed}
-              </TooltipContent>
+              <TooltipContent side="right">{isOpen ? item.tooltipOpen : item.tooltipClosed}</TooltipContent>
             </Tooltip>
           </div>
         );

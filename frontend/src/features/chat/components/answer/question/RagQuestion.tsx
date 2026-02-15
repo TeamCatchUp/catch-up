@@ -45,9 +45,7 @@ const RagQuestion = ({ currentQA, isLastPage, onSubmitEdit }: RagQuestionProps) 
         <CollapsibleQuestionText key={questionRenderKey} content={questionContent} />
       </div>
 
-      {isLastPage && (
-        <QuestionEditButton onClick={() => setEditingMessageId(questionId)} />
-      )}
+      {isLastPage && <QuestionEditButton onClick={() => setEditingMessageId(questionId)} />}
     </div>
   );
 };

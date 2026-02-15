@@ -15,8 +15,7 @@ export * from '@/features/chat/types/props/actionProps';
 /** 기존 코드 호환용 별칭: 백엔드 소스 플랫폼 타입 */
 export type BackendSource_Source = import('@/features/chat/types/api/sourceApi').BackendSourceSourceApi;
 /** 기존 코드 호환용 별칭: 백엔드 소스 엔티티 타입 */
-export type BackendSource_EntityType =
-  import('@/features/chat/types/api/sourceApi').BackendSourceEntityTypeApi;
+export type BackendSource_EntityType = import('@/features/chat/types/api/sourceApi').BackendSourceEntityTypeApi;
 /** 기존 코드 호환용 별칭: 백엔드 소스 원본 타입 */
 export type BackendSource = import('@/features/chat/types/api/sourceApi').BackendSourceApi;
 

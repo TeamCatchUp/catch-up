@@ -58,52 +58,55 @@ const createMockSSE = (options: MockSSEOptions): EventSource => {
 
     // 각 단계별 RAG_IN_PROGRESS
     steps.forEach((step, index) => {
-      const timer = setTimeout(() => {
-        if (isClosed) return;
+      const timer = setTimeout(
+        () => {
+          if (isClosed) return;
 
-        console.log(`[MockSSE] 단계 진행: ${step}`);
+          console.log(`[MockSSE] 단계 진행: ${step}`);
 
-        onMessage({
-          type: 'RAG_IN_PROGRESS',
-          target: 'CHAT',
-          message: null,
-          data: {
-            session_id: sessionId,
-            type: 'status',
-            node: step,
-            message: `Processing ${step}...`,
-          },
-        });
+          onMessage({
+            type: 'RAG_IN_PROGRESS',
+            target: 'CHAT',
+            message: null,
+            data: {
+              session_id: sessionId,
+              type: 'status',
+              node: step,
+              message: `Processing ${step}...`,
+            },
+          });
 
-        // 마지막 단계 후 RAG_DONE
-        if (index === steps.length - 1) {
-          const doneTimer = setTimeout(() => {
-            if (isClosed) return;
+          // 마지막 단계 후 RAG_DONE
+          if (index === steps.length - 1) {
+            const doneTimer = setTimeout(() => {
+              if (isClosed) return;
 
-            console.log('[MockSSE] RAG 완료');
+              console.log('[MockSSE] RAG 완료');
 
-            onMessage({
-              type: 'RAG_DONE',
-              target: 'CHAT',
-              message: null,
-              data: {
-                session_id: sessionId,
-                type: 'result',
-                node: 'generate',
-                response: {
+              onMessage({
+                type: 'RAG_DONE',
+                target: 'CHAT',
+                message: null,
+                data: {
                   session_id: sessionId,
-                  answer: MOCK_RAG_ANSWER,
-                  sources: MOCK_SOURCES,
-                  chat_history_id: `mock-history-${Date.now()}`,
-                  has_feedback: false,
+                  type: 'result',
+                  node: 'generate',
+                  response: {
+                    session_id: sessionId,
+                    answer: MOCK_RAG_ANSWER,
+                    sources: MOCK_SOURCES,
+                    chat_history_id: `mock-history-${Date.now()}`,
+                    has_feedback: false,
+                  },
+                  related_jira_issues: MOCK_RELATED_JIRA_ISSUES,
                 },
-                related_jira_issues: MOCK_RELATED_JIRA_ISSUES,
-              },
-            });
-          }, stepDelay);
-          timers.push(doneTimer);
-        }
-      }, stepDelay * (index + 1));
+              });
+            }, stepDelay);
+            timers.push(doneTimer);
+          }
+        },
+        stepDelay * (index + 1),
+      );
       timers.push(timer);
     });
   }, 100);

@@ -23,11 +23,7 @@ interface UseIsOverflowingLinesParams {
   watch?: string;
 }
 
-export const useIsOverflowingLines = ({
-  elementRef,
-  lineCount,
-  watch,
-}: UseIsOverflowingLinesParams) => {
+export const useIsOverflowingLines = ({ elementRef, lineCount, watch }: UseIsOverflowingLinesParams) => {
   const [isOverflowing, setIsOverflowing] = useState(false);
 
   useEffect(() => {
@@ -45,9 +41,7 @@ export const useIsOverflowingLines = ({
       // line-height 계산 (CSS에서 파싱 실패 시 fallback 사용)
       const computedStyle = window.getComputedStyle(element);
       const parsedLineHeight = Number.parseFloat(computedStyle.lineHeight);
-      const lineHeight = Number.isNaN(parsedLineHeight)
-        ? FALLBACK_LINE_HEIGHT_PX
-        : parsedLineHeight;
+      const lineHeight = Number.isNaN(parsedLineHeight) ? FALLBACK_LINE_HEIGHT_PX : parsedLineHeight;
 
       // 허용된 최대 높이를 초과하는지 확인 (epsilon 고려)
       const maxHeight = lineHeight * lineCount;

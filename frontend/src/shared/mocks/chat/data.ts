@@ -66,8 +66,7 @@ export const MOCK_SOURCES: MockSource[] = [
     source: 'github',
     entity_type: 'code',
     relevance_score: 0.9,
-    html_url:
-      'https://github.com/TeamCatchUp/CatchUp-FE/blob/main/src/features/chat/hooks/useRagChat.ts',
+    html_url: 'https://github.com/TeamCatchUp/CatchUp-FE/blob/main/src/features/chat/hooks/useRagChat.ts',
     content: '프론트는 스트리밍 token을 누적해 답변을 만들고 stream 종료 시 최종 상태를 확정합니다.',
     owner: 'TeamCatchUp',
     repo: 'CatchUp-FE',
