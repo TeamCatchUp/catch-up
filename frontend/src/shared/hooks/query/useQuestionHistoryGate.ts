@@ -12,10 +12,10 @@ interface UseQuestionHistoryGateReturn {
 export const useQuestionHistoryGate = (): UseQuestionHistoryGateReturn => {
   const recentQueriesQuery = useQuery(chatQueries.recentQueries());
 
-  const content = recentQueriesQuery.data?.content;
+  const items = recentQueriesQuery.data?.items;
 
   // 비어있지 않은/에러/비정상 응답은 모두 기존 UI 유지
-  const shouldShowNoHistoryBox = !recentQueriesQuery.isError && Array.isArray(content) && content.length === 0;
+  const shouldShowNoHistoryBox = !recentQueriesQuery.isError && Array.isArray(items) && items.length === 0;
 
   return {
     shouldShowNoHistoryBox,
