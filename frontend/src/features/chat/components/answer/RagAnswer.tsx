@@ -96,6 +96,7 @@ const RagAnswer = ({
             {/* 피드백 */}
             <FeedbackSection
               messageId={currentQA.answer.id}
+              sessionId={sessionId}
               chatHistoryId={currentQA.answer.chat_history_id}
               hasFeedback={currentQA.answer.has_feedback}
               feedbackVisibleMap={feedbackVisibleMap}
@@ -107,6 +108,7 @@ const RagAnswer = ({
           <AnswerError
             icons={ANSWER_ICONS}
             messageId={`error_${sessionId}`}
+            sessionId={sessionId}
             hasFeedback={currentQA.answer.has_feedback}
             feedbackVisibleMap={feedbackVisibleMap}
             setFeedbackVisibleMap={setFeedbackVisibleMap}
@@ -125,6 +127,7 @@ const RagAnswer = ({
         <AnswerError
           icons={ANSWER_ICONS}
           messageId={`error_${sessionId}`}
+          sessionId={sessionId}
           feedbackVisibleMap={feedbackVisibleMap}
           setFeedbackVisibleMap={setFeedbackVisibleMap}
         />

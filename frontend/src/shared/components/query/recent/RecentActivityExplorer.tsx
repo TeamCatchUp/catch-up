@@ -13,9 +13,9 @@ export const RecentActivityExplorer = () => {
   const queriesQuery = useQuery(chatQueries.recentQueries());
 
   const recentQueries = useMemo<SearchQuery[]>(() => {
-    if (!queriesQuery.data?.content) return [];
-    return queriesQuery.data.content.map((item) => ({
-      query: item.query,
+    if (!queriesQuery.data?.items) return [];
+    return queriesQuery.data.items.map((item) => ({
+      query: item.content,
       session_id: item.session_id,
       date: formatFullDate(item.created_at),
     }));

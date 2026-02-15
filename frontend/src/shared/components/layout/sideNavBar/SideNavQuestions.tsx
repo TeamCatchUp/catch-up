@@ -34,8 +34,8 @@ export default function SideNavQuestions() {
   const { data: chatroomData } = useQuery(chatQueries.recentRooms());
 
   const recentChatrooms = useMemo<ChatRoomQuery[]>(() => {
-    if (!chatroomData?.content) return [];
-    return chatroomData.content
+    if (!chatroomData?.items) return [];
+    return chatroomData.items
       .map((item) => ({
         title: item.title,
         session_id: item.session_id,

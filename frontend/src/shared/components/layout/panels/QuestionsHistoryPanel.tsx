@@ -28,8 +28,8 @@ const QuestionsHistoryPanel = () => {
   const recentQueries = useMemo<SearchQueryWithRawDate[]>(() => {
     // Mock 데이터 사용 모드 (NEXT_PUBLIC_USE_MOCK=true)
     if (USE_MOCK) {
-      return MOCK_RECENT_QUERIES.content.map((item) => ({
-        query: item.query,
+      return MOCK_RECENT_QUERIES.items.map((item) => ({
+        query: item.content,
         session_id: item.session_id,
         date: formatFullDate(item.created_at),
         rawDate: new Date(item.created_at),
@@ -37,9 +37,9 @@ const QuestionsHistoryPanel = () => {
     }
 
     // 실제 API 데이터 사용
-    if (!data?.content) return [];
-    return data.content.map((item) => ({
-      query: item.query,
+    if (!data?.items) return [];
+    return data.items.map((item) => ({
+      query: item.content,
       session_id: item.session_id,
       date: formatFullDate(item.created_at),
       rawDate: new Date(item.created_at),

@@ -8,6 +8,7 @@ import Error from '/public/icons/icon/error.svg';
 const AnswerError = ({
   icons,
   messageId,
+  sessionId,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
   hasFeedback,
@@ -32,6 +33,7 @@ const AnswerError = ({
       {feedbackVisibleMap[messageId] && (
         <FeedbackSection
           messageId={messageId}
+          sessionId={sessionId}
           chatHistoryId={undefined}
           hasFeedback={hasFeedback}
           feedbackVisibleMap={feedbackVisibleMap}

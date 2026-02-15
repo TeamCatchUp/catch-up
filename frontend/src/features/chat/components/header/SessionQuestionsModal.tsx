@@ -20,7 +20,7 @@ const SessionQuestionsModal = ({ onClose, onSelect }: SessionQuestionsModalProps
   const modalRef = useRef<HTMLDivElement>(null);
   const { data, isLoading } = useQuery(chatQueries.sessionQueries(sessionId));
 
-  const allQueries = data?.content ?? [];
+  const allQueries = data?.items ?? [];
 
   useEscapeKey(onClose);
   useOutsideClick(modalRef, onClose);
@@ -46,11 +46,11 @@ const SessionQuestionsModal = ({ onClose, onSelect }: SessionQuestionsModalProps
                 key={idx}
                 className="hover:bg-neutral-2 flex h-10 w-full cursor-pointer items-center rounded-xl px-2 py-1 transition-colors"
                 onClick={() => {
-                  onSelect(item.query);
+                  onSelect(item.content);
                   onClose();
                 }}
               >
-                <span className="text-body-small text-gray-80 truncate text-left">{item.query}</span>
+                <span className="text-body-small text-gray-80 truncate text-left">{item.content}</span>
               </button>
             ))
           ) : (
