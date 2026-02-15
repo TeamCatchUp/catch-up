@@ -228,3 +228,63 @@ def update_message_feedback(
     db.add(message)
     
     return message
+
+
+def soft_delete_last_conversation_turn(
+    db: Session,
+    room_id: int
+) -> Optional[str]:
+    """
+    특정 채팅방의 마지막 대화 턴을 soft-delete한다.
+    사용자의 마지막 질문을 포함하여 이후 시점의 모든 메시지에 대해 
+    is_displayed 속성을 False로 변경한다.
+    사용자의 마지막 질문을 반환한다.
+    """
+    
+    last_user_message = db.scalar(
+        select(ChatHistory)
+        .where(
+            (ChatHistory.chat_room_id == room_id) &
+            (ChatHistory.sender_type == SenderType.HUMAN) &
+            (ChatHistory.is_displayed == True)
+        )
+        .order_by(ChatHistory.created_at.desc())
+        .limit(1)
+    )
+    
+    if not last_user_message:
+        return None
+    
+    # sd: soft-deletion
+    sd_target_messages = db.scalars(
+        select(ChatHistory)
+        .where(
+            (ChatHistory.chat_room_id == room_id) &
+            (ChatHistory.created_at >= last_user_message.created_at) &
+            (ChatHistory.is_displayed == True)
+        )
+    ).all()
+    
+    for message in sd_target_messages:
+        message.is_displayed = False  # soft-deletion 처리
+        db.add(message)
+        
+    return last_user_message.content
+
+
+def get_recent_messages(
+    db: Session,
+    session_id: uuid.UUID
+) -> list[ChatHistory]:
+    stmt = (
+        select(ChatHistory)
+        .join(ChatHistory.chat_room)
+        .where(
+            (ChatRoom.session_id == session_id) &
+            (ChatHistory.is_displayed == True)
+        )
+        .order_by(ChatHistory.created_at.desc())
+        .limit(20)  # 최근 10 턴의 대화
+    )
+    
+    return db.scalars(stmt).all()

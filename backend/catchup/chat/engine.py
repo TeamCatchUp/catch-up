@@ -5,12 +5,15 @@ from typing import Any, AsyncGenerator, Optional
 import uuid
 
 from fastapi.concurrency import run_in_threadpool
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import BaseMessage, HumanMessage
+from langgraph.pregel.types import StateSnapshot
 from sqlalchemy.orm import Session
 
 from catchup.chat.chat_room import generate_chat_room_title
+from catchup.chat.utils import restore_conversation_context
 from catchup.configs.config import settings
-from catchup.db.chat_room import add_message, create_chat_room, get_chat_room
+from catchup.db.chat_room import add_message, create_chat_room, get_chat_room, soft_delete_last_conversation_turn
+from catchup.db.models import ChatRoom
 from catchup.observability.langfuse import observe
 from catchup.chat.schemas import (
     NODE_STATUS_MAP,
@@ -42,41 +45,6 @@ class ChatService:
             ChatService._app = get_compiled_graph(checkpointer)
         return ChatService._app
 
-    async def chat(
-            self,
-            global_context: GlobalContext,
-            query: str,
-            session_id: uuid.UUID,
-    ) -> ChatResponse:
-        app = await self._get_app()
-
-        config = self._setup_config(session_id)
-        
-        inputs = {
-            "messages": [HumanMessage(content=query)],
-            "original_query": query,
-            "global_context": global_context
-        }
-
-        start = time.perf_counter()
-        final_state = await app.ainvoke(inputs, config)
-        end = time.perf_counter()
-
-        elapsed_time = end - start
-
-        last_message = final_state["messages"][-1]
-        sources = final_state.get("sources", [])
-
-        answer_text = (
-            last_message.content
-            if hasattr(last_message, "content")
-            else "답변을 생성하지 못했습니다."
-        )
-
-        return ChatResponse(
-            answer=answer_text, sources=sources, process_time=elapsed_time
-        )
-
     @observe(name="chat-stream")
     async def chat_stream(
         self,
@@ -86,51 +54,102 @@ class ChatService:
         query: str = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         
-        # 채팅 세션 획득
-        room_id: int = await self._setup_chat_room(
-            db,
-            global_context,
-            session_id,
-            query
-        )
-        
-        # Compiled Graph
-        app = await self._get_app()
-
-        # Checkpointer 설정
-        config = self._setup_config(session_id)
-        
-        # 초기 AgentState
-        inputs = {
-            "messages": [HumanMessage(content=query)],
-            "original_query": query,
-            "global_context": global_context
-        }
-
-        # 실행 시간 측정 시작
+         # 실행 시간 측정 시작
         start = time.perf_counter()
-        
-        stream_state = {
-            "buffer": "",
-            "is_citation_reached": False,
-            "has_streamed": False
-        }
-
+            
         try:
+            # 채팅 세션 획득
+            room_id: int = await self._setup_chat_room(
+                db,
+                global_context,
+                session_id,
+                query
+            )
+            
+            # Compiled Graph
+            app = await self._get_app()
+
+            # Checkpointer 설정
+            config = self._setup_config(session_id)
+            
+            lg_current_state = await app.aget_state(config)
+            
+            input_messages = await run_in_threadpool(
+                self._resolve_input_messages,
+                db,
+                session_id,
+                query,
+                lg_current_state
+            )
+            
+            # 초기 AgentState
+            inputs = {
+                "messages": input_messages,
+                "original_query": query,
+                "global_context": global_context
+            }
+            
+            stream_state = {
+                "buffer": "",
+                "is_citation_reached": False,
+                "has_streamed": False
+            }
+
             async for event in app.astream_events(inputs, config, version="v2"):
                 async for parsed_event in self._parse_stream_event(event, session_id, room_id, stream_state, db):
                     yield parsed_event
 
         except asyncio.CancelledError:
-            logger.warning(f"({session_id})클라이언트 연결 종료.")
+            logger.warning(f"({session_id}) 답변 생성이 중지되었습니다.")
             raise
 
         except Exception as e:
             logger.error(f"({session_id})Streaming 중 에러 발생: {e}", exc_info=True)
+            
+            room = await run_in_threadpool(
+                get_chat_room,
+                db,
+                session_id,
+                global_context.user.id
+            )
+            
+            await self.reset_last_turn(
+                db,
+                room
+            )
 
         finally:
             elapsed_time = time.perf_counter() - start
             logger.info(f"({session_id})Streaming 종료: total {elapsed_time:.4f}s")
+            
+    def _resolve_input_messages(
+        self,
+        db: Session,
+        session_id: uuid.UUID,
+        query: str,
+        lg_current_state: StateSnapshot
+    ) -> list[BaseMessage]:
+        
+        state_values = lg_current_state.values
+
+        has_history_in_graph = (
+            state_values
+            and "messages" in state_values
+            and len(state_values["messages"]) > 0
+        )
+        
+        if has_history_in_graph:
+            logger.info(f"({session_id}) State not empty: appending new query.")
+            input_messages = [HumanMessage(content=query)]
+        else:
+            logger.info(f"({session_id}) State empty: restoring context from DB.")
+            past_messages = restore_conversation_context(
+                db=db,
+                session_id=session_id
+            )
+            input_messages = past_messages + [HumanMessage(content=query)]
+            
+        return input_messages
 
     async def _parse_stream_event(
         self,
@@ -370,7 +389,39 @@ class ChatService:
             db.commit()
             
         await run_in_threadpool(_save_sync)
-
+        
+    async def reset_last_turn(
+        self,
+        db: Session,
+        room: ChatRoom,
+    ) -> Optional[str]:
+        """
+        마지막 대화 턴을 soft-delete 하고, 해당 세션 id에 대한 Redis Checkpointer를 초기화 한다.
+        삭제된 질문 텍스트를 반환한다.
+        """
+        
+        def _soft_delete_last_turn_sync():
+            deleted_message = soft_delete_last_conversation_turn(
+                db=db,
+                room_id=room.id
+            )
+            db.commit()
+            return deleted_message
+        
+        deleted_query = await run_in_threadpool(_soft_delete_last_turn_sync)
+        
+        if deleted_query:
+            from catchup.utils.redis import get_langgraph_checkpointer
+            checkpointer = get_langgraph_checkpointer()
+            
+            await checkpointer.adelete_thread(
+                thread_id=str(room.session_id)
+            )
+            
+            logger.info(f"Session {room.session_id}: LangGraph memory & Legacy history flushed.")
+        
+        return deleted_query
+    
     def _setup_config(self, session_id: uuid.UUID):
         default_config = {"configurable": {"thread_id": session_id}}
         if settings.ENABLE_LANGFUSE:
@@ -379,4 +430,40 @@ class ChatService:
             logger.info(f"Langfuse Status: {settings.ENABLE_LANGFUSE}, Handler: {langfuse_handler is not None}")
 
         return default_config
+    
+    async def chat(
+            self,
+            global_context: GlobalContext,
+            query: str,
+            session_id: uuid.UUID,
+    ) -> ChatResponse:
+        """Deprecated"""
+        app = await self._get_app()
+
+        config = self._setup_config(session_id)
+        
+        inputs = {
+            "messages": [HumanMessage(content=query)],
+            "original_query": query,
+            "global_context": global_context
+        }
+
+        start = time.perf_counter()
+        final_state = await app.ainvoke(inputs, config)
+        end = time.perf_counter()
+
+        elapsed_time = end - start
+
+        last_message = final_state["messages"][-1]
+        sources = final_state.get("sources", [])
+
+        answer_text = (
+            last_message.content
+            if hasattr(last_message, "content")
+            else "답변을 생성하지 못했습니다."
+        )
+
+        return ChatResponse(
+            answer=answer_text, sources=sources, process_time=elapsed_time
+        )
         
