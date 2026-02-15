@@ -1,6 +1,5 @@
 import type { UserStatus } from '@/shared/queries/auth.types';
 
-import { buildStreamingMockAnswer, MOCK_SOURCES } from './chat/data';
 import { MOCK_JWT_TOKENS, MOCK_USER } from './auth/data';
 import delay from './delay';
 import { MOCK_FEEDBACK_RESPONSE } from './feedback/data';
@@ -10,7 +9,7 @@ const USE_EMPTY_RECENT_QUERIES = process.env.NEXT_PUBLIC_MOCK_RECENT_QUERIES_EMP
 
 type MockHandler = {
   pattern: RegExp;
-  method: 'get' | 'post' | 'put' | 'delete';
+  method: 'get' | 'post' | 'put' | 'delete' | 'patch';
   handler: (url: string, data?: unknown) => Promise<unknown>;
 };
 
@@ -34,49 +33,42 @@ const mockHandlers: MockHandler[] = [
 
   // Chatrooms
   {
-    pattern: /^\/api\/chatrooms$/,
+    pattern: /^\/api\/v1\/rooms$/,
     method: 'get',
     handler: async () => MOCK_CHATROOMS,
   },
   {
-    pattern: /^\/api\/chatrooms\/queries$/,
+    pattern: /^\/api\/v1\/rooms\/queries$/,
     method: 'get',
     handler: async () => (USE_EMPTY_RECENT_QUERIES ? MOCK_RECENT_QUERIES_EMPTY : MOCK_RECENT_QUERIES),
   },
   {
-    pattern: /^\/api\/chatrooms\/[^/]+\/queries$/,
+    pattern: /^\/api\/v1\/rooms\/[^/]+\/queries$/,
     method: 'get',
     handler: async () => (USE_EMPTY_RECENT_QUERIES ? MOCK_RECENT_QUERIES_EMPTY : MOCK_RECENT_QUERIES),
   },
 
-  // Chat REST (SSE stream is mocked in chat/mockChatService.ts)
+  // Chat (SSE stream is mocked in chat/mockChatService.ts)
   {
-    pattern: /^\/api\/chat$/,
-    method: 'post',
-    handler: async (_, data) => {
-      const requestData = data as { query?: string } | undefined;
-      const query = requestData?.query?.trim() || 'mock query';
-
-      return {
-        answer: buildStreamingMockAnswer(query),
-        sources: MOCK_SOURCES,
-        process_time: 0.31,
-      };
-    },
-  },
-  {
-    pattern: /^\/api\/chat\/stream$/,
+    pattern: /^\/api\/v1\/chat\/stream$/,
     method: 'post',
     handler: async () => ({
       message: 'SSE stream is not served by axios mock adapter. Use chatService.streamChat().',
     }),
   },
+  // TODO: resume API 백엔드 구현 시 재활성
+  // {
+  //   pattern: /^\/api\/v1\/chat\/stream\/resume$/,
+  //   method: 'post',
+  //   handler: async () => ({
+  //     message: 'SSE resume is not served by axios mock adapter. Use chatService.resumeStream().',
+  //   }),
+  // },
+  // reset-last
   {
-    pattern: /^\/api\/chat\/stream\/resume$/,
+    pattern: /^\/api\/v1\/chat\/[^/]+\/reset-last$/,
     method: 'post',
-    handler: async () => ({
-      message: 'SSE resume is not served by axios mock adapter. Use chatService.resumeStream().',
-    }),
+    handler: async () => ({ status: 'success', deleted_query: 'mock deleted query' }),
   },
 
   // Onboarding
@@ -103,17 +95,15 @@ const mockHandlers: MockHandler[] = [
     }),
   },
 
-  // Feedback
+  // Feedback (PATCH /api/v1/rooms/{sessionId}/messages/{messageId}/feedback)
   {
-    pattern: /^\/api\/chat\/feedback$/,
-    method: 'post',
+    pattern: /^\/api\/v1\/rooms\/[^/]+\/messages\/[^/]+\/feedback$/,
+    method: 'patch',
     handler: async (_, data) => {
-      const requestData = data as { chat_history_id?: string; tags?: string[]; detail?: string } | undefined;
+      const requestData = data as { is_liked?: boolean | null; reasons?: string[]; comment?: string } | undefined;
       return {
         ...MOCK_FEEDBACK_RESPONSE,
-        chat_history_id: requestData?.chat_history_id || 'mock-history',
-        tags: requestData?.tags || [],
-        detail: requestData?.detail || '',
+        is_liked: requestData?.is_liked ?? null,
       };
     },
   },
