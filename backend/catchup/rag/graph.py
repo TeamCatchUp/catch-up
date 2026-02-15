@@ -1,8 +1,12 @@
+from functools import partial
 import logging
 from typing import Optional
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 
+from catchup.components.llm.factory import LlmProvider, ModelCapacity, get_llm_service
+from catchup.components.reranker.constants import RerankerProvider
+from catchup.components.reranker.factory import get_rerank_service
 from catchup.rag.conditional_edges import route_after_grade, route_question
 from catchup.rag.nodes import (
     chitchat_node,
@@ -25,20 +29,57 @@ logger = logging.getLogger(__name__)
 def get_compiled_graph(
     checkpointer: Optional[BaseCheckpointSaver] = None
 ):
+    
+    # 분석 및 일상 대화용 (small)
+    analysis_llm = get_llm_service(LlmProvider.AWS_BEDROCK, ModelCapacity.SMALL).get_llm()
+    
+    # 최종 답변 생성용 llm (large)
+    final_llm = get_llm_service(LlmProvider.AWS_BEDROCK, ModelCapacity.LARGE).get_llm()
+    
+    # Reranker 서비스
+    # Bedrock Rerank는 async API를 제공하지 않으므로,
+    # Service 레벨에서 sync 호출을 executor로 감싸
+    # 상위 Node/Graph에서는 항상 await 가능한 인터페이스만 사용하도록 한다.
+    rerank_service = get_rerank_service(RerankerProvider.AWS_BEDROCK)
+
     workflow = StateGraph(AgentState)
 
     # Nodes
-    workflow.add_node("route", route_node)
-    workflow.add_node("chitchat", chitchat_node)
-    workflow.add_node("rewrite", rewrite_node)
-    workflow.add_node("generate_vector_queries", generate_vector_queries_node)
-    workflow.add_node("search_vector_db", search_vector_db_node)
-    workflow.add_node("rerank", rerank_node)
-    workflow.add_node("grade", grade_node)
+    workflow.add_node(
+        node="route", 
+        action=partial(route_node, llm=analysis_llm)
+    )
+    workflow.add_node(
+        node="rewrite", 
+        action=partial(rewrite_node, llm=analysis_llm)
+    )
+    workflow.add_node(
+        node="generate_vector_queries",
+        action=partial(generate_vector_queries_node, llm=analysis_llm)
+    )
+    workflow.add_node(
+        node="search_vector_db", 
+        action=search_vector_db_node
+    )
+    workflow.add_node(
+        node="rerank", 
+        action=partial(rerank_node, rerank_service=rerank_service)
+    )
+    workflow.add_node(
+        node="grade",
+        action=partial(grade_node, llm=analysis_llm)
+    )
+    workflow.add_node(
+        node="chitchat", 
+        action=partial(chitchat_node, llm=analysis_llm)
+    )
+    workflow.add_node(
+        node="generate_final_answer", 
+        action=partial(generate_final_answer_node, llm=final_llm)
+    )
     # workflow.add_node("expand_graph_context", expand_graph_context_node)
     # workflow.add_node("fetch_details_after_graph_context_expansion", fetch_details_after_graph_context_expansion_node)
     # workflow.add_node("fallback_cypher_query", fallback_cypher_query_node)
-    workflow.add_node("generate_final_answer", generate_final_answer_node)
 
     # Edges
     workflow.set_entry_point("route")

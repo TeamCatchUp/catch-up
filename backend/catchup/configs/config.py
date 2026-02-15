@@ -1,4 +1,5 @@
 from enum import StrEnum
+from typing import Optional
 
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -52,11 +53,13 @@ class Settings(BaseSettings):
     MEILISEARCH_SEMANTIC_RATIO: float
     MEILISEARCH_MIN_K_PER_INDEX: int
     MEILISEARCH_GLOBAL_RETRIEVAL_BUDGET: int
-    CUSTOM_RERANK_TOTAL_K: int
     OPENAI_EMBEDDING_MODEL: str
     COHERE_EMBEDDING_MODEL: str = "embed-v4.0"
-    OPENAI_CHAT_MODEL: str
+    OPENAI_SMALL_MODEL: str
+    OPENAI_LARGE_MODEL: str
     FINAL_SOURCES_SANITY_THRESHOLD: float
+    RERANK_TOP_N: int
+    RERANK_TOTAL_K: int
 
     GITHUB_TOKEN: str
     GITHUB_BASE_URL: str
@@ -126,6 +129,20 @@ class Settings(BaseSettings):
     WEBHOOK_FLUSH_INTERVAL_HOURS: int = 1  
     WEBHOOK_ENABLE_AUTO_SYNC: bool = True
     
+    # AWS
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
+
+    # AWS Bedrock
+    # Bedrock API Key
+    AWS_BEARER_TOKEN_BEDROCK: str
+    AWS_REGION: str
+    AWS_BEDROCK_EMBEDDING_MODEL: str
+    AWS_BEDROCK_SMALL_MODEL: str
+    AWS_BEDROCK_LARGE_MODEL: str
+    AWS_RERANK_MODEL_ARN: str
+    AWS_RERANK_MODEL_REGION: str
+
 
     model_config = SettingsConfigDict(
         env_file=".env",

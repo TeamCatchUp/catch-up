@@ -1,6 +1,7 @@
 import logging
 
-from catchup.components.llm.factory import get_llm_service, LlmProvider
+from langchain.chat_models import BaseChatModel
+
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import llm_semaphore, log_node
 from catchup.rag.schemas.structures import VectorDbSearchPlan, VectorDbSearchQuery
@@ -10,10 +11,10 @@ logger = logging.getLogger(__name__)
 
 
 @log_node
-async def generate_vector_queries_node(state: AgentState):
-    llm = get_llm_service(LlmProvider.OPENAI).get_llm()
+async def generate_vector_queries_node(state: AgentState, llm: BaseChatModel):
     structured_llm = llm.with_structured_output(
-        VectorDbSearchPlan, method="function_calling"
+        VectorDbSearchPlan,
+        method="function_calling"
     )
         
     rewritten_query = state["rewritten_query"]

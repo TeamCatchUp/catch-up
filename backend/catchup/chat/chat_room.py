@@ -4,6 +4,7 @@ from langchain_core.runnables import RunnableWithMessageHistory
 from sqlalchemy.orm import Session
 from catchup.chat.exceptions import FeedbackImmutableError, LikedWithNegativeFeedbackError
 from catchup.chat.schemas import FeedbackRequest
+from catchup.components.llm.constants import ModelCapacity
 from catchup.components.llm.factory import LlmProvider, get_llm_service
 from catchup.db.chat_room import update_message_feedback
 from catchup.db.models import ChatHistory
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 async def generate_chat_room_title(query: str) -> str:
     """채팅방 제목 생성"""
-    llm = get_llm_service(LlmProvider.OPENAI).get_llm()
+    llm = get_llm_service(LlmProvider.AWS_BEDROCK, ModelCapacity.SMALL).get_llm()
     prompt = prompt_loader.get_prompt(
         "chat/summarize_title.j2",
         query=query

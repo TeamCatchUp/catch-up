@@ -1,9 +1,8 @@
 import logging
 
+from langchain.chat_models import BaseChatModel
 from langchain_core.documents import Document
-from langchain_core.prompts import ChatPromptTemplate
 
-from catchup.components.llm.factory import get_llm_service, LlmProvider
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import (
     get_context_text_from_documents,
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @log_node
-async def grade_node(state: AgentState):
+async def grade_node(state: AgentState, llm: BaseChatModel):
     query = state["rewritten_query"]
 
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
@@ -34,7 +33,6 @@ async def grade_node(state: AgentState):
 
     context_text = get_context_text_from_documents(retrieved_docs)
 
-    llm = get_llm_service(LlmProvider.OPENAI).get_llm()
     structured_llm = llm.with_structured_output(
         GradeDocuments, method="function_calling"
     )

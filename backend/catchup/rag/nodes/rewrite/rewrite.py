@@ -1,5 +1,6 @@
 import logging
 
+from langchain.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @log_node
-async def rewrite_node(state: AgentState):
+async def rewrite_node(state: AgentState, llm: BaseChatModel):
     conversation_history = get_conversation_history(state["messages"])
     history_text = get_formatted_history_text(conversation_history)
     
@@ -34,7 +35,6 @@ async def rewrite_node(state: AgentState):
         **global_context
     )
     
-    llm = get_llm_service(LlmProvider.OPENAI).get_llm()
     chain = llm | StrOutputParser()
 
     try:

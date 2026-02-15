@@ -113,10 +113,15 @@ class ChatService:
                 global_context.user.id
             )
             
-            await self.reset_last_turn(
-                db,
-                room
-            )
+            if room:
+                await self.reset_last_turn(
+                    db,
+                    room
+                )
+            else:
+                logger.warning(f"({session_id}) 에러 발생 후 복구를 시도했으나 채팅방을 찾을 수 없습니다.")
+                
+            
 
         finally:
             elapsed_time = time.perf_counter() - start
