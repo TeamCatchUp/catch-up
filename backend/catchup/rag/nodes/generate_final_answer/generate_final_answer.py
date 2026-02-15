@@ -4,10 +4,12 @@ import re
 from re import DOTALL
 
 from langchain_core.documents import Document
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import Runnable
+from regex import F
 
-from catchup.components.llm.factory import get_llm_service, LlmProvider
 from catchup.rag.policies import CITATION_POLICY_MESSAGE, FALLBACK_ANSWER
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
@@ -18,10 +20,7 @@ from catchup.rag.state import AgentState
 logger = logging.getLogger(__name__)
 
 @log_node
-async def generate_final_answer_node(state: AgentState):
-    llm_service = get_llm_service(LlmProvider.OPENAI)
-    llm = llm_service.get_llm()
-    trimmer = llm_service.get_trimmer()
+async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
 
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
         
@@ -36,6 +35,8 @@ async def generate_final_answer_node(state: AgentState):
         
     global_context = state["global_context"].model_dump()
     query = state["rewritten_query"]
+    query_with_citation_policy = query + CITATION_POLICY_MESSAGE
+    
 
     prompt = prompt_loader.get_prompt(
         "rag/generate_final_answer",
@@ -44,13 +45,11 @@ async def generate_final_answer_node(state: AgentState):
     )
     
     conversation_history = get_conversation_history(state["messages"])
-    trimmed_history = trimmer.invoke(conversation_history)
     
     messages = (
         [SystemMessage(content=prompt)]
-        + trimmed_history
-        + [HumanMessage(content=query)]
-        + [CITATION_POLICY_MESSAGE]
+        + conversation_history
+        + [HumanMessage(content=query_with_citation_policy)]
     )
 
     chain = llm | StrOutputParser()

@@ -1,21 +1,19 @@
-import datetime
 import logging
 from typing import Literal
+from langchain.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 
 from catchup.components.llm.factory import get_llm_service, LlmProvider
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
+from catchup.rag.nodes.utils import llm_semaphore, log_node
 from catchup.rag.state import AgentState
 
 logger = logging.getLogger(__name__)
 
 
 @log_node
-async def route_node(state: AgentState):
+async def route_node(state: AgentState, llm: BaseChatModel):
     query = state["original_query"]
-
-    llm = get_llm_service(LlmProvider.OPENAI).get_llm()
     
     global_context = state["global_context"].model_dump()
     
