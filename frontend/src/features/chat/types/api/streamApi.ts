@@ -1,4 +1,4 @@
-import type { BackendSourceApi } from '@/features/chat/types/api/sourceApi';
+import type { SourceResponseApi } from '@/features/chat/types/api/sourceApi';
 import type { PRPayloadModel } from '@/features/chat/types/model/chatModel';
 
 /**
@@ -14,11 +14,11 @@ export interface RagNotificationDataApi {
   response?: {
     session_id: string;
     answer: string;
-    sources: BackendSourceApi[];
+    sources: SourceResponseApi[];
     chat_history_id: string;
     has_feedback?: boolean;
   };
-  related_jira_issues?: BackendSourceApi[];
+  related_jira_issues?: SourceResponseApi[];
 }
 
 /**
@@ -37,12 +37,12 @@ export interface RagNotificationApi {
  */
 export type StreamEventApi =
   | { type: 'status'; session_id?: string; node: string; message: string }
-  | { type: 'sources'; session_id?: string; sources?: BackendSourceApi[] }
+  | { type: 'sources'; session_id?: string; sources?: SourceResponseApi[] }
   | {
       type: 'source_candidates';
       session_id?: string;
       message_id?: string;
-      sources?: BackendSourceApi[];
+      sources?: SourceResponseApi[];
     }
   | { type: 'token'; session_id?: string; token: string }
   | { type: 'delta'; session_id?: string; message_id?: string; delta: string; sequence?: number }
@@ -52,10 +52,10 @@ export type StreamEventApi =
       session_id?: string;
       message_id?: string;
       answer?: string;
-      sources?: BackendSourceApi[];
+      sources?: SourceResponseApi[];
       chat_history_id?: string;
       has_feedback?: boolean;
-      related_jira_issues?: BackendSourceApi[];
+      related_jira_issues?: SourceResponseApi[];
     }
   | { type: 'error'; session_id?: string; message: string; retryable?: boolean }
   | { type: 'ping' };

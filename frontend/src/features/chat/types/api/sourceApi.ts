@@ -1,69 +1,44 @@
-/**
- * REST 응답에서 사용하는 단순 소스 타입.
- * @interface SourceResponseApi
- */
+/** 소스 플랫폼 타입 */
+export type SourceTypeApi = 'jira' | 'slack' | 'github' | 'unknown';
+
+/** 소스 엔티티 타입. 'code'는 프론트 UI 전용 (github + code → 코드 출처 카드) */
+export type EntityTypeApi = 'issue' | 'epic' | 'message' | 'pr' | 'comment' | 'code';
+
+/** RAG 소스 응답 타입 */
 export interface SourceResponseApi {
-  source_type: 'file' | 'wiki' | 'url' | 'github' | 'slack' | 'comment';
-  content: string;
-  file_path?: string;
-  html_url?: string;
-  language?: string;
-}
-
-/**
- * 백엔드 소스 플랫폼 타입.
- * - catchup/rag/schemas/sources.py SourceType 기준
- */
-export type BackendSourceSourceApi = 'jira' | 'slack' | 'github' | 'unknown';
-
-/**
- * 백엔드 소스 엔티티 타입.
- * - catchup/rag/schemas/sources.py EntityType(+ code) 기준
- */
-export type BackendSourceEntityTypeApi = 'issue' | 'epic' | 'message' | 'pr' | 'comment' | 'code';
-
-/**
- * 백엔드 RAG 소스 원본 타입.
- * 스트리밍/정규화 과정에서 공통으로 사용하는 핵심 계약 타입.
- * @interface BackendSourceApi
- */
-export interface BackendSourceApi {
-  index?: number;
-  is_cited?: boolean;
-  source: BackendSourceSourceApi;
-  entity_type: BackendSourceEntityTypeApi;
-  relevance_score?: number;
-  html_url?: string;
-  url?: string;
-  content?: string;
-  text?: string;
-  citation_rationale?: string;
-  owner?: string;
-
-  // github
-  repo?: string;
-  file_path?: string;
-  days_ago?: number;
+  // 공통 (BaseSource)
+  id?: string;
+  source: SourceTypeApi;
+  entity_type: EntityTypeApi;
   title?: string;
-  pr_number?: number;
+  url?: string | null;
+  text?: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+  author?: string | null;
+  index?: number | null;
+  relevance_score?: number;
+  is_cited?: boolean;
+  citation_rationale?: string | null;
+
+  // github (GithubSource)
+  owner?: string;
+  repo?: string;
   number?: number;
-  created_at?: string;
-  updated_at?: string;
-  author?: string;
+  state?: string;
+  labels?: string[];
+  merged?: boolean;
+  base_ref?: string;
+  head_ref?: string;
 
-  // jira
-  issue_key?: string;
-  summary?: string;
-  project_name?: string;
+  // jira (JiraSource)
   project_key?: string;
-  parent_key?: string;
-  parent_summary?: string;
-  assignee_name?: string;
-  assignee?: string;
-  status_id?: number;
+  issue_key?: string;
   status?: string;
+  priority?: string;
+  assignee?: string;
 
-  // slack
+  // slack (SlackSource)
   channel_name?: string;
   team_id?: string;
   ts?: string;
