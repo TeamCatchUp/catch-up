@@ -11,7 +11,8 @@ const JiraGuideSection = () => {
       <h3 className="text-heading-small text-gray-80">Jira (Atlassian) 연동 가이드</h3>
       <div className="border-neutral-3 flex flex-col gap-10 rounded-xl border bg-white px-6 py-5">
         <p className="text-body-small text-gray-70">
-          Jira와의 연동을 위해 Atlassian 계정에서 API 토큰을 발급받아야 합니다. 아래 절차를 따라 키를 생성하고 입력해 주세요.
+          Jira와의 연동을 위해 Atlassian 계정에서 API 토큰을 발급받아야 합니다. 아래 절차를 따라 키를 생성하고 입력해
+          주세요.
         </p>
 
         <div className="flex flex-col gap-2.5">
@@ -29,7 +30,7 @@ const JiraGuideSection = () => {
             </div>
             <div className="flex min-w-0 flex-col">
               <span className="text-body-xsmall text-gray-80">Atlassian account</span>
-              <span className="text-label-xsmall text-gray-50 truncate">{ATLASSIAN_PROFILE_URL}</span>
+              <span className="text-label-xsmall truncate text-gray-50">{ATLASSIAN_PROFILE_URL}</span>
             </div>
           </button>
         </div>
@@ -38,7 +39,12 @@ const JiraGuideSection = () => {
           <div className="flex flex-col gap-2">
             <h4 className="text-heading-medium text-gray-80">2. 보안 설정 이동 및 토큰 생성</h4>
             <div className="border-neutral-4 overflow-hidden rounded-xl border bg-white px-4 py-2">
-              <Image src={JIRA_GUIDE_IMAGES.tokenSetting} alt="Atlassian API 토큰 설정 화면" quality={100} className="h-auto w-full" />
+              <Image
+                src={JIRA_GUIDE_IMAGES.tokenSetting}
+                alt="Atlassian API 토큰 설정 화면"
+                quality={100}
+                className="h-auto w-full"
+              />
             </div>
             <p className="text-body-small text-gray-70">
               1) 상단 메뉴 또는 페이지 내에서 &apos;보안(Security)&apos; 탭을 클릭합니다.
@@ -48,8 +54,13 @@ const JiraGuideSection = () => {
               3) 페이지 상단의 [API 토큰 만들기] 버튼을 누릅니다.
             </p>
             <div className="border-neutral-4 relative flex w-115.25 flex-col items-start gap-2.5 overflow-hidden rounded-xl border bg-white px-4 py-2.5">
-              <Image src={JIRA_GUIDE_IMAGES.token} alt="Atlassian API 토큰 생성 예시" quality={100} className="h-33.5 w-107.25 object-cover" />
-              <div className="pointer-events-none absolute top-5.9 left-45.5 h-6 w-17.25 border-3 border-red-50" />
+              <Image
+                src={JIRA_GUIDE_IMAGES.token}
+                alt="Atlassian API 토큰 생성 예시"
+                quality={100}
+                className="h-33.5 w-107.25 object-cover"
+              />
+              <div className="top-5.9 pointer-events-none absolute left-45.5 h-6 w-17.25 border-3 border-red-50" />
             </div>
           </div>
         </div>
@@ -79,7 +90,8 @@ const JiraGuideSection = () => {
           <div className="bg-neutral-1 flex flex-col gap-1.5 rounded-xl px-3 py-2">
             <span className="text-body-xsmall text-gray-80">주의사항 : 반드시 바로 복사하세요!</span>
             <p className="text-heading-small text-gray-70">
-              보안상의 이유로 발급된 API 키는 창을 닫으면 다시 조회할 수 없습니다. 복사하지 못했다면 키를 재생성해야 합니다.
+              보안상의 이유로 발급된 API 키는 창을 닫으면 다시 조회할 수 없습니다. 복사하지 못했다면 키를 재생성해야
+              합니다.
             </p>
           </div>
         </div>

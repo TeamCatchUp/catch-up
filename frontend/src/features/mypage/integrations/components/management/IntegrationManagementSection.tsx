@@ -36,7 +36,7 @@ const IntegrationManagementSection = ({
               type="button"
               onClick={() => onSelectService(service)}
               className={cn(
-                'shadow-[0_0_4px_0_#f7fbff] flex h-16 w-81.25 cursor-pointer items-center justify-between rounded-xl border p-4',
+                'flex h-16 w-81.25 cursor-pointer items-center justify-between rounded-xl border p-4 shadow-[0_0_4px_0_#f7fbff]',
                 isSelected ? 'border-blue-30 bg-white' : 'border-neutral-3 bg-white',
               )}
             >
@@ -52,7 +52,7 @@ const IntegrationManagementSection = ({
                   </>
                 ) : (
                   <>
-                    <IconCloudOff className="h-5 w-5 text-gray-30" />
+                    <IconCloudOff className="text-gray-30 h-5 w-5" />
                     <span className="text-body-xsmall text-gray-50">연동 안됨</span>
                   </>
                 )}
@@ -77,7 +77,7 @@ const IntegrationManagementSection = ({
                   type="button"
                   className="border-neutral-3 text-body-xsmall text-gray-70 flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-white px-2 py-1"
                 >
-                  <IconRotate className="h-6 w-6 text-gray-70" />
+                  <IconRotate className="text-gray-70 h-6 w-6" />
                   동기화
                 </button>
               </div>
@@ -85,17 +85,26 @@ const IntegrationManagementSection = ({
             <div className="border-neutral-3 flex h-13 items-center justify-between border-b px-4 py-3">
               <span className="text-body-small text-gray-70">연동 상태</span>
               <div className="flex items-center gap-1.5">
-                <button type="button" className="text-body-xsmall text-gray-70 h-7 cursor-pointer rounded-full px-1.5 py-1">
+                <button
+                  type="button"
+                  className="text-body-xsmall text-gray-70 h-7 cursor-pointer rounded-full px-1.5 py-1"
+                >
                   재연결
                 </button>
-                <button type="button" className="text-body-xsmall text-red-50 h-7 cursor-pointer rounded-full px-1.5 py-1">
+                <button
+                  type="button"
+                  className="text-body-xsmall h-7 cursor-pointer rounded-full px-1.5 py-1 text-red-50"
+                >
                   연결 해제
                 </button>
               </div>
             </div>
             <div className="border-neutral-3 flex h-13 items-center justify-between border-b px-4 py-3">
               <span className="text-body-small text-gray-70">보안 관련 설명</span>
-              <button type="button" className="text-body-xsmall text-gray-70 flex h-7 cursor-pointer items-center gap-1 rounded-full px-1.5 py-1">
+              <button
+                type="button"
+                className="text-body-xsmall text-gray-70 flex h-7 cursor-pointer items-center gap-1 rounded-full px-1.5 py-1"
+              >
                 원문 보기
                 <IconOpenInNew className="h-4.5 w-4.5" />
               </button>
@@ -112,9 +121,12 @@ const IntegrationManagementSection = ({
 
         <div className="flex flex-col gap-1.5">
           <h3 className="text-heading-small text-gray-70">연동된 Jira Space</h3>
-          <div className="border-neutral-3 overflow-hidden rounded-xl border bg-neutral-1">
+          <div className="border-neutral-3 bg-neutral-1 overflow-hidden rounded-xl border">
             {spaceRows.map((row, index) => (
-              <div key={`${row}-${index}`} className="border-neutral-3 text-body-small text-gray-70 flex h-13 items-center border-b px-4 py-3">
+              <div
+                key={`${row}-${index}`}
+                className="border-neutral-3 text-body-small text-gray-70 flex h-13 items-center border-b px-4 py-3"
+              >
                 <span className="truncate">{row}</span>
               </div>
             ))}

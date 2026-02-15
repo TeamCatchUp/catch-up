@@ -20,8 +20,10 @@ const ConnectedAccountCard = ({ account, accountInfo, variant }: ConnectedAccoun
         <div className="bg-neutral-2 h-6.25 w-6.25 rounded-full" />
         <span className="text-heading-small text-gray-70">{accountInfo.userName}</span>
       </div>
-      <div className="bg-neutral-2 text-body-xsmall text-gray-50 inline-flex w-fit rounded-md px-1.5 py-0.5">{accountInfo.userId}</div>
-      <div className="text-body-xsmall text-gray-50 h-5 truncate">{accountInfo.userEmail}</div>
+      <div className="bg-neutral-2 text-body-xsmall inline-flex w-fit rounded-md px-1.5 py-0.5 text-gray-50">
+        {accountInfo.userId}
+      </div>
+      <div className="text-body-xsmall h-5 truncate text-gray-50">{accountInfo.userEmail}</div>
     </div>
   );
 
@@ -40,7 +42,10 @@ const ConnectedAccountCard = ({ account, accountInfo, variant }: ConnectedAccoun
           </div>
           <div className="flex w-full flex-col gap-3">
             {details}
-            <button type="button" className="box-button-outline-gray text-body-small text-gray-70 h-9 w-full cursor-pointer">
+            <button
+              type="button"
+              className="box-button-outline-gray text-body-small text-gray-70 h-9 w-full cursor-pointer"
+            >
               수정하기
             </button>
           </div>
@@ -52,7 +57,10 @@ const ConnectedAccountCard = ({ account, accountInfo, variant }: ConnectedAccoun
             <span className="text-heading-medium text-gray-80">{name}</span>
           </div>
           {details}
-          <button type="button" className="box-button-outline-gray text-body-small text-gray-70 h-9 w-full cursor-pointer">
+          <button
+            type="button"
+            className="box-button-outline-gray text-body-small text-gray-70 h-9 w-full cursor-pointer"
+          >
             수정하기
           </button>
         </>
