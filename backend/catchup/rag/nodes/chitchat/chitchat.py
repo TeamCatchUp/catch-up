@@ -28,6 +28,8 @@ async def chitchat_node(state: AgentState):
         **global_context
     )
     
+    logger.info(conversation_history)
+    
     messages = [SystemMessage(content=prompt)] + conversation_history + [HumanMessage(content=query)]
 
     chain = llm | StrOutputParser()
@@ -35,6 +37,7 @@ async def chitchat_node(state: AgentState):
     try:
         async with llm_semaphore:
             answer = await chain.ainvoke(input=messages)
+            logger.info(f"최종 답변: {answer}")
 
     except Exception as e:
         logger.error(f"Chitchat node failed: {e}", exc_info=True)

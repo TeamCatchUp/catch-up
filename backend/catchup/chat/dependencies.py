@@ -1,7 +1,6 @@
 import uuid
 
 from fastapi import Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import get_current_user
