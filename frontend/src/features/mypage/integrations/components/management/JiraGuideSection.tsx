@@ -60,7 +60,7 @@ const JiraGuideSection = () => {
                 quality={100}
                 className="h-33.5 w-107.25 object-cover"
               />
-              <div className="top-5.9 pointer-events-none absolute left-45.5 h-6 w-17.25 border-3 border-red-50" />
+              <div className="top-5.9 pointer-events-none absolute left-45.5 h-6 w-17.25 border-[3px] border-red-50" />
             </div>
           </div>
         </div>

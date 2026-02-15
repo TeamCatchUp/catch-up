@@ -13,7 +13,7 @@ import Profile from '/public/icons/icon/profile.svg';
 /**
  * 마이페이지 프로필 화면을 렌더링
  */
-const Page = () => {
+const ProfilePage = () => {
   const { user } = useUserStore();
   const queryClient = useQueryClient();
   const isAdmin = user?.role === 'admin';
@@ -117,7 +117,7 @@ const Page = () => {
                 className={cn(
                   'text-body-small h-9 rounded-full border px-3 py-1.5',
                   isAdmin
-                    ? 'cursor-disabled border-neutral-3 bg-neutral-1 text-gray-30'
+                    ? 'border-neutral-3 bg-neutral-1 text-gray-30 cursor-not-allowed'
                     : 'hover:bg-red-5 active:bg-red-10 cursor-pointer border-red-50 bg-white text-red-50',
                 )}
               >
@@ -131,4 +131,4 @@ const Page = () => {
   );
 };
 
-export default Page;
+export default ProfilePage;
