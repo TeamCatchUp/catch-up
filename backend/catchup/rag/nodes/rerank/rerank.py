@@ -3,7 +3,7 @@ from collections import defaultdict
 
 from langchain_core.documents import Document
 
-from catchup.components.reranker.factory import get_rerank_service
+from catchup.components.reranker.service import BaseRerankService
 from catchup.configs.config import settings
 from catchup.rag.nodes.utils import log_node, rerank_semaphore
 from catchup.rag.state import AgentState
@@ -12,30 +12,31 @@ logger = logging.getLogger(__name__)
 
 
 @log_node
-async def rerank_node(state: AgentState):
+async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
 
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
     if not retrieved_docs:
         logger.warning("검색된 문서가 없습니다.")
         return {"retrieved_docs": []}
 
-    rerank_service = get_rerank_service()
     query = state["rewritten_query"]
 
     try:
         async with rerank_semaphore:
             reranked_docs = await rerank_service.rerank(
-                query=query, documents=retrieved_docs, top_n=len(retrieved_docs)
+                query=query,
+                documents=retrieved_docs,
+                top_n=settings.RERANK_TOP_N
             )
 
         final_docs = select_diverse_top_k(
             reranked_docs=reranked_docs,
-            total_k=settings.CUSTOM_RERANK_TOTAL_K,  # 최종 10개
+            total_k=settings.RERANK_TOTAL_K,  # LLM에게 최종적으로 제공되는 문서 개수
             min_guarantee=2,  # 최소 2개 보장
         )
 
     except Exception as e:
-        logger.warning(f"Rerank node failed: {e}")
+        logger.warning(f"Rerank node failed: {e}", exc_info=True)
         final_docs = retrieved_docs
 
     return {"retrieved_docs": final_docs}

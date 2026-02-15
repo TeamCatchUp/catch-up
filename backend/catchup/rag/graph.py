@@ -5,6 +5,8 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 
 from catchup.components.llm.factory import LlmProvider, ModelCapacity, get_llm_service
+from catchup.components.reranker.constants import RerankerProvider
+from catchup.components.reranker.factory import get_rerank_service
 from catchup.rag.conditional_edges import route_after_grade, route_question
 from catchup.rag.nodes import (
     chitchat_node,
@@ -32,7 +34,13 @@ def get_compiled_graph(
     analysis_llm = get_llm_service(LlmProvider.AWS_BEDROCK, ModelCapacity.SMALL).get_llm()
     
     # 최종 답변 생성용 llm (large)
-    final_llm = get_llm_service(LlmProvider.AWS_BEDROCK, ModelCapacity.LARGE).get_llm()    
+    final_llm = get_llm_service(LlmProvider.AWS_BEDROCK, ModelCapacity.LARGE).get_llm()
+    
+    # Reranker 서비스
+    # Bedrock Rerank는 async API를 제공하지 않으므로,
+    # Service 레벨에서 sync 호출을 executor로 감싸
+    # 상위 Node/Graph에서는 항상 await 가능한 인터페이스만 사용하도록 한다.
+    rerank_service = get_rerank_service(RerankerProvider.AWS_BEDROCK)
 
     workflow = StateGraph(AgentState)
 
@@ -55,7 +63,7 @@ def get_compiled_graph(
     )
     workflow.add_node(
         node="rerank", 
-        action=rerank_node
+        action=partial(rerank_node, rerank_service=rerank_service)
     )
     workflow.add_node(
         node="grade",
