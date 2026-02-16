@@ -251,6 +251,17 @@ const emitBackendLikeStream = async (
     session_id: sessionId,
     sources: turnSources,
   });
+
+  throwIfAborted(signal);
+  onEvent({
+    type: 'result',
+    session_id: sessionId,
+    answer,
+    sources: turnSources,
+    related_jira_issues: [],
+    chat_history_id: `mock-history-${Date.now()}`,
+    has_feedback: false,
+  });
 };
 
 /**

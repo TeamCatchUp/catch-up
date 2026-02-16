@@ -114,7 +114,7 @@ const FeedbackSection = ({
     async (selectedReason?: FeedbackReason) => {
       if (!chatHistoryId) {
         console.warn('[feedback] chatHistoryId(message_id) missing — 피드백 제출 불가');
-        toast('피드백을 제출할 수 없습니다. 잠시 후 다시 시도해주세요.');
+        toast('피드백을 제출할 수 없습니다.');
         return;
       }
 
@@ -126,7 +126,6 @@ const FeedbackSection = ({
 
       // OTHER 선택 시 comment 필수
       if (selectedReason === 'OTHER' && !comment) return;
-      if (isDetail && !comment) return;
 
       setSubmitError(false);
 
@@ -170,7 +169,7 @@ const FeedbackSection = ({
         {FEEDBACK_CHIPS.map((chip) => (
           <button
             key={chip.id}
-            disabled={isSubmitting}
+            disabled={isSubmitting || (isDetailOpen && chip.id !== DETAIL_ID)}
             onClick={() => {
               if (chip.id === DETAIL_ID) {
                 setIsDetailOpen((prev) => {

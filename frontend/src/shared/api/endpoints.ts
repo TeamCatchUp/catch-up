@@ -12,7 +12,7 @@ export const API = {
     stream: `${API_PREFIX}/chat/stream`, // POST SSE 스트리밍 질의 (text/event-stream)
     feedback: (sessionId: string, messageId: string | number) =>
       `${API_PREFIX}/rooms/${sessionId}/messages/${messageId}/feedback`, // PATCH 답변 피드백 (is_liked, reasons, comment)
-    resetLast: (sessionId: string) => `${API_PREFIX}/chat/${sessionId}/reset-last`, // DELETE 마지막 턴 soft-delete
+    resetLast: (sessionId: string) => `${API_PREFIX}/chat/${sessionId}/reset-last`, // POST 마지막 턴 soft-delete
   },
 
   // 채팅방 목록, 질문 히스토리, 메시지 조회 — 모두 ?page=&size= 페이지네이션
