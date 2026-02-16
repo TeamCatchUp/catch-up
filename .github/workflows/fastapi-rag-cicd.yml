@@ -1,91 +1,115 @@
-name: FastAPI Rag Server with Docker - Push based
+name: Catch Up CI/CD - Build & Deploy
+
 on:
   push:
-    branches:
-      - "release/**"
-      - main
-      - develop
+    branches: [ "main", "develop", "deploy/**"]
   pull_request:
-    branches:
-    - main
-      
+    branches: [ "main" ]
+
+env:
+  DOCKER_REGISTRY: docker.io
+  DOCKER_USERNAME: ${{ secrets.DOCKER_REGISTRY_USER_NAME }}
+  PROJECT_NAME: teamcatchup
+
 jobs:
-  build:
-    name: Build and Push Docker Image
-    if: github.repository_owner == 'TeamCatchUp'
+  # ===================================
+  # Build & Push (백엔드/프론트엔드 병렬 처리)
+  # ===================================
+  build-and-push:
+    name: Build & Push ${{ matrix.service }}
     runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ github.sha }}
-    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: backend
+            context: .
+            dockerfile: backend/Dockerfile
+            image_name: catchup-backend
+          - service: frontend
+            context: .
+            dockerfile: frontend/Dockerfile
+            image_name: catchup-web
+
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
-        
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ${{ secrets.DOCKER_REGISTRY_URL }}
           username: ${{ secrets.DOCKER_REGISTRY_USER_NAME }}
           password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
-          
-      - name: Build and push
+
+      - name: Extract Metadata (Tags, Labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_USERNAME }}/${{ matrix.image_name }}
+          tags: |
+            type=sha,format=long   # sha-905a... (전체 SHA 사용)
+            type=raw,value=latest  # latest 태그 추가
+
+      - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: true
-          tags: ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_IMAGE_NAME }}:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # =================================
+  # 2. EC2 Deployment (Pull & Restart)
+  # =================================
   deploy:
-    name: Deploy FastAPI Server to OCI Instance
+    name: Deploy to EC2
+    needs: build-and-push
     runs-on: ubuntu-latest
-    needs: build
-    if: github.repository_owner == 'TeamCatchUp' && github.event_name != 'pull_request'
-    
+    if: github.event_name == 'push'
+
     steps:
-      - name: Deploy to OCI
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.OCI_INSTANCE_HOST }}
+          host: ${{ secrets.EC2_HOST }}
           username: ubuntu
-          key: ${{ secrets.OCI_INSTANCE_SSH_PRIVATE_KEY }}
-          port: ${{ secrets.OCI_INSTANCE_SSH_PORT }}
-          command_timeout: 30m
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
           script: |
-            cd ~
-            
-            if [ ! -d "CatchUp-RAG-Server" ]; then
-              echo "Repository not found. Cloning..."
-              git clone https://github.com/TeamCatchUp/CatchUp-RAG-Server.git
-            fi
+            cd ~/CatchUp || { echo "Directory not found"; exit 1; }
 
-            cd CatchUp-RAG-Server
+            git pull origin main
+
+            cat << 'EOF' > .env
+            ${{ secrets.DOTENV_FILE }}
+            EOF
             
-            echo "Pulling latest code..."
-            git fetch origin
-            git checkout ${{ github.sha }}
+            echo "IMAGE_TAG=sha-${{ github.sha }}" >> .env
+            echo "DOCKER_REGISTRY_USER_NAME=${{ secrets.DOCKER_REGISTRY_USER_NAME }}" >> .env
             
-            echo "Injecting '.env' file..."
-            touch .env
-            echo "${{ secrets.DOTENV_FILE }}" > .env
-            echo "IMAGE_TAG=${{ needs.build.outputs.image_tag }}" >> .env
-            
-            echo "Pulling new image..."
-            docker compose pull
-            
-            echo "Shutting down containers..."          
-            docker compose down
-            
-            echo "Running containers..."
-            docker compose up -d
-            
-            echo "Pruning old images..."
-            docker image prune -a -f
-            
-            docker ps
-            
-            
+            # echo "${{ secrets.DOCKER_REGISTRY_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_REGISTRY_USER_NAME }}" --password-stdin
+
+            # 이미지 pull
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              -f docker-compose.public.yml \
+              -f docker-compose.build.yml \
+              pull api_server web_client
+
+            # 컨테이너 재시작 (변경된 이미지만 교체)
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              -f docker-compose.public.yml \
+              -f docker-compose.build.yml \
+              --profile full \
+              up -d --remove-orphans
+
+            # 리소스 정리
+            docker image prune -f

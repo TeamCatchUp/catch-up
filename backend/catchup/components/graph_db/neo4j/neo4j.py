@@ -9,24 +9,36 @@ logger = logging.getLogger(__name__)
 
 class Neo4jRetrievalService:
     def __init__(self):
+        self.graph = None
+        
+        if not getattr(settings, "ENABLE_NEO4J", False):
+            logger.info("Graph DB is DISABLED via settings. Skipping connection.")
+            return
+        
         try:
             logger.info(f"Neo4j URL: {settings.NEO4J_URI}")
-            self.graph = Neo4jGraph(
-                url=settings.NEO4J_URI,
-                username=settings.NEO4J_USER,
-                password=settings.NEO4J_PASSWORD,
-            )
-
-            logger.info("Neo4j connection successfully established.")
+            if settings.NEO4J_URI and settings.NEO4J_USER and settings.NEO4J_PASSWORD:
+                self.graph = Neo4jGraph(
+                    url=settings.NEO4J_URI,
+                    username=settings.NEO4J_USER,
+                    password=settings.NEO4J_PASSWORD,
+                )
+                logger.info("Neo4j connection successfully established.")
+            else:
+                logger.warning("Graph DB settings are missing. Connection skipped.")
 
         except Exception as e:
             logger.error(f"Neo4j connection failed: {e}")
-            raise e
+            self.graph = None
 
     def get_instance(self) -> Neo4jGraph:
         return self.graph
 
     def query(self, query: str, params: dict[str, Any] = None) -> list[dict[str, Any]]:
+        if not self.graph:
+            logger.debug("Graph DB is not connected. Skipping query.")
+            return []
+        
         try:
             return self.graph.query(query, params=params)
         except Exception as e:
@@ -36,7 +48,7 @@ class Neo4jRetrievalService:
     def get_context_by_anchors(
         self, anchor_ids: list[str], limit: int = 50
     ) -> list[dict[str, Any]]:
-        if not anchor_ids:
+        if not self.graph or not anchor_ids:
             return []
 
         # TODO: Full Scan 방지를 위해 Index 설정 여부 확인 (필수)

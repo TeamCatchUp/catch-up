@@ -106,9 +106,10 @@ class Settings(BaseSettings):
     JIRA_API_RATE_LIMIT_DELAY: float = 0.1  # Seconds between requests
     
     # Neo4j
-    NEO4J_USER: str 
-    NEO4J_PASSWORD: str
-    NEO4J_URI: str
+    NEO4J_USER:Optional[str] 
+    NEO4J_PASSWORD: Optional[str]
+    NEO4J_URI: Optional[str]
+    ENABLE_NEO4J: bool = False
 
     # Slack Sync Settings
     SLACK_SYNC_MAX_CONCURRENT_REQUESTS: int = 10  # 동시 요청 수

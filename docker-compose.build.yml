@@ -1,0 +1,15 @@
+# =======
+# Build
+# =======
+services:
+  api_server:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+    image: teamcatchup/catchup-backend:latest
+
+  web_client:
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile
+    image: teamcatchup/catchup-web:latest

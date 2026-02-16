@@ -6,7 +6,7 @@ RUN apk add --no-cache libc6-compat
 # Deps: 의존성 설치 (캐싱 효율을 위해 분리)
 FROM base AS deps
 # 패키지 매니저 파일 복사
-COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
+COPY frontend/package.json frontend/package-lock.json* frontend/yarn.lock* frontend/pnpm-lock.yaml* ./
 
 # 의존성 설치
 RUN \
@@ -23,7 +23,7 @@ FROM base AS dev
 WORKDIR /app
 # Deps 단계에서 설치한 node_modules를 가져옴
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY frontend/ .
 
 ENV NODE_ENV=development
 # Next.js 개발 서버 실행
@@ -35,7 +35,7 @@ CMD ["npm", "run", "dev"]
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY frontend/ .
 
 # 빌드 실행
 RUN \
