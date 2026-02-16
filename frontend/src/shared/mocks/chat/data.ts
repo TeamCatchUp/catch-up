@@ -2,6 +2,13 @@ import { formatFullDate } from '@/shared/utils/formatDate';
 
 import type { MockChatSource, MockMessage, MockSource } from './types';
 
+/** 현재 시각 기준 N일 전 ISO 문자열 생성 */
+const daysAgo = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString();
+};
+
 export const MOCK_STREAM_STATUS_STEPS: Array<{ node: string; message: string }> = [
   { node: 'route', message: '질문 의도를 분석하고 있어요' },
   { node: 'rewrite', message: 'retrieval 정확도를 높이기 위해 질문을 정리하고 있어요' },
@@ -27,7 +34,7 @@ export const MOCK_SOURCES: MockSource[] = [
     title: '[CAT-317] 채팅 스트리밍 이벤트(status/sources/token) 적용',
     number: 52,
     state: 'merged',
-    created_at: '2025-02-11T08:00:00.000Z',
+    created_at: daysAgo(14),
     author: '백엔드팀',
   },
   {
@@ -44,7 +51,7 @@ export const MOCK_SOURCES: MockSource[] = [
     project_key: 'CATCH',
     assignee: '기획팀',
     status: 'Done',
-    created_at: '2025-02-12T08:00:00.000Z',
+    created_at: daysAgo(5),
   },
   {
     id: 'slack:message:T001:C001:1739433600.000100',
@@ -60,7 +67,7 @@ export const MOCK_SOURCES: MockSource[] = [
     ts: '1739433600.000100',
     title: '프론트/백엔드 스트리밍 동기화 메모',
     author: '프론트엔드팀',
-    created_at: '2025-02-13T08:00:00.000Z',
+    created_at: daysAgo(1),
   },
   {
     id: 'github:code:TeamCatchUp/CatchUp-FE:useRagChat',
@@ -75,7 +82,7 @@ export const MOCK_SOURCES: MockSource[] = [
     repo: 'CatchUp-FE',
     title: 'useRagChat: token 누적 및 종료 처리',
     author: '프론트엔드팀',
-    created_at: '2025-02-14T07:00:00.000Z',
+    created_at: daysAgo(0),
   },
   {
     id: 'jira:issue:CAT-321',
@@ -91,7 +98,7 @@ export const MOCK_SOURCES: MockSource[] = [
     project_key: 'CATCH',
     assignee: '백엔드팀',
     status: 'To Do',
-    created_at: '2025-02-14T08:00:00.000Z',
+    created_at: daysAgo(10),
   },
 ];
 

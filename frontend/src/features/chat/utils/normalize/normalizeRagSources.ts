@@ -1,5 +1,5 @@
 import type { ChatSource, SourceResponse } from '@/features/chat/types';
-import { formatFullDate } from '@/shared/utils/formatDate';
+import { formatFullDate, formatRelativeDate } from '@/shared/utils/formatDate';
 
 /**
  * source/entity_type을 UI용 source_type으로 변환
@@ -29,12 +29,12 @@ const getUiSourceType = (source: SourceResponse['source'], entityType: string): 
   return 'code';
 };
 
+const RELATIVE_DATE_THRESHOLD_DAYS = 7;
+
 /**
- * 생성 시각을 날짜 형식으로 포맷
- * - ISO 문자열 → "YYYY-MM-DD" 형식
- *
- * @param createdAt - ISO 문자열
- * @returns 포맷된 날짜 또는 빈 문자열
+ * 생성 시각을 포맷
+ * - 7일 이내: "N일 전 변경"
+ * - 7일 초과: "YYYY.MM.DD"
  */
 const formatCreatedAt = (createdAt?: string | null) => {
   if (!createdAt) return '';
@@ -42,11 +42,14 @@ const formatCreatedAt = (createdAt?: string | null) => {
   if (!trimmed) return '';
 
   const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) {
-    return '';
-  }
+  if (Number.isNaN(parsed.getTime())) return '';
 
-  return formatFullDate(parsed.toISOString());
+  const iso = parsed.toISOString();
+  const diffDays = Math.floor((Date.now() - parsed.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return formatFullDate(iso);
+  if (diffDays <= RELATIVE_DATE_THRESHOLD_DAYS) return `${formatRelativeDate(iso)} 변경`;
+  return formatFullDate(iso);
 };
 
 /**
