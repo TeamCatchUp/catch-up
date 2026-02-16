@@ -120,7 +120,7 @@ const toSourceRepo = (source: MockSource) => {
 };
 
 const toSourceTitle = (source: MockSource) => {
-  return source.title ?? (source.number ? `#${source.number}` : source.issue_key ?? '');
+  return source.title ?? (source.number ? `#${source.number}` : (source.issue_key ?? ''));
 };
 
 const formatSourceDate = (source: MockSource) => {

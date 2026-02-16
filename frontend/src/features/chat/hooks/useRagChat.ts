@@ -14,15 +14,15 @@ import {
   appendStreamingToken,
   updateStreamingSources,
 } from '@/features/chat/hooks/useRagChat.parts/streamMessageUpdater';
-import chatService from '@/features/chat/services/chatService';
 import { useRagStream } from '@/features/chat/hooks/useRagStream';
+import chatService from '@/features/chat/services/chatService';
 import type {
-  SourceResponse,
   ChatData,
   ChatSource,
   Message,
   PRPayload,
   RagUIStepKey,
+  SourceResponse,
   StreamEvent,
 } from '@/features/chat/types';
 import { normalizeSources } from '@/features/chat/utils/normalize/normalizeRagSources';
@@ -650,12 +650,9 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
 
   // TODO: resume API 백엔드 구현 시 재활성
   // handlePRContinue는 현재 interrupt가 비활성이므로 호출되지 않음
-  const handlePRContinue = useCallback(
-    async (_selectedPrNumbers: number[]) => {
-      console.warn('[useRagChat] handlePRContinue called but resume is disabled');
-    },
-    [],
-  );
+  const handlePRContinue = useCallback(async (_selectedPrNumbers: number[]) => {
+    console.warn('[useRagChat] handlePRContinue called but resume is disabled');
+  }, []);
 
   /**
    * PR 다시 가져오기 (스트림 재시작)

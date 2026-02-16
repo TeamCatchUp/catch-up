@@ -1,6 +1,6 @@
 /** Jira 이슈를 JiraTask 목록으로 정규화 */
 
-import type { SourceResponse, JiraTask } from '@/features/chat/types';
+import type { JiraTask, SourceResponse } from '@/features/chat/types';
 
 /**
  * 백엔드 Jira 이슈 배열을 JiraTask 목록으로 변환

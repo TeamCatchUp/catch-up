@@ -1,4 +1,4 @@
-import type { SourceResponse, ChatSource } from '@/features/chat/types';
+import type { ChatSource, SourceResponse } from '@/features/chat/types';
 import { formatFullDate } from '@/shared/utils/formatDate';
 
 /**
@@ -64,8 +64,7 @@ const getSourceLink = (source: SourceResponse) => source.url ?? '';
  * @param source - 백엔드 출처 객체
  * @returns 내용 문자열
  */
-const getSourceContent = (source: SourceResponse) =>
-  source.citation_rationale?.trim() || source.text?.trim() || '';
+const getSourceContent = (source: SourceResponse) => source.citation_rationale?.trim() || source.text?.trim() || '';
 
 /**
  * 저장소/프로젝트 텍스트 생성
@@ -142,8 +141,7 @@ export const normalizeSources = (sources: SourceResponse[]): ChatSource[] => {
 
     const date = formatCreatedAt(source.created_at);
 
-    const author =
-      sourceType === 'jira' ? (source.assignee ?? source.author ?? '') : (source.author ?? '');
+    const author = sourceType === 'jira' ? (source.assignee ?? source.author ?? '') : (source.author ?? '');
 
     return {
       id: crypto.randomUUID(),

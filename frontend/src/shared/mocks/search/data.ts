@@ -34,21 +34,61 @@ export const MOCK_CHATROOMS: ChatroomsResponse = {
 
 const recentQueryItems: RecentQueriesResponse['items'] = [
   // 오늘 (5개)
-  { id: 1, content: '일본 시장 진출 전체 진행 상황 요약 및 분석', session_id: 'mock-today-1', created_at: new Date().toISOString() },
-  { id: 2, content: 'Q4 매출 분석 리포트 작성 가이드', session_id: 'mock-today-2', created_at: new Date().toISOString() },
+  {
+    id: 1,
+    content: '일본 시장 진출 전체 진행 상황 요약 및 분석',
+    session_id: 'mock-today-1',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 2,
+    content: 'Q4 매출 분석 리포트 작성 가이드',
+    session_id: 'mock-today-2',
+    created_at: new Date().toISOString(),
+  },
   { id: 3, content: '신규 프로젝트 예산 편성 방법', session_id: 'mock-today-3', created_at: new Date().toISOString() },
-  { id: 4, content: '팀 미팅 일정 조율 및 안건 정리', session_id: 'mock-today-4', created_at: new Date().toISOString() },
+  {
+    id: 4,
+    content: '팀 미팅 일정 조율 및 안건 정리',
+    session_id: 'mock-today-4',
+    created_at: new Date().toISOString(),
+  },
   { id: 5, content: '월간 KPI 달성 현황 점검', session_id: 'mock-today-5', created_at: new Date().toISOString() },
 
   // 최근 7일 (4개)
-  { id: 6, content: '경쟁사 분석 자료 수집 및 정리', session_id: 'mock-week-1', created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() },
-  { id: 7, content: '고객 피드백 취합 및 개선 방안', session_id: 'mock-week-2', created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() },
-  { id: 8, content: '다음 분기 마케팅 전략 수립', session_id: 'mock-week-3', created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() },
-  { id: 9, content: '인력 채용 계획 및 일정 관리', session_id: 'mock-week-4', created_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString() },
+  {
+    id: 6,
+    content: '경쟁사 분석 자료 수집 및 정리',
+    session_id: 'mock-week-1',
+    created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 7,
+    content: '고객 피드백 취합 및 개선 방안',
+    session_id: 'mock-week-2',
+    created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 8,
+    content: '다음 분기 마케팅 전략 수립',
+    session_id: 'mock-week-3',
+    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 9,
+    content: '인력 채용 계획 및 일정 관리',
+    session_id: 'mock-week-4',
+    created_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+  },
 
   // 이전 (12개)
   { id: 10, content: '월간 보고서 작성 템플릿', session_id: 'mock-old-1', created_at: '2025-01-15T00:00:00.000Z' },
-  { id: 11, content: '연말 정산 자료 준비 체크리스트', session_id: 'mock-old-2', created_at: '2024-12-20T00:00:00.000Z' },
+  {
+    id: 11,
+    content: '연말 정산 자료 준비 체크리스트',
+    session_id: 'mock-old-2',
+    created_at: '2024-12-20T00:00:00.000Z',
+  },
   { id: 12, content: '파트너사 계약서 검토 포인트', session_id: 'mock-old-3', created_at: '2024-12-10T00:00:00.000Z' },
   { id: 13, content: '제품 로드맵 업데이트 내용', session_id: 'mock-old-4', created_at: '2024-11-28T00:00:00.000Z' },
   { id: 14, content: '사용자 데이터 분석 리포트', session_id: 'mock-old-5', created_at: '2024-11-15T00:00:00.000Z' },

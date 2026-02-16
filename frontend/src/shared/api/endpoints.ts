@@ -31,8 +31,7 @@ export const API = {
     syncFlush: `${API_PREFIX}/github/sync/flush`, // POST 웹훅 버퍼 즉시 반영
     syncStatus: (installationId: string) => `${API_PREFIX}/github/sync/status/${installationId}`, // GET 레포별 동기화 상태
     repositories: (installationId: string) => `${API_PREFIX}/github/sync/repositories/${installationId}`, // GET DB 저장소 목록
-    repositoriesRefresh: (installationId: string) =>
-      `${API_PREFIX}/github/sync/repositories/${installationId}/refresh`, // POST GitHub API에서 저장소 목록 재조회
+    repositoriesRefresh: (installationId: string) => `${API_PREFIX}/github/sync/repositories/${installationId}/refresh`, // POST GitHub API에서 저장소 목록 재조회
   },
 
   jira: {
