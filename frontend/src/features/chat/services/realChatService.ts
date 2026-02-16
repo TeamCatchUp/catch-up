@@ -78,15 +78,9 @@ const realChatService = {
   /**
    * 질문 스트림 시작
    *
-   * POST /api/chat/stream
+   * POST /api/v1/chat/stream
    * - 새 질문에 대한 SSE 스트림 응답 수신
    * - 이벤트 타입: status, sources, token/delta, interrupt, result, error
-   *
-   * @param query - 질문 내용
-   * @param sessionId - 현재 세션 ID
-   * @param onEvent - 스트림 이벤트를 처리할 콜백
-   * @param signal - 요청 취소용 AbortSignal (옵셔널)
-   * @throws HTTP 에러 또는 네트워크 에러
    */
   streamChat: async (query: string, sessionId: string, onEvent: (event: StreamEvent) => void, signal?: AbortSignal) => {
     const res = await fetch(API.chat.stream, {
@@ -101,41 +95,34 @@ const realChatService = {
   },
 
   /**
-   * PR 선택 후 스트림 재개
+   * 마지막 턴 soft-delete
    *
-   * POST /api/chat/stream/resume
-   * - interrupt 이벤트 이후 사용자가 선택한 PR 정보 전송
-   * - 백엔드에서 선택된 PR을 기반으로 답변 생성 재개
-   *
-   * @param sessionId - 현재 세션 ID
-   * @param selectedPRs - 사용자가 선택한 PR 목록
-   * @param onEvent - 스트림 이벤트를 처리할 콜백
-   * @param signal - 요청 취소용 AbortSignal (옵셔널)
-   * @throws HTTP 에러 또는 네트워크 에러
+   * POST /api/v1/chat/{session_id}/reset-last
+   * - 질문 수정 시 기존 마지막 턴을 삭제한 후 재질문
+   * - 실패해도 사용자 흐름을 block하지 않음
    */
-  resumeStream: async (
-    sessionId: string,
-    selectedPRs: { pr_number: number; repo_name: string; owner: string }[],
-    onEvent: (event: StreamEvent) => void,
-    signal?: AbortSignal,
-  ) => {
-    const res = await fetch(API.chat.streamResume, {
+  resetLastTurn: async (sessionId: string): Promise<{ status: string }> => {
+    const res = await fetch(API.chat.resetLast(sessionId), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({
-        session_id: sessionId,
-        user_selected_pull_requests: selectedPRs.map((pr) => ({
-          pr_number: pr.pr_number,
-          repo_name: pr.repo_name,
-          owner: pr.owner,
-        })),
-      }),
-      signal,
     });
 
-    await parseSSEStream(res, onEvent);
+    if (!res.ok) {
+      console.warn(`[resetLastTurn] HTTP ${res.status} for session ${sessionId}`);
+      return { status: 'error' };
+    }
+
+    return res.json();
   },
+
+  // TODO: resume API 백엔드 구현 시 재활성
+  // resumeStream: async (
+  //   sessionId: string,
+  //   selectedPRs: { pr_number: number; repo_name: string; owner: string }[],
+  //   onEvent: (event: StreamEvent) => void,
+  //   signal?: AbortSignal,
+  // ) => { ... },
 };
 
 export default realChatService;

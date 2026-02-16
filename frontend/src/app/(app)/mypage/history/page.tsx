@@ -14,9 +14,9 @@ export default function HistoryPage() {
   const { data, isLoading } = useQuery(chatQueries.recentQueries());
 
   const recentQueries = useMemo<SearchQueryWithRawDate[]>(() => {
-    if (!data?.content) return [];
-    return data.content.map((item) => ({
-      query: item.query,
+    if (!data?.items) return [];
+    return data.items.map((item) => ({
+      query: item.content,
       session_id: item.session_id,
       date: formatFullDate(item.created_at),
       rawDate: new Date(item.created_at),

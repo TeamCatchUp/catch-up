@@ -3,7 +3,6 @@
  * - api/model/props 하위 타입을 재노출
  * - 기존 코드 호환을 위한 별칭 타입 제공
  */
-export * from '@/features/chat/types/api/chatApi';
 export * from '@/features/chat/types/api/feedbackApi';
 export * from '@/features/chat/types/api/sourceApi';
 export * from '@/features/chat/types/api/streamApi';
@@ -12,12 +11,12 @@ export * from '@/features/chat/types/model/stepModel';
 export * from '@/features/chat/types/model/taskModel';
 export * from '@/features/chat/types/props/actionProps';
 
-/** 기존 코드 호환용 별칭: 백엔드 소스 플랫폼 타입 */
-export type BackendSource_Source = import('@/features/chat/types/api/sourceApi').BackendSourceSourceApi;
-/** 기존 코드 호환용 별칭: 백엔드 소스 엔티티 타입 */
-export type BackendSource_EntityType = import('@/features/chat/types/api/sourceApi').BackendSourceEntityTypeApi;
-/** 기존 코드 호환용 별칭: 백엔드 소스 원본 타입 */
-export type BackendSource = import('@/features/chat/types/api/sourceApi').BackendSourceApi;
+/** 호환용 별칭: 소스 플랫폼 타입 */
+export type SourceType = import('@/features/chat/types/api/sourceApi').SourceTypeApi;
+/** 호환용 별칭: 소스 엔티티 타입 */
+export type EntityType = import('@/features/chat/types/api/sourceApi').EntityTypeApi;
+/** 호환용 별칭: 소스 응답 타입 */
+export type SourceResponse = import('@/features/chat/types/api/sourceApi').SourceResponseApi;
 
 /** 기존 코드 호환용 별칭: 출처 모델 */
 export type ChatSource = import('@/features/chat/types/model/chatModel').ChatSourceModel;

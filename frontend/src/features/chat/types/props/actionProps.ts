@@ -30,6 +30,7 @@ export interface AnswerActionButtonsProps {
 export interface ErrorResponseProps {
   icons: IconItem[];
   messageId: string;
+  sessionId: string;
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: Dispatch<SetStateAction<Record<string, boolean>>>;
   hasFeedback?: boolean;
@@ -42,6 +43,7 @@ export interface ErrorResponseProps {
  */
 export interface FeedbackSectionProps {
   messageId: string;
+  sessionId: string;
   chatHistoryId?: string;
   hasFeedback?: boolean;
   feedbackVisibleMap: Record<string, boolean>;

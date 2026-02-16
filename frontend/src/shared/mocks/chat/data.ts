@@ -2,6 +2,13 @@ import { formatFullDate } from '@/shared/utils/formatDate';
 
 import type { MockChatSource, MockMessage, MockSource } from './types';
 
+/** 현재 시각 기준 N일 전 ISO 문자열 생성 */
+const daysAgo = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString();
+};
+
 export const MOCK_STREAM_STATUS_STEPS: Array<{ node: string; message: string }> = [
   { node: 'route', message: '질문 의도를 분석하고 있어요' },
   { node: 'rewrite', message: 'retrieval 정확도를 높이기 위해 질문을 정리하고 있어요' },
@@ -14,83 +21,84 @@ export const MOCK_STREAM_STATUS_STEPS: Array<{ node: string; message: string }> 
 
 export const MOCK_SOURCES: MockSource[] = [
   {
+    id: 'github:pr:TeamCatchUp/CatchUp-BE:52',
     index: 1,
     is_cited: true,
     source: 'github',
     entity_type: 'pr',
     relevance_score: 0.94,
-    html_url: 'https://github.com/TeamCatchUp/CatchUp-BE/pull/52',
-    content: 'PR #52에서 채팅 답변의 status/sources/token 스트리밍 계약을 도입했습니다.',
+    url: 'https://github.com/TeamCatchUp/CatchUp-BE/pull/52',
+    text: 'PR #52에서 채팅 답변의 status/sources/token 스트리밍 계약을 도입했습니다.',
     owner: 'TeamCatchUp',
     repo: 'CatchUp-BE',
     title: '[CAT-317] 채팅 스트리밍 이벤트(status/sources/token) 적용',
-    pr_number: 52,
-    created_at: '2025-02-11T08:00:00.000Z',
+    number: 52,
+    state: 'merged',
+    created_at: daysAgo(14),
     author: '백엔드팀',
   },
   {
+    id: 'jira:issue:CAT-299',
     index: 2,
     is_cited: false,
     source: 'jira',
     entity_type: 'issue',
     relevance_score: 0.87,
-    html_url: 'https://catchup.atlassian.net/browse/CAT-299',
-    content: 'cited/non-cited 분리 규칙과 출처 badge 순서 정책을 정의한 Jira 이슈입니다.',
-    owner: 'CATCH',
+    url: 'https://catchup.atlassian.net/browse/CAT-299',
+    text: 'cited/non-cited 분리 규칙과 출처 badge 순서 정책을 정의한 Jira 이슈입니다.',
+    title: '[CAT-299] 인용 출처 렌더링 정책 정리',
     issue_key: 'CAT-299',
-    summary: '인용 출처 렌더링 정책 정리',
-    project_name: 'CatchUp',
-    assignee_name: '기획팀',
-    status_id: 3,
-    created_at: '2025-02-12T08:00:00.000Z',
+    project_key: 'CATCH',
+    assignee: '기획팀',
+    status: 'Done',
+    created_at: daysAgo(5),
   },
   {
+    id: 'slack:message:T001:C001:1739433600.000100',
     index: 3,
     is_cited: true,
     source: 'slack',
     entity_type: 'message',
     relevance_score: 0.92,
-    html_url: 'https://catchup.slack.com/archives/C001/p1739433600000100',
-    content: '백엔드는 status -> source 후보 -> token stream -> 최종 cited sources 순서로 이벤트를 보냅니다.',
-    owner: 'TeamCatchUp',
+    url: 'https://catchup.slack.com/archives/C001/p1739433600000100',
+    text: '백엔드는 status -> source 후보 -> token stream -> 최종 cited sources 순서로 이벤트를 보냅니다.',
     channel_name: 'frontend-dev',
     team_id: 'T001',
     ts: '1739433600.000100',
     title: '프론트/백엔드 스트리밍 동기화 메모',
     author: '프론트엔드팀',
-    created_at: '2025-02-13T08:00:00.000Z',
+    created_at: daysAgo(1),
   },
   {
+    id: 'github:code:TeamCatchUp/CatchUp-FE:useRagChat',
     index: 4,
     is_cited: true,
     source: 'github',
     entity_type: 'code',
     relevance_score: 0.9,
-    html_url: 'https://github.com/TeamCatchUp/CatchUp-FE/blob/main/src/features/chat/hooks/useRagChat.ts',
-    content: '프론트는 스트리밍 token을 누적해 답변을 만들고 stream 종료 시 최종 상태를 확정합니다.',
+    url: 'https://github.com/TeamCatchUp/CatchUp-FE/blob/main/src/features/chat/hooks/useRagChat.ts',
+    text: '프론트는 스트리밍 token을 누적해 답변을 만들고 stream 종료 시 최종 상태를 확정합니다.',
     owner: 'TeamCatchUp',
     repo: 'CatchUp-FE',
-    file_path: 'src/features/chat/hooks/useRagChat.ts',
     title: 'useRagChat: token 누적 및 종료 처리',
     author: '프론트엔드팀',
-    days_ago: 1,
-    created_at: '2025-02-14T07:00:00.000Z',
+    created_at: daysAgo(0),
   },
   {
+    id: 'jira:issue:CAT-321',
     index: 5,
     is_cited: false,
     source: 'jira',
     entity_type: 'issue',
     relevance_score: 0.72,
-    html_url: 'https://catchup.atlassian.net/browse/CAT-321',
-    content: '/api/chat/stream/resume 구현 진행 상태를 추적하는 Jira 이슈입니다.',
-    owner: 'CATCH',
+    url: 'https://catchup.atlassian.net/browse/CAT-321',
+    text: '/api/chat/stream/resume 구현 진행 상태를 추적하는 Jira 이슈입니다.',
+    title: '[CAT-321] Resume API 구현 추적',
     issue_key: 'CAT-321',
-    summary: 'Resume API 구현 추적',
-    project_name: 'CatchUp',
-    assignee_name: '백엔드팀',
-    status_id: 1,
-    created_at: '2025-02-14T08:00:00.000Z',
+    project_key: 'CATCH',
+    assignee: '백엔드팀',
+    status: 'To Do',
+    created_at: daysAgo(10),
   },
 ];
 
@@ -104,7 +112,7 @@ const toSourceType = (source: MockSource): MockChatSource['source_type'] => {
 
 const toSourceRepo = (source: MockSource) => {
   if (source.source === 'jira') {
-    return source.project_name ?? source.issue_key ?? 'Jira';
+    return source.project_key ?? source.issue_key ?? 'Jira';
   }
 
   if (source.source === 'slack') {
@@ -115,29 +123,14 @@ const toSourceRepo = (source: MockSource) => {
     return `${source.owner}/${source.repo}`;
   }
 
-  return source.repo ?? source.owner ?? '';
+  return source.repo ?? '';
 };
 
 const toSourceTitle = (source: MockSource) => {
-  if (source.entity_type === 'code') {
-    return source.file_path?.split('/').pop() ?? source.title ?? '';
-  }
-
-  if (source.entity_type === 'issue' && source.issue_key && source.summary) {
-    return `[${source.issue_key}] ${source.summary}`;
-  }
-
-  if (source.entity_type === 'pr' && source.pr_number && source.title) {
-    return `#${source.pr_number} ${source.title}`;
-  }
-
-  return source.title ?? source.summary ?? source.issue_key ?? '';
+  return source.title ?? (source.number ? `#${source.number}` : (source.issue_key ?? ''));
 };
 
 const formatSourceDate = (source: MockSource) => {
-  if (typeof source.days_ago === 'number') {
-    return `${source.days_ago}일 전 변경`;
-  }
   if (typeof source.created_at === 'string' && source.created_at.trim()) {
     return formatFullDate(source.created_at);
   }
@@ -147,14 +140,14 @@ const formatSourceDate = (source: MockSource) => {
 const toChatSource = (source: MockSource): MockChatSource => ({
   id: `mock-source-${source.index}`,
   source_type: toSourceType(source),
-  is_cited: source.is_cited,
+  is_cited: source.is_cited ?? false,
   repo: toSourceRepo(source),
   title: toSourceTitle(source),
-  content: source.content,
+  content: source.citation_rationale?.trim() || source.text?.trim() || '',
   date: formatSourceDate(source),
-  author: source.assignee_name ?? source.author ?? '',
-  html_url: source.html_url ?? '',
-  source_index: source.index,
+  author: source.source === 'jira' ? (source.assignee ?? source.author ?? '') : (source.author ?? ''),
+  html_url: source.url ?? '',
+  source_index: typeof source.index === 'number' ? source.index : 0,
 });
 
 export const MOCK_CHAT_SOURCES: MockChatSource[] = MOCK_SOURCES.map(toChatSource);

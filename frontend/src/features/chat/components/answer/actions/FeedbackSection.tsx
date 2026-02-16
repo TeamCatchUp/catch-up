@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useScrollIntoContainer } from '@/features/chat/hooks/scroll/useScrollIntoContainer';
 import { useAnimatedMount } from '@/features/chat/hooks/ui/useAnimatedMount';
 import { chatMutations } from '@/features/chat/mutations';
+import type { FeedbackReason } from '@/features/chat/types/api/feedbackApi';
 import type { FeedbackSectionProps } from '@/features/chat/types/props/actionProps';
 import { cn } from '@/shared/utils/cn';
 
@@ -14,15 +15,15 @@ import FeedbackDetailInput from './FeedbackDetailInput';
 
 import Cancel from '/public/icons/icon/cancel.svg';
 
-const FEEDBACK_CHIPS = [
-  { id: 1, content: '존재하지 않는 자료를 참고했어요' },
-  { id: 2, content: '최신 내용이 반영되지 않았어요' },
-  { id: 3, content: '답변의 출처가 없어요' },
-  { id: 4, content: '중요한 정보가 누락되었어요' },
-  { id: 5, content: '유용하지 않은 정보를 참고해요' },
-  { id: 6, content: '내가 원하는 내용이 아니에요' },
-  { id: 7, content: '답변이 너무 길어요' },
-  { id: 8, content: '더 자세히...' },
+const FEEDBACK_CHIPS: { id: number; label: string; reason: FeedbackReason }[] = [
+  { id: 1, label: '존재하지 않는 자료를 참고했어요', reason: 'HALLUCINATION' },
+  { id: 2, label: '최신 내용이 반영되지 않았어요', reason: 'OUTDATED' },
+  { id: 3, label: '답변의 출처가 없어요', reason: 'NO_CITATION' },
+  { id: 4, label: '중요한 정보가 누락되었어요', reason: 'MISSING_INFO' },
+  { id: 5, label: '유용하지 않은 정보를 참고해요', reason: 'IRRELEVANT_SOURCE' },
+  { id: 6, label: '내가 원하는 내용이 아니에요', reason: 'IRRELEVANT_ANSWER' },
+  { id: 7, label: '답변이 너무 길어요', reason: 'TOO_LONG' },
+  { id: 8, label: '더 자세히...', reason: 'OTHER' },
 ];
 
 const DETAIL_ID = 8;
@@ -30,6 +31,7 @@ const ANIM_MS = 200;
 
 const FeedbackSection = ({
   messageId,
+  sessionId,
   chatHistoryId,
   hasFeedback,
   feedbackVisibleMap,
@@ -52,6 +54,7 @@ const FeedbackSection = ({
   const [detailText, setDetailText] = useState('');
   const [selectedChipId, setSelectedChipId] = useState<number | null>(null);
   const [localHasFeedback, setLocalHasFeedback] = useState(hasFeedback);
+  const [submitError, setSubmitError] = useState(false);
 
   const isSubmitting = feedbackMutation.isPending;
   const isVisible = !!feedbackVisibleMap[messageId];
@@ -108,41 +111,39 @@ const FeedbackSection = ({
 
   // 피드백 제출
   const submitFeedback = useCallback(
-    async (selectedContent?: string) => {
+    async (selectedReason?: FeedbackReason) => {
       if (!chatHistoryId) {
-        console.warn('[feedback] chatHistoryId missing');
-        handleSubmitSuccess();
+        console.warn('[feedback] chatHistoryId(message_id) missing — 피드백 제출 불가');
+        toast('피드백을 제출할 수 없습니다.');
         return;
       }
 
       if (isSubmitting || localHasFeedback) return;
 
       const isDetail = isDetailOpen;
-      const tags = selectedContent ? [selectedContent] : [];
-      const detailValue = isDetail ? detailText.trim() : '';
+      const reasons: FeedbackReason[] = selectedReason ? [selectedReason] : [];
+      const comment = isDetail ? detailText.trim() : null;
 
-      if (isDetail && !detailValue) return;
+      // OTHER 선택 시 comment 필수
+      if (selectedReason === 'OTHER' && !comment) return;
+
+      setSubmitError(false);
 
       try {
         await feedbackMutationRef.current.mutateAsync({
-          chat_history_id: chatHistoryId,
-          tags,
-          detail: detailValue,
+          params: { sessionId, messageId: chatHistoryId },
+          body: { is_liked: false, reasons, comment },
         });
 
         handleSubmitSuccess();
       } catch (e) {
         console.error('[feedback] submit failed', e);
-        const error = e as { response?: { status?: number } };
-        if (error?.response?.status === 500) {
-          // 500 에러 = 이미 제출된 피드백
-          handleSubmitSuccess();
-        }
+        setSubmitError(true);
       } finally {
         feedbackMutationRef.current.reset();
       }
     },
-    [chatHistoryId, detailText, isDetailOpen, isSubmitting, localHasFeedback, handleSubmitSuccess],
+    [chatHistoryId, sessionId, detailText, isDetailOpen, isSubmitting, localHasFeedback, handleSubmitSuccess],
   );
 
   if (!section.mounted || localHasFeedback) return null;
@@ -168,7 +169,7 @@ const FeedbackSection = ({
         {FEEDBACK_CHIPS.map((chip) => (
           <button
             key={chip.id}
-            disabled={isSubmitting}
+            disabled={isSubmitting || (isDetailOpen && chip.id !== DETAIL_ID)}
             onClick={() => {
               if (chip.id === DETAIL_ID) {
                 setIsDetailOpen((prev) => {
@@ -178,7 +179,7 @@ const FeedbackSection = ({
                 return;
               }
               setSelectedChipId(chip.id);
-              submitFeedback(chip.content);
+              submitFeedback(chip.reason);
             }}
             className={cn(
               'text-xsmall text-gray-80 cursor-pointer rounded-lg px-2 py-1',
@@ -187,17 +188,19 @@ const FeedbackSection = ({
                 : 'box-button-outline-gray',
             )}
           >
-            {chip.content}
+            {chip.label}
           </button>
         ))}
       </div>
+
+      {submitError && <p className="text-xsmall text-red-500">피드백 제출에 실패했습니다. 다시 시도해주세요.</p>}
 
       {detail.mounted && (
         <div ref={detailRef}>
           <FeedbackDetailInput
             detailText={detailText}
             onDetailChange={setDetailText}
-            onSubmit={() => submitFeedback()}
+            onSubmit={() => submitFeedback('OTHER')}
             onCancel={() => setIsDetailOpen(false)}
             isSubmitting={isSubmitting}
             entered={detail.entered}

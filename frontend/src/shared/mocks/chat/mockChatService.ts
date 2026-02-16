@@ -142,8 +142,7 @@ const buildSourcesForTurn = (turn: number): typeof MOCK_SOURCES => {
       index: index + 1,
       is_cited: isCitedInTurn2,
       title: source.title ? `${source.title} (답변 ${turn})` : source.title,
-      summary: source.summary ? `${source.summary} (답변 ${turn})` : source.summary,
-      content: source.content ? `${source.content} [답변 ${turn} 기준 재평가]` : source.content,
+      text: source.text ? `${source.text} [답변 ${turn} 기준 재평가]` : source.text,
       created_at: createdAt,
     };
   });
@@ -252,6 +251,17 @@ const emitBackendLikeStream = async (
     session_id: sessionId,
     sources: turnSources,
   });
+
+  throwIfAborted(signal);
+  onEvent({
+    type: 'result',
+    session_id: sessionId,
+    answer,
+    sources: turnSources,
+    related_jira_issues: [],
+    chat_history_id: `mock-history-${Date.now()}`,
+    has_feedback: false,
+  });
 };
 
 /**
@@ -289,17 +299,26 @@ const mockChatService = {
    * @param onEvent - 이벤트 핸들러
    * @param signal - 중단 시그널
    */
-  resumeStream: async (
-    sessionId: string,
-    selectedPRs: { pr_number: number; repo_name: string; owner: string }[],
-    onEvent: (event: MockStreamEvent) => void,
-    signal?: AbortSignal,
-  ) => {
-    const prLabel = selectedPRs.length > 0 ? selectedPRs.map((pr) => `#${pr.pr_number}`).join(', ') : 'no-selected-pr';
-    const query = `resume with ${prLabel}`;
-    const turn = getTurnForRequest(sessionId, buildResumeRequestSignature(selectedPRs));
-    await emitBackendLikeStream(query, sessionId, turn, onEvent, signal);
+  /**
+   * 마지막 턴 soft-delete (목 버전)
+   * - 항상 성공 반환
+   */
+  resetLastTurn: async (_sessionId: string): Promise<{ status: string }> => {
+    return { status: 'success' };
   },
+
+  // TODO: resume API 백엔드 구현 시 재활성
+  // resumeStream: async (
+  //   sessionId: string,
+  //   selectedPRs: { pr_number: number; repo_name: string; owner: string }[],
+  //   onEvent: (event: MockStreamEvent) => void,
+  //   signal?: AbortSignal,
+  // ) => {
+  //   const prLabel = selectedPRs.length > 0 ? selectedPRs.map((pr) => `#${pr.pr_number}`).join(', ') : 'no-selected-pr';
+  //   const query = `resume with ${prLabel}`;
+  //   const turn = getTurnForRequest(sessionId, buildResumeRequestSignature(selectedPRs));
+  //   await emitBackendLikeStream(query, sessionId, turn, onEvent, signal);
+  // },
 };
 
 export default mockChatService;

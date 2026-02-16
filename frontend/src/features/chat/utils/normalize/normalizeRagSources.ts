@@ -1,5 +1,5 @@
-import type { BackendSource, ChatSource } from '@/features/chat/types';
-import { formatFullDate } from '@/shared/utils/formatDate';
+import type { ChatSource, SourceResponse } from '@/features/chat/types';
+import { formatFullDate, formatRelativeDate } from '@/shared/utils/formatDate';
 
 /**
  * source/entity_type을 UI용 source_type으로 변환
@@ -16,7 +16,7 @@ import { formatFullDate } from '@/shared/utils/formatDate';
  * @param entityType - 엔티티 타입
  * @returns UI용 source_type
  */
-const getUiSourceType = (source: BackendSource['source'], entityType: string): ChatSource['source_type'] => {
+const getUiSourceType = (source: SourceResponse['source'], entityType: string): ChatSource['source_type'] => {
   if (source === 'github') {
     if (entityType === 'code') return 'code';
     if (entityType === 'pr') return 'pr';
@@ -29,76 +29,51 @@ const getUiSourceType = (source: BackendSource['source'], entityType: string): C
   return 'code';
 };
 
-/**
- * 파일 경로에서 마지막 부분만 추출
- * 예: "src/components/Button.tsx" → "Button.tsx"
- *
- * @param path - 파일 경로
- * @returns 파일명 또는 빈 문자열
- */
-const getLastPath = (path?: string) => {
-  if (!path) return '';
-  const cleaned = path.replace(/\+$/, '');
-  return cleaned.split('/').pop() ?? cleaned;
-};
+const RELATIVE_DATE_THRESHOLD_DAYS = 7;
 
 /**
- * 며칠 전 형식으로 포맷
- * 예: 3 → "3일 전 변경"
- *
- * @param daysAgo - 며칠 전 (숫자)
- * @returns 포맷된 문자열
+ * 생성 시각을 포맷
+ * - 7일 이내: "N일 전 변경"
+ * - 7일 초과: "YYYY.MM.DD"
  */
-const formatDaysAgo = (daysAgo?: number) => {
-  if (typeof daysAgo !== 'number') return '';
-  return `${daysAgo}일 전 변경`;
-};
-
-/**
- * 생성 시각을 날짜 형식으로 포맷
- * - number: Unix timestamp → "YYYY-MM-DD" 형식
- * - string: ISO 문자열 또는 숫자 문자열 → 파싱 후 포맷
- *
- * @param createdAt - Unix timestamp 또는 ISO 문자열
- * @returns 포맷된 날짜 또는 빈 문자열
- */
-const formatCreatedAt = (createdAt?: string) => {
+const formatCreatedAt = (createdAt?: string | null) => {
   if (!createdAt) return '';
   const trimmed = createdAt.trim();
   if (!trimmed) return '';
 
   const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) {
-    return '';
-  }
+  if (Number.isNaN(parsed.getTime())) return '';
 
-  return formatFullDate(parsed.toISOString());
+  const iso = parsed.toISOString();
+  const diffDays = Math.floor((Date.now() - parsed.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return formatFullDate(iso);
+  if (diffDays <= RELATIVE_DATE_THRESHOLD_DAYS) return `${formatRelativeDate(iso)} 변경`;
+  return formatFullDate(iso);
 };
 
 /**
  * 출처 링크 추출
- * html_url → url 순서로 fallback
  *
  * @param source - 백엔드 출처 객체
  * @returns URL 또는 빈 문자열
  */
-const getSourceLink = (source: BackendSource) => source.html_url ?? source.url ?? '';
+const getSourceLink = (source: SourceResponse) => source.url ?? '';
 
 /**
  * 출처 내용 추출
- * citation_rationale → content → text 순서로 fallback
+ * citation_rationale → text 순서로 fallback
  *
  * @param source - 백엔드 출처 객체
  * @returns 내용 문자열
  */
-const getSourceContent = (source: BackendSource) =>
-  source.citation_rationale?.trim() || source.content?.trim() || source.text?.trim() || '';
+const getSourceContent = (source: SourceResponse) => source.citation_rationale?.trim() || source.text?.trim() || '';
 
 /**
  * 저장소/프로젝트 텍스트 생성
  *
  * 타입별 표시 형식:
- * - jira: project_name 또는 project_key 또는 issue_key
+ * - jira: project_key 또는 issue_key
  * - slack: channel_name
  * - github: "owner/repo" 형식
  *
@@ -106,13 +81,13 @@ const getSourceContent = (source: BackendSource) =>
  * @param sourceType - UI용 source_type
  * @returns 저장소/프로젝트 표시 문자열
  */
-const getRepoText = (source: BackendSource, sourceType: ChatSource['source_type']) => {
+const getRepoText = (source: SourceResponse, sourceType: ChatSource['source_type']) => {
   if (sourceType === 'jira') {
-    return source.project_name ?? source.project_key ?? source.issue_key ?? source.repo ?? 'Jira';
+    return source.project_key ?? source.issue_key ?? 'Jira';
   }
 
   if (sourceType === 'slack') {
-    return source.channel_name ?? source.repo ?? '';
+    return source.channel_name ?? '';
   }
 
   if (source.owner && source.repo) {
@@ -124,32 +99,24 @@ const getRepoText = (source: BackendSource, sourceType: ChatSource['source_type'
 
 /**
  * 출처 제목 생성
- *
- * 타입별 제목 형식:
- * - pr: PR 제목 또는 "PR #번호"
- * - jira: "[이슈키] 요약" 또는 이슈키만
- * - code: 파일명 (경로의 마지막 부분)
- * - slack: 메시지 제목 또는 "Slack 메시지"
- * - github_issue: 이슈 제목 또는 "Issue #번호"
+ * - 백엔드가 title 필드에 이미 포맷된 제목을 보내줌
+ *   (jira: "[KEY] summary", github: "PR #n title" 등)
  *
  * @param source - 백엔드 출처 객체
  * @param sourceType - UI용 source_type
  * @returns 제목 문자열
  */
-const getTitleText = (source: BackendSource, sourceType: ChatSource['source_type']) => {
+const getTitleText = (source: SourceResponse, sourceType: ChatSource['source_type']) => {
   if (sourceType === 'pr') {
     return source.title ?? (source.number ? `PR #${source.number}` : '');
   }
 
   if (sourceType === 'jira') {
-    if (source.issue_key && source.summary) {
-      return `[${source.issue_key}] ${source.summary}`;
-    }
-    return source.title ?? source.summary ?? source.issue_key ?? '';
+    return source.title ?? source.issue_key ?? '';
   }
 
   if (sourceType === 'code') {
-    return getLastPath(source.file_path) || source.title || '';
+    return source.title ?? '';
   }
 
   if (sourceType === 'slack') {
@@ -164,24 +131,20 @@ const getTitleText = (source: BackendSource, sourceType: ChatSource['source_type
  *
  * 변환 과정:
  * 1. source/entity_type → UI source_type 매핑
- * 2. 날짜 포맷 (code 타입: days_ago 우선, 나머지: created_at)
- * 3. 작성자 추출 (code: author, 나머지: assignee_name 또는 author)
+ * 2. 날짜 포맷 (created_at → "YYYY-MM-DD")
+ * 3. 작성자 추출 (jira: assignee → author, 나머지: author)
  * 4. 출처 인덱스 설정 (source.index 또는 배열 순서 + 1)
  *
  * @param sources - 백엔드 출처 배열
  * @returns UI용 ChatSource 배열
  */
-export const normalizeSources = (sources: BackendSource[]): ChatSource[] => {
+export const normalizeSources = (sources: SourceResponse[]): ChatSource[] => {
   return (sources ?? []).map((source, index) => {
     const sourceType = getUiSourceType(source.source, source.entity_type);
 
-    const date =
-      sourceType === 'code'
-        ? formatDaysAgo(source.days_ago) || formatCreatedAt(source.created_at)
-        : formatCreatedAt(source.created_at);
+    const date = formatCreatedAt(source.created_at);
 
-    const author =
-      sourceType === 'code' ? (source.author ?? '') : (source.assignee_name ?? source.assignee ?? source.author ?? '');
+    const author = sourceType === 'jira' ? (source.assignee ?? source.author ?? '') : (source.author ?? '');
 
     return {
       id: crypto.randomUUID(),

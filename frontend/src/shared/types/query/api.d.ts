@@ -1,22 +1,23 @@
-/** 최근 검색 쿼리 API 응답 */
+/** 페이지네이션 응답 공통 타입 (백엔드 BasePagination[T]) */
+export interface PaginatedResponse<T> {
+  total: number;
+  page: number;
+  size: number;
+  items: T[];
+}
+
+/** 최근 검색 쿼리 API 응답 항목 */
 export interface RecentQueryResponse {
-  query: string;
+  id: number;
   session_id: string;
+  content: string;
   created_at: string;
 }
 
 /** 최근 검색 쿼리 목록 API 응답 */
-export interface RecentQueriesResponse {
-  content: RecentQueryResponse[];
-}
+export type RecentQueriesResponse = PaginatedResponse<RecentQueryResponse>;
 
-/** Jira 티켓 API 응답 */
-export interface JiraTicketResponse {
-  issue_key: string;
-  summary: string;
-}
-
-/** 채팅방 API 응답 */
+/** 채팅방 API 응답 항목 */
 export interface ChatroomResponse {
   session_id: string;
   title: string;
@@ -25,11 +26,7 @@ export interface ChatroomResponse {
 }
 
 /** 채팅방 목록 API 응답 */
-export interface ChatroomsResponse {
-  content: ChatroomResponse[];
-}
+export type ChatroomsResponse = PaginatedResponse<ChatroomResponse>;
 
 /** 세션 내 쿼리 목록 API 응답 */
-export interface SessionQueriesResponse {
-  content: RecentQueryResponse[];
-}
+export type SessionQueriesResponse = PaginatedResponse<RecentQueryResponse>;

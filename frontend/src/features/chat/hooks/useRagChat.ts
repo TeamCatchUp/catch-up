@@ -15,13 +15,14 @@ import {
   updateStreamingSources,
 } from '@/features/chat/hooks/useRagChat.parts/streamMessageUpdater';
 import { useRagStream } from '@/features/chat/hooks/useRagStream';
+import chatService from '@/features/chat/services/chatService';
 import type {
-  BackendSource,
   ChatData,
   ChatSource,
   Message,
   PRPayload,
   RagUIStepKey,
+  SourceResponse,
   StreamEvent,
 } from '@/features/chat/types';
 import { normalizeSources } from '@/features/chat/utils/normalize/normalizeRagSources';
@@ -92,7 +93,7 @@ interface UseRagChatReturn {
 export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions): UseRagChatReturn => {
   const storageKeys = getStorageKeys(sessionId);
   const effectiveInitialQuery = getEffectiveInitialQuery(initialQuery, sessionId);
-  const { streamChat, resumeStream, abortStream, markStopped, resetStopped, isStopped } = useRagStream(sessionId);
+  const { streamChat, abortStream, markStopped, resetStopped, isStopped } = useRagStream(sessionId);
   const queryClient = useQueryClient();
 
   const [chatData, setChatData] = useState<ChatData | null>(() =>
@@ -119,7 +120,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
   const hasStreamedTokenRef = useRef(false); // 토큰을 하나라도 받았는지 여부 (사이드바 갱신 판단)
   const hasResultEventRef = useRef(false); // result 이벤트를 받았는지 여부 (최종 완료 판단)
   const wasInterruptedRef = useRef(false); // PR 선택 interrupt가 발생했는지 여부
-  const latestSourcesRef = useRef<BackendSource[]>([]); // 가장 최근에 받은 백엔드 소스 (원본)
+  const latestSourcesRef = useRef<SourceResponse[]>([]); // 가장 최근에 받은 백엔드 소스 (원본)
   const latestUiSourcesRef = useRef<ChatSource[]>([]); // 가장 최근에 받은 UI용 소스 (정규화됨)
   const streamInFlightRef = useRef(false); // 스트림 진행 중 여부 (중복 요청 방지)
 
@@ -238,8 +239,8 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
   const appendAssistantAnswer = useCallback(
     (
       answer = '',
-      sources: BackendSource[] = [],
-      relatedJiraIssues: BackendSource[] = [],
+      sources: SourceResponse[] = [],
+      relatedJiraIssues: SourceResponse[] = [],
       chatHistoryId?: string,
       hasFeedback?: boolean,
     ) => {
@@ -341,7 +342,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
    *
    * @param sources - 백엔드 출처 목록
    */
-  const applyStreamingSources = useCallback((sources: BackendSource[] = []) => {
+  const applyStreamingSources = useCallback((sources: SourceResponse[] = []) => {
     latestSourcesRef.current = sources;
     latestUiSourcesRef.current = normalizeSources(sources);
 
@@ -473,12 +474,15 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
           break;
         }
 
+        // TODO: resume API 백엔드 구현 시 재활성
         case 'interrupt': {
-          wasInterruptedRef.current = true;
-          setPrList(event.payload);
-          setShowPRSelection(true);
+          // 비활성: PR 선택 UI를 띄우지 않고 즉시 종료 상태로 전환 (무한 로딩 방지)
+          console.warn('[useRagChat] interrupt event received but resume is disabled');
+          setShowPRSelection(false);
+          setPrList([]);
           setIsLoading(false);
           streamInFlightRef.current = false;
+          setCurrentStep('router');
           abortStream();
           break;
         }
@@ -612,6 +616,13 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       beginAnswerLoading();
 
       try {
+        // 마지막 턴 soft-delete (실패해도 스트림 진행)
+        try {
+          await chatService.resetLastTurn(sessionId);
+        } catch (resetErr) {
+          console.warn('[useRagChat] resetLastTurn failed, proceeding with stream:', resetErr);
+        }
+
         await streamChat(newContent, handleStreamEvent);
         finalizeAfterStreamClose();
       } catch (err) {
@@ -631,50 +642,17 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       finalizeAfterStreamClose,
       handleAbortError,
       handleStreamEvent,
+      sessionId,
       storageKeys.chat,
       streamChat,
     ],
   );
 
-  /**
-   * PR 선택 후 스트림 재개
-   * - 사용자가 선택한 PR 번호들을 백엔드에 전송
-   * - resumeStream API 호출하여 답변 생성 재개
-   *
-   * @param selectedPrNumbers - 사용자가 선택한 PR 번호 배열
-   */
-  const handlePRContinue = useCallback(
-    async (selectedPrNumbers: number[]) => {
-      if (streamInFlightRef.current) return;
-
-      setShowPRSelection(false);
-      beginAnswerLoading();
-
-      const selectedPRs = selectedPrNumbers
-        .map((prNumber) => prList.find((pr) => pr.pr_number === prNumber))
-        .filter((pr): pr is PRPayload => pr !== undefined)
-        .map((pr) => ({
-          pr_number: pr.pr_number,
-          repo_name: pr.repo_name,
-          owner: pr.owner,
-        }));
-
-      try {
-        await resumeStream(selectedPRs, handleStreamEvent);
-        finalizeAfterStreamClose();
-      } catch (err) {
-        if ((err as Error).name === 'AbortError') {
-          handleAbortError();
-          return;
-        }
-        console.error('[useRagChat] handlePRContinue error:', err);
-        setIsError(true);
-        setIsLoading(false);
-        streamInFlightRef.current = false;
-      }
-    },
-    [beginAnswerLoading, finalizeAfterStreamClose, handleAbortError, handleStreamEvent, prList, resumeStream],
-  );
+  // TODO: resume API 백엔드 구현 시 재활성
+  // handlePRContinue는 현재 interrupt가 비활성이므로 호출되지 않음
+  const handlePRContinue = useCallback(async (_selectedPrNumbers: number[]) => {
+    console.warn('[useRagChat] handlePRContinue called but resume is disabled');
+  }, []);
 
   /**
    * PR 다시 가져오기 (스트림 재시작)
