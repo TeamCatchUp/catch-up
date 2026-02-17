@@ -10,9 +10,9 @@ import logging
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from catchup.connectors.jira.auth import get_jira_oauth_service
+from catchup.connectors.atlassian.auth import get_atlassian_oauth_service
 from catchup.connectors.jira.service import JiraIngestionService
-from catchup.db.jira import oauth_repository
+from catchup.db.atlassian import oauth_repository
 
 logger = logging.getLogger(__name__)
 
@@ -34,16 +34,16 @@ async def create_jira_ingestion_service(
     Raises:
         HTTPException: Token을 찾을 수 없거나 유효하지 않은 경우
     """
-    token_record = oauth_repository.get_jira_token_by_cloud_id(db, cloud_id)
+    token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
     if not token_record:
         raise HTTPException(
             status_code=404,
             detail=f"Jira 연결을 찾을 수 없습니다: {cloud_id}",
         )
 
-    jira_service = get_jira_oauth_service()
+    atlassian_service = get_atlassian_oauth_service()
     try:
-        access_token = await jira_service.get_valid_access_token(db, token_record)
+        access_token = await atlassian_service.get_valid_access_token(db, token_record)
     except HTTPException:
         raise
     except Exception as e:

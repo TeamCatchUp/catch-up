@@ -15,7 +15,7 @@ from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.db.github.installation_repository import get_all_installations
 from catchup.db.jira import sync_repository as jira_sync
-from catchup.db.jira.oauth_repository import get_all_jira_tokens
+from catchup.db.atlassian.oauth_repository import get_all_tokens as get_all_atlassian_tokens
 from catchup.db.models import JiraEntityType
 from catchup.db.slack.oauth_repository import get_all_slack_tokens
 from catchup.utils.webhook_buffer import get_webhook_buffer
@@ -157,7 +157,7 @@ async def flush_jira_events():
     buffer = get_webhook_buffer()
 
     with SessionLocal() as db:
-        tokens = get_all_jira_tokens(db)
+        tokens = get_all_atlassian_tokens(db)
 
         for token in tokens:
             cloud_id = token.cloud_id
@@ -268,7 +268,7 @@ async def refresh_jira_dynamic_webhooks():
     dynamic_webhook_service = get_jira_dynamic_webhook_service()
 
     with SessionLocal() as db:
-        tokens = get_all_jira_tokens(db)
+        tokens = get_all_atlassian_tokens(db)
 
         for token in tokens:
             cloud_id = token.cloud_id

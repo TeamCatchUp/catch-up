@@ -13,11 +13,11 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from catchup.configs.config import settings
-from catchup.connectors.jira.auth import get_jira_oauth_service
+from catchup.connectors.atlassian.auth import get_atlassian_oauth_service
 from catchup.connectors.jira.client import JiraApiClient
-from catchup.db.jira import domain_repository as jira_domain
-from catchup.db.jira import oauth_repository as jira_oauth
+from catchup.db.atlassian import oauth_repository as atlassian_oauth
 from catchup.db.jira import webhook_repository as jira_webhook
+from catchup.db.jira import domain_repository as jira_domain
 
 logger = logging.getLogger(__name__)
 
@@ -43,22 +43,25 @@ def _parse_atlassian_datetime(dt_str: str | None) -> datetime | None:
 
 class JiraDynamicWebhookService:
     async def _create_client(self, db: Session, cloud_id: str) -> JiraApiClient:
-        token = jira_oauth.get_jira_token_by_cloud_id(db, cloud_id)
+        token = atlassian_oauth.get_token_by_cloud_id(db, cloud_id)
         if token is None:
             raise HTTPException(status_code=404, detail=f"Jira token not found: {cloud_id}")
 
-        oauth_service = get_jira_oauth_service()
-        access_token = await oauth_service.get_valid_access_token(db, token)
+        atlassian_oauth_service = get_atlassian_oauth_service()
+        access_token = await atlassian_oauth_service.get_valid_access_token(db, token)
         return JiraApiClient(cloud_id=cloud_id, access_token=access_token)
 
     def _build_callback_url(self, cloud_id: str) -> str:
-        configured_base_url = settings.JIRA_WEBHOOK_CALLBACK_BASE_URL.strip()
+        configured_base_url = settings.ATLASSIAN_WEBHOOK_CALLBACK_BASE_URL.strip()
+
         if configured_base_url:
             base_url = configured_base_url.rstrip("/")
         else:
-            parsed = urlparse(settings.JIRA_REDIRECT_URI)
+            parsed = urlparse(settings.ATLASSIAN_REDIRECT_URI)
             if not parsed.scheme or not parsed.netloc:
-                raise RuntimeError("Invalid JIRA_REDIRECT_URI for webhook callback URL fallback")
+                raise RuntimeError(
+                    "Invalid ATLASSIAN_REDIRECT_URI for webhook callback URL fallback"
+                )
             base_url = f"{parsed.scheme}://{parsed.netloc}"
 
         return f"{base_url}/api/v1/jira/webhooks/{cloud_id}"

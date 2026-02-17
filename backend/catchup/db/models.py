@@ -373,8 +373,8 @@ class GithubInstallation(Base):
         onupdate=func.now()
     )
 
-class JiraOAuthToken(Base):
-    __tablename__ = "jira_oauth_tokens"
+class AtlassianOAuthToken(Base):
+    __tablename__ = "atlassian_oauth_tokens"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     atlassian_account_id: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -386,7 +386,8 @@ class JiraOAuthToken(Base):
     refresh_token: Mapped[str] = mapped_column(String(4096), nullable=False)
     token_type: Mapped[str] = mapped_column(String(50), default="Bearer")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="Access Token 만료 시간")
-    scopes: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="부여된 권한 범위")
+
+    scopes: Mapped[str | None] = mapped_column(String(1000), nullable=True, comment="Jira + Confluence + Atlassian 공통 Scope 포함")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
         nullable=False, 
@@ -399,6 +400,39 @@ class JiraOAuthToken(Base):
         onupdate=func.now()
     )
 
+class ConfluenceSpace(Base):
+    """
+    Confluence Space Metadata
+    """
+    __tablename__ = "confluence_spaces"
+
+    cloud_id: Mapped[str] = mapped_column(
+        String(128), primary_key=True
+    )
+    space_id: Mapped[str] = mapped_column(
+        String(32), primary_key=True
+    )
+    space_key: Mapped[str] = mapped_column(
+        String(128), nullable=False
+    )
+    space_name: Mapped[str] = mapped_column(
+        String(255), nullable=False
+    )
+    space_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="global"
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="current"
+    )
+    homepage_id: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )
+    description: Mapped[str | None] = mapped_column(
+        String(2000), nullable=True
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 class JiraWebhookSubscription(Base):
     """

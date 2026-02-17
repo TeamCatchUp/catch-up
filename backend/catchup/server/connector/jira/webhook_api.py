@@ -54,7 +54,7 @@ async def handle_jira_webhook(
     """
     verify_result = WebhookVerifierProvider.verify_jira(
         authorization=authorization,
-        client_secret=settings.JIRA_CLIENT_SECRET,
+        client_secret=settings.ATLASSIAN_CLIENT_SECRET,
         jwt_leeway_seconds=settings.JIRA_WEBHOOK_JWT_LEEWAY_SECONDS,
     )
     if not verify_result.ok:
