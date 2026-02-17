@@ -82,6 +82,6 @@ class GoogleOAuthService:
 
         new_user = create_new_user(db, new_user_data)
         
-        db.flush()  # commit은 상위 계층 이루어짐 (현재 라우터가 오케스트레이션하기 때문)
+        db.flush()
         
         return new_user

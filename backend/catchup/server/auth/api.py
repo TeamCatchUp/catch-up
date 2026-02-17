@@ -10,6 +10,7 @@ from catchup.auth.cookies import delete_auth_cookies, set_auth_cookies
 from catchup.auth.dependencies import get_current_user
 from catchup.auth.google_oauth import GoogleOAuthService
 from catchup.auth.jwt import create_access_token, create_refresh_token, verify_token
+from catchup.auth.okta_oauth import OktaOAuthService
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
 from catchup.db.models import User
@@ -24,8 +25,66 @@ GOOGLE_LOGIN_BASE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GOOGLE_USER_INFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
 
+# ==========
+# Okta
+# ==========
+@router.get(
+    path="/okta/login",
+    description="Okta OAuth2 로그인"
+)
+async def okta_oauth2_login():
+    base_url = f"https://{auth_settings.OKTA_DOMAIN}/oauth2/v1/authorize"
+    
+    params = {
+        "client_id": auth_settings.OKTA_CLIENT_ID,
+        "redirect_uri": auth_settings.OKTA_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "openid email profile offline_access",
+        "state": "random_state_string_check_needed",
+    }
+    
+    url = f"{base_url}?{urlencode(params)}"
+    
+    return RedirectResponse(url)
 
-@router.get("/login")
+
+@router.get(
+    path="/okta/callback",
+    description="Okta OAuth2 리다이렉트 URI"
+)
+async def okta_callback(
+    code: str,
+    state: str,
+    db: Session = Depends(get_db),
+    oauth_service: OktaOAuthService = Depends(),
+):
+    okta_user = await oauth_service.get_okta_user(code)
+    
+    def _handle_login_sync():
+        user = oauth_service.get_or_register_okta_user(db, okta_user)
+        
+        access_token = create_access_token(data={"sub": user.email})
+        refresh_token = create_refresh_token(data={"sub": user.email})
+        
+        update_user_refresh_token(db, user.id, refresh_token)
+        db.commit()
+        
+        return access_token, refresh_token
+    
+    access_token, refresh_token = await run_in_threadpool(_handle_login_sync)
+    
+    response = RedirectResponse(url=auth_settings.FRONTEND_REDIRECT_URI)
+    set_auth_cookies(response, access_token, refresh_token)
+    
+    return response
+
+# ==========
+# Google
+# ==========
+@router.get(
+    path="/google/login",
+    description="Google Oauth2 로그인"
+)
 async def google_oauth2_login():
     params = {
         "client_id": auth_settings.GOOGLE_CLIENT_ID,
@@ -40,7 +99,10 @@ async def google_oauth2_login():
     return RedirectResponse(url)
 
 
-@router.get("/google/callback")
+@router.get(
+    path="/google/callback",
+    description="Google OAuth2 리다이렉트 URI"
+)
 async def google_callback(
     code: str,
     db: Session = Depends(get_db),
@@ -68,7 +130,10 @@ async def google_callback(
     return response
 
 
-@router.post("/refresh", response_model=TokenRefreshResponse)
+@router.post(
+    path="/refresh",
+    description="Refresh 토큰 발급",
+    response_model=TokenRefreshResponse)
 async def refresh_token(
     request: Request,
     response: Response,
@@ -107,7 +172,10 @@ async def refresh_token(
     )
 
 
-@router.post("/logout")
+@router.post(
+    path="/logout",
+    description="access & refresh 토큰을 쿠키에서 제거한다."
+)
 async def logout(
     response: Response,
     db: Session = Depends(get_db),
@@ -128,7 +196,10 @@ async def logout(
     return {"status": "success", "detail": "Logged out successfully"}
 
 
-@router.get("/me")
+@router.get(
+    path="/me",
+    description="인증된 사용자의 정보를 반환한다."    
+)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return CurrentUserInfo(
         email=current_user.email,

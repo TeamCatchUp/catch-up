@@ -168,9 +168,16 @@ class AuthSettings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Google
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
+    
+    # Okta
+    OKTA_DOMAIN: str
+    OKTA_CLIENT_ID: str
+    OKTA_CLIENT_SECRET: str
+    OKTA_REDIRECT_URI: str
 
     FRONTEND_REDIRECT_URI: str
 
