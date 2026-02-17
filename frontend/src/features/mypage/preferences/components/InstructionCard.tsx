@@ -20,9 +20,7 @@ interface InstructionCardProps {
 const InstructionCard = ({ content, onEdit, onDelete }: InstructionCardProps) => {
   return (
     <div className="border-neutral-3 flex min-h-[46px] items-center gap-6 rounded-xl border bg-white px-4 py-3">
-      <p className="text-body-small text-gray-70 w-full whitespace-pre-wrap wrap-break-word">
-        {content}
-      </p>
+      <p className="text-body-small text-gray-70 w-full wrap-break-word whitespace-pre-wrap">{content}</p>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -30,7 +28,7 @@ const InstructionCard = ({ content, onEdit, onDelete }: InstructionCardProps) =>
             type="button"
             className="active:bg-neutral-3 hover:bg-neutral-2 flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lg p-1.5"
           >
-            <IconKebab className="size-6 text-gray-70" />
+            <IconKebab className="text-gray-70 size-6" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" sideOffset={4} className="w-[250px] min-w-0">
@@ -39,7 +37,7 @@ const InstructionCard = ({ content, onEdit, onDelete }: InstructionCardProps) =>
             맞춤형 지침 수정하기
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onDelete} className="text-red-50 gap-2.5">
+          <DropdownMenuItem onClick={onDelete} className="gap-2.5 text-red-50">
             <IconDelete className="size-6 shrink-0" />
             맞춤형 지침 삭제하기
           </DropdownMenuItem>

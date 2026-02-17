@@ -39,9 +39,9 @@ const SettingDropdownRow = ({ label, description, options, value, onChange }: Se
           >
             <span className="text-body-small text-gray-70 whitespace-nowrap">{selectedLabel}</span>
             {open ? (
-              <DropdownUp className="size-[18px] shrink-0 text-gray-70" />
+              <DropdownUp className="text-gray-70 size-[18px] shrink-0" />
             ) : (
-              <DropdownDown className="size-[18px] shrink-0 text-gray-70" />
+              <DropdownDown className="text-gray-70 size-[18px] shrink-0" />
             )}
           </button>
         </DropdownMenuTrigger>

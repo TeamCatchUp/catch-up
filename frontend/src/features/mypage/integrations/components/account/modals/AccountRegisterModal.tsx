@@ -66,7 +66,10 @@ const AccountRegisterModal = ({ open, onOpenChange, allRows, serviceName }: Acco
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent hideClose className="border-neutral-3 shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-white px-5 pt-3 pb-4">
+      <DialogContent
+        hideClose
+        className="border-neutral-3 shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-white px-5 pt-3 pb-4"
+      >
         <div className="flex h-9 items-center justify-between">
           <DialogTitle className="text-heading-medium text-gray-80">계정 등록하기</DialogTitle>
           <button type="button" onClick={handleClose} className="cursor-pointer" aria-label="닫기">
@@ -90,7 +93,7 @@ const AccountRegisterModal = ({ open, onOpenChange, allRows, serviceName }: Acco
               }}
             />
 
-            <p className="text-label-xsmall text-red-50 flex items-center gap-0.5">
+            <p className="text-label-xsmall flex items-center gap-0.5 text-red-50">
               <IconError className="size-4" />
               반드시 본인의 계정을 연동해주세요.
             </p>
@@ -106,7 +109,8 @@ const AccountRegisterModal = ({ open, onOpenChange, allRows, serviceName }: Acco
           />
 
           <p className="text-label-xsmall mt-4 text-gray-50">
-            자신의 계정이 아닌 타인의 계정을 연동하면 Catch Up이 드리는 답변의 내용이 부정확해지거나 관련 내용이 누락될 수 있어요.
+            자신의 계정이 아닌 타인의 계정을 연동하면 Catch Up이 드리는 답변의 내용이 부정확해지거나 관련 내용이 누락될
+            수 있어요.
           </p>
         </div>
 

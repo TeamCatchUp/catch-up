@@ -26,7 +26,12 @@ const ReasonRadio = ({
   onClick: () => void;
   ariaLabel: string;
 }) => (
-  <button type="button" onClick={onClick} aria-label={ariaLabel} className="relative mt-px size-6 shrink-0 cursor-pointer">
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={ariaLabel}
+    className="relative mt-px size-6 shrink-0 cursor-pointer"
+  >
     <span className="absolute inset-[3px] size-[18px]">
       {selected ? <RadioSelectedRing className="size-[18px]" /> : <RadioUnselectedRing className="size-[18px]" />}
     </span>
@@ -50,7 +55,7 @@ const ReasonRadioGroup = ({
   <div className="mt-4 flex w-full flex-col gap-2">
     <div className="text-body-small text-gray-80 flex items-center gap-1">
       {title}
-      <span className="bg-red-50 block size-[5px] shrink-0 rounded-full" />
+      <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
     </div>
 
     <div className="border-neutral-1 flex flex-col gap-4 rounded-xl border px-4 py-4">
@@ -58,7 +63,11 @@ const ReasonRadioGroup = ({
         if (option.key !== 'custom') {
           return (
             <div key={option.key} className="flex w-full items-center gap-3">
-              <ReasonRadio selected={selectedKey === option.key} onClick={() => onSelect(option.key)} ariaLabel={option.label} />
+              <ReasonRadio
+                selected={selectedKey === option.key}
+                onClick={() => onSelect(option.key)}
+                ariaLabel={option.label}
+              />
               <span className="text-body-small text-gray-70">{option.label}</span>
             </div>
           );

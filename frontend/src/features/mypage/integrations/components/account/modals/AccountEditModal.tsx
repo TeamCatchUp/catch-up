@@ -70,7 +70,10 @@ const AccountEditModal = ({ open, onOpenChange, selectedRow, allRows, serviceNam
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent hideClose className="border-neutral-3 shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-white px-5 pt-3 pb-4">
+      <DialogContent
+        hideClose
+        className="border-neutral-3 shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-white px-5 pt-3 pb-4"
+      >
         <div className="flex h-9 items-center justify-between">
           <DialogTitle className="text-heading-medium text-gray-80">계정 정보 수정하기</DialogTitle>
           <button type="button" onClick={handleClose} className="cursor-pointer" aria-label="닫기">
@@ -79,7 +82,7 @@ const AccountEditModal = ({ open, onOpenChange, selectedRow, allRows, serviceNam
         </div>
 
         <div className="border-neutral-3 max-h-[378px] w-full overflow-y-auto border-t pt-4">
-          <div className="relative w-full overflow-clip rounded-xl border border-neutral-3">
+          <div className="border-neutral-3 relative w-full overflow-clip rounded-xl border">
             <div className="bg-neutral-1 border-neutral-3 flex flex-col gap-2 border-b p-4">
               <span className="text-body-small text-gray-80">현재 연결된 계정</span>
               <div className="flex flex-col gap-1.5">
@@ -97,7 +100,7 @@ const AccountEditModal = ({ open, onOpenChange, selectedRow, allRows, serviceNam
             <div className="flex flex-col gap-1.5 bg-white p-4">
               <div className="text-body-small text-gray-80 flex items-center gap-1">
                 새 계정 선택
-                <span className="bg-red-50 block size-[5px] shrink-0 rounded-full" />
+                <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
               </div>
 
               <AccountSelectorPopover
@@ -114,13 +117,13 @@ const AccountEditModal = ({ open, onOpenChange, selectedRow, allRows, serviceNam
                 }}
               />
 
-              <p className="text-label-xsmall text-red-50 flex items-center gap-0.5">
+              <p className="text-label-xsmall flex items-center gap-0.5 text-red-50">
                 <IconError className="size-4" />
                 반드시 본인의 계정을 연동해주세요.
               </p>
             </div>
 
-            <div className="border-neutral-1 absolute top-[101px] left-1/2 -translate-x-1/2 rounded-full border bg-gray-80 p-1">
+            <div className="border-neutral-1 bg-gray-80 absolute top-[101px] left-1/2 -translate-x-1/2 rounded-full border p-1">
               <ArrowDown className="size-[18px] text-white" />
             </div>
           </div>
@@ -135,7 +138,8 @@ const AccountEditModal = ({ open, onOpenChange, selectedRow, allRows, serviceNam
           />
 
           <p className="text-label-xsmall mt-4 text-gray-50">
-            자신의 계정이 아닌 타인의 계정을 연동하면 Catch Up이 드리는 답변의 내용이 부정확해지거나 관련 내용이 누락될 수 있어요.
+            자신의 계정이 아닌 타인의 계정을 연동하면 Catch Up이 드리는 답변의 내용이 부정확해지거나 관련 내용이 누락될
+            수 있어요.
           </p>
         </div>
 
