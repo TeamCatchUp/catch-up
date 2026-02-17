@@ -1,4 +1,4 @@
-import ConnectedAccountsUserSection from '../account/ConnectedAccountsUserSection';
+import ConnectedAccountsUserSection from '../account/sections/ConnectedAccountsUserSection';
 
 /** 일반 사용자 협업툴 연동 화면 */
 const UserIntegrationsView = () => {

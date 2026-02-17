@@ -2,9 +2,9 @@ import { USE_MOCK } from '@/shared/mocks/config';
 import { MOCK_INTEGRATION_ACCOUNT_INFO } from '@/shared/mocks/integration';
 import { cn } from '@/shared/utils/cn';
 
-import { INTEGRATION_ACCOUNTS } from '../../constants/integrations';
-import type { IntegrationAccountInfo } from '../../types/integrations';
-import ConnectedAccountCard from './ConnectedAccountCard';
+import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
+import type { IntegrationAccountInfo } from '../../../types/integrations';
+import ConnectedAccountCard from '../cards/ConnectedAccountCard';
 
 interface ConnectedAccountsSectionBaseProps {
   variant: 'user' | 'admin';

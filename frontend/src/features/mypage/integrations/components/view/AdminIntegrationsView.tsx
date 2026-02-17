@@ -4,7 +4,7 @@ import { cn } from '@/shared/utils/cn';
 
 import { useAdminIntegrationViewModel } from '../../hooks/useAdminIntegrationViewModel';
 import type { AdminIntegrationTab, IntegrationService } from '../../types/integrations';
-import ConnectedAccountsAdminSection from '../account/ConnectedAccountsAdminSection';
+import ConnectedAccountsAdminSection from '../account/sections/ConnectedAccountsAdminSection';
 import IntegrationManagementSection from '../management/IntegrationManagementSection';
 import MemberIntegrationsSection from '../member/MemberIntegrationsSection';
 
