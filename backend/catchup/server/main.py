@@ -96,6 +96,8 @@ app = FastAPI(
     lifespan=lifespan,
     redirect_slashes=False,
     version=__version__,
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
 )
 
 
