@@ -1,17 +1,18 @@
-﻿import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
+import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
-import { INTEGRATION_ACCOUNTS } from '../../constants/integrations';
-import type { MemberIntegrationRow } from '../../types/integrations';
+import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
+import type { MemberIntegrationRow } from '../../../types/integrations';
 
-interface MemberUserDetailPanelProps {
+interface UserDetailPanelProps {
   selectedRow: MemberIntegrationRow | null;
+  onOpenEditModal: () => void;
 }
 
 /** 이용자 연동 우측 상세 패널 */
-const MemberUserDetailPanel = ({ selectedRow }: MemberUserDetailPanelProps) => {
+const UserDetailPanel = ({ selectedRow, onOpenEditModal }: UserDetailPanelProps) => {
   if (!selectedRow) {
     return (
       <section className="overflow-clip bg-white pt-5 pb-5 pl-6">
@@ -30,7 +31,7 @@ const MemberUserDetailPanel = ({ selectedRow }: MemberUserDetailPanelProps) => {
             <DefaultProfile className="border-neutral-2 text-gray-30 size-7 shrink-0 rounded-full border" />
             <span className="text-heading-medium text-gray-80 truncate">{selectedRow.userName}</span>
           </div>
-          <Button variant="box-outline-gray" size="md" className="h-9 shrink-0">
+          <Button variant="box-outline-gray" size="md" className="h-9 shrink-0" onClick={onOpenEditModal}>
             수정하기
           </Button>
         </div>
@@ -98,4 +99,4 @@ const MemberUserDetailPanel = ({ selectedRow }: MemberUserDetailPanelProps) => {
   );
 };
 
-export default MemberUserDetailPanel;
+export default UserDetailPanel;

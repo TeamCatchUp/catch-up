@@ -5,17 +5,17 @@ import {
   getMemberStatusBadgeClassName,
   MEMBER_LIST_STATUS_BADGE_BASE_CLASS,
   MEMBER_TABLE_SERVICES,
-} from '../../constants/memberUi';
-import type { MemberDisplayRow } from '../../types/memberDisplay';
+} from '../../../constants/memberUi';
+import type { MemberDisplayRow } from '../../../types/memberDisplay';
 
-interface MemberUsersTableProps {
+interface UsersTableProps {
   displayRows: MemberDisplayRow[];
   activeRenderKey: string | null;
   onSelectRenderKey: (renderKey: string) => void;
 }
 
 /** 이용자 연동 좌측 상태 테이블 */
-const MemberUsersTable = ({ displayRows, activeRenderKey, onSelectRenderKey }: MemberUsersTableProps) => {
+const UsersTable = ({ displayRows, activeRenderKey, onSelectRenderKey }: UsersTableProps) => {
   return (
     <section className="border-neutral-3 flex h-full min-h-0 flex-col overflow-clip border-r bg-white">
       <div className="border-neutral-3 bg-neutral-1 grid h-9 shrink-0 grid-cols-4 items-center border-b px-5">
@@ -70,4 +70,4 @@ const MemberUsersTable = ({ displayRows, activeRenderKey, onSelectRenderKey }: M
   );
 };
 
-export default MemberUsersTable;
+export default UsersTable;

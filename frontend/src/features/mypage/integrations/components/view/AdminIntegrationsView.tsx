@@ -6,7 +6,7 @@ import { useAdminIntegrationViewModel } from '../../hooks/useAdminIntegrationVie
 import type { AdminIntegrationTab, IntegrationService } from '../../types/integrations';
 import ConnectedAccountsAdminSection from '../account/sections/ConnectedAccountsAdminSection';
 import IntegrationManagementSection from '../management/IntegrationManagementSection';
-import MemberIntegrationsSection from '../member/MemberIntegrationsSection';
+import IntegrationsSection from '../member/sections/IntegrationsSection';
 
 /** 관리자 협업툴 연동 화면 */
 const AdminIntegrationsView = () => {
@@ -57,7 +57,7 @@ const AdminIntegrationsView = () => {
             </section>
           </section>
         ) : (
-          <MemberIntegrationsSection />
+          <IntegrationsSection />
         )}
       </div>
     </section>

@@ -1,14 +1,14 @@
 ﻿import IconInfo from '@/public/icons/icon/info.svg';
 import { Button } from '@/shared/components/ui/button';
 
-import type { MemberIntegrationCardItem } from '../../types/integrations';
+import type { MemberIntegrationCardItem } from '../../../types/integrations';
 
-interface MemberStatusCardsSectionProps {
+interface StatusCardsSectionProps {
   cards: MemberIntegrationCardItem[];
 }
 
 /** 이용자 연동 상단 계정 등록 카드 섹션 */
-const MemberStatusCardsSection = ({ cards }: MemberStatusCardsSectionProps) => {
+const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
   return (
     <section className="flex w-250 flex-col gap-3">
       <div className="flex flex-col gap-0.5">
@@ -57,4 +57,4 @@ const MemberStatusCardsSection = ({ cards }: MemberStatusCardsSectionProps) => {
   );
 };
 
-export default MemberStatusCardsSection;
+export default StatusCardsSection;

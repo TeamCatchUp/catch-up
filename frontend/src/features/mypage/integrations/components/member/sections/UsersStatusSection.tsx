@@ -10,14 +10,14 @@ import {
 } from '@/shared/components/ui/dropdown-menu';
 import { cn } from '@/shared/utils/cn';
 
-import { SORT_OPTIONS } from '../../constants/memberUi';
-import type { MemberIntegrationRow } from '../../types/integrations';
-import type { MemberDisplayRow, MemberSortKey } from '../../types/memberDisplay';
-import MemberAccountEditModal from './MemberAccountEditModal';
-import MemberUserDetailPanel from './MemberUserDetailPanel';
-import MemberUsersTable from './MemberUsersTable';
+import { SORT_OPTIONS } from '../../../constants/memberUi';
+import type { MemberIntegrationRow } from '../../../types/integrations';
+import type { MemberDisplayRow, MemberSortKey } from '../../../types/memberDisplay';
+import AccountEditModal from '../modals/AccountEditModal';
+import UserDetailPanel from '../panels/UserDetailPanel';
+import UsersTable from '../tables/UsersTable';
 
-interface MemberUsersStatusSectionProps {
+interface UsersStatusSectionProps {
   rowCount: number;
   displayRows: MemberDisplayRow[];
   activeRenderKey: string | null;
@@ -26,13 +26,13 @@ interface MemberUsersStatusSectionProps {
 }
 
 /** 이용자 계정 연동 상태 섹션 */
-const MemberUsersStatusSection = ({
+const UsersStatusSection = ({
   rowCount,
   displayRows,
   activeRenderKey,
   onSelectRenderKey,
   selectedRow,
-}: MemberUsersStatusSectionProps) => {
+}: UsersStatusSectionProps) => {
   const [sortKey, setSortKey] = useState<MemberSortKey>('rank');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -74,16 +74,16 @@ const MemberUsersStatusSection = ({
       </div>
 
       <div className="border-neutral-3 grid h-124 min-h-0 w-250 grid-cols-[500px_500px] overflow-clip border-y">
-        <MemberUsersTable
+        <UsersTable
           displayRows={displayRows}
           activeRenderKey={activeRenderKey}
           onSelectRenderKey={onSelectRenderKey}
         />
-        <MemberUserDetailPanel selectedRow={selectedRow} onOpenEditModal={() => setIsEditModalOpen(true)} />
+        <UserDetailPanel selectedRow={selectedRow} onOpenEditModal={() => setIsEditModalOpen(true)} />
       </div>
 
       {selectedRow && (
-        <MemberAccountEditModal
+        <AccountEditModal
           open={isEditModalOpen}
           onOpenChange={setIsEditModalOpen}
           selectedRow={selectedRow}
@@ -94,4 +94,4 @@ const MemberUsersStatusSection = ({
   );
 };
 
-export default MemberUsersStatusSection;
+export default UsersStatusSection;
