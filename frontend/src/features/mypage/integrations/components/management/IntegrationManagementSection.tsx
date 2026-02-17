@@ -1,6 +1,6 @@
-import { cn } from '@/shared/utils/cn';
+﻿import { cn } from '@/shared/utils/cn';
 
-import type { IntegrationMenuItem, IntegrationService } from '../../types/integrations.types';
+import type { IntegrationMenuItem, IntegrationService } from '../../types/integrations';
 import JiraGuideSection from './JiraGuideSection';
 
 import IconCloudCheckFilled from '/public/icons/icon/cloud_check_filled.svg';

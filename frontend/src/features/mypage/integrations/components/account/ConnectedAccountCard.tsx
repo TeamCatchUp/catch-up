@@ -1,6 +1,6 @@
-import { cn } from '@/shared/utils/cn';
+﻿import { cn } from '@/shared/utils/cn';
 
-import type { IntegrationAccountInfo, IntegrationAccountMeta } from '../../types/integrations.types';
+import type { IntegrationAccountInfo, IntegrationAccountMeta } from '../../types/integrations';
 
 interface ConnectedAccountCardProps {
   account: IntegrationAccountMeta;

@@ -32,3 +32,32 @@ export interface AdminIntegrationViewModel {
   lastSyncedAt: string;
   spaceRows: string[];
 }
+
+/** 이용자 연동 상태 값 */
+export type MemberIntegrationStatus = '미사용' | '완료' | '미등록';
+
+/** 이용자 연동 탭의 사용자 행 데이터 */
+export interface MemberIntegrationRow {
+  userKey: string;
+  userName: string;
+  email: string;
+  phone: string;
+  department: string;
+  teamSizeLabel: string;
+  picture: string | null;
+  accountIdByService: Partial<Record<IntegrationService, string>>;
+  statusByService: Record<IntegrationService, MemberIntegrationStatus>;
+}
+
+/** 이용자 연동 탭 상단 카드 데이터 */
+export interface MemberIntegrationCardItem extends IntegrationAccountMeta {
+  completedCount: number;
+  totalCount: number;
+  completionRate: number;
+}
+
+/** 이용자 연동 탭 view model */
+export interface MemberIntegrationViewModel {
+  cards: MemberIntegrationCardItem[];
+  rows: MemberIntegrationRow[];
+}
