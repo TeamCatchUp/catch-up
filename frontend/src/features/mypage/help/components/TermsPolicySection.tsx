@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { POLICY_ITEMS } from '@/features/mypage/help/constants/helpSections';
 import ArrowRight from '@/public/icons/icon/arrow_right.svg';
 
@@ -13,13 +15,14 @@ const TermsPolicySection = () => {
 
       <div className="flex gap-5">
         {POLICY_ITEMS.map((item) => (
-          <div
+          <Link
             key={item.label}
-            className="border-neutral-3 flex w-122.5 shrink-0 items-center justify-between rounded-xl border px-5 py-3"
+            href="#"
+            className="border-neutral-3 flex w-122.5 shrink-0 items-center justify-between rounded-xl border px-5 py-3 transition-colors hover:bg-neutral-1"
           >
             <span className="text-body-small text-gray-80">{item.label}</span>
             <ArrowRight className="h-6 w-6 text-gray-50" />
-          </div>
+          </Link>
         ))}
       </div>
     </section>
