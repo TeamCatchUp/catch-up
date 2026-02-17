@@ -1,0 +1,52 @@
+'use client';
+
+import IconDelete from '@/public/icons/icon/delete.svg';
+import IconEditSquare from '@/public/icons/icon/edit_square.svg';
+import IconKebab from '@/public/icons/icon/kebab.svg';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
+
+interface InstructionCardProps {
+  content: string;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+const InstructionCard = ({ content, onEdit, onDelete }: InstructionCardProps) => {
+  return (
+    <div className="border-neutral-3 flex min-h-[46px] items-center gap-6 rounded-xl border bg-white px-4 py-3">
+      <p className="text-body-small text-gray-70 w-full whitespace-pre-wrap wrap-break-word">
+        {content}
+      </p>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="active:bg-neutral-3 hover:bg-neutral-2 flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lg p-1.5"
+          >
+            <IconKebab className="size-6 text-gray-70" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" sideOffset={4} className="w-[250px] min-w-0">
+          <DropdownMenuItem onClick={onEdit} className="gap-2.5">
+            <IconEditSquare className="size-6 shrink-0" />
+            맞춤형 지침 수정하기
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onDelete} className="text-red-50 gap-2.5">
+            <IconDelete className="size-6 shrink-0" />
+            맞춤형 지침 삭제하기
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+};
+
+export default InstructionCard;
