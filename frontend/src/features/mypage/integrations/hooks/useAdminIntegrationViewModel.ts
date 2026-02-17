@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import { MOCK_INTEGRATION_LAST_SYNC_AT, MOCK_INTEGRATION_SPACE_ROWS } from '@/shared/mocks/integration/data';
+import { USE_MOCK } from '@/shared/mocks/config';
+import { MOCK_INTEGRATION_LAST_SYNC_AT, MOCK_INTEGRATION_SPACE_ROWS } from '@/shared/mocks/integration';
 import { integrationQueries } from '@/shared/queries/integration.queries';
 
-import { INTEGRATION_ACCOUNTS } from '../constants/integrations.constants';
-import type { AdminIntegrationViewModel, IntegrationService } from '../types/integrations.types';
-import { parseConnected } from '../utils/integration.parsers';
+import { INTEGRATION_ACCOUNTS } from '../constants/integrations';
+import type { AdminIntegrationViewModel, IntegrationService } from '../types/integrations';
+import { parseConnected } from '../utils/integrationParsers';
 
 /** 관리자 연동 화면에서 필요한 데이터를 조합해 반환 */
 export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
@@ -28,13 +29,13 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
 
   const lastSyncedAt = useMemo(() => {
     if (!Array.isArray(jiraSyncStatus) || jiraSyncStatus.length === 0) {
-      return MOCK_INTEGRATION_LAST_SYNC_AT;
+      return USE_MOCK ? MOCK_INTEGRATION_LAST_SYNC_AT : '-';
     }
     const dates = jiraSyncStatus
       .map((s: { last_successful_sync_at?: string | null }) => s.last_successful_sync_at)
       .filter((d): d is string => !!d);
-    if (dates.length === 0) return MOCK_INTEGRATION_LAST_SYNC_AT;
-    return dates.sort().at(-1) ?? MOCK_INTEGRATION_LAST_SYNC_AT;
+    if (dates.length === 0) return USE_MOCK ? MOCK_INTEGRATION_LAST_SYNC_AT : '-';
+    return dates.sort().at(-1) ?? '-';
   }, [jiraSyncStatus]);
 
   const integrationMenu = useMemo(
@@ -50,6 +51,6 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
   return {
     integrationMenu,
     lastSyncedAt,
-    spaceRows: MOCK_INTEGRATION_SPACE_ROWS,
+    spaceRows: USE_MOCK ? MOCK_INTEGRATION_SPACE_ROWS : [],
   };
 };
