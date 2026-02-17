@@ -22,7 +22,6 @@ class PostgresFTSRetriever(BaseRetriever):
     
     session_factory: Any  # e.g) sessionmaker (from sqlalchemy.orm)
     collection_name: str = settings.PGVECTOR_COLLECTION_NAME
-    language_config: str = "korean"
     k: int = 4
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -48,22 +47,33 @@ class PostgresFTSRetriever(BaseRetriever):
             FROM langchain_pg_embedding e
             JOIN langchain_pg_collection c ON e.collection_id = c.uuid
             WHERE c.name = :collection_name
-              AND to_tsvector('{self.language_config}', e.document) @@ websearch_to_tsquery('{self.language_config}', :query)
-            ORDER BY ts_rank(to_tsvector('{self.language_config}', e.document), websearch_to_tsquery('{self.language_config}', :query)) DESC
+              AND e.document LIKE :like_query
+            ORDER BY bigm_similarity(e.document, :query) DESC
             LIMIT :k
-        """)  # TODO: 한국어 형태소 분석기
+        """)
+        
+        like_query = f"%{query}%"
 
-        results = self._do_query(query, search_sql)
-
+        results = self._do_query(query, like_query, search_sql)
         docs = self._get_documents_from_results(results)
 
         return docs
 
-    def _do_query(self, query: str, search_sql: str):
+    def _do_query(
+            self,
+            query: str,
+            like_query: str,
+            search_sql: str
+        ):
         with self.session_factory() as session:
             results = session.execute(
                 search_sql,
-                {"collection_name": self.collection_name, "query": query, "k": self.k},
+                {
+                    "collection_name": self.collection_name,
+                    "query": query,
+                    "like_query": like_query,
+                    "k": self.k
+                },
             )
             return results
 
@@ -93,6 +103,7 @@ class PGVectorService(BaseVectorDbService):
         self.vector_store = self._create_pgvector(
             postgresql_engine, embeddings, collection_name
         )
+        self._ensure_fts_index()
 
     def _create_pgvector(
         self, postgresql_engine: Engine, embeddings: Embeddings, collection_name: str
@@ -106,22 +117,23 @@ class PGVectorService(BaseVectorDbService):
 
     def _ensure_fts_index(self):
         """
-        한국어 Full Text Search를 위한 GIN 인덱스를 생성한다.
+        pg_bigm을 사용하여 한글 부분 일치 검색을 위한 GIN 인덱스를 생성한다.
         테이블이 존재할 때만 인덱스를 생성하며, 이미 존재하면 건너뛴다.
         """
         index_query = text("""
-            CREATE INDEX IF NOT EXISTS idx_fts_korean_document
-            ON langchain_pg_embedding 
-            USING GIN (to_tsvector('korean', document));
+            CREATE EXTENSION IF NOT EXISTS pg_bigm;
+            CREATE INDEX IF NOT EXISTS idx_fts_korean_bigm
+            ON langchain_pg_embedding
+            USING GIN (document gin_bigm_ops);
         """)
 
         try:
             with self.session_factory() as session:
                 session.execute(index_query)
                 session.commit()
-                logger.info("Korean FTS 인덱스 생성 성공")
+                logger.info("pg_bigm 기반 한글 인덱스 생성 성공")
         except Exception as e:
-            logger.warning(f"pgvector 인덱스 생성 실패: {e}")
+            logger.warning(f"pg_bigm 인덱스 생성 실패: {e}")
 
     def similarity_search(
         self,
@@ -194,16 +206,13 @@ if __name__ == "__main__":
     from sqlalchemy import create_engine, text
     from sqlalchemy.orm import sessionmaker
 
-    # [주의] 이 부분은 프로젝트 경로에 맞게 수정 필요
     from catchup.configs.config import settings
 
-    # ---------------------------------------------------------
-    # 1. DB 연결 및 초기화
-    # ---------------------------------------------------------
+    # DB 연결 및 초기화
     DATABASE_URL = settings.sqlalchemy_database_url
     engine = create_engine(DATABASE_URL)
     SessionFactory = sessionmaker(bind=engine)
-    COLLECTION_NAME = settings.PGVECTOR_COLLECTION_NAME # 예: 'catchup_jira'
+    COLLECTION_NAME = settings.PGVECTOR_COLLECTION_NAME
 
     embeddings = CohereEmbeddings(
         model=settings.COHERE_EMBEDDING_MODEL,
@@ -212,7 +221,6 @@ if __name__ == "__main__":
 
     print(f">>> 컬렉션 '{COLLECTION_NAME}' 초기화 중...")
 
-    # 기존 데이터 싹 지우기 (초기화)
     with SessionFactory() as session:
         coll_query = text("SELECT uuid FROM langchain_pg_collection WHERE name = :name")
         result = session.execute(coll_query, {"name": COLLECTION_NAME}).fetchone()
@@ -226,11 +234,7 @@ if __name__ == "__main__":
         else:
             print(">>> 삭제할 기존 데이터가 없습니다.")
 
-    # ---------------------------------------------------------
-    # 2. 데이터 주입 (Graph DB와 ID 싱크 맞추기)
-    # ---------------------------------------------------------
     print("\n>>> 데이터 주입 시작...")
-    
     pg_service = PGVectorService(
         postgresql_engine=engine,
         embeddings=embeddings,
@@ -238,7 +242,6 @@ if __name__ == "__main__":
         session_factory=SessionFactory
     )
 
-    # ★ 핵심: Graph DB에 넣은 ID와 똑같은 ID를 사용해야 함! ★
     mock_docs = [
         Document(
             # d1: LangChain 문서
@@ -275,11 +278,7 @@ if __name__ == "__main__":
     pg_service.vector_store.add_documents(mock_docs, ids=[doc.id for doc in mock_docs])
     print(f">>> {len(mock_docs)}개의 문서를 Vector DB에 저장했습니다. (Graph DB와 ID 동기화 완료)")
 
-    # ---------------------------------------------------------
-    # 3. 확인용 검색
-    # ---------------------------------------------------------
     print("\n>>> [검색 테스트] '파이썬' 검색")
     results = pg_service.hybrid_search("파이썬", k=1)
     for doc in results:
         print(f"ID: {doc.id} | Content: {doc.metadata.get('contextual_content', '')}")
-        # ID가 0e2f... 로 나오면 성공!
