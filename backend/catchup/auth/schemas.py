@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel, EmailStr
 
 from catchup.db.models import UserRole
@@ -6,19 +7,34 @@ from catchup.db.models import UserRole
 class GoogleUserInfoResponse(BaseModel):
     email: EmailStr
     name: str
-    given_name: str | None = None
-    family_name: str | None = None
-    picture: str | None = None
+    given_name: Optional[str] = None
+    family_name: Optional[str] = None
+    picture: Optional[str] = None
     provider_id: str
+    
+
+# TODO: 공통 필드 추상화
+class OktaUserInfoResponse(BaseModel):
+    sub: str
+    name: str
+    email: EmailStr
+    preferred_username: Optional[str] = None
+    given_name: Optional[str] = None
+    family_name: Optional[str] = None
+    picture: Optional[str] = None
+
+    @property
+    def provider_id(self) -> str:
+        return self.sub
 
 
 class UserCreate(BaseModel):
     email: EmailStr
-    given_name: str | None = None
-    family_name: str | None = None
-    name: str
-    picture: str | None = None
-    provider: str = "google"
+    given_name: Optional[str] = None
+    family_name: Optional[str] = None
+    name: Optional[str] = None
+    picture: Optional[str] = None
+    provider: str
     role: UserRole = UserRole.USER
 
     @classmethod
