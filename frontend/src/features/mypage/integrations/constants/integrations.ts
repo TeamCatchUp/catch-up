@@ -1,4 +1,4 @@
-import type { IntegrationAccountMeta } from '../types/integrations.types';
+﻿import type { IntegrationAccountMeta } from '../types/integrations';
 
 import IconConfluence from '/public/icons/logo/Counfluence.svg';
 import IconGithub from '/public/icons/logo/GitHub.svg';

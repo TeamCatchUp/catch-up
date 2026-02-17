@@ -1,6 +1,6 @@
-import Image from 'next/image';
+﻿import Image from 'next/image';
 
-import { ATLASSIAN_PROFILE_URL, JIRA_GUIDE_IMAGES } from '../../constants/integrations.constants';
+import { ATLASSIAN_PROFILE_URL, JIRA_GUIDE_IMAGES } from '../../constants/integrations';
 
 import IconAT from '/public/icons/logo/atlassian.svg';
 
