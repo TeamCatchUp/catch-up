@@ -22,7 +22,11 @@ from catchup.connectors.atlassian.auth import (
 )
 from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.connectors.confluence.client import ConfluenceAuthError, ConfluenceApiError
-from catchup.connectors.confluence.schemas import ConfluenceSpaceResponse
+from catchup.connectors.confluence.schemas import (
+    ConfluenceSpaceResponse,
+    ConfluenceUserResponse,
+    ConfluenceRoleAssignmentResponse,
+)
 from catchup.db.confluence import domain_repository as confluence_entities
 from catchup.connectors.atlassian.schemas import AtlassianInstallationStatus
 from catchup.connectors.jira.factory import create_jira_ingestion_service
@@ -44,6 +48,18 @@ REQUIRED_CONFLUENCE_SCOPES = {
     "read:confluence-content.all",
     "read:confluence-space.summary",
 }
+REQUIRED_CONFLUENCE_USER_SCOPES = {
+    "read:confluence-user",
+}
+REQUIRED_CONFLUENCE_ROLE_SCOPES = {
+    "read:space:confluence",
+    "read:space.permission:confluence",
+}
+ALL_REQUIRED_CONFLUENCE_SCOPES = (
+    REQUIRED_CONFLUENCE_SCOPES
+    | REQUIRED_CONFLUENCE_USER_SCOPES
+    | REQUIRED_CONFLUENCE_ROLE_SCOPES
+)
 
 
 def _decode_jwt_payload(token: str) -> dict | None:
@@ -181,10 +197,10 @@ async def atlassian_oauth_callback(
 
         # resource.scopes는 제품별 제한적일 수 있으므로 토큰 스코프까지 합산해 판단
         granted_scopes = resource_scopes | set((tokens.scope or "").split())
-        has_confluence_scope = REQUIRED_CONFLUENCE_SCOPES.issubset(granted_scopes)
+        has_confluence_scope = ALL_REQUIRED_CONFLUENCE_SCOPES.issubset(granted_scopes)
 
         if not has_confluence_scope:
-            missing_scopes = sorted(REQUIRED_CONFLUENCE_SCOPES - granted_scopes)
+            missing_scopes = sorted(ALL_REQUIRED_CONFLUENCE_SCOPES - granted_scopes)
             logger.warning(
                 f"[ATLASSIAN][AUTH] 리소스 스코프 미달로 Confluence 동기화 스킵: "
                 f"cloud_id={resource.id}, missing_scopes={missing_scopes}, "
@@ -342,16 +358,16 @@ async def _sync_confluence_metadata(cloud_id: str) -> None:
         logger.info(
             f"[CONFLUENCE][METADATA] token scopes: cloud_id={cloud_id}, scopes={sorted(granted_scopes)}"
         )
-        missing_scopes = sorted(REQUIRED_CONFLUENCE_SCOPES - granted_scopes)
+        missing_scopes = sorted(ALL_REQUIRED_CONFLUENCE_SCOPES - granted_scopes)
 
         if missing_scopes:
             logger.warning(
-                f"[CONFLUENCE][METADATA] 스코프 누락으로 스페이스 동기화 스킵: "
+                f"[CONFLUENCE][METADATA] 스코프 누락으로 동기화 스킵: "
                 f"cloud_id={cloud_id}, missing={missing_scopes}, granted={sorted(granted_scopes)}"
             )
             logger.warning(
                 f"[CONFLUENCE][METADATA] Confluence 스코프 재인증이 필요합니다. "
-                f"권장 스코프: {sorted(REQUIRED_CONFLUENCE_SCOPES)}"
+                f"권장 스코프: {sorted(ALL_REQUIRED_CONFLUENCE_SCOPES)}"
             )
             return
 
@@ -359,7 +375,46 @@ async def _sync_confluence_metadata(cloud_id: str) -> None:
         access_token = await atlassian_service.get_valid_access_token(db, token)
 
         client = ConfluenceApiClient(cloud_id, access_token)
-        # space_type=None → 모든 타입(knowledge_base 등) 포함해서 조회
+
+        # 1) 사용자 동기화
+        users_data = await client.get_users()
+        db_users: list[dict] = []
+        for raw_user in users_data:
+            try:
+                # v1 search API는 {"user": {...}} 형태로 감싸서 반환
+                payload = raw_user.get("user") if isinstance(raw_user, dict) else raw_user
+                if not payload or not payload.get("accountId"):
+                    logger.warning(
+                        f"[CONFLUENCE][METADATA] Skip user without accountId: cloud_id={cloud_id}"
+                    )
+                    continue
+                user = ConfluenceUserResponse.model_validate(payload)
+                db_users.append(
+                    {
+                        "cloud_id": cloud_id,
+                        "account_id": user.id,
+                        "account_type": user.account_type,
+                        "display_name": user.display_name,
+                        "public_name": user.public_name,
+                        "email": user.email,
+                        "time_zone": user.time_zone,
+                        "locale": user.locale,
+                        "avatar_url": user.get_avatar_url(),
+                        "is_external_collaborator": user.is_external_collaborator,
+                    }
+                )
+            except Exception as e:
+                logger.error(
+                    f"[CONFLUENCE][METADATA] Failed to parse user: cloud_id={cloud_id}, error={e}"
+                )
+
+        if db_users:
+            confluence_entities.upsert_users_bulk(db, db_users)
+            logger.info(
+                f"[CONFLUENCE][METADATA] Saved {len(db_users)} users: cloud_id={cloud_id}"
+            )
+
+        # 2) Space 메타데이터 동기화 (기존)
         spaces_data = await client.get_spaces(space_type=None, status="current")
 
         logger.info(
@@ -397,6 +452,99 @@ async def _sync_confluence_metadata(cloud_id: str) -> None:
             logger.info(
                 f"[CONFLUENCE][METADATA] Saved {len(db_spaces)} spaces: "
                 f"cloud_id={cloud_id}"
+            )
+
+        # 3) Space 멤버(역할) 동기화
+        total_members = 0
+        role_scope_failed = False
+        for space in db_spaces:
+            space_id = space["space_id"]
+            try:
+                assignments = await client.get_space_role_assignments(space_id)
+            except ConfluenceAuthError as e:
+                if not role_scope_failed:
+                    logger.error(
+                        f"[CONFLUENCE][METADATA] Role assignment fetch unauthorized (scope?): "
+                        f"cloud_id={cloud_id}, space_id={space_id}, error={e}"
+                    )
+                    role_scope_failed = True
+                break
+            except ConfluenceApiError as e:
+                # RBAC 미지원 사이트에서는 role-assignments가 404. permissions로 폴백.
+                status = getattr(e, "status_code", None)
+                if status == 404:
+                    try:
+                        assignments = await client.get_space_permissions(space_id)
+                    except Exception as e_perm:
+                        logger.error(
+                            f"[CONFLUENCE][METADATA] Failed to fetch permissions fallback: "
+                            f"cloud_id={cloud_id}, space_id={space_id}, error={e_perm}"
+                        )
+                        continue
+                else:
+                    logger.error(
+                        f"[CONFLUENCE][METADATA] Failed to fetch role assignments: "
+                        f"cloud_id={cloud_id}, space_id={space_id}, error={e}"
+                    )
+                    continue
+
+            space_members: list[dict] = []
+            for raw_assignment in assignments:
+                try:
+                    if "role" in raw_assignment:
+                        assignment = ConfluenceRoleAssignmentResponse.model_validate(raw_assignment)
+                        if assignment.principal_type.lower() != "user":
+                            continue
+                        space_members.append(
+                            {
+                                "cloud_id": cloud_id,
+                                "space_id": space_id,
+                                "account_id": assignment.principal_id,
+                                "role_id": assignment.role.id,
+                                "role_key": assignment.role.key,
+                                "role_name": assignment.role.name,
+                                "principal_type": assignment.principal_type,
+                            }
+                        )
+                    else:
+                        # permissions fallback 구조
+                        subject = (raw_assignment or {}).get("subject", {})
+                        subj_type = subject.get("type", "")
+                        account_id = subject.get("user", {}).get("accountId") if isinstance(subject.get("user"), dict) else None
+                        if subj_type.lower() != "user" or not account_id:
+                            continue
+                        perm_id = str(raw_assignment.get("id", "")) or f"perm:{space_id}"
+                        operation = raw_assignment.get("operation", {}) if isinstance(raw_assignment, dict) else {}
+                        role_key = operation.get("key")
+                        role_name = role_key or operation.get("access")
+                        space_members.append(
+                            {
+                                "cloud_id": cloud_id,
+                                "space_id": space_id,
+                                "account_id": account_id,
+                                "role_id": perm_id,
+                                "role_key": role_key,
+                                "role_name": role_name,
+                                "principal_type": subj_type,
+                            }
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"[CONFLUENCE][METADATA] Failed to parse role assignment: "
+                        f"cloud_id={cloud_id}, space_id={space_id}, error={e}"
+                    )
+
+            confluence_entities.delete_space_members_by_space(db, cloud_id, space_id)
+            if space_members:
+                confluence_entities.upsert_space_members_bulk(db, space_members)
+                total_members += len(space_members)
+                logger.info(
+                    f"[CONFLUENCE][METADATA] Saved {len(space_members)} members for space_id={space_id}"
+                )
+
+        if db_spaces:
+            logger.info(
+                f"[CONFLUENCE][METADATA] Completed member sync: cloud_id={cloud_id}, members={total_members}"
             )
 
     except ConfluenceAuthError as e:

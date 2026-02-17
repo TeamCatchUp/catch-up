@@ -30,7 +30,10 @@ class ConfluenceApiClient:
     def __init__(self, cloud_id: str, access_token:str):
         self.cloud_id = cloud_id
         self.access_token = access_token
+        # v2 API (spaces, role-assignments 등)
         self.base_url = f"{settings.ATLASSIAN_API_URL}/ex/confluence/{cloud_id}/wiki/api/v2"
+        # v1 API (user search 등)
+        self.base_url_v1 = f"{settings.ATLASSIAN_API_URL}/ex/confluence/{cloud_id}/wiki/rest/api"
 
         self._semaphore = asyncio.Semaphore(settings.CONFLUENCE_SYNC_MAX_CONCURRENT_REQUEST)
         self._rate_limit_delay = settings.CONFLUENCE_SYNC_RATE_LIMIT_DELAY
@@ -112,6 +115,11 @@ class ConfluenceApiClient:
 
         raise ConfluenceApiError("Max retries exceeded", status_code=500)
     
+    def _extract_cursor_from_link(self, link: str) -> str | None:
+        parsed = urlparse(link)
+        query_params = parse_qs(parsed.query)
+        return query_params.get("cursor", [None])[0]
+
     async def _paginate_cursor(
         self,
         url: str,
@@ -137,10 +145,7 @@ class ConfluenceApiClient:
             if not next_link:
                 break
 
-            parsed = urlparse(next_link)
-            query_params = parse_qs(parsed.query)
-            cursor = query_params.get("cursor", [None])[0]
-
+            cursor = self._extract_cursor_from_link(next_link)
             if not cursor:
                 break
 
@@ -148,6 +153,76 @@ class ConfluenceApiClient:
 
         logger.info(f"[CONFLUENCE][API] Paginated {len(all_results)} results from {url}")
         return all_results
+    
+    async def get_users(
+        self,
+        cql: str = "type=user",
+        limit: int = 250,
+    ) -> list[dict[str, Any]]:
+        """
+        Confluence 사용자 전체 조회 (v1 search API)
+        - default cql: type=user (모든 사용자)
+        - start/limit 기반 페이지네이션 자동 처리
+        """
+        all_results: list[dict[str, Any]] = []
+        start = 0
+        while True:
+            params = {"cql": cql, "limit": limit, "start": start}
+            response = await self._request(
+                "GET",
+                url=f"{self.base_url_v1}/search/user",
+                params=params,
+            )
+            results = response.get("results", [])
+            if results:
+                all_results.extend(results)
+
+            next_link = response.get("_links", {}).get("next")
+            if not next_link:
+                break
+
+            parsed = urlparse(next_link)
+            query_params = parse_qs(parsed.query)
+            next_start = query_params.get("start", [None])[0]
+            if next_start is None:
+                break
+            try:
+                start = int(next_start)
+            except ValueError:
+                break
+
+        logger.info(f"[CONFLUENCE][API] Paginated {len(all_results)} users via v1 search")
+        return all_results
+
+    async def get_space_role_assignments(
+        self,
+        space_id: str,
+        principal_type: str = "user",
+        limit: int = 250,
+    ) -> list[dict[str, Any]]:
+        """특정 Space의 Role Assignments 조회 (principal_type=user)."""
+        params = {"principalType": principal_type, "limit": limit}
+        return await self._paginate_cursor(
+            url=f"{self.base_url}/spaces/{space_id}/role-assignments",
+            params=params,
+            limit=limit,
+        )
+    
+    async def get_space_permissions(
+        self,
+        space_id: str,
+        limit: int = 250,
+    ) -> list[dict[str, Any]]:
+        """
+        Space 권한 목록 조회 (v2 permissions)
+        - RBAC 미적용 사이트에서도 사용 가능
+        """
+        params = {"limit": limit}
+        return await self._paginate_cursor(
+            url=f"{self.base_url}/spaces/{space_id}/permissions",
+            params=params,
+            limit=limit,
+        )
     
     async def get_spaces(
         self,

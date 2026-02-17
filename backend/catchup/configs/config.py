@@ -79,7 +79,7 @@ class Settings(BaseSettings):
         "manage:jira-webhook read:account read:email-address:confluence "
         "read:confluence-content.all read:confluence-space.summary "
         "read:confluence-user search:confluence readonly:content.attachment:confluence "
-        "offline_access read:space:confluence read:space-details:confluence "
+        "offline_access read:space:confluence read:space-details:confluence read:space.permission:confluence "
         "read:content-details:confluence"
     )
 
