@@ -4,6 +4,19 @@ import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
 export const integrationQueries = {
+  onboarding: {
+    all: () => ['onboarding', 'connectors'] as const,
+
+    connectors: () =>
+      queryOptions({
+        queryKey: integrationQueries.onboarding.all(),
+        queryFn: async () => {
+          const res = await api.get(API.onboarding.connectors);
+          return res.data;
+        },
+      }),
+  },
+
   github: {
     all: () => ['github'] as const,
 
