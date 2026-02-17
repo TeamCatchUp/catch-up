@@ -70,11 +70,7 @@ const UsersStatusSection = ({
       </div>
 
       <div className="border-neutral-3 grid h-124 min-h-0 w-250 grid-cols-[500px_500px] overflow-clip border-y">
-        <UsersTable
-          displayRows={displayRows}
-          activeRenderKey={activeRenderKey}
-          onSelectRenderKey={onSelectRenderKey}
-        />
+        <UsersTable displayRows={displayRows} activeRenderKey={activeRenderKey} onSelectRenderKey={onSelectRenderKey} />
         <UserDetailPanel selectedRow={selectedRow} />
       </div>
     </section>

@@ -41,13 +41,23 @@ const AccountSelectorPopover = ({
         <span className="truncate">
           {selectedAccount ? `${selectedAccount.userName} (${selectedAccount.accountId})` : placeholder}
         </span>
-        <UnfoldMore className="size-5.5 shrink-0 text-gray-40" />
+        <UnfoldMore className="text-gray-40 size-5.5 shrink-0" />
       </button>
     </PopoverTrigger>
-    <PopoverContent side="bottom" align="start" sideOffset={6} avoidCollisions={false} className="border-neutral-4 shadow-dropdown-menu w-[336px] rounded-xl p-0">
+    <PopoverContent
+      side="bottom"
+      align="start"
+      sideOffset={6}
+      avoidCollisions={false}
+      className="border-neutral-4 shadow-dropdown-menu w-[336px] rounded-xl p-0"
+    >
       <Command className="gap-2.5 rounded-xl py-2.5">
         <div className="px-2.5">
-          <CommandInput value={searchValue} onValueChange={onSearchValueChange} placeholder="이름, 이메일, 아이디를 검색하세요." />
+          <CommandInput
+            value={searchValue}
+            onValueChange={onSearchValueChange}
+            placeholder="이름, 이메일, 아이디를 검색하세요."
+          />
         </div>
         <CommandList className="max-h-[310px] px-0 py-0">
           <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>

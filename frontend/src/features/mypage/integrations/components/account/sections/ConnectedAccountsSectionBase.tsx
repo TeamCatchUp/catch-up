@@ -112,12 +112,7 @@ const ConnectedAccountsSectionBase = ({
       )}
 
       {activeModal === 'register' && (
-        <AccountRegisterModal
-          open
-          onOpenChange={handleModalClose}
-          allRows={allRows}
-          serviceName={serviceName}
-        />
+        <AccountRegisterModal open onOpenChange={handleModalClose} allRows={allRows} serviceName={serviceName} />
       )}
     </section>
   );
