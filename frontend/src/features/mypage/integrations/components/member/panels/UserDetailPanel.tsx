@@ -1,6 +1,5 @@
 import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
-import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
 import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
@@ -8,11 +7,10 @@ import type { MemberIntegrationRow } from '../../../types/integrations';
 
 interface UserDetailPanelProps {
   selectedRow: MemberIntegrationRow | null;
-  onOpenEditModal: () => void;
 }
 
 /** 이용자 연동 우측 상세 패널 */
-const UserDetailPanel = ({ selectedRow, onOpenEditModal }: UserDetailPanelProps) => {
+const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
   if (!selectedRow) {
     return (
       <section className="overflow-clip bg-white pt-5 pb-5 pl-6">
@@ -26,14 +24,9 @@ const UserDetailPanel = ({ selectedRow, onOpenEditModal }: UserDetailPanelProps)
   return (
     <section className="overflow-clip bg-white pt-5 pb-5 pl-6">
       <div className="flex h-full flex-col gap-4">
-        <div className="flex w-full items-center gap-5">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <DefaultProfile className="border-neutral-2 text-gray-30 size-7 shrink-0 rounded-full border" />
-            <span className="text-heading-medium text-gray-80 truncate">{selectedRow.userName}</span>
-          </div>
-          <Button variant="box-outline-gray" size="md" className="h-9 shrink-0" onClick={onOpenEditModal}>
-            수정하기
-          </Button>
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <DefaultProfile className="border-neutral-2 text-gray-30 size-7 shrink-0 rounded-full border" />
+          <span className="text-heading-medium text-gray-80 truncate">{selectedRow.userName}</span>
         </div>
 
         <div className="flex flex-col gap-9">
@@ -47,7 +40,7 @@ const UserDetailPanel = ({ selectedRow, onOpenEditModal }: UserDetailPanelProps)
               <span className="text-gray-70 min-w-0 flex-1 truncate">{selectedRow.email}</span>
             </div>
             <div className="flex w-full items-center gap-14">
-              <span className="w-19.75 shrink-0 text-gray-50">부서 / 팀원 수</span>
+              <span className="w-19.75 shrink-0 text-gray-50">부서 / 인원</span>
               <span className="text-gray-70 min-w-0 flex-1 truncate">{`${selectedRow.department} / ${selectedRow.teamSizeLabel}`}</span>
             </div>
           </div>

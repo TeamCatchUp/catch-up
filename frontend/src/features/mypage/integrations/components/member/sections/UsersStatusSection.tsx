@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import IconFilter from '@/public/icons/icon/filter-3.svg';
 import { Button } from '@/shared/components/ui/button';
@@ -13,7 +13,6 @@ import { cn } from '@/shared/utils/cn';
 import { SORT_OPTIONS } from '../../../constants/memberUi';
 import type { MemberIntegrationRow } from '../../../types/integrations';
 import type { MemberDisplayRow, MemberSortKey } from '../../../types/memberDisplay';
-import AccountEditModal from '../modals/AccountEditModal';
 import UserDetailPanel from '../panels/UserDetailPanel';
 import UsersTable from '../tables/UsersTable';
 
@@ -34,9 +33,6 @@ const UsersStatusSection = ({
   selectedRow,
 }: UsersStatusSectionProps) => {
   const [sortKey, setSortKey] = useState<MemberSortKey>('rank');
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
-  const allRows = useMemo(() => displayRows.map((displayRow) => displayRow.row), [displayRows]);
 
   return (
     <section className="flex w-250 flex-col gap-3">
@@ -79,17 +75,8 @@ const UsersStatusSection = ({
           activeRenderKey={activeRenderKey}
           onSelectRenderKey={onSelectRenderKey}
         />
-        <UserDetailPanel selectedRow={selectedRow} onOpenEditModal={() => setIsEditModalOpen(true)} />
+        <UserDetailPanel selectedRow={selectedRow} />
       </div>
-
-      {selectedRow && (
-        <AccountEditModal
-          open={isEditModalOpen}
-          onOpenChange={setIsEditModalOpen}
-          selectedRow={selectedRow}
-          allRows={allRows}
-        />
-      )}
     </section>
   );
 };
