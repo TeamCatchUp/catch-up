@@ -71,6 +71,34 @@ const mockHandlers: MockHandler[] = [
     handler: async () => ({ status: 'success', deleted_query: 'mock deleted query' }),
   },
 
+  // Integration status
+  {
+    pattern: /^\/api\/v1\/auth\/jira\/status$/,
+    method: 'get',
+    handler: async () => ({
+      resources: [{ id: 'mock-cloud-id-001', name: 'CatchUp Jira', url: 'https://catchup.atlassian.net' }],
+    }),
+  },
+  {
+    pattern: /^\/api\/v1\/jira\/sync\/status$/,
+    method: 'get',
+    handler: async () => [
+      { entity_type: 'issue', last_successful_sync_at: '2026-02-15T10:30:00Z', status: 'completed' },
+    ],
+  },
+  {
+    pattern: /^\/api\/v1\/auth\/slack\/status$/,
+    method: 'get',
+    handler: async () => ({
+      workspaces: [{ team_id: 'T04MOCK001', team_name: 'CatchUp Workspace' }],
+    }),
+  },
+  {
+    pattern: /^\/api\/v1\/github\/installations$/,
+    method: 'get',
+    handler: async () => [{ id: 12345678, account: { login: 'catchup-org' }, app_slug: 'catchup-bot' }],
+  },
+
   // Onboarding
   {
     pattern: /^\/api\/v1\/onboarding\/complete$/,
@@ -87,11 +115,29 @@ const mockHandlers: MockHandler[] = [
     method: 'get',
     handler: async () => ({
       jira: [
-        { id: '5b10ac8d14c9e6', name: 'Kim Dev', email: 'dev@catchup.io', picture: null },
-        { id: '6a21bd9e25d0f7', name: 'Lee Dev', email: 'dev2@catchup.io', picture: null },
+        { id: 'jira-kimdev', name: 'Kim Dev', email: 'dev1@catchup.io', picture: null },
+        { id: 'jira-leedev', name: 'Lee Dev', email: 'dev2@catchup.io', picture: null },
+        { id: 'jira-parkdev', name: 'Park Dev', email: 'dev3@catchup.io', picture: null },
+        { id: 'jira-choidev', name: 'Choi Dev', email: 'dev4@catchup.io', picture: null },
+        { id: 'jira-jungdev', name: 'Jung Dev', email: 'dev5@catchup.io', picture: null },
+        { id: 'jira-handev', name: 'Han Dev', email: 'dev6@catchup.io', picture: null },
+        { id: 'jira-limdev', name: 'Lim Dev', email: 'dev7@catchup.io', picture: null },
+        { id: 'jira-yoondev', name: 'Yoon Dev', email: 'dev8@catchup.io', picture: null },
+        { id: 'jira-jangdev', name: 'Jang Dev', email: 'dev9@catchup.io', picture: null },
+        { id: 'jira-kangdev', name: 'Kang Dev', email: 'dev10@catchup.io', picture: null },
+        { id: 'jira-shindev', name: 'Shin Dev', email: 'dev11@catchup.io', picture: null },
+        { id: 'jira-chodev', name: 'Cho Dev', email: 'dev12@catchup.io', picture: null },
       ],
-      github: [{ id: 'kimdev', name: 'Kim Dev', email: 'dev@catchup.io', picture: null }],
-      slack: [{ id: 'U04ABC12DEF', name: 'Kim Dev', email: 'dev@catchup.io', picture: null }],
+      github: [
+        { id: 'kimdev', name: 'Kim Dev', email: 'dev1@catchup.io', picture: null },
+        { id: 'parkdev', name: 'Park Dev', email: 'dev3@catchup.io', picture: null },
+        { id: 'jungdev', name: 'Jung Dev', email: 'dev5@catchup.io', picture: null },
+      ],
+      slack: [
+        { id: 'U04ABC12DEF', name: 'Kim Dev', email: 'dev1@catchup.io', picture: null },
+        { id: 'U04PARK03XYZ', name: 'Park Dev', email: 'dev3@catchup.io', picture: null },
+        { id: 'U04JUNG05XYZ', name: 'Jung Dev', email: 'dev5@catchup.io', picture: null },
+      ],
     }),
   },
 
