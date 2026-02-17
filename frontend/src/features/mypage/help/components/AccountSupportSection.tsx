@@ -8,7 +8,7 @@ const AccountSupportSection = () => {
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
         <h2 className="text-heading-large text-gray-80">계정 및 지원 안내</h2>
-        <p className="text-body-small text-gray-60">계정 설정과 지원 정보를 확인하세요.</p>
+        <p className="text-body-small text-gray-50">계정 설정과 지원 정보를 확인하세요.</p>
       </div>
 
       <ul className="flex gap-5">
@@ -25,7 +25,7 @@ const AccountSupportSection = () => {
                 <h3 className="text-heading-small text-gray-80">{card.title}</h3>
                 <Badge className="rounded-md2 px-1.5 py-0.5">{card.tag}</Badge>
               </div>
-              <p className="text-body-xsmall whitespace-pre-line text-gray-60">
+              <p className="text-body-xsmall whitespace-pre-line text-gray-50">
                 {card.description}
               </p>
             </div>
