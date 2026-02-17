@@ -6,3 +6,6 @@ export interface MemberDisplayRow {
   row: MemberIntegrationRow;
   displayStatusByService: Record<IntegrationService, MemberIntegrationStatus>;
 }
+
+/** 이용자 연동 테이블 정렬 키 */
+export type MemberSortKey = 'rank' | 'newest' | 'oldest';

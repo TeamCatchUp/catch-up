@@ -1,8 +1,19 @@
-﻿import IconFilter from '@/public/icons/icon/filter-3.svg';
-import { Button } from '@/shared/components/ui/button';
+import { useMemo, useState } from 'react';
 
+import IconFilter from '@/public/icons/icon/filter-3.svg';
+import { Button } from '@/shared/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
+import { cn } from '@/shared/utils/cn';
+
+import { SORT_OPTIONS } from '../../constants/memberUi';
 import type { MemberIntegrationRow } from '../../types/integrations';
-import type { MemberDisplayRow } from '../../types/memberDisplay';
+import type { MemberDisplayRow, MemberSortKey } from '../../types/memberDisplay';
+import MemberAccountEditModal from './MemberAccountEditModal';
 import MemberUserDetailPanel from './MemberUserDetailPanel';
 import MemberUsersTable from './MemberUsersTable';
 
@@ -22,6 +33,11 @@ const MemberUsersStatusSection = ({
   onSelectRenderKey,
   selectedRow,
 }: MemberUsersStatusSectionProps) => {
+  const [sortKey, setSortKey] = useState<MemberSortKey>('rank');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const allRows = useMemo(() => displayRows.map((displayRow) => displayRow.row), [displayRows]);
+
   return (
     <section className="flex w-250 flex-col gap-3">
       <div className="flex items-end justify-between">
@@ -36,9 +52,24 @@ const MemberUsersStatusSection = ({
           <Button variant="box-outline-gray" size="md" className="text-body-small h-9">
             CSV 일괄등록
           </Button>
-          <Button variant="icon-outline-gray" size="md" className="size-9 p-1.5">
-            <IconFilter className="size-6" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="icon-outline-gray" size="md" className="size-9 p-1.5">
+                <IconFilter className="size-6" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={2} className="w-50 min-w-0">
+              {SORT_OPTIONS.map((option) => (
+                <DropdownMenuItem
+                  key={option.key}
+                  onClick={() => setSortKey(option.key)}
+                  className={cn(sortKey === option.key && 'bg-neutral-1')}
+                >
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -48,8 +79,17 @@ const MemberUsersStatusSection = ({
           activeRenderKey={activeRenderKey}
           onSelectRenderKey={onSelectRenderKey}
         />
-        <MemberUserDetailPanel selectedRow={selectedRow} />
+        <MemberUserDetailPanel selectedRow={selectedRow} onOpenEditModal={() => setIsEditModalOpen(true)} />
       </div>
+
+      {selectedRow && (
+        <MemberAccountEditModal
+          open={isEditModalOpen}
+          onOpenChange={setIsEditModalOpen}
+          selectedRow={selectedRow}
+          allRows={allRows}
+        />
+      )}
     </section>
   );
 };
