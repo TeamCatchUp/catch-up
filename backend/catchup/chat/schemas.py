@@ -25,7 +25,7 @@ NODE_STATUS_MAP = {
 
 class ChatRequest(BaseModel):
     query: str = Field(..., description="사용자 질문")
-    role: Optional[str] = Field(defualt=UserRole.USER, description="사용자 역할 (admin 또는 user)") # TODO: 직군으로 바꿔야 하나?
+    role: Optional[str] = Field(default=UserRole.USER, description="사용자 역할 (admin 또는 user)") # TODO: 직군으로 바꿔야 하나?
     session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
 
 
