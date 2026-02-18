@@ -1,5 +1,6 @@
 import type { UserStatus } from '@/shared/queries/auth.types';
 
+import { MOCK_ADMIN_MEMBERS, MOCK_ENTRY_REQUESTS } from './admin/adminMembersMockData';
 import { MOCK_JWT_TOKENS, MOCK_USER } from './auth/data';
 import delay from './delay';
 import { MOCK_FEEDBACK_RESPONSE } from './feedback/data';
@@ -139,6 +140,34 @@ const mockHandlers: MockHandler[] = [
         { id: 'U04JUNG05XYZ', name: 'Jung Dev', email: 'dev5@catchup.io', picture: null },
       ],
     }),
+  },
+
+  // Admin — 이용자 관리
+  {
+    pattern: /^\/api\/v1\/admin\/members$/,
+    method: 'get',
+    handler: async () => MOCK_ADMIN_MEMBERS,
+  },
+  {
+    pattern: /^\/api\/v1\/admin\/members\/requests$/,
+    method: 'get',
+    handler: async () => MOCK_ENTRY_REQUESTS,
+  },
+  {
+    pattern: /^\/api\/v1\/admin\/members\/requests\/decide$/,
+    method: 'post',
+    handler: async (_, data) => {
+      console.log('[Mock] member request decision:', data);
+      return { success: true };
+    },
+  },
+  {
+    pattern: /^\/api\/v1\/admin\/members\/[^/]+\/status$/,
+    method: 'patch',
+    handler: async (_, data) => {
+      console.log('[Mock] member status change:', data);
+      return { success: true };
+    },
   },
 
   // Feedback (PATCH /api/v1/rooms/{sessionId}/messages/{messageId}/feedback)
