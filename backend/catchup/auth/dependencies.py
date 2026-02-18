@@ -1,5 +1,5 @@
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import APIKeyCookie
 from sqlalchemy.orm import Session
 
 from catchup.auth.jwt import verify_token
@@ -8,22 +8,32 @@ from catchup.db.models import User
 from catchup.db.users import get_user_by_email
 
 
-security_scheme = HTTPBearer()
+cookie_scheme = APIKeyCookie(name="access_token", auto_error=False)
 
 def get_current_user(
-    auth: HTTPAuthorizationCredentials = Depends(security_scheme),
+    access_token: str = Depends(cookie_scheme),
     db: Session = Depends(get_db)
 ) -> User:
     
-    access_token = auth.credentials
-    
-    payload = verify_token(access_token, "access")
-
-    email: str = payload.get("sub")
-    if not email:
+    if not access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="토큰에 사용자 정보가 없습니다.",
+            detail="인증 쿠키가 없습니다.",
+        )
+        
+    try:
+        payload = verify_token(access_token, "access")
+        email: str = payload.get("sub")
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="토큰에 사용자 정보가 없습니다.",
+            )
+        
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="토큰이 만료되었거나 유효하지 않습니다.",
         )
 
     user = get_user_by_email(db, email)
