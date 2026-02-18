@@ -13,11 +13,17 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from catchup.configs.config import settings
-from catchup.connectors.jira.auth import get_jira_oauth_service
+from catchup.connectors.atlassian.exceptions import (
+    AtlassianTokenExpiredError,
+    AtlassianTokenNotFoundError,
+)
+from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
+from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.jira.client import JiraApiClient
-from catchup.db.jira import domain_repository as jira_domain
-from catchup.db.jira import oauth_repository as jira_oauth
+from catchup.db.atlassian import oauth_repository as atlassian_oauth
 from catchup.db.jira import webhook_repository as jira_webhook
+from catchup.db.jira import domain_repository as jira_domain
 
 logger = logging.getLogger(__name__)
 
@@ -32,33 +38,31 @@ DEFAULT_JIRA_WEBHOOK_EVENTS = [
 ]
 
 
-def _parse_atlassian_datetime(dt_str: str | None) -> datetime | None:
-    if not dt_str:
-        return None
-    try:
-        return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-
-
 class JiraDynamicWebhookService:
     async def _create_client(self, db: Session, cloud_id: str) -> JiraApiClient:
-        token = jira_oauth.get_jira_token_by_cloud_id(db, cloud_id)
-        if token is None:
+        token_manager = AtlassianTokenManager(
+            oauth_client=AtlassianOAuthClient(),
+            oauth_repository=atlassian_oauth,
+        )
+        try:
+            access_token = await token_manager.resolve_access_token_by_cloud_id(db, cloud_id)
+        except AtlassianTokenNotFoundError:
             raise HTTPException(status_code=404, detail=f"Jira token not found: {cloud_id}")
-
-        oauth_service = get_jira_oauth_service()
-        access_token = await oauth_service.get_valid_access_token(db, token)
+        except AtlassianTokenExpiredError:
+            raise HTTPException(status_code=401, detail=f"Jira token expired: {cloud_id}")
         return JiraApiClient(cloud_id=cloud_id, access_token=access_token)
 
     def _build_callback_url(self, cloud_id: str) -> str:
-        configured_base_url = settings.JIRA_WEBHOOK_CALLBACK_BASE_URL.strip()
+        configured_base_url = settings.ATLASSIAN_WEBHOOK_CALLBACK_BASE_URL.strip()
+
         if configured_base_url:
             base_url = configured_base_url.rstrip("/")
         else:
-            parsed = urlparse(settings.JIRA_REDIRECT_URI)
+            parsed = urlparse(settings.ATLASSIAN_REDIRECT_URI)
             if not parsed.scheme or not parsed.netloc:
-                raise RuntimeError("Invalid JIRA_REDIRECT_URI for webhook callback URL fallback")
+                raise RuntimeError(
+                    "Invalid ATLASSIAN_REDIRECT_URI for webhook callback URL fallback"
+                )
             base_url = f"{parsed.scheme}://{parsed.netloc}"
 
         return f"{base_url}/api/v1/jira/webhooks/{cloud_id}"
@@ -125,26 +129,6 @@ class JiraDynamicWebhookService:
         quoted_keys = ", ".join(f'"{project_key}"' for project_key in project_keys)
         return f"project IN ({quoted_keys})"
 
-    async def _get_all_dynamic_webhooks(self, client: JiraApiClient) -> list[dict]:
-        all_values: list[dict] = []
-        start_at = 0
-        max_results = 100
-
-        while True:
-            page = await client.get_dynamic_webhooks(start_at=start_at, max_results=max_results)
-            values = page.get("values", [])
-            all_values.extend(values)
-
-            if page.get("isLast", True):
-                break
-
-            next_offset = page.get("maxResults", max_results)
-            if not values or next_offset <= 0:
-                break
-            start_at += next_offset
-
-        return all_values
-
     async def sync_webhook_state(self, db: Session, cloud_id: str) -> list:
         """
         Jira API 상태를 DB에 동기화
@@ -152,7 +136,7 @@ class JiraDynamicWebhookService:
         client = await self._create_client(db, cloud_id)
         callback_url = self._build_callback_url(cloud_id)
 
-        webhooks = await self._get_all_dynamic_webhooks(client)
+        webhooks = await client.list_all_dynamic_webhooks()
         own_webhooks = [
             webhook for webhook in webhooks
             if webhook.get("url") == callback_url
@@ -176,7 +160,7 @@ class JiraDynamicWebhookService:
                 callback_url=callback_url,
                 jql_filter=webhook.get("jqlFilter"),
                 events=webhook.get("events") or [],
-                expires_at=_parse_atlassian_datetime(webhook.get("expirationDate")),
+                expires_at=parse_atlassian_datetime(webhook.get("expirationDate")),
                 last_synced_at=now,
             )
 
@@ -258,7 +242,7 @@ class JiraDynamicWebhookService:
             return {"status": "skipped", "reason": "no_expiring_webhooks", "cloud_id": cloud_id}
 
         response = await client.refresh_dynamic_webhook_life(target_ids)
-        expiration_date = _parse_atlassian_datetime(response.get("expirationDate"))
+        expiration_date = parse_atlassian_datetime(response.get("expirationDate"))
         updated_count = jira_webhook.update_webhook_expiration(
             db,
             cloud_id=cloud_id,

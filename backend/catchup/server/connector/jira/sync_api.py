@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.db.jira import sync_repository as jira_sync
-from catchup.db.jira.oauth_repository import get_all_jira_tokens
+from catchup.db.atlassian.oauth_repository import get_all_tokens
 from catchup.db.dependencies import get_db
 from catchup.db.models import JiraEntityType, JiraSyncState
 from catchup.utils.webhook_buffer import get_webhook_buffer
@@ -181,7 +181,7 @@ async def flush_all_jira_buffers(
 
     try:
         # 1) 연결된 전체 Jira Cloud 조회
-        tokens = get_all_jira_tokens(db)
+        tokens = get_all_tokens(db)
         if not tokens:
             logger.info("[JIRA][FLUSH] No Jira tokens found")
             return JiraFlushResponse(

@@ -16,12 +16,17 @@ PGVector 저장을 위한 LangChain Document로 변환.
     doc = transformer.transform_issue(issue_data, site_url)
 """
 
-import re
 from datetime import datetime
 from typing import Any
 
 from langchain_core.documents import Document
 
+from catchup.connectors.atlassian.adf_parser import (
+    extract_media,
+    extract_mentions,
+    extract_text,
+)
+from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.jira.field_mapper import JiraFieldMapper
 from catchup.connectors.jira.schemas import (
     JiraAttachment,
@@ -133,9 +138,9 @@ class JiraTransformer:
         creator = self._parse_user(fields.get("creator"))
 
         # 시간
-        created_at = self._parse_datetime(fields.get("created"))
-        updated_at = self._parse_datetime(fields.get("updated"))
-        resolved_at = self._parse_datetime(fields.get("resolutiondate"))
+        created_at = parse_atlassian_datetime(fields.get("created"))
+        updated_at = parse_atlassian_datetime(fields.get("updated"))
+        resolved_at = parse_atlassian_datetime(fields.get("resolutiondate"))
         due_date = fields.get("duedate")  # "2024-02-10" 형식
 
         # 계층 구조
@@ -210,7 +215,7 @@ class JiraTransformer:
             priority=priority,
             resolution=resolution,
             summary=fields.get("summary", ""),
-            description=self._extract_text(fields.get("description")),
+            description=extract_text(fields.get("description")),
             assignee=assignee,
             reporter=reporter,
             creator=creator,
@@ -515,16 +520,6 @@ class JiraTransformer:
             email_address=user_data.get("emailAddress"),
         )
 
-    def _parse_datetime(self, dt_str: str | None) -> datetime | None:
-        """ISO 날짜 문자열 → datetime"""
-        if not dt_str:
-            return None
-        try:
-            # "2024-02-01T09:00:00.000+0900" 형식
-            return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-
     def _parse_comments(
         self, comments_data: list[dict], site_url: str = ""
     ) -> list[JiraComment]:
@@ -534,15 +529,32 @@ class JiraTransformer:
             author = c.get("author", {}).get("displayName", "Unknown")
             author_account_id = c.get("author", {}).get("accountId")
             body_adf = c.get("body")
-            body = self._extract_text(body_adf)
-            created = self._parse_datetime(c.get("created"))
+            body = extract_text(body_adf)
+            created = parse_atlassian_datetime(c.get("created"))
 
             # ADF에서 멘션 및 인라인 미디어 추출
-            mentions = []
-            inline_attachments = []
+            mentions: list[JiraMention] = []
+            inline_attachments: list[JiraInlineAttachment] = []
             if isinstance(body_adf, dict) and body_adf.get("type") == "doc":
-                mentions = self._extract_mentions_from_adf(body_adf)
-                inline_attachments = self._extract_media_from_adf(body_adf, site_url)
+                mentions = [
+                    JiraMention(
+                        account_id=m.account_id,
+                        display_name=m.display_name,
+                        text=m.text,
+                    )
+                    for m in extract_mentions(body_adf)
+                ]
+                inline_attachments = [
+                    JiraInlineAttachment(
+                        id=m.id,
+                        collection=m.collection,
+                        type=m.type,
+                        alt=m.alt,
+                        filename=m.filename,
+                        url=m.url,
+                    )
+                    for m in extract_media(body_adf, site_url)
+                ]
 
             if created:
                 result.append(JiraComment(
@@ -555,73 +567,6 @@ class JiraTransformer:
                     inline_attachments=inline_attachments,
                 ))
         return result
-
-    def _extract_mentions_from_adf(self, adf: dict) -> list[JiraMention]:
-        """ADF에서 @멘션 노드 추출"""
-        mentions = []
-
-        def extract(node: Any):
-            if isinstance(node, dict):
-                if node.get("type") == "mention":
-                    attrs = node.get("attrs", {})
-                    account_id = attrs.get("id", "")
-                    if account_id:
-                        mentions.append(JiraMention(
-                            account_id=account_id,
-                            display_name=attrs.get("text"),
-                            text=attrs.get("text"),
-                        ))
-                # 재귀적으로 하위 content 탐색
-                for child in node.get("content", []):
-                    extract(child)
-            elif isinstance(node, list):
-                for item in node:
-                    extract(item)
-
-        extract(adf.get("content", []))
-        return mentions
-
-    def _extract_media_from_adf(
-        self, adf: dict, site_url: str = ""
-    ) -> list[JiraInlineAttachment]:
-        """ADF에서 media/mediaGroup/mediaSingle 노드 추출"""
-        attachments = []
-
-        def extract(node: Any):
-            if isinstance(node, dict):
-                node_type = node.get("type")
-
-                # media 노드 처리
-                if node_type == "media":
-                    attrs = node.get("attrs", {})
-                    media_id = attrs.get("id", "")
-                    if media_id:
-                        collection = attrs.get("collection", "")
-                        # Jira attachment content URL 생성
-                        media_url = (
-                            f"{site_url}/rest/api/3/attachment/content/{media_id}"
-                            if site_url else None
-                        )
-
-                        attachments.append(JiraInlineAttachment(
-                            id=media_id,
-                            collection=collection,
-                            type=attrs.get("type"),  # image, file 등
-                            alt=attrs.get("alt"),
-                            filename=attrs.get("__fileName"),  # 파일명 (있을 경우)
-                            url=media_url,
-                        ))
-
-                # mediaGroup, mediaSingle은 media를 감싸는 컨테이너
-                # 재귀적으로 하위 content 탐색
-                for child in node.get("content", []):
-                    extract(child)
-            elif isinstance(node, list):
-                for item in node:
-                    extract(item)
-
-        extract(adf.get("content", []))
-        return attachments
 
     def _parse_linked_issues(self, links_data: list[dict]) -> list[JiraLinkedIssue]:
         """연결된 이슈 파싱"""
@@ -681,89 +626,3 @@ class JiraTransformer:
             )
         return None
 
-    def _extract_text(self, content: Any) -> str:
-        """
-        Jira ADF (Atlassian Document Format) → 평문 텍스트
-
-        Jira Cloud는 description, comment 등을 ADF JSON으로 반환.
-        이를 평문 텍스트로 변환.
-        """
-        if not content:
-            return ""
-
-        if isinstance(content, str):
-            return content
-
-        if not isinstance(content, dict):
-            return str(content)
-
-        # ADF 형식
-        if content.get("type") == "doc":
-            return self._adf_to_text(content)
-
-        return str(content)
-
-    def _adf_to_text(self, adf: dict) -> str:
-        """ADF JSON → 평문 텍스트 변환 (URL, 멘션, 이모지 포함)"""
-        texts = []
-
-        def extract(node: Any):
-            if isinstance(node, dict):
-                node_type = node.get("type")
-
-                if node_type == "text":
-                    text = node.get("text", "")
-                    # 링크가 있으면 URL 추가
-                    marks = node.get("marks", [])
-                    for mark in marks:
-                        if mark.get("type") == "link":
-                            url = mark.get("attrs", {}).get("href", "")
-                            if url and url != text:
-                                text = f"{text} ({url})"
-                                break
-                    texts.append(text)
-
-                elif node_type == "hardBreak":
-                    texts.append("\n")
-
-                elif node_type == "paragraph":
-                    for child in node.get("content", []):
-                        extract(child)
-                    texts.append("\n")
-
-                elif node_type == "mention":
-                    # @멘션 텍스트 포함
-                    attrs = node.get("attrs", {})
-                    mention_text = attrs.get("text", "")
-                    if mention_text:
-                        # 이미 @로 시작하면 그대로 사용
-                        if mention_text.startswith("@"):
-                            texts.append(mention_text)
-                        else:
-                            texts.append(f"@{mention_text}")
-
-                elif node_type == "inlineCard":
-                    # 인라인 URL 카드 (Jira, Confluence 링크 등)
-                    attrs = node.get("attrs", {})
-                    url = attrs.get("url", "")
-                    if url:
-                        texts.append(f"[{url}]")
-
-                elif node_type == "emoji":
-                    # 이모지 shortName 포함
-                    attrs = node.get("attrs", {})
-                    short_name = attrs.get("shortName", "")
-                    if short_name:
-                        texts.append(short_name)
-
-                else:
-                    # 기타 노드는 재귀적으로 content 탐색
-                    for child in node.get("content", []):
-                        extract(child)
-
-            elif isinstance(node, list):
-                for item in node:
-                    extract(item)
-
-        extract(adf.get("content", []))
-        return "".join(texts).strip()

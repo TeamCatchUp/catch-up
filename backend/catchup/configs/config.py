@@ -70,14 +70,23 @@ class Settings(BaseSettings):
     GITHUB_APP_CLIENT_ID: str
     GITHUB_APP_CLIENT_SECRET: str
 
-    JIRA_CLIENT_ID: str
-    JIRA_CLIENT_SECRET: str
-    JIRA_REDIRECT_URI: str
-    JIRA_WEBHOOK_CALLBACK_BASE_URL: str
+    ATLASSIAN_CLIENT_ID: str
+    ATLASSIAN_CLIENT_SECRET: str
+    ATLASSIAN_REDIRECT_URI: str
+    ATLASSIAN_WEBHOOK_CALLBACK_BASE_URL: str
     JIRA_WEBHOOK_REFRESH_INTERVAL_HOURS: int = 6
     JIRA_WEBHOOK_REFRESH_THRESHOLD_HOURS: int = 24
     JIRA_WEBHOOK_JWT_LEEWAY_SECONDS: int = 30
-    JIRA_SCOPES: str = "read:me read:jira-work read:jira-user manage:jira-webhook read:account offline_access"
+    ATLASSIAN_SCOPES: str = (
+        "read:me read:jira-work read:jira-user read:email-address:jira "
+        "manage:jira-webhook read:account read:email-address:confluence "
+        "read:confluence-content.all read:confluence-space.summary "
+        "read:confluence-user search:confluence readonly:content.attachment:confluence "
+        "offline_access read:space:confluence read:space-details:confluence read:space.permission:confluence "
+        "read:content-details:confluence "
+        "read:page:confluence read:blogpost:confluence read:comment:confluence "
+        "read:attachment:confluence read:label:confluence"
+    )
 
     ATLASSIAN_AUTH_URL: str = "https://auth.atlassian.com/authorize"
     ATLASSIAN_TOKEN_URL: str = "https://auth.atlassian.com/oauth/token"
@@ -104,6 +113,11 @@ class Settings(BaseSettings):
     JIRA_SYNC_MAX_CONCURRENT_REQUESTS: int = 5  # Rate limit safe
     JIRA_SYNC_COMMENTS_LIMIT: int = 5  # Recent comments to include
     JIRA_API_RATE_LIMIT_DELAY: float = 0.1  # Seconds between requests
+
+    # Confluence Sync Settings
+    CONFLUENCE_SYNC_MAX_CONCURRENT_REQUEST: int = 5
+    CONFLUENCE_SYNC_RATE_LIMIT_DELAY: float = 0.1
+    
     
     # Neo4j
     NEO4J_USER:Optional[str] 

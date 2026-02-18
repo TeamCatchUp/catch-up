@@ -43,6 +43,8 @@ dependencies = [
     "apscheduler>=3.11.2",
     "ragas>=0.4.3",
     "alembic>=1.18.4",
+    "beautifulsoup4>=4.14.3",
+    "lxml>=6.0.2",
 ]
 
 # 개발 전용 의존성

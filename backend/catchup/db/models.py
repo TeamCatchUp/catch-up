@@ -2,8 +2,6 @@ import uuid
 from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import Any, Optional
-
-from click import Option
 from sqlalchemy import ForeignKey, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.associationproxy import association_proxy
@@ -373,8 +371,8 @@ class GithubInstallation(Base):
         onupdate=func.now()
     )
 
-class JiraOAuthToken(Base):
-    __tablename__ = "jira_oauth_tokens"
+class AtlassianOAuthToken(Base):
+    __tablename__ = "atlassian_oauth_tokens"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     atlassian_account_id: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -386,7 +384,8 @@ class JiraOAuthToken(Base):
     refresh_token: Mapped[str] = mapped_column(String(4096), nullable=False)
     token_type: Mapped[str] = mapped_column(String(50), default="Bearer")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="Access Token 만료 시간")
-    scopes: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="부여된 권한 범위")
+
+    scopes: Mapped[str | None] = mapped_column(String(1000), nullable=True, comment="Jira + Confluence + Atlassian 공통 Scope 포함")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
         nullable=False, 
@@ -397,6 +396,158 @@ class JiraOAuthToken(Base):
         nullable=False, 
         server_default=func.now(),
         onupdate=func.now()
+    )
+
+class ConfluenceSpace(Base):
+    """
+    Confluence Space Metadata
+    """
+    __tablename__ = "confluence_spaces"
+
+    cloud_id: Mapped[str] = mapped_column(
+        String(128), primary_key=True
+    )
+    space_id: Mapped[str] = mapped_column(
+        String(32), primary_key=True
+    )
+    space_key: Mapped[str] = mapped_column(
+        String(128), nullable=False
+    )
+    space_name: Mapped[str] = mapped_column(
+        String(255), nullable=False
+    )
+    space_type: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )
+    homepage_id: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )
+    description: Mapped[str | None] = mapped_column(
+        String(2000), nullable=True
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ConfluenceUser(Base):
+    """
+    Confluence User Metadata
+    """
+
+    __tablename__ = "confluence_users"
+
+    cloud_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    account_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    account_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    public_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    time_zone: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    locale: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_external_collaborator: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ConfluenceSpaceMember(Base):
+    """
+    Space ↔ User role assignments
+    """
+
+    __tablename__ = "confluence_space_members"
+
+    cloud_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    space_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    account_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    role_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    role_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    role_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    principal_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+# ============================================================
+# Confluence Sync State
+# ============================================================
+
+class ConfluenceSyncStatus(StrEnum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+class ConfluenceEntityType(StrEnum):
+    PAGE = "page"
+    BLOGPOST = "blogpost"
+
+
+class ConfluenceSyncState(Base):
+    """
+    Confluence Space별 동기화 상태 추적 테이블
+
+    - Space + Entity Type별로 동기화 상태 관리 -> 타입별로 병렬처리 및 재시도 가능
+    - 증분 동기화 : last_successful_sync_at 기준으로 이후 변경된 엔티티만 동기화
+    """
+    __tablename__ = "confluence_sync_states"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Atlassian Cloud + Space 식별
+    cloud_id: Mapped[str] = mapped_column(
+        String(128), nullable=False, index=True,
+        comment="Atlassian Cloud ID"
+    )
+    space_key: Mapped[str] = mapped_column(
+        String(128), nullable=False,
+        comment="Confluence Space Key"
+    )
+    entity_type: Mapped[ConfluenceEntityType] = mapped_column(
+        String(50), nullable=False,
+        comment="page, blogpost"
+    )
+
+    # 동기화 상태
+    last_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="마지막 동기화 시작 시간"
+    )
+    last_successful_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="마지막 성공적인 동기화 시간 (증분 동기화 기준)"
+    )
+    last_sync_status: Mapped[ConfluenceSyncStatus | None] = mapped_column(
+        String(20), nullable=True,
+        comment="pending, in_progress, success, failed"
+    )
+    last_sync_error: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True,
+        comment="마지막 에러 메시지"
+    )
+
+    # 진행 상황
+    total_entities: Mapped[int] = mapped_column(
+        Integer, default=0,
+        comment="동기화 대상 총 엔티티 수"
+    )
+    synced_entities: Mapped[int] = mapped_column(
+        Integer, default=0,
+        comment="동기화 완료된 엔티티 수"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        server_default=func.now(), onupdate=func.now()
     )
 
 

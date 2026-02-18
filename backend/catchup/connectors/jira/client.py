@@ -352,6 +352,31 @@ class JiraApiClient:
             json_body=body,
         )
 
+    async def list_all_dynamic_webhooks(
+        self,
+        max_results: int = 100,
+    ) -> list[dict]:
+        """
+        Dynamic webhook 전체 목록을 페이지네이션 따라 모두 반환.
+        """
+        all_values: list[dict] = []
+        start_at = 0
+
+        while True:
+            page = await self.get_dynamic_webhooks(start_at=start_at, max_results=max_results)
+            values = page.get("values", [])
+            all_values.extend(values)
+
+            if page.get("isLast", True) or not values:
+                break
+
+            next_offset = page.get("maxResults", max_results) or 0
+            if next_offset <= 0:
+                break
+            start_at += next_offset
+
+        return all_values
+
     # ============================================================
     # Issue APIs (REST API v3)
     #
