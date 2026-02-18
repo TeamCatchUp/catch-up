@@ -22,6 +22,7 @@ export const useCurrentUser = (redirectToLogin = true) => {
   useEffect(() => {
     if (query.data) {
       setUser(query.data);
+      // TODO : auth/me API 구현 전까지 배포 경로에서 API 확인하기 위해, 임시 주석 처리
       // const { role, status } = query.data;
 
       // // 삭제된 사용자는 모든 페이지에서 로그인으로 이동
