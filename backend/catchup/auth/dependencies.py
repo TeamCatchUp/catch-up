@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status, Depends
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
