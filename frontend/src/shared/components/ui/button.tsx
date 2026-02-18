@@ -98,7 +98,7 @@ const buttonVariants = cva(
       {
         variant: ['box-solid-primary', 'box-outline-gray'],
         size: 'md',
-        class: 'text-heading-small gap-1 px-2.5 py-1.5',
+        class: 'text-body-small gap-1 px-2.5 py-1.5',
       },
       {
         variant: ['box-solid-primary', 'box-outline-gray'],

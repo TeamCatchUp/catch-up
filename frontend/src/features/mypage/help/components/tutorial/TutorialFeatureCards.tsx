@@ -57,14 +57,10 @@ const TutorialFeatureCards = () => {
   };
 
   return (
-    <div
-      className="relative w-full"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+    <div className="relative w-full" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       <ul
         ref={scrollRef}
-        className={`flex gap-5 overflow-x-auto no-scrollbar select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        className={`no-scrollbar flex gap-5 overflow-x-auto select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -73,13 +69,13 @@ const TutorialFeatureCards = () => {
         {TUTORIAL_1_FEATURE_CARDS.map((card) => (
           <li
             key={card.title}
-            className="border-neutral-3 flex w-80 shrink-0 flex-col gap-4 rounded-2xl border bg-white p-4 shadow-card"
+            className="border-neutral-3 shadow-card flex w-80 shrink-0 flex-col gap-4 rounded-2xl border bg-white p-4"
           >
             <div className="border-neutral-3 relative aspect-1416/600 w-full overflow-hidden rounded-xl border-b">
               <Image src={card.image} alt={card.title} fill className="object-cover" />
             </div>
             <h3 className="text-heading-medium text-gray-80">{card.title}</h3>
-            <p className="text-label-small whitespace-pre-line text-gray-60">{card.description}</p>
+            <p className="text-label-small text-gray-60 whitespace-pre-line">{card.description}</p>
           </li>
         ))}
       </ul>
@@ -90,11 +86,11 @@ const TutorialFeatureCards = () => {
       {/* FAB: 오른쪽 스크롤 버튼 */}
       <button
         onClick={handleScrollRight}
-        className={`absolute top-1/2 right-0 flex size-10 translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-neutral-3 bg-white shadow-md transition-opacity ${
+        className={`border-neutral-3 absolute top-1/2 right-0 flex size-10 translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border bg-white shadow-md transition-opacity ${
           isHovered && canScrollRight ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
       >
-        <ArrowForward className="h-5 w-5 text-gray-70" />
+        <ArrowForward className="text-gray-70 h-5 w-5" />
       </button>
     </div>
   );

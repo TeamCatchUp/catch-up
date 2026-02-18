@@ -25,9 +25,7 @@ const AccountSupportSection = () => {
                 <h3 className="text-heading-small text-gray-80">{card.title}</h3>
                 <Badge className="rounded-md2 px-1.5 py-0.5">{card.tag}</Badge>
               </div>
-              <p className="text-body-xsmall whitespace-pre-line text-gray-50">
-                {card.description}
-              </p>
+              <p className="text-body-xsmall whitespace-pre-line text-gray-50">{card.description}</p>
             </div>
           </li>
         ))}

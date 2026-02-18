@@ -1,17 +1,9 @@
-import type { ComponentType, SVGProps } from 'react';
+export type { IntegrationAccountMeta, IntegrationService } from '@/shared/types/integrationService';
 
-/** 협업툴 서비스 식별자 */
-export type IntegrationService = 'jira' | 'github' | 'slack' | 'confluence';
+import type { IntegrationAccountMeta, IntegrationService } from '@/shared/types/integrationService';
 
 /** 관리자 연동 화면 탭 식별자 */
 export type AdminIntegrationTab = 'my' | 'member';
-
-/** 연동 계정 카드에 사용되는 기본 메타 정보 */
-export interface IntegrationAccountMeta {
-  service: IntegrationService;
-  name: string;
-  Icon: ComponentType<SVGProps<SVGSVGElement>>;
-}
 
 /** 연동 계정 카드에 표시할 사용자 정보 */
 export interface IntegrationAccountInfo {

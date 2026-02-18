@@ -1,11 +1,37 @@
-/**
- * 사용자 관리 화면의 기본 플레이스홀더 페이지다.
- */
+'use client';
+
+import { useState } from 'react';
+
+import EntryRequestSection from '@/features/admin/members/components/sections/EntryRequestSection';
+import UserListSection from '@/features/admin/members/components/sections/UserListSection';
+import IconSearch from '@/public/icons/icon/search.svg';
+
+/** 관리자 — 이용자 관리 페이지 */
 export default function AdminMembersPage() {
+  const [searchTerm, setSearchTerm] = useState('');
+
   return (
-    <section className="border-neutral-3 mx-16 mt-6 mb-25 rounded-xl border bg-white p-6">
-      <h1 className="text-heading-large text-gray-80">이용자 관리</h1>
-      <p className="text-body-small text-gray-60 mt-3">이용자 계정과 권한 상태를 확인하고 관리할 수 있습니다.</p>
+    <section className="flex flex-col gap-6 px-16 pt-9 pb-25">
+      {/* 헤더: 타이틀 + 검색 */}
+      <div className="flex flex-col gap-2.5">
+        <h1 className="text-heading-xlarge text-gray-80">이용자 관리</h1>
+        <label className="bg-neutral-1 border-neutral-2 flex h-10 w-70 items-center gap-1.5 rounded-lg border px-3 py-2">
+          <IconSearch className="text-gray-30 size-5 shrink-0" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="임직원의 이름을 검색하세요."
+            className="text-body-small text-gray-70 placeholder:text-gray-30 w-full bg-transparent outline-none"
+          />
+        </label>
+      </div>
+
+      {/* 입장 신청 목록 */}
+      <EntryRequestSection searchTerm={searchTerm} />
+
+      {/* 이용자 목록 */}
+      <UserListSection searchTerm={searchTerm} />
     </section>
   );
 }

@@ -2,9 +2,9 @@ import TutorialFeatureCards from '@/features/mypage/help/components/tutorial/Tut
 
 const DotDivider = () => (
   <div className="flex items-center justify-center gap-1.5 py-4">
-    <span className="size-1 rounded-full bg-gray-30" />
-    <span className="size-1 rounded-full bg-gray-30" />
-    <span className="size-1 rounded-full bg-gray-30" />
+    <span className="bg-gray-30 size-1 rounded-full" />
+    <span className="bg-gray-30 size-1 rounded-full" />
+    <span className="bg-gray-30 size-1 rounded-full" />
   </div>
 );
 
@@ -16,10 +16,7 @@ const Tutorial1Content = () => {
         <p>
           필요한 정보는 사실 회사 안에 다 있어요.
           <br />
-          없어서 막히는 게 아니라,{' '}
-          <strong>
-            여기저기 흩어져 있어서 찾다가 시간이 새는 거죠.
-          </strong>
+          없어서 막히는 게 아니라, <strong>여기저기 흩어져 있어서 찾다가 시간이 새는 거죠.</strong>
         </p>
         <br />
         <p>
@@ -31,16 +28,13 @@ const Tutorial1Content = () => {
         <p>질문하는 쪽도, 답하는 쪽도 일을 멈추게 되죠.</p>
         <br />
         <p>
-          결국 <strong>서로가 서로를 방해하는 구조</strong>가 되고, 이건{' '}
-          <strong>팀 전체의 시간 낭비</strong>예요.
+          결국 <strong>서로가 서로를 방해하는 구조</strong>가 되고, 이건 <strong>팀 전체의 시간 낭비</strong>예요.
         </p>
         <br />
         <p>
           그래서 Catch Up은 이런 끊김을 줄이려고 시작됐어요.
           <br />
-          <strong>
-            검색 한 번으로 흩어진 기록을 모아, 필요한 답을 근거와 함께 정리해드립니다.
-          </strong>
+          <strong>검색 한 번으로 흩어진 기록을 모아, 필요한 답을 근거와 함께 정리해드립니다.</strong>
         </p>
       </div>
 
@@ -49,15 +43,11 @@ const Tutorial1Content = () => {
       {/* 섹션 1: 정보를 찾는 시간이 줄면 */}
       <section className="flex flex-col gap-8">
         <div className="flex flex-col gap-4">
-          <h2 className="text-heading-xlarge text-gray-90">
-            정보를 찾는 시간이 줄면, 일하는 시간이 늘어납니다.
-          </h2>
+          <h2 className="text-heading-xlarge text-gray-90">정보를 찾는 시간이 줄면, 일하는 시간이 늘어납니다.</h2>
           <div className="text-label-medium text-gray-80">
             <p>그냥 몇 분 아끼는 얘기가 아니에요.</p>
             <p>
-              <strong>
-                찾는 과정이 짧아질수록, 집중은 오래 가고 실행은 빨라져요.
-              </strong>
+              <strong>찾는 과정이 짧아질수록, 집중은 오래 가고 실행은 빨라져요.</strong>
             </p>
             <br />
             <p>
@@ -84,9 +74,7 @@ const Tutorial1Content = () => {
           </p>
           <br />
           <p>
-            <strong>
-              그래서 Catch Up은 출처랑 핵심 발췌, 왜 선택됐는지까지 같이 보여줘요.
-            </strong>
+            <strong>그래서 Catch Up은 출처랑 핵심 발췌, 왜 선택됐는지까지 같이 보여줘요.</strong>
           </p>
           <br />
           <p>
@@ -104,22 +92,16 @@ const Tutorial1Content = () => {
           <p>
             출처마다 &quot;왜 인용됐는지&quot;를 같이 보여주니까
             <br />
-            <strong>
-              어떤 걸 먼저 보면 될지 감이 잡히고, 확인도 훨씬 빨라집니다.
-            </strong>
+            <strong>어떤 걸 먼저 보면 될지 감이 잡히고, 확인도 훨씬 빨라집니다.</strong>
           </p>
           <br />
-          <p>
-            덕분에 팀은 같은 맥락 위에서 더 쉽게 합의하고, 다음 일을 바로 이어갈 수 있어요.
-          </p>
+          <p>덕분에 팀은 같은 맥락 위에서 더 쉽게 합의하고, 다음 일을 바로 이어갈 수 있어요.</p>
         </div>
       </section>
 
       {/* 섹션 3: 팀이 커질수록 효과가 커지는 이유 */}
       <section className="flex flex-col gap-4">
-        <h2 className="text-heading-xlarge text-gray-90">
-          팀이 커질수록 효과가 커지는 이유
-        </h2>
+        <h2 className="text-heading-xlarge text-gray-90">팀이 커질수록 효과가 커지는 이유</h2>
         <div className="text-label-medium text-gray-80">
           <p>
             팀이 작을 때는 기억으로도 꽤 잘 굴러가요.
@@ -136,8 +118,7 @@ const Tutorial1Content = () => {
           <p>
             우리가 하려는 건 사람을 대신하는 게 아니에요.
             <br />
-            사람이 남긴 기록이 다음에도 바로 쓰일 수 있도록, &apos;다시 찾을 수 있는 지식&apos;으로
-            정리해두는 일입니다.
+            사람이 남긴 기록이 다음에도 바로 쓰일 수 있도록, &apos;다시 찾을 수 있는 지식&apos;으로 정리해두는 일입니다.
           </p>
           <br />
           <p>

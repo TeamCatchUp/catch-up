@@ -2,14 +2,14 @@ import Image from 'next/image';
 
 const DotDivider = () => (
   <div className="flex items-center justify-center gap-1.5 py-4">
-    <span className="size-1 rounded-full bg-gray-30" />
-    <span className="size-1 rounded-full bg-gray-30" />
-    <span className="size-1 rounded-full bg-gray-30" />
+    <span className="bg-gray-30 size-1 rounded-full" />
+    <span className="bg-gray-30 size-1 rounded-full" />
+    <span className="bg-gray-30 size-1 rounded-full" />
   </div>
 );
 
 const ExampleBox = ({ children }: { children: React.ReactNode }) => (
-  <div className="flex flex-col gap-3 rounded-xl border border-neutral-2 bg-neutral-1 px-5 py-4 text-label-medium">
+  <div className="border-neutral-2 bg-neutral-1 text-label-medium flex flex-col gap-3 rounded-xl border px-5 py-4">
     {children}
   </div>
 );
@@ -28,8 +28,7 @@ const Tutorial3Content = () => {
         <br />
         <p>
           출처를 전부 읽을 필요는 없어요.
-          <br />
-          왜 인용됐는지, 어떤 출처를 사용했는지만 보면 판단이 훨씬 빨라집니다.
+          <br />왜 인용됐는지, 어떤 출처를 사용했는지만 보면 판단이 훨씬 빨라집니다.
         </p>
         <br />
         <p>Catch Up은 그 과정을 한 화면에서 끝내도록 만들었어요.</p>
@@ -45,8 +44,7 @@ const Tutorial3Content = () => {
             <p>
               출처를 확인하려고 원문부터 열 필요는 없어요.
               <br />
-              Catch Up 답변에는 인용 표시가 붙어 있어서, &quot;어떤 문장이 어떤 근거를
-              썼는지&quot;가 먼저 보입니다.
+              Catch Up 답변에는 인용 표시가 붙어 있어서, &quot;어떤 문장이 어떤 근거를 썼는지&quot;가 먼저 보입니다.
             </p>
             <br />
             <p>
@@ -74,9 +72,7 @@ const Tutorial3Content = () => {
       {/* 섹션 2: 답변 생성에 사용한 '이유'까지 보여줘요 */}
       <section className="flex flex-col gap-6">
         <div className="flex flex-col gap-4">
-          <h2 className="text-heading-xlarge text-gray-90">
-            답변 생성에 사용한 &apos;이유&apos;까지 보여줘요
-          </h2>
+          <h2 className="text-heading-xlarge text-gray-90">답변 생성에 사용한 &apos;이유&apos;까지 보여줘요</h2>
           <div className="px-16">
             <div className="relative aspect-[1416/600] w-full">
               <Image
@@ -110,7 +106,7 @@ const Tutorial3Content = () => {
 
         <ExampleBox>
           <p className="text-gray-80">[예시]</p>
-          <ul className="list-disc space-y-3 pl-6 text-gray-60">
+          <ul className="text-gray-60 list-disc space-y-3 pl-6">
             <li>
               그럴듯한 답을 빨리 걸러낼 수 있어요
               <br />
@@ -119,8 +115,7 @@ const Tutorial3Content = () => {
             <li>
               확인 포인트가 정해져요
               <br />
-              최신 변경이라면 &apos;최근 PR/배포&apos;만, 코드 근거라면 &apos;해당 diff&apos;만
-              보면 돼요.
+              최신 변경이라면 &apos;최근 PR/배포&apos;만, 코드 근거라면 &apos;해당 diff&apos;만 보면 돼요.
               <br />
               원문을 전부 읽지 않아도 판단이 됩니다.
             </li>
@@ -147,9 +142,7 @@ const Tutorial3Content = () => {
       {/* 섹션 3: 확인이 필요한 순간만 원문을 열면 돼요 */}
       <section className="flex flex-col gap-6">
         <div className="flex flex-col gap-4">
-          <h2 className="text-heading-xlarge text-gray-90">
-            확인이 필요한 순간만 원문을 열면 돼요
-          </h2>
+          <h2 className="text-heading-xlarge text-gray-90">확인이 필요한 순간만 원문을 열면 돼요</h2>
           <div className="text-label-medium text-gray-80">
             <p>
               모든 출처를 다 열어볼 필요는 없어요.
@@ -160,15 +153,9 @@ const Tutorial3Content = () => {
         </div>
 
         <ExampleBox>
-          <p className="text-label-medium text-gray-80">
-            - 결정이 걸린 순간: 승인/정책/방향을 확정해야 할 때
-          </p>
-          <p className="text-label-medium text-gray-80">
-            - 조건이 중요한 순간: 기간, 권한 범위, 수치가 포함될 때
-          </p>
-          <p className="text-label-medium text-gray-80">
-            - 원인이 필요한 순간: 장애/버그처럼 재현과 근거가 필요할 때
-          </p>
+          <p className="text-label-medium text-gray-80">- 결정이 걸린 순간: 승인/정책/방향을 확정해야 할 때</p>
+          <p className="text-label-medium text-gray-80">- 조건이 중요한 순간: 기간, 권한 범위, 수치가 포함될 때</p>
+          <p className="text-label-medium text-gray-80">- 원인이 필요한 순간: 장애/버그처럼 재현과 근거가 필요할 때</p>
         </ExampleBox>
 
         <div className="text-label-medium text-gray-80">
@@ -183,24 +170,18 @@ const Tutorial3Content = () => {
       {/* 섹션 4: 출처 확인은 이렇게 10초면 충분해요 */}
       <section className="flex flex-col gap-6">
         <div className="flex flex-col gap-4">
-          <h2 className="text-heading-xlarge text-gray-90">
-            출처 확인은 이렇게 10초면 충분해요
-          </h2>
+          <h2 className="text-heading-xlarge text-gray-90">출처 확인은 이렇게 10초면 충분해요</h2>
           <div className="text-label-medium text-gray-80">
             <p>처음엔 복잡해 보이지만, 실제로는 딱 이 순서면 돼요.</p>
           </div>
         </div>
 
         <ExampleBox>
-          <p className="text-label-medium text-gray-80">
-            1. 답변에서 표시 확인: 이 문장이 근거가 있는 문장인지 보기
-          </p>
+          <p className="text-label-medium text-gray-80">1. 답변에서 표시 확인: 이 문장이 근거가 있는 문장인지 보기</p>
           <p className="text-label-medium text-gray-80">
             2. 인용 이유 확인: 왜 이 출처가 답변 생성에 쓰였는지 확인하기
           </p>
-          <p className="text-label-medium text-gray-80">
-            3. 필요할 때만 원문 이동: 결정에 필요한 부분만 확인하기
-          </p>
+          <p className="text-label-medium text-gray-80">3. 필요할 때만 원문 이동: 결정에 필요한 부분만 확인하기</p>
         </ExampleBox>
 
         <div className="text-label-medium text-gray-80">

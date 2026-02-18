@@ -27,7 +27,7 @@ const TutorialPagination = ({ currentId }: TutorialPaginationProps) => {
           </Link>
         ) : (
           <span className="flex size-6 items-center justify-center">
-            <ArrowLeft className="h-6 w-6 text-gray-30" />
+            <ArrowLeft className="text-gray-30 h-6 w-6" />
           </span>
         )}
 
@@ -36,8 +36,8 @@ const TutorialPagination = ({ currentId }: TutorialPaginationProps) => {
             key={tutorial.id}
             href={`/mypage/help/tutorial/${tutorial.id}`}
             className={cn(
-              'flex size-7.5 items-center justify-center rounded-md2 text-body-small',
-              tutorial.id === currentId ? 'bg-neutral-2 text-gray-80' : 'text-gray-50 hover:bg-neutral-2',
+              'rounded-md2 text-body-small flex size-7.5 items-center justify-center',
+              tutorial.id === currentId ? 'bg-neutral-2 text-gray-80' : 'hover:bg-neutral-2 text-gray-50',
             )}
           >
             {tutorial.id}
@@ -53,7 +53,7 @@ const TutorialPagination = ({ currentId }: TutorialPaginationProps) => {
           </Link>
         ) : (
           <span className="flex size-6 items-center justify-center">
-            <ArrowRight className="h-6 w-6 text-gray-30" />
+            <ArrowRight className="text-gray-30 h-6 w-6" />
           </span>
         )}
       </nav>

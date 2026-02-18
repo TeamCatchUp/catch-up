@@ -46,7 +46,4 @@ export const SUPPORT_CARDS = [
   },
 ] as const;
 
-export const POLICY_ITEMS = [
-  { label: '이용약관' },
-  { label: '개인정보처리방침' },
-] as const;
+export const POLICY_ITEMS = [{ label: '이용약관' }, { label: '개인정보처리방침' }] as const;

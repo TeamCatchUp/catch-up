@@ -12,7 +12,7 @@ const ContactChannelSection = () => {
           <p className="text-body-small text-gray-50">운영팀과 Slack으로 바로 연결됩니다.</p>
         </div>
 
-        <Button type="button" variant="text-primary-blue" size="md" className="gap-1 text-blue-55">
+        <Button type="button" variant="text-primary-blue" size="md" className="text-blue-55 gap-1">
           Slack 으로 문의하기
           <ArrowForward className="h-5 w-5" />
         </Button>
@@ -21,7 +21,7 @@ const ContactChannelSection = () => {
       <div className="flex flex-col gap-2.5">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <AlarmFilled className="h-5 w-5 text-gray-20" />
+            <AlarmFilled className="text-gray-20 h-5 w-5" />
             <span className="text-body-small text-gray-50">운영 시간</span>
           </div>
           <span className="text-body-small text-gray-80">매일 10:00-18:00</span>
@@ -29,7 +29,7 @@ const ContactChannelSection = () => {
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <CommentFilled className="h-5 w-5 text-gray-20" />
+            <CommentFilled className="text-gray-20 h-5 w-5" />
             <span className="text-body-small text-gray-50">응답 시간</span>
           </div>
           <span className="text-body-small text-gray-80">매일 10:00-18:00</span>

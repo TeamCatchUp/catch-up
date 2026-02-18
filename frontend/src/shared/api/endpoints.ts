@@ -57,6 +57,16 @@ export const API = {
     channels: `${API_PREFIX}/slack/sync/accessible/channels`, // GET Bot 접근 가능 채널 목록 (?team_id=)
   },
 
+  // 관리자 — 이용자 관리
+  admin: {
+    members: {
+      list: `${API_PREFIX}/admin/members`, // GET 이용자 목록
+      requests: `${API_PREFIX}/admin/members/requests`, // GET 입장 신청 목록
+      decide: `${API_PREFIX}/admin/members/requests/decide`, // POST 승인/반려
+      status: (userId: string) => `${API_PREFIX}/admin/members/${userId}/status`, // PATCH 비활성화/삭제
+    },
+  },
+
   // 백엔드 미구현 — 라우터 미등록 상태
   onboarding: {
     complete: `${API_PREFIX}/onboarding/complete`, // POST 온보딩 완료 처리
