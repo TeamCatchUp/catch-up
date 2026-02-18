@@ -1,8 +1,8 @@
 import logging
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.db.jira import domain_repository
 
 logger = logging.getLogger(__name__)
@@ -19,14 +19,6 @@ SUPPORTED_METADATA_EVENTS = {
     "user_deleted",
 }
 
-def _parse_datetime(dt_str:str | None) -> datetime | None:
-    if not dt_str:
-        return None
-    try:
-        return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    
 def _extract_project_key(payload: dict) -> str | None:
     project = payload.get("project") or {}
     return project.get("key") or payload.get("projectKey")
@@ -104,9 +96,9 @@ def handle_metadata_event(
             goal=sprint.get("goal"),
             project_key=_extract_project_key(payload),
             board_id=sprint.get("originBoardId"),
-            start_date=_parse_datetime(sprint.get("startDate")),
-            end_date=_parse_datetime(sprint.get("endDate")),
-            complete_date=_parse_datetime(sprint.get("completeDate")),
+            start_date=parse_atlassian_datetime(sprint.get("startDate")),
+            end_date=parse_atlassian_datetime(sprint.get("endDate")),
+            complete_date=parse_atlassian_datetime(sprint.get("completeDate")),
         )
 
         logger.info(

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ConfluenceSpaceDescription(BaseModel):
@@ -9,13 +9,13 @@ class ConfluenceSpaceDescription(BaseModel):
         if self.plain and isinstance(self.plain.get("value"), str):
             return self.plain["value"]
         return ""
-    
+
 class ConfluenceSpaceResponse(BaseModel):
     id: str
     key: str
     name: str
-    type: str = "global"
-    status: str = "current"
+    type: str
+    status: str
     homepage_id: str | None = Field(default=None, alias="homepageId")
     description: ConfluenceSpaceDescription | None = None
 
@@ -54,3 +54,123 @@ class ConfluenceRoleAssignmentResponse(BaseModel):
     role: ConfluenceRoleResponse
 
     model_config = {"populate_by_name": True}
+
+class ConfluenceVersion(BaseModel):
+    """콘텐츠 버전 정보"""
+    number: int
+    created_at: str | None = Field(default=None, alias="createdAt")
+    message: str | None = None
+    minor_edit: bool = Field(default=False, alias="minorEdit")
+    author_id: str | None = Field(default=None, alias="authorId")
+
+    model_config = {"populate_by_name": True}
+
+class ConfluenceBody(BaseModel):
+    """콘텐츠 본문 (atlas_doc_format 또는 storage)"""
+    representation: str | None = None
+    value: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _extract_nested_body(cls, data):
+        """
+        Confluence v2 API는 body를 format 키로 감싸서 반환:
+        {"storage": {"representation": "storage", "value": "..."}}
+        → {"representation": "storage", "value": "..."} 로 평탄화
+        """
+        if isinstance(data, dict):
+            for key in ("storage", "atlas_doc_format", "view", "export_view"):
+                if key in data and isinstance(data[key], dict):
+                    return data[key]
+        return data
+
+
+class ConfluencePageResponse(BaseModel):
+    """Page 응답 스키마 (v2 API)"""
+    id: str
+    status: str
+    title: str
+    space_id: str | None = Field(default=None, alias="spaceId")
+    parent_id: str | None = Field(default=None, alias="parentId")
+    parent_type: str | None = Field(default=None, alias="parentType")
+    position: int | None = None
+    author_id: str | None = Field(default=None, alias="authorId")
+    owner_id: str | None = Field(default=None, alias="ownerId")
+    created_at: str | None = Field(default=None, alias="createdAt")
+    version: ConfluenceVersion | None = None
+    body: ConfluenceBody | None = None
+    links: dict | None = Field(default=None, alias="_links")
+
+    model_config = {"populate_by_name": True}
+
+    def get_web_url(self) -> str | None:
+        if self.links:
+            return self.links.get("webui")
+        return None
+
+
+class ConfluenceBlogPostResponse(BaseModel):
+    """BlogPost 응답 스키마 (v2 API)"""
+    id: str
+    status: str
+    title: str
+    space_id: str | None = Field(default=None, alias="spaceId")
+    author_id: str | None = Field(default=None, alias="authorId")
+    created_at: str | None = Field(default=None, alias="createdAt")
+    version: ConfluenceVersion | None = None
+    body: ConfluenceBody | None = None
+    links: dict | None = Field(default=None, alias="_links")
+
+    model_config = {"populate_by_name": True}
+
+    def get_web_url(self) -> str | None:
+        if self.links:
+            return self.links.get("webui")
+        return None
+
+
+class ConfluenceCommentResponse(BaseModel):
+    """Comment 응답 스키마 (footer / inline 공용, v2 API)"""
+    id: str
+    status: str
+    title: str | None = None
+    body: ConfluenceBody | None = None
+    version: ConfluenceVersion | None = None
+    created_at: str | None = Field(default=None, alias="createdAt")
+    author_id: str | None = Field(default=None, alias="authorId")
+    # inline comment 전용 필드
+    resolution_status: str | None = Field(default=None, alias="resolutionStatus")
+    parent_comment_id: str | None = Field(default=None, alias="parentCommentId")
+    properties: dict | None = None
+    links: dict | None = Field(default=None, alias="_links")
+
+    model_config = {"populate_by_name": True}
+
+
+class ConfluenceAttachmentResponse(BaseModel):
+    """Attachment 응답 스키마 (v2 API)"""
+    id: str
+    status: str
+    title: str
+    media_type: str | None = Field(default=None, alias="mediaType")
+    file_size: int | None = Field(default=None, alias="fileSize")
+    created_at: str | None = Field(default=None, alias="createdAt")
+    version: ConfluenceVersion | None = None
+    download_link: str | None = Field(default=None, alias="downloadLink")
+    links: dict | None = Field(default=None, alias="_links")
+
+    model_config = {"populate_by_name": True}
+
+    def get_download_url(self) -> str | None:
+        if self.download_link:
+            return self.download_link
+        if self.links:
+            return self.links.get("download")
+        return None
+
+
+class ConfluenceLabelResponse(BaseModel):
+    """Label 응답 스키마 (v2 API)"""
+    id: str
+    prefix: str | None = None
+    name: str

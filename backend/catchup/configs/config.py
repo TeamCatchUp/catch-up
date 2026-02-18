@@ -80,7 +80,9 @@ class Settings(BaseSettings):
         "read:confluence-content.all read:confluence-space.summary "
         "read:confluence-user search:confluence readonly:content.attachment:confluence "
         "offline_access read:space:confluence read:space-details:confluence read:space.permission:confluence "
-        "read:content-details:confluence"
+        "read:content-details:confluence "
+        "read:page:confluence read:blogpost:confluence read:comment:confluence "
+        "read:attachment:confluence read:label:confluence"
     )
 
     ATLASSIAN_AUTH_URL: str = "https://auth.atlassian.com/authorize"

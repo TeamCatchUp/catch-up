@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from catchup.db.models import AtlassianOAuthToken
 
-
 def get_token_by_cloud_id(db: Session, cloud_id: str) -> Optional[AtlassianOAuthToken]:
     """cloud_id로 Atlassian OAuth 토큰 조회."""
     stmt = select(AtlassianOAuthToken).where(AtlassianOAuthToken.cloud_id == cloud_id)
@@ -73,3 +72,45 @@ def delete_token(db: Session, cloud_id: str) -> bool:
     result = db.execute(stmt)
     db.commit()
     return result.rowcount > 0
+
+
+# ──────────────────────────────────────────
+# 클래스 래퍼 (FastAPI DI용)
+# ──────────────────────────────────────────
+
+class AtlassianOAuthRepository:
+    
+    def get_token_by_cloud_id(
+        self, db: Session, cloud_id: str
+    ) -> Optional[AtlassianOAuthToken]:
+        return get_token_by_cloud_id(db, cloud_id)
+
+    def get_all_tokens(self, db: Session) -> list[AtlassianOAuthToken]:
+        return get_all_tokens(db)
+
+    def create_or_update_token(
+        self,
+        db: Session,
+        atlassian_account_id: str,
+        cloud_id: str,
+        site_name: str,
+        site_url: str,
+        access_token: str,
+        refresh_token: str,
+        expires_at: datetime,
+        scopes: str,
+    ) -> AtlassianOAuthToken:
+        return create_or_update_token(
+            db=db,
+            atlassian_account_id=atlassian_account_id,
+            cloud_id=cloud_id,
+            site_name=site_name,
+            site_url=site_url,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_at=expires_at,
+            scopes=scopes,
+        )
+
+    def delete_token(self, db: Session, cloud_id: str) -> bool:
+        return delete_token(db, cloud_id)

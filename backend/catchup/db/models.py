@@ -417,10 +417,10 @@ class ConfluenceSpace(Base):
         String(255), nullable=False
     )
     space_type: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="global"
+        String(20), nullable=False
     )
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="current"
+        String(20), nullable=False
     )
     homepage_id: Mapped[str | None] = mapped_column(
         String(32), nullable=True
@@ -472,6 +472,84 @@ class ConfluenceSpaceMember(Base):
     synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+# ============================================================
+# Confluence Sync State
+# ============================================================
+
+class ConfluenceSyncStatus(StrEnum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+class ConfluenceEntityType(StrEnum):
+    PAGE = "page"
+    BLOGPOST = "blogpost"
+
+
+class ConfluenceSyncState(Base):
+    """
+    Confluence Space별 동기화 상태 추적 테이블
+
+    - Space + Entity Type별로 동기화 상태 관리 -> 타입별로 병렬처리 및 재시도 가능
+    - 증분 동기화 : last_successful_sync_at 기준으로 이후 변경된 엔티티만 동기화
+    """
+    __tablename__ = "confluence_sync_states"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Atlassian Cloud + Space 식별
+    cloud_id: Mapped[str] = mapped_column(
+        String(128), nullable=False, index=True,
+        comment="Atlassian Cloud ID"
+    )
+    space_key: Mapped[str] = mapped_column(
+        String(128), nullable=False,
+        comment="Confluence Space Key"
+    )
+    entity_type: Mapped[ConfluenceEntityType] = mapped_column(
+        String(50), nullable=False,
+        comment="page, blogpost"
+    )
+
+    # 동기화 상태
+    last_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="마지막 동기화 시작 시간"
+    )
+    last_successful_sync_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="마지막 성공적인 동기화 시간 (증분 동기화 기준)"
+    )
+    last_sync_status: Mapped[ConfluenceSyncStatus | None] = mapped_column(
+        String(20), nullable=True,
+        comment="pending, in_progress, success, failed"
+    )
+    last_sync_error: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True,
+        comment="마지막 에러 메시지"
+    )
+
+    # 진행 상황
+    total_entities: Mapped[int] = mapped_column(
+        Integer, default=0,
+        comment="동기화 대상 총 엔티티 수"
+    )
+    synced_entities: Mapped[int] = mapped_column(
+        Integer, default=0,
+        comment="동기화 완료된 엔티티 수"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        server_default=func.now(), onupdate=func.now()
+    )
+
 
 class JiraWebhookSubscription(Base):
     """

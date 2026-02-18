@@ -22,6 +22,9 @@ from catchup.server.connector.atlassian.auth_api import (
 )
 from catchup.server.connector.jira.sync_api import router as jira_sync_router
 from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
+from catchup.server.connector.confluence.sync_api import (
+    router as confluence_sync_router,
+)
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.sync_api import router as slack_sync_router
 
@@ -110,6 +113,7 @@ app.include_router(github_sync_router)
 app.include_router(atlassian_auth_router)
 app.include_router(jira_sync_router)
 app.include_router(jira_webhook_router)
+app.include_router(confluence_sync_router)
 app.include_router(slack_auth_router)
 app.include_router(slack_sync_router)
 

@@ -156,18 +156,17 @@ class ConfluenceApiClient:
     
     async def get_users(
         self,
-        cql: str = "type=user",
         limit: int = 250,
     ) -> list[dict[str, Any]]:
         """
         Confluence 사용자 전체 조회 (v1 search API)
-        - default cql: type=user (모든 사용자)
+        - cql은 내부에서 고정: type=user (모든 사용자)
         - start/limit 기반 페이지네이션 자동 처리
         """
         all_results: list[dict[str, Any]] = []
         start = 0
         while True:
-            params = {"cql": cql, "limit": limit, "start": start}
+            params = {"cql": "type=user", "limit": limit, "start": start}
             response = await self._request(
                 "GET",
                 url=f"{self.base_url_v1}/search/user",
@@ -232,7 +231,6 @@ class ConfluenceApiClient:
     ) -> list[dict[str, Any]]:
         """
         Space 목록 조회
-        - space_type가 None이면 필터를 제거하여 knowledge_base 등 모든 타입을 가져온다.
         """
 
         params: dict[str, Any] = {"limit": limit}
@@ -246,3 +244,179 @@ class ConfluenceApiClient:
             params=params,
             limit=limit,
         )
+
+    async def get_pages(
+        self,
+        space_id: str,
+        status: str = "current",
+        sort: str = "-modified-date",
+        body_format: str = "atlas_doc_format",
+        limit: int = 250,
+    ) -> list[dict[str, Any]]:
+        """
+        Space 내 모든 Page 조회 (v2 API)
+
+        Args:
+            space_id: Space ID
+            status: 페이지 상태 필터 (current, archived, trashed)
+            sort: 정렬 기준 (-modified-date, created-date 등)
+            body_format: 본문 포맷 (atlas_doc_format, storage)
+            limit: 페이지당 결과 수
+        """
+        params: dict[str, Any] = {
+            "space-id": space_id,
+            "status": status,
+            "sort": sort,
+            "body-format": body_format,
+        }
+        return await self._paginate_cursor(
+            url=f"{self.base_url}/pages",
+            params=params,
+            limit=limit,
+        )
+
+    async def get_page_by_id(
+        self,
+        page_id: str,
+        body_format: str = "atlas_doc_format",
+    ) -> dict[str, Any]:
+        """단일 Page 조회"""
+        params: dict[str, Any] = {"body-format": body_format}
+        return await self._request(
+            "GET",
+            url=f"{self.base_url}/pages/{page_id}",
+            params=params,
+        )
+
+    async def get_blogposts(
+        self,
+        space_id: str,
+        status: str = "current",
+        sort: str = "-modified-date",
+        body_format: str = "atlas_doc_format",
+        limit: int = 250,
+    ) -> list[dict[str, Any]]:
+        """Space 내 모든 BlogPost 조회 (v2 API)"""
+        params: dict[str, Any] = {
+            "space-id": space_id,
+            "status": status,
+            "sort": sort,
+            "body-format": body_format,
+        }
+        return await self._paginate_cursor(
+            url=f"{self.base_url}/blogposts",
+            params=params,
+            limit=limit,
+        )
+
+    async def get_page_footer_comments(
+        self,
+        page_id: str,
+        body_format: str = "atlas_doc_format",
+        limit: int = 250,
+    ) -> list[dict[str, Any]]:
+        """Page의 Footer 코멘트 조회 (v2 API)"""
+        params: dict[str, Any] = {"body-format": body_format}
+        return await self._paginate_cursor(
+            url=f"{self.base_url}/pages/{page_id}/footer-comments",
+            params=params,
+            limit=limit,
+        )
+
+    async def get_page_inline_comments(
+        self,
+        page_id: str,
+        body_format: str = "atlas_doc_format",
+        limit: int = 250,
+    ) -> list[dict[str, Any]]:
+        """Page의 Inline 코멘트 조회 (v2 API)"""
+        params: dict[str, Any] = {"body-format": body_format}
+        return await self._paginate_cursor(
+            url=f"{self.base_url}/pages/{page_id}/inline-comments",
+            params=params,
+            limit=limit,
+        )
+
+    async def get_page_attachments(
+        self,
+        page_id: str,
+        limit: int = 250,
+    ) -> list[dict[str, Any]]:
+        """Page의 첨부파일 조회 (v2 API)"""
+        return await self._paginate_cursor(
+            url=f"{self.base_url}/pages/{page_id}/attachments",
+            limit=limit,
+        )
+
+    async def get_page_labels(
+        self,
+        page_id: str,
+        limit: int = 250,
+    ) -> list[dict[str, Any]]:
+        """Page의 라벨 조회 (v2 API)"""
+        return await self._paginate_cursor(
+            url=f"{self.base_url}/pages/{page_id}/labels",
+            limit=limit,
+        )
+
+    async def download_attachment(
+        self,
+        attachment_id: str,
+        max_size_bytes: int = 5 * 1024 * 1024,
+    ) -> bytes | None:
+        """
+        첨부파일 바이너리 다운로드 (이미지 임베딩용)
+
+        v2 API 엔드포인트를 사용하여 Bearer 토큰 인증으로 다운로드.
+        (서블릿 경로 /download/attachments/... 는 API 게이트웨이에서 401 발생)
+
+        Args:
+            attachment_id: Confluence Attachment ID
+            max_size_bytes: 최대 다운로드 크기 (기본 5MB, Embed v4 제한)
+
+        Returns:
+            파일 바이너리 데이터, 실패 시 None
+        """
+        url = f"{self.base_url}/attachments/{attachment_id}/download"
+
+        async with self._semaphore:
+            try:
+                headers = {
+                    "Authorization": f"Bearer {self.access_token}",
+                }
+                async with httpx.AsyncClient(
+                    headers=headers, timeout=60.0, follow_redirects=True,
+                ) as client:
+                    response = await client.get(url)
+
+                    if response.status_code != 200:
+                        logger.warning(
+                            f"[CONFLUENCE][ATTACHMENT] Download failed: "
+                            f"status={response.status_code}, attachment_id={attachment_id}"
+                        )
+                        return None
+
+                    content = response.content
+
+                    if len(content) > max_size_bytes:
+                        logger.info(
+                            f"[CONFLUENCE][ATTACHMENT] File too large "
+                            f"({len(content)} bytes > {max_size_bytes}), skipping: "
+                            f"attachment_id={attachment_id}"
+                        )
+                        return None
+
+                    await asyncio.sleep(self._rate_limit_delay)
+                    return content
+
+            except httpx.TimeoutException:
+                logger.warning(
+                    f"[CONFLUENCE][ATTACHMENT] Download timeout: attachment_id={attachment_id}"
+                )
+                return None
+            except Exception as e:
+                logger.warning(
+                    f"[CONFLUENCE][ATTACHMENT] Download error: {e}, attachment_id={attachment_id}"
+                )
+                return None
+

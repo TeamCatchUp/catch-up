@@ -24,6 +24,7 @@ from typing import Any
 from langchain_core.documents import Document
 from sqlalchemy.orm import Session
 
+from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.jira.client import (
     JiraApiClient,
     JiraApiError,
@@ -549,13 +550,13 @@ class JiraIngestionService:
                             "goal": sprint_data.get("goal"),
                             "project_key": project_key,
                             "board_id": board_id,
-                            "start_date": self._parse_datetime(
+                            "start_date": parse_atlassian_datetime(
                                 sprint_data.get("startDate")
                             ),
-                            "end_date": self._parse_datetime(
+                            "end_date": parse_atlassian_datetime(
                                 sprint_data.get("endDate")
                             ),
-                            "complete_date": self._parse_datetime(
+                            "complete_date": parse_atlassian_datetime(
                                 sprint_data.get("completeDate")
                             ),
                         })
@@ -644,15 +645,6 @@ class JiraIngestionService:
         logger.info(f"User sync completed: {results}")
         return results
 
-    def _parse_datetime(self, dt_str: str | None) -> datetime | None:
-        """ISO 날짜 문자열 -> datetime 변환"""
-        if not dt_str:
-            return None
-        try:
-            return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-        
     async def delete_issue_documents(
             self,
             issue_keys: list[str],
