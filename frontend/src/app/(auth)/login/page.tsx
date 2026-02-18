@@ -12,7 +12,7 @@ export default function Login() {
   const router = useRouter();
 
   const handleGoogleLogin = () => {
-    window.location.href = '/api/v1/auth/login';
+    window.location.href = '/api/v1/auth/google/login';
   };
 
   const handleSignup = () => {
