@@ -31,8 +31,8 @@ export const useSearchInput = ({ inputRef }: UseSearchInputOptions): UseSearchIn
   const handleSubmit = useCallback(() => {
     const trimmed = value.trim();
     if (!trimmed) return;
-
-    router.push(`/chat/new?q=${encodeURIComponent(trimmed)}`);
+    const sessionId = crypto.randomUUID();
+    router.push(`/chat/${sessionId}?q=${encodeURIComponent(trimmed)}`);
   }, [value, router]);
 
   // Textarea 자동 높이 조절

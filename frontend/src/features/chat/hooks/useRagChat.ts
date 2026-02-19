@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import { useRouter } from 'next/navigation';
 
 import { NODE_TO_UI_STEP } from '@/features/chat/constants/config';
@@ -52,13 +53,17 @@ const toComparableTimestamp = (iso: string) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const isSessionMessagesNotFoundError = (err: unknown) =>
+  isAxiosError(err) && err.response?.status === 404;
+
 export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions): UseRagChatReturn => {
   const router = useRouter();
   const { streamChat, abortStream, markStopped, resetStopped, isStopped } = useRagStream();
   const queryClient = useQueryClient();
 
-  const effectiveInitialQuery = initialQuery?.trim() ? initialQuery.trim() : null;
   const isPlaceholderSession = sessionId === 'new';
+  const initialQueryFromUrl = initialQuery?.trim() ? initialQuery.trim() : null;
+  const effectiveInitialQuery = initialQueryFromUrl;
   const [provisionalSessionId, setProvisionalSessionId] = useState<string | undefined>();
   const resolvedSessionId = isPlaceholderSession ? provisionalSessionId : sessionId;
 
@@ -70,6 +75,8 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
   const syncedSessionRef = useRef<string | null>(null);
   const sessionSyncGuardRef = useRef<{ from: string; to: string } | null>(null);
   const pendingReplaceSessionIdRef = useRef<string | null>(null);
+  const hasPlaceholderReplacedRef = useRef(false);
+  const canReplacePlaceholderRef = useRef(false);
 
   const streamingMessageIdRef = useRef<string | null>(null);
   const hasStreamedTokenRef = useRef(false);
@@ -77,6 +84,8 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
   const latestSourcesRef = useRef<SourceResponse[]>([]);
   const latestUiSourcesRef = useRef<ChatSource[]>([]);
   const streamInFlightRef = useRef(false);
+  const hasAttemptedInitialStreamRef = useRef(false);
+  const resolvedSessionIdRef = useRef<string | undefined>(resolvedSessionId);
 
   const refreshRecentChatsNow = useCallback(() => {
     refreshRecentChats(queryClient);
@@ -89,6 +98,10 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     latestSourcesRef.current = [];
     latestUiSourcesRef.current = [];
   }, []);
+
+  useEffect(() => {
+    resolvedSessionIdRef.current = resolvedSessionId;
+  }, [resolvedSessionId]);
 
   const buildEmptyChatData = useCallback(
     (targetSessionId: string): ChatData => ({
@@ -187,21 +200,9 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       setProvisionalSessionId(streamSessionId);
 
       if (!isPlaceholderSession) return;
-      if (pendingReplaceSessionIdRef.current === streamSessionId) return;
-
-      sessionSyncGuardRef.current = { from: sessionId, to: streamSessionId };
       pendingReplaceSessionIdRef.current = streamSessionId;
-
-      const nextUrl = (() => {
-        if (typeof window === 'undefined') return `/chat/${streamSessionId}`;
-        const params = new URLSearchParams(window.location.search);
-        const queryString = params.toString();
-        return queryString ? `/chat/${streamSessionId}?${queryString}` : `/chat/${streamSessionId}`;
-      })();
-
-      router.replace(nextUrl);
     },
-    [isPlaceholderSession, resolvedSessionId, router, sessionId],
+    [isPlaceholderSession, resolvedSessionId],
   );
 
   useEffect(() => {
@@ -213,12 +214,16 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       syncedSessionRef.current = sessionId;
       sessionSyncGuardRef.current = null;
       pendingReplaceSessionIdRef.current = null;
+      hasPlaceholderReplacedRef.current = false;
       return;
     }
 
     syncedSessionRef.current = sessionId;
 
     streamInFlightRef.current = false;
+    hasAttemptedInitialStreamRef.current = false;
+    canReplacePlaceholderRef.current = false;
+    hasPlaceholderReplacedRef.current = false;
     resetStreamStateRefs();
     abortStream();
 
@@ -226,6 +231,17 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     setCurrentStep('router');
 
     if (!isValidSessionId(sessionId)) {
+      setChatData(buildEmptyChatData(sessionId));
+      setIsLoading(false);
+      return;
+    }
+
+    // 프론트 생성 UUID로 첫 진입(+q)한 신규 세션은 room이 아직 없어 messages API가 404가 된다.
+    // 이 경우 초기 hydrate를 건너뛰고, 초기 stream 이후 서버 동기화로 메시지를 채운다.
+    const hasCachedPageOne = Boolean(
+      queryClient.getQueryData(chatQueries.sessionMessages(sessionId, 1, MESSAGE_PAGE_SIZE).queryKey),
+    );
+    if (effectiveInitialQuery && !hasCachedPageOne) {
       setChatData(buildEmptyChatData(sessionId));
       setIsLoading(false);
       return;
@@ -243,9 +259,15 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
         setChatData(nextData);
       } catch (err) {
         if (cancelled) return;
-        console.error('[useRagChat] loadSessionChatData error:', err);
-        setIsError(true);
-        setChatData(buildEmptyChatData(sessionId));
+        // 신규 세션은 stream 시작 전 room/messages가 없어 404가 정상일 수 있다.
+        if (effectiveInitialQuery && isSessionMessagesNotFoundError(err)) {
+          setIsError(false);
+          setChatData(buildEmptyChatData(sessionId));
+        } else {
+          console.error('[useRagChat] loadSessionChatData error:', err);
+          setIsError(true);
+          setChatData(buildEmptyChatData(sessionId));
+        }
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -258,12 +280,56 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     return () => {
       cancelled = true;
     };
-  }, [abortStream, buildEmptyChatData, loadSessionChatData, resetStreamStateRefs, sessionId]);
+  }, [
+    abortStream,
+    buildEmptyChatData,
+    effectiveInitialQuery,
+    loadSessionChatData,
+    queryClient,
+    resetStreamStateRefs,
+    sessionId,
+  ]);
+
+  useEffect(() => {
+    if (!isPlaceholderSession) return;
+    if (!provisionalSessionId) return;
+    if (isLoading) return;
+    if (!canReplacePlaceholderRef.current) return;
+    if (hasPlaceholderReplacedRef.current) return;
+
+    hasPlaceholderReplacedRef.current = true;
+    sessionSyncGuardRef.current = { from: sessionId, to: provisionalSessionId };
+    pendingReplaceSessionIdRef.current = provisionalSessionId;
+
+    const nextUrl = (() => {
+      if (typeof window === 'undefined') return `/chat/${provisionalSessionId}`;
+      const params = new URLSearchParams(window.location.search);
+      params.delete('q');
+      const queryString = params.toString();
+      return queryString ? `/chat/${provisionalSessionId}?${queryString}` : `/chat/${provisionalSessionId}`;
+    })();
+
+    router.replace(nextUrl);
+  }, [isLoading, isPlaceholderSession, provisionalSessionId, router, sessionId]);
+
+  const clearInitialQueryParam = useCallback(() => {
+    if (!initialQueryFromUrl) return;
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('q')) return;
+
+    params.delete('q');
+    const queryString = params.toString();
+    const nextUrl = queryString ? `/chat/${sessionId}?${queryString}` : `/chat/${sessionId}`;
+    router.replace(nextUrl);
+  }, [initialQueryFromUrl, router, sessionId]);
 
   const beginAnswerLoading = useCallback(() => {
     resetStopped();
     resetStreamStateRefs();
     streamInFlightRef.current = true;
+    canReplacePlaceholderRef.current = false;
     setIsLoading(true);
     setIsError(false);
     setCurrentStep('router');
@@ -359,9 +425,6 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
           messages: [...prev.messages, assistantMessage],
         };
       });
-
-      setIsLoading(false);
-      setCurrentStep('router');
       streamingMessageIdRef.current = null;
     },
     [],
@@ -408,8 +471,9 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       streamInFlightRef.current = false;
       return;
     }
+    canReplacePlaceholderRef.current = true;
 
-    const targetSessionId = resolvedSessionId;
+    const targetSessionId = resolvedSessionIdRef.current;
 
     if (hasResultEventRef.current) {
       if (targetSessionId) {
@@ -431,7 +495,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     setCurrentStep('router');
     streamingMessageIdRef.current = null;
     streamInFlightRef.current = false;
-  }, [isStopped, refreshRecentChatsNow, resolvedSessionId, syncChatDataFromServer]);
+  }, [isStopped, refreshRecentChatsNow, syncChatDataFromServer]);
 
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
@@ -649,7 +713,6 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
 
     queueMicrotask(() => {
       ensureInitialUserMessage(effectiveInitialQuery);
-      setIsLoading(true);
     });
   }, [chatData, effectiveInitialQuery, ensureInitialUserMessage]);
 
@@ -658,16 +721,21 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     if (!chatData) return;
     if (isLoading) return;
     if (streamInFlightRef.current) return;
+    if (hasAttemptedInitialStreamRef.current) return;
 
     const hasAssistantContent = chatData.messages.some(
       (message) => message.role === 'assistant' && Boolean(message.content?.trim()),
     );
     if (hasAssistantContent) {
+      hasAttemptedInitialStreamRef.current = true;
+      clearInitialQueryParam();
       return;
     }
 
     const runStream = async () => {
       ensureInitialUserMessage(effectiveInitialQuery);
+      hasAttemptedInitialStreamRef.current = true;
+      clearInitialQueryParam();
       beginAnswerLoading();
 
       try {
@@ -692,6 +760,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     effectiveInitialQuery,
     ensureInitialUserMessage,
     finalizeAfterStreamClose,
+    clearInitialQueryParam,
     handleAbortError,
     handleStreamEvent,
     isLoading,
