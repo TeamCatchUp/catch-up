@@ -8,8 +8,6 @@
 import { RefObject, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { setToSessionStorage } from '@/shared/hooks/useSessionStorage';
-
 interface UseSearchInputOptions {
   inputRef: RefObject<HTMLTextAreaElement | null>;
 }
@@ -34,9 +32,7 @@ export const useSearchInput = ({ inputRef }: UseSearchInputOptions): UseSearchIn
     const trimmed = value.trim();
     if (!trimmed) return;
 
-    const newSessionId = crypto.randomUUID();
-    setToSessionStorage(`pending_chat_query_${newSessionId}`, trimmed);
-    router.push(`/chat/${newSessionId}?q=${encodeURIComponent(trimmed)}`);
+    router.push(`/chat/new?q=${encodeURIComponent(trimmed)}`);
   }, [value, router]);
 
   // Textarea 자동 높이 조절
