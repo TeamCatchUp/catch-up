@@ -110,8 +110,12 @@ export default function RagAnswerPage() {
         />
       </div>
 
-      {/* 사이드바 */}
-      <RagSidebar currentQA={qaPairs[activePairIndex]} isLoading={chat.isLoading} isError={chat.isError} />
+      {/* 사이드바 — 스트리밍 중에는 마지막 QA pair(스트리밍 대상)에 고정 */}
+      <RagSidebar
+        currentQA={qaPairs[chat.isLoading ? qaPairs.length - 1 : activePairIndex]}
+        isLoading={chat.isLoading}
+        isError={chat.isError}
+      />
     </div>
   );
 }
