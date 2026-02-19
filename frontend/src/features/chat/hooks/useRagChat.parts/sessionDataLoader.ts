@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 
 import type { ChatData, Message, SourceResponse } from '@/features/chat/types';
-import { normalizeSources } from '@/features/chat/utils/normalize/normalizeRagSources';
+import { normalizeHistorySources } from '@/features/chat/utils/normalize/normalizeRagSources';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import type { ChatHistoryMessageResponse } from '@/shared/types/query/api';
 
@@ -47,7 +47,7 @@ const toUiMessage = (item: ChatHistoryMessageResponse): Message => {
     id: `history_${item.id}`,
     role: 'assistant',
     content: item.content ?? '',
-    sources: normalizeSources(rawSources),
+    sources: normalizeHistorySources(rawSources),
     detailed_tasks: [],
     timestamp,
     chat_history_id: item.chat_history_id ? String(item.chat_history_id) : String(item.id),

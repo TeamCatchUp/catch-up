@@ -6,7 +6,7 @@ import {
   updateStreamingSources,
 } from '@/features/chat/hooks/useRagChat.parts/streamMessageUpdater';
 import type { SourceResponse, StreamEvent } from '@/features/chat/types';
-import { normalizeSources } from '@/features/chat/utils/normalize/normalizeRagSources';
+import { normalizeStreamSources } from '@/features/chat/utils/normalize/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/features/chat/utils/normalize/normalizeRelatedJiraIssues';
 
 import type { ChatStateSetters, SessionGuardRefs, StreamRuntimeRefs } from './types';
@@ -155,7 +155,7 @@ export const useStreamProcessing = ({
       setChatData((prev) => {
         if (!prev) return prev;
 
-        const uiSources = normalizeSources(sources);
+        const uiSources = normalizeStreamSources(sources);
         const detailedTasks = normalizeRelatedJiraIssues(relatedJiraIssues);
         latestSourcesRef.current = sources;
         latestUiSourcesRef.current = uiSources;
@@ -236,7 +236,7 @@ export const useStreamProcessing = ({
   const applyStreamingSources = useCallback(
     (sources: SourceResponse[] = []) => {
       latestSourcesRef.current = sources;
-      latestUiSourcesRef.current = normalizeSources(sources);
+      latestUiSourcesRef.current = normalizeStreamSources(sources);
 
       setChatData((prev) => {
         if (!prev) return prev;
