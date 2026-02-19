@@ -74,7 +74,7 @@ export default function RagAnswerPage() {
                     {/* 답변 영역 */}
                     <RagAnswer
                       currentQA={qaPair}
-                      sessionId={sessionId}
+                      sessionId={chat.resolvedSessionId ?? sessionId}
                       isLoading={chat.isLoading && isLastPair}
                       isError={chat.isError && isLastPair}
                       currentStep={chat.currentStep}
@@ -88,7 +88,7 @@ export default function RagAnswerPage() {
                 <div className="flex flex-col gap-6" style={{ minHeight: scrollContainerHeight }}>
                   <RagAnswer
                     currentQA={undefined}
-                    sessionId={sessionId}
+                    sessionId={chat.resolvedSessionId ?? sessionId}
                     isLoading={chat.isLoading}
                     isError={chat.isError}
                     currentStep={chat.currentStep}

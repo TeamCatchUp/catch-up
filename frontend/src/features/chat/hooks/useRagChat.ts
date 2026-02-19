@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 
 import { getStorageKeys, NODE_TO_UI_STEP } from '@/features/chat/constants/config';
 import { buildInitialChatData, loadSavedChat } from '@/features/chat/hooks/useRagChat.parts/chatStorage';
@@ -42,6 +43,7 @@ interface UseRagChatOptions {
  */
 interface UseRagChatReturn {
   chatData: ChatData | null;
+  resolvedSessionId: string | undefined;
   isLoading: boolean;
   isError: boolean;
   currentStep: RagUIStepKey;
@@ -62,10 +64,16 @@ interface UseRagChatReturn {
  * - 스트림 중단 및 재개
  */
 export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions): UseRagChatReturn => {
+  const router = useRouter();
   const storageKeys = getStorageKeys(sessionId);
   const effectiveInitialQuery = getEffectiveInitialQuery(initialQuery, sessionId);
   const { streamChat, abortStream, markStopped, resetStopped, isStopped } = useRagStream();
   const queryClient = useQueryClient();
+  const isPlaceholderSession = sessionId === 'new';
+  const [provisionalSessionId, setProvisionalSessionId] = useState<string | undefined>();
+  const resolvedSessionId = isPlaceholderSession ? provisionalSessionId : sessionId;
+  const sessionSyncGuardRef = useRef<{ from: string; to: string } | null>(null);
+  const pendingReplaceSessionIdRef = useRef<string | null>(null);
 
   const [chatData, setChatData] = useState<ChatData | null>(() =>
     buildInitialChatData(sessionId, repo, effectiveInitialQuery, storageKeys.chat),
@@ -99,8 +107,42 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     latestUiSourcesRef.current = [];
   }, []);
 
+  const resolveSessionIdFromStream = useCallback(
+    (streamSessionId?: string) => {
+      if (!streamSessionId) return;
+      if (resolvedSessionId === streamSessionId) return;
+
+      setProvisionalSessionId(streamSessionId);
+
+      if (!isPlaceholderSession) return;
+      if (pendingReplaceSessionIdRef.current === streamSessionId) return;
+
+      sessionSyncGuardRef.current = { from: sessionId, to: streamSessionId };
+      pendingReplaceSessionIdRef.current = streamSessionId;
+
+      const nextUrl = (() => {
+        if (typeof window === 'undefined') return `/chat/${streamSessionId}`;
+        const params = new URLSearchParams(window.location.search);
+        const queryString = params.toString();
+        return queryString ? `/chat/${streamSessionId}?${queryString}` : `/chat/${streamSessionId}`;
+      })();
+
+      router.replace(nextUrl);
+    },
+    [isPlaceholderSession, resolvedSessionId, router, sessionId],
+  );
+
   useEffect(() => {
     if (syncedSessionRef.current === sessionId) return;
+
+    const guard = sessionSyncGuardRef.current;
+    if (guard && guard.from === syncedSessionRef.current && guard.to === sessionId) {
+      syncedSessionRef.current = sessionId;
+      sessionSyncGuardRef.current = null;
+      pendingReplaceSessionIdRef.current = null;
+      return;
+    }
+
     syncedSessionRef.current = sessionId;
 
     streamInFlightRef.current = false;
@@ -330,6 +372,9 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
    */
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
+      if ('session_id' in event) {
+        resolveSessionIdFromStream(event.session_id);
+      }
       if (isStopped()) return;
 
       switch (event.type) {
@@ -391,6 +436,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       applyStreamingSources,
       isStopped,
       refreshRecentChatsNow,
+      resolveSessionIdFromStream,
     ],
   );
 
@@ -416,7 +462,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       beginAnswerLoading();
 
       try {
-        await streamChat(message, sessionId, handleStreamEvent);
+        await streamChat(message, resolvedSessionId, handleStreamEvent);
         finalizeAfterStreamClose();
       } catch (err) {
         if ((err as Error).name === 'AbortError') {
@@ -437,7 +483,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       handleAbortError,
       isLoading,
       refreshRecentChatsNow,
-      sessionId,
+      resolvedSessionId,
       storageKeys.chat,
       streamChat,
     ],
@@ -470,12 +516,14 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       try {
         // 마지막 턴 soft-delete (실패해도 스트림 진행)
         try {
-          await chatService.resetLastTurn(sessionId);
+          if (resolvedSessionId) {
+            await chatService.resetLastTurn(resolvedSessionId);
+          }
         } catch (resetErr) {
           console.warn('[useRagChat] resetLastTurn failed, proceeding with stream:', resetErr);
         }
 
-        await streamChat(newContent, sessionId, handleStreamEvent);
+        await streamChat(newContent, resolvedSessionId, handleStreamEvent);
         finalizeAfterStreamClose();
       } catch (err) {
         if ((err as Error).name === 'AbortError') {
@@ -494,7 +542,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       finalizeAfterStreamClose,
       handleAbortError,
       handleStreamEvent,
-      sessionId,
+      resolvedSessionId,
       storageKeys.chat,
       streamChat,
     ],
@@ -574,7 +622,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       clearPendingInitialQuery(sessionId);
 
       try {
-        await streamChat(effectiveInitialQuery, sessionId, handleStreamEvent);
+        await streamChat(effectiveInitialQuery, resolvedSessionId, handleStreamEvent);
         finalizeAfterStreamClose();
       } catch (err) {
         if ((err as Error).name === 'AbortError') {
@@ -599,11 +647,13 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     chatData,
     isLoading,
     sessionId,
+    resolvedSessionId,
     streamChat,
   ]);
 
   return {
     chatData,
+    resolvedSessionId,
     isLoading,
     isError,
     currentStep,
