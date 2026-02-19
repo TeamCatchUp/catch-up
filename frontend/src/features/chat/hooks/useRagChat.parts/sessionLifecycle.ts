@@ -14,6 +14,7 @@ interface UseSessionLifecycleParams {
   sessionId: string;
   isPlaceholderSession: boolean;
   isLoading: boolean;
+  chatData: ChatData | null;
   provisionalSessionId: string | undefined;
   setProvisionalSessionId: Dispatch<SetStateAction<string | undefined>>;
   resolvedSessionId: string | undefined;
@@ -53,6 +54,7 @@ export const useSessionLifecycle = ({
   sessionId,
   isPlaceholderSession,
   isLoading,
+  chatData,
   provisionalSessionId,
   setProvisionalSessionId,
   resolvedSessionId,
@@ -110,7 +112,13 @@ export const useSessionLifecycle = ({
    */
   useEffect(() => {
     const previousSessionId = syncedSessionRef.current;
-    if (previousSessionId === sessionId) return;
+    if (previousSessionId === sessionId) {
+      // Dev StrictMode에서는 mount effect가 "실행 -> cleanup -> 재실행"된다.
+      // 첫 실행에서 hydrate가 cleanup으로 취소되면, 같은 sessionId라도 1회 재시도해야 로딩 고착을 막을 수 있다.
+      // 따라서 "아직 hydrate 결과가 없는 상태(chatData=null && isLoading=true)"일 때만 계속 진행한다.
+      const needsStrictModeHydrationRetry = chatData === null && isLoading;
+      if (!needsStrictModeHydrationRetry) return;
+    }
 
     // replace 직후 "한 번만 허용"해야 하는 경로 전환은 guard로 통과시킨다.
     const guard = sessionSyncGuardRef.current;
@@ -191,9 +199,11 @@ export const useSessionLifecycle = ({
     abortStream,
     buildEmptyChatData,
     canReplacePlaceholderRef,
+    chatData,
     effectiveInitialQuery,
     hasAttemptedInitialStreamRef,
     hasPlaceholderReplacedRef,
+    isLoading,
     loadSessionChatDataWithContext,
     pendingReplaceSessionIdRef,
     queryClient,

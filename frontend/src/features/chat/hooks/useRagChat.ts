@@ -110,6 +110,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     sessionId,
     isPlaceholderSession,
     isLoading,
+    chatData,
     provisionalSessionId,
     setProvisionalSessionId,
     resolvedSessionId,
