@@ -268,25 +268,29 @@ export const useStreamProcessing = ({
     const targetSessionId = resolvedSessionIdRef.current;
 
     if (hasResultEventRef.current) {
-      if (targetSessionId) {
-        await syncChatDataFromServer(targetSessionId);
-      }
+      // 로딩 해제를 먼저 수행 → 소스 즉시 표시
       streamingMessageIdRef.current = null;
       setIsLoading(false);
       setCurrentStep('router');
       streamInFlightRef.current = false;
+
+      // 서버 동기화는 백그라운드 (chat_history_id 등 보정용)
+      if (targetSessionId) {
+        syncChatDataFromServer(targetSessionId);
+      }
       return;
     }
 
-    if (hasStreamedTokenRef.current && targetSessionId) {
-      await syncChatDataFromServer(targetSessionId);
-      refreshRecentChatsNow();
-    }
-
+    // result 이벤트 없이 토큰만 온 경우 (백엔드 비정상 종료)
     setIsLoading(false);
     setCurrentStep('router');
     streamingMessageIdRef.current = null;
     streamInFlightRef.current = false;
+
+    if (hasStreamedTokenRef.current && targetSessionId) {
+      syncChatDataFromServer(targetSessionId);
+      refreshRecentChatsNow();
+    }
   }, [
     canReplacePlaceholderRef,
     hasResultEventRef,

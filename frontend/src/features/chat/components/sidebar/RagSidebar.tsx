@@ -85,9 +85,11 @@ const RagSidebar = ({ currentQA, isLoading, isError }: RagSidebarProps) => {
   }, []);
 
   const transitionKey = displayQA?.question.id ?? 'empty';
-  const sources = displayQA?.answer?.sources ?? [];
+  // 같은 QA pair → currentQA(최신 데이터), 전환 중 → displayQA(이전 pair 유지)
+  const effectiveQA = displayQA?.question.id === currentQA?.question.id ? currentQA : displayQA;
+  const sources = effectiveQA?.answer?.sources ?? [];
   const sourceCount = sources.filter((source) => source.is_cited).length;
-  const answerContent = displayQA?.answer?.content ?? '';
+  const answerContent = effectiveQA?.answer?.content ?? '';
 
   const transitionClass = prefersReducedMotion
     ? ''
