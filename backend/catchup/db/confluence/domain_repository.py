@@ -4,7 +4,7 @@ from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 
-from catchup.db.models import ConfluenceSpace, ConfluenceUser, ConfluenceSpaceMember
+from catchup.db.models import ConfluenceSpace, ConfluenceUser
 
 def upsert_spaces_bulk(db:Session, spaces: list[dict]) -> int:
     if not spaces:
@@ -121,50 +121,6 @@ def get_users_by_cloud_id(db: Session, cloud_id: str) -> list[ConfluenceUser]:
 
 def delete_users_by_cloud_id(db: Session, cloud_id: str) -> int:
     stmt = delete(ConfluenceUser).where(ConfluenceUser.cloud_id == cloud_id)
-    result = db.execute(stmt)
-    db.commit()
-    return result.rowcount
-
-
-# ------------------------------------------------------------
-# Confluence Space Members
-# ------------------------------------------------------------
-
-def upsert_space_members_bulk(db: Session, members: list[dict]) -> int:
-    if not members:
-        return 0
-
-    now = datetime.now(timezone.utc)
-    for member in members:
-        member["synced_at"] = now
-
-    stmt = insert(ConfluenceSpaceMember).values(members)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["cloud_id", "space_id", "account_id", "role_id"],
-        set_={
-            "role_key": stmt.excluded.role_key,
-            "role_name": stmt.excluded.role_name,
-            "principal_type": stmt.excluded.principal_type,
-            "synced_at": stmt.excluded.synced_at,
-        },
-    )
-    db.execute(stmt)
-    db.commit()
-    return len(members)
-
-
-def delete_space_members_by_cloud_id(db: Session, cloud_id: str) -> int:
-    stmt = delete(ConfluenceSpaceMember).where(ConfluenceSpaceMember.cloud_id == cloud_id)
-    result = db.execute(stmt)
-    db.commit()
-    return result.rowcount
-
-
-def delete_space_members_by_space(db: Session, cloud_id: str, space_id: str) -> int:
-    stmt = delete(ConfluenceSpaceMember).where(
-        ConfluenceSpaceMember.cloud_id == cloud_id,
-        ConfluenceSpaceMember.space_id == space_id,
-    )
     result = db.execute(stmt)
     db.commit()
     return result.rowcount
