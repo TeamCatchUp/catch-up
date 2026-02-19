@@ -2,12 +2,18 @@ import { queryOptions } from '@tanstack/react-query';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
-import type { ChatroomsResponse, RecentQueriesResponse, SessionQueriesResponse } from '@/shared/types/query/api';
+import type {
+  ChatroomsResponse,
+  RecentQueriesResponse,
+  SessionMessagesResponse,
+  SessionQueriesResponse,
+} from '@/shared/types/query/api';
 
 export const chatQueries = {
   all: () => ['chatrooms'] as const,
   lists: () => [...chatQueries.all(), 'list'] as const,
   sessions: () => [...chatQueries.all(), 'session'] as const,
+  messages: () => [...chatQueries.all(), 'messages'] as const,
 
   recentRooms: () =>
     queryOptions({
@@ -35,5 +41,17 @@ export const chatQueries = {
         return res.data;
       },
       enabled: !!id,
+    }),
+
+  sessionMessages: (id: string, page = 1, size = 50) =>
+    queryOptions({
+      queryKey: [...chatQueries.messages(), id, page, size] as const,
+      queryFn: async (): Promise<SessionMessagesResponse> => {
+        const res = await api.get<SessionMessagesResponse>(API.chatrooms.messages(id), {
+          params: { page, size },
+        });
+        return res.data;
+      },
+      enabled: !!id && id !== 'new',
     }),
 };
