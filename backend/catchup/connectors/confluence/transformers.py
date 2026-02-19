@@ -251,50 +251,44 @@ class ConfluenceTransformer:
             chunks: list[Chunk],
             inline_comments: list[ConfluenceCommentResponse],
     ) -> list[ConfluenceCommentResponse]:
-        """
-        Inline Comment를 selection 텍스트 매칭으로 해당 Chunk에 삽입
-
-        매칭 성공: 해당 chunk.content에 자연어 형식으로 삽입
-        매칭 실패: unmatched 리스트로 반환 → Discussion Chunk에 배치
-
-        [임베딩 최적화]
-        메타데이터 형식(`[OPEN] [2024-01-15 user_abc]`)이 아닌
-        자연어 형식(`A user commented:`)을 사용하여
-        의미적 유사도 검색 시 노이즈를 줄인다.
-        날짜, 상태, 작성자 등은 contextual_content에서 활용.
-
-        Returns:
-            매칭 실패한 Inline Comment 리스트
-        """
+        
         unmatched: list[ConfluenceCommentResponse] = []
 
         if not chunks:
             return inline_comments
-
+        
+        ref_to_chunk: dict[str, Chunk] = {}
+        for chunk in chunks:
+            for ref in chunk.inline_comment_refs:
+                ref_to_chunk[ref] = chunk
+        
         for comment in inline_comments:
             comment_text = self._extract_comment_text(comment)
             if not comment_text:
                 continue
 
-            formatted = f"A user commented: {comment_text}"
+            formatted = f"(Comment : {comment_text})"
+            
+            # 1) marker-ref 기반 Injection
+            marker_ref = self._extract_inline_marker_ref(comment)
+            target_chunk = ref_to_chunk.get(marker_ref) if marker_ref else None
 
-            selection = self._extract_inline_selection(comment)
-            target_chunk = None
-
-            if selection:
-                for chunk in chunks:
-                    if selection in chunk.content:
-                        target_chunk = chunk
-                        break
-
+            # 2) selection 텍스트 매칭
+            if target_chunk is None:
+                selection = self._extract_inline_selection(comment)
+                if selection:
+                    for chunk in chunks:
+                        if selection in chunk.content:
+                            target_chunk = chunk
+                            break
+                        
             if target_chunk is not None:
-                # 매칭 성공 → 해당 chunk에 삽입
                 target_chunk.content = f"{target_chunk.content}\n{formatted}"
             else:
-                # 매칭 실패 → Discussion Chunk로 전달
                 unmatched.append(comment)
 
         return unmatched
+
 
     def _build_discussion_chunk(
         self,
@@ -409,6 +403,22 @@ class ConfluenceTransformer:
             if isinstance(value, str):
                 return value.strip() if value.strip() else None
 
+        return None
+    
+    def _extract_inline_marker_ref(
+            self, comment: ConfluenceCommentResponse
+    ) -> str | None:
+        
+        if not comment.properties:
+            return None
+        
+        ref = comment.properties.get("inline-marker-ref")
+        if isinstance(ref, str):
+            return ref.strip() or None
+        if isinstance(ref, dict):
+            value = ref.get("value")
+            if isinstance(value, str):
+                return value.strip() or None
         return None
 
     # ================================================================

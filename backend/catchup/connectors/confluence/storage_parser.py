@@ -34,6 +34,7 @@ class ContentBlock:
     panel_type: str | None = None   # Panel 전용
     image_filename: str | None = None
     image_media_type: str | None = None
+    inline_comment_refs: list[str] = field(default_factory=list)
 
 @dataclass
 class Section:
@@ -176,6 +177,7 @@ class ConfluenceStorageParser:
         """
         blocks: list[ContentBlock] = []
         text_parts: list[str] = []  # 현재까지 모은 인라인 텍스트 조각들
+        collected_refs: list[str] = []
 
         for child in element.children:
             if isinstance(child, NavigableString):
@@ -187,13 +189,23 @@ class ConfluenceStorageParser:
                     if text_parts:
                         text = "".join(text_parts).strip()
                         if text:
-                            blocks.append(ContentBlock(block_type="text", text=text))
+                            blocks.append(ContentBlock(
+                                block_type="text", text=text,
+                                inline_comment_refs = collected_refs,
+                            ))
                         text_parts = []
+                        collected_refs = []
                     # 이미지는 별도 블록으로 분리
                     blocks.append(self._parse_image(child))
 
                 elif child.name == "ac:emoticon":
                     pass  # 이모티콘 무시
+
+                elif child.name == "ac:inline-comment-marker":
+                    ref = child.get("ac:ref")
+                    if ref:
+                        collected_refs.append(ref)
+                    text_parts.append(self._extract_inline_text(child, collected_refs))
 
                 elif child.name == "ac:link":
                     text_parts.append(self._extract_ac_link_text(child))
@@ -206,19 +218,26 @@ class ConfluenceStorageParser:
                     if text_parts:
                         text = "".join(text_parts).strip()
                         if text:
-                            blocks.append(ContentBlock(block_type="text", text=text))
+                            blocks.append(ContentBlock(
+                                block_type="text", text=text,
+                                inline_comment_refs=collected_refs,
+                            ))
                         text_parts = []
+                        collected_refs = []
                     blocks.extend(self._parse_macro(child))
 
                 else:
                     # <strong>, <em>, <span> 등 인라인 서식 태그
-                    text_parts.append(self._extract_inline_text(child))
+                    text_parts.append(self._extract_inline_text(child, collected_refs))
 
         # 남은 텍스트 처리
         if text_parts:
             text = "".join(text_parts).strip()
             if text:
-                blocks.append(ContentBlock(block_type="text", text=text))
+                blocks.append(ContentBlock(
+                    block_type="text", text=text,
+                    inline_comment_refs=collected_refs,
+                ))
 
         return blocks
 
@@ -527,20 +546,20 @@ class ConfluenceStorageParser:
     # 인라인 텍스트 추출 헬퍼
     # ================================================================
 
-    def _extract_inline_text(self, element: Tag) -> str:
-        """
-        인라인 서식 요소에서 텍스트 추출
-
-        <strong>굵은 텍스트</strong>, <em>기울임</em>, <span>텍스트</span> 등
-        서식 태그 내부의 텍스트를 재귀적으로 추출한다.
-        (Markdown 서식 변환은 하지 않음 - 임베딩에 불필요)
-        """
+    def _extract_inline_text(
+        self, element: Tag, refs_out: list[str] | None = None,
+    ) -> str:
         parts: list[str] = []
         for child in element.children:
             if isinstance(child, NavigableString):
                 parts.append(str(child))
             elif isinstance(child, Tag):
-                if child.name == "a":
+                if child.name == "ac:inline-comment-marker":
+                    ref = child.get("ac:ref")
+                    if ref and refs_out is not None:
+                        refs_out.append(ref)
+                    parts.append(child.get_text())
+                elif child.name == "a":
                     parts.append(self._extract_link_text(child))
                 elif child.name == "ac:link":
                     parts.append(self._extract_ac_link_text(child))
@@ -550,7 +569,7 @@ class ConfluenceStorageParser:
                         fn = attachment.get("ri:filename", "")
                         parts.append(f"[이미지: {fn}]")
                 else:
-                    parts.append(child.get_text())
+                    parts.append(self._extract_inline_text(child, refs_out))
         return "".join(parts)
 
     def _extract_link_text(self, element: Tag) -> str:

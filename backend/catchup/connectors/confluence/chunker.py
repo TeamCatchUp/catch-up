@@ -63,6 +63,7 @@ class Chunk:
     char_count: int
     estimated_tokens: int
     image_blocks: list[ContentBlock] = field(default_factory=list)
+    inline_comment_refs: list[str] = field(default_factory=list)
 
 
 class ConfluenceChunker:
@@ -586,6 +587,7 @@ class ConfluenceChunker:
             # ContentBlock 텍스트를 합침
             body_parts: list[str] = []
             image_blocks: list[ContentBlock] = []
+            comment_refs: list[str] = []
 
             for block in leaf.content_blocks:
                 if block.text:
@@ -593,6 +595,8 @@ class ConfluenceChunker:
                 # 이미지 블록은 별도 추적 (transformers.py에서 base64 변환에 사용)
                 if block.block_type == "image":
                     image_blocks.append(block)
+                if block.inline_comment_refs:
+                    comment_refs.extend(block.inline_comment_refs)
 
             body = "\n\n".join(body_parts)
 
@@ -607,6 +611,7 @@ class ConfluenceChunker:
                 char_count=len(content),
                 estimated_tokens=len(content) // 4,
                 image_blocks=image_blocks,
+                inline_comment_refs=comment_refs,
             ))
 
         return chunks
