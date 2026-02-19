@@ -24,68 +24,128 @@ interface UseRagScrollReturn {
   activePairIndex: number;
 }
 
+const OBSERVER_THRESHOLDS = [0, 0.15, 0.3, 0.5, 0.7, 1.0];
+const HYSTERESIS_PX = 48;
+const MIN_ACTIVE_RATIO = 0.15;
+
 export const useRagScroll = ({ messages }: UseRagScrollOptions): UseRagScrollReturn => {
   const qaPairs = useMemo(() => extractQAPairs(messages), [messages]);
   const qaRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const intersectingEntriesRef = useRef<Map<number, IntersectionObserverEntry>>(new Map());
+  const activePairIndexRef = useRef(0);
+
   const [scrollContainerHeight, setScrollContainerHeight] = useState(0);
   const [activePairIndex, setActivePairIndex] = useState(0);
+  const [observerSeed, setObserverSeed] = useState(0);
+
   const pendingScrollRef = useRef(false);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const clampedActivePairIndex = qaPairs.length === 0 ? 0 : Math.min(activePairIndex, qaPairs.length - 1);
 
-  // 스크롤 컨테이너 높이 측정 (callback ref)
+  useEffect(() => {
+    activePairIndexRef.current = clampedActivePairIndex;
+  }, [clampedActivePairIndex]);
+
   const scrollContainerCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    scrollContainerRef.current = node;
+    setObserverSeed((prev) => prev + 1);
+
     if (resizeObserverRef.current) {
       resizeObserverRef.current.disconnect();
       resizeObserverRef.current = null;
     }
-    if (node) {
-      const observer = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          setScrollContainerHeight(entry.contentRect.height);
-        }
-      });
-      observer.observe(node);
-      resizeObserverRef.current = observer;
-    }
+
+    if (!node) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setScrollContainerHeight(entry.contentRect.height);
+      }
+    });
+
+    observer.observe(node);
+    resizeObserverRef.current = observer;
   }, []);
 
-  // Intersection Observer: 뷰포트에 보이는 QA 감지 → 사이드바 연동
   useEffect(() => {
+    const root = scrollContainerRef.current;
+    if (!root) return;
+
+    const observedEntries = intersectingEntriesRef.current;
+    observedEntries.clear();
+
     const observer = new IntersectionObserver(
       (entries) => {
-        // 가장 많이 보이는(intersectionRatio 가장 큰) QA를 active로
-        let bestIdx = -1;
-        let bestRatio = 0;
-
         for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-
           const idx = Number(entry.target.getAttribute('data-qa-index'));
           if (Number.isNaN(idx)) continue;
 
-          if (entry.intersectionRatio > bestRatio) {
-            bestRatio = entry.intersectionRatio;
+          if (!entry.isIntersecting || entry.intersectionRatio < MIN_ACTIVE_RATIO) {
+            observedEntries.delete(idx);
+            continue;
+          }
+
+          observedEntries.set(idx, entry);
+        }
+
+        if (observedEntries.size === 0) return;
+
+        const rootRect = root.getBoundingClientRect();
+        const viewportCenter = rootRect.top + rootRect.height / 2;
+
+        let bestIdx = -1;
+        let bestDistance = Number.POSITIVE_INFINITY;
+
+        for (const [idx, entry] of observedEntries) {
+          const { top, height } = entry.boundingClientRect;
+          const pairCenter = top + height / 2;
+          const distance = Math.abs(pairCenter - viewportCenter);
+
+          if (distance < bestDistance) {
+            bestDistance = distance;
             bestIdx = idx;
           }
         }
 
-        if (bestIdx !== -1) {
+        if (bestIdx < 0) return;
+
+        const currentIdx = activePairIndexRef.current;
+        if (bestIdx === currentIdx) return;
+
+        const currentEntry = observedEntries.get(currentIdx);
+        let currentDistance = Number.POSITIVE_INFINITY;
+
+        if (currentEntry) {
+          const { top, height } = currentEntry.boundingClientRect;
+          const currentCenter = top + height / 2;
+          currentDistance = Math.abs(currentCenter - viewportCenter);
+        }
+
+        const shouldSwitch =
+          !Number.isFinite(currentDistance) || bestDistance + HYSTERESIS_PX < currentDistance;
+
+        if (shouldSwitch) {
           setActivePairIndex(bestIdx);
         }
       },
-      { threshold: [0, 0.3, 0.5, 0.7, 1.0] },
+      {
+        root,
+        threshold: OBSERVER_THRESHOLDS,
+      },
     );
 
-    // 현재 등록된 모든 QA ref 관찰
     const currentRefs = qaRefs.current;
     for (const [, el] of currentRefs) {
       if (el) observer.observe(el);
     }
 
-    return () => observer.disconnect();
-  }, [qaPairs.length]);
+    return () => {
+      observer.disconnect();
+      observedEntries.clear();
+    };
+  }, [observerSeed, qaPairs.length]);
 
-  // 새 메시지 추가 시 자동 스크롤
   useEffect(() => {
     if (!pendingScrollRef.current) return;
     pendingScrollRef.current = false;
@@ -107,7 +167,7 @@ export const useRagScroll = ({ messages }: UseRagScrollOptions): UseRagScrollRet
     scrollContainerCallbackRef,
     scrollContainerHeight,
     scrollToLatest,
-    activePairIndex,
+    activePairIndex: clampedActivePairIndex,
   };
 };
 
