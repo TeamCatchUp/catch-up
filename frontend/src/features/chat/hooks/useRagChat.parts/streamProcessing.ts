@@ -287,10 +287,16 @@ export const useStreamProcessing = ({
     streamingMessageIdRef.current = null;
     streamInFlightRef.current = false;
 
-    if (hasStreamedTokenRef.current && targetSessionId) {
-      syncChatDataFromServer(targetSessionId);
-      refreshRecentChatsNow();
+    if (hasStreamedTokenRef.current) {
+      if (targetSessionId) {
+        syncChatDataFromServer(targetSessionId);
+        refreshRecentChatsNow();
+      }
+      return;
     }
+
+    // status만 수신한 뒤 종료된 경우(예: 백엔드에서 예외 후 스트림 종료) 빈 화면 대신 에러를 노출한다.
+    setIsError(true);
   }, [
     canReplacePlaceholderRef,
     hasResultEventRef,
@@ -299,6 +305,7 @@ export const useStreamProcessing = ({
     refreshRecentChatsNow,
     resolvedSessionIdRef,
     setCurrentStep,
+    setIsError,
     setIsLoading,
     streamInFlightRef,
     streamingMessageIdRef,
