@@ -21,6 +21,8 @@ export interface ChatHistoryMessageResponse {
   content: string;
   created_at: string;
   sources?: unknown[];
+  chat_history_id?: string | number | null;
+  has_feedback?: boolean | null;
 }
 
 /** 최근 검색 쿼리 목록 API 응답 */

@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
+import { isValidSessionId } from '@/shared/utils/sessionId';
 
 interface SessionQuestionsModalProps {
   onClose: () => void;
@@ -15,10 +16,16 @@ interface SessionQuestionsModalProps {
 
 const SessionQuestionsModal = ({ onClose, onSelect }: SessionQuestionsModalProps) => {
   const params = useParams();
-  const sessionId = params.sessionId as string;
+  const sessionIdParam = params.sessionId;
+  const sessionId = typeof sessionIdParam === 'string' ? sessionIdParam : '';
+  // /chat/new 단계에서는 세션 질문 목록 API를 호출하지 않는다.
+  const canLoadSessionQueries = isValidSessionId(sessionId);
 
   const modalRef = useRef<HTMLDivElement>(null);
-  const { data, isLoading } = useQuery(chatQueries.sessionQueries(sessionId));
+  const { data, isLoading } = useQuery({
+    ...chatQueries.sessionQueries(sessionId),
+    enabled: canLoadSessionQueries,
+  });
 
   const allQueries = data?.items ?? [];
 

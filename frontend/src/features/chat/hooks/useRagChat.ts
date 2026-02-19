@@ -4,12 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
-import { getStorageKeys, NODE_TO_UI_STEP } from '@/features/chat/constants/config';
-import { buildInitialChatData, loadSavedChat } from '@/features/chat/hooks/useRagChat.parts/chatStorage';
-import {
-  clearPendingInitialQuery,
-  getEffectiveInitialQuery,
-} from '@/features/chat/hooks/useRagChat.parts/pendingQuery';
+import { NODE_TO_UI_STEP } from '@/features/chat/constants/config';
 import { refreshRecentChats } from '@/features/chat/hooks/useRagChat.parts/refreshRecentChats';
 import {
   appendStreamingToken,
@@ -27,20 +22,18 @@ import type {
 } from '@/features/chat/types';
 import { normalizeSources } from '@/features/chat/utils/normalize/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/features/chat/utils/normalize/normalizeRelatedJiraIssues';
-import { setToLocalStorage } from '@/shared/hooks/useLocalStorage';
+import { chatQueries } from '@/shared/queries/chatroom.queries';
+import type { ChatHistoryMessageResponse } from '@/shared/types/query/api';
+import { isValidSessionId } from '@/shared/utils/sessionId';
 
-/**
- * RAG 채팅 훅 옵션
- */
+const MESSAGE_PAGE_SIZE = 50;
+
 interface UseRagChatOptions {
   sessionId: string;
   repo: string | null;
   initialQuery: string | null;
 }
 
-/**
- * RAG 채팅 훅 반환 타입
- */
 interface UseRagChatReturn {
   chatData: ChatData | null;
   resolvedSessionId: string | undefined;
@@ -54,50 +47,40 @@ interface UseRagChatReturn {
   updateMessageFeedback: (messageId: string) => void;
 }
 
-/**
- * RAG 채팅 통합 관리 훅
- *
- * 채팅 세션의 전체 lifecycle을 관리하는 중앙 훅
- * - SSE 스트림 연결 및 이벤트 처리
- * - 메시지 상태 관리 (user/assistant)
- * - localStorage 기반 세션 영속화
- * - 스트림 중단 및 재개
- */
+const toComparableTimestamp = (iso: string) => {
+  const parsed = new Date(iso).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions): UseRagChatReturn => {
   const router = useRouter();
-  const storageKeys = getStorageKeys(sessionId);
-  const effectiveInitialQuery = getEffectiveInitialQuery(initialQuery, sessionId);
   const { streamChat, abortStream, markStopped, resetStopped, isStopped } = useRagStream();
   const queryClient = useQueryClient();
+
+  const effectiveInitialQuery = initialQuery?.trim() ? initialQuery.trim() : null;
   const isPlaceholderSession = sessionId === 'new';
   const [provisionalSessionId, setProvisionalSessionId] = useState<string | undefined>();
   const resolvedSessionId = isPlaceholderSession ? provisionalSessionId : sessionId;
+
+  const [chatData, setChatData] = useState<ChatData | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(isValidSessionId(sessionId));
+  const [isError, setIsError] = useState(false);
+  const [currentStep, setCurrentStep] = useState<RagUIStepKey>('router');
+
+  const syncedSessionRef = useRef<string | null>(null);
   const sessionSyncGuardRef = useRef<{ from: string; to: string } | null>(null);
   const pendingReplaceSessionIdRef = useRef<string | null>(null);
 
-  const [chatData, setChatData] = useState<ChatData | null>(() =>
-    buildInitialChatData(sessionId, repo, effectiveInitialQuery, storageKeys.chat),
-  );
-  const [isLoading, setIsLoading] = useState<boolean>(
-    () => !loadSavedChat(storageKeys.chat) && !!effectiveInitialQuery,
-  );
-  const [isError, setIsError] = useState(false);
-  const [currentStep, setCurrentStep] = useState<RagUIStepKey>('router');
-  const syncedSessionRef = useRef(sessionId);
-
-  const refreshRecentChatsNow = useCallback(() => {
-    refreshRecentChats(queryClient);
-  }, [queryClient]);
-
-  /**
-   * 스트림 진행 상태 추적 ref들
-   */
   const streamingMessageIdRef = useRef<string | null>(null);
   const hasStreamedTokenRef = useRef(false);
   const hasResultEventRef = useRef(false);
   const latestSourcesRef = useRef<SourceResponse[]>([]);
   const latestUiSourcesRef = useRef<ChatSource[]>([]);
   const streamInFlightRef = useRef(false);
+
+  const refreshRecentChatsNow = useCallback(() => {
+    refreshRecentChats(queryClient);
+  }, [queryClient]);
 
   const resetStreamStateRefs = useCallback(() => {
     streamingMessageIdRef.current = null;
@@ -106,6 +89,95 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     latestSourcesRef.current = [];
     latestUiSourcesRef.current = [];
   }, []);
+
+  const buildEmptyChatData = useCallback(
+    (targetSessionId: string): ChatData => ({
+      session_id: targetSessionId,
+      title: effectiveInitialQuery ?? '',
+      repo: repo ?? '',
+      messages: [],
+    }),
+    [effectiveInitialQuery, repo],
+  );
+
+  const toUiMessage = useCallback((item: ChatHistoryMessageResponse): Message => {
+    const timestamp = item.created_at || new Date().toISOString();
+
+    if (item.sender_type === 'human') {
+      return {
+        id: `history_${item.id}`,
+        role: 'user',
+        content: item.content ?? '',
+        timestamp,
+      };
+    }
+
+    const rawSources = Array.isArray(item.sources) ? (item.sources as SourceResponse[]) : [];
+
+    return {
+      id: `history_${item.id}`,
+      role: 'assistant',
+      content: item.content ?? '',
+      sources: normalizeSources(rawSources),
+      detailed_tasks: [],
+      timestamp,
+      chat_history_id: item.chat_history_id ? String(item.chat_history_id) : String(item.id),
+      has_feedback: Boolean(item.has_feedback),
+    };
+  }, []);
+
+  const loadSessionChatData = useCallback(
+    async (targetSessionId: string): Promise<ChatData> => {
+      let page = 1;
+      let title = '';
+      let total = 0;
+      const allItems: ChatHistoryMessageResponse[] = [];
+
+      while (true) {
+        const response = await queryClient.fetchQuery(
+          chatQueries.sessionMessages(targetSessionId, page, MESSAGE_PAGE_SIZE),
+        );
+
+        title = response.title || title;
+        total = response.total;
+        allItems.push(...response.items);
+
+        if (allItems.length >= total || response.items.length === 0) {
+          break;
+        }
+
+        page += 1;
+      }
+
+      const sortedMessages = [...allItems].sort((a, b) => {
+        const byCreatedAt = toComparableTimestamp(a.created_at) - toComparableTimestamp(b.created_at);
+        if (byCreatedAt !== 0) return byCreatedAt;
+        return a.id - b.id;
+      });
+
+      return {
+        session_id: targetSessionId,
+        title: title || effectiveInitialQuery || '',
+        repo: repo ?? '',
+        messages: sortedMessages.map(toUiMessage),
+      };
+    },
+    [effectiveInitialQuery, queryClient, repo, toUiMessage],
+  );
+
+  const syncChatDataFromServer = useCallback(
+    async (targetSessionId: string) => {
+      if (!isValidSessionId(targetSessionId)) return;
+
+      try {
+        const nextData = await loadSessionChatData(targetSessionId);
+        setChatData(nextData);
+      } catch (err) {
+        console.error('[useRagChat] syncChatDataFromServer error:', err);
+      }
+    },
+    [loadSessionChatData],
+  );
 
   const resolveSessionIdFromStream = useCallback(
     (streamSessionId?: string) => {
@@ -133,10 +205,11 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
   );
 
   useEffect(() => {
-    if (syncedSessionRef.current === sessionId) return;
+    const previousSessionId = syncedSessionRef.current;
+    if (previousSessionId === sessionId) return;
 
     const guard = sessionSyncGuardRef.current;
-    if (guard && guard.from === syncedSessionRef.current && guard.to === sessionId) {
+    if (guard && guard.from === previousSessionId && guard.to === sessionId) {
       syncedSessionRef.current = sessionId;
       sessionSyncGuardRef.current = null;
       pendingReplaceSessionIdRef.current = null;
@@ -149,15 +222,43 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     resetStreamStateRefs();
     abortStream();
 
-    const nextData = buildInitialChatData(sessionId, repo, effectiveInitialQuery, storageKeys.chat);
-    const hasSaved = !!loadSavedChat(storageKeys.chat);
-    queueMicrotask(() => {
-      setIsError(false);
-      setCurrentStep('router');
-      setChatData(nextData);
-      setIsLoading(!hasSaved && !!effectiveInitialQuery);
-    });
-  }, [abortStream, effectiveInitialQuery, repo, resetStreamStateRefs, sessionId, storageKeys.chat]);
+    setIsError(false);
+    setCurrentStep('router');
+
+    if (!isValidSessionId(sessionId)) {
+      setChatData(buildEmptyChatData(sessionId));
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const hydrateSession = async () => {
+      setIsLoading(true);
+      setChatData(null);
+
+      try {
+        const nextData = await loadSessionChatData(sessionId);
+        if (cancelled) return;
+        setChatData(nextData);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('[useRagChat] loadSessionChatData error:', err);
+        setIsError(true);
+        setChatData(buildEmptyChatData(sessionId));
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void hydrateSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [abortStream, buildEmptyChatData, loadSessionChatData, resetStreamStateRefs, sessionId]);
 
   const beginAnswerLoading = useCallback(() => {
     resetStopped();
@@ -168,36 +269,30 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     setCurrentStep('router');
   }, [resetStopped, resetStreamStateRefs]);
 
-  const ensureInitialUserMessage = useCallback(
-    (query: string) => {
-      const trimmed = query.trim();
-      if (!trimmed) return;
+  const ensureInitialUserMessage = useCallback((query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
 
-      setChatData((prev) => {
-        if (!prev) return prev;
+    setChatData((prev) => {
+      if (!prev) return prev;
 
-        const hasUser = prev.messages.some((message) => message.role === 'user');
-        if (hasUser) return prev;
+      const hasUser = prev.messages.some((message) => message.role === 'user');
+      if (hasUser) return prev;
 
-        const userMessage: Message = {
-          id: crypto.randomUUID(),
-          role: 'user',
-          content: trimmed,
-          timestamp: new Date().toISOString(),
-        };
+      const userMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: trimmed,
+        timestamp: new Date().toISOString(),
+      };
 
-        const nextData: ChatData = {
-          ...prev,
-          title: prev.title || trimmed,
-          messages: [...prev.messages, userMessage],
-        };
-
-        setToLocalStorage(storageKeys.chat, nextData);
-        return nextData;
-      });
-    },
-    [storageKeys.chat],
-  );
+      return {
+        ...prev,
+        title: prev.title || trimmed,
+        messages: [...prev.messages, userMessage],
+      };
+    });
+  }, []);
 
   const handleAbortError = useCallback(() => {
     streamInFlightRef.current = false;
@@ -239,9 +334,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
               has_feedback: hasFeedback ?? currentMessage.has_feedback,
             };
 
-            const finalData: ChatData = { ...prev, messages };
-            setToLocalStorage(storageKeys.chat, finalData);
-            return finalData;
+            return { ...prev, messages };
           }
         }
 
@@ -261,20 +354,17 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
           has_feedback: hasFeedback,
         };
 
-        const finalData: ChatData = {
+        return {
           ...prev,
           messages: [...prev.messages, assistantMessage],
         };
-
-        setToLocalStorage(storageKeys.chat, finalData);
-        return finalData;
       });
 
       setIsLoading(false);
       setCurrentStep('router');
       streamingMessageIdRef.current = null;
     },
-    [storageKeys.chat],
+    [],
   );
 
   const appendTokenToStreamingMessage = useCallback(
@@ -313,51 +403,27 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     });
   }, []);
 
-  const finalizeAfterStreamClose = useCallback(() => {
+  const finalizeAfterStreamClose = useCallback(async () => {
     if (isStopped()) {
       streamInFlightRef.current = false;
       return;
     }
 
+    const targetSessionId = resolvedSessionId;
+
     if (hasResultEventRef.current) {
+      if (targetSessionId) {
+        await syncChatDataFromServer(targetSessionId);
+      }
       streamingMessageIdRef.current = null;
+      setIsLoading(false);
+      setCurrentStep('router');
       streamInFlightRef.current = false;
       return;
     }
 
-    setChatData((prev) => {
-      if (!prev) return prev;
-
-      const currentStreamingMessageId = streamingMessageIdRef.current;
-      if (!currentStreamingMessageId) {
-        if (hasStreamedTokenRef.current) {
-          setToLocalStorage(storageKeys.chat, prev);
-        }
-        return prev;
-      }
-
-      const streamMessageIndex = prev.messages.findIndex((message) => message.id === currentStreamingMessageId);
-      if (streamMessageIndex < 0) {
-        if (hasStreamedTokenRef.current) {
-          setToLocalStorage(storageKeys.chat, prev);
-        }
-        return prev;
-      }
-
-      const messages = [...prev.messages];
-      const currentMessage = messages[streamMessageIndex];
-      messages[streamMessageIndex] = {
-        ...currentMessage,
-        sources: latestUiSourcesRef.current.length ? latestUiSourcesRef.current : (currentMessage.sources ?? []),
-        detailed_tasks: currentMessage.detailed_tasks ?? [],
-      };
-
-      const finalData: ChatData = { ...prev, messages };
-      setToLocalStorage(storageKeys.chat, finalData);
-      return finalData;
-    });
-
-    if (hasStreamedTokenRef.current) {
+    if (hasStreamedTokenRef.current && targetSessionId) {
+      await syncChatDataFromServer(targetSessionId);
       refreshRecentChatsNow();
     }
 
@@ -365,11 +431,8 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     setCurrentStep('router');
     streamingMessageIdRef.current = null;
     streamInFlightRef.current = false;
-  }, [isStopped, refreshRecentChatsNow, storageKeys.chat]);
+  }, [isStopped, refreshRecentChatsNow, resolvedSessionId, syncChatDataFromServer]);
 
-  /**
-   * SSE 스트림 이벤트 핸들러
-   */
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
       if ('session_id' in event) {
@@ -456,14 +519,13 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
         messages: [...chatData.messages, userMessage],
       };
       setChatData(updated);
-      setToLocalStorage(storageKeys.chat, updated);
       refreshRecentChatsNow();
 
       beginAnswerLoading();
 
       try {
         await streamChat(message, resolvedSessionId, handleStreamEvent);
-        finalizeAfterStreamClose();
+        await finalizeAfterStreamClose();
       } catch (err) {
         if ((err as Error).name === 'AbortError') {
           handleAbortError();
@@ -484,7 +546,6 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       isLoading,
       refreshRecentChatsNow,
       resolvedSessionId,
-      storageKeys.chat,
       streamChat,
     ],
   );
@@ -509,12 +570,10 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
         messages: [...messagesBeforeTarget, userMessage],
       };
       setChatData(updated);
-      setToLocalStorage(storageKeys.chat, updated);
 
       beginAnswerLoading();
 
       try {
-        // 마지막 턴 soft-delete (실패해도 스트림 진행)
         try {
           if (resolvedSessionId) {
             await chatService.resetLastTurn(resolvedSessionId);
@@ -524,7 +583,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
         }
 
         await streamChat(newContent, resolvedSessionId, handleStreamEvent);
-        finalizeAfterStreamClose();
+        await finalizeAfterStreamClose();
       } catch (err) {
         if ((err as Error).name === 'AbortError') {
           handleAbortError();
@@ -543,7 +602,6 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       handleAbortError,
       handleStreamEvent,
       resolvedSessionId,
-      storageKeys.chat,
       streamChat,
     ],
   );
@@ -564,39 +622,29 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       return;
     }
 
+    streamInFlightRef.current = false;
+  }, [abortStream, appendAssistantAnswer, isLoading, markStopped]);
+
+  const updateMessageFeedback = useCallback((messageId: string) => {
     setChatData((prev) => {
       if (!prev) return prev;
-      setToLocalStorage(storageKeys.chat, prev);
-      return prev;
+
+      const updatedMessages = prev.messages.map((message) =>
+        message.id === messageId ? { ...message, has_feedback: true } : message,
+      );
+
+      return {
+        ...prev,
+        messages: updatedMessages,
+      };
     });
-    streamInFlightRef.current = false;
-  }, [abortStream, appendAssistantAnswer, isLoading, markStopped, storageKeys.chat]);
-
-  const updateMessageFeedback = useCallback(
-    (messageId: string) => {
-      setChatData((prev) => {
-        if (!prev) return prev;
-
-        const updatedMessages = prev.messages.map((message) =>
-          message.id === messageId ? { ...message, has_feedback: true } : message,
-        );
-
-        const updatedData: ChatData = {
-          ...prev,
-          messages: updatedMessages,
-        };
-
-        setToLocalStorage(storageKeys.chat, updatedData);
-        return updatedData;
-      });
-    },
-    [storageKeys.chat],
-  );
+  }, []);
 
   useEffect(() => {
     if (!effectiveInitialQuery) return;
+    if (!chatData) return;
 
-    const hasUserMessage = chatData?.messages.some((message) => message.role === 'user') ?? false;
+    const hasUserMessage = chatData.messages.some((message) => message.role === 'user');
     if (hasUserMessage) return;
 
     queueMicrotask(() => {
@@ -607,23 +655,24 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
 
   useEffect(() => {
     if (!effectiveInitialQuery) return;
+    if (!chatData) return;
+    if (isLoading) return;
     if (streamInFlightRef.current) return;
 
-    const hasAssistantContent =
-      chatData?.messages.some((message) => message.role === 'assistant' && Boolean(message.content?.trim())) ?? false;
+    const hasAssistantContent = chatData.messages.some(
+      (message) => message.role === 'assistant' && Boolean(message.content?.trim()),
+    );
     if (hasAssistantContent) {
-      clearPendingInitialQuery(sessionId);
       return;
     }
 
     const runStream = async () => {
       ensureInitialUserMessage(effectiveInitialQuery);
       beginAnswerLoading();
-      clearPendingInitialQuery(sessionId);
 
       try {
         await streamChat(effectiveInitialQuery, resolvedSessionId, handleStreamEvent);
-        finalizeAfterStreamClose();
+        await finalizeAfterStreamClose();
       } catch (err) {
         if ((err as Error).name === 'AbortError') {
           handleAbortError();
@@ -639,14 +688,13 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     void runStream();
   }, [
     beginAnswerLoading,
+    chatData,
+    effectiveInitialQuery,
     ensureInitialUserMessage,
     finalizeAfterStreamClose,
-    handleStreamEvent,
     handleAbortError,
-    effectiveInitialQuery,
-    chatData,
+    handleStreamEvent,
     isLoading,
-    sessionId,
     resolvedSessionId,
     streamChat,
   ]);

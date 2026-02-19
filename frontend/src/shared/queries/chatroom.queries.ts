@@ -8,6 +8,7 @@ import type {
   SessionMessagesResponse,
   SessionQueriesResponse,
 } from '@/shared/types/query/api';
+import { isValidSessionId } from '@/shared/utils/sessionId';
 
 export const chatQueries = {
   all: () => ['chatrooms'] as const,
@@ -40,7 +41,8 @@ export const chatQueries = {
         const res = await api.get<SessionQueriesResponse>(API.chatrooms.session(id));
         return res.data;
       },
-      enabled: !!id,
+      // placeholder(/chat/new)나 잘못된 ID에서는 /rooms/{id} 호출 자체를 막음
+      enabled: isValidSessionId(id),
     }),
 
   sessionMessages: (id: string, page = 1, size = 50) =>
@@ -52,6 +54,7 @@ export const chatQueries = {
         });
         return res.data;
       },
-      enabled: !!id && id !== 'new',
+      // 세션 확정 전에는 메시지 API를 호출하지 않음
+      enabled: isValidSessionId(id),
     }),
 };
