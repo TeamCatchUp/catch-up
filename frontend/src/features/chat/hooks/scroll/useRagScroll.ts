@@ -6,6 +6,7 @@
 
 'use client';
 
+import type { RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Message } from '@/features/chat/types';
@@ -17,7 +18,7 @@ interface UseRagScrollOptions {
 
 interface UseRagScrollReturn {
   qaPairs: QAPair[];
-  qaRefs: React.MutableRefObject<Map<number, HTMLDivElement | null>>;
+  qaRefs: RefObject<Map<number, HTMLDivElement | null>>;
   scrollContainerCallbackRef: (node: HTMLDivElement | null) => void;
   scrollContainerHeight: number;
   scrollToLatest: () => void;
