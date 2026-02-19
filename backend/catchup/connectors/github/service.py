@@ -46,7 +46,7 @@ from catchup.connectors.github.schemas import (
     IncrementalSyncRequest,
 )
 from catchup.connectors.github.transformers import GithubTransformer
-from catchup.components.vector_db.pgvector.repository import PGVectorRepository
+from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
 from catchup.db.github import sync_repository as github_sync
@@ -119,6 +119,7 @@ class GithubIngestionService:
 
     def __init__(
         self,
+        repository: PGVectorRepository,
         installation_id: int,
         access_token: str,
         enable_summarization: bool = True,
@@ -135,7 +136,7 @@ class GithubIngestionService:
 
         self.client = GitHubApiClient(access_token)
         self.transformer: GithubTransformer | None = None
-        self.repository = PGVectorRepository()
+        self.repository = repository
         self.summarizer: SummarizerService | None = None
 
         # 사용자 캐시 (멘션 변환용)

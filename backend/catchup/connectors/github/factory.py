@@ -8,6 +8,9 @@ from functools import lru_cache
 
 from sqlalchemy.orm import Session
 
+from catchup.components.embedder.constants import EmbeddingProvider
+from catchup.components.embedder.factory import get_embedding_service
+from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.connectors.github.service import GithubService, GithubIngestionService
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
@@ -50,7 +53,15 @@ async def create_github_ingestion_service(
     access_token = await github_app_service.get_installation_access_token(installation_id)
 
     # Service 인스턴스 생성 및 초기화
-    service = GithubIngestionService(installation_id, access_token)
+    repository = PGVectorRepository(
+        embeddings=get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
+    )
+    
+    service = GithubIngestionService(
+        repository=repository,
+        installation_id=installation_id,
+        access_token=access_token,
+    )
     await service.initialize()
 
     return service

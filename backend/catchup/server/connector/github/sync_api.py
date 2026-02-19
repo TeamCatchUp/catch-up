@@ -15,6 +15,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from catchup.components.embedder.constants import EmbeddingProvider
+from catchup.components.embedder.factory import get_embedding_service
+from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.db.dependencies import get_db
 from catchup.db.github import sync_repository as github_sync
 from catchup.db.github import domain_repository as github_entities
@@ -89,7 +92,15 @@ async def _get_ingestion_service(
     access_token = await github_app_service.get_installation_access_token(installation_id)
 
     # Service 인스턴스 생성 및 초기화
-    service = GithubIngestionService(installation_id, access_token)
+    repository = PGVectorRepository(
+        embeddings=get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
+    )
+    
+    service = GithubIngestionService(
+        repository=repository,
+        installation_id=installation_id,
+        access_token=access_token
+    )
     await service.initialize()
 
     return service

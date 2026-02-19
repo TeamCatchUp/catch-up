@@ -60,6 +60,7 @@ class JiraIngestionService:
 
     def __init__(
         self,
+        repository: PGVectorRepository,
         cloud_id: str,
         access_token: str,
         site_url: str,
@@ -82,7 +83,7 @@ class JiraIngestionService:
         self.client = JiraApiClient(cloud_id, access_token)
         self.field_mapper = JiraFieldMapper(self.client)
         self.transformer: JiraTransformer | None = None
-        self.repository = PGVectorRepository()
+        self.repository = repository
         self.summarizer: SummarizerService | None = None
 
         self._initialized = False
