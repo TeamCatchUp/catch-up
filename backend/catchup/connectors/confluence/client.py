@@ -30,7 +30,7 @@ class ConfluenceApiClient:
     def __init__(self, cloud_id: str, access_token:str):
         self.cloud_id = cloud_id
         self.access_token = access_token
-        # v2 API (spaces, role-assignments 등)
+        # v2 API (spaces, pages 등)
         self.base_url = f"{settings.ATLASSIAN_API_URL}/ex/confluence/{cloud_id}/wiki/api/v2"
         # v1 API (user search 등)
         self.base_url_v1 = f"{settings.ATLASSIAN_API_URL}/ex/confluence/{cloud_id}/wiki/rest/api"
@@ -223,36 +223,6 @@ class ConfluenceApiClient:
         logger.info(f"[CONFLUENCE][API] Paginated {len(all_results)} users via v1 search")
         return all_results
 
-    async def get_space_role_assignments(
-        self,
-        space_id: str,
-        principal_type: str = "user",
-        limit: int = 250,
-    ) -> list[dict[str, Any]]:
-        """특정 Space의 Role Assignments 조회 (principal_type=user)."""
-        params = {"principalType": principal_type, "limit": limit}
-        return await self._paginate_cursor(
-            url=f"{self.base_url}/spaces/{space_id}/role-assignments",
-            params=params,
-            limit=limit,
-        )
-    
-    async def get_space_permissions(
-        self,
-        space_id: str,
-        limit: int = 250,
-    ) -> list[dict[str, Any]]:
-        """
-        Space 권한 목록 조회 (v2 permissions)
-        - RBAC 미적용 사이트에서도 사용 가능
-        """
-        params = {"limit": limit}
-        return await self._paginate_cursor(
-            url=f"{self.base_url}/spaces/{space_id}/permissions",
-            params=params,
-            limit=limit,
-        )
-    
     async def get_spaces(
         self,
         space_type: str | None = None,

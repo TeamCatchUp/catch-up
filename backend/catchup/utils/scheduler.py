@@ -19,6 +19,11 @@ from catchup.db.atlassian.oauth_repository import get_all_tokens as get_all_atla
 from catchup.db.models import JiraEntityType
 from catchup.db.slack.oauth_repository import get_all_slack_tokens
 from catchup.utils.webhook_buffer import get_webhook_buffer
+from catchup.connectors.confluence.factory import create_confluence_ingestion_service
+from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
+from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
+from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.db.atlassian import oauth_repository
 
 logger = logging.getLogger(__name__)
 
@@ -289,6 +294,54 @@ async def refresh_jira_dynamic_webhooks():
 
     logger.info("[JIRA][WEBHOOK][DYNAMIC] Webhook refresh job completed")
 
+async def poll_confluence_sync():
+    """
+    1. User + Spaces 조회
+    2. Page, Blogpost Incremental Sync
+    """
+    logger.info("[CONFLUENCE][POLL] Starting Confluence Polling Job")
+
+    with SessionLocal() as db:
+        tokens = get_all_atlassian_tokens(db)
+
+        for token in tokens:
+            cloud_id = token.cloud_id
+
+            try:
+                token_manager = AtlassianTokenManager(
+                    oauth_client=AtlassianOAuthClient(),
+                    oauth_repository=oauth_repository,
+                )
+                metadata_service = ConfluenceMetadataService(token_manager)
+                metadata_result = await metadata_service.sync_all(db, cloud_id)
+                logger.info(
+                    f"[CONFLUENCE][POLL] Metadata synced: "
+                    f"cloud_id={cloud_id}, result={metadata_result}"
+                )
+
+                try:
+                    service = await create_confluence_ingestion_service(db, cloud_id)
+                    sync_result = await service.incremental_sync(db)
+                    logger.info(
+                        f"[CONFLUENCE][POLL] Incremental Sync Completed: "
+                        f"cloud_id = {cloud_id}, results = {sync_result}"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"[CONFLUENCE][POLL] Incremental sync failed: "
+                        f"cloud_id={cloud_id}, error={e}",
+                        exc_info=True,
+                    )
+
+            except Exception as e:
+                logger.error(
+                    f"[CONFLUENCE][POLL] Cloud polling failed: "
+                    f"cloud_id={cloud_id}, error={e}",
+                    exc_info=True,
+                )
+
+    logger.info("[CONFLUENCE][POLL] Confluence polling job completed")
+
 
 def init_scheduler():
 
@@ -343,6 +396,15 @@ def init_scheduler():
         misfire_grace_time=300,
     )
 
+    _scheduler.add_job(
+        poll_confluence_sync,
+        trigger=CronTrigger(hour=f"*/{interval_hours}", minute=0),
+        id="confluence_polling_sync",
+        name="Confluence Polling Sync",
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
+    
     _scheduler.start()
     logger.info(f"Scheduler initialized with {interval_hours}-hour interval")
 

@@ -120,6 +120,62 @@ async def trigger_full_sync(
             status_code=500,
             detail=f"동기화 중 오류가 발생했습니다: {str(e)}",
         )
+    
+@router.post("/incremental", response_model = ConfluenceSyncResponse)
+async def trigger_incremental_sync(
+    cloud_id: str = Query(..., description="Atlassian Cloud ID"),
+    db: Session = Depends(get_db),
+):
+    """
+    Sync Status가 있는 Space Id를 대상으로 마지막 동기화 시점 이후 수정/생성된 Page, Blogpost 동기화
+    """
+    try:
+        service = await create_confluence_ingestion_service(db, cloud_id)
+        result = await service.incremental_sync(db=db)
+
+        summary_parts = []
+        if result["pages"]["synced"] > 0 or result["pages"]["errors"] > 0:
+            summary_parts.append(
+                f"Pages={result['pages']['synced']}(skipped={result['pages']['skipped']})"
+            )
+        if result["blogposts"]["synced"] > 0 or result["blogposts"]["errors"] > 0:
+            summary_parts.append(
+                f"BlogPosts={result['blogposts']['synced']}(skipped={result['blogposts']['skipped']})"
+            )
+        
+        message = (
+            f"증분 동기화 완료: {', '.join(summary_parts)}"
+            if summary_parts
+            else "변경된 데이터가 없습니다"
+        )
+
+        return ConfluenceSyncResponse(
+            status="success",
+            message=message,
+            cloud_id=cloud_id,
+            results={
+                "pages": SyncResultDetail(
+                    synced=result["pages"]["synced"],
+                    errors=result["pages"]["errors"],
+                ),
+                "blogposts": SyncResultDetail(
+                    synced=result["blogposts"]["synced"],
+                    errors=result["blogposts"]["errors"],
+                ),
+            },
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"[CONFLUENCE][INCREMENTAL SYNC] Failed: cloud_id = {cloud_id}"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"증분 동기화 중 오류가 발생했습니다: {str(e)}",
+        )
+
 
 
 
