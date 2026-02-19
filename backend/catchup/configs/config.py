@@ -156,6 +156,7 @@ class Settings(BaseSettings):
     AWS_BEDROCK_LARGE_MODEL: str
     AWS_RERANK_MODEL_ARN: str
     AWS_RERANK_MODEL_REGION: str
+    AWS_EMBEDDING_MODEL_REGION: str
 
 
     model_config = SettingsConfigDict(

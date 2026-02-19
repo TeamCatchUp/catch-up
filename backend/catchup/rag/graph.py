@@ -4,9 +4,13 @@ from typing import Optional
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 
+from catchup.components.embedder.constants import EmbeddingProvider
+from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.llm.factory import LlmProvider, ModelCapacity, get_llm_service
 from catchup.components.reranker.constants import RerankerProvider
 from catchup.components.reranker.factory import get_rerank_service
+from catchup.components.vector_db.factory import get_vector_db_service
+from catchup.components.vector_db.pgvector.constants import VectorDbProvider
 from catchup.rag.conditional_edges import route_after_grade, route_question
 from catchup.rag.nodes import (
     chitchat_node,
@@ -36,6 +40,10 @@ def get_compiled_graph(
     # 최종 답변 생성용 llm (large)
     final_llm = get_llm_service(LlmProvider.AWS_BEDROCK, ModelCapacity.LARGE).get_llm()
     
+    # Vector DB 서비스
+    embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
+    vector_db_service = get_vector_db_service(VectorDbProvider.PGVECTOR, embeddings)
+    
     # Reranker 서비스
     # Bedrock Rerank는 async API를 제공하지 않으므로,
     # Service 레벨에서 sync 호출을 executor로 감싸
@@ -59,7 +67,7 @@ def get_compiled_graph(
     )
     workflow.add_node(
         node="search_vector_db", 
-        action=search_vector_db_node
+        action=partial(search_vector_db_node, vector_db_service=vector_db_service)
     )
     workflow.add_node(
         node="rerank", 

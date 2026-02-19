@@ -22,6 +22,7 @@ import asyncio
 import logging
 from typing import Any
 
+from langchain.embeddings import Embeddings
 from langchain_cohere import CohereEmbeddings
 from langchain_core.documents import Document
 from langchain_postgres import PGVector
@@ -47,7 +48,11 @@ class PGVectorRepository:
         _initialized: 초기화 완료 여부
     """
 
-    def __init__(self, collection_name: str | None = None):
+    def __init__(
+            self,
+            embeddings: Embeddings,
+            collection_name: str | None = None,
+        ):
         """
         PGVector Repository 초기화
 
@@ -57,10 +62,7 @@ class PGVectorRepository:
         self.collection_name = collection_name or settings.PGVECTOR_COLLECTION_NAME
 
         # Cohere Embeddings 설정 (embed-v4.0, 1536 dimensions)
-        self.embeddings = CohereEmbeddings(
-            model=settings.COHERE_EMBEDDING_MODEL,
-            cohere_api_key=settings.COHERE_API_KEY,
-        )
+        self.embeddings = embeddings
 
         self.vector_store: PGVector | None = None
         self._initialized = False

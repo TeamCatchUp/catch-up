@@ -3,7 +3,7 @@ import logging
 
 from langchain_core.documents import Document
 
-from catchup.components.vector_db.factory import VectorDbProvider, get_vector_db_service
+from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.structures import VectorDbSearchQuery
 from catchup.rag.state import AgentState
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 @log_node
-async def search_vector_db_node(state: AgentState):
+async def search_vector_db_node(state: AgentState, vector_db_service: BaseVectorDbService):
 
     queries = state.get("vector_search_queries", [])
 
@@ -24,10 +24,10 @@ async def search_vector_db_node(state: AgentState):
         ))
 
     results: list[list[Document]] = await _get_hybrid_search_results(
-        provider=VectorDbProvider.PGVECTOR,
+        vector_db_service=vector_db_service,
         queries=queries,
         k=100,
-        weights=[0.6, 0.4]
+        weights=[0.6, 0.4],
     )
 
     unique_results = _deduplicate_search_results(results)
@@ -38,13 +38,11 @@ async def search_vector_db_node(state: AgentState):
 
 
 async def _get_hybrid_search_results(
-    provider: VectorDbProvider,
+    vector_db_service: BaseVectorDbService,
     queries: list[VectorDbSearchQuery],
     k: int = 10,
     weights: list[float] = [0.5, 0.5],
 ):
-    vector_db_service = get_vector_db_service(provider)
-
     tasks = [
         asyncio.to_thread(vector_db_service.hybrid_search, q.query, k, weights)
         for q in queries

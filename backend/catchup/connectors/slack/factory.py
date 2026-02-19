@@ -14,6 +14,9 @@ import logging
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from catchup.components.embedder.constants import EmbeddingProvider
+from catchup.components.embedder.factory import get_embedding_service
+from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.connectors.slack.auth import get_slack_oauth_service
 from catchup.connectors.slack.service import SlackIngestionService
 from catchup.db.slack import oauth_repository as slack_crud
@@ -60,7 +63,15 @@ async def create_slack_ingestion_service(
         )
 
     # Service 인스턴스 생성 및 초기화
-    service = SlackIngestionService(team_id, access_token)
+    repository = PGVectorRepository(
+        embeddings=get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
+    )
+    
+    service = SlackIngestionService(
+        repository=repository,
+        team_id=team_id,
+        access_token=access_token,
+    )
     await service.initialize()
 
     return service

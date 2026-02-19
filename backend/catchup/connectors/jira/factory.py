@@ -10,6 +10,9 @@ import logging
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from catchup.components.embedder.constants import EmbeddingProvider
+from catchup.components.embedder.factory import get_embedding_service
+from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.connectors.atlassian.exceptions import (
     AtlassianTokenExpiredError,
     AtlassianTokenNotFoundError,
@@ -65,6 +68,14 @@ async def create_jira_ingestion_service(
 
     token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
     site_url = token_record.site_url if token_record else ""
-    service = JiraIngestionService(cloud_id, access_token, site_url or "")
+    repository = PGVectorRepository(
+        embeddings=get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
+    )
+    service = JiraIngestionService(
+        repository=repository,
+        cloud_id=cloud_id,
+        access_token=access_token,
+        site_url=site_url or ""
+    )
     await service.initialize()
     return service

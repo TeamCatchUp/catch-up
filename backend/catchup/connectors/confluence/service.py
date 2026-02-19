@@ -59,13 +59,14 @@ class ConfluenceIngestionService:
         cloud_id: str,
         access_token: str,
         site_url: str,
+        repository: PGVectorRepository
     ):
         self.cloud_id = cloud_id
         self.site_url = site_url.rstrip("/")
 
         self.client = ConfluenceApiClient(cloud_id, access_token)
         self.transformer = ConfluenceTransformer()
-        self.repository = PGVectorRepository()
+        self.repository = repository
 
         self._initialized = False
 

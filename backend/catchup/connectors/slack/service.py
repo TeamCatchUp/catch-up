@@ -36,6 +36,7 @@ class SlackIngestionService:
 
     def __init__(
         self,
+        repository: PGVectorRepository,
         team_id: str,
         access_token: str,
         enable_summarization: bool = True,
@@ -52,7 +53,7 @@ class SlackIngestionService:
         self.enable_summarization = enable_summarization
         self.client = SlackApiClientWrapper(access_token, team_id)
         self.transformer: SlackTransformer | None = None
-        self.repository = PGVectorRepository()
+        self.repository = repository
         self.summarizer: SummarizerService | None = None
         self.user_cache: dict[str, SlackUser] = {}
         self.workspace_domain: str | None = None  # Permalink 생성용
