@@ -153,7 +153,37 @@ class ConfluenceApiClient:
 
         logger.info(f"[CONFLUENCE][API] Paginated {len(all_results)} results from {url}")
         return all_results
-    
+
+    async def _paginate_cursor_iter(
+        self,
+        url: str,
+        params: dict[str, Any] | None = None,
+        result_key: str = "results",
+        limit: int = 250,
+    ):
+        """커서 기반 페이지네이션으로 배치 단위 yield (대량 데이터용)"""
+        current_params = dict(params or {})
+        current_params["limit"] = limit
+
+        while True:
+            response = await self._request("GET", url, params=current_params)
+
+            results = response.get(result_key, [])
+            if not results:
+                break
+
+            yield results
+
+            next_link = response.get("_links", {}).get("next")
+            if not next_link:
+                break
+
+            cursor = self._extract_cursor_from_link(next_link)
+            if not cursor:
+                break
+
+            current_params["cursor"] = cursor
+
     async def get_users(
         self,
         limit: int = 250,
@@ -245,36 +275,6 @@ class ConfluenceApiClient:
             limit=limit,
         )
 
-    async def get_pages(
-        self,
-        space_id: str,
-        status: str = "current",
-        sort: str = "-modified-date",
-        body_format: str = "atlas_doc_format",
-        limit: int = 250,
-    ) -> list[dict[str, Any]]:
-        """
-        Space 내 모든 Page 조회 (v2 API)
-
-        Args:
-            space_id: Space ID
-            status: 페이지 상태 필터 (current, archived, trashed)
-            sort: 정렬 기준 (-modified-date, created-date 등)
-            body_format: 본문 포맷 (atlas_doc_format, storage)
-            limit: 페이지당 결과 수
-        """
-        params: dict[str, Any] = {
-            "space-id": space_id,
-            "status": status,
-            "sort": sort,
-            "body-format": body_format,
-        }
-        return await self._paginate_cursor(
-            url=f"{self.base_url}/pages",
-            params=params,
-            limit=limit,
-        )
-
     async def get_page_by_id(
         self,
         page_id: str,
@@ -288,74 +288,57 @@ class ConfluenceApiClient:
             params=params,
         )
 
-    async def get_blogposts(
+    async def get_content_footer_comments(
         self,
-        space_id: str,
-        status: str = "current",
-        sort: str = "-modified-date",
+        content_type: str,  # "pages" | "blogposts"
+        content_id: str,
         body_format: str = "atlas_doc_format",
         limit: int = 250,
     ) -> list[dict[str, Any]]:
-        """Space 내 모든 BlogPost 조회 (v2 API)"""
-        params: dict[str, Any] = {
-            "space-id": space_id,
-            "status": status,
-            "sort": sort,
-            "body-format": body_format,
-        }
-        return await self._paginate_cursor(
-            url=f"{self.base_url}/blogposts",
-            params=params,
-            limit=limit,
-        )
-
-    async def get_page_footer_comments(
-        self,
-        page_id: str,
-        body_format: str = "atlas_doc_format",
-        limit: int = 250,
-    ) -> list[dict[str, Any]]:
-        """Page의 Footer 코멘트 조회 (v2 API)"""
+        """콘텐츠의 Footer 코멘트 조회"""
         params: dict[str, Any] = {"body-format": body_format}
         return await self._paginate_cursor(
-            url=f"{self.base_url}/pages/{page_id}/footer-comments",
+            url=f"{self.base_url}/{content_type}/{content_id}/footer-comments",
             params=params,
             limit=limit,
         )
 
-    async def get_page_inline_comments(
+    async def get_content_inline_comments(
         self,
-        page_id: str,
+        content_type: str,
+        content_id: str,
         body_format: str = "atlas_doc_format",
         limit: int = 250,
     ) -> list[dict[str, Any]]:
-        """Page의 Inline 코멘트 조회 (v2 API)"""
+        """콘텐츠의 Inline 코멘트 조회 (Page 전용)"""
         params: dict[str, Any] = {"body-format": body_format}
         return await self._paginate_cursor(
-            url=f"{self.base_url}/pages/{page_id}/inline-comments",
+            url=f"{self.base_url}/{content_type}/{content_id}/inline-comments",
             params=params,
             limit=limit,
         )
 
-    async def get_page_attachments(
+    async def get_content_attachments(
         self,
-        page_id: str,
+        content_type: str,
+        content_id: str,
         limit: int = 250,
     ) -> list[dict[str, Any]]:
-        """Page의 첨부파일 조회 (v2 API)"""
+        """콘텐츠의 첨부파일 조회"""
         return await self._paginate_cursor(
-            url=f"{self.base_url}/pages/{page_id}/attachments",
+            url=f"{self.base_url}/{content_type}/{content_id}/attachments",
             limit=limit,
         )
 
-    async def get_page_labels(
+    async def get_content_labels(
         self,
-        page_id: str,
+        content_type: str,
+        content_id: str,
         limit: int = 250,
     ) -> list[dict[str, Any]]:
-        """Page의 라벨 조회 (v2 API)"""
+        """콘텐츠의 라벨 조회"""
         return await self._paginate_cursor(
-            url=f"{self.base_url}/pages/{page_id}/labels",
+            url=f"{self.base_url}/{content_type}/{content_id}/labels",
             limit=limit,
         )
 
@@ -420,3 +403,51 @@ class ConfluenceApiClient:
                 )
                 return None
 
+
+    # ================================================================
+    # Streaming Iterators (대량 데이터용 - 배치 단위 yield)
+    # ================================================================
+
+    async def iter_pages(
+        self,
+        space_id: str,
+        status: str = "current",
+        sort: str = "-modified-date",
+        body_format: str = "atlas_doc_format",
+        limit: int = 250,
+    ):
+        """Space 내 Page를 배치 단위로 yield"""
+        params: dict[str, Any] = {
+            "space-id": space_id,
+            "status": status,
+            "sort": sort,
+            "body-format": body_format,
+        }
+        async for batch in self._paginate_cursor_iter(
+            url=f"{self.base_url}/pages",
+            params=params,
+            limit=limit,
+        ):
+            yield batch
+
+    async def iter_blogposts(
+        self,
+        space_id: str,
+        status: str = "current",
+        sort: str = "-modified-date",
+        body_format: str = "atlas_doc_format",
+        limit: int = 250,
+    ):
+        """Space 내 BlogPost를 배치 단위로 yield"""
+        params: dict[str, Any] = {
+            "space-id": space_id,
+            "status": status,
+            "sort": sort,
+            "body-format": body_format,
+        }
+        async for batch in self._paginate_cursor_iter(
+            url=f"{self.base_url}/blogposts",
+            params=params,
+            limit=limit,
+        ):
+            yield batch
