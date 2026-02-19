@@ -1,0 +1,27 @@
+ARG IMAGE_BASE=pgvector/pgvector:pg17
+FROM ${IMAGE_BASE} AS build
+
+USER root
+ARG PG_VER=17
+
+RUN apt-get update && apt-get install -y \
+    postgresql-server-dev-${PG_VER} \
+    make gcc libicu-dev wget checkinstall \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp
+RUN wget https://github.com/pgbigm/pg_bigm/archive/refs/tags/v1.2-20240606.tar.gz \
+    && tar xzf v1.2-20240606.tar.gz
+
+RUN cd pg_bigm-1.2-20240606 && \
+    make USE_PGXS=1 with_llvm=no && \
+    checkinstall -Dy --pkgname=postgresql-${PG_VER}-bigm --pkgversion=1.2 --nodoc --default \
+    make USE_PGXS=1 with_llvm=no install
+
+FROM ${IMAGE_BASE}
+
+USER root
+COPY --from=build /tmp/pg_bigm-1.2-20240606/*.deb /tmp/
+RUN dpkg -i /tmp/*.deb && rm /tmp/*.deb
+
+USER postgres
