@@ -26,7 +26,7 @@ import type {
 } from '@/features/chat/types';
 import { normalizeSources } from '@/features/chat/utils/normalize/normalizeRagSources';
 import { normalizeRelatedJiraIssues } from '@/features/chat/utils/normalize/normalizeRelatedJiraIssues';
-
+import { setToLocalStorage } from '@/shared/hooks/useLocalStorage';
 
 /**
  * RAG 채팅 훅 옵션
@@ -150,7 +150,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
           messages: [...prev.messages, userMessage],
         };
 
-        localStorage.setItem(storageKeys.chat, JSON.stringify(nextData));
+        setToLocalStorage(storageKeys.chat, nextData);
         return nextData;
       });
     },
@@ -198,7 +198,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
             };
 
             const finalData: ChatData = { ...prev, messages };
-            localStorage.setItem(storageKeys.chat, JSON.stringify(finalData));
+            setToLocalStorage(storageKeys.chat, finalData);
             return finalData;
           }
         }
@@ -224,7 +224,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
           messages: [...prev.messages, assistantMessage],
         };
 
-        localStorage.setItem(storageKeys.chat, JSON.stringify(finalData));
+        setToLocalStorage(storageKeys.chat, finalData);
         return finalData;
       });
 
@@ -289,7 +289,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       const currentStreamingMessageId = streamingMessageIdRef.current;
       if (!currentStreamingMessageId) {
         if (hasStreamedTokenRef.current) {
-          localStorage.setItem(storageKeys.chat, JSON.stringify(prev));
+          setToLocalStorage(storageKeys.chat, prev);
         }
         return prev;
       }
@@ -297,7 +297,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       const streamMessageIndex = prev.messages.findIndex((message) => message.id === currentStreamingMessageId);
       if (streamMessageIndex < 0) {
         if (hasStreamedTokenRef.current) {
-          localStorage.setItem(storageKeys.chat, JSON.stringify(prev));
+          setToLocalStorage(storageKeys.chat, prev);
         }
         return prev;
       }
@@ -311,7 +311,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       };
 
       const finalData: ChatData = { ...prev, messages };
-      localStorage.setItem(storageKeys.chat, JSON.stringify(finalData));
+      setToLocalStorage(storageKeys.chat, finalData);
       return finalData;
     });
 
@@ -410,7 +410,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
         messages: [...chatData.messages, userMessage],
       };
       setChatData(updated);
-      localStorage.setItem(storageKeys.chat, JSON.stringify(updated));
+      setToLocalStorage(storageKeys.chat, updated);
       refreshRecentChatsNow();
 
       beginAnswerLoading();
@@ -462,7 +462,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
         messages: [...messagesBeforeTarget, userMessage],
       };
       setChatData(updated);
-      localStorage.setItem(storageKeys.chat, JSON.stringify(updated));
+      setToLocalStorage(storageKeys.chat, updated);
 
       beginAnswerLoading();
 
@@ -517,7 +517,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
 
     setChatData((prev) => {
       if (!prev) return prev;
-      localStorage.setItem(storageKeys.chat, JSON.stringify(prev));
+      setToLocalStorage(storageKeys.chat, prev);
       return prev;
     });
     streamInFlightRef.current = false;
@@ -537,7 +537,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
           messages: updatedMessages,
         };
 
-        localStorage.setItem(storageKeys.chat, JSON.stringify(updatedData));
+        setToLocalStorage(storageKeys.chat, updatedData);
         return updatedData;
       });
     },

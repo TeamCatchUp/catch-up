@@ -8,6 +8,8 @@
 import { RefObject, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { setToSessionStorage } from '@/shared/hooks/useSessionStorage';
+
 interface UseSearchInputOptions {
   inputRef: RefObject<HTMLTextAreaElement | null>;
 }
@@ -33,9 +35,7 @@ export const useSearchInput = ({ inputRef }: UseSearchInputOptions): UseSearchIn
     if (!trimmed) return;
 
     const newSessionId = crypto.randomUUID();
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem(`pending_chat_query_${newSessionId}`, trimmed);
-    }
+    setToSessionStorage(`pending_chat_query_${newSessionId}`, trimmed);
     router.push(`/chat/${newSessionId}?q=${encodeURIComponent(trimmed)}`);
   }, [value, router]);
 

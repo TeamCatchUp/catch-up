@@ -1,4 +1,5 @@
 import type { ChatData } from '@/features/chat/types';
+import { getFromLocalStorage, setToLocalStorage } from '@/shared/hooks/useLocalStorage';
 import { MOCK_INITIAL_MESSAGES } from '@/shared/mocks/chat/data';
 import { USE_MOCK } from '@/shared/mocks/config';
 
@@ -12,12 +13,9 @@ import { USE_MOCK } from '@/shared/mocks/config';
  * @returns 저장된 채팅 데이터 또는 null
  */
 export const loadSavedChat = (key: string): ChatData | null => {
-  if (typeof window === 'undefined') return null;
+  const parsedData = getFromLocalStorage<ChatData | null>(key, null);
+  if (!parsedData) return null;
 
-  const saved = localStorage.getItem(key);
-  if (!saved) return null;
-
-  const parsedData: ChatData = JSON.parse(saved);
   const lastMessage = parsedData.messages[parsedData.messages.length - 1];
 
   if (lastMessage?.role === 'user') {
@@ -35,7 +33,7 @@ export const loadSavedChat = (key: string): ChatData | null => {
         },
       ],
     };
-    localStorage.setItem(key, JSON.stringify(repairedData));
+    setToLocalStorage(key, repairedData);
     return repairedData;
   }
 

@@ -1,3 +1,5 @@
+import { getFromSessionStorage, removeFromSessionStorage } from '@/shared/hooks/useSessionStorage';
+
 /**
  * pending 초기 질문 키 생성
  * sessionStorage에 임시 저장된 질문을 가져올 때 사용
@@ -27,7 +29,7 @@ export const getEffectiveInitialQuery = (initialQuery: string | null, sessionId:
   const fromUrl = new URLSearchParams(window.location.search).get('q')?.trim();
   if (fromUrl) return fromUrl;
 
-  const fromPending = sessionStorage.getItem(getPendingInitialQueryKey(sessionId))?.trim();
+  const fromPending = getFromSessionStorage(getPendingInitialQueryKey(sessionId))?.trim();
   return fromPending || null;
 };
 
@@ -38,6 +40,5 @@ export const getEffectiveInitialQuery = (initialQuery: string | null, sessionId:
  * @param sessionId - 세션 ID
  */
 export const clearPendingInitialQuery = (sessionId: string) => {
-  if (typeof window === 'undefined') return;
-  sessionStorage.removeItem(getPendingInitialQueryKey(sessionId));
+  removeFromSessionStorage(getPendingInitialQueryKey(sessionId));
 };
