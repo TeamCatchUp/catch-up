@@ -61,7 +61,6 @@ class Settings(BaseSettings):
     RERANK_TOP_N: int
     RERANK_TOTAL_K: int
 
-    GITHUB_TOKEN: str
     GITHUB_BASE_URL: str
 
     GITHUB_APP_ID: int

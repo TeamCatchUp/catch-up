@@ -1,10 +1,11 @@
 """
 Confluence Section Tree -> Semantic Chunk
 
-1. Leaf Section Flattening : Leaf Node Extraction
-2. Small Section Merge : MIN_CHARS 미만이라면, 부모 노드와 병합
-3. Large Section Split : MAX_CHARS 초과 시, Section 내의 Content Block 경계에서 분할
-4. Contxt Prefix : Page, Section 정보를 추가한다.
+1. Leaf Flattening       : Section tree → LeafSection 리스트로 평탄화
+2. 1차 병합 (MIN 기준)   : 같은 parent에서 작은 leaf를 다음 형제로 흡수
+3. 1차 분할 (MAX 기준)   : 큰 leaf를 ContentBlock 경계에서 분할
+4. 2차 병합 (split 후처리): split에서 생긴 MIN 미만 조각을 인접 leaf로 병합
+5. 최종 Chunk 생성       : Context Prefix + 텍스트 합치기
 
 - TARGET_CHARS = 2000  (~500 tokens)
 - MAX_CHARS    = 4000  (~1000 tokens)
@@ -66,8 +67,10 @@ class Chunk:
 
 class ConfluenceChunker:
     """
-    Section Tree → Chunk List 
+    Section Tree → Chunk List
     """
+
+    _SPECIAL_TYPES = frozenset({"code", "table", "list"})
 
     def __init__(
         self,
@@ -95,8 +98,10 @@ class ConfluenceChunker:
         # Step 3: Split Large Sections
         split = self._split_large_sections(merged)
 
+        post_merged = self._merge_post_split(split)
+
         # Step 4: Context Prefix + 최종 Chunk 생성
-        chunks = self._build_chunks(split, page_title)
+        chunks = self._build_chunks(post_merged, page_title)
 
         return chunks
 
@@ -443,6 +448,118 @@ class ConfluenceChunker:
             ))
 
         return result if result else [block]
+    
+    # ================================================================
+    # Step 3.5: Split 이후 2차 병합
+    # ================================================================
+
+    def _merge_post_split(self, leaves: list[LeafSection]) -> list[LeafSection]:
+        if len(leaves) <= 1:
+            return leaves
+        
+        result: list[LeafSection] = list(leaves)
+        i = 0
+
+        while i < len(result):
+            current = result[i]
+            current_len = self._calc_leaf_length(current)
+
+            if current_len >= self.min_chars:
+                i += 1
+                continue
+
+            prev = result[i-1] if i>0 else None
+            next_leaf = result[i+1] if i+1 < len(result) else None
+
+            if prev is None and next_leaf is None:
+                i += 1
+                continue
+            
+            if prev is None:
+                direction = "next"
+            elif next_leaf is None:
+                direction = "prev"
+            else:
+                direction = self._choose_merge_direction(prev, current, next_leaf)
+
+            if direction == "prev":
+                merged = LeafSection(
+                    hierarchy= prev.hierarchy,
+                    content_blocks = prev.content_blocks + current.content_blocks,
+                    parent_key=prev.parent_key,
+                )
+                result[i - 1] = merged
+                result.pop(i)
+            else:
+                merged = LeafSection(
+                    hierarchy= next_leaf.hierarchy,
+                    content_blocks = current.content_blocks + next_leaf.content_blocks,
+                    parent_key = next_leaf.parent_key,
+                )
+                result[i] = merged
+                result.pop(i + 1)
+        
+        return result
+    
+    def _choose_merge_direction(
+            self,
+            prev: LeafSection,
+            current: LeafSection,
+            next_leaf: LeafSection,
+    ) -> str:
+        cur_first = self._first_block_type(current)
+        cur_last = self._last_block_type(current)
+        prev_last = self._last_block_type(prev)
+        next_first = self._first_block_type(next_leaf)
+
+        # 1) 특수 블록 타입 경계 보존
+        prev_match = (prev_last == cur_first) and (cur_first in self._SPECIAL_TYPES)
+        next_match = (next_first == cur_last) and (cur_last in self._SPECIAL_TYPES)
+
+        if prev_match and not next_match:
+            return "prev"
+        if next_match and not prev_match:
+            return "next"
+        if prev_match and next_match:
+            return "prev"
+        
+        # 2) hiearchy Prefix 일치
+        prev_prefix = self._common_prefix_len(current.hierarchy, prev.hierarchy)
+        next_prefix = self._common_prefix_len(current.hierarchy, next_leaf.hierarchy)
+
+        if prev_prefix > next_prefix:
+            return "prev"
+        if next_prefix > prev_prefix:
+            return "next"
+
+        # 3) 1,2 둘다 안되면 짧은 쪽으로 병합
+        prev_len = self._calc_leaf_length(prev)
+        next_len = self._calc_leaf_length(next_leaf)
+
+        return "prev" if prev_len <= next_len else "next"
+
+    @staticmethod
+    def _first_block_type(leaf: LeafSection) -> str | None:
+        if leaf.content_blocks:
+            return leaf.content_blocks[0].block_type
+        return None
+
+    @staticmethod
+    def _last_block_type(leaf: LeafSection) -> str | None:
+        if leaf.content_blocks:
+            return leaf.content_blocks[-1].block_type
+        return None
+
+    @staticmethod
+    def _common_prefix_len(h1: list[str], h2: list[str]) -> int:
+        count = 0
+        for a, b in zip(h1, h2):
+            if a == b:
+                count += 1
+            else:
+                break
+        return count
+
 
     # ================================================================
     # Step 4: 최종 Chunk 생성
@@ -524,4 +641,4 @@ class ConfluenceChunker:
 
     def _calc_leaf_length(self, leaf: LeafSection) -> int:
         """리프 섹션의 총 텍스트 길이 계산"""
-        return sum(len(block.text) for block in leaf.content_blocks)
+        return sum(len(block.text or "") for block in leaf.content_blocks)
