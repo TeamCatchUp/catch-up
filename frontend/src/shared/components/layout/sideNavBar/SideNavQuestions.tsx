@@ -66,7 +66,7 @@ export default function SideNavQuestions() {
 
           return (
             <Link
-              href={`/chat/${chatroom.session_id}?q=${encodeURIComponent(chatroom.title)}`}
+              href={`/chat/${chatroom.session_id}`}
               key={chatroom.session_id}
               className={cn('group flex cursor-pointer rounded-lg py-2', isActive ? selectedClass : defaultClass)}
             >
