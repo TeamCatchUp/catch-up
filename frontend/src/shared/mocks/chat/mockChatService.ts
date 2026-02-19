@@ -98,27 +98,6 @@ const getTurnForRequest = (sessionId: string, requestSignature: string) => {
 const buildStreamRequestSignature = (query: string) => `chat:${query.trim()}`;
 
 /**
- * PR 재개 요청 시그니처 생성
- * - PR 선택 조합을 정규화하여 고유 키 생성
- * - 정렬하여 순서에 무관하게 동일한 시그니처 생성
- *
- * @param selectedPRs - 선택된 PR 목록
- * @returns 요청 시그니처 (resume:{owner}/{repo}#{pr_number},...)
- */
-const buildResumeRequestSignature = (selectedPRs: { pr_number: number; repo_name: string; owner: string }[]) => {
-  const normalized = [...selectedPRs]
-    .sort((a, b) => {
-      const left = `${a.owner}/${a.repo_name}#${a.pr_number}`;
-      const right = `${b.owner}/${b.repo_name}#${b.pr_number}`;
-      return left.localeCompare(right);
-    })
-    .map((pr) => `${pr.owner}/${pr.repo_name}#${pr.pr_number}`)
-    .join(',');
-
-  return `resume:${normalized || 'none'}`;
-};
-
-/**
  * 턴별로 다른 출처 데이터 생성
  * - turn 1: 원본 MOCK_SOURCES
  * - turn 2 이상: cited 인덱스 변경([2], [4], [5]), 제목/내용 수정, 시간 증가
@@ -290,35 +269,12 @@ const mockChatService = {
   },
 
   /**
-   * PR 선택 후 스트림 재개 (목 버전)
-   * - 선택된 PR 정보를 기반으로 새 답변 생성
-   * - 턴 시스템으로 매번 다른 답변 제공
-   *
-   * @param sessionId - 세션 ID
-   * @param selectedPRs - 선택된 PR 목록
-   * @param onEvent - 이벤트 핸들러
-   * @param signal - 중단 시그널
-   */
-  /**
    * 마지막 턴 soft-delete (목 버전)
    * - 항상 성공 반환
    */
   resetLastTurn: async (_sessionId: string): Promise<{ status: string }> => {
     return { status: 'success' };
   },
-
-  // TODO: resume API 백엔드 구현 시 재활성
-  // resumeStream: async (
-  //   sessionId: string,
-  //   selectedPRs: { pr_number: number; repo_name: string; owner: string }[],
-  //   onEvent: (event: MockStreamEvent) => void,
-  //   signal?: AbortSignal,
-  // ) => {
-  //   const prLabel = selectedPRs.length > 0 ? selectedPRs.map((pr) => `#${pr.pr_number}`).join(', ') : 'no-selected-pr';
-  //   const query = `resume with ${prLabel}`;
-  //   const turn = getTurnForRequest(sessionId, buildResumeRequestSignature(selectedPRs));
-  //   await emitBackendLikeStream(query, sessionId, turn, onEvent, signal);
-  // },
 };
 
 export default mockChatService;

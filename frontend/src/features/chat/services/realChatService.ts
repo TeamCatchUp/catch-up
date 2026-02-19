@@ -80,7 +80,7 @@ const realChatService = {
    *
    * POST /api/v1/chat/stream
    * - 새 질문에 대한 SSE 스트림 응답 수신
-   * - 이벤트 타입: status, sources, token/delta, interrupt, result, error
+   * - 이벤트 타입: status, sources, token, result, error
    */
   streamChat: async (query: string, sessionId: string, onEvent: (event: StreamEvent) => void, signal?: AbortSignal) => {
     const res = await fetch(API.chat.stream, {
@@ -116,13 +116,6 @@ const realChatService = {
     return res.json();
   },
 
-  // TODO: resume API 백엔드 구현 시 재활성
-  // resumeStream: async (
-  //   sessionId: string,
-  //   selectedPRs: { pr_number: number; repo_name: string; owner: string }[],
-  //   onEvent: (event: StreamEvent) => void,
-  //   signal?: AbortSignal,
-  // ) => { ... },
 };
 
 export default realChatService;

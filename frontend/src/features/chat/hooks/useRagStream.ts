@@ -49,9 +49,6 @@ export const useRagStream = (sessionId: string): UseRagStreamReturn => {
     [sessionId],
   );
 
-  // TODO: resume API 백엔드 구현 시 재활성
-  // const resumeStream = useCallback(async (...) => { ... }, [sessionId]);
-
   const markStopped = useCallback(() => {
     stoppedRef.current = true;
   }, []);
