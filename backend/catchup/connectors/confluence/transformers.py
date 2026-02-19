@@ -13,7 +13,6 @@ page.body.value (Storage Format HTML)
 - confluence:page:{page_id}:chunk:{chunk_index}
 - confluence:blogpost:{page_id}:chunk:{chunk_index}
 """
-import base64
 import logging
 from datetime import datetime
 
@@ -30,9 +29,6 @@ from catchup.connectors.confluence.schemas import (
 from catchup.connectors.confluence.storage_parser import ConfluenceStorageParser
 
 logger = logging.getLogger(__name__)
-
-SUPPORTED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
-MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
 class ConfluenceTransformer:
     def __init__(self):
@@ -55,6 +51,7 @@ class ConfluenceTransformer:
         return self._transform_content(
             content_id=page.id,
             entity_type="page",
+            status=page.status,
             title=page.title,
             body=page.body,
             space_id=page.space_id,
@@ -69,6 +66,7 @@ class ConfluenceTransformer:
             footer_comments=footer_comments,
             inline_comments=inline_comments,
             attachment_images=attachment_images,
+            site_url=site_url,
         )
 
     def transform_blogpost(
@@ -85,6 +83,7 @@ class ConfluenceTransformer:
         return self._transform_content(
             content_id=blogpost.id,
             entity_type="blogpost",
+            status=blogpost.status,
             title=blogpost.title,
             body=blogpost.body,
             space_id=blogpost.space_id,
@@ -99,12 +98,14 @@ class ConfluenceTransformer:
             footer_comments=footer_comments,
             inline_comments=None,
             attachment_images=attachment_images,
+            site_url=site_url,
         )
     
     def _transform_content(
         self,
         content_id: str,
         entity_type: str,
+        status: str,
         title: str,
         body,
         space_id: str | None,
@@ -119,6 +120,7 @@ class ConfluenceTransformer:
         footer_comments: list[ConfluenceCommentResponse] | None,
         inline_comments: list[ConfluenceCommentResponse] | None,
         attachment_images: dict[str, bytes] | None,
+        site_url: str | None = None,
     ) -> list[Document]:
         
         labels = labels or []
@@ -184,13 +186,13 @@ class ConfluenceTransformer:
                 chunk_body=chunk.content,
             )
 
-            # 이미지 임베딩 데이터 생성 (Cohere Embed v4용)
-            embed_input = self._build_embed_input(
-                chunk_content=semantic_content,
-                image_blocks=chunk.image_blocks,
-                attachment_images=attachment_images,
-            )
+            # 이미지 정보
             has_images = bool(chunk.image_blocks)
+            image_urls = self._build_image_urls(
+                image_blocks=chunk.image_blocks,
+                site_url=site_url,
+                content_id=content_id,
+            )
 
             # Document ID: confluence:{entity_type}:{id}:chunk:{index}
             doc_id = f"confluence:{entity_type}:{content_id}:chunk:{chunk.index}"
@@ -199,11 +201,12 @@ class ConfluenceTransformer:
                 # 소스 식별
                 "source": "confluence",
                 "entity_type": entity_type,
+                "status": status,
 
                 # 페이지 정보
-                "page_id": content_id,
-                "page_title": title,
-                "page_url": web_url,
+                "id": content_id,
+                "title": title,
+                "url": web_url,
                 "space_id": space_id,
                 "space_key": space_key,
                 "space_name": space_name,
@@ -223,9 +226,9 @@ class ConfluenceTransformer:
                 "total_chunks": total_chunks,
                 "section_hierarchy": chunk.section_hierarchy,
 
-                # 이미지 임베딩 (Cohere Embed v4)
+                # 이미지
                 "has_images": has_images,
-                "embed_input": embed_input,
+                "image_urls": image_urls,
 
                 # LLM 답변 생성용
                 "contextual_content": contextual_content,
@@ -300,22 +303,6 @@ class ConfluenceTransformer:
         """
         Footer Comment + 매칭 실패 Inline Comment → 별도 Discussion Chunk 생성
 
-        마지막 chunk에 넣지 않고 별도 Chunk로 분리하여
-        원본 콘텐츠 chunk와 토론 내용을 독립적으로 검색 가능하게 한다.
-
-        [임베딩 최적화]
-        page_content(semantic_content)에는 자연어 형식만 사용.
-        날짜, 상태, 작성자 등 메타데이터는 contextual_content에서 활용.
-
-        [Discussion Chunk 형식 — page_content]
-        [Page: API 설계 가이드]
-        [Section: Discussion]
-
-        A user commented: 이 부분 수정 필요합니다
-        A user commented: 확인했습니다
-        A user commented: 전체적으로 잘 정리되었습니다
-        A user commented: 코드 예제 추가해주세요
-
         Returns:
             Discussion Chunk 또는 None (댓글이 없을 때)
         """
@@ -325,13 +312,13 @@ class ConfluenceTransformer:
         for comment in (unmatched_inline or []):
             comment_text = self._extract_comment_text(comment)
             if comment_text:
-                comment_lines.append(f"A user commented: {comment_text}")
+                comment_lines.append(f"Comment: {comment_text}")
 
         # 2) Footer Comments
         for comment in (footer_comments or []):
             comment_text = self._extract_comment_text(comment)
             if comment_text:
-                comment_lines.append(f"A user commented: {comment_text}")
+                comment_lines.append(f"Commented: {comment_text}")
 
         if not comment_lines:
             return None
@@ -421,6 +408,25 @@ class ConfluenceTransformer:
                 return value.strip() or None
         return None
 
+    def _build_image_urls(
+        self,
+        image_blocks: list,
+        site_url: str | None,
+        content_id: str,
+    ) -> list[str]:
+        """Chunk에 포함된 이미지의 다운로드 URL 목록 생성"""
+        if not image_blocks or not site_url:
+            return []
+
+        base = site_url.rstrip("/")
+        urls: list[str] = []
+        for block in image_blocks:
+            if block.image_filename:
+                urls.append(
+                    f"{base}/wiki/download/attachments/{content_id}/{block.image_filename}"
+                )
+        return urls
+
     # ================================================================
     # Dual Content Strategy
     # ================================================================
@@ -445,14 +451,14 @@ class ConfluenceTransformer:
         chunk마다 다른 contextual_content가 생성된다.
 
         형식:
-            [Confluence] API 설계 가이드
+            Title : API 설계 가이드
             Space: Engineering | Labels: api, design
             Author: user_abc | Last Updated: 2024-02-10
             Section: 인증 > OAuth 2.0
 
             (chunk 본문)
         """
-        lines = [f"[Confluence] {title}"]
+        lines = [f"Title : {title}"]
 
         # Space & Labels
         meta_parts = []
@@ -480,80 +486,3 @@ class ConfluenceTransformer:
         lines.append(chunk_body)
 
         return "\n".join(lines)
-
-    # ================================================================
-    # 이미지 임베딩 (Cohere Embed v4)
-    # ================================================================
-
-    def _build_embed_input(
-        self,
-        chunk_content: str,
-        image_blocks: list,
-        attachment_images: dict[str, bytes],
-    ) -> list[dict] | None:
-        """
-        Cohere Embed v4 멀티모달 임베딩 입력 생성
-
-        Embed v4는 텍스트와 이미지를 함께 임베딩할 수 있다.
-        이미지가 포함된 chunk는 텍스트 + 이미지 Data URI를 함께 전달한다.
-
-        [Embed v4 입력 형식]
-        [
-            {"type": "text", "text": "chunk 텍스트..."},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
-        ]
-
-        이미지가 없는 chunk는 None을 반환 → 기본 텍스트 임베딩 사용
-
-        Args:
-            chunk_content: chunk의 텍스트 content
-            image_blocks: 이 chunk에 포함된 이미지 ContentBlock들
-            attachment_images: filename → bytes 매핑 (미리 다운로드된 이미지 데이터)
-
-        Returns:
-            Embed v4 입력 리스트 또는 None (이미지 없을 때)
-        """
-        if not image_blocks:
-            return None
-
-        # 이미지 Data URI 생성
-        image_entries: list[dict] = []
-
-        for block in image_blocks:
-            if not block.image_filename:
-                continue
-
-            image_data = attachment_images.get(block.image_filename)
-            if not image_data:
-                continue
-
-            # 크기 체크 (5MB 초과 시 스킵)
-            if len(image_data) > MAX_IMAGE_SIZE:
-                logger.info(
-                    f"[CONFLUENCE][IMAGE] Skipping oversized image: "
-                    f"{block.image_filename} ({len(image_data)} bytes)"
-                )
-                continue
-
-            # MIME 타입 확인
-            media_type = block.image_media_type
-            if media_type not in SUPPORTED_IMAGE_TYPES:
-                continue
-
-            # base64 인코딩 → Data URI 생성
-            b64_str = base64.b64encode(image_data).decode("utf-8")
-            data_uri = f"data:{media_type};base64,{b64_str}"
-
-            image_entries.append({
-                "type": "image_url",
-                "image_url": {"url": data_uri},
-            })
-
-        if not image_entries:
-            return None
-
-        # 텍스트 + 이미지 결합
-        embed_input = [{"type": "text", "text": chunk_content}]
-        embed_input.extend(image_entries)
-
-        return embed_input
