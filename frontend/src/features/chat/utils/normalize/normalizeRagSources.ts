@@ -60,6 +60,28 @@ const formatCreatedAt = (createdAt?: string | null) => {
  */
 const getSourceLink = (source: SourceResponse) => source.url ?? '';
 
+const buildStableSourceId = (source: SourceResponse, fallbackIndex: number) => {
+  const explicitId = source.id?.trim();
+  if (explicitId) return explicitId;
+
+  const candidates = [
+    source.source,
+    source.entity_type,
+    source.owner,
+    source.repo,
+    source.number !== undefined ? String(source.number) : undefined,
+    source.issue_key,
+    source.ts,
+    source.index !== undefined ? String(source.index) : undefined,
+    source.title,
+  ]
+    .filter(Boolean)
+    .join(':');
+
+  if (candidates) return candidates;
+  return `source_${fallbackIndex + 1}`;
+};
+
 /**
  * 출처 내용 추출
  * citation_rationale → text 순서로 fallback
@@ -147,7 +169,7 @@ export const normalizeSources = (sources: SourceResponse[]): ChatSource[] => {
     const author = sourceType === 'jira' ? (source.assignee ?? source.author ?? '') : (source.author ?? '');
 
     return {
-      id: crypto.randomUUID(),
+      id: buildStableSourceId(source, index),
       source_type: sourceType,
       is_cited: source.is_cited ?? false,
       repo: getRepoText(source, sourceType),
