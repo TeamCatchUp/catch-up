@@ -81,13 +81,19 @@ const realChatService = {
    * POST /api/v1/chat/stream
    * - 새 질문에 대한 SSE 스트림 응답 수신
    * - 이벤트 타입: status, sources, token, result, error
+   * - session_id는 선택 값이며, 없으면 서버가 새 세션을 생성
    */
-  streamChat: async (query: string, session_id: string, onEvent: (event: StreamEvent) => void, signal?: AbortSignal) => {
+  streamChat: async (query: string, sessionId: string | undefined, onEvent: (event: StreamEvent) => void, signal?: AbortSignal) => {
+    const payload: { query: string; session_id?: string } = { query };
+    if (sessionId) {
+      payload.session_id = sessionId;
+    }
+
     const res = await fetch(API.chat.stream, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ query, session_id }),
+      body: JSON.stringify(payload),
       signal,
     });
 

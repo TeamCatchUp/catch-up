@@ -172,15 +172,17 @@ const emitBackendLikeStream = async (
 const mockChatService = {
   streamChat: async (
     query: string,
-    session_id: string,
+    sessionId: string | undefined,
     onEvent: (event: MockStreamEvent) => void,
     signal?: AbortSignal,
   ) => {
-    const turn = getTurnForRequest(session_id, buildStreamRequestSignature(query));
-    await emitBackendLikeStream(query, session_id, turn, onEvent, signal);
+    const resolvedSessionId = sessionId ?? `mock-session-${crypto.randomUUID()}`;
+    const turn = getTurnForRequest(resolvedSessionId, buildStreamRequestSignature(query));
+    await emitBackendLikeStream(query, resolvedSessionId, turn, onEvent, signal);
   },
 
-  resetLastTurn: async (_session_id: string): Promise<{ status: string }> => {
+  resetLastTurn: async (sessionId: string): Promise<{ status: string }> => {
+    void sessionId;
     return { status: 'success' };
   },
 };
