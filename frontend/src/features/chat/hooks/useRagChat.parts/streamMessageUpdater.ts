@@ -1,10 +1,15 @@
 import type { ChatData, ChatSource, Message } from '@/features/chat/types';
 
 interface AppendStreamingTokenParams {
+  // 기존 chatData 스냅샷
   prev: ChatData;
+  // 이번 이벤트에서 들어온 토큰 1개
   token: string;
+  // 현재 스트리밍 대상 assistant 메시지 id
   currentStreamingMessageId: string | null;
+  // 최신 UI용 sources(정규화 완료)
   latestUiSources: ChatSource[];
+  // 첫 질문 자동실행 케이스에서 user 메시지 보정용
   effectiveInitialQuery: string | null;
 }
 
@@ -15,7 +20,9 @@ interface UpdateStreamingSourcesParams {
 }
 
 interface StreamingUpdateResult {
+  // 업데이트된 chatData
   nextData: ChatData;
+  // 다음 토큰이 붙어야 할 메시지 id
   nextStreamingMessageId: string | null;
 }
 
@@ -32,6 +39,7 @@ export const appendStreamingToken = ({
   latestUiSources,
   effectiveInitialQuery,
 }: AppendStreamingTokenParams): StreamingUpdateResult => {
+  // 1) 이미 스트리밍 대상 메시지를 알고 있으면, 해당 메시지에 직접 append
   if (currentStreamingMessageId) {
     const streamMessageIndex = prev.messages.findIndex((message) => message.id === currentStreamingMessageId);
 
@@ -51,6 +59,7 @@ export const appendStreamingToken = ({
     }
   }
 
+  // 2) 명시 id는 없지만 마지막 메시지가 assistant면 거기에 이어 붙임
   const lastMessage = prev.messages[prev.messages.length - 1];
   if (lastMessage?.role === 'assistant') {
     const messages = [...prev.messages];
@@ -66,6 +75,8 @@ export const appendStreamingToken = ({
     };
   }
 
+  // 3) assistant 메시지가 전혀 없는 경우:
+  //    필요하면 user 메시지를 먼저 보정해 넣고, 새 assistant 메시지를 생성
   const hasUser = prev.messages.some((message) => message.role === 'user');
   const baseMessages = [...prev.messages];
   if (!hasUser && effectiveInitialQuery) {
@@ -98,6 +109,11 @@ export const appendStreamingToken = ({
 
 /**
  * 스트리밍 중인 메시지의 sources만 갱신
+ *
+ * 동작:
+ * - 명시된 streaming id가 있으면 해당 메시지 갱신
+ * - 없으면 마지막 assistant 메시지를 대상 메시지로 추론
+ * - 대상을 못 찾으면 기존 데이터 그대로 반환
  */
 export const updateStreamingSources = ({
   prev,
@@ -106,6 +122,7 @@ export const updateStreamingSources = ({
 }: UpdateStreamingSourcesParams): StreamingUpdateResult => {
   let resolvedStreamingMessageId = currentStreamingMessageId;
   if (!resolvedStreamingMessageId) {
+    // 토큰 시작 전에 sources가 먼저 오는 케이스를 위해 마지막 assistant를 fallback으로 사용
     const lastMessage = prev.messages[prev.messages.length - 1];
     if (lastMessage?.role === 'assistant') {
       resolvedStreamingMessageId = lastMessage.id;
