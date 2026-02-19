@@ -78,10 +78,6 @@ export default function RagAnswerPage() {
                       isLoading={chat.isLoading && isLastPair}
                       isError={chat.isError && isLastPair}
                       currentStep={chat.currentStep}
-                      showPRSelection={chat.showPRSelection && isLastPair}
-                      prList={chat.prList}
-                      onPRContinue={chat.handlePRContinue}
-                      onPRRefetch={chat.handlePRRefetch}
                       onFeedbackSubmitted={chat.updateMessageFeedback}
                     />
                   </div>
@@ -96,10 +92,6 @@ export default function RagAnswerPage() {
                     isLoading={chat.isLoading}
                     isError={chat.isError}
                     currentStep={chat.currentStep}
-                    showPRSelection={chat.showPRSelection}
-                    prList={chat.prList}
-                    onPRContinue={chat.handlePRContinue}
-                    onPRRefetch={chat.handlePRRefetch}
                     onFeedbackSubmitted={chat.updateMessageFeedback}
                   />
                 </div>
