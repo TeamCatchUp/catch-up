@@ -29,7 +29,21 @@ def get_sync_state(
         ConfluenceSyncState.space_key == space_key,
         ConfluenceSyncState.entity_type == entity_type,
     )
-    return db.execute(stmt).scalar_one_or_none()
+    return db.execute(stmt).scalar_one_or_none()\
+
+def get_synced_space_keys(
+        db: Session,
+        cloud_id: str,
+) -> list[str]:
+    stmt = (
+        select(ConfluenceSyncState.space_key)
+        .where(
+            ConfluenceSyncState.cloud_id == cloud_id,
+            ConfluenceSyncState.last_successful_sync_at.isnot(None),
+        )
+        .distinct()
+    )
+    return list(db.execute(stmt).scalars().all())
 
 
 def get_all_sync_states(

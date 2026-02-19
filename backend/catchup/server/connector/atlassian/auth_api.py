@@ -100,7 +100,6 @@ async def atlassian_oauth_callback(
 
     for cloud_id in result.confluence_targets:
         background_tasks.add_task(_sync_confluence_metadata, cloud_id)
-        background_tasks.add_task(_ensure_confluence_webhook, cloud_id)
 
     logger.info(
         f"[ATLASSIAN][AUTH] 설치 완료: {len(result.resources)}개 사이트 연결 (Jira + Confluence)"
@@ -225,17 +224,3 @@ async def _sync_confluence_metadata(cloud_id: str) -> None:
         )
     finally:
         db.close()
-
-
-
-async def _ensure_confluence_webhook(cloud_id: str) -> None:
-    """
-    Confluence Webhook 등록 보장 (BackgroundTask)
-
-    TODO: Phase 3에서 Confluence webhook 등록/갱신으로 확장
-    (현재 스텁 로그만 남기며, 추후 이벤트 동기화 정책 정합성 점검 필요).
-    """
-    logger.info(
-        f"[ATLASSIAN][AUTH] Confluence webhook ensure skipped (Phase 3): "
-        f"cloud_id={cloud_id}"
-    )
