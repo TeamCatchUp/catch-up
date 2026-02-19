@@ -29,8 +29,8 @@ services:
     profiles: ["backend", "full"]
     build:
       context: .
-      dockerfile: ./backend/Dockerfile.textsearch-ko
-    image: pgvector/pgvector:pg16
+      dockerfile: ./backend/Dockerfile.pg_bigm
+    image: catchup-db-pg17:local
     environment:
       - POSTGRES_USER=${DB_USERNAME:-postgres}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
@@ -39,9 +39,9 @@ services:
       - pg_data:/var/lib/postgresql/data
     networks:
       - catchup_net
-    restart: always
     ports:
       - "5433:5432"
+    restart: always
 
   web_client:
     build:
