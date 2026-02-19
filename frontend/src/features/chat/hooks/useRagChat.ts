@@ -64,7 +64,7 @@ interface UseRagChatReturn {
 export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions): UseRagChatReturn => {
   const storageKeys = getStorageKeys(sessionId);
   const effectiveInitialQuery = getEffectiveInitialQuery(initialQuery, sessionId);
-  const { streamChat, abortStream, markStopped, resetStopped, isStopped } = useRagStream(sessionId);
+  const { streamChat, abortStream, markStopped, resetStopped, isStopped } = useRagStream();
   const queryClient = useQueryClient();
 
   const [chatData, setChatData] = useState<ChatData | null>(() =>
@@ -416,7 +416,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       beginAnswerLoading();
 
       try {
-        await streamChat(message, handleStreamEvent);
+        await streamChat(message, sessionId, handleStreamEvent);
         finalizeAfterStreamClose();
       } catch (err) {
         if ((err as Error).name === 'AbortError') {
@@ -437,6 +437,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       handleAbortError,
       isLoading,
       refreshRecentChatsNow,
+      sessionId,
       storageKeys.chat,
       streamChat,
     ],
@@ -474,7 +475,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
           console.warn('[useRagChat] resetLastTurn failed, proceeding with stream:', resetErr);
         }
 
-        await streamChat(newContent, handleStreamEvent);
+        await streamChat(newContent, sessionId, handleStreamEvent);
         finalizeAfterStreamClose();
       } catch (err) {
         if ((err as Error).name === 'AbortError') {
@@ -573,7 +574,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
       clearPendingInitialQuery(sessionId);
 
       try {
-        await streamChat(effectiveInitialQuery, handleStreamEvent);
+        await streamChat(effectiveInitialQuery, sessionId, handleStreamEvent);
         finalizeAfterStreamClose();
       } catch (err) {
         if ((err as Error).name === 'AbortError') {
