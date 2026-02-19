@@ -40,7 +40,7 @@ export default function RagAnswerPage() {
     <div className="flex h-screen w-full">
       {/* 메인 영역 */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <RagContentHeader title={chat.chatData?.title ?? ''} onSelectQuestion={() => {}} />
+        <RagContentHeader title={chat.chatData?.title ?? ''} />
 
         {/* 스크롤 가능한 콘텐츠 영역 */}
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
