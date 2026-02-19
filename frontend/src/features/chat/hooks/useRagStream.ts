@@ -21,7 +21,7 @@ interface UseRagStreamReturn {
  * - 스트림 중단 (AbortController 기반)
  * - 사용자 중단 상태 추적 (stopped flag)
  */
-export const useRagStream = (sessionId: string): UseRagStreamReturn => {
+export const useRagStream = (session_id: string): UseRagStreamReturn => {
   const abortRef = useRef<AbortController | null>(null);
   const stoppedRef = useRef(false);
 
@@ -39,14 +39,14 @@ export const useRagStream = (sessionId: string): UseRagStreamReturn => {
       const controller = new AbortController();
       abortRef.current = controller;
       try {
-        await chatService.streamChat(query, sessionId, onEvent, controller.signal);
+        await chatService.streamChat(query, session_id, onEvent, controller.signal);
       } finally {
         if (abortRef.current === controller) {
           abortRef.current = null;
         }
       }
     },
-    [sessionId],
+    [session_id],
   );
 
   const markStopped = useCallback(() => {

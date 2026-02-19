@@ -82,12 +82,12 @@ const realChatService = {
    * - 새 질문에 대한 SSE 스트림 응답 수신
    * - 이벤트 타입: status, sources, token, result, error
    */
-  streamChat: async (query: string, sessionId: string, onEvent: (event: StreamEvent) => void, signal?: AbortSignal) => {
+  streamChat: async (query: string, session_id: string, onEvent: (event: StreamEvent) => void, signal?: AbortSignal) => {
     const res = await fetch(API.chat.stream, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ query, session_id: sessionId }),
+      body: JSON.stringify({ query, session_id }),
       signal,
     });
 
