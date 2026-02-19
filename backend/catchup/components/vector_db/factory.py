@@ -11,9 +11,8 @@ from catchup.db.engine import engine
 from catchup.configs.config import settings
 
 
-@lru_cache(maxsize=1)
 def get_vector_db_service(
-    provider: str,
+    provider: VectorDbProvider,
     embeddings: Optional[Embeddings] = None  # TODO: Meilisearch 관련 코드 제거 이후 Optional 해제
 )-> BaseVectorDbService:
     
