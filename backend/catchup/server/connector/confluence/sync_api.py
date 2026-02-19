@@ -2,7 +2,7 @@
 Confluence Sync API
 
 Confluence 데이터 동기화 API 엔드포인트.
-전체/증분 동기화, 상태 조회 기능 제공.
+전체 동기화, 상태 조회 기능 제공.
 """
 
 import logging
@@ -121,55 +121,6 @@ async def trigger_full_sync(
             detail=f"동기화 중 오류가 발생했습니다: {str(e)}",
         )
 
-
-@router.post("/incremental", response_model=ConfluenceSyncResponse)
-async def trigger_incremental_sync(
-    request: ConfluenceSyncRequest,
-    cloud_id: str = Query(..., description="Atlassian Cloud ID"),
-    db: Session = Depends(get_db),
-):
-    """
-    증분 동기화 트리거
-
-    마지막 동기화 이후 변경된 Page/BlogPost만 동기화.
-    """
-    try:
-        service = await create_confluence_ingestion_service(db, cloud_id)
-        result = await service.incremental_sync(
-            db=db,
-            space_keys=request.space_keys,
-        )
-
-        summary_parts = []
-        if result["pages"]["synced"] > 0 or result["pages"]["errors"] > 0:
-            summary_parts.append(f"Pages={result['pages']['synced']}")
-        if result["blogposts"]["synced"] > 0 or result["blogposts"]["errors"] > 0:
-            summary_parts.append(f"BlogPosts={result['blogposts']['synced']}")
-
-        message = (
-            f"증분 동기화 완료: {', '.join(summary_parts)}"
-            if summary_parts
-            else "변경된 데이터가 없습니다"
-        )
-
-        return ConfluenceSyncResponse(
-            status="success",
-            message=message,
-            cloud_id=cloud_id,
-            results={
-                "pages": SyncResultDetail(**result["pages"]),
-                "blogposts": SyncResultDetail(**result["blogposts"]),
-            },
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"[CONFLUENCE][SYNC] Incremental sync error: cloud_id={cloud_id}, error={e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"증분 동기화 중 오류가 발생했습니다: {str(e)}",
-        )
 
 
 @router.get("/status", response_model=list[ConfluenceSyncStatusResponse])

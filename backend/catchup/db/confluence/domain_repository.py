@@ -66,6 +66,17 @@ def delete_spaces_by_cloud_id(db: Session, cloud_id: str) -> int:
     db.commit()
     return result.rowcount
 
+def get_space_id_map(
+        db: Session, cloud_id: str, space_keys: list[str],
+) -> dict[str, str]:
+    stmt = select(
+        ConfluenceSpace.space_key, ConfluenceSpace.space_id,
+    ).where(
+        ConfluenceSpace.cloud_id == cloud_id,
+        ConfluenceSpace.space_key.in_(space_keys)
+    )
+    return dict(db.execute(stmt).all())
+
 
 # ------------------------------------------------------------
 # Confluence Users

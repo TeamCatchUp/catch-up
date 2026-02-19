@@ -27,6 +27,8 @@ from langchain_cohere import CohereEmbeddings
 from langchain_core.documents import Document
 from langchain_postgres import PGVector
 
+from sqlalchemy import delete as sa_delete
+
 from catchup.configs.config import settings
 
 logger = logging.getLogger(__name__)
@@ -366,3 +368,18 @@ class PGVectorRepository:
             "embedding_dimensions": settings.PGVECTOR_EMBEDDING_DIMENSIONS,
             "initialized": self._initialized,
         }
+    
+    async def delete_by_id_prefix(self, prefix: str) -> None:
+        self._ensure_initialized()
+
+        if not prefix:
+            return
+
+        with self.vector_store._make_sync_session() as session:
+            stmt = sa_delete(self.vector_store.EmbeddingStore).where(
+                self.vector_store.EmbeddingStore.id.like(f"{prefix}%")
+            )
+            result = session.execute(stmt)
+            session.commit()
+
+        logger.info(f"Deleted {result.rowcount} documents with prefix '{prefix}'")
