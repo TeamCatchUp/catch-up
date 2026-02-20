@@ -9,7 +9,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import type { FilterLabels, PopoverType } from '@/shared/types/query/search';
 
-export type SourceType = 'jira' | 'github' | 'slack';
+export type SourceType = 'jira' | 'github' | 'slack' | 'confluence';
 
 export interface UseSearchFiltersReturn {
   // Popover
