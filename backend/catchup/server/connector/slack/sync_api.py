@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -36,6 +37,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/slack/sync", tags=["slack-sync"])
 
 
+class SlackFullSyncRequest(BaseModel):
+    """Slack Full Sync 요청"""
+
+    team_id: str = Field(..., description="Slack Team/Workspace ID")
+    sync_days: int | None = Field(
+        None,
+        description="수집 범위 (일), 미지정 시 기본값 사용",
+    )
+
+
 def _require_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """
     Slack 동기화 API 접근 권한 검사.
@@ -50,8 +61,7 @@ def _require_admin_user(current_user: User = Depends(get_current_user)) -> User:
 
 @router.post("/full", response_model=SlackSyncResponse)
 async def trigger_full_sync(
-    team_id: str = Query(..., description="Slack Team/Workspace ID"),
-    sync_days: int | None = Query(None, description="수집 범위 (일), 기본값 3년"),
+    request: SlackFullSyncRequest,
     db: Session = Depends(get_db),
     _admin_user: User = Depends(_require_admin_user),
 ):
@@ -61,6 +71,8 @@ async def trigger_full_sync(
     지정된 채널(또는 전체)의 모든 Slack 데이터를 PGVector에 동기화.
     대량의 데이터가 있을 경우 시간이 오래 걸릴 수 있습니다.
     """
+    team_id = request.team_id
+    sync_days = request.sync_days
     try:
         service = await create_slack_ingestion_service(db, team_id)
         result = await service.full_sync(db, sync_days=sync_days)

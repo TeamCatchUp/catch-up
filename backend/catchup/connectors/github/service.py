@@ -42,7 +42,6 @@ from catchup.connectors.github.schemas import (
     GithubCommit,
     PRFileContext,
     PRComment,
-    FullSyncRequest,
     IncrementalSyncRequest,
 )
 from catchup.connectors.github.transformers import GithubTransformer
@@ -250,7 +249,8 @@ class GithubIngestionService:
     async def full_sync(
         self,
         db: Session,
-        request: FullSyncRequest,
+        repo_ids: list[int] | None = None,
+        sync_days: int | None = None,
     ) -> dict[str, Any]:
         """
         Github Full Sync
@@ -259,30 +259,23 @@ class GithubIngestionService:
             "repositories": {"synced": 0, "errors": 0},
             "issues": {"synced": 0, "errors": 0},
             "pull_requests": {"synced": 0, "errors": 0},
-            "users": {"synced": 0, "errors": 0},
         }
 
         try:
-            # 0. User 동기화
-            if request.sync_users:
-                user_result = await self._sync_users(db)
-                results["users"]["synced"] = user_result.get("synced", 0)
-                results["users"]["errors"] = user_result.get("errors", 0)
-
             # 1. Repository 목록 조회 및 RDBMS 저장
-            if request.sync_repos or request.repo_ids is None:
-                repos_to_sync = await self._sync_repositories(db)
-                results["repositories"]["synced"] = len(repos_to_sync)
-            else:
-                # repo_ids로 full_name 조회
-                repos_to_sync = self._get_repo_names_by_ids(db, request.repo_ids)
+            repos_to_sync = (
+                await self._sync_repositories(db)
+                if repo_ids is None
+                else self._get_repo_names_by_ids(db, repo_ids)
+            )
+            results["repositories"]["synced"] = len(repos_to_sync)
+            days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
+            sync_from = datetime.now(timezone.utc) - timedelta(days=days)
 
-            # 필터링: 지정된 repo_ids만 동기화
-            if request.repo_ids:
-                target_names = set(self._get_repo_names_by_ids(db, request.repo_ids))
-                repos_to_sync = [r for r in repos_to_sync if r in target_names]
-
-            logger.info(f"[GITHUB][{SyncOperation.FULL_SYNC}] Syncing {len(repos_to_sync)} repositories")
+            logger.info(
+                f"[GITHUB][{SyncOperation.FULL_SYNC}] Syncing {len(repos_to_sync)} "
+                f"repositories from last {days} days"
+            )
 
             # 2. 각 Repository별 동기화
             for repo_full_name in repos_to_sync:
@@ -290,16 +283,14 @@ class GithubIngestionService:
                     owner, repo = repo_full_name.split("/", 1)
 
                     # Issue 동기화
-                    if request.sync_issues:
-                        issue_result = await self._sync_issues(db, owner, repo)
-                        results["issues"]["synced"] += issue_result.get("synced", 0)
-                        results["issues"]["errors"] += issue_result.get("errors", 0)
+                    issue_result = await self._sync_issues(db, owner, repo, since=sync_from)
+                    results["issues"]["synced"] += issue_result.get("synced", 0)
+                    results["issues"]["errors"] += issue_result.get("errors", 0)
 
                     # PR 동기화 (Commits 포함)
-                    if request.sync_prs:
-                        pr_result = await self._sync_pull_requests(db, owner, repo)
-                        results["pull_requests"]["synced"] += pr_result.get("synced", 0)
-                        results["pull_requests"]["errors"] += pr_result.get("errors", 0)
+                    pr_result = await self._sync_pull_requests(db, owner, repo, since=sync_from)
+                    results["pull_requests"]["synced"] += pr_result.get("synced", 0)
+                    results["pull_requests"]["errors"] += pr_result.get("errors", 0)
 
                 except Exception as e:
                     logger.error(f"[GITHUB][{SyncOperation.FULL_SYNC}] Failed to sync repository {repo_full_name}: {e}")

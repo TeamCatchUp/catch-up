@@ -349,14 +349,6 @@ class FullSyncRequest(BaseModel):
         default=None,
         description="동기화할 Repository ID 목록. None이면 모든 접근 가능 레포"
     )
-    sync_issues: bool = Field(default=True, description="Issue 동기화 여부")
-    sync_prs: bool = Field(default=True, description="PR 동기화 여부")
-    sync_repos: bool = Field(default=True, description="Repository 메타데이터 동기화 여부")
-    sync_users: bool = Field(default=False, description="User 동기화 여부")
-    branch: str | None = Field(
-        default=None,
-        description="코드베이스 동기화 대상 브랜치 (향후 구현)"
-    )
 
 
 class IncrementalSyncRequest(BaseModel):

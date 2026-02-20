@@ -202,7 +202,7 @@ class SlackIngestionService:
         self._ensure_initialized()
         self._load_context_from_db(db)
 
-        days = sync_days or settings.SLACK_DEFAULT_SYNC_DAYS
+        days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
         sync_from = str((datetime.now(timezone.utc) - timedelta(days=days)).timestamp())
 
         logger.info(f"[SLACK][FULL SYNC] Starting Full Sync for team_id : {self.team_id}, sync_days = {sync_days}")
@@ -642,4 +642,3 @@ class SlackIngestionService:
 
         logger.debug(f"Summarized {len(documents)} documents for embedding")
         return documents
-
