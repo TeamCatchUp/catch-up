@@ -127,7 +127,7 @@ class Settings(BaseSettings):
     ENABLE_NEO4J: bool = False
 
     # Common Sync Settings
-    DEFAULT_SYNC_DAYS: int
+    DEFAULT_SYNC_DAYS: int = 1095
 
     # Slack Sync Settings
     SLACK_SYNC_MAX_CONCURRENT_REQUESTS: int = 10  # 동시 요청 수
