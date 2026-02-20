@@ -3,6 +3,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from httpx import HTTPStatusError, RequestError
 from sqlalchemy.orm import Session
@@ -14,7 +15,12 @@ from catchup.connectors.slack.schemas import (
 )
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
+from catchup.db.knowledge_source import add_knowledge_source
+from catchup.db.models import KnowledgeSource, SourceType
 from catchup.db.slack import oauth_repository as slack_crud
+from catchup.db.user_source_mapping import upsert_okta_users
+from catchup.mapping.okta import OktaClient
+from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
 from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.db.engine import SessionLocal
@@ -100,9 +106,12 @@ async def slack_oauth_callback(
     )
 
     logger.info(f"[SLACK][AUTH] Installation completed: team_id={tokens.team.id}, name={tokens.team.name}")
-
+    
+    # Knowleged Source 등록
+    await _register_knowledge_source(tokens.team.id)
+    
     # 4. 메타데이터 동기화 (BackgroundTask)
-    background_tasks.add_task(_sync_workspace_metadata, tokens.team.id)
+    background_tasks.add_task(_sync_workspace_metadata_and_map_user, tokens.team.id)
 
     # 5. 프론트엔드로 리다이렉트
     return RedirectResponse(
@@ -190,6 +199,64 @@ async def slack_uninstall(
 # =============================================================================
 # Private Helper Functions
 # =============================================================================
+async def _register_knowledge_source(team_id: str):
+    def _sync_task():
+        with SessionLocal() as db:
+            new_source = KnowledgeSource(
+                workspace_id=1,
+                source_type=SourceType.SLACK,
+                display_name="Slack",
+                external_identifier=team_id    
+            )
+            add_knowledge_source(db, new_source)
+            db.commit()
+    await run_in_threadpool(_sync_task)
+
+
+async def _sync_workspace_metadata_and_map_user(team_id: str) -> None:
+    """Slack 메타데이터 fetching 이후 사용자 매핑까지 수행하는 Wrapper 함수 (임시)"""
+    
+    await _sync_workspace_metadata(team_id)
+    
+    logger.info(f"[OKTA][MAPPING] Starting Okta sync and Slack mapping for team_id={team_id}")
+    
+     # Okta Users 기반 Slack Users 매핑
+    try:
+        okta_client = OktaClient()
+        okta_users = await okta_client.get_parsed_users()
+        
+        if okta_users:
+            def _mapping_task_sync():
+                with SessionLocal() as db:
+                    try:
+                        upsert_okta_users(db, okta_users)
+                        
+                        mapping_result = sync_users_to_pre_mapping_buffer(
+                            db=db,
+                            source_type=SourceType.SLACK,
+                            okta_users=okta_users
+                        )
+                        
+                        db.commit() 
+                        return mapping_result
+                        
+                    except Exception as e:
+                        db.rollback() 
+                        logger.error(f"Transaction failed, rolling back: {e}")
+                        raise
+                
+            mapping_result = await run_in_threadpool(_mapping_task_sync)
+            logger.info(f"[OKTA][MAPPING] Mapping completed: {mapping_result}")
+        else:
+            logger.warning("[OKTA][MAPPING] No active users found in Okta. Skipping mapping.")
+            
+    except Exception as e:
+        logger.error(
+            f"[SLACK][AUTH] Okta mapping failed after Slack sync: "
+            f"team_id={team_id}, error={e}",
+            exc_info=True
+        )
+
 
 async def _sync_workspace_metadata(team_id: str) -> None:
     """
