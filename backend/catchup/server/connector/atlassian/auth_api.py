@@ -109,7 +109,6 @@ async def atlassian_oauth_callback(
     for cloud_id in result.confluence_targets:
         await _register_knowledge_source(cloud_id, SourceType.CONFLUENCE)
         background_tasks.add_task(_sync_confluence_metadata, cloud_id)
-        background_tasks.add_task(_ensure_confluence_webhook, cloud_id)
         
     if result.jira_targets or result.confluence_targets:
         background_tasks.add_task(_sync_okta_users_and_map_all_sources)
