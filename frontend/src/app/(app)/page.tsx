@@ -95,6 +95,7 @@ export default function Home() {
           filters={filters}
           variant={shouldShowNoHistoryBox ? 'no-history' : 'default'}
           noHistoryExpanded={isNoHistoryExpanded || input.isFocused}
+          highlightBracketPlaceholders
         />
       </div>
 

@@ -22,6 +22,7 @@ interface QueryBoxProps {
   filters: UseSearchFiltersReturn;
   variant?: 'default' | 'no-history';
   noHistoryExpanded?: boolean;
+  highlightBracketPlaceholders?: boolean;
 }
 
 const QueryBox = ({
@@ -31,6 +32,7 @@ const QueryBox = ({
   filters,
   variant = 'default',
   noHistoryExpanded = true,
+  highlightBracketPlaceholders = false,
 }: QueryBoxProps) => {
   const isNoHistory = variant === 'no-history';
   const showPanel = isNoHistory ? noHistoryExpanded : input.isFocused;
@@ -53,7 +55,11 @@ const QueryBox = ({
       ref={containerRef}
       className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center border border-solid bg-white ${containerClassName}`}
     >
-      <QueryInput input={input} inputRef={inputRef} />
+      <QueryInput
+        input={input}
+        inputRef={inputRef}
+        highlightBracketPlaceholders={highlightBracketPlaceholders}
+      />
 
       {showPanel && (
         <div
