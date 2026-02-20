@@ -256,6 +256,7 @@ class JiraTransformer:
             "issue_key": issue.key,
             "issue_id": issue.id,
             "url": issue.url,
+            "title": issue.summary,
 
             # 분류
             "project_key": issue.project_key,
@@ -449,6 +450,7 @@ class JiraTransformer:
             "issue_key": issue.key,
             "issue_id": issue.id,
             "url": issue.url,
+            "title": issue.summary,
             "project_key": issue.project_key,
             "status": issue.status,
             "assignee": issue.assignee.display_name if issue.assignee else None,
@@ -625,4 +627,3 @@ class JiraTransformer:
                 state=sprint_data.get("state"),
             )
         return None
-
