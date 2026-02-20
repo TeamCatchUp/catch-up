@@ -7,13 +7,15 @@ Confluence 데이터 동기화 API 엔드포인트.
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from catchup.auth.dependencies import get_current_user
 from catchup.connectors.confluence.factory import create_confluence_ingestion_service
 from catchup.db.confluence import sync_repository as confluence_sync
 from catchup.db.dependencies import get_db
+from catchup.db.models import User, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +69,18 @@ class ConfluenceSyncStatusResponse(BaseModel):
 router = APIRouter(prefix="/api/v1/confluence/sync", tags=["confluence-sync"])
 
 
+def _require_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Confluence 동기화 API 접근 권한 검사.
+    """
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="권한이 없습니다. 관리자만 동기화 API를 호출할 수 있습니다.",
+        )
+    return current_user
+
+
 # ================================================================
 # Endpoints
 # ================================================================
@@ -76,6 +90,7 @@ async def trigger_full_sync(
     request: ConfluenceSyncRequest,
     cloud_id: str = Query(..., description="Atlassian Cloud ID"),
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
     전체 동기화 트리거
@@ -125,6 +140,7 @@ async def trigger_full_sync(
 async def trigger_incremental_sync(
     cloud_id: str = Query(..., description="Atlassian Cloud ID"),
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
     Sync Status가 있는 Space Id를 대상으로 마지막 동기화 시점 이후 수정/생성된 Page, Blogpost 동기화
@@ -183,6 +199,7 @@ async def trigger_incremental_sync(
 async def get_sync_status(
     cloud_id: str = Query(..., description="Atlassian Cloud ID"),
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
     동기화 상태 조회

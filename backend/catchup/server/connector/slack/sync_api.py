@@ -5,10 +5,12 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from catchup.auth.dependencies import get_current_user
 from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.connectors.slack.schemas import SlackEventWrapper, SlackMessageEvent
 from catchup.connectors.slack import webhook_service
 from catchup.configs.config import settings
+from catchup.db.models import User, UserRole
 from catchup.server.connector.slack.schemas import (
     ChannelAccessInfo,
     ChannelAccessResponse,
@@ -34,11 +36,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/slack/sync", tags=["slack-sync"])
 
 
+def _require_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Slack 동기화 API 접근 권한 검사.
+    """
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="권한이 없습니다. 관리자만 동기화 API를 호출할 수 있습니다.",
+        )
+    return current_user
+
+
 @router.post("/full", response_model=SlackSyncResponse)
 async def trigger_full_sync(
     team_id: str = Query(..., description="Slack Team/Workspace ID"),
     sync_days: int | None = Query(None, description="수집 범위 (일), 기본값 3년"),
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
     전체 동기화 트리거
@@ -83,6 +98,7 @@ async def trigger_full_sync(
 @router.post("/flush", response_model=SlackFlushResponse)
 async def flush_all_slack_buffers(
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
     모든 Slack Workspace의 Redis 버퍼를 즉시 flush하고 증분 동기화
@@ -250,6 +266,7 @@ async def flush_all_slack_buffers(
 async def get_sync_status(
     team_id: str = Query(..., description="Slack Team/Workspace ID"),
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
     동기화 상태 조회
@@ -286,6 +303,7 @@ async def get_sync_status(
 async def debug_channel_access(
     team_id: str = Query(..., description="Slack Team/Workspace ID"),
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
     Bot이 접근 권한이 있는 채널 목록 조회
