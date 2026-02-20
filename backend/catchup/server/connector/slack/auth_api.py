@@ -15,7 +15,8 @@ from catchup.connectors.slack.schemas import (
 )
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
-from catchup.db.models import SourceType
+from catchup.db.knowledge_source import add_knowledge_source
+from catchup.db.models import KnowledgeSource, SourceType
 from catchup.db.slack import oauth_repository as slack_crud
 from catchup.db.user_source_mapping import upsert_okta_users
 from catchup.mapping.okta import OktaClient
@@ -105,7 +106,10 @@ async def slack_oauth_callback(
     )
 
     logger.info(f"[SLACK][AUTH] Installation completed: team_id={tokens.team.id}, name={tokens.team.name}")
-
+    
+    # Knowleged Source 등록
+    await _register_knowledge_source(tokens.team.id)
+    
     # 4. 메타데이터 동기화 (BackgroundTask)
     background_tasks.add_task(_sync_workspace_metadata_and_map_user, tokens.team.id)
 
@@ -195,6 +199,20 @@ async def slack_uninstall(
 # =============================================================================
 # Private Helper Functions
 # =============================================================================
+async def _register_knowledge_source(team_id: str):
+    def _sync_task():
+        with SessionLocal() as db:
+            new_source = KnowledgeSource(
+                workspace_id=1,
+                source_type=SourceType.SLACK,
+                display_name="Slack",
+                external_identifier=team_id    
+            )
+            add_knowledge_source(db, new_source)
+            db.commit()
+    await run_in_threadpool(_sync_task)
+
+
 async def _sync_workspace_metadata_and_map_user(team_id: str) -> None:
     """Slack 메타데이터 fetching 이후 사용자 매핑까지 수행하는 Wrapper 함수 (임시)"""
     

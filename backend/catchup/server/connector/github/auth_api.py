@@ -10,6 +10,7 @@ from catchup.connectors.github.schemas import(
      InstallationRepositoriesWebhookPayload, InstallationWebhookPayload,
      IssueWebhookPayload, PullRequestWebhookPayload
 )
+from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.user_source_mapping import upsert_okta_users
 from catchup.mapping.okta import OktaClient
 from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
@@ -21,7 +22,7 @@ from catchup.db.engine import SessionLocal
 from catchup.db.github import installation_repository as installation_crud
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.domain_repository import RepositoryUpsertData
-from catchup.db.models import GithubInstallationType, GithubRepositorySelection, SourceType
+from catchup.db.models import GithubInstallationType, GithubRepositorySelection, KnowledgeSource, SourceType
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 
 logger = logging.getLogger(__name__)
@@ -223,6 +224,19 @@ async def _sync_installation_metadata(installation_id: int) -> None:
 # =============================================================================
 # Private Helper Functions
 # =============================================================================
+async def _register_knowledge_source(installation_id: int):
+    def _sync_task():
+        with SessionLocal() as db:
+            new_source = KnowledgeSource(
+                workspace_id=1,
+                source_type=SourceType.GITHUB,
+                display_name="GitHub",
+                external_identifier=str(installation_id)    
+            )
+            add_knowledge_source(db, new_source)
+            db.commit()
+    await run_in_threadpool(_sync_task)
+
 
 async def _handle_installation_event(
     payload: dict,
@@ -278,6 +292,8 @@ async def _handle_installation_created(
         f"Installation Created: id={new_installation.installation_id}, "
         f"account={new_installation.account_login}"
     )
+    
+    await _register_knowledge_source(installation.id)
 
     background_tasks.add_task(_sync_installation_metadata_and_map_user, installation.id)
     logger.info(f"Scheduled repository sync for installation {installation.id}")
