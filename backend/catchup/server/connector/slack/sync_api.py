@@ -90,24 +90,25 @@ async def flush_all_slack_buffers(
     스케줄러가 정각에 자동으로 실행하는 작업을 수동으로 트리거합니다.
     모든 연결된 Slack Workspace를 순회하며:
     1. Redis에서 버퍼링된 이벤트가 있는 채널 조회
-    2. 각 채널별로 버퍼 클리어 및 이벤트 개수 카운트
-    3. Incremental Sync 실행
+    2. 채널 목록 기준으로 flush_message 실행
+    3. 동기화 성공 후에만 버퍼 클리어
     4. 팀별 결과 수집 및 전체 통계 반환
     """
-    logger.info("Starting manual Slack webhook flush for all teams")
+    # [SLACK][FLUSH] 수동 flush 시작 로그
+    logger.info("[SLACK][FLUSH] Starting manual Slack webhook flush for all teams")
 
     buffer = get_webhook_buffer()
-    results = []
+    results: list[SlackFlushTeamResult] = []
     total_events = 0
     total_synced = 0
     flushed_teams_count = 0
 
     try:
-        # 모든 Slack Token 조회
+        # 1) 연결된 Slack 토큰 조회
         tokens = get_all_slack_tokens(db)
 
         if not tokens:
-            logger.info("No Slack tokens found")
+            logger.info("[SLACK][FLUSH] No Slack tokens found")
             return SlackFlushResponse(
                 status="success",
                 message="연결된 Slack Workspace가 없습니다",
@@ -117,19 +118,19 @@ async def flush_all_slack_buffers(
                 total_synced=0,
             )
 
-        logger.info(f"Found {len(tokens)} Slack workspaces to process")
+        logger.info(f"[SLACK][FLUSH] Found {len(tokens)} Slack workspaces to process")
 
-        # 각 팀별로 처리
+        # 2) 팀 단위로 순차 처리
         for token in tokens:
             team_id = token.team_id
             team_name = token.team_name
 
             try:
-                # 버퍼링된 채널 조회
+                # 2-1) 해당 팀의 버퍼된 채널 조회
                 channels_with_events = await buffer.get_slack_buffered_channels(team_id)
 
                 if not channels_with_events:
-                    logger.debug(f"No buffered events for team {team_id}")
+                    logger.debug(f"[SLACK][FLUSH] No buffered events for team {team_id}")
                     results.append(SlackFlushTeamResult(
                         team_id=team_id,
                         team_name=team_name,
@@ -141,34 +142,33 @@ async def flush_all_slack_buffers(
                     continue
 
                 logger.info(
-                    f"Flushing events for team {team_id}: "
+                    f"[SLACK][FLUSH] Flushing team {team_id}: "
                     f"{len(channels_with_events)} channels affected"
                 )
 
-                # 채널별 버퍼 클리어
-                team_events = 0
-                for channel_id in channels_with_events:
-                    try:
-                        event_count = await buffer.clear_slack_buffer(team_id, channel_id)
-                        team_events += event_count
-                        logger.info(
-                            f"Cleared {event_count} events for channel {channel_id} "
-                            f"(team {team_id})"
-                        )
-                    except Exception as e:
-                        logger.error(
-                            f"Failed to clear buffer for channel {channel_id}: {e}",
-                            exc_info=True,
-                        )
-
                 try:
+                    # 2-2) 채널 목록 기준으로 메시지 증분 동기화 수행
                     service = await create_slack_ingestion_service(db, team_id)
                     sync_result = await service.flush_message(db, channels_with_events)
 
-                    team_synced = sum(
-                        entity_result.get("synced", 0)
-                        for entity_result in sync_result.values()
-                    )
+                    message_result = sync_result.get("messages", {})
+                    team_synced = message_result.get("synced", 0)
+
+                    # 2-3) 동기화 성공 후에만 버퍼 clear (실패 시 이벤트 보존)
+                    team_events = 0
+                    for channel_id in channels_with_events:
+                        try:
+                            event_count = await buffer.clear_slack_buffer(team_id, channel_id)
+                            team_events += event_count
+                            logger.info(
+                                f"[SLACK][FLUSH] Cleared {event_count} events for channel {channel_id} "
+                                f"(team {team_id})"
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"[SLACK][FLUSH] Failed to clear buffer for channel {channel_id}: {e}",
+                                exc_info=True,
+                            )
 
                     total_events += team_events
                     total_synced += team_synced
@@ -184,25 +184,30 @@ async def flush_all_slack_buffers(
                     ))
 
                     logger.info(
-                        f"Successfully flushed team {team_id}: "
+                        f"[SLACK][FLUSH] Successfully flushed team {team_id}: "
                         f"{team_events} events, {team_synced} messages synced"
                     )
 
                 except Exception as e:
-                    logger.error(f"Failed to sync team {team_id}: {e}", exc_info=True)
+                    # 동기화 실패 시 clear는 수행 안함 → 다음 flush에서 재처리 가능
+                    logger.error(
+                        f"[SLACK][FLUSH] Failed to sync team {team_id}: {e}",
+                        exc_info=True,
+                    )
                     results.append(SlackFlushTeamResult(
                         team_id=team_id,
                         team_name=team_name,
                         flushed_channels=len(channels_with_events),
-                        flushed_events=team_events,
+                        flushed_events=0,
                         synced_messages=0,
                         status="error",
                         error_message=str(e),
                     ))
 
             except Exception as e:
+                # 팀 단위 예외는 전체 작업이 멈추지 않도록 분리
                 logger.error(
-                    f"Failed to process team {team_id}: {e}",
+                    f"[SLACK][FLUSH] Failed to process team {team_id}: {e}",
                     exc_info=True,
                 )
                 results.append(SlackFlushTeamResult(
@@ -220,7 +225,7 @@ async def flush_all_slack_buffers(
             f"{total_events}개 이벤트, {total_synced}개 메시지 동기화"
         )
 
-        logger.info(f"Slack flush completed: {message}")
+        logger.info(f"[SLACK][FLUSH] Manual flush completed: {message}")
 
         return SlackFlushResponse(
             status="success",
@@ -233,7 +238,8 @@ async def flush_all_slack_buffers(
         )
 
     except Exception as e:
-        logger.error(f"Flush all error: {e}", exc_info=True)
+        # 엔드포인트 전체 실패
+        logger.error(f"[SLACK][FLUSH] Flush all error: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"전체 flush 중 오류가 발생했습니다: {str(e)}",
