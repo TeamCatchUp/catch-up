@@ -36,12 +36,32 @@ const AccountSelectorPopover = ({
     <PopoverTrigger asChild>
       <button
         type="button"
-        className="border-neutral-3 text-body-small text-gray-30 flex h-[46px] w-full cursor-pointer items-center justify-between rounded-lg border bg-white px-2.5 py-1.5 text-left"
+        className={`border-neutral-3 flex w-full cursor-pointer items-center rounded-[10px] border bg-white text-left ${
+          selectedAccount ? 'gap-4 px-3 py-2.5' : 'h-[46px] justify-between px-2.5 py-1.5'
+        }`}
       >
-        <span className="truncate">
-          {selectedAccount ? `${selectedAccount.userName} (${selectedAccount.accountId})` : placeholder}
-        </span>
-        <UnfoldMore className="text-gray-40 size-5.5 shrink-0" />
+        {selectedAccount ? (
+          <>
+            <DefaultProfile className="border-neutral-1 text-gray-30 size-10 shrink-0 rounded-full border" />
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <div className="flex items-center gap-2.5">
+                <span className="text-heading-small text-gray-80 max-w-[133px] truncate">
+                  {selectedAccount.userName}
+                </span>
+                <span className="rounded-md2 bg-neutral-2 text-body-xsmall shrink-0 px-1.5 py-0.5 text-gray-50">
+                  {selectedAccount.accountId}
+                </span>
+              </div>
+              <span className="text-body-xsmall truncate text-gray-50">{selectedAccount.userEmail}</span>
+            </div>
+            <UnfoldMore className="text-gray-40 size-6 shrink-0" />
+          </>
+        ) : (
+          <>
+            <span className="text-body-small text-gray-30 truncate">{placeholder}</span>
+            <UnfoldMore className="text-gray-40 size-5.5 shrink-0" />
+          </>
+        )}
       </button>
     </PopoverTrigger>
     <PopoverContent
