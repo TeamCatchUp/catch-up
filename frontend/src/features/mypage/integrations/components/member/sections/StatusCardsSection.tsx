@@ -1,9 +1,13 @@
-﻿import IconHelp from '@/public/icons/icon/help.svg';
+﻿import { useState } from 'react';
+
+import IconHelp from '@/public/icons/icon/help.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
 import { Button } from '@/shared/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import type { IntegrationService } from '@/shared/types/integrationService';
 
 import type { MemberIntegrationCardItem } from '../../../types/integrations';
+import EmbeddingModal from '../modals/EmbeddingModal';
 
 interface StatusCardsSectionProps {
   cards: MemberIntegrationCardItem[];
@@ -11,6 +15,16 @@ interface StatusCardsSectionProps {
 
 /** 이용자 연동 상단 계정 등록 카드 섹션 */
 const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
+  const [embeddingModal, setEmbeddingModal] = useState<{
+    open: boolean;
+    service: IntegrationService;
+    serviceName: string;
+  }>({ open: false, service: 'jira', serviceName: '' });
+
+  const openEmbeddingModal = (service: IntegrationService, serviceName: string) => {
+    setEmbeddingModal({ open: true, service, serviceName });
+  };
+
   return (
     <section className="flex w-250 flex-col gap-3">
       <div className="flex flex-col gap-0.5">
@@ -69,7 +83,12 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
                   />
                 </div>
 
-                <Button variant="box-outline-blue" size="md" className="text-body-small h-9 w-full">
+                <Button
+                  variant="box-outline-blue"
+                  size="md"
+                  className="text-body-small h-9 w-full"
+                  onClick={() => service !== 'slack' && openEmbeddingModal(service, name)}
+                >
                   임베딩하기
                 </Button>
               </div>
@@ -77,6 +96,13 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
           );
         })}
       </div>
+
+      <EmbeddingModal
+        open={embeddingModal.open}
+        onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
+        service={embeddingModal.service}
+        serviceName={embeddingModal.serviceName}
+      />
     </section>
   );
 };
