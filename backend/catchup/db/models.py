@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from enum import IntEnum, StrEnum
+from enum import StrEnum
 from typing import Any, Optional
 from sqlalchemy import ForeignKey, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -16,6 +16,13 @@ class Base(DeclarativeBase):
 class UserRole(StrEnum):
     USER = "user"
     ADMIN = "admin"
+    
+
+class CompanySize(StrEnum):
+    SMALL = "small"  # 1 ~ 5인
+    MEDIUM = "medium" # 6 ~ 20인
+    LARGE = "large"  # 51 ~ 100인
+    ENTERPRISE = "enterprise"  # 100인 이상
 
 
 class Company(Base):
@@ -24,6 +31,7 @@ class Company(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     description: Mapped[str] = mapped_column(String(255), nullable=True)
+    size: Mapped[CompanySize] = mapped_column(String(20), nullable=False, server_default=text(f"'{CompanySize.SMALL.value}'"))
     location: Mapped[str] = mapped_column(String(255), nullable=True)
     logo_url: Mapped[str] = mapped_column(String(500), nullable=True)
     
@@ -43,11 +51,13 @@ class Workspace(Base):
         cascade="all, delete-orphan"
     )
     users: Mapped[list["User"]] = association_proxy("user_links", "user")
+    knowledge_sources: Mapped[list["KnowledgeSource"]] = relationship(back_populates="workspace")
 
 
 class User(Base):
     __tablename__ = "users"
 
+    # Columns   
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -61,12 +71,19 @@ class User(Base):
     )
     provider: Mapped[str] = mapped_column(String(20), nullable=False)
     refresh_token: Mapped[str] = mapped_column(String(500), nullable=True)
- 
+    department_id: Mapped[int] = mapped_column(ForeignKey("departments.id"), nullable=True)
+    job_level_id: Mapped[int] = mapped_column(ForeignKey("job_levels.id"), nullable=True)
+    job_role_id: Mapped[int] = mapped_column(ForeignKey("job_roles.id"), nullable=True)
+    
+    # Objects
     workspace_links: Mapped[list["UserWorkspace"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan"
     )
     workspaces: Mapped[list["Workspace"]] = association_proxy("workspace_links", "workspace")
+    department: Mapped["Department"] = relationship(back_populates="users")
+    job_level: Mapped["JobLevel"] = relationship()
+    job_role: Mapped["JobRole"] = relationship()
     
     
 class UserWorkspace(Base):
@@ -78,8 +95,107 @@ class UserWorkspace(Base):
     
     user: Mapped["User"] = relationship(back_populates="workspace_links")
     workspace: Mapped["Workspace"] = relationship(back_populates="user_links")
+    
+    
+class Department(Base):
+    __tablename__ = "departments"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    
+    users: Mapped[list["User"]] = relationship(back_populates="department")
 
 
+class JobLevel(Base):
+    __tablename__ = "job_levels"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(20), unique=True)
+    rank_order: Mapped[int] = mapped_column(default=10)  # 기본: 10 단위로 관리
+
+
+class JobRole(Base):
+    __tablename__ = "job_roles"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(20), unique=True)
+
+
+class SourceType(StrEnum):
+    CONFLUENCE = "confluence"
+    JIRA = "jira"
+    GITHUB = "github"
+    SLACK = "slack"
+
+
+class KnowledgeSource(Base):
+    __tablename__ = "knowledge_sources"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), nullable=False)
+    source_type: Mapped[SourceType] = mapped_column(String(20), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(20), nullable=False)
+    external_identifier: Mapped[str] = mapped_column(String(128), nullable=False, index=True)  # 논리적 연결
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    
+    workspace: Mapped["Workspace"] = relationship(back_populates="knowledge_sources")    
+
+    
+class UserSourceMapping(Base):
+    __tablename__ = "user_source_mappings"
+       
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    source_type: Mapped[SourceType] = mapped_column(String(20), nullable=False)
+    
+    external_user_identifier: Mapped[str] = mapped_column(String(128), nullable=False)
+    
+    __table_args__ = (
+        UniqueConstraint("user_id", "source_type", name="uq_user_source"),
+    )
+
+
+class PreMappingBuffer(Base):
+    __tablename__ = "pre_mapping_buffers"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    
+    okta_uid: Mapped[str] = mapped_column(String(128), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    name: Mapped[str] = mapped_column(String(100), comment="Okta에 등록된 임직원 실명") 
+    
+    source_type: Mapped[SourceType] = mapped_column(String(20), nullable=False)
+    
+    # Slack: user_id
+    # Github: login_id
+    # Atlassian: account_id
+    external_user_identifier: Mapped[str] = mapped_column(String(128), nullable=False)
+    
+    is_registered: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    
+    # (사내 이메일, 툴 종류) 중복 방지
+    __table_args__ = (
+        UniqueConstraint("email", "source_type", name="uq_email_source_buffer"),
+    )
+    
+
+class OktaUser(Base):
+    __tablename__ = "okta_users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    okta_uid: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    email: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+# =================
+# Integration
+# =================
 class JiraAccountType(StrEnum):
     ATLASSIAN = "atlassian" # 일반 사용자
     APP = "app"             # Bot
@@ -1083,8 +1199,8 @@ class ChatRoom(Base):
         index=True,
         default=uuid.uuid4
     )
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), nullable=False, index=True)
     
     title: Mapped[str] = mapped_column(String(50), nullable=False)
     
@@ -1115,7 +1231,7 @@ class FeedbackLiteral(StrEnum):
     IRRELEVANT_SOURCE = "IRRELEVANT_SOURCE"
     IRRELEVANT_ANSWER = "IRRELEVANT_ANSWER"
     TOO_LONG = "TOO_LONG"
-    OTHER = "OTHER"    
+    OTHER = "OTHER"
 
 
 class ChatHistory(Base):
@@ -1124,7 +1240,8 @@ class ChatHistory(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     chat_room_id: Mapped[int] = mapped_column(
         ForeignKey("chat_rooms.id"), 
-        nullable=False
+        nullable=False,
+        index=True
     )
     
     content: Mapped[str] = mapped_column(Text, nullable=True)

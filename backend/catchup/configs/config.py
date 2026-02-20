@@ -192,6 +192,7 @@ class AuthSettings(BaseSettings):
     OKTA_CLIENT_ID: str
     OKTA_CLIENT_SECRET: str
     OKTA_REDIRECT_URI: str
+    OKTA_API_KEY: str
 
     FRONTEND_REDIRECT_URI: str
 
