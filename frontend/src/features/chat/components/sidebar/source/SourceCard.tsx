@@ -81,10 +81,12 @@ const SourceCard = ({ source, showCount = true, count }: Props) => {
 
       {/* 이 출처가 사용된 이유 (content 필드, 최대 2줄 + 120자 truncate) */}
       <div className="border-neutral-3 flex w-full flex-col gap-0.5 border-l-2 py-0.5 pl-3">
-        <div className="flex items-center gap-1">
-          <LightbulbFilled className="text-gray-20 h-4 w-4" />
-          <span className="text-body-xsmall whitespace-nowrap text-gray-50">이 출처가 사용된 이유</span>
-        </div>
+        {source.is_cited && (
+          <div className="flex items-center gap-1">
+            <LightbulbFilled className="text-gray-20 h-4 w-4" />
+            <span className="text-body-xsmall whitespace-nowrap text-gray-50">이 출처가 사용된 이유</span>
+          </div>
+        )}
         <div className="text-body-small line-clamp-2 wrap-break-word text-gray-50">
           {reasonPreview}
           {isReasonTrimmed && <span className="text-gray-30"> ...더보기</span>}
