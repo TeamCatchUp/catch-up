@@ -5,7 +5,9 @@ import { useRef, useState } from 'react';
 import AdminGuideModal from '@/features/home/components/AdminGuideModal';
 import HowToUse from '@/features/home/components/HowToUse';
 import QuestionTips from '@/features/home/components/QuestionTips';
+import UserGuideModal from '@/features/home/components/UserGuideModal';
 import { ADMIN_GUIDE_STORAGE_KEY } from '@/features/home/constants/adminGuide';
+import { USER_GUIDE_STORAGE_KEY } from '@/features/home/constants/userGuide';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import QueryBox from '@/shared/components/query/QueryBox';
 import { useQuestionHistoryGate } from '@/shared/hooks/query/useQuestionHistoryGate';
@@ -18,11 +20,16 @@ import { useUserStore } from '@/shared/store/userStore';
 
 export default function Home() {
   const user = useUserStore((state) => state.user);
-  const [guideDismissed, setGuideDismissed] = useLocalStorage({
+  const [adminGuideDismissed, setAdminGuideDismissed] = useLocalStorage({
     key: ADMIN_GUIDE_STORAGE_KEY,
     initialValue: false,
   });
-  const showAdminGuide = user?.role === 'admin' && !guideDismissed;
+  const [userGuideDismissed, setUserGuideDismissed] = useLocalStorage({
+    key: USER_GUIDE_STORAGE_KEY,
+    initialValue: false,
+  });
+  const showAdminGuide = user?.role === 'admin' && !adminGuideDismissed;
+  const showUserGuide = user?.role !== 'admin' && !userGuideDismissed;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -106,7 +113,8 @@ export default function Home() {
         <HowToUse />
       </div>
 
-      {showAdminGuide && <AdminGuideModal onDismiss={() => setGuideDismissed(true)} />}
+      {showAdminGuide && <AdminGuideModal onDismiss={() => setAdminGuideDismissed(true)} />}
+      {showUserGuide && <UserGuideModal onDismiss={() => setUserGuideDismissed(true)} />}
     </div>
   );
 }
