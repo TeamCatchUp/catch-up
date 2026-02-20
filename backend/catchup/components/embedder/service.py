@@ -4,8 +4,8 @@ from langchain.embeddings import Embeddings
 from langchain_aws import BedrockEmbeddings
 from langchain_cohere import CohereEmbeddings
 from langchain_openai import OpenAIEmbeddings
-from langchain_aws.utils import create_aws_client
-from openai import api_key
+from botocore.config import Config
+import boto3
 
 from catchup.configs.config import settings
 
@@ -37,9 +37,16 @@ class CohereEmbeddingService(BaseEmbeddingService):
     
 class AwsBedrockEmbeddingService(BaseEmbeddingService):
     def _create_embedder(self):
-        client = create_aws_client(
-            service_name="bedrock-runtime",
-            region_name=settings.AWS_EMBEDDING_MODEL_REGION
+        config = Config(
+            max_pool_connections=40,
+            retries={"max_attempts": 5, "mode": "standard"},
+        )
+        client = boto3.client(
+            "bedrock-runtime",
+            region_name=settings.AWS_EMBEDDING_MODEL_REGION,
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            config=config,
         )
         return BedrockEmbeddings(
             model_id=settings.AWS_BEDROCK_EMBEDDING_MODEL,

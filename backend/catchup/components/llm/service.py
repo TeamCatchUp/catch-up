@@ -4,7 +4,6 @@ from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from langchain_aws import ChatBedrock
 from botocore.config import Config
-import boto3
 
 from catchup.components.llm.constants import ModelCapacity
 from catchup.configs.config import settings
@@ -73,20 +72,16 @@ class AwsBedrockLlmService(BaseLlmService):
 
         config = Config(
             max_pool_connections = 50,
-            retries = {"max_attempts": 5, "mode": "standard"},
-        )
-        client = boto3.client(
-            "bedrock-runtime",
-            region_name = settings.AWS_REGION,
-            aws_access_key_id = settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key = settings.AWS_SECRET_ACCESS_KEY,
-            config = config,
+            retries = {"max_attempts": 5, "mode": "adaptive"},
         )
         
         return ChatBedrock(
-            client=client,
-            model_id = model_id,
+            model_id=model_id,
+            region_name=settings.AWS_REGION,
+            aws_access_key_id=None,
+            aws_secret_access_key=None,
             temperature=0,
             max_tokens=4096,
-            streaming=True
+            streaming=True,
+            config=config
         )

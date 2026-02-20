@@ -95,7 +95,7 @@ class SummarizerService:
     async def summarize_batch(
         self,
         requests: list[SummarizeRequest],
-        max_concurrent: int = 10,
+        max_concurrent: int = 25,
     ) -> list[str]:
         """
         여러 문서를 병렬로 요약합니다.
