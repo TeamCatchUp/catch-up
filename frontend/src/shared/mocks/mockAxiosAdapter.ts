@@ -116,8 +116,7 @@ const mockHandlers: MockHandler[] = [
   {
     pattern: /^\/api\/v1\/onboarding\/complete$/,
     method: 'post',
-    handler: async (_, data) => {
-      console.log('[Mock] onboarding complete:', data);
+    handler: async (_, _data) => {
       const nextStatus: UserStatus = MOCK_USER.role === 'admin' ? 'active' : 'pending';
       MOCK_USER.status = nextStatus;
       return { success: true };
@@ -168,16 +167,14 @@ const mockHandlers: MockHandler[] = [
   {
     pattern: /^\/api\/v1\/admin\/members\/requests\/decide$/,
     method: 'post',
-    handler: async (_, data) => {
-      console.log('[Mock] member request decision:', data);
+    handler: async () => {
       return { success: true };
     },
   },
   {
     pattern: /^\/api\/v1\/admin\/members\/[^/]+\/status$/,
     method: 'patch',
-    handler: async (_, data) => {
-      console.log('[Mock] member status change:', data);
+    handler: async () => {
       return { success: true };
     },
   },
