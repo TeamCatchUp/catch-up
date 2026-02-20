@@ -106,7 +106,7 @@ async def flush_github_events():
     logger.info("Github Webhook Flush Completed")
 
 async def flush_slack_events():
-    logger.info("Starting Slack Webhook Flush")
+    logger.info("[SLACK][FLUSH] Starting Slack Webhook Flush")
     buffer = get_webhook_buffer()
 
     with SessionLocal() as db:
@@ -116,45 +116,55 @@ async def flush_slack_events():
             team_id = token.team_id
 
             try:
+                # 1) Redis에 버퍼된 채널이 있는지 확인
                 channels_with_events = await buffer.get_slack_buffered_channels(team_id)
 
                 if not channels_with_events:
-                    logger.debug(f"No Buffered Events for Slack team {team_id}")
+                    logger.debug(f"No Buffered Events for team_id = {team_id}")
                     continue
-
+                
                 logger.info(
-                    f"Flushing Slack Events for Team {team_id}: "
+                    f"[SLACK][FLUSH] Flushing Slack Team {team_id} "
                     f"{len(channels_with_events)} channels affected"
                 )
 
-                # Create service instance
+                # 2) 팀별 서비스 생성
                 service = await create_slack_ingestion_service(db, team_id)
 
+                # 3) 채널 기준 증분 동기화 수행
+                sync_result = await service.flush_message(db, channels_with_events)
+
+                # 4) 동기화 성공 시 버퍼 삭제 (실패 시 재시도 보장)
+                cleared_total = 0
                 for channel_id in channels_with_events:
                     try:
                         event_count = await buffer.clear_slack_buffer(team_id, channel_id)
+                        cleared_total += event_count
                         logger.info(
-                            f"Cleared {event_count} message events for channel {channel_id}"
+                            f"[SLACK][FLUSH] Cleared {event_count} message events for channel_id = {channel_id}"
                         )
                     except Exception as e:
                         logger.error(
-                            f"Failed to Clear Buffer for Channel {channel_id}: {e}",
-                            exc_info=True
+                            f"[SLACK][FLUSH] Failed to clear buffer for channel {channel_id}: {e}",
+                            exc_info=True,
                         )
-
-                try:
-                    result = await service.incremental_sync(db)
-                    logger.info(f"Slack incremental sync result for team {team_id}: {result}")
-                except Exception as e:
-                    logger.error(f"Failed to sync Slack team {team_id}: {e}", exc_info=True)
-
+                
+                message_result = sync_result.get("messages", {})
+                logger.info(
+                    f"[SLACK][FLUSH] Sync result for team {team_id}: "
+                    f"synced={message_result.get('synced', 0)}, "
+                    f"errors={message_result.get('errors', 0)}, "
+                    f"skipped={message_result.get('skipped', 0)}, "
+                    f"cleared_events={cleared_total}"
+                )
+            
             except Exception as e:
                 logger.error(
-                    f"Failed to Flush Events for Slack Team {team_id}: {e}",
-                    exc_info=True
+                    f"[SLACK][FLUSH] Failed to flush events for Slack Team {team_id}: {e}",
+                    exc_info=True,
                 )
+    logger.info("[SLACK][FLUSH] Slack Webhook Flush Completed")
 
-    logger.info("Slack Webhook Flush Completed")
 
 
 async def flush_jira_events():
