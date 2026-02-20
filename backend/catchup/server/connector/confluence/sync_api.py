@@ -2,18 +2,20 @@
 Confluence Sync API
 
 Confluence 데이터 동기화 API 엔드포인트.
-전체/증분 동기화, 상태 조회 기능 제공.
+전체 동기화, 상태 조회 기능 제공.
 """
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from catchup.auth.dependencies import get_current_user
 from catchup.connectors.confluence.factory import create_confluence_ingestion_service
 from catchup.db.confluence import sync_repository as confluence_sync
 from catchup.db.dependencies import get_db
+from catchup.db.models import User, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +69,18 @@ class ConfluenceSyncStatusResponse(BaseModel):
 router = APIRouter(prefix="/api/v1/confluence/sync", tags=["confluence-sync"])
 
 
+def _require_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Confluence 동기화 API 접근 권한 검사.
+    """
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="권한이 없습니다. 관리자만 동기화 API를 호출할 수 있습니다.",
+        )
+    return current_user
+
+
 # ================================================================
 # Endpoints
 # ================================================================
@@ -76,6 +90,7 @@ async def trigger_full_sync(
     request: ConfluenceSyncRequest,
     cloud_id: str = Query(..., description="Atlassian Cloud ID"),
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
     전체 동기화 트리거
@@ -120,32 +135,30 @@ async def trigger_full_sync(
             status_code=500,
             detail=f"동기화 중 오류가 발생했습니다: {str(e)}",
         )
-
-
-@router.post("/incremental", response_model=ConfluenceSyncResponse)
+    
+@router.post("/incremental", response_model = ConfluenceSyncResponse)
 async def trigger_incremental_sync(
-    request: ConfluenceSyncRequest,
     cloud_id: str = Query(..., description="Atlassian Cloud ID"),
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
-    증분 동기화 트리거
-
-    마지막 동기화 이후 변경된 Page/BlogPost만 동기화.
+    Sync Status가 있는 Space Id를 대상으로 마지막 동기화 시점 이후 수정/생성된 Page, Blogpost 동기화
     """
     try:
         service = await create_confluence_ingestion_service(db, cloud_id)
-        result = await service.incremental_sync(
-            db=db,
-            space_keys=request.space_keys,
-        )
+        result = await service.incremental_sync(db=db)
 
         summary_parts = []
         if result["pages"]["synced"] > 0 or result["pages"]["errors"] > 0:
-            summary_parts.append(f"Pages={result['pages']['synced']}")
+            summary_parts.append(
+                f"Pages={result['pages']['synced']}(skipped={result['pages']['skipped']})"
+            )
         if result["blogposts"]["synced"] > 0 or result["blogposts"]["errors"] > 0:
-            summary_parts.append(f"BlogPosts={result['blogposts']['synced']}")
-
+            summary_parts.append(
+                f"BlogPosts={result['blogposts']['synced']}(skipped={result['blogposts']['skipped']})"
+            )
+        
         message = (
             f"증분 동기화 완료: {', '.join(summary_parts)}"
             if summary_parts
@@ -157,25 +170,36 @@ async def trigger_incremental_sync(
             message=message,
             cloud_id=cloud_id,
             results={
-                "pages": SyncResultDetail(**result["pages"]),
-                "blogposts": SyncResultDetail(**result["blogposts"]),
+                "pages": SyncResultDetail(
+                    synced=result["pages"]["synced"],
+                    errors=result["pages"]["errors"],
+                ),
+                "blogposts": SyncResultDetail(
+                    synced=result["blogposts"]["synced"],
+                    errors=result["blogposts"]["errors"],
+                ),
             },
         )
-
+    
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[CONFLUENCE][SYNC] Incremental sync error: cloud_id={cloud_id}, error={e}")
+        logger.error(
+            f"[CONFLUENCE][INCREMENTAL SYNC] Failed: cloud_id = {cloud_id}"
+        )
         raise HTTPException(
             status_code=500,
             detail=f"증분 동기화 중 오류가 발생했습니다: {str(e)}",
         )
 
 
+
+
 @router.get("/status", response_model=list[ConfluenceSyncStatusResponse])
 async def get_sync_status(
     cloud_id: str = Query(..., description="Atlassian Cloud ID"),
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
     동기화 상태 조회

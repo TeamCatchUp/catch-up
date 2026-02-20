@@ -119,19 +119,6 @@ export interface MockMessage {
 }
 
 /**
- * Mock PR payload 모델.
- * @interface MockPRPayload
- */
-export interface MockPRPayload {
-  pr_number: number;
-  title: string;
-  repo_name: string;
-  summary: string;
-  owner: string;
-  created_at: string;
-}
-
-/**
  * Mock 스트림 이벤트 타입.
  */
 export type MockStreamEvent =
@@ -139,8 +126,6 @@ export type MockStreamEvent =
   | { type: 'sources'; session_id?: string; sources?: MockSource[] }
   | { type: 'source_candidates'; session_id?: string; message_id?: string; sources?: MockSource[] }
   | { type: 'token'; session_id?: string; token: string }
-  | { type: 'delta'; session_id?: string; message_id?: string; delta: string; sequence?: number }
-  | { type: 'interrupt'; payload: MockPRPayload[] }
   | {
       type: 'result';
       session_id?: string;
@@ -153,34 +138,3 @@ export type MockStreamEvent =
     }
   | { type: 'error'; session_id?: string; message: string; retryable?: boolean }
   | { type: 'ping' };
-
-/**
- * Mock notification 데이터 타입.
- * @interface MockRagNotificationData
- */
-export interface MockRagNotificationData {
-  session_id: string;
-  type: 'status' | 'interrupt' | 'result';
-  node: string;
-  message?: string;
-  payload?: MockPRPayload[];
-  response?: {
-    session_id: string;
-    answer: string;
-    sources: MockSource[];
-    chat_history_id: string;
-    has_feedback?: boolean;
-  };
-  related_jira_issues?: MockSource[];
-}
-
-/**
- * Mock notification 타입.
- * @interface MockRagNotification
- */
-export interface MockRagNotification {
-  target: 'CHAT' | 'MESSAGE';
-  type: 'CONNECT' | 'RAG_IN_PROGRESS' | 'RAG_INTERRUPT' | 'RAG_DONE';
-  message: string | null;
-  data: MockRagNotificationData | null;
-}

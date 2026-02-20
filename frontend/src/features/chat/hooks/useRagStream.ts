@@ -6,7 +6,7 @@ import chatService from '@/features/chat/services/chatService';
 import type { StreamEvent } from '@/features/chat/types';
 
 interface UseRagStreamReturn {
-  streamChat: (query: string, onEvent: (event: StreamEvent) => void) => Promise<void>;
+  streamChat: (query: string, sessionId: string | undefined, onEvent: (event: StreamEvent) => void) => Promise<void>;
   abortStream: () => void;
   markStopped: () => void;
   resetStopped: () => void;
@@ -17,11 +17,11 @@ interface UseRagStreamReturn {
  * RAG SSE 스트림 관리 훅
  *
  * SSE 연결의 lifecycle을 관리하며 다음 기능을 제공:
- * - 질문 스트림 시작 (streamChat)
+ * - 질문 스트림 시작 (streamChat, sessionId 선택 전달)
  * - 스트림 중단 (AbortController 기반)
  * - 사용자 중단 상태 추적 (stopped flag)
  */
-export const useRagStream = (sessionId: string): UseRagStreamReturn => {
+export const useRagStream = (): UseRagStreamReturn => {
   const abortRef = useRef<AbortController | null>(null);
   const stoppedRef = useRef(false);
 
@@ -33,7 +33,7 @@ export const useRagStream = (sessionId: string): UseRagStreamReturn => {
   }, []);
 
   const streamChat = useCallback(
-    async (query: string, onEvent: (event: StreamEvent) => void) => {
+    async (query: string, sessionId: string | undefined, onEvent: (event: StreamEvent) => void) => {
       const activeController = abortRef.current;
       if (activeController && !activeController.signal.aborted) return;
       const controller = new AbortController();
@@ -46,11 +46,8 @@ export const useRagStream = (sessionId: string): UseRagStreamReturn => {
         }
       }
     },
-    [sessionId],
+    [],
   );
-
-  // TODO: resume API 백엔드 구현 시 재활성
-  // const resumeStream = useCallback(async (...) => { ... }, [sessionId]);
 
   const markStopped = useCallback(() => {
     stoppedRef.current = true;

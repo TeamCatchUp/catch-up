@@ -21,19 +21,6 @@ export interface ChatSourceModel {
 }
 
 /**
- * PR 선택 interrupt 화면에서 사용하는 PR 항목 모델.
- * @interface PRPayloadModel
- */
-export interface PRPayloadModel {
-  pr_number: number;
-  title: string;
-  repo_name: string;
-  summary: string;
-  owner: string;
-  created_at: string;
-}
-
-/**
  * Jira 서브태스크 모델.
  * @interface JiraSubTaskModel
  */

@@ -41,20 +41,6 @@ class ConfluenceUserResponse(BaseModel):
         return None
 
 
-class ConfluenceRoleResponse(BaseModel):
-    id: str
-    key: str | None = None
-    name: str | None = None
-
-
-class ConfluenceRoleAssignmentResponse(BaseModel):
-    id: str
-    principal_id: str = Field(alias="principalId")
-    principal_type: str = Field(alias="principalType")
-    role: ConfluenceRoleResponse
-
-    model_config = {"populate_by_name": True}
-
 class ConfluenceVersion(BaseModel):
     """콘텐츠 버전 정보"""
     number: int

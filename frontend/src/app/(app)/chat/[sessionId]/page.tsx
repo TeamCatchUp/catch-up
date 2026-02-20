@@ -39,20 +39,20 @@ export default function RagAnswerPage() {
   return (
     <div className="flex h-screen w-full">
       {/* 메인 영역 */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <RagContentHeader title={chat.chatData?.title ?? ''} onSelectQuestion={() => {}} />
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <RagContentHeader title={chat.chatData?.title ?? ''} />
 
         {/* 스크롤 가능한 콘텐츠 영역 */}
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
           <div
             ref={scrollContainerCallbackRef}
-            className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-24 pt-3 pb-9"
+            className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-6 lg:px-24 pt-3 pb-9"
           >
             {/* 날짜 구분선 */}
-            <DateDivider className="mb-8 w-192.75" />
+            <DateDivider className="mb-8 w-full max-w-192.75" />
 
             {/* 모든 Q&A 쌍을 순서대로 렌더링 */}
-            <div className="mx-auto flex w-193.25 flex-1 flex-col gap-12">
+            <div className="mx-auto flex max-w-193.25 w-full flex-1 flex-col gap-12">
               {qaPairs.map((qaPair, index) => {
                 const isLastPair = index === qaPairs.length - 1;
 
@@ -74,14 +74,10 @@ export default function RagAnswerPage() {
                     {/* 답변 영역 */}
                     <RagAnswer
                       currentQA={qaPair}
-                      sessionId={sessionId}
+                      sessionId={chat.resolvedSessionId ?? sessionId}
                       isLoading={chat.isLoading && isLastPair}
                       isError={chat.isError && isLastPair}
                       currentStep={chat.currentStep}
-                      showPRSelection={chat.showPRSelection && isLastPair}
-                      prList={chat.prList}
-                      onPRContinue={chat.handlePRContinue}
-                      onPRRefetch={chat.handlePRRefetch}
                       onFeedbackSubmitted={chat.updateMessageFeedback}
                     />
                   </div>
@@ -92,14 +88,10 @@ export default function RagAnswerPage() {
                 <div className="flex flex-col gap-6" style={{ minHeight: scrollContainerHeight }}>
                   <RagAnswer
                     currentQA={undefined}
-                    sessionId={sessionId}
+                    sessionId={chat.resolvedSessionId ?? sessionId}
                     isLoading={chat.isLoading}
                     isError={chat.isError}
                     currentStep={chat.currentStep}
-                    showPRSelection={chat.showPRSelection}
-                    prList={chat.prList}
-                    onPRContinue={chat.handlePRContinue}
-                    onPRRefetch={chat.handlePRRefetch}
                     onFeedbackSubmitted={chat.updateMessageFeedback}
                   />
                 </div>
@@ -118,8 +110,12 @@ export default function RagAnswerPage() {
         />
       </div>
 
-      {/* 사이드바 */}
-      <RagSidebar currentQA={qaPairs[activePairIndex]} isLoading={chat.isLoading} isError={chat.isError} />
+      {/* 사이드바 — 스트리밍 중에는 마지막 QA pair(스트리밍 대상)에 고정 */}
+      <RagSidebar
+        currentQA={qaPairs[chat.isLoading ? qaPairs.length - 1 : activePairIndex]}
+        isLoading={chat.isLoading}
+        isError={chat.isError}
+      />
     </div>
   );
 }

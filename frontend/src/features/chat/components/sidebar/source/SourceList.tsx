@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
 import type { ChatSource } from '@/features/chat/types';
@@ -16,6 +16,8 @@ interface Props {
   answerContent?: string;
   isLoading?: boolean;
   isError?: boolean;
+  transitionKey?: string;
+  prefersReducedMotion?: boolean;
 }
 
 const filterCategory = [
@@ -28,6 +30,8 @@ const filterCategory = [
 type FilterType = (typeof filterCategory)[number]['type'];
 
 const CITATION_PATTERN = /\[(\d+)\]/g;
+const STAGGER_STEP_MS = 24;
+const STAGGER_MAX_DELAY_MS = 120;
 
 const getCitationOrderMap = (answerContent?: string) => {
   const map = new Map<number, number>();
@@ -43,8 +47,33 @@ const getCitationOrderMap = (answerContent?: string) => {
   return map;
 };
 
-const SourceList = ({ sources, answerContent, isLoading, isError }: Props) => {
+const SourceList = ({
+  sources,
+  answerContent,
+  isLoading,
+  isError,
+  transitionKey = 'default',
+  prefersReducedMotion = false,
+}: Props) => {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [listEntered, setListEntered] = useState(prefersReducedMotion);
+
+  useEffect(() => {
+    if (prefersReducedMotion) return;
+
+    let enterRafId = 0;
+    const resetRafId = requestAnimationFrame(() => {
+      setListEntered(false);
+      enterRafId = requestAnimationFrame(() => {
+        setListEntered(true);
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(resetRafId);
+      if (enterRafId) cancelAnimationFrame(enterRafId);
+    };
+  }, [prefersReducedMotion, transitionKey]);
 
   const citationOrderMap = useMemo(() => getCitationOrderMap(answerContent), [answerContent]);
 
@@ -80,9 +109,28 @@ const SourceList = ({ sources, answerContent, isLoading, isError }: Props) => {
 
   const recommendedSources = filteredSources.filter((source) => !source.is_cited);
 
+  const buildStaggerStyle = (index: number) => {
+    if (prefersReducedMotion) return undefined;
+    const delay = Math.min(index * STAGGER_STEP_MS, STAGGER_MAX_DELAY_MS);
+    return { transitionDelay: `${delay}ms` };
+  };
+
+  const itemTransitionClass = prefersReducedMotion
+    ? ''
+    : cn(
+        'transition-[opacity,transform] duration-160 ease-out',
+        listEntered ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
+      );
+
   return (
     <div className="flex min-h-full w-full flex-col gap-2 pt-3">
-      <div className="no-scrollbar flex w-full items-center gap-2 overflow-x-auto px-4">
+      <div
+        className={cn(
+          'no-scrollbar flex w-full items-center gap-2 overflow-x-auto px-4',
+          !prefersReducedMotion && 'transition-opacity duration-160 ease-out',
+          !prefersReducedMotion && (listEntered ? 'opacity-100' : 'opacity-0'),
+        )}
+      >
         {filterCategory.map((category) => {
           const isActive = activeFilter === category.type;
 
@@ -116,13 +164,14 @@ const SourceList = ({ sources, answerContent, isLoading, isError }: Props) => {
         ) : (
           <>
             <div className="flex flex-col gap-3 px-4">
-              {citedSources.map((source) => (
-                <SourceCard
-                  key={source.id}
-                  source={source}
-                  showCount
-                  count={citationOrderMap.get(source.source_index) ?? source.source_index}
-                />
+              {citedSources.map((source, index) => (
+                <div key={source.id} className={itemTransitionClass} style={buildStaggerStyle(index)}>
+                  <SourceCard
+                    source={source}
+                    showCount
+                    count={citationOrderMap.get(source.source_index) ?? source.source_index}
+                  />
+                </div>
               ))}
             </div>
 
@@ -135,8 +184,14 @@ const SourceList = ({ sources, answerContent, isLoading, isError }: Props) => {
                     <span className="text-body-small text-gray-70">참고하면 좋은 문서</span>
                   </div>
                   <div className="flex flex-col gap-2.5">
-                    {recommendedSources.map((source) => (
-                      <SourceCard key={source.id} source={source} showCount={false} />
+                    {recommendedSources.map((source, index) => (
+                      <div
+                        key={source.id}
+                        className={itemTransitionClass}
+                        style={buildStaggerStyle(index + citedSources.length)}
+                      >
+                        <SourceCard source={source} showCount={false} />
+                      </div>
                     ))}
                   </div>
                 </div>

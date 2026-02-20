@@ -80,14 +80,20 @@ const realChatService = {
    *
    * POST /api/v1/chat/stream
    * - 새 질문에 대한 SSE 스트림 응답 수신
-   * - 이벤트 타입: status, sources, token/delta, interrupt, result, error
+   * - 이벤트 타입: status, sources, token, result, error
+   * - session_id는 선택 값이며, 없으면 서버가 새 세션을 생성
    */
-  streamChat: async (query: string, sessionId: string, onEvent: (event: StreamEvent) => void, signal?: AbortSignal) => {
+  streamChat: async (query: string, sessionId: string | undefined, onEvent: (event: StreamEvent) => void, signal?: AbortSignal) => {
+    const payload: { query: string; session_id?: string } = { query };
+    if (sessionId) {
+      payload.session_id = sessionId;
+    }
+
     const res = await fetch(API.chat.stream, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ query, session_id: sessionId }),
+      body: JSON.stringify(payload),
       signal,
     });
 
@@ -116,13 +122,6 @@ const realChatService = {
     return res.json();
   },
 
-  // TODO: resume API 백엔드 구현 시 재활성
-  // resumeStream: async (
-  //   sessionId: string,
-  //   selectedPRs: { pr_number: number; repo_name: string; owner: string }[],
-  //   onEvent: (event: StreamEvent) => void,
-  //   signal?: AbortSignal,
-  // ) => { ... },
 };
 
 export default realChatService;

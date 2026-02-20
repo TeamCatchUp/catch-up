@@ -35,12 +35,10 @@ export default function SideNavQuestions() {
 
   const recentChatrooms = useMemo<ChatRoomQuery[]>(() => {
     if (!chatroomData?.items) return [];
-    return chatroomData.items
-      .map((item) => ({
-        title: item.title,
-        session_id: item.session_id,
-      }))
-      .reverse();
+    return chatroomData.items.map((item) => ({
+      title: item.title,
+      session_id: item.session_id,
+    }));
   }, [chatroomData]);
 
   // refresh_sidebar 이벤트 → TanStack Query invalidation
@@ -66,7 +64,7 @@ export default function SideNavQuestions() {
 
           return (
             <Link
-              href={`/chat/${chatroom.session_id}?q=${encodeURIComponent(chatroom.title)}`}
+              href={`/chat/${chatroom.session_id}`}
               key={chatroom.session_id}
               className={cn('group flex cursor-pointer rounded-lg py-2', isActive ? selectedClass : defaultClass)}
             >

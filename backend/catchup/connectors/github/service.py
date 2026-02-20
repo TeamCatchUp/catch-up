@@ -515,46 +515,51 @@ class GithubIngestionService:
             동기화 결과 {"synced": N, "errors": N}
         """
         full_name = f"{owner}/{repo}"
-        documents = []
-        doc_ids = []
+        total_synced = 0
         errors = 0
 
         try:
             # 동기화 시작
             self._start_sync(db, full_name, GithubEntityType.ISSUE, SyncOperation.ISSUE_SYNC)
 
-            # Issue 목록 조회 (GraphQL - 코멘트 포함)
-            issues_data = await self.client.list_issues_graphql(
+            batch_idx = 0
+            async for issue_batch in self.client.list_issues_graphql(
                 owner=owner,
                 repo=repo,
                 since=since,
-            )
-            logger.info(f"[GITHUB][{SyncOperation.ISSUE_SYNC}] Found {len(issues_data)} issues in {full_name}")
+            ):
+                batch_idx += 1
+                batch_documents: list[Document] = []
+                batch_doc_ids: list[str] = []
 
-            for issue_data in issues_data:
-                try:
-                    # 파싱 및 변환 (GraphQL 응답에 코멘트 이미 포함됨)
-                    issue = self.transformer.parse_issue(issue_data)
-                    doc = self.transformer.transform_issue(
-                        issue, owner, repo, self.installation_id
-                    )
-                    documents.append(doc)
-                    doc_ids.append(doc.id)
+                for issue_data in issue_batch:
+                    try:
+                        issue = self.transformer.parse_issue(issue_data)
+                        doc = self.transformer.transform_issue(
+                            issue, owner, repo, self.installation_id
+                        )
+                        batch_documents.append(doc)
+                        batch_doc_ids.append(doc.id)
 
-                except Exception as e:
-                    logger.warning(f"[GITHUB][{SyncOperation.ISSUE_SYNC}] Failed to process issue #{issue_data.get('number')}: {e}")
-                    errors += 1
+                    except Exception as e:
+                        logger.warning(f"[GITHUB][{SyncOperation.ISSUE_SYNC}] Failed to process issue #{issue_data.get('number')}: {e}")
+                        errors += 1
 
-            # PGVector에 Upsert
-            if documents:
-                # 요약 적용 (summarizer가 활성화된 경우)
+                if not batch_documents:
+                    continue
+
                 if self.summarizer:
-                    documents = await self._summarize_documents(documents)
-                await self.repository.upsert_documents(documents, doc_ids)
+                    batch_documents = await self._summarize_documents(batch_documents)
 
-            # 동기화 완료
-            self._complete_sync(db, full_name, GithubEntityType.ISSUE, len(documents), SyncOperation.ISSUE_SYNC)
-            return {"synced": len(documents), "errors": errors}
+                await self.repository.upsert_documents(batch_documents, batch_doc_ids)
+                total_synced += len(batch_documents)
+
+                logger.info(
+                    f"[GITHUB][{SyncOperation.ISSUE_SYNC}] Batch {batch_idx}: upserted {len(batch_documents)} issue docs in {full_name}"
+                )
+
+            self._complete_sync(db, full_name, GithubEntityType.ISSUE, total_synced, SyncOperation.ISSUE_SYNC)
+            return {"synced": total_synced, "errors": errors}
 
         except GitHubRateLimitError as e:
             self._handle_rate_limit(db, full_name, GithubEntityType.ISSUE, e, SyncOperation.ISSUE_SYNC)
@@ -563,7 +568,7 @@ class GithubIngestionService:
         except Exception as e:
             logger.error(f"[GITHUB][{SyncOperation.ISSUE_SYNC}] Sync failed for {full_name}: {e}", exc_info=True)
             self._fail_sync(db, full_name, GithubEntityType.ISSUE, str(e), SyncOperation.ISSUE_SYNC)
-            return {"synced": len(documents), "errors": errors + 1}
+            return {"synced": total_synced, "errors": errors + 1}
 
     # ============================================================
     # Pull Request Sync
@@ -594,51 +599,52 @@ class GithubIngestionService:
             동기화 결과 {"synced": N, "errors": N}
         """
         full_name = f"{owner}/{repo}"
-        documents = []
-        doc_ids = []
+        total_synced = 0
         errors = 0
 
         try:
             # 동기화 시작
             self._start_sync(db, full_name, GithubEntityType.PULL_REQUEST, SyncOperation.PR_SYNC)
 
-            # GraphQL 배치 쿼리로 PR 목록 + 상세 정보 한 번에 조회
-            prs_data = await self.client.list_pull_requests_graphql(
+            batch_idx = 0
+            async for pr_batch in self.client.list_pull_requests_graphql(
                 owner=owner,
                 repo=repo,
                 since=since,
-            )
-            logger.info(f"[GITHUB][{SyncOperation.PR_SYNC}] Found {len(prs_data)} pull requests in {full_name} (GraphQL batch)")
+            ):
+                batch_idx += 1
+                batch_documents: list[Document] = []
+                batch_doc_ids: list[str] = []
 
-            for idx, pr_data in enumerate(prs_data):
-                try:
-                    # 진행 상황 로깅
-                    if (idx + 1) % 50 == 0:
-                        logger.info(f"[GITHUB][{SyncOperation.PR_SYNC}] Processing PR {idx + 1}/{len(prs_data)} in {full_name}")
+                for pr_data in pr_batch:
+                    try:
+                        pr = self.transformer.parse_pull_request(pr_data)
+                        doc = self.transformer.transform_pull_request(
+                            pr, owner, repo, self.installation_id
+                        )
+                        batch_documents.append(doc)
+                        batch_doc_ids.append(doc.id)
 
-                    # GraphQL 노드를 직접 파싱
-                    pr = self.transformer.parse_pull_request(pr_data)
-                    doc = self.transformer.transform_pull_request(
-                        pr, owner, repo, self.installation_id
-                    )
-                    documents.append(doc)
-                    doc_ids.append(doc.id)
+                    except Exception as e:
+                        logger.warning(f"[GITHUB][{SyncOperation.PR_SYNC}] Failed to process PR #{pr_data.get('number')}: {e}")
+                        logger.debug(f"PR processing error traceback:\n{traceback.format_exc()}")
+                        errors += 1
 
-                except Exception as e:
-                    logger.warning(f"[GITHUB][{SyncOperation.PR_SYNC}] Failed to process PR #{pr_data.get('number')}: {e}")
-                    logger.debug(f"PR processing error traceback:\n{traceback.format_exc()}")
-                    errors += 1
+                if not batch_documents:
+                    continue
 
-            # PGVector에 Upsert
-            if documents:
-                # 요약 적용 (summarizer가 활성화된 경우)
                 if self.summarizer:
-                    documents = await self._summarize_documents(documents)
-                await self.repository.upsert_documents(documents, doc_ids)
+                    batch_documents = await self._summarize_documents(batch_documents)
 
-            # 동기화 완료
-            self._complete_sync(db, full_name, GithubEntityType.PULL_REQUEST, len(documents), SyncOperation.PR_SYNC)
-            return {"synced": len(documents), "errors": errors}
+                await self.repository.upsert_documents(batch_documents, batch_doc_ids)
+                total_synced += len(batch_documents)
+
+                logger.info(
+                    f"[GITHUB][{SyncOperation.PR_SYNC}] Batch {batch_idx}: upserted {len(batch_documents)} PR docs in {full_name}"
+                )
+
+            self._complete_sync(db, full_name, GithubEntityType.PULL_REQUEST, total_synced, SyncOperation.PR_SYNC)
+            return {"synced": total_synced, "errors": errors}
 
         except GitHubRateLimitError as e:
             self._handle_rate_limit(db, full_name, GithubEntityType.PULL_REQUEST, e, SyncOperation.PR_SYNC)
@@ -647,7 +653,7 @@ class GithubIngestionService:
         except Exception as e:
             logger.error(f"[GITHUB][{SyncOperation.PR_SYNC}] Sync failed for {full_name}: {e}", exc_info=True)
             self._fail_sync(db, full_name, GithubEntityType.PULL_REQUEST, str(e), SyncOperation.PR_SYNC)
-            return {"synced": len(documents), "errors": errors + 1}
+            return {"synced": total_synced, "errors": errors + 1}
 
     # ============================================================
     # Incremental Sync

@@ -397,6 +397,7 @@ class SlackUser(Base):
 
     team_id: Mapped[str] = mapped_column(String(20), primary_key=True, comment="WorkSpaceId")
     user_id: Mapped[str] = mapped_column(String(20), primary_key=True, comment="UserId")
+    user_id: Mapped[str] = mapped_column(String(20), primary_key=True, comment="UserId")
     name: Mapped[str] = mapped_column(String(255), nullable=False, comment="Login Name Used for Mention")
     real_name: Mapped[str] = mapped_column(String(255), nullable=False, comment="실제 이름")
     deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, comment="비활성 사용자 여부")
@@ -570,24 +571,6 @@ class ConfluenceUser(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-
-class ConfluenceSpaceMember(Base):
-    """
-    Space ↔ User role assignments
-    """
-
-    __tablename__ = "confluence_space_members"
-
-    cloud_id: Mapped[str] = mapped_column(String(128), primary_key=True)
-    space_id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    account_id: Mapped[str] = mapped_column(String(128), primary_key=True)
-    role_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    role_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    role_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    principal_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    synced_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
 
 # ============================================================
 # Confluence Sync State

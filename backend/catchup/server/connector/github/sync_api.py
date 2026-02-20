@@ -11,13 +11,15 @@ Endpoints:
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from catchup.auth.dependencies import get_current_user
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.db.models import User, UserRole
 from catchup.db.dependencies import get_db
 from catchup.db.github import sync_repository as github_sync
 from catchup.db.github import domain_repository as github_entities
@@ -31,6 +33,21 @@ from catchup.utils.scheduler import flush_github_events
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/github/sync", tags=["github-sync"])
+
+
+def _require_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """
+    GitHub 동기화 API 접근 권한 검사.
+
+    - 인증된 사용자만 허용
+    - 역할이 admin이어야 실행 가능
+    """
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="권한이 없습니다. 관리자만 동기화 API를 호출할 수 있습니다.",
+        )
+    return current_user
 
 
 # ============================================================
@@ -114,6 +131,7 @@ async def _get_ingestion_service(
 async def full_sync(
     request: FullSyncRequest,
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
     전체 동기화 수행
@@ -135,6 +153,10 @@ async def full_sync(
 
         results = await service.full_sync(db=db, request=service_request)
 
+        logger.info(
+            "[GITHUB][FULL SYNC] full_sync completed: "
+            f"installation_id={request.installation_id}, results={results}"
+        )
         return SyncResponse(
             success=True,
             message="Full sync completed",
@@ -146,7 +168,10 @@ async def full_sync(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Full sync failed: {e}")
+        logger.error(
+            "[GITHUB][FULL SYNC] full_sync failed: "
+            f"installation_id={request.installation_id}, error={e}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -154,6 +179,7 @@ async def full_sync(
 async def get_sync_status(
     installation_id: int,
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
     동기화 상태 조회
@@ -199,7 +225,10 @@ async def get_sync_status(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get sync status: {e}")
+        logger.error(
+            "[GITHUB][SYNC STATUS] get_sync_status failed: "
+            f"installation_id={installation_id}, error={e}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -207,6 +236,7 @@ async def get_sync_status(
 async def list_repositories(
     installation_id: int,
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
     Installation에서 접근 가능한 Repository 목록 조회
@@ -247,7 +277,10 @@ async def list_repositories(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to list repositories: {e}")
+        logger.error(
+            "[GITHUB][SYNC] list_repositories failed: "
+            f"installation_id={installation_id}, error={e}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -255,6 +288,7 @@ async def list_repositories(
 async def refresh_repositories(
     installation_id: int,
     db: Session = Depends(get_db),
+    _admin_user: User = Depends(_require_admin_user),
 ):
     """
     GitHub API에서 Repository 목록을 다시 가져와 RDBMS에 저장
@@ -294,7 +328,10 @@ async def refresh_repositories(
         ]
         count = github_entities.upsert_repositories_bulk(db, installation_id, repos_data)
 
-        logger.info(f"Refreshed {count} repositories for installation {installation_id}")
+        logger.info(
+            "[GITHUB][SYNC] refresh_repositories completed: "
+            f"installation_id={installation_id}, refreshed_count={count}"
+        )
 
         # 갱신된 목록 반환
         repos = github_entities.get_repositories_by_installation(db, installation_id)
@@ -322,18 +359,23 @@ async def refresh_repositories(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to refresh repositories: {e}")
+        logger.error(
+            "[GITHUB][SYNC] refresh_repositories failed: "
+            f"installation_id={installation_id}, error={e}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/flush")
-async def test_flush_webhook_events():
+async def test_flush_webhook_events(
+    _admin_user: User = Depends(_require_admin_user),
+):
     """
     Redis에 저장하고 있는 Github Webhook 이벤트들을 즉시 동기화합니다.
     - APScheduler가 1시간 단위로 수행하고 있는 Task를 동작시킵니다.
     """
     try:
-        logger.info("[GITHUB][FLUSH] Manually Flushing Github Webhook Events")
+        logger.info("[GITHUB][FLUSH] Manually flushing GitHub webhook events")
         await flush_github_events()
 
         return {
