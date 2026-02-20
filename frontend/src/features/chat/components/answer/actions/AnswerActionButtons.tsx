@@ -19,6 +19,7 @@ const AnswerActionButtons = ({
   hasFeedback,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
+  onRetry,
 }: AnswerActionButtonsProps) => {
   const [bookmarked, setBookmarked] = useState(false);
 
@@ -49,6 +50,9 @@ const AnswerActionButtons = ({
               if (isBookmark) {
                 if (!bookmarked) toast('답변 내용이 저장되었습니다.');
                 setBookmarked((prev) => !prev);
+              }
+              if (item.name === 'Rotate') {
+                onRetry?.();
               }
             }}
             className={`icon-button-only-gray cursor-pointer p-1.5 ${isThumbsDownActive ? 'bg-neutral-3 border-neutral-5' : ''}`}
