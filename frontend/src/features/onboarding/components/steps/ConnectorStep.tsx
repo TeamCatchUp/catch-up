@@ -22,15 +22,22 @@ interface ConnectorStepProps {
 export function ConnectorStep({ defaultValues, onSubmit, onBack }: ConnectorStepProps) {
   const { data: connectors } = useQuery(connectorQueries.list());
 
-  const [jiraAccountId, setJiraAccountId] = useState(defaultValues.jira_account_id);
+  const [atlassianAccountId, setAtlassianAccountId] = useState(defaultValues.jira_account_id);
   const [githubAccountId, setGithubAccountId] = useState(defaultValues.github_account_id);
   const [slackAccountId, setSlackAccountId] = useState(defaultValues.slack_account_id);
 
-  const isComplete = jiraAccountId && githubAccountId && slackAccountId;
+  const [atlassianDisabled, setAtlassianDisabled] = useState(false);
+  const [githubDisabled, setGithubDisabled] = useState(false);
+  const [slackDisabled, setSlackDisabled] = useState(false);
+
+  const isComplete =
+    (atlassianAccountId || atlassianDisabled) &&
+    (githubAccountId || githubDisabled) &&
+    (slackAccountId || slackDisabled);
 
   const handleNext = () => {
     onSubmit({
-      jira_account_id: jiraAccountId || undefined,
+      jira_account_id: atlassianAccountId || undefined,
       github_account_id: githubAccountId || undefined,
       slack_account_id: slackAccountId || undefined,
     });
@@ -53,11 +60,13 @@ export function ConnectorStep({ defaultValues, onSubmit, onBack }: ConnectorStep
         {/* 폼 영역 */}
         <div className="flex flex-col gap-6">
           <ConnectorSelect
-            label="Jira"
-            placeholder="사용중인 Jira 계정을 선택하세요."
+            label="Atlassian"
+            placeholder="사용중인 Atlassian 계정을 선택하세요."
             accounts={connectors?.jira ?? []}
-            value={jiraAccountId}
-            onChange={setJiraAccountId}
+            value={atlassianAccountId}
+            onChange={setAtlassianAccountId}
+            disabled={atlassianDisabled}
+            onDisabledChange={setAtlassianDisabled}
           />
           <ConnectorSelect
             label="Github"
@@ -65,6 +74,8 @@ export function ConnectorStep({ defaultValues, onSubmit, onBack }: ConnectorStep
             accounts={connectors?.github ?? []}
             value={githubAccountId}
             onChange={setGithubAccountId}
+            disabled={githubDisabled}
+            onDisabledChange={setGithubDisabled}
           />
           <ConnectorSelect
             label="Slack"
@@ -72,6 +83,8 @@ export function ConnectorStep({ defaultValues, onSubmit, onBack }: ConnectorStep
             accounts={connectors?.slack ?? []}
             value={slackAccountId}
             onChange={setSlackAccountId}
+            disabled={slackDisabled}
+            onDisabledChange={setSlackDisabled}
           />
         </div>
       </div>
@@ -79,7 +92,7 @@ export function ConnectorStep({ defaultValues, onSubmit, onBack }: ConnectorStep
       <StepNavButtons
         onBack={() =>
           onBack({
-            jira_account_id: jiraAccountId || undefined,
+            jira_account_id: atlassianAccountId || undefined,
             github_account_id: githubAccountId || undefined,
             slack_account_id: slackAccountId || undefined,
           })
