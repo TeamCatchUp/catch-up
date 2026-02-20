@@ -2,19 +2,34 @@
 
 import { useRef, useState } from 'react';
 
+import AdminGuideModal from '@/features/home/components/AdminGuideModal';
 import HowToUse from '@/features/home/components/HowToUse';
 import QuestionTips from '@/features/home/components/QuestionTips';
+import UserGuideModal from '@/features/home/components/UserGuideModal';
+import { ADMIN_GUIDE_STORAGE_KEY } from '@/features/home/constants/adminGuide';
+import { USER_GUIDE_STORAGE_KEY } from '@/features/home/constants/userGuide';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import QueryBox from '@/shared/components/query/QueryBox';
 import { useQuestionHistoryGate } from '@/shared/hooks/query/useQuestionHistoryGate';
 import { useSearchFilters } from '@/shared/hooks/query/useSearchFilters';
 import { useSearchInput } from '@/shared/hooks/query/useSearchInput';
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
+import useLocalStorage from '@/shared/hooks/useLocalStorage';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
 import { useUserStore } from '@/shared/store/userStore';
 
 export default function Home() {
   const user = useUserStore((state) => state.user);
+  const [adminGuideDismissed, setAdminGuideDismissed] = useLocalStorage({
+    key: ADMIN_GUIDE_STORAGE_KEY,
+    initialValue: false,
+  });
+  const [userGuideDismissed, setUserGuideDismissed] = useLocalStorage({
+    key: USER_GUIDE_STORAGE_KEY,
+    initialValue: false,
+  });
+  const showAdminGuide = user?.role === 'admin' && !adminGuideDismissed;
+  const showUserGuide = user?.role !== 'admin' && !userGuideDismissed;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -80,6 +95,7 @@ export default function Home() {
           filters={filters}
           variant={shouldShowNoHistoryBox ? 'no-history' : 'default'}
           noHistoryExpanded={isNoHistoryExpanded || input.isFocused}
+          highlightBracketPlaceholders
         />
       </div>
 
@@ -97,6 +113,9 @@ export default function Home() {
         />
         <HowToUse />
       </div>
+
+      {showAdminGuide && <AdminGuideModal onDismiss={() => setAdminGuideDismissed(true)} />}
+      {showUserGuide && <UserGuideModal onDismiss={() => setUserGuideDismissed(true)} />}
     </div>
   );
 }

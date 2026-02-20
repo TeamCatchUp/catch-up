@@ -36,6 +36,7 @@ interface RagAnswerProps {
   isError: boolean;
   currentStep: RagUIStepKey;
   onFeedbackSubmitted: (messageId: string) => void;
+  onRetry?: (questionId: string, questionContent: string) => void;
 }
 
 const RagAnswer = ({
@@ -45,6 +46,7 @@ const RagAnswer = ({
   isError,
   currentStep,
   onFeedbackSubmitted,
+  onRetry,
 }: RagAnswerProps) => {
   // 섹션 로컬 UI 상태
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<Record<string, boolean>>({});
@@ -82,6 +84,7 @@ const RagAnswer = ({
               hasFeedback={currentQA.answer.has_feedback}
               feedbackVisibleMap={feedbackVisibleMap}
               setFeedbackVisibleMap={setFeedbackVisibleMap}
+              onRetry={() => onRetry?.(currentQA.question.id, currentQA.question.content)}
             />
 
             {/* 피드백 */}

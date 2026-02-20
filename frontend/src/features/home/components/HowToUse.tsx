@@ -7,7 +7,7 @@ const cardData = [
   {
     title: '검색 한 번으로 찾는 업무 정보',
     description: '정보를 찾는 시간,\n이제 일하는 시간으로 사용하세요.',
-    image: '/image/home-search-work-info.png',
+    image: '/image/home-search-work-info.jpg',
   },
   {
     title: '원하는 답을 한 번에 얻는 비결',

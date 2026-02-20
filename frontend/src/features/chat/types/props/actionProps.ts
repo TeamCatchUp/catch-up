@@ -21,6 +21,7 @@ export interface AnswerActionButtonsProps {
   hasFeedback?: boolean;
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: Dispatch<SetStateAction<Record<string, boolean>>>;
+  onRetry?: () => void;
 }
 
 /**

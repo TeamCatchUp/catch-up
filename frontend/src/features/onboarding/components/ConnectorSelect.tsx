@@ -5,6 +5,8 @@ import Image from 'next/image';
 
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import UnfoldMore from '@/public/icons/icon/unfold_more.svg';
+import CheckboxChecked from '@/public/icons/icon/checkbox_checked.svg';
+import CheckboxUnchecked from '@/public/icons/icon/checkbox_unchecked.svg';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/shared/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
 import { cn } from '@/shared/utils/cn';
@@ -17,32 +19,70 @@ interface ConnectorSelectProps {
   accounts: ConnectorAccount[];
   value: string;
   onChange: (v: string) => void;
+  disabled?: boolean;
+  onDisabledChange?: (disabled: boolean) => void;
 }
 
-export function ConnectorSelect({ label, placeholder, accounts, value, onChange }: ConnectorSelectProps) {
+export function ConnectorSelect({
+  label,
+  placeholder,
+  accounts,
+  value,
+  onChange,
+  disabled = false,
+  onDisabledChange,
+}: ConnectorSelectProps) {
   const [open, setOpen] = useState(false);
 
-  const selected = accounts.find((a) => a.id === value);
+  const selected = !disabled ? accounts.find((a) => a.id === value) : undefined;
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-heading-medium text-gray-80 flex items-center gap-1 tracking-tight">
-        <span className="size-[5px] rounded-full bg-red-50" />
-        {label}
-      </label>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
+      <div className="flex items-center justify-between">
+        <label className="text-heading-medium text-gray-80 flex items-center gap-1 tracking-tight">
+          <span className="size-[5px] rounded-full bg-red-50" />
+          {label}
+        </label>
+        {onDisabledChange && (
           <button
             type="button"
+            className="flex cursor-pointer items-center gap-0.5"
+            onClick={() => {
+              const next = !disabled;
+              onDisabledChange(next);
+              if (next) onChange('');
+            }}
+          >
+            <span className="text-body-xsmall text-gray-80 tracking-tight">현재 사용하지 않는 툴이에요</span>
+            <div className="p-1">
+              {disabled ? <CheckboxChecked className="size-5" /> : <CheckboxUnchecked className="size-5" />}
+            </div>
+          </button>
+        )}
+      </div>
+      <Popover open={disabled ? false : open} onOpenChange={disabled ? undefined : setOpen}>
+        <PopoverTrigger asChild disabled={disabled}>
+          <button
+            type="button"
+            disabled={disabled}
             className={cn(
-              'flex w-full cursor-pointer items-center border bg-white tracking-tight',
-              selected
-                ? 'border-neutral-3 gap-4 rounded-[10px] px-3 py-2.5'
-                : 'border-neutral-4 text-body-small h-[46px] justify-between rounded-lg px-2.5 py-1.5',
-              open && 'bg-neutral-3',
+              'flex w-full items-center border bg-white tracking-tight',
+              disabled
+                ? 'border-neutral-4 text-body-small h-[46px] cursor-not-allowed justify-between rounded-lg px-2.5 py-1.5'
+                : 'cursor-pointer',
+              !disabled &&
+                (selected
+                  ? 'border-neutral-3 gap-4 rounded-[10px] px-3 py-2.5'
+                  : 'border-neutral-4 text-body-small h-[46px] justify-between rounded-lg px-2.5 py-1.5'),
+              !disabled && open && 'bg-neutral-3',
             )}
           >
-            {selected ? (
+            {disabled ? (
+              <>
+                <span className="text-gray-30">사용하지 않는 도구로 설정되어 있습니다</span>
+                <UnfoldMore className="size-5 shrink-0 text-gray-30" />
+              </>
+            ) : selected ? (
               <>
                 {selected.picture ? (
                   <Image

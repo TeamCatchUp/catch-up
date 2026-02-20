@@ -120,6 +120,17 @@
     scrollbar-width: none;
   }
 
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 16px;
+  }
+
   .bg-rag-github-pr-mcp {
     background: linear-gradient(180deg, #fff 30.97%, #f7fbff 100%);
   }

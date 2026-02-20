@@ -100,6 +100,29 @@ export const MOCK_SOURCES: MockSource[] = [
     status: 'To Do',
     created_at: daysAgo(10),
   },
+  {
+    id: 'confluence:page:98765:chunk:0',
+    index: 6,
+    is_cited: true,
+    source: 'confluence',
+    entity_type: 'page',
+    relevance_score: 0.89,
+    url: 'https://catchup.atlassian.net/wiki/spaces/ENG/pages/98765',
+    text: 'Title : RAG 파이프라인 아키텍처 가이드\nSpace: Engineering\n\n벡터 DB 검색 → 리랭킹 → 답변 생성 순서로 동작합니다.',
+    title: 'RAG 파이프라인 아키텍처 가이드',
+    citation_rationale: 'RAG 파이프라인의 전체 흐름(검색 → 리랭킹 → 답변 생성)을 설명하는 핵심 문서입니다.',
+    author: 'backend-lead',
+    created_at: daysAgo(3),
+    space_id: '~12345',
+    space_key: 'ENG',
+    space_name: 'Engineering',
+    version: 5,
+    chunk_index: 0,
+    total_chunks: 4,
+    section_hierarchy: ['아키텍처', 'RAG 파이프라인'],
+    has_images: false,
+    image_urls: [],
+  },
 ];
 
 const toSourceType = (source: MockSource): MockChatSource['source_type'] => {
@@ -107,6 +130,7 @@ const toSourceType = (source: MockSource): MockChatSource['source_type'] => {
   if (source.source === 'github' && source.entity_type === 'pr') return 'pr';
   if (source.source === 'slack' && source.entity_type === 'message') return 'slack';
   if (source.source === 'jira') return 'jira';
+  if (source.source === 'confluence') return 'confluence';
   return 'github_issue';
 };
 
@@ -117,6 +141,10 @@ const toSourceRepo = (source: MockSource) => {
 
   if (source.source === 'slack') {
     return source.channel_name ?? 'Slack';
+  }
+
+  if (source.source === 'confluence') {
+    return source.space_name ?? source.space_key ?? 'Confluence';
   }
 
   if (source.owner && source.repo) {
@@ -138,6 +166,9 @@ const toSourceTitle = (source: MockSource, sourceType: MockChatSource['source_ty
   }
   if (sourceType === 'slack') {
     return source.title ?? 'Slack 메시지';
+  }
+  if (sourceType === 'confluence') {
+    return source.title ?? 'Confluence 문서';
   }
   return source.title ?? (source.number ? `Issue #${source.number}` : '');
 };
@@ -219,7 +250,10 @@ export const buildStreamingMockAnswer = (query: string) =>
     '}',
     '```',
     '',
-    '## 6. 마무리 [1][4]',
+    '## 6. Confluence 출처 [6]',
+    'RAG 파이프라인 아키텍처는 Confluence 문서에서 확인할 수 있습니다 [6].',
+    '',
+    '## 7. 마무리 [1][4]',
     '인용된 cited source와 참고용 source는 분리해서 보여줘야 합니다.',
   ].join('\n');
 

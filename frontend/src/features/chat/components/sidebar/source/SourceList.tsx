@@ -24,7 +24,8 @@ const filterCategory = [
   { id: 1, category: '전체', type: 'all' },
   { id: 2, category: 'Github', type: 'github' },
   { id: 3, category: 'Jira', type: 'jira' },
-  { id: 4, category: 'Slack', type: 'slack' },
+  { id: 4, category: 'Confluence', type: 'confluence' },
+  { id: 5, category: 'Slack', type: 'slack' },
 ] as const;
 
 type FilterType = (typeof filterCategory)[number]['type'];
@@ -83,6 +84,8 @@ const SourceList = ({
         return 'jira';
       case 'slack':
         return 'slack';
+      case 'confluence':
+        return 'confluence';
       case 'code':
       case 'pr':
       case 'github_issue':

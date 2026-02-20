@@ -7,15 +7,15 @@
  * - MOCK_RELATED_JIRA_ISSUES (관련 Jira 이슈)
  *
  * 백엔드 RAG 타입 체계:
- * - source: "jira" | "slack" | "github" | "unknown"
- * - entity_type: "issue" | "epic" | "message" | "pr" | "comment" | "code"
+ * - source: "jira" | "slack" | "github" | "confluence" | "unknown"
+ * - entity_type: "issue" | "epic" | "message" | "pr" | "comment" | "code" | "page" | "blogpost"
  */
 
 /** 소스 플랫폼 */
-export type MockSource_Source = 'jira' | 'slack' | 'github' | 'unknown';
+export type MockSource_Source = 'jira' | 'slack' | 'github' | 'confluence' | 'unknown';
 
 /** 엔티티 타입 */
-export type MockSource_EntityType = 'issue' | 'epic' | 'message' | 'pr' | 'comment' | 'code';
+export type MockSource_EntityType = 'issue' | 'epic' | 'message' | 'pr' | 'comment' | 'code' | 'page' | 'blogpost';
 
 export interface MockSource {
   // 공통 (BaseSource)
@@ -55,13 +55,25 @@ export interface MockSource {
   team_id?: string;
   ts?: string;
   thread_ts?: string;
+
+  // Confluence (ConfluenceSource)
+  space_id?: string;
+  space_key?: string;
+  space_name?: string;
+  parent_page_id?: string;
+  version?: number | string;
+  chunk_index?: number;
+  total_chunks?: number;
+  section_hierarchy?: string[];
+  has_images?: boolean;
+  image_urls?: string[];
 }
 
 /**
  * Mock UI 출처 타입.
  * ChatSource 구조와 호환되도록 정의.
  */
-export type MockChatSourceType = 'code' | 'pr' | 'github_issue' | 'jira' | 'slack';
+export type MockChatSourceType = 'code' | 'pr' | 'github_issue' | 'jira' | 'slack' | 'confluence';
 
 /**
  * Mock UI 출처 모델.

@@ -14,6 +14,7 @@ const NON_CITED_REASON = '직접 인용되지는 않았지만 질문과 관련�
  * - github + (issue|comment) → 'github_issue'
  * - slack + message → 'slack'
  * - jira → 'jira'
+ * - confluence → 'confluence'
  * - 기타 → 'code' (기본값)
  *
  * @param source - 백엔드 소스 타입
@@ -29,6 +30,7 @@ const getUiSourceType = (source: SourceResponse['source'], entityType: string): 
 
   if (source === 'slack' && entityType === 'message') return 'slack';
   if (source === 'jira') return 'jira';
+  if (source === 'confluence') return 'confluence';
 
   return 'code';
 };
@@ -146,6 +148,21 @@ const parseJiraAuthorFromText = (text?: string | null) => {
   return '';
 };
 
+/**
+ * Slack text에서 채널명 파싱
+ * text 예시: "[2026-02-18 06:29:16]\nAuthor: 팀원B\nChannel: #전체공지\n..."
+ *
+ * /Channel:\s*(#?\S+)/
+ *  Channel:  → 리터럴 매칭
+ *  \s*       → 공백 0개 이상
+ *  (#?\S+)   → #(있으면) + 공백 아닌 문자 1개 이상을 캡처
+ */
+const parseSlackChannelFromText = (text?: string | null) => {
+  if (!text) return '';
+  const match = text.match(/Channel:\s*(#?\S+)/);
+  return match?.[1] ?? '';
+};
+
 const pickReasonPreviewFromText = (text?: string | null) => {
   if (!text) return '';
   const lines = text
@@ -177,6 +194,7 @@ const getSourceContent = (source: SourceResponse) => {
  * 타입별 표시 형식:
  * - jira: project_key 또는 issue_key
  * - slack: channel_name
+ * - confluence: space_name 또는 'Confluence'
  * - github: "owner/repo" 형식
  *
  * @param source - 백엔드 출처 객체
@@ -190,7 +208,11 @@ const getRepoText = (source: SourceResponse, sourceType: ChatSource['source_type
   }
 
   if (sourceType === 'slack') {
-    return source.channel_name ?? '';
+    return source.channel_name ?? parseSlackChannelFromText(source.text) || '';
+  }
+
+  if (sourceType === 'confluence') {
+    return source.space_name ?? source.space_key ?? 'Confluence';
   }
 
   if (source.owner && source.repo) {
@@ -241,6 +263,10 @@ const getTitleText = (source: SourceResponse, sourceType: ChatSource['source_typ
 
   if (sourceType === 'slack') {
     return source.title ?? 'Slack 메시지';
+  }
+
+  if (sourceType === 'confluence') {
+    return source.title ?? 'Confluence 문서';
   }
 
   return source.title ?? (source.number ? `Issue #${source.number}` : '');

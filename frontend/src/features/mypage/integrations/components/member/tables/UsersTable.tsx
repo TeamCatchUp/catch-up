@@ -1,4 +1,6 @@
-﻿import DefaultProfile from '@/public/icons/icon/default_profile.svg';
+﻿import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
+import DefaultProfile from '@/public/icons/icon/default_profile.svg';
+import IconError from '@/public/icons/icon/error.svg';
 import { cn } from '@/shared/utils/cn';
 
 import {
@@ -57,6 +59,8 @@ const UsersTable = ({ displayRows, activeRenderKey, onSelectRenderKey }: UsersTa
                         getMemberStatusBadgeClassName(displayStatusByService[service]),
                       )}
                     >
+                      {displayStatusByService[service] === '완료' && <IconCheckCircle className="size-4" />}
+                      {displayStatusByService[service] === '미등록' && <IconError className="size-4" />}
                       {displayStatusByService[service]}
                     </span>
                   </div>

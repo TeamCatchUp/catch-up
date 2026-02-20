@@ -79,6 +79,7 @@ export default function RagAnswerPage() {
                       isError={chat.isError && isLastPair}
                       currentStep={chat.currentStep}
                       onFeedbackSubmitted={chat.updateMessageFeedback}
+                      onRetry={chat.submitEdit}
                     />
                   </div>
                 );

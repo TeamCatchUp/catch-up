@@ -24,8 +24,8 @@ export default function OnboardingPage() {
           // 이미 로그인됨 → funnel로 전환
           setStarted(true);
         } else {
-          // 비로그인 → Google OAuth
-          window.location.href = '/api/v1/auth/login';
+          // 비로그인 → SSO 통합로그인
+          window.location.href = '/api/v1/auth/okta/login';
         }
       }}
     />

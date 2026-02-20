@@ -33,7 +33,6 @@ export function OnboardingFunnel() {
             isAdmin={isAdmin}
             defaultValues={{
               name: context.name ?? user?.name ?? '',
-              position: context.position ?? '',
               rank: context.rank ?? '',
               department: context.department ?? '',
             }}
