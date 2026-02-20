@@ -29,8 +29,7 @@ const ProfilePage = () => {
   const basicInfoRows = [
     { label: '이름', value: user?.name ?? '' },
     { label: '메일 / 사번', value: user?.email ?? '' },
-    { label: '직무', value: 'PM' },
-    { label: '직급', value: '팀원' },
+{ label: '직급', value: '팀원' },
   ];
 
   return (
@@ -46,8 +45,6 @@ const ProfilePage = () => {
               <span className="text-heading-xlarge text-gray-80">{user?.name ?? ''}</span>
               <div className="flex gap-1 text-gray-50">
                 <span className="text-body-small">사업개발팀</span>
-                <span className="text-body-xsmall">·</span>
-                <span className="text-body-small">PM</span>
               </div>
             </div>
             <Tooltip>
