@@ -2,14 +2,12 @@
 export type OnboardingSteps = {
   Profile: {
     name?: string;
-    position?: string;
     rank?: string;
     department?: string;
   };
 
   OrgInfo: {
     name: string;
-    position: string;
     rank: string;
     company_name?: string;
     team_size?: string;
@@ -17,7 +15,6 @@ export type OnboardingSteps = {
 
   Connector: {
     name: string;
-    position: string;
     rank: string;
     department?: string;
     company_name?: string;
@@ -29,7 +26,6 @@ export type OnboardingSteps = {
 
   Complete: {
     name: string;
-    position: string;
     rank: string;
     department?: string;
     company_name?: string;
@@ -42,7 +38,6 @@ export type OnboardingSteps = {
 
 export interface ProfileFormData {
   name: string;
-  position: string;
   rank: string;
   department?: string;
 }
@@ -74,7 +69,6 @@ export interface ConnectorOptions {
 /** POST /api/v1/onboarding/complete 요청 바디 */
 export interface OnboardingCompleteRequest {
   name: string;
-  position: string;
   rank: string;
   department?: string;
   company_name?: string;

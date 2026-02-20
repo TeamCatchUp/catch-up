@@ -24,7 +24,6 @@ export function CompleteStep({ data, isAdmin }: CompleteStepProps) {
     complete(
       {
         name: data.name,
-        position: data.position,
         rank: data.rank,
         department: data.department,
         company_name: data.company_name,

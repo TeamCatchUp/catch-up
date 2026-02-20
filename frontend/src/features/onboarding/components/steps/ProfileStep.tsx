@@ -6,7 +6,7 @@ import ErrorIcon from '@/public/icons/icon/error.svg';
 import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 
-import { MOCK_DEPARTMENT_OPTIONS, POSITION_OPTIONS, RANK_OPTIONS } from '../../constants/onboarding';
+import { DEPARTMENT_OPTIONS, RANK_OPTIONS } from '../../constants/onboarding';
 import type { ProfileFormData } from '../../types/onboarding';
 import { StepIndicator } from '../StepIndicator';
 import { StepNavButtons } from '../StepNavButtons';
@@ -15,7 +15,6 @@ interface ProfileStepProps {
   isAdmin: boolean;
   defaultValues: {
     name: string;
-    position: string;
     rank: string;
     department: string;
   };
@@ -25,7 +24,6 @@ interface ProfileStepProps {
 
 export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: ProfileStepProps) {
   const [name, setName] = useState(defaultValues.name);
-  const [position, setPosition] = useState(defaultValues.position);
   const [rank, setRank] = useState(defaultValues.rank);
   const [department, setDepartment] = useState(defaultValues.department);
 
@@ -36,7 +34,6 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
   const validate = () => {
     const newErrors: Record<string, boolean> = {};
     if (!name.trim()) newErrors.name = true;
-    if (!position) newErrors.position = true;
     if (!rank) newErrors.rank = true;
     if (!isAdmin && !department) newErrors.department = true;
     setErrors(newErrors);
@@ -47,13 +44,12 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
     if (!validate()) return;
     onSubmit({
       name: name.trim(),
-      position,
       rank,
       ...(isAdmin ? {} : { department }),
     });
   };
 
-  const isComplete = name.trim() && position && rank && (isAdmin || department);
+  const isComplete = name.trim() && rank && (isAdmin || department);
 
   return (
     <div className="flex size-full flex-col justify-between">
@@ -89,39 +85,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
             />
           </div>
 
-          {/* 직무 */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-heading-medium text-gray-80 flex items-center gap-1 tracking-tight">
-              <span className="size-[5px] rounded-full bg-red-50" />
-              맡고 계신 직무를 알려주세요.
-            </label>
-            <Select
-              value={position}
-              onValueChange={(v) => {
-                setPosition(v);
-                if (errors.position) setErrors((p) => ({ ...p, position: false }));
-              }}
-            >
-              <SelectTrigger className={`h-[46px] ${errors.position ? 'border-red-50' : ''}`}>
-                <SelectValue placeholder="선택 안됨" />
-              </SelectTrigger>
-              <SelectContent>
-                {POSITION_OPTIONS.map((opt) => (
-                  <SelectItem key={opt} value={opt}>
-                    {opt}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.position && (
-              <div className="flex items-center gap-0.5">
-                <ErrorIcon className="size-4 shrink-0 text-red-50" />
-                <span className="text-label-xsmall text-red-50">직무를 선택해주세요.</span>
-              </div>
-            )}
-          </div>
-
-          {/* 직급 + 부서명 (멤버는 가로 배치) */}
+          {/* 직급 + 부서명 */}
           <div className={isAdmin ? '' : 'flex gap-2'}>
             <div className={`flex flex-col gap-1.5 ${isAdmin ? '' : 'flex-1'}`}>
               <label className="text-heading-medium text-gray-80 flex items-center gap-1 tracking-tight">
@@ -138,7 +102,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
                 <SelectTrigger className={`h-[46px] ${errors.rank ? 'border-red-50' : ''}`}>
                   <SelectValue placeholder="선택 안됨" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" side="bottom" sideOffset={4} avoidCollisions={false}>
                   {RANK_OPTIONS.map((opt) => (
                     <SelectItem key={opt} value={opt}>
                       {opt}
@@ -171,8 +135,8 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
                   <SelectTrigger className={`h-[46px] ${errors.department ? 'border-red-50' : ''}`}>
                     <SelectValue placeholder="선택 안됨" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {MOCK_DEPARTMENT_OPTIONS.map((opt) => (
+                  <SelectContent position="popper" side="bottom" sideOffset={4} avoidCollisions={false} className="max-h-45">
+                    {DEPARTMENT_OPTIONS.map((opt) => (
                       <SelectItem key={opt} value={opt}>
                         {opt}
                       </SelectItem>
