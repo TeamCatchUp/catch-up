@@ -7,6 +7,7 @@ import IconDivider from '@/public/icons/icon/divider.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconSpace from '@/public/icons/icon/space.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
+import IconConfluence from '@/public/icons/logo/Confluence.svg';
 import IconGithub from '@/public/icons/logo/GitHub.svg';
 import IconJira from '@/public/icons/logo/Jira.svg';
 import IconSlack from '@/public/icons/logo/Slack.svg';
@@ -89,6 +90,12 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
                 label="Jira"
                 selected={filters.selectedSources.includes('jira')}
                 onClick={() => filters.toggleSource('jira')}
+              />
+              <SearchOptionButton
+                Icon={IconConfluence}
+                label="Confluence"
+                selected={filters.selectedSources.includes('confluence')}
+                onClick={() => filters.toggleSource('confluence')}
               />
               <SearchOptionButton
                 Icon={IconGithub}

@@ -1,7 +1,7 @@
 /**
  * UI에서 사용하는 출처 타입.
  */
-export type ChatSourceTypeModel = 'code' | 'pr' | 'github_issue' | 'jira' | 'slack';
+export type ChatSourceTypeModel = 'code' | 'pr' | 'github_issue' | 'jira' | 'slack' | 'confluence';
 
 /**
  * 답변 우측 사이드바/배지 렌더링용 출처 모델.

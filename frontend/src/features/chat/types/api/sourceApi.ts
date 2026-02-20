@@ -1,8 +1,8 @@
 /** 소스 플랫폼 타입 */
-export type SourceTypeApi = 'jira' | 'slack' | 'github' | 'unknown';
+export type SourceTypeApi = 'jira' | 'slack' | 'github' | 'confluence' | 'unknown';
 
 /** 소스 엔티티 타입. 'code'는 프론트 UI 전용 (github + code → 코드 출처 카드) */
-export type EntityTypeApi = 'issue' | 'epic' | 'message' | 'pr' | 'comment' | 'code';
+export type EntityTypeApi = 'issue' | 'epic' | 'message' | 'pr' | 'comment' | 'code' | 'page' | 'blogpost';
 
 /** RAG 소스 응답 타입 */
 export interface SourceResponseApi {
@@ -43,4 +43,16 @@ export interface SourceResponseApi {
   team_id?: string;
   ts?: string;
   thread_ts?: string;
+
+  // confluence (ConfluenceSource)
+  space_id?: string;
+  space_key?: string;
+  space_name?: string;
+  parent_page_id?: string;
+  version?: number | string;
+  chunk_index?: number;
+  total_chunks?: number;
+  section_hierarchy?: string[];
+  has_images?: boolean;
+  image_urls?: string[];
 }

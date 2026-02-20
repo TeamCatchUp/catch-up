@@ -14,6 +14,7 @@ const NON_CITED_REASON = '직접 인용되지는 않았지만 질문과 관련�
  * - github + (issue|comment) → 'github_issue'
  * - slack + message → 'slack'
  * - jira → 'jira'
+ * - confluence → 'confluence'
  * - 기타 → 'code' (기본값)
  *
  * @param source - 백엔드 소스 타입
@@ -29,6 +30,7 @@ const getUiSourceType = (source: SourceResponse['source'], entityType: string): 
 
   if (source === 'slack' && entityType === 'message') return 'slack';
   if (source === 'jira') return 'jira';
+  if (source === 'confluence') return 'confluence';
 
   return 'code';
 };
@@ -177,6 +179,7 @@ const getSourceContent = (source: SourceResponse) => {
  * 타입별 표시 형식:
  * - jira: project_key 또는 issue_key
  * - slack: channel_name
+ * - confluence: space_name 또는 'Confluence'
  * - github: "owner/repo" 형식
  *
  * @param source - 백엔드 출처 객체
@@ -191,6 +194,10 @@ const getRepoText = (source: SourceResponse, sourceType: ChatSource['source_type
 
   if (sourceType === 'slack') {
     return source.channel_name ?? '';
+  }
+
+  if (sourceType === 'confluence') {
+    return source.space_name ?? source.space_key ?? 'Confluence';
   }
 
   if (source.owner && source.repo) {
@@ -241,6 +248,10 @@ const getTitleText = (source: SourceResponse, sourceType: ChatSource['source_typ
 
   if (sourceType === 'slack') {
     return source.title ?? 'Slack 메시지';
+  }
+
+  if (sourceType === 'confluence') {
+    return source.title ?? 'Confluence 문서';
   }
 
   return source.title ?? (source.number ? `Issue #${source.number}` : '');

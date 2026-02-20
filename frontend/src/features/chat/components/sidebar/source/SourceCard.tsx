@@ -1,6 +1,7 @@
 import type { ChatSource } from '@/features/chat/types';
 
 import LightbulbFilled from '/public/icons/icon/lightbulb_filled.svg';
+import Confluence from '/public/icons/logo/Confluence.svg';
 import Github from '/public/icons/logo/GitHub.svg';
 import Jira from '/public/icons/logo/Jira.svg';
 import Slack from '/public/icons/logo/Slack.svg';
@@ -15,7 +16,7 @@ interface Props {
 
 // source_type을 플랫폼 로고 카테고리로 매핑하기 위한 타입
 // code | pr | github_issue → 'github'로 통합
-type SourceLogoType = 'jira' | 'github' | 'slack';
+type SourceLogoType = 'jira' | 'github' | 'slack' | 'confluence';
 
 // 이 출처가 사용된 이유(content) 미리보기 최대 글자 수
 const REASON_PREVIEW_MAX_LENGTH = 120;
@@ -31,6 +32,7 @@ const SourceCard = ({ source, showCount = true, count }: Props) => {
   const getSourceLogoType = (): SourceLogoType => {
     if (source.source_type === 'jira') return 'jira';
     if (source.source_type === 'slack') return 'slack';
+    if (source.source_type === 'confluence') return 'confluence';
     return 'github'; // code | pr | github_issue
   };
 
@@ -38,6 +40,7 @@ const SourceCard = ({ source, showCount = true, count }: Props) => {
     const sourceLogoType = getSourceLogoType();
     if (sourceLogoType === 'jira') return <Jira className="h-4 w-4 shrink-0" />;
     if (sourceLogoType === 'slack') return <Slack className="h-4 w-4 shrink-0" />;
+    if (sourceLogoType === 'confluence') return <Confluence className="h-4 w-4 shrink-0" />;
     return <Github className="h-4 w-4 shrink-0" />;
   };
 
