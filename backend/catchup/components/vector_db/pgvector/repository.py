@@ -33,8 +33,7 @@ from catchup.configs.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Embedding API Rate Limit 제한 (Cohere API 동시 요청 제한)
-_embedding_semaphore = asyncio.Semaphore(10)
+_embedding_semaphore = asyncio.Semaphore(25)
 
 
 class PGVectorRepository:

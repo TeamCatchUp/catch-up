@@ -3,6 +3,7 @@ from langchain_core.messages import trim_messages
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from langchain_aws import ChatBedrock
+from botocore.config import Config
 
 from catchup.components.llm.constants import ModelCapacity
 from catchup.configs.config import settings
@@ -68,6 +69,11 @@ class AwsBedrockLlmService(BaseLlmService):
             if self.model_capacity == ModelCapacity.SMALL
             else settings.AWS_BEDROCK_LARGE_MODEL
         )
+
+        config = Config(
+            max_pool_connections = 50,
+            retries = {"max_attempts": 5, "mode": "adaptive"},
+        )
         
         return ChatBedrock(
             model_id=model_id,
@@ -76,5 +82,6 @@ class AwsBedrockLlmService(BaseLlmService):
             aws_secret_access_key=None,
             temperature=0,
             max_tokens=4096,
-            streaming=True
+            streaming=True,
+            config=config
         )
