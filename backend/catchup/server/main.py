@@ -34,6 +34,9 @@ logging.basicConfig(
     format="(%(asctime)s) %(name)s.%(funcName)s:%(lineno)d: [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 ) 
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
