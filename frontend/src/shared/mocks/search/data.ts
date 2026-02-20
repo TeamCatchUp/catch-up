@@ -1,5 +1,7 @@
 import type { ChatroomsResponse, RecentQueriesResponse, SessionMessagesResponse } from '@/shared/types/query/api';
 
+import { MOCK_RAG_ANSWER, MOCK_SOURCES } from '../chat/data';
+
 export const MOCK_CHATROOMS: ChatroomsResponse = {
   total: 4,
   page: 1,
@@ -119,22 +121,24 @@ export const MOCK_CHATROOM_MESSAGES: SessionMessagesResponse = {
   total: 2,
   page: 1,
   size: 50,
-  title: '로그인 관련 질문',
+  title: 'RAG 스트리밍 관련 질문',
   session_id: 'uuid-001',
   items: [
     {
       id: 101,
       sender_type: 'human',
-      content: '로그인 관련 질문',
+      content: '이 채팅에서 token streaming은 어떻게 동작하나요?',
       created_at: new Date(Date.now() - 60 * 1000).toISOString(),
       sources: [],
     },
     {
       id: 102,
       sender_type: 'assistant',
-      content: '인증 흐름은 Access/Refresh 토큰 구조로 구성하는 것이 일반적입니다.',
+      content: MOCK_RAG_ANSWER,
       created_at: new Date(Date.now() - 30 * 1000).toISOString(),
-      sources: [],
+      sources: MOCK_SOURCES,
+      chat_history_id: 'mock-history-001',
+      has_feedback: false,
     },
   ],
 };
