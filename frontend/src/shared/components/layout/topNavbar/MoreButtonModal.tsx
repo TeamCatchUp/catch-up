@@ -15,7 +15,7 @@ import ArrowRight from '/public/icons/icon/arrow_right.svg';
 import CloudCheck from '/public/icons/icon/cloud_check.svg';
 import Error from '/public/icons/icon/error.svg';
 import Storage from '/public/icons/icon/storage.svg';
-import ConfluenceLogo from '/public/icons/logo/Counfluence.svg';
+import ConfluenceLogo from '/public/icons/logo/Confluence.svg';
 import GithubLogo from '/public/icons/logo/GitHub.svg';
 import JiraLogo from '/public/icons/logo/Jira.svg';
 import SlackLogo from '/public/icons/logo/Slack.svg';

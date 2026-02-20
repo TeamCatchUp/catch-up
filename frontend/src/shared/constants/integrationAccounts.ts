@@ -1,6 +1,6 @@
 import type { IntegrationAccountMeta } from '@/shared/types/integrationService';
 
-import IconConfluence from '/public/icons/logo/Counfluence.svg';
+import IconConfluence from '/public/icons/logo/Confluence.svg';
 import IconGithub from '/public/icons/logo/GitHub.svg';
 import IconJira from '/public/icons/logo/Jira.svg';
 import IconSlack from '/public/icons/logo/Slack.svg';
