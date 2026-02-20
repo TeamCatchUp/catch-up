@@ -126,8 +126,20 @@ const toSourceRepo = (source: MockSource) => {
   return source.repo ?? '';
 };
 
-const toSourceTitle = (source: MockSource) => {
-  return source.title ?? (source.number ? `#${source.number}` : (source.issue_key ?? ''));
+const toSourceTitle = (source: MockSource, sourceType: MockChatSource['source_type']) => {
+  if (sourceType === 'pr') {
+    return source.title ?? (source.number ? `PR #${source.number}` : '');
+  }
+  if (sourceType === 'jira') {
+    return source.title ?? source.issue_key ?? '';
+  }
+  if (sourceType === 'code') {
+    return source.title ?? '';
+  }
+  if (sourceType === 'slack') {
+    return source.title ?? 'Slack 메시지';
+  }
+  return source.title ?? (source.number ? `Issue #${source.number}` : '');
 };
 
 const formatSourceDate = (source: MockSource) => {
@@ -137,18 +149,21 @@ const formatSourceDate = (source: MockSource) => {
   return '';
 };
 
-const toChatSource = (source: MockSource): MockChatSource => ({
-  id: `mock-source-${source.index}`,
-  source_type: toSourceType(source),
-  is_cited: source.is_cited ?? false,
-  repo: toSourceRepo(source),
-  title: toSourceTitle(source),
-  content: source.citation_rationale?.trim() || source.text?.trim() || '',
-  date: formatSourceDate(source),
-  author: source.source === 'jira' ? (source.assignee ?? source.author ?? '') : (source.author ?? ''),
-  html_url: source.url ?? '',
-  source_index: typeof source.index === 'number' ? source.index : 0,
-});
+const toChatSource = (source: MockSource): MockChatSource => {
+  const sourceType = toSourceType(source);
+  return {
+    id: `mock-source-${source.index}`,
+    source_type: sourceType,
+    is_cited: source.is_cited ?? false,
+    repo: toSourceRepo(source),
+    title: toSourceTitle(source, sourceType),
+    content: source.citation_rationale?.trim() || source.text?.trim() || '',
+    date: formatSourceDate(source),
+    author: source.source === 'jira' ? (source.assignee ?? source.author ?? '') : (source.author ?? ''),
+    html_url: source.url ?? '',
+    source_index: typeof source.index === 'number' ? source.index : 0,
+  };
+};
 
 export const MOCK_CHAT_SOURCES: MockChatSource[] = MOCK_SOURCES.map(toChatSource);
 

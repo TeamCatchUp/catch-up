@@ -108,4 +108,15 @@ export const setToLocalStorage = <T>(key: string, value: T): void => {
   }
 };
 
+/** localStorage에서 값 삭제 (SSR 안전) */
+export const removeFromLocalStorage = (key: string): void => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    localStorage.removeItem(key);
+  } catch (error) {
+    console.warn(`Error removing localStorage key "${key}":`, error);
+  }
+};
+
 export default useLocalStorage;

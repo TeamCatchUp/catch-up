@@ -4,7 +4,7 @@ import { MOCK_ADMIN_MEMBERS, MOCK_ENTRY_REQUESTS } from './admin/adminMembersMoc
 import { MOCK_JWT_TOKENS, MOCK_USER } from './auth/data';
 import delay from './delay';
 import { MOCK_FEEDBACK_RESPONSE } from './feedback/data';
-import { MOCK_CHATROOMS, MOCK_RECENT_QUERIES, MOCK_RECENT_QUERIES_EMPTY } from './search/data';
+import { MOCK_CHATROOM_MESSAGES, MOCK_CHATROOMS, MOCK_RECENT_QUERIES, MOCK_RECENT_QUERIES_EMPTY } from './search/data';
 
 const USE_EMPTY_RECENT_QUERIES = process.env.NEXT_PUBLIC_MOCK_RECENT_QUERIES_EMPTY === 'true';
 
@@ -47,6 +47,18 @@ const mockHandlers: MockHandler[] = [
     pattern: /^\/api\/v1\/rooms\/[^/]+\/queries$/,
     method: 'get',
     handler: async () => (USE_EMPTY_RECENT_QUERIES ? MOCK_RECENT_QUERIES_EMPTY : MOCK_RECENT_QUERIES),
+  },
+  {
+    pattern: /^\/api\/v1\/rooms\/[^/]+\/messages$/,
+    method: 'get',
+    handler: async (url) => {
+      const matched = url.match(/^\/api\/v1\/rooms\/([^/]+)\/messages$/);
+      const sessionId = matched?.[1] ?? MOCK_CHATROOM_MESSAGES.session_id;
+      return {
+        ...MOCK_CHATROOM_MESSAGES,
+        session_id: sessionId,
+      };
+    },
   },
 
   // Chat (SSE stream is mocked in chat/mockChatService.ts)

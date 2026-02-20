@@ -1,4 +1,4 @@
-import type { ChatroomsResponse, RecentQueriesResponse } from '@/shared/types/query/api';
+import type { ChatroomsResponse, RecentQueriesResponse, SessionMessagesResponse } from '@/shared/types/query/api';
 
 export const MOCK_CHATROOMS: ChatroomsResponse = {
   total: 4,
@@ -113,4 +113,28 @@ export const MOCK_RECENT_QUERIES_EMPTY: RecentQueriesResponse = {
   page: 1,
   size: 50,
   items: [],
+};
+
+export const MOCK_CHATROOM_MESSAGES: SessionMessagesResponse = {
+  total: 2,
+  page: 1,
+  size: 50,
+  title: '로그인 관련 질문',
+  session_id: 'uuid-001',
+  items: [
+    {
+      id: 101,
+      sender_type: 'human',
+      content: '로그인 관련 질문',
+      created_at: new Date(Date.now() - 60 * 1000).toISOString(),
+      sources: [],
+    },
+    {
+      id: 102,
+      sender_type: 'assistant',
+      content: '인증 흐름은 Access/Refresh 토큰 구조로 구성하는 것이 일반적입니다.',
+      created_at: new Date(Date.now() - 30 * 1000).toISOString(),
+      sources: [],
+    },
+  ],
 };

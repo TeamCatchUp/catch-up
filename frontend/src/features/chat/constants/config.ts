@@ -26,13 +26,6 @@ export const NODE_TO_UI_STEP: Record<string, RagUIStepKey | null> = {
 } as const;
 
 /**
- * localStorage 키 생성
- */
-export const getStorageKeys = (sessionId: string) => ({
-  chat: `chat_${sessionId}`,
-});
-
-/**
  * 답변 아이콘 목록
  */
 export { RAG_UI_STEPS } from './steps';

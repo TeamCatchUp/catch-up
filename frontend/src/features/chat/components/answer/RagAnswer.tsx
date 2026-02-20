@@ -5,9 +5,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 
-import GithubPRStepSkeleton from '@/features/chat/components/skeleton/GithubPRStepSkeleton';
 import RagAnswerSkeleton from '@/features/chat/components/skeleton/RagAnswerSkeleton';
-import type { PRPayload, RagUIStepKey } from '@/features/chat/types';
+import type { RagUIStepKey } from '@/features/chat/types';
 import type { QAPair } from '@/features/chat/utils/render/chat';
 import { formatMarkdownString } from '@/features/chat/utils/render/markdown';
 
@@ -36,10 +35,6 @@ interface RagAnswerProps {
   isLoading: boolean;
   isError: boolean;
   currentStep: RagUIStepKey;
-  showPRSelection: boolean;
-  prList: PRPayload[];
-  onPRContinue: (selectedPrNumbers: number[]) => Promise<void>;
-  onPRRefetch: () => Promise<void>;
   onFeedbackSubmitted: (messageId: string) => void;
 }
 
@@ -49,10 +44,6 @@ const RagAnswer = ({
   isLoading,
   isError,
   currentStep,
-  showPRSelection,
-  prList,
-  onPRContinue,
-  onPRRefetch,
   onFeedbackSubmitted,
 }: RagAnswerProps) => {
   // 섹션 로컬 UI 상태
@@ -118,10 +109,9 @@ const RagAnswer = ({
     );
   }
 
-  // 답변이 없는 경우 (로딩/PR선택/에러)
+  // 답변이 없는 경우 (로딩/에러)
   return (
     <div>
-      {showPRSelection && <GithubPRStepSkeleton onContinue={onPRContinue} prList={prList} onRefetch={onPRRefetch} />}
       {isLoading && !currentQA?.answer && <RagAnswerSkeleton currentStep={currentStep} />}
       {isError && (
         <AnswerError
