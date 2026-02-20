@@ -3,6 +3,7 @@ APScheduler for Hourly Sync
 """
 
 import logging
+from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -352,6 +353,48 @@ async def poll_confluence_sync():
 
     logger.info("[CONFLUENCE][POLL] Confluence polling job completed")
 
+async def refresh_atlassian_tokens():
+    """
+    30분 간격으로 Atlassian Access Token을 갱신함.
+    """
+    logger.info("[ATLASSIAN][TOKEN] Starting Token Refresh Job")
+
+    oauth_client = AtlassianOAuthClient()
+
+    with SessionLocal() as db:
+        tokens = get_all_atlassian_tokens(db)
+
+        if not tokens:
+            logger.debug("[ATLASSIAN][TOKEN] No Atlassian Tokens Found")
+            return
+        
+        refreshed_count = 0
+        for token in tokens:
+            cloud_id = token.cloud_id
+            try:
+                new_tokens = await oauth_client.refresh_access_token(token.refresh_token)
+
+                token.access_token = new_tokens.access_token
+                token.refresh_token = new_tokens.refresh_token
+                token.expires_at = datetime.now(timezone.utc) + timedelta(seconds=new_tokens.expires_in)
+                db.commit()
+
+                refreshed_count += 1
+                logger.info(
+                    f"[ATLASSIAN][TOKEN] Token Refreshed : cloud_id = {cloud_id}"
+                )
+            except Exception as e:
+                db.rollback()
+                logger.error(
+                    "[ATLASSIAN][TOKEN] Token refresh failed: cloud_id=%s, error=%s",
+                    cloud_id, e,
+                    exc_info=True,
+                )
+    logger.info(
+        "[ATLASSIAN][TOKEN] Token Refresh Job Completed"
+    )
+
+
 
 def init_scheduler():
 
@@ -368,6 +411,7 @@ def init_scheduler():
     _scheduler = AsyncIOScheduler()
 
     interval_hours = settings.WEBHOOK_FLUSH_INTERVAL_HOURS
+    token_refresh_minutes = settings.ATLASSIAN_TOKEN_REFRESH_INTERVAL_MINUTES
 
     _scheduler.add_job(
         flush_github_events,
@@ -413,6 +457,15 @@ def init_scheduler():
         name="Confluence Polling Sync",
         replace_existing=True,
         misfire_grace_time=300,
+    )
+
+    _scheduler.add_job(
+        refresh_atlassian_tokens,
+        trigger=CronTrigger(minute=f"*/{token_refresh_minutes}"),
+        id="atlassian_token_refresh",
+        name="Atlassian OAuth Token Refresh",
+        replace_existing=True,
+        misfire_grace_time = 300,
     )
     
     _scheduler.start()

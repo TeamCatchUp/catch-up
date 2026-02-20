@@ -90,6 +90,8 @@ class Settings(BaseSettings):
     ATLASSIAN_AUTH_URL: str = "https://auth.atlassian.com/authorize"
     ATLASSIAN_TOKEN_URL: str = "https://auth.atlassian.com/oauth/token"
     ATLASSIAN_API_URL: str = "https://api.atlassian.com"
+    ATLASSIAN_TOKEN_REFRESH_INTERVAL_MINUTES: int = 30
+
 
     # Slack OAuth
     SLACK_CLIENT_ID: str
