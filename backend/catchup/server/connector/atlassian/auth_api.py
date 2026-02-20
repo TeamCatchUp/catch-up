@@ -9,6 +9,7 @@ import logging
 import secrets
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from httpx import HTTPStatusError, RequestError
 from sqlalchemy.orm import Session
@@ -33,6 +34,10 @@ from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
 from catchup.db.engine import SessionLocal
 from catchup.db.atlassian import oauth_repository as atlassian_crud
+from catchup.db.models import SourceType
+from catchup.db.user_source_mapping import upsert_okta_users
+from catchup.mapping.okta import OktaClient
+from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
 from catchup.utils.redis import store_oauth_state
 
 logger = logging.getLogger(__name__)
@@ -95,7 +100,7 @@ async def atlassian_oauth_callback(
 
     # Background tasks
     for cloud_id in result.jira_targets:
-        background_tasks.add_task(_sync_jira_metadata, cloud_id)
+        background_tasks.add_task(_sync_jira_metadata_and_map_users, cloud_id)
         background_tasks.add_task(_ensure_jira_dynamic_webhook, cloud_id)
 
     for cloud_id in result.confluence_targets:
@@ -148,6 +153,61 @@ async def atlassian_uninstall(
     if deleted:
         return {"status": "success", "message": "Atlassian 연결이 해제되었습니다."}
     return {"status": "not_found", "message": "해당 Atlassian 연결을 찾을 수 없습니다."}
+
+
+async def _sync_jira_metadata_and_map_users(cloud_id: str) -> None:
+    """Atlassian 메타데이터 fetching 이후 사용자 매핑까지 수행하는 Wrapper 함수 (임시)"""
+    
+    # Jira Metadata 동기화
+    await _sync_jira_metadata(cloud_id)
+    
+    logger.info(f"[OKTA][MAPPING] Starting Okta sync and Atlassian mapping for cloud_id={cloud_id}")
+    
+    # Okta Users 기반 Atlassian Users 매핑
+    try:
+        okta_client = OktaClient()
+        okta_users = await okta_client.get_parsed_users()
+        
+        if okta_users:
+            def _mapping_task_sync():
+                with SessionLocal() as db:
+                    try:
+                        upsert_okta_users(db, okta_users)
+                        
+                        mapping_result_jira = sync_users_to_pre_mapping_buffer(
+                            db=db,
+                            source_type=SourceType.JIRA,
+                            okta_users=okta_users
+                        )
+                        
+                        mapping_result_conf = sync_users_to_pre_mapping_buffer(
+                            db=db,
+                            source_type=SourceType.CONFLUENCE,
+                            okta_users=okta_users
+                        )
+                        
+                        db.commit() 
+                        return {
+                            "JIRA": mapping_result_jira,
+                            "CONFLUENCE": mapping_result_conf
+                        }
+                        
+                    except Exception as e:
+                        db.rollback() 
+                        logger.error(f"Transaction failed, rolling back: {e}")
+                        raise
+                
+            combined_mapping_result = await run_in_threadpool(_mapping_task_sync)
+            logger.info(f"[OKTA][MAPPING] Mapping completed: {combined_mapping_result}")
+        else:
+            logger.warning("[OKTA][MAPPING] No active users found in Okta. Skipping mapping.")
+            
+    except Exception as e:
+        logger.error(
+            f"[ATLASSIAN][AUTH] Okta mapping failed after Jira sync: "
+            f"cloud_id={cloud_id}, error={e}",
+            exc_info=True
+        )
 
 
 async def _sync_jira_metadata(cloud_id: str) -> None:

@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -9,6 +10,9 @@ from catchup.connectors.github.schemas import(
      InstallationRepositoriesWebhookPayload, InstallationWebhookPayload,
      IssueWebhookPayload, PullRequestWebhookPayload
 )
+from catchup.db.user_source_mapping import upsert_okta_users
+from catchup.mapping.okta import OktaClient
+from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
 from catchup.utils.webhook_buffer import get_webhook_buffer
 from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.configs.config import auth_settings, settings
@@ -17,7 +21,7 @@ from catchup.db.engine import SessionLocal
 from catchup.db.github import installation_repository as installation_crud
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.domain_repository import RepositoryUpsertData
-from catchup.db.models import GithubInstallationType, GithubRepositorySelection
+from catchup.db.models import GithubInstallationType, GithubRepositorySelection, SourceType
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 
 logger = logging.getLogger(__name__)
@@ -154,6 +158,52 @@ async def github_app_install_callback(
     return RedirectResponse(url=redirect_url)
 
 
+async def _sync_installation_metadata_and_map_user(installation_id: int) -> None:
+    """Github 메타데이터 fetching 이후 사용자 매핑까지 수행하는 Wrapper 함수 (임시)"""
+    
+    await _sync_installation_metadata(installation_id)
+
+    logger.info(f"[OKTA][MAPPING] Starting Okta sync and Github mapping for installation_id={installation_id}")
+
+    # Okta Users 기반 GitHub Users 매핑
+    try:
+        okta_client = OktaClient()
+        okta_users = await okta_client.get_parsed_users()
+        
+        if okta_users:
+            def _mapping_task_sync():
+                with SessionLocal() as db:
+                    try:
+                        upsert_okta_users(db, okta_users)
+                        
+                        mapping_result = sync_users_to_pre_mapping_buffer(
+                            db=db,
+                            source_type=SourceType.GITHUB,
+                            okta_users=okta_users
+                        )
+                        
+                        db.commit() 
+                        return mapping_result
+                        
+                    except Exception as e:
+                        db.rollback() 
+                        logger.error(f"Transaction failed, rolling back: {e}")
+                        raise
+                
+            mapping_result = await run_in_threadpool(_mapping_task_sync)
+            logger.info(f"[OKTA][MAPPING] Mapping completed: {mapping_result}")
+        else:
+            logger.warning("[OKTA][MAPPING] No active users found in Okta. Skipping mapping.")
+            
+    except Exception as e:
+        logger.error(
+            f"[GITHUB][AUTH] Okta mapping failed after GitHub sync: "
+            f"installation_id={installation_id}, error={e}",
+            exc_info=True
+        )
+
+
+
 async def _sync_installation_metadata(installation_id: int) -> None:
     """
     Background Task: Installation 메타데이터 동기화 (Users + Repositories)
@@ -229,7 +279,7 @@ async def _handle_installation_created(
         f"account={new_installation.account_login}"
     )
 
-    background_tasks.add_task(_sync_installation_metadata, installation.id)
+    background_tasks.add_task(_sync_installation_metadata_and_map_user, installation.id)
     logger.info(f"Scheduled repository sync for installation {installation.id}")
 
     return {"status": "created", "installation_id": new_installation.installation_id}

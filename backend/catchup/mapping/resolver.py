@@ -16,7 +16,7 @@ def sync_users_to_pre_mapping_buffer(
     db: Session,
     source_type: SourceType,
     okta_users: list[OktaUserSchema]
-):
+) -> dict:
     sync_results = {"success": 0, "failed": 0, "mapping_created": 0, "mapping_updated": 0}
     
     for user in okta_users:
@@ -52,8 +52,6 @@ def sync_users_to_pre_mapping_buffer(
             sync_results["mapping_updated"] += 1
         
         sync_results["success"] += 1
-        
-    db.commit()
     
     logger.info(f"Sync Result: {sync_results}")
     
