@@ -24,6 +24,8 @@ const buttonVariants = cva(
         'box-solid-primary': 'hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 rounded-lg bg-blue-50 text-white',
         'box-outline-gray':
           'border-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 disabled:bg-neutral-1 disabled:text-gray-30 text-gray-70 rounded-lg border bg-white',
+        'box-outline-blue':
+          'border-blue-40 hover:bg-blue-5 active:bg-blue-10 disabled:bg-neutral-1 disabled:text-gray-30 disabled:border-neutral-2 rounded-lg border bg-blue-1 text-blue-50',
 
         /* ── Capsule Buttons ── */
         'capsule-solid-primary':
@@ -91,22 +93,22 @@ const buttonVariants = cva(
 
       /* ── Box sizes ── */
       {
-        variant: ['box-solid-primary', 'box-outline-gray'],
+        variant: ['box-solid-primary', 'box-outline-gray', 'box-outline-blue'],
         size: 'lg',
         class: 'text-body-medium gap-1 px-4 py-1.5',
       },
       {
-        variant: ['box-solid-primary', 'box-outline-gray'],
+        variant: ['box-solid-primary', 'box-outline-gray', 'box-outline-blue'],
         size: 'md',
         class: 'text-body-small gap-1 px-2.5 py-1.5',
       },
       {
-        variant: ['box-solid-primary', 'box-outline-gray'],
+        variant: ['box-solid-primary', 'box-outline-gray', 'box-outline-blue'],
         size: 'sm',
         class: 'text-body-xsmall gap-1 px-2 py-1',
       },
       {
-        variant: ['box-solid-primary', 'box-outline-gray'],
+        variant: ['box-solid-primary', 'box-outline-gray', 'box-outline-blue'],
         size: 'xs',
         class: 'rounded-md2 text-body-xsmall gap-1 px-1.5 py-1',
       },
