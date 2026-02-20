@@ -37,7 +37,7 @@ def sync_users_to_pre_mapping_buffer(
         if not external_user_id:
             continue
         
-        created = _upsert_pre_mapping(
+        created = upsert_pre_mapping(
             db,
             okta_uid=okta_uid,
             email=email,
@@ -58,7 +58,7 @@ def sync_users_to_pre_mapping_buffer(
     return sync_results
 
 
-def _upsert_pre_mapping(
+def upsert_pre_mapping(
     db: Session,
     okta_uid: str,
     email: str,
@@ -76,8 +76,10 @@ def _upsert_pre_mapping(
     
     if premapped:
         premapped.external_user_identifier = external_user_id
-        premapped.okta_uid = okta_uid
-        premapped.name = name
+        if name:
+            premapped.name = name
+        if okta_uid not in ["FILE_IMPORTED"]:
+            premapped.okta_uid = okta_uid
         return False
     
     else:
@@ -91,3 +93,4 @@ def _upsert_pre_mapping(
         )
         add_new_mapping(db, new_entry)
         return True
+    

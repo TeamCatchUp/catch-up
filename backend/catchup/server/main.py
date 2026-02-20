@@ -27,6 +27,7 @@ from catchup.server.connector.confluence.sync_api import (
 )
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.sync_api import router as slack_sync_router
+from catchup.server.mapping.api import router as github_mapping_csv_router
 
 # logging 설정
 logging.basicConfig(
@@ -118,6 +119,7 @@ app.include_router(jira_webhook_router)
 app.include_router(confluence_sync_router)
 app.include_router(slack_auth_router)
 app.include_router(slack_sync_router)
+app.include_router(github_mapping_csv_router)
 
 
 app.add_middleware(
