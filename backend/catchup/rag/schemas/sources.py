@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------
 class SourceType(StrEnum):
     JIRA = "jira"
+    CONFLUENCE = "confluence"
     SLACK = "slack"
     GITHUB = "github"
     UNKNOWN = "unknown"
@@ -22,6 +23,9 @@ class EntityType(StrEnum):
     # Jira
     ISSUE = "issue"
     EPIC = "epic"
+    # Confluence
+    PAGE = "page"
+    BLOGPOST = "blogpost"
     # Slack
     MESSAGE = "message"
     # GitHub
@@ -43,7 +47,7 @@ class BaseSource(BaseModel):
 
     # 데이터 출처
     source: SourceType = Field(..., description="데이터 소스 (e.g. Jira, Slack, GitHub)")
-    entity_type: EntityType = Field(..., description="엔티티 타입 (issue, epic, pr, message)")
+    entity_type: EntityType = Field(..., description="엔티티 타입 (툴별 상이)")
 
     # 공통 메타데이터
     title: str = Field(..., description="제목 또는 요약")
@@ -108,6 +112,12 @@ class BaseSource(BaseModel):
                 
                 if full_name and number:
                     doc_id = f"github:{entity_type}:{full_name}:{number}"
+                    
+            elif source_str == "confluence":
+                content_id = metadata.get("id")
+                chunk_index = metadata.get("chunk_index")
+                if content_id and chunk_index is not None:
+                    doc_id = f"confluence:{entity_type}:{content_id}:chunk:{chunk_index}"
             
 
         # Slack은 edited_at을 사용하므로, updated_at이 없으면 edited_at을 찾도록 fallback 처리
@@ -195,11 +205,30 @@ class BaseSource(BaseModel):
                 base_ref=metadata.get("base_ref"),
                 head_ref=metadata.get("head_ref"),
             )
-
-        # 4. Fallback
-        return BaseSource(
+        
+        # 4. Confluence
+        elif source_str == "confluence":
+            return ConfluenceSource(
+                **base_data,
+                source=SourceType.CONFLUENCE,
+                title=metadata.get("title", "No Title"),
+                author=metadata.get("author_id"),
+                space_id=metadata.get("space_id"),
+                space_key=metadata.get("space_key"),
+                space_name=metadata.get("space_name"),
+                parent_page_id=metadata.get("parent_page_id"),
+                version=metadata.get("version"),
+                labels=metadata.get("labels", []),
+                chunk_index=metadata.get("chunk_index"),
+                total_chunks=metadata.get("total_chunks"),
+                section_hierarchy=metadata.get("section_hierarchy", []),
+                has_images=metadata.get("has_images", False),
+                image_urls=metadata.get("image_urls", []),
+            )
+        
+        # Fallback
+        return UnknownSource(
             **base_data,
-            source=SourceType.UNKNOWN,
             title="Unknown Source",
         )
 
@@ -245,6 +274,22 @@ class GithubSource(BaseSource):
     head_ref: str | None = Field(None, description="소스 브랜치 (PR only)")
 
 
+class ConfluenceSource(BaseSource):
+    source: Literal[SourceType.CONFLUENCE] = SourceType.CONFLUENCE
+    
+    space_id: str | None = Field(None, description="스페이스 ID")
+    space_key: str | None = Field(None, description="스페이스 키")
+    space_name: str | None = Field(None, description="스페이스 이름")
+    parent_page_id: str | None = Field(None, description="상위 페이지 ID")
+    version: int | str | None = Field(None, description="문서 버전")
+    labels: list[str] = Field(default_factory=list, description="라벨 목록")
+    chunk_index: int | None = Field(None, description="현재 청크 인덱스")
+    total_chunks: int | None = Field(None, description="전체 청크 수")
+    section_hierarchy: list[str] = Field(default_factory=list, description="섹션 계층 구조")
+    has_images: bool = Field(False, description="이미지 포함 여부")
+    image_urls: list[str] = Field(default_factory=list, description="이미지 URL 목록")
+
+
 # Fallback
 class UnknownSource(BaseSource):
     source: Literal[SourceType.UNKNOWN] = SourceType.UNKNOWN
@@ -253,6 +298,6 @@ class UnknownSource(BaseSource):
 # Response Union
 # --------------------------------------------------------------------------
 SourceResponse = Annotated[
-    Union[JiraSource, SlackSource, GithubSource, UnknownSource],
+    Union[JiraSource, SlackSource, GithubSource, ConfluenceSource, UnknownSource],
     Field(discriminator="source"),
 ]
