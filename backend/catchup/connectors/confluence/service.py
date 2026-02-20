@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from langchain_core.documents import Document
@@ -19,6 +20,7 @@ from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.db.models import ConfluenceEntityType
 from catchup.db.confluence import sync_repository as confluence_sync
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
+from catchup.configs.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +53,14 @@ class ConfluenceIngestionService:
             self,
             db: Session,
             space_keys: list[str] | None = None,
+            sync_days: int | None = None,
     ) -> dict[str, Any]:
+        days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
+        sync_from = datetime.now(timezone.utc) - timedelta(days=days)
         
         logger.info(
             f"[CONFLUENCE][FULL SYNC] Started: "
-            f"cloud_id={self.cloud_id}, spaces={space_keys or 'all'}"
+            f"cloud_id={self.cloud_id}, spaces={space_keys or 'all'} since={sync_from.isoformat()}"
         )
 
         results: dict[str, Any] = {
@@ -73,13 +78,13 @@ class ConfluenceIngestionService:
             
             for space_key, space_id in space_id_map.items():
                 page_result = await self._sync_space_pages(
-                    db, space_id = space_id, space_key = space_key,
+                    db, space_id = space_id, space_key = space_key, since = sync_from,
                 )
                 results["pages"]["synced"] += page_result["synced"]
                 results["pages"]["errors"] += page_result["errors"]
 
                 blog_result = await self._sync_space_blogposts(
-                    db, space_id = space_id, space_key = space_key,
+                    db, space_id = space_id, space_key = space_key, since = sync_from,
                 )
                 results["blogposts"]["synced"] += blog_result["synced"]
                 results["blogposts"]["errors"] += blog_result["errors"]
@@ -359,6 +364,7 @@ class ConfluenceIngestionService:
         db: Session,
         space_id: str,
         space_key: str,
+        since: datetime | None = None,
     ) -> dict[str, int]:
 
         results = {"synced": 0, "errors": 0}
@@ -369,12 +375,21 @@ class ConfluenceIngestionService:
         db.commit()
 
         try:
+            should_stop = False
             async for batch in self.client.iter_pages(
                 space_id=space_id, body_format="storage",
             ):
                 for raw_page in batch:
                     try:
                         page = ConfluencePageResponse.model_validate(raw_page)
+
+                        modified_at = parse_atlassian_datetime(
+                            page.version.created_at if page.version else None
+                        )
+                        if since and modified_at and modified_at < since:
+                            should_stop = True
+                            continue
+
                         documents = await self._process_page(page, space_key=space_key)
 
                         if documents:
@@ -390,6 +405,8 @@ class ConfluenceIngestionService:
                             f"space_key={space_key}, page_id={raw_page.get('id')}, error={e}"
                         )
                         results["errors"] += 1
+                if should_stop:
+                    break
 
             logger.info(
                 f"[CONFLUENCE][SYNC] Pages completed: "
@@ -420,6 +437,7 @@ class ConfluenceIngestionService:
             db: Session,
             space_id: str,
             space_key: str,
+            since: datetime | None = None,
     ) -> dict[str, int]:
         
         results = {"synced": 0, "errors": 0}
@@ -430,12 +448,21 @@ class ConfluenceIngestionService:
         db.commit()
 
         try:
+            should_stop = False
             async for batch in self.client.iter_blogposts(
                 space_id = space_id, body_format="storage",
             ):
                 for raw_blogpost in batch:
                     try:
                         blogpost = ConfluenceBlogPostResponse.model_validate(raw_blogpost)
+
+                        modified_at = parse_atlassian_datetime(
+                            blogpost.version.created_at if blogpost.version else None
+                        )
+                        if since and modified_at and modified_at < since:
+                            should_stop = True
+                            continue
+
                         documents = await self._process_blogpost(blogpost, space_key = space_key)
 
                         if documents:
@@ -451,6 +478,8 @@ class ConfluenceIngestionService:
                             f"space_key = {space_key}, blogpost_id = {raw_blogpost.get('id')}, error = {e}"
                         )
                         results["errors"] += 1
+                if should_stop:
+                    break
 
             logger.info(
                 f"[CONFLUENCE][SYNC] Blogposts completed: "

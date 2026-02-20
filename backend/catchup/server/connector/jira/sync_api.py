@@ -30,10 +30,15 @@ logger = logging.getLogger(__name__)
 
 class SyncRequest(BaseModel):
     """동기화 요청 (최소 파라미터)"""
+    cloud_id: str = Field(..., description="Jira Cloud ID")
     project_keys: list[str] | None = Field(
         None,
         description="동기화할 프로젝트 키 목록 (None이면 전체)",
         examples=[["CATCH", "PROJ"]],
+    )
+    sync_days: int | None = Field(
+        None,
+        description="수집 범위 (일), 미지정 시 기본값 사용",
     )
 
 
@@ -120,7 +125,6 @@ def _require_admin_user(current_user: User = Depends(get_current_user)) -> User:
 @router.post("/full", response_model=SyncResponse)
 async def trigger_full_sync(
     request: SyncRequest,
-    cloud_id: str = Query(..., description="Jira Cloud ID"),
     db: Session = Depends(get_db),
     _admin_user: User = Depends(_require_admin_user),
 ):
@@ -131,11 +135,13 @@ async def trigger_full_sync(
     대량의 데이터가 있을 경우 시간이 오래 걸릴 수 있습니다.
 
     """
+    cloud_id = request.cloud_id
     try:
         service = await create_jira_ingestion_service(db, cloud_id)
         result = await service.full_sync(
             db=db,
             project_keys=request.project_keys,
+            sync_days=request.sync_days,
         )
 
         summary_parts = []

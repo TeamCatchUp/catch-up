@@ -26,10 +26,15 @@ logger = logging.getLogger(__name__)
 
 class ConfluenceSyncRequest(BaseModel):
     """동기화 요청"""
+    cloud_id: str = Field(..., description="Atlassian Cloud ID")
     space_keys: list[str] | None = Field(
         None,
         description="동기화할 Space Key 목록 (None이면 전체)",
         examples=[["ENG", "DEV"]],
+    )
+    sync_days: int | None = Field(
+        None,
+        description="수집 범위 (일), 미지정 시 기본값 사용",
     )
 
 
@@ -88,7 +93,6 @@ def _require_admin_user(current_user: User = Depends(get_current_user)) -> User:
 @router.post("/full", response_model=ConfluenceSyncResponse)
 async def trigger_full_sync(
     request: ConfluenceSyncRequest,
-    cloud_id: str = Query(..., description="Atlassian Cloud ID"),
     db: Session = Depends(get_db),
     _admin_user: User = Depends(_require_admin_user),
 ):
@@ -98,11 +102,13 @@ async def trigger_full_sync(
     지정된 Space(또는 전체)의 모든 Confluence Page/BlogPost를 PGVector에 동기화.
     대량의 데이터가 있을 경우 시간이 오래 걸릴 수 있습니다.
     """
+    cloud_id = request.cloud_id
     try:
         service = await create_confluence_ingestion_service(db, cloud_id)
         result = await service.full_sync(
             db=db,
             space_keys=request.space_keys,
+            sync_days=request.sync_days,
         )
 
         summary_parts = []

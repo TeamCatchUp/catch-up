@@ -18,7 +18,7 @@ JiraApiClient, JiraFieldMapper, JiraTransformer, PGVectorRepository를 조합.
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from langchain_core.documents import Document
@@ -164,6 +164,7 @@ class JiraIngestionService:
         self,
         db: Session,
         project_keys: list[str] | None = None,
+        sync_days: int | None = None,
     ) -> dict[str, Any]:
         """
         전체 동기화
@@ -173,9 +174,13 @@ class JiraIngestionService:
         """
         self._ensure_initialized()
 
+        days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
+        sync_from = datetime.now(timezone.utc) - timedelta(days=days)
+
         logger.info(
             f"[JIRA][FULL SYNC] Started for cloud_id = {self.cloud_id}"
             f" projects={project_keys or 'all'}"
+            f" since={sync_from.isoformat()}"
         )
 
         results = {
@@ -214,7 +219,11 @@ class JiraIngestionService:
             else:
                 logger.info("[JIRA][FULL SYNC] Sprint Sync Skipped : Agile API Not Avaiable")
             
-            issue_results = await self._sync_all_issues(db, project_keys)
+            issue_results = await self._sync_all_issues(
+                db,
+                project_keys=project_keys,
+                since=sync_from,
+            )
             results["issues"]["synced"] = issue_results["issues"]
             results["epics"]["synced"] = issue_results["epics"]
             results["issues"]["errors"] = issue_results["errors"]
@@ -261,6 +270,7 @@ class JiraIngestionService:
         self,
         db: Session,
         project_keys: list[str] | None = None,
+        since: datetime | None = None,
     ) -> dict[str, int]:
         """
         모든 이슈 동기화 (Batch API 사용)
@@ -306,6 +316,9 @@ class JiraIngestionService:
 
         # JQL 구성
         jql_parts = []
+        if since:
+            since_str = since.strftime("%Y-%m-%d %H:%M")
+            jql_parts.append(f'updated >= "{since_str}"')
         if project_keys:
             projects_str = ", ".join(f'"{pk}"' for pk in project_keys)
             jql_parts.append(f"project IN ({projects_str})")

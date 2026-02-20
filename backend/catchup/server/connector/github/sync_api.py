@@ -27,7 +27,6 @@ from catchup.db.github.domain_repository import RepositoryUpsertData
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.service import GithubIngestionService
-from catchup.connectors.github.schemas import FullSyncRequest as ServiceFullSyncRequest
 from catchup.utils.scheduler import flush_github_events
 
 logger = logging.getLogger(__name__)
@@ -61,11 +60,9 @@ class FullSyncRequest(BaseModel):
         default=None,
         description="동기화할 Repository ID 목록. None이면 모든 접근 가능 레포"
     )
-    sync_issues: bool = Field(default=True, description="Issue 동기화 여부")
-    sync_prs: bool = Field(default=True, description="PR 동기화 여부 (Commits 포함)")
-    branch: str | None = Field(
+    sync_days: int | None = Field(
         default=None,
-        description="코드베이스 동기화 대상 브랜치 (향후 구현 예정)"
+        description="수집 범위 (일), 미지정 시 기본값 사용",
     )
 
 class SyncResult(BaseModel):
@@ -141,18 +138,11 @@ async def full_sync(
     try:
         service = await _get_ingestion_service(db, request.installation_id)
 
-        # API Request를 Service Request로 변환
-        service_request = ServiceFullSyncRequest(
+        results = await service.full_sync(
+            db=db,
             repo_ids=request.repo_ids,
-            sync_issues=request.sync_issues,
-            sync_prs=request.sync_prs,
-            sync_repos=True,  # API에서는 항상 True
-            sync_users=False,  # API에서는 기본 False
-            branch=request.branch,
+            sync_days=request.sync_days,
         )
-
-        results = await service.full_sync(db=db, request=service_request)
-
         logger.info(
             "[GITHUB][FULL SYNC] full_sync completed: "
             f"installation_id={request.installation_id}, results={results}"
