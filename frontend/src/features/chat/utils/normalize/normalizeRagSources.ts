@@ -208,7 +208,7 @@ const getRepoText = (source: SourceResponse, sourceType: ChatSource['source_type
   }
 
   if (sourceType === 'slack') {
-    return source.channel_name ?? parseSlackChannelFromText(source.text) || '';
+    return source.channel_name ?? (parseSlackChannelFromText(source.text) || '');
   }
 
   if (sourceType === 'confluence') {
