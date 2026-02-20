@@ -21,7 +21,7 @@ GitHub REST API v3를 사용하며, GitHub App Installation Token으로 인증.
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, AsyncIterator
 
 from githubkit import GitHub
 from githubkit.exception import RequestFailed, RequestTimeout
@@ -482,13 +482,16 @@ class GitHubApiClient:
         owner: str,
         repo: str,
         since: datetime | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> AsyncIterator[list[dict[str, Any]]]:
         """
-        GraphQL로 PR 목록과 상세 정보를 한 번에 조회
+        GraphQL로 PR 목록과 상세 정보를 페이지 단위로 스트리밍 조회
+
+        - per_page 50 통일 (GraphQL 복잡도 제한 고려 시 안전선)
+        - updatedAt이 since 이전인 항목을 만나면 즉시 종료해 불필요 호출 차단
+        - 각 페이지의 노드 리스트를 yield 하여 호출 위치에서 배치 처리
         """
-        all_prs = []
-        after_cursor = None     # Cursor 기반 페이지네이션
-        per_page = 25           # 복잡도 기반 호출 제한량 대비
+        after_cursor = None 
+        per_page = 50           
 
         while True:
             variables = {
@@ -502,26 +505,35 @@ class GitHubApiClient:
                 self._github.async_graphql(PULL_REQUESTS_QUERY, variables)
             )
 
-            if not response : break
+            if not response:
+                break
 
             pr_connection = response.get("repository", {}).get("pullRequests", {})
-            if not pr_connection: break
+            if not pr_connection:
+                break
 
             nodes = pr_connection.get("nodes") or []
 
+            batch: list[dict[str, Any]] = []
             for node in nodes:
-                if not node: continue
+                if not node:
+                    continue
 
-                # since 필터링이 적용된 경우 : GraphQL은 updatedAt 기준으로 정렬되어 있으므로 since 이전의 PR을 만나면 즉시 반환
                 if since:
                     updated_at_str = node.get("updatedAt")
                     if updated_at_str:
                         updated_at = datetime.fromisoformat(
                             updated_at_str.replace("Z", "+00:00")
                         )
-                        if updated_at < since: return all_prs
+                        if updated_at < since:
+                            if batch:
+                                yield batch
+                            return
 
-                all_prs.append(node)
+                batch.append(node)
+
+            if batch:
+                yield batch
             
             page_info = pr_connection.get("pageInfo", {})
             if not page_info.get("hasNextPage"):
@@ -529,26 +541,22 @@ class GitHubApiClient:
 
             after_cursor = page_info.get("endCursor")
 
-        return all_prs
-
     async def list_issues_graphql(
         self,
         owner: str,
         repo: str,
         since: datetime | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> AsyncIterator[list[dict[str, Any]]]:
         """
-        GraphQL로 Issue 목록과 코멘트를 한 번에 조회
+        GraphQL로 Issue 목록과 코멘트를 페이지 단위로 스트리밍 조회
 
-        PR 리팩토링과 동일한 패턴:
-        - Cursor 기반 페이지네이션
-        - since 필터링 (updatedAt 기준)
-        - 코멘트를 Issue 응답에 포함
+        - per_page 50 고정
+        - updatedAt이 since 이전이면 즉시 종료
+        - 각 페이지 노드 리스트를 yield
         """
-        all_issues = []
         after_cursor = None
-        per_page = 50  # Issue는 PR보다 단순하므로 더 많이 가져올 수 있음
-
+        per_page = 50
+        
         while True:
             variables = {
                 "owner": owner,
@@ -570,11 +578,12 @@ class GitHubApiClient:
 
             nodes = issue_connection.get("nodes") or []
 
+            batch: list[dict[str, Any]] = []
             for node in nodes:
                 if not node:
                     continue
 
-                # since 필터링 : GraphQL은 updatedAt 기준으로 정렬되어 있으므로 since 이전의 Issue를 만나면 즉시 반환
+                # since 필터링: updatedAt 기준 정렬이므로 이전 시점 도달 시 종료
                 if since:
                     updated_at_str = node.get("updatedAt")
                     if updated_at_str:
@@ -582,14 +591,17 @@ class GitHubApiClient:
                             updated_at_str.replace("Z", "+00:00")
                         )
                         if updated_at < since:
-                            return all_issues
+                            if batch:
+                                yield batch
+                            return
 
-                all_issues.append(node)
+                batch.append(node)
+
+            if batch:
+                yield batch
 
             page_info = issue_connection.get("pageInfo", {})
             if not page_info.get("hasNextPage"):
                 break
 
             after_cursor = page_info.get("endCursor")
-
-        return all_issues
