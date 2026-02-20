@@ -103,13 +103,16 @@ async def atlassian_oauth_callback(
     # Background tasks
     for cloud_id in result.jira_targets:
         await _register_knowledge_source(cloud_id, SourceType.JIRA)
-        background_tasks.add_task(_sync_jira_metadata_and_map_users, cloud_id)  # TODO: upsert_okta_users 로직 중복 호출 해소
+        background_tasks.add_task(_sync_jira_metadata, cloud_id)
         background_tasks.add_task(_ensure_jira_dynamic_webhook, cloud_id)
 
     for cloud_id in result.confluence_targets:
         await _register_knowledge_source(cloud_id, SourceType.CONFLUENCE)
-        background_tasks.add_task(_sync_confluence_metadata, cloud_id)  # TODO: upsert_okta_users 로직 중복 호출 해소
+        background_tasks.add_task(_sync_confluence_metadata, cloud_id)
         background_tasks.add_task(_ensure_confluence_webhook, cloud_id)
+        
+    if result.jira_targets or result.confluence_targets:
+        background_tasks.add_task(_sync_okta_users_and_map_all_sources)
 
     logger.info(
         f"[ATLASSIAN][AUTH] 설치 완료: {len(result.resources)}개 사이트 연결 (Jira + Confluence)"
@@ -177,59 +180,46 @@ async def _register_knowledge_source(cloud_id: str, source_type: SourceType):
     await run_in_threadpool(_sync_task)
 
 
-async def _sync_jira_metadata_and_map_users(cloud_id: str) -> None:
+async def _sync_okta_users_and_map_all_sources() -> None:
     """Atlassian 메타데이터 fetching 이후 사용자 매핑까지 수행하는 Wrapper 함수 (임시)"""
     
-    # Jira Metadata 동기화
-    await _sync_jira_metadata(cloud_id)
-    
-    logger.info(f"[OKTA][MAPPING] Starting Okta sync and Atlassian mapping for cloud_id={cloud_id}")
+    logger.info("[MAPPING] Starting integrated Okta sync and multi-source mapping")
     
     # Okta Users 기반 Atlassian Users 매핑
     try:
         okta_client = OktaClient()
         okta_users = await okta_client.get_parsed_users()
         
-        if okta_users:
-            def _mapping_task_sync():
-                with SessionLocal() as db:
-                    try:
-                        upsert_okta_users(db, okta_users)
-                        
-                        mapping_result_jira = sync_users_to_pre_mapping_buffer(
+        if not okta_users:
+            logger.warning("[MAPPING] No active users found in Okta. Skipping.")
+            return
+        
+        def _mapping_task_sync():
+            with SessionLocal() as db:
+                try:
+                    upsert_okta_users(db, okta_users)
+                    
+                    sources_to_map = [SourceType.JIRA, SourceType.CONFLUENCE]
+                    results = {}
+                    for source_type in sources_to_map:
+                        results[source_type.value] = sync_users_to_pre_mapping_buffer(
                             db=db,
-                            source_type=SourceType.JIRA,
+                            source_type=source_type,
                             okta_users=okta_users
                         )
-                        
-                        mapping_result_conf = sync_users_to_pre_mapping_buffer(
-                            db=db,
-                            source_type=SourceType.CONFLUENCE,
-                            okta_users=okta_users
-                        )
-                        
-                        db.commit() 
-                        return {
-                            "JIRA": mapping_result_jira,
-                            "CONFLUENCE": mapping_result_conf
-                        }
-                        
-                    except Exception as e:
-                        db.rollback() 
-                        logger.error(f"Transaction failed, rolling back: {e}")
-                        raise
-                
-            combined_mapping_result = await run_in_threadpool(_mapping_task_sync)
-            logger.info(f"[OKTA][MAPPING] Mapping completed: {combined_mapping_result}")
-        else:
-            logger.warning("[OKTA][MAPPING] No active users found in Okta. Skipping mapping.")
+                    db.commit()
+                    return results
+                    
+                except Exception as e:
+                    db.rollback() 
+                    logger.error(f"Transaction failed, rolling back: {e}")
+                    raise
+            
+        combined_mapping_result = await run_in_threadpool(_mapping_task_sync)
+        logger.info(f"[OKTA][MAPPING] Mapping completed: {combined_mapping_result}")
             
     except Exception as e:
-        logger.error(
-            f"[ATLASSIAN][AUTH] Okta mapping failed after Jira sync: "
-            f"cloud_id={cloud_id}, error={e}",
-            exc_info=True
-        )
+        logger.error(f"[MAPPING] Integrated mapping failed: {e}", exc_info=True)
 
 
 async def _sync_jira_metadata(cloud_id: str) -> None:
