@@ -36,9 +36,9 @@ export function WelcomeStep({ onStart, isLoading }: WelcomeStepProps) {
         <div className="flex w-full flex-col items-start gap-2.5">
           <div className="flex w-full items-center gap-1.5">
             <div className="size-[22px] shrink-0 overflow-clip">
-              <LockIcon className="size-full" />
+              <LockIcon className="size-full text-gray-30" />
             </div>
-            <span className="text-body-medium text-gray-80 tracking-tight">회원가입에는 구글 로그인이 필요해요.</span>
+            <span className="text-body-medium text-gray-80 tracking-tight">소속 조직의 계정으로 안전하게 로그인하세요.</span>
           </div>
           <Button
             variant="box-solid-primary"
@@ -47,7 +47,7 @@ export function WelcomeStep({ onStart, isLoading }: WelcomeStepProps) {
             disabled={isLoading}
             className="h-[46px] w-full"
           >
-            구글 계정으로 계속하기
+            SSO 통합 로그인하기
           </Button>
         </div>
       </div>
