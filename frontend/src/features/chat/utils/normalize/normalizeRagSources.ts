@@ -148,6 +148,21 @@ const parseJiraAuthorFromText = (text?: string | null) => {
   return '';
 };
 
+/**
+ * Slack text에서 채널명 파싱
+ * text 예시: "[2026-02-18 06:29:16]\nAuthor: 팀원B\nChannel: #전체공지\n..."
+ *
+ * /Channel:\s*(#?\S+)/
+ *  Channel:  → 리터럴 매칭
+ *  \s*       → 공백 0개 이상
+ *  (#?\S+)   → #(있으면) + 공백 아닌 문자 1개 이상을 캡처
+ */
+const parseSlackChannelFromText = (text?: string | null) => {
+  if (!text) return '';
+  const match = text.match(/Channel:\s*(#?\S+)/);
+  return match?.[1] ?? '';
+};
+
 const pickReasonPreviewFromText = (text?: string | null) => {
   if (!text) return '';
   const lines = text
@@ -193,7 +208,7 @@ const getRepoText = (source: SourceResponse, sourceType: ChatSource['source_type
   }
 
   if (sourceType === 'slack') {
-    return source.channel_name ?? '';
+    return source.channel_name ?? parseSlackChannelFromText(source.text) || '';
   }
 
   if (sourceType === 'confluence') {
