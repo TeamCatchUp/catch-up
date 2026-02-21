@@ -1,0 +1,76 @@
+import IconAddSmall from '@/public/icons/icon/add_small.svg';
+import { Button } from '@/shared/components/ui/button';
+import { Input } from '@/shared/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
+
+import type { PermissionMember } from '../../types/adminPermission';
+
+interface AdminGrantSectionProps {
+  members: PermissionMember[];
+  selectedMemberId: string;
+  reason: string;
+  onMemberChange: (memberId: string) => void;
+  onReasonChange: (reason: string) => void;
+  onOpenGrantModal: () => void;
+  disabled?: boolean;
+}
+
+/** Admin 권한 부여 섹션 */
+const AdminGrantSection = ({
+  members,
+  selectedMemberId,
+  reason,
+  onMemberChange,
+  onReasonChange,
+  onOpenGrantModal,
+  disabled = false,
+}: AdminGrantSectionProps) => {
+  return (
+    <section className="border-neutral-3 flex w-250 flex-col gap-2 bg-white">
+      <div className="flex h-9 items-center justify-between">
+        <h2 className="text-heading-large text-gray-80">Admin 권한 부여하기</h2>
+        <Button
+          variant="box-solid-primary"
+          size="md"
+          className="text-heading-small h-9 w-[99px]"
+          onClick={onOpenGrantModal}
+          disabled={disabled}
+        >
+          <IconAddSmall className="size-6 shrink-0" />
+          부여하기
+        </Button>
+      </div>
+
+      <div className="border-neutral-3 flex items-start gap-5 rounded-xl border px-5 py-5">
+        <div className="flex w-[470px] flex-col gap-1.5">
+          <span className="text-body-small text-gray-80">멤버</span>
+          <Select value={selectedMemberId} onValueChange={onMemberChange} disabled={disabled}>
+            <SelectTrigger className="h-[46px]">
+              <SelectValue placeholder="멤버 선택" />
+            </SelectTrigger>
+            <SelectContent>
+              {members.map((member) => (
+                <SelectItem key={member.id} value={member.id}>
+                  {member.name} ({member.department})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex w-[470px] flex-col gap-1.5">
+          <span className="text-body-small text-gray-80">부여 사유</span>
+          <Input
+            value={reason}
+            onChange={(event) => onReasonChange(event.target.value)}
+            placeholder="부여 사유를 작성해주세요."
+            className="h-[46px]"
+            disabled={disabled}
+          />
+        </div>
+      </div>
+    </section>
+  );
+};
+
+export default AdminGrantSection;
