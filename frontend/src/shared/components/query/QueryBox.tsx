@@ -42,7 +42,7 @@ const QueryBox = ({
       ? 'gap-3 min-h-92.5 max-h-135 overflow-hidden rounded-[30px] px-4 py-3'
       : !isNoHistory && input.isFocused
         ? 'gap-1.5 min-h-92.5 max-h-135 overflow-hidden rounded-[30px] px-4 py-3'
-        : 'gap-1.5 rounded-rounded h-auto px-4 py-3';
+        : `gap-1.5 h-auto px-4 py-3 ${input.isMultiLine ? 'rounded-[30px]' : 'rounded-rounded'}`;
 
   const handleExampleClick = (query: string) => {
     input.setValue(query);

@@ -55,7 +55,7 @@ export default function QueryInput({
 
   return (
     <div className="flex w-full items-center justify-between">
-      <div className="text-button-secondary-mono mr-2 flex h-10 w-10 cursor-pointer items-center justify-center p-1.5">
+      <div className="text-button-secondary-mono mr-2 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center self-end p-1.5">
         <IconAdd className="text-gray-70 h-7 w-7" />
       </div>
       <div className="relative flex flex-1">
@@ -63,7 +63,7 @@ export default function QueryInput({
           <div
             ref={overlayRef}
             aria-hidden
-            className="text-body-medium pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words text-gray-70"
+            className="text-body-medium pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap wrap-break-word text-gray-70"
           >
             {highlightedSegments.map((segment, index) => (
               <span key={`${segment.text}-${index}`} className={segment.isPlaceholder ? 'text-blue-50' : ''}>
@@ -93,7 +93,7 @@ export default function QueryInput({
       </div>
       <button
         onClick={input.handleSubmit}
-        className={`rounded-rounded ml-2 flex items-center border border-solid p-2 ${
+        className={`rounded-rounded ml-2 flex shrink-0 items-center self-end border border-solid p-2 ${
           input.hasText ? 'cursor-pointer border-blue-50 bg-blue-50' : 'bg-neutral-1 border-neutral-2'
         }`}
       >
