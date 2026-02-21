@@ -242,6 +242,15 @@ class SlackTransformer:
         # Mentioned 사용자 user_id 목록
         mentioned_user_ids = [u.id for u in message.mentioned_users]
 
+        # 작성자 표시 이름: 실명 → 유저명 → 봇명 → ID 순서로 선택
+        author_name = (
+            message.user_real_name
+            or message.user_name
+            or message.bot_name
+            or message.user_id
+            or message.bot_id
+        )
+
         return {
             # === 공통 필수 ===
             "source": "slack",
@@ -261,6 +270,7 @@ class SlackTransformer:
 
             # === 작성자 ===
             "author_id": message.user_id or message.bot_id,
+            "author_name": author_name,
 
             # === 시간 ===
             "created_at": message.created_at.isoformat(),
