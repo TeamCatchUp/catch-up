@@ -1,12 +1,19 @@
 ﻿'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { authMutations } from '@/shared/queries/auth.mutations';
+import { authQueries } from '@/shared/queries/auth.queries';
 import { useUserStore } from '@/shared/store/userStore';
 import { cn } from '@/shared/utils/cn';
 
 import Profile from '/public/icons/icon/profile.svg';
+
+const JOB_LEVEL_LABEL: Record<string, string> = {
+  executive: '경영진',
+  leader: '팀장',
+  member: '팀원',
+};
 
 /**
  * 마이페이지 프로필 화면을 렌더링
@@ -15,6 +22,8 @@ const ProfilePage = () => {
   const { user } = useUserStore();
   const queryClient = useQueryClient();
   const isAdmin = user?.role === 'admin';
+
+  const { data: profile } = useQuery(authQueries.profile());
 
   const logoutMutation = useMutation({
     ...authMutations.logout(),
@@ -25,9 +34,9 @@ const ProfilePage = () => {
   });
 
   const basicInfoRows = [
-    { label: '이름', value: user?.name ?? '' },
-    { label: '메일 / 사번', value: user?.email ?? '' },
-    { label: '직급', value: '팀원' },
+    { label: '이름', value: profile?.name ?? user?.name ?? '' },
+    { label: '메일 / 사번', value: profile?.email ?? user?.email ?? '' },
+    { label: '직급', value: JOB_LEVEL_LABEL[profile?.job_level ?? ''] ?? '' },
   ];
 
   return (
@@ -37,11 +46,22 @@ const ProfilePage = () => {
 
       <div className="flex flex-col gap-8">
         <div className="flex items-end gap-4">
-          <Profile className="h-27.5 w-27.5 rounded-2xl ring-4 ring-white" />
+          {profile?.picture ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={profile.picture}
+              alt={profile.name}
+              className="h-27.5 w-27.5 rounded-2xl object-cover ring-4 ring-white"
+            />
+          ) : (
+            <Profile className="h-27.5 w-27.5 rounded-2xl ring-4 ring-white" />
+          )}
           <div className="flex flex-col gap-1">
-            <span className="text-heading-xlarge text-gray-80">{user?.name ?? ''}</span>
+            <span className="text-heading-xlarge text-gray-80">
+              {profile?.name ?? user?.name ?? ''}
+            </span>
             <div className="flex gap-1 text-gray-50">
-              <span className="text-body-small">사업개발팀</span>
+              <span className="text-body-small">{profile?.department ?? ''}</span>
             </div>
           </div>
         </div>
