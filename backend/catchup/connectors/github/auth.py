@@ -9,7 +9,6 @@ GitHub App 인증을 담당하는 서비스.
 
 import time
 from functools import lru_cache
-from pathlib import Path
 
 import httpx
 import jwt
@@ -89,11 +88,13 @@ class GitHubAppService:
 
 
 def _load_private_key() -> str:
-        """Private Key 파일 로드"""
-        key_path = Path(settings.GITHUB_APP_PRIVATE_KEY_PATH)
-        if not key_path.exists():
-            raise FileNotFoundError(f"GitHub App Private Key not found: {key_path}")
-        return key_path.read_text()
+    """환경변수에 저장된 Private Key를 읽어 반환"""
+    private_key = settings.GITHUB_APP_PRIVATE_KEY.strip()
+
+    if not private_key:
+        raise ValueError("GITHUB_APP_PRIVATE_KEY NOT FOUND.")
+
+    return private_key.replace("\\r\\n", "\n").replace("\\n", "\n")
 
 
 @lru_cache
