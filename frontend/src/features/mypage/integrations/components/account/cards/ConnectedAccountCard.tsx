@@ -41,8 +41,6 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
     </div>
   );
 
-  const buttonText = isConnected ? '수정하기' : '계정 등록하기';
-
   return (
     <article
       className={cn(
@@ -58,13 +56,15 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
           </div>
           <div className="flex w-full flex-col gap-3">
             {details}
-            <button
-              type="button"
-              onClick={onEditClick}
-              className="box-button-outline-gray text-body-small text-gray-70 h-9 w-full cursor-pointer"
-            >
-              {buttonText}
-            </button>
+            {!isConnected && (
+              <button
+                type="button"
+                onClick={onEditClick}
+                className="box-button-outline-gray text-body-small text-gray-70 h-9 w-full cursor-pointer"
+              >
+                계정 등록하기
+              </button>
+            )}
           </div>
         </>
       ) : (
@@ -74,13 +74,15 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
             <span className="text-heading-medium text-gray-80">{name}</span>
           </div>
           {details}
-          <button
-            type="button"
-            onClick={onEditClick}
-            className="box-button-outline-gray text-body-small text-gray-70 h-9 w-full cursor-pointer"
-          >
-            {buttonText}
-          </button>
+          {!isConnected && (
+            <button
+              type="button"
+              onClick={onEditClick}
+              className="box-button-outline-gray text-body-small text-gray-70 h-9 w-full cursor-pointer"
+            >
+              계정 등록하기
+            </button>
+          )}
         </>
       )}
     </article>
