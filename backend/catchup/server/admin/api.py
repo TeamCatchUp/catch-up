@@ -554,7 +554,7 @@ def get_syncable_entities(
 
 
 @router.get(
-    path="/audit/queries",
+    path="/queries",
     response_model=BasePagination[UserQueryWithSaveStatusResponse],
     description="[어드민] 전체 유저 대상 감사 로그 조회 (키워드/기간/유저 필터)"
 )
