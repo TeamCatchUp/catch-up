@@ -10,14 +10,21 @@ from catchup.db.models import (
     AtlassianOAuthToken,
     ConfluenceSpace,
     ConfluenceSyncState,
+    ConfluenceUser,
+    GitHubUser,
     GithubInstallation,
     GithubRepository,
     GithubSyncState,
+    JiraAccountType,
     JiraProject,
     JiraSyncState,
+    JiraUser,
+    PreMappingBuffer,
     SlackChannelSyncState,
     SlackOAuthToken,
     SlackSyncState,
+    SlackUser,
+    SourceType,
     User,
 )
 from catchup.server.auth.schemas import (
@@ -31,6 +38,12 @@ from catchup.server.auth.schemas import (
     JiraSyncableProject,
     JiraSyncableResponse,
     SlackConnectorStatus,
+)
+from catchup.server.admin.schemas import (
+    SyncStatusCounts,
+    UserSyncMapping,
+    UserSyncStatusResponse,
+    SourceUserCount,
 )
 
 logger = logging.getLogger(__name__)
@@ -324,6 +337,119 @@ def get_confluence_connector_status(
     _admin_user: User = Depends(require_admin_user),
 ):
     return _get_confluence_status(db)
+
+
+# ============================
+# User Sync Status (pre-mapping)
+# ============================
+def _get_user_sync_counts(db: Session) -> SyncStatusCounts:
+    """협업 도구별 실제 사용자 수와 PreMappingBuffer 수를 집계한다."""
+    jira_users = (
+        db.query(func.count())
+        .select_from(JiraUser)
+        .filter(JiraUser.account_type == JiraAccountType.ATLASSIAN)
+        .scalar()
+    )
+    slack_users = (
+        db.query(func.count())
+        .select_from(SlackUser)
+        .filter(SlackUser.is_bot == False)  # noqa: E712
+        .scalar()
+    )
+    github_users = db.query(func.count()).select_from(GitHubUser).scalar()
+    confluence_users = (
+        db.query(func.count())
+        .select_from(ConfluenceUser)
+        .filter(ConfluenceUser.account_type == "atlassian")
+        .scalar()
+    )
+
+    premap_rows = (
+        db.query(PreMappingBuffer.source_type, func.count())
+        .group_by(PreMappingBuffer.source_type)
+        .all()
+    )
+    premap_map = {source_type: count for source_type, count in premap_rows}
+
+    return SyncStatusCounts(
+        jira=SourceUserCount(
+            users=jira_users or 0, premap=premap_map.get(SourceType.JIRA, 0)
+        ),
+        slack=SourceUserCount(
+            users=slack_users or 0, premap=premap_map.get(SourceType.SLACK, 0)
+        ),
+        github=SourceUserCount(
+            users=github_users or 0, premap=premap_map.get(SourceType.GITHUB, 0)
+        ),
+        confluence=SourceUserCount(
+            users=confluence_users or 0,
+            premap=premap_map.get(SourceType.CONFLUENCE, 0),
+        ),
+    )
+
+
+def _get_user_sync_mappings(db: Session) -> list[UserSyncMapping]:
+    """
+    PreMappingBuffer를 사용자 단위로 모아 반환한다.
+    - name: PreMappingBuffer.name
+    - githubLogin: external_user_identifier (github)
+    - atlassianEmail: email (jira)
+    - slackEmail: email (slack)
+    """
+    rows = (
+        db.query(
+            PreMappingBuffer.name,
+            PreMappingBuffer.source_type,
+            PreMappingBuffer.external_user_identifier,
+            PreMappingBuffer.email,
+        )
+        .filter(
+            PreMappingBuffer.source_type.in_(
+                [SourceType.GITHUB, SourceType.JIRA, SourceType.SLACK]
+            )
+        )
+        .order_by(PreMappingBuffer.name, PreMappingBuffer.source_type)
+        .all()
+    )
+
+    aggregated: dict[str, UserSyncMapping] = {}
+    for name, source_type, external_id, email in rows:
+        entry = aggregated.get(name)
+        if not entry:
+            entry = UserSyncMapping(
+                name=name,
+                githubLogin=None,
+                atlassianEmail=None,
+                slackEmail=None,
+            )
+            aggregated[name] = entry
+
+        if source_type == SourceType.GITHUB:
+            entry.githubLogin = external_id
+        elif source_type == SourceType.JIRA:
+            entry.atlassianEmail = email
+        elif source_type == SourceType.SLACK:
+            entry.slackEmail = email
+
+    return list(aggregated.values())
+
+
+@router.get(
+    path="/users/sync-status",
+    description="협업 도구 사용자/프리매핑 현황 및 사용자별 매핑 데이터 (admin 전용)",
+    response_model=UserSyncStatusResponse,
+)
+def get_user_sync_status(
+    db: Session = Depends(get_db),
+    _admin_user: User = Depends(require_admin_user),
+):
+    counts = _get_user_sync_counts(db)
+    mappings = _get_user_sync_mappings(db)
+    logger.info(
+        "[ADMIN][SYNC_STATUS] fetched counts and mappings (rows=%d)",
+        len(mappings),
+    )
+    return UserSyncStatusResponse(counts=counts, mappings=mappings)
 
 
 def _get_syncable_jira_projects(db: Session) -> JiraSyncableResponse:
