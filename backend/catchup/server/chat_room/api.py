@@ -1,4 +1,6 @@
+from datetime import datetime
 import logging
+from typing import Optional
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,9 +12,9 @@ from catchup.chat.chat_room import process_answer_feedback
 from catchup.chat.dependencies import get_valid_chat_room, get_valid_message, get_valid_user_query
 from catchup.chat.exceptions import FeedbackImmutableError, LikedWithNegativeFeedbackError
 from catchup.chat.schemas import ChatHistoryResponse, ChatRoomResponse, FeedbackRequest, UserQueryResponse, UserQueryWithSaveStatusResponse
-from catchup.db.chat_room import get_chat_room_messages, get_chat_rooms, get_queries_by_chat_room, get_queries_by_user, get_queries_by_user_with_save_status, get_query_answer_pair, toggle_save_status
+from catchup.db.chat_room import get_all_queries_for_admin, get_chat_room_messages, get_chat_rooms, get_queries_by_chat_room, get_queries_by_user, get_queries_by_user_with_save_status, get_query_answer_pair, toggle_save_status
 from catchup.db.dependencies import get_db
-from catchup.db.models import ChatHistory, ChatRoom, User
+from catchup.db.models import ChatHistory, ChatRoom, User, UserRole
 from catchup.server.chat_room.schemas import ChatHistoryListResponse
 from catchup.server.schemas import BasePagination, calculate_skip
 

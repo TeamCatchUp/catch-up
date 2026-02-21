@@ -1311,9 +1311,18 @@ class ChatHistory(Base):
     @property
     def session_id(self) -> uuid.UUID:
         return self.chat_room.session_id
-
-Index(
-    "ix_chat_histories_is_saved_true",
-    ChatHistory.is_saved,
-    postgresql_where=(ChatHistory.is_saved == True)
-)
+    
+    __table_args__ = (
+        Index(
+            "ix_chat_histories_is_saved_true",
+            "is_saved",
+            postgresql_where=text("is_saved IS TRUE") # 내부에서는 문자열이나 text() 권장
+        ),
+        
+        Index(
+            "idx_chat_history_content_bigm",
+            "content",
+            postgresql_using="gin",
+            postgresql_ops={"content": "gin_bigm_ops"}
+        ),
+    )

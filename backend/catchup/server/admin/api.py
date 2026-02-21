@@ -1,10 +1,14 @@
+from datetime import datetime
 import logging
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import require_admin_user
+from catchup.chat.schemas import UserQueryWithSaveStatusResponse
+from catchup.db.chat_room import get_all_queries_for_admin
 from catchup.db.dependencies import get_db
 from catchup.db.models import (
     AtlassianOAuthToken,
@@ -60,6 +64,7 @@ from catchup.server.admin.schemas import (
     SlackAccount,
     ConfluenceAccount,
 )
+from catchup.server.schemas import BasePagination, calculate_skip
 
 logger = logging.getLogger(__name__)
 
@@ -851,3 +856,38 @@ def get_syncable_entities(
         status_code=400,
         detail="source must be one of: jira, github, confluence",
     )
+
+
+@router.get(
+    path="/queries",
+    response_model=BasePagination[UserQueryWithSaveStatusResponse],
+    description="[어드민] 전체 유저 대상 감사 로그 조회 (키워드/기간/유저 필터)"
+)
+def get_query_history(
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=100),
+    search: Optional[str] = Query(None, description="검색어 (질문 내용)"),
+    target_user_id: Optional[int] = Query(None, description="특정 유저 ID 필터"),
+    start_date: Optional[datetime] = Query(None, description="조회 시작일 (ISO 8601)"),
+    end_date: Optional[datetime] = Query(None, description="조회 종료일 (ISO 8601)"),
+    db: Session = Depends(get_db),
+    _admin_user: User = Depends(require_admin_user)
+):
+    skip = calculate_skip(page, size)
+    
+    items, total = get_all_queries_for_admin(
+        db=db,
+        user_id=target_user_id,
+        search_term=search,
+        start_date=start_date,
+        end_date=end_date,
+        skip=skip,
+        limit=size
+    )
+    
+    return {
+        "total": total,
+        "page": page,
+        "size": size,
+        "items": items,
+    }
