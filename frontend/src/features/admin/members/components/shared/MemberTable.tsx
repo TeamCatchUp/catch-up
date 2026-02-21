@@ -48,11 +48,7 @@ const MemberTable = ({
         {isSelecting && (
           <button type="button" onClick={onToggleAll} className="shrink-0 cursor-pointer">
             <div className="p-1">
-              {allSelected ? (
-                <CheckboxChecked className="size-5" />
-              ) : (
-                <CheckboxUnchecked className="size-5" />
-              )}
+              {allSelected ? <CheckboxChecked className="size-5" /> : <CheckboxUnchecked className="size-5" />}
             </div>
           </button>
         )}
@@ -89,11 +85,7 @@ const MemberTable = ({
                 {isSelecting && (
                   <div className="shrink-0">
                     <div className="p-1">
-                      {isChecked ? (
-                        <CheckboxChecked className="size-5" />
-                      ) : (
-                        <CheckboxUnchecked className="size-5" />
-                      )}
+                      {isChecked ? <CheckboxChecked className="size-5" /> : <CheckboxUnchecked className="size-5" />}
                     </div>
                   </div>
                 )}
@@ -106,9 +98,7 @@ const MemberTable = ({
 
                   {/* 직급 */}
                   <div className="flex items-center justify-center">
-                    <span
-                      className={cn(TAG_BASE_CLASS, RANK_BADGE_CLASS[row.rank] ?? 'bg-neutral-2 text-gray-50')}
-                    >
+                    <span className={cn(TAG_BASE_CLASS, RANK_BADGE_CLASS[row.rank] ?? 'bg-neutral-2 text-gray-50')}>
                       {row.rank}
                     </span>
                   </div>
@@ -121,7 +111,10 @@ const MemberTable = ({
                   {/* 4번째 컬럼 */}
                   <div className="flex items-center justify-center">
                     <span
-                      className={cn(TAG_BASE_CLASS, lastColumnBadgeClass[row.lastColumn] ?? 'bg-neutral-2 text-gray-50')}
+                      className={cn(
+                        TAG_BASE_CLASS,
+                        lastColumnBadgeClass[row.lastColumn] ?? 'bg-neutral-2 text-gray-50',
+                      )}
                     >
                       {row.lastColumn}
                     </span>

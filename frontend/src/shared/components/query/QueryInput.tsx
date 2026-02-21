@@ -28,11 +28,7 @@ const splitByBracketPlaceholders = (value: string): HighlightSegment[] =>
       isPlaceholder: segment.startsWith('[') && segment.endsWith(']'),
     }));
 
-export default function QueryInput({
-  input,
-  inputRef,
-  highlightBracketPlaceholders = false,
-}: QueryInputProps) {
+export default function QueryInput({ input, inputRef, highlightBracketPlaceholders = false }: QueryInputProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const shouldHighlight = highlightBracketPlaceholders && input.value.length > 0;
 
@@ -63,7 +59,7 @@ export default function QueryInput({
           <div
             ref={overlayRef}
             aria-hidden
-            className="text-body-medium pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap wrap-break-word text-gray-70"
+            className="text-body-medium text-gray-70 pointer-events-none absolute inset-0 overflow-hidden wrap-break-word whitespace-pre-wrap"
           >
             {highlightedSegments.map((segment, index) => (
               <span key={`${segment.text}-${index}`} className={segment.isPlaceholder ? 'text-blue-50' : ''}>
@@ -76,7 +72,7 @@ export default function QueryInput({
           ref={inputRef}
           rows={1}
           className={`text-body-medium w-full resize-none outline-none ${
-            shouldHighlight ? 'relative z-10 bg-transparent text-transparent caret-gray-70' : ''
+            shouldHighlight ? 'caret-gray-70 relative z-10 bg-transparent text-transparent' : ''
           }`}
           placeholder="업무와 관련해 궁금한 무엇이든 물어보세요!"
           value={input.value}

@@ -8,7 +8,11 @@ import PermissionChangeModal from '@/features/admin/permissions/components/modal
 import AdminGrantSection from '@/features/admin/permissions/components/sections/AdminGrantSection';
 import PermissionsListSection from '@/features/admin/permissions/components/sections/PermissionsListSection';
 import AdminOwnerInfoTag from '@/features/admin/permissions/components/shared/AdminOwnerInfoTag';
-import { LIST_PAGE_SIZE, ROLE_FILTER_OPTIONS, type RoleFilter } from '@/features/admin/permissions/constants/permissionsConfig';
+import {
+  LIST_PAGE_SIZE,
+  ROLE_FILTER_OPTIONS,
+  type RoleFilter,
+} from '@/features/admin/permissions/constants/permissionsConfig';
 import { useAssignAdminRoleMutation } from '@/features/admin/permissions/queries/adminPermissions.mutations';
 import { adminPermissionsQueries } from '@/features/admin/permissions/queries/adminPermissions.queries';
 import type { AssignAdminPayload, PermissionMember } from '@/features/admin/permissions/types/adminPermission';
@@ -16,12 +20,7 @@ import type { AssignAdminPayload, PermissionMember } from '@/features/admin/perm
 const DEFAULT_ROLE_FILTER: RoleFilter = ROLE_FILTER_OPTIONS[0].key;
 
 export default function AdminPermissionsPage() {
-  const {
-    data: members = [],
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery(adminPermissionsQueries.list());
+  const { data: members = [], isLoading, isError, refetch } = useQuery(adminPermissionsQueries.list());
 
   const grantMutation = useAssignAdminRoleMutation();
   const changeMutation = useAssignAdminRoleMutation();
@@ -62,13 +61,11 @@ export default function AdminPermissionsPage() {
   }, [filteredMembers, safeCurrentPage]);
 
   const grantErrorMessage = grantMutation.isError
-    ? (grantMutation.error as Error | null)?.message ??
-      '권한 부여 요청에 실패했습니다.'
+    ? ((grantMutation.error as Error | null)?.message ?? '권한 부여 요청에 실패했습니다.')
     : undefined;
 
   const changeErrorMessage = changeMutation.isError
-    ? (changeMutation.error as Error | null)?.message ??
-      '권한 변경 요청에 실패했습니다.'
+    ? ((changeMutation.error as Error | null)?.message ?? '권한 변경 요청에 실패했습니다.')
     : undefined;
 
   const handleOpenGrantModal = () => {

@@ -2,14 +2,19 @@ import IconHelp from '@/public/icons/icon/help.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 
-import { ADMIN_OWNER_LABEL, ADMIN_OWNER_LINE_1, ADMIN_OWNER_LINE_2, TAG_BASE_CLASS } from '../../constants/permissionsConfig';
+import {
+  ADMIN_OWNER_LABEL,
+  ADMIN_OWNER_LINE_1,
+  ADMIN_OWNER_LINE_2,
+  TAG_BASE_CLASS,
+} from '../../constants/permissionsConfig';
 
 /** Admin 권한 소유자 안내 태그 + 툴팁 */
 const AdminOwnerInfoTag = () => {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={`${TAG_BASE_CLASS} bg-neutral-2 text-gray-50 inline-flex cursor-default items-center gap-1`}>
+        <span className={`${TAG_BASE_CLASS} bg-neutral-2 inline-flex cursor-default items-center gap-1 text-gray-50`}>
           <IconInfo className="size-4 shrink-0 text-gray-50" />
           {ADMIN_OWNER_LABEL}
         </span>

@@ -13,8 +13,7 @@ interface DetailHeaderProps {
 }
 
 const DetailHeader = ({ sessionId, prevQuery, nextQuery }: DetailHeaderProps) => {
-  const buildHref = (q: string) =>
-    `/mypage/history/${sessionId}?q=${encodeURIComponent(q)}`;
+  const buildHref = (q: string) => `/mypage/history/${sessionId}?q=${encodeURIComponent(q)}`;
 
   return (
     <div className="flex items-center justify-between">

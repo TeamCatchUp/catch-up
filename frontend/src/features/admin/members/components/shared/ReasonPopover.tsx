@@ -17,14 +17,7 @@ interface ReasonPopoverProps {
 }
 
 /** 사유 선택 팝오버 (반려 / 비활성화 공통) */
-const ReasonPopover = ({
-  trigger,
-  title,
-  reasonLabel,
-  reasons,
-  requestReason,
-  onSave,
-}: ReasonPopoverProps) => {
+const ReasonPopover = ({ trigger, title, reasonLabel, reasons, requestReason, onSave }: ReasonPopoverProps) => {
   const [open, setOpen] = useState(false);
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [customReason, setCustomReason] = useState('');
@@ -49,18 +42,14 @@ const ReasonPopover = ({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent
-        align="end"
-        sideOffset={6}
-        className="shadow-modal flex w-100 flex-col gap-2 px-5 pb-4 pt-3"
-      >
+      <PopoverContent align="end" sideOffset={6} className="shadow-modal flex w-100 flex-col gap-2 px-5 pt-3 pb-4">
         {/* 헤더 + 내용 영역 (gap-6px) */}
         <div className="flex flex-col gap-1.5">
           {/* 헤더 */}
           <div className="flex h-9 items-center justify-between">
             <h3 className="text-heading-medium text-gray-80">{title}</h3>
             <button type="button" onClick={handleClose} className="cursor-pointer p-0.5">
-              <Cancel className="text-gray-50 size-6" />
+              <Cancel className="size-6 text-gray-50" />
             </button>
           </div>
 
@@ -78,7 +67,7 @@ const ReasonPopover = ({
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1">
                 <span className="text-body-small text-gray-80">{reasonLabel}</span>
-                <span className="bg-red-50 size-1.25 rounded-full" />
+                <span className="size-1.25 rounded-full bg-red-50" />
               </div>
 
               <div className="border-neutral-2 flex flex-col gap-4 overflow-clip rounded-xl border px-4 py-4">
@@ -110,7 +99,7 @@ const ReasonPopover = ({
                           value={customReason}
                           onChange={(e) => setCustomReason(e.target.value)}
                           placeholder="사유를 입력해주세요."
-                          className="text-body-small border-neutral-3 text-gray-80 placeholder:text-gray-30 ml-9 rounded-lg border px-3 py-2 outline-none focus:border-blue-40"
+                          className="text-body-small border-neutral-3 text-gray-80 placeholder:text-gray-30 focus:border-blue-40 ml-9 rounded-lg border px-3 py-2 outline-none"
                         />
                       )}
                     </div>

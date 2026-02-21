@@ -293,7 +293,7 @@ const normalizeSourcesByMode = (sources: SourceResponse[], mode: NormalizeSource
 
     const author =
       sourceType === 'jira'
-        ? ((source.assignee ?? source.author ?? parseJiraAuthorFromText(source.text)) || '')
+        ? (source.assignee ?? source.author ?? parseJiraAuthorFromText(source.text)) || ''
         : (source.author ?? '');
 
     return {
@@ -329,5 +329,4 @@ export const normalizeHistorySources = (sources: SourceResponse[]): ChatSource[]
  * 호환용 기본 normalize 함수.
  * 기존 호출부가 남아 있어도 동작하도록 stream 기준으로 유지한다.
  */
-export const normalizeSources = (sources: SourceResponse[]): ChatSource[] =>
-  normalizeSourcesByMode(sources, 'stream');
+export const normalizeSources = (sources: SourceResponse[]): ChatSource[] => normalizeSourcesByMode(sources, 'stream');

@@ -19,8 +19,7 @@ interface DetailHeaderProps {
 
 /** 질문 로그 상세 — 헤더 (타이틀 + 유저 정보 + 네비게이션) */
 const DetailHeader = ({ sessionId, userId, userName, userDepartment, prevQuery, nextQuery }: DetailHeaderProps) => {
-  const buildHref = (q: string) =>
-    `/admin/question-logs/${sessionId}?q=${encodeURIComponent(q)}&userId=${userId}`;
+  const buildHref = (q: string) => `/admin/question-logs/${sessionId}?q=${encodeURIComponent(q)}&userId=${userId}`;
 
   return (
     <div className="flex flex-col gap-6">

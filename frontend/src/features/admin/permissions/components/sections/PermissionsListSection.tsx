@@ -90,7 +90,7 @@ const PermissionsListSection = ({
           <div className="flex h-full flex-col gap-3 p-5">
             <div className="bg-neutral-2 h-9 animate-pulse rounded-lg" />
             {Array.from({ length: 10 }).map((_, index) => (
-              <div key={index} className="bg-neutral-1 h-12.5 animate-pulse rounded-md2" />
+              <div key={index} className="bg-neutral-1 rounded-md2 h-12.5 animate-pulse" />
             ))}
           </div>
         ) : isError ? (

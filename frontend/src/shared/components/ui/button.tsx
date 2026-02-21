@@ -25,7 +25,7 @@ const buttonVariants = cva(
         'box-outline-gray':
           'border-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 disabled:bg-neutral-1 disabled:text-gray-30 text-gray-70 rounded-lg border bg-white',
         'box-outline-blue':
-          'border-blue-40 hover:bg-blue-5 active:bg-blue-10 disabled:bg-neutral-1 disabled:text-gray-30 disabled:border-neutral-2 rounded-lg border bg-blue-1 text-blue-50',
+          'border-blue-40 hover:bg-blue-5 active:bg-blue-10 disabled:bg-neutral-1 disabled:text-gray-30 disabled:border-neutral-2 bg-blue-1 rounded-lg border text-blue-50',
 
         /* ── Capsule Buttons ── */
         'capsule-solid-primary':
@@ -39,8 +39,7 @@ const buttonVariants = cva(
 
         /* ── Text Buttons ── */
         'text-primary-blue': 'hover:bg-blue-5 active:bg-blue-5 rounded-full text-blue-50',
-        'text-secondary-mono':
-          'hover:bg-neutral-2 active:bg-neutral-3 disabled:text-gray-20 text-gray-70 rounded-full',
+        'text-secondary-mono': 'hover:bg-neutral-2 active:bg-neutral-3 disabled:text-gray-20 text-gray-70 rounded-full',
 
         /* ── FAB ── */
         'fab-primary': 'bg-neutral-80 shadow-button rounded-full text-white',

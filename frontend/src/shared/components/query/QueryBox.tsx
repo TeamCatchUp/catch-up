@@ -55,11 +55,7 @@ const QueryBox = ({
       ref={containerRef}
       className={`shadow-rag-bar border-neutral-4 flex w-190 flex-col items-center border border-solid bg-white ${containerClassName}`}
     >
-      <QueryInput
-        input={input}
-        inputRef={inputRef}
-        highlightBracketPlaceholders={highlightBracketPlaceholders}
-      />
+      <QueryInput input={input} inputRef={inputRef} highlightBracketPlaceholders={highlightBracketPlaceholders} />
 
       {showPanel && (
         <div

@@ -44,10 +44,7 @@ const QuestionLogListSection = ({ items, userId }: QuestionLogListSectionProps) 
     );
   }, [items, sort, period, savedOnly, searchTerm]);
 
-  const groupedSections = useMemo(
-    () => groupItemsByDate(filteredItems, (item) => item.rawDate),
-    [filteredItems],
-  );
+  const groupedSections = useMemo(() => groupItemsByDate(filteredItems, (item) => item.rawDate), [filteredItems]);
 
   return (
     <div className="flex flex-col gap-4">

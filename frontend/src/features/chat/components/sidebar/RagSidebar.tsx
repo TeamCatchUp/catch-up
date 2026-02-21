@@ -93,17 +93,14 @@ const RagSidebar = ({ currentQA, isLoading, isError }: RagSidebarProps) => {
 
   const transitionClass = prefersReducedMotion
     ? ''
-    : cn(
-        'transition-[opacity,transform] duration-160 ease-out',
-        isVisible ? 'opacity-100 translate-y-0' : 'opacity-0',
-      );
+    : cn('transition-[opacity,transform] duration-160 ease-out', isVisible ? 'translate-y-0 opacity-100' : 'opacity-0');
 
   const transitionStyle = prefersReducedMotion
     ? undefined
     : { transform: `translateY(${isVisible ? 0 : SIDEBAR_SHIFT_PX}px)` };
 
   return (
-    <div className="border-neutral-3 hidden lg:flex w-100 flex-none flex-col border-l bg-white">
+    <div className="border-neutral-3 hidden w-100 flex-none flex-col border-l bg-white lg:flex">
       <SidebarHeader sourceCount={sourceCount} className={transitionClass} />
       <div className={cn('min-h-0 flex-1 overflow-y-auto', transitionClass)} style={transitionStyle}>
         <SourceList

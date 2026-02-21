@@ -135,7 +135,13 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
                   <SelectTrigger className={`h-[46px] ${errors.department ? 'border-red-50' : ''}`}>
                     <SelectValue placeholder="선택 안됨" />
                   </SelectTrigger>
-                  <SelectContent position="popper" side="bottom" sideOffset={4} avoidCollisions={false} className="max-h-45">
+                  <SelectContent
+                    position="popper"
+                    side="bottom"
+                    sideOffset={4}
+                    avoidCollisions={false}
+                    className="max-h-45"
+                  >
                     {DEPARTMENT_OPTIONS.map((opt) => (
                       <SelectItem key={opt} value={opt}>
                         {opt}

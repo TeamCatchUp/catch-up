@@ -123,8 +123,7 @@ export const useRagScroll = ({ messages }: UseRagScrollOptions): UseRagScrollRet
           currentDistance = Math.abs(currentCenter - viewportCenter);
         }
 
-        const shouldSwitch =
-          !Number.isFinite(currentDistance) || bestDistance + HYSTERESIS_PX < currentDistance;
+        const shouldSwitch = !Number.isFinite(currentDistance) || bestDistance + HYSTERESIS_PX < currentDistance;
 
         if (shouldSwitch) {
           setActivePairIndex(bestIdx);

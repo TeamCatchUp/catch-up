@@ -91,9 +91,7 @@ const AnswerActionButtons = ({
             }}
             className={cn(
               'cursor-pointer rounded-lg p-1.5',
-              isFeedbackDisabled
-                ? ''
-                : 'icon-button-only-gray',
+              isFeedbackDisabled ? '' : 'icon-button-only-gray',
               isThumbsDownActive && 'bg-neutral-3 border-neutral-5',
             )}
           >

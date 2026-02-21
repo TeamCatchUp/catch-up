@@ -91,7 +91,7 @@ export default function HistoryDetailPage() {
           <div className="flex min-w-0 flex-1 flex-col gap-6">
             {/* 질문 */}
             <div className="flex flex-col gap-3">
-              <Badge variant="secondary" className="w-17.75 rounded-md2 px-1.5 py-0.5">
+              <Badge variant="secondary" className="rounded-md2 w-17.75 px-1.5 py-0.5">
                 이용자 질문
               </Badge>
               <div className="relative">
@@ -101,9 +101,7 @@ export default function HistoryDetailPage() {
 
             {/* 답변 */}
             <div className="flex flex-col gap-3">
-              <Badge className="w-23.25 rounded-md2 px-1.5 py-0.5">
-                캐치스턴트 답변
-              </Badge>
+              <Badge className="rounded-md2 w-23.25 px-1.5 py-0.5">캐치스턴트 답변</Badge>
               {currentQA.answer?.content ? (
                 <div className="markdown-body wrap-break-words">
                   <ReactMarkdown

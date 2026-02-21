@@ -41,11 +41,7 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
       }}
       components={{
         Chevron: ({ orientation }) =>
-          orientation === 'left' ? (
-            <IconArrowLeft className="size-5" />
-          ) : (
-            <IconArrowRight className="size-5" />
-          ),
+          orientation === 'left' ? <IconArrowLeft className="size-5" /> : <IconArrowRight className="size-5" />,
       }}
       {...props}
     />

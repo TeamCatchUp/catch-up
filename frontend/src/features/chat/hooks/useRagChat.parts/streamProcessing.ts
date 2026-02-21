@@ -94,7 +94,15 @@ export const useStreamProcessing = ({
     setIsLoading(true);
     setIsError(false);
     setCurrentStep('router');
-  }, [canReplacePlaceholderRef, resetStopped, resetStreamStateRefs, setCurrentStep, setIsError, setIsLoading, streamInFlightRef]);
+  }, [
+    canReplacePlaceholderRef,
+    resetStopped,
+    resetStreamStateRefs,
+    setCurrentStep,
+    setIsError,
+    setIsLoading,
+    streamInFlightRef,
+  ]);
 
   /**
    * 첫 질문 자동 실행 시, user 메시지가 아직 없으면 1회 생성

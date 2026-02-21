@@ -36,7 +36,6 @@ const formatDate = (iso: string) => {
   return `${y}.${m}.${day}. ${h}:${min}`;
 };
 
-
 /** 계정관리 감사 로그 섹션 */
 const AccountLogSection = () => {
   const { data: logs = [] } = useQuery(auditLogsQueries.list());
@@ -91,7 +90,6 @@ const AccountLogSection = () => {
   /* 선택된 로그 데이터 */
   const selectedLog: AuditLog | null = sorted.find((l) => l.logId === activeKey) ?? null;
 
-
   return (
     <div className="flex w-full flex-col gap-3">
       {/* 필터바 */}
@@ -107,7 +105,7 @@ const AccountLogSection = () => {
                 <span className="text-body-small text-gray-70">
                   {SORT_OPTIONS.find((o) => o.key === sortKey)?.label}
                 </span>
-                <IconDropdownDown className="text-gray-50 size-4.5" />
+                <IconDropdownDown className="size-4.5 text-gray-50" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" sideOffset={2} className="w-30 min-w-0">
@@ -201,11 +199,7 @@ const AccountLogSection = () => {
                             badgeCls,
                           )}
                         >
-                          {isSuccess ? (
-                            <IconCheckCircle className="size-4" />
-                          ) : (
-                            <IconDelete2 className="size-4" />
-                          )}
+                          {isSuccess ? <IconCheckCircle className="size-4" /> : <IconDelete2 className="size-4" />}
                           {row.status}
                         </span>
                       </div>

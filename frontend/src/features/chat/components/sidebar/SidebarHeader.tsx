@@ -10,7 +10,12 @@ interface Props {
 
 const SidebarHeader = ({ sourceCount, className }: Props) => {
   return (
-    <div className={cn('border-b-neutral-3 flex h-13 items-center justify-between border-b bg-white px-4 py-1.5', className)}>
+    <div
+      className={cn(
+        'border-b-neutral-3 flex h-13 items-center justify-between border-b bg-white px-4 py-1.5',
+        className,
+      )}
+    >
       <div className="text-heading-medium text-gray-70 flex items-center gap-1.5 whitespace-nowrap">
         <span>출처</span>
         <span>{sourceCount}개</span>

@@ -8,11 +8,9 @@ import DashboardImage from '@/public/image/catchup-login.jpg';
 import { Button } from '@/shared/components/ui/button';
 
 export default function Login() {
-
   const handleOktaLogin = () => {
     window.location.href = '/api/v1/auth/okta/login';
   };
-
 
   return (
     <div className="flex h-226.5 w-360 items-center justify-center bg-white p-6">

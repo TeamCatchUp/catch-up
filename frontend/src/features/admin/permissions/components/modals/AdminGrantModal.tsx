@@ -54,7 +54,7 @@ const AdminGrantModal = ({
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1">
               <span className="text-body-small text-gray-80">부여할 멤버</span>
-              <span className="bg-red-50 size-1.25 rounded-full" />
+              <span className="size-1.25 rounded-full bg-red-50" />
             </div>
             <Select value={memberId} onValueChange={setMemberId}>
               <SelectTrigger className="h-[46px]">
@@ -73,7 +73,7 @@ const AdminGrantModal = ({
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-1">
               <span className="text-body-small text-gray-80">부여 사유를 입력해주세요.</span>
-              <span className="bg-red-50 size-1.25 rounded-full" />
+              <span className="size-1.25 rounded-full bg-red-50" />
             </div>
             <Input
               value={reason}

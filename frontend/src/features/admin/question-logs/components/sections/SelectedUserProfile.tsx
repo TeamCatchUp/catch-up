@@ -13,7 +13,7 @@ const SelectedUserProfile = ({ user }: SelectedUserProfileProps) => {
       <DefaultProfile className="border-neutral-2 text-gray-30 size-14 shrink-0 rounded-full border-4 border-white" />
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
         <h2 className="text-heading-large text-gray-70">{user.name}</h2>
-        <p className="text-body-small text-gray-50 tracking-tight">
+        <p className="text-body-small tracking-tight text-gray-50">
           {user.department} · {user.rank}
         </p>
       </div>

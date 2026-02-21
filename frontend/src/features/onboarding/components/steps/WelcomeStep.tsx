@@ -36,9 +36,11 @@ export function WelcomeStep({ onStart, isLoading }: WelcomeStepProps) {
         <div className="flex w-full flex-col items-start gap-2.5">
           <div className="flex w-full items-center gap-1.5">
             <div className="size-[22px] shrink-0 overflow-clip">
-              <LockIcon className="size-full text-gray-30" />
+              <LockIcon className="text-gray-30 size-full" />
             </div>
-            <span className="text-body-medium text-gray-80 tracking-tight">소속 조직의 계정으로 안전하게 로그인하세요.</span>
+            <span className="text-body-medium text-gray-80 tracking-tight">
+              소속 조직의 계정으로 안전하게 로그인하세요.
+            </span>
           </div>
           <Button
             variant="box-solid-primary"

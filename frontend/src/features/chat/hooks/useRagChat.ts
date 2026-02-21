@@ -8,10 +8,7 @@ import { useInitialQueryBootstrap } from '@/features/chat/hooks/useRagChat.parts
 import { useMessageActions } from '@/features/chat/hooks/useRagChat.parts/messageActions';
 import { refreshRecentChats } from '@/features/chat/hooks/useRagChat.parts/refreshRecentChats';
 import { useRagChatRefs } from '@/features/chat/hooks/useRagChat.parts/refs';
-import {
-  createEmptyChatData,
-  loadSessionChatData,
-} from '@/features/chat/hooks/useRagChat.parts/sessionDataLoader';
+import { createEmptyChatData, loadSessionChatData } from '@/features/chat/hooks/useRagChat.parts/sessionDataLoader';
 import { useSessionLifecycle } from '@/features/chat/hooks/useRagChat.parts/sessionLifecycle';
 import { useStreamProcessing } from '@/features/chat/hooks/useRagChat.parts/streamProcessing';
 import type { UseRagChatOptions, UseRagChatReturn } from '@/features/chat/hooks/useRagChat.parts/types';

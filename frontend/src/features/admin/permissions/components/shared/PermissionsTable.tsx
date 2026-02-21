@@ -26,7 +26,9 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
       </div>
 
       {rows.length === 0 ? (
-        <div className="text-body-small flex h-full min-h-25 items-center justify-center text-gray-50">조회된 권한 정보가 없습니다.</div>
+        <div className="text-body-small flex h-full min-h-25 items-center justify-center text-gray-50">
+          조회된 권한 정보가 없습니다.
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {rows.map((member) => {
@@ -49,11 +51,18 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
                   <div className="flex items-center justify-center">
                     <Popover>
                       <PopoverTrigger asChild>
-                        <button type="button" className="text-body-xsmall text-gray-80 max-w-full cursor-pointer truncate">
+                        <button
+                          type="button"
+                          className="text-body-xsmall text-gray-80 max-w-full cursor-pointer truncate"
+                        >
                           {member.department}
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent side="top" align="center" className="text-body-xsmall w-auto px-3 py-2 text-gray-70">
+                      <PopoverContent
+                        side="top"
+                        align="center"
+                        className="text-body-xsmall text-gray-70 w-auto px-3 py-2"
+                      >
                         {member.department}
                       </PopoverContent>
                     </Popover>
@@ -64,7 +73,12 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
                   </div>
 
                   <div className="flex w-[110px] items-center justify-end">
-                    <Button variant="box-outline-gray" size="sm" className="h-7.5 w-[110px]" onClick={() => onChangeRoleClick(member)}>
+                    <Button
+                      variant="box-outline-gray"
+                      size="sm"
+                      className="h-7.5 w-[110px]"
+                      onClick={() => onChangeRoleClick(member)}
+                    >
                       권한 변경
                     </Button>
                   </div>

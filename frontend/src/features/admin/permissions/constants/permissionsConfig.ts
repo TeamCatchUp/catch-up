@@ -1,4 +1,7 @@
-import { RANK_BADGE_CLASS as MEMBER_RANK_BADGE_CLASS, TAG_BASE_CLASS as MEMBER_TAG_BASE_CLASS } from '@/features/admin/members/constants/memberTableConfig';
+import {
+  RANK_BADGE_CLASS as MEMBER_RANK_BADGE_CLASS,
+  TAG_BASE_CLASS as MEMBER_TAG_BASE_CLASS,
+} from '@/features/admin/members/constants/memberTableConfig';
 
 import type { PermissionRole } from '../types/adminPermission';
 

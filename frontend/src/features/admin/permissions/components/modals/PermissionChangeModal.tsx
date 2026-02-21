@@ -59,7 +59,7 @@ const PermissionChangeModal = ({
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1">
               <span className="text-body-small text-gray-80">변경할 멤버</span>
-              <span className="bg-red-50 size-1.25 rounded-full" />
+              <span className="size-1.25 rounded-full bg-red-50" />
             </div>
 
             <Select value={memberId} onValueChange={setMemberId}>
@@ -79,7 +79,7 @@ const PermissionChangeModal = ({
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-1">
               <span className="text-body-small text-gray-80">권한 변경 사유를 선택해주세요.</span>
-              <span className="bg-red-50 size-1.25 rounded-full" />
+              <span className="size-1.25 rounded-full bg-red-50" />
             </div>
 
             <div className="border-neutral-2 flex flex-col gap-4 rounded-xl border px-4 py-4">

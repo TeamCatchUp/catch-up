@@ -46,7 +46,7 @@ function DateRangePicker({
             className,
           )}
         >
-          <IconCalendar className="text-gray-50 size-6" />
+          <IconCalendar className="size-6 text-gray-50" />
           {displayFrom ? (
             <>
               <span className="text-body-small text-gray-70">{displayFrom}</span>
@@ -59,14 +59,8 @@ function DateRangePicker({
         </button>
       </PopoverTrigger>
 
-      <PopoverContent align="start" sideOffset={4} className="w-auto rounded-2xl p-0 shadow-modal">
-        <Calendar
-          mode="range"
-          selected={value}
-          onSelect={onChange}
-          numberOfMonths={numberOfMonths}
-          locale={ko}
-        />
+      <PopoverContent align="start" sideOffset={4} className="shadow-modal w-auto rounded-2xl p-0">
+        <Calendar mode="range" selected={value} onSelect={onChange} numberOfMonths={numberOfMonths} locale={ko} />
       </PopoverContent>
     </Popover>
   );

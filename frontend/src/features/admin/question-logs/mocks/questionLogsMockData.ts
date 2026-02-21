@@ -4,7 +4,16 @@ import type { QuestionLogItem } from '../types/questionLog';
 
 const toItem = (id: string, sessionId: string, query: string, createdAt: string, isSaved = false): QuestionLogItem => {
   const rawDate = new Date(createdAt);
-  return { id, sessionId, query, createdAt, rawDate, fullDate: formatFullDate(createdAt), relativeDate: formatRelativeDate(createdAt), isSaved };
+  return {
+    id,
+    sessionId,
+    query,
+    createdAt,
+    rawDate,
+    fullDate: formatFullDate(createdAt),
+    relativeDate: formatRelativeDate(createdAt),
+    isSaved,
+  };
 };
 
 const today = new Date();

@@ -55,7 +55,7 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
       <DialogPortal>
         <DialogOverlay />
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="shadow-modal flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border border-neutral-5 bg-white p-6">
+          <div className="shadow-modal border-neutral-5 flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border bg-white p-6">
             {/* 콘텐츠 영역 */}
             <div
               className={`flex min-h-0 flex-1 flex-col gap-5 overflow-hidden transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}
@@ -73,7 +73,7 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
                 <button
                   type="button"
                   onClick={onDismiss}
-                  className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-50 hover:bg-neutral-2"
+                  className="hover:bg-neutral-2 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-50"
                 >
                   <CloseIcon className="size-5" />
                 </button>
@@ -81,12 +81,7 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
 
               {/* 일러스트 이미지 */}
               <div className="relative h-[160px] w-full overflow-hidden rounded-lg">
-                <Image
-                  src={currentStep.image}
-                  alt={currentStep.title.join(' ')}
-                  fill
-                  className="object-cover"
-                />
+                <Image src={currentStep.image} alt={currentStep.title.join(' ')} fill className="object-cover" />
               </div>
 
               {/* 본문 텍스트 */}
@@ -96,14 +91,11 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
             </div>
 
             {/* Footer: 페이지네이션 + 버튼 */}
-            <div className="flex shrink-0 items-center justify-between border-t border-neutral-4 pt-5">
+            <div className="border-neutral-4 flex shrink-0 items-center justify-between border-t pt-5">
               {/* Pagination Dots */}
-              <div className="flex self-center gap-2.5 px-2">
+              <div className="flex gap-2.5 self-center px-2">
                 {Array.from({ length: USER_GUIDE_TOTAL_STEPS }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-gray-20'}`}
-                  />
+                  <div key={i} className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-gray-20'}`} />
                 ))}
               </div>
 

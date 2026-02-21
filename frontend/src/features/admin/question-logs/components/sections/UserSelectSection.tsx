@@ -65,11 +65,11 @@ const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSe
         <PopoverContent
           align="start"
           sideOffset={2}
-          className="flex h-[380px] w-[var(--radix-popover-trigger-width)] flex-col gap-3 rounded-xl border-neutral-5 p-2.5"
+          className="border-neutral-5 flex h-[380px] w-[var(--radix-popover-trigger-width)] flex-col gap-3 rounded-xl p-2.5"
         >
           {/* 검색 */}
           <label className="bg-neutral-2 border-blue-30 flex h-10 items-center gap-1.5 rounded-lg border px-3">
-            <IconSearch className="size-5 shrink-0 text-gray-30" />
+            <IconSearch className="text-gray-30 size-5 shrink-0" />
             <input
               type="text"
               value={search}

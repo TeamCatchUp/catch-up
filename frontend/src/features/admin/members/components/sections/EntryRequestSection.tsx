@@ -75,9 +75,7 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
   }, []);
 
   const handleToggleAll = useCallback(() => {
-    setSelectedKeys((prev) =>
-      prev.size === tableRows.length ? new Set() : new Set(tableRows.map((r) => r.key)),
-    );
+    setSelectedKeys((prev) => (prev.size === tableRows.length ? new Set() : new Set(tableRows.map((r) => r.key))));
   }, [tableRows]);
 
   const handleCancelSelection = () => {

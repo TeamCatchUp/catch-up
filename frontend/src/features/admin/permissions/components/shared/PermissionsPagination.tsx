@@ -38,7 +38,7 @@ const PermissionsPagination = ({ currentPage, totalPages, onPageChange }: Permis
         aria-label="이전 페이지"
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage <= 1}
-        className="text-gray-50 disabled:text-gray-20 inline-flex size-6 cursor-pointer items-center justify-center rounded-md2 disabled:cursor-not-allowed"
+        className="disabled:text-gray-20 rounded-md2 inline-flex size-6 cursor-pointer items-center justify-center text-gray-50 disabled:cursor-not-allowed"
       >
         <ArrowLeft className="size-6" />
       </button>
@@ -51,8 +51,8 @@ const PermissionsPagination = ({ currentPage, totalPages, onPageChange }: Permis
             type="button"
             onClick={() => onPageChange(page)}
             className={cn(
-              'text-body-small flex size-7.5 cursor-pointer items-center justify-center rounded-md2 tracking-tight',
-              isActive ? 'bg-neutral-1 text-gray-80' : 'text-gray-50 hover:bg-neutral-1',
+              'text-body-small rounded-md2 flex size-7.5 cursor-pointer items-center justify-center tracking-tight',
+              isActive ? 'bg-neutral-1 text-gray-80' : 'hover:bg-neutral-1 text-gray-50',
             )}
           >
             {page}
@@ -65,7 +65,7 @@ const PermissionsPagination = ({ currentPage, totalPages, onPageChange }: Permis
         aria-label="다음 페이지"
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage >= totalPages}
-        className="text-gray-50 disabled:text-gray-20 inline-flex size-6 cursor-pointer items-center justify-center rounded-md2 disabled:cursor-not-allowed"
+        className="disabled:text-gray-20 rounded-md2 inline-flex size-6 cursor-pointer items-center justify-center text-gray-50 disabled:cursor-not-allowed"
       >
         <ArrowRight className="size-6" />
       </button>

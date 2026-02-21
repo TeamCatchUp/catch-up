@@ -27,9 +27,7 @@ export default function AdminAuditLogsPage() {
                 onClick={() => setActiveTab(tab)}
                 className={cn(
                   'text-heading-large cursor-pointer pb-1.5',
-                  isActive
-                    ? 'border-gray-80 text-gray-80 border-b-2'
-                    : 'text-gray-30',
+                  isActive ? 'border-gray-80 text-gray-80 border-b-2' : 'text-gray-30',
                 )}
               >
                 {tab}

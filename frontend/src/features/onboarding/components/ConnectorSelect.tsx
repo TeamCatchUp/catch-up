@@ -80,7 +80,7 @@ export function ConnectorSelect({
             {disabled ? (
               <>
                 <span className="text-gray-30">사용하지 않는 도구로 설정되어 있습니다</span>
-                <UnfoldMore className="size-5 shrink-0 text-gray-30" />
+                <UnfoldMore className="text-gray-30 size-5 shrink-0" />
               </>
             ) : selected ? (
               <>

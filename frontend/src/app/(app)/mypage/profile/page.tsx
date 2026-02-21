@@ -27,7 +27,7 @@ const ProfilePage = () => {
   const basicInfoRows = [
     { label: '이름', value: user?.name ?? '' },
     { label: '메일 / 사번', value: user?.email ?? '' },
-{ label: '직급', value: '팀원' },
+    { label: '직급', value: '팀원' },
   ];
 
   return (

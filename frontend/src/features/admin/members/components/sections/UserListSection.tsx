@@ -15,7 +15,12 @@ import {
 } from '@/shared/components/ui/dropdown-menu';
 import { cn } from '@/shared/utils/cn';
 
-import { DEACTIVATION_REASONS, SORT_OPTIONS, STATUS_BADGE_CLASS, STATUS_LABEL } from '../../constants/memberTableConfig';
+import {
+  DEACTIVATION_REASONS,
+  SORT_OPTIONS,
+  STATUS_BADGE_CLASS,
+  STATUS_LABEL,
+} from '../../constants/memberTableConfig';
 import { useMemberStatusMutation } from '../../queries/adminMembers.mutations';
 import { adminMembersQueries } from '../../queries/adminMembers.queries';
 import type { AdminMember, AdminSortKey, MemberTableRow } from '../../types/adminMember';
@@ -124,9 +129,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
                   title="비활성화 사유"
                   reasonLabel="비활성화 사유를 선택해주세요."
                   reasons={DEACTIVATION_REASONS}
-                  onSave={() =>
-                    statusMutation.mutate({ userId: selectedMember.userId, action: 'deactivate' })
-                  }
+                  onSave={() => statusMutation.mutate({ userId: selectedMember.userId, action: 'deactivate' })}
                 />
                 <Button
                   variant="box-outline-gray"
@@ -143,9 +146,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
                   description="계정을 삭제하면 모든 데이터가 영구 삭제되며 복구할 수 없습니다."
                   confirmLabel="삭제"
                   variant="danger"
-                  onConfirm={() =>
-                    statusMutation.mutate({ userId: selectedMember.userId, action: 'delete' })
-                  }
+                  onConfirm={() => statusMutation.mutate({ userId: selectedMember.userId, action: 'delete' })}
                 />
               </>
             )

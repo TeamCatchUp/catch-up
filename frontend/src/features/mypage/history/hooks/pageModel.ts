@@ -69,10 +69,7 @@ export const usePageModel = (): UsePageModelReturn => {
     );
   }, [historyItems, period, savedOnly, searchTerm, sort]);
 
-  const groupedSections = useMemo(
-    () => groupItemsByDate(filteredItems, (item) => item.rawDate),
-    [filteredItems],
-  );
+  const groupedSections = useMemo(() => groupItemsByDate(filteredItems, (item) => item.rawDate), [filteredItems]);
 
   return {
     sort,
