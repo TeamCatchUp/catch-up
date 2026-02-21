@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 import { INTEGRATION_ACCOUNTS } from '@/shared/constants/integrationAccounts';
-import { auditLogsQueries } from '@/shared/queries/adminAuditLogs.queries';
+import { auditLogsQueries } from '../../queries/auditLogs.queries';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 

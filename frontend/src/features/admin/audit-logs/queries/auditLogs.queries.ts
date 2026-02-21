@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 
-import { MOCK_AUDIT_LOGS } from '@/shared/mocks/admin/auditLogsMockData';
+import { MOCK_AUDIT_LOGS } from '../mocks/auditLogsMockData';
 
 export const auditLogsQueries = {
   all: () => ['admin', 'auditLogs'] as const,
