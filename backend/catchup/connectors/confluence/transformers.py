@@ -47,6 +47,7 @@ class ConfluenceTransformer:
             inline_comments: list[ConfluenceCommentResponse] | None = None,
             attachment_images: dict[str, bytes] | None = None,
             site_url: str | None = None,
+            user_name_map: dict[str, str | None] | None = None,
     ) -> list[Document]:
         return self._transform_content(
             content_id=page.id,
@@ -67,6 +68,7 @@ class ConfluenceTransformer:
             inline_comments=inline_comments,
             attachment_images=attachment_images,
             site_url=site_url,
+            user_name_map=user_name_map,
         )
 
     def transform_blogpost(
@@ -79,6 +81,7 @@ class ConfluenceTransformer:
         footer_comments: list[ConfluenceCommentResponse] | None = None,
         attachment_images: dict[str, bytes] | None = None,
         site_url: str | None = None,
+        user_name_map: dict[str, str | None] | None = None,
     ) -> list[Document]:
         return self._transform_content(
             content_id=blogpost.id,
@@ -99,6 +102,7 @@ class ConfluenceTransformer:
             inline_comments=None,
             attachment_images=attachment_images,
             site_url=site_url,
+            user_name_map=user_name_map,
         )
     
     def _transform_content(
@@ -121,6 +125,7 @@ class ConfluenceTransformer:
         inline_comments: list[ConfluenceCommentResponse] | None,
         attachment_images: dict[str, bytes] | None,
         site_url: str | None = None,
+        user_name_map: dict[str, str | None] | None = None,
     ) -> list[Document]:
         
         labels = labels or []
@@ -135,6 +140,10 @@ class ConfluenceTransformer:
             return []
         
         web_url = self._absolutize_web_url(web_url, site_url)
+
+        author_name = None
+        if author_id and user_name_map:
+            author_name = user_name_map.get(author_id)
 
         # 2) Storage -> Section Tree
         sections = self.parser.parse(storage_html)
@@ -216,6 +225,7 @@ class ConfluenceTransformer:
 
                 # 작성자/시간
                 "author_id": author_id,
+                "author_name": author_name,
                 "created_at": created_at,
                 "updated_at": updated_at,
                 "version": version_number,

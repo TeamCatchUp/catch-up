@@ -212,7 +212,7 @@ class BaseSource(BaseModel):
                 **base_data,
                 source=SourceType.CONFLUENCE,
                 title=metadata.get("title", "No Title"),
-                author=metadata.get("author_id"),
+                author=metadata.get("author_name"),
                 space_id=metadata.get("space_id"),
                 space_key=metadata.get("space_key"),
                 space_name=metadata.get("space_name"),

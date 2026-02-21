@@ -6,7 +6,6 @@ from typing import Any
 from langchain_core.documents import Document
 from sqlalchemy.orm import Session
 
-from catchup.db.confluence import domain_repository
 from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.connectors.confluence.schemas import (
     ConfluenceAttachmentResponse,
@@ -20,6 +19,7 @@ from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.db.models import ConfluenceEntityType
 from catchup.db.confluence import sync_repository as confluence_sync
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
+from catchup.db.confluence import domain_repository
 from catchup.configs.config import settings
 
 logger = logging.getLogger(__name__)
@@ -75,16 +75,20 @@ class ConfluenceIngestionService:
             if not space_id_map:
                 logger.warning(f"[CONFLUENCE][FULL SYNC] No spaces found: cloud_id={self.cloud_id}")
                 return results
+
+            user_name_map = self._load_user_name_map(db)
             
             for space_key, space_id in space_id_map.items():
                 page_result = await self._sync_space_pages(
                     db, space_id = space_id, space_key = space_key, since = sync_from,
+                    user_name_map=user_name_map,
                 )
                 results["pages"]["synced"] += page_result["synced"]
                 results["pages"]["errors"] += page_result["errors"]
 
                 blog_result = await self._sync_space_blogposts(
                     db, space_id = space_id, space_key = space_key, since = sync_from,
+                    user_name_map=user_name_map,
                 )
                 results["blogposts"]["synced"] += blog_result["synced"]
                 results["blogposts"]["errors"] += blog_result["errors"]
@@ -360,11 +364,12 @@ class ConfluenceIngestionService:
 
 
     async def _sync_space_pages(
-        self,
-        db: Session,
-        space_id: str,
-        space_key: str,
-        since: datetime | None = None,
+            self,
+            db: Session,
+            space_id: str,
+            space_key: str,
+            since: datetime | None = None,
+            user_name_map: dict[str, str | None] | None = None,
     ) -> dict[str, int]:
 
         results = {"synced": 0, "errors": 0}
@@ -390,7 +395,9 @@ class ConfluenceIngestionService:
                             should_stop = True
                             continue
 
-                        documents = await self._process_page(page, space_key=space_key)
+                        documents = await self._process_page(
+                            page, space_key=space_key, user_name_map=user_name_map,
+                        )
 
                         if documents:
                             doc_ids = [doc.id for doc in documents]
@@ -438,6 +445,7 @@ class ConfluenceIngestionService:
             space_id: str,
             space_key: str,
             since: datetime | None = None,
+            user_name_map: dict[str, str | None] | None = None,
     ) -> dict[str, int]:
         
         results = {"synced": 0, "errors": 0}
@@ -463,7 +471,9 @@ class ConfluenceIngestionService:
                             should_stop = True
                             continue
 
-                        documents = await self._process_blogpost(blogpost, space_key = space_key)
+                        documents = await self._process_blogpost(
+                            blogpost, space_key = space_key, user_name_map=user_name_map,
+                        )
 
                         if documents:
                             doc_ids = [doc.id for doc in documents]
@@ -510,6 +520,7 @@ class ConfluenceIngestionService:
             self,
             page: ConfluencePageResponse,
             space_key: str,
+            user_name_map: dict[str, str | None] | None = None,
     ) -> list[Document]:
         
         footer_comments, inline_comments, labels, attachments = await self._fetch_supplementary(
@@ -525,13 +536,15 @@ class ConfluenceIngestionService:
             footer_comments=footer_comments,
             inline_comments=inline_comments,
             attachment_images=attachment_images,
-            site_url = self.site_url
+            site_url = self.site_url,
+            user_name_map=user_name_map,
         )
     
     async def _process_blogpost(
         self,
         blogpost: ConfluenceBlogPostResponse,
         space_key: str,
+        user_name_map: dict[str, str | None] | None = None,
     ) -> list[Document]:
 
         footer_comments, _, labels, attachments = await self._fetch_supplementary(
@@ -547,8 +560,25 @@ class ConfluenceIngestionService:
             footer_comments=footer_comments,
             attachment_images=attachment_images,
             site_url=self.site_url,
+            user_name_map=user_name_map,
         )
     
+    def _load_user_name_map(self, db: Session) -> dict[str, str | None]:
+        """
+        ConfluenceUsers 테이블에서 account_type이 'atlassian'인 사용자만 로드해
+        account_id → display_name 매핑을 만든다. Full Sync에서 작성자 이름 주입용으로 사용.
+        """
+        users = domain_repository.get_users_by_cloud_id(db, self.cloud_id)
+        mapping = {
+            user.account_id: (user.display_name or user.public_name)
+            for user in users
+            if user.account_type == "atlassian"
+        }
+        logger.info(
+            f"[CONFLUENCE][USER CACHE] Loaded {len(mapping)} atlassian users for cloud_id={self.cloud_id}"
+        )
+        return mapping
+
     async def _fetch_supplementary(
             self,
             content_type: str,
