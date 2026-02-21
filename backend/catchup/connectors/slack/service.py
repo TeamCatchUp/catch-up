@@ -1,4 +1,6 @@
+import asyncio
 import logging
+from _collections_abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -251,7 +253,7 @@ class SlackIngestionService:
             channel_name = channel.name if channel else channel_id
 
             result = await self._sync_channel_messages(
-                db, channel_id, channel_name, sync_from,
+                channel_id, channel_name, sync_from,
             )
             total_synced += result.get("synced", 0)
             total_errors += result.get("errors", 0)
@@ -421,10 +423,32 @@ class SlackIngestionService:
         except Exception as e:
             logger.warning(f"Failed to sync members for channel {channel_id}: {e}")
 
+    async def _get_syncable_channels(self) -> list[dict[str, str]]:
+        channels = []
+        cursor = None
+
+        while True:
+            response = await self.client.list_conversations(
+                types="public_channel,private_channel,mpim,im",
+                cursor=cursor,
+            )
+            for channel in response.get("channels", []):
+                channel_id = channel.get("id")
+                channels.append({
+                    "id": channel_id,
+                    "name": channel.get("name", channel_id),
+                })
+
+            cursor = response.get("response_metadata", {}).get("next_cursor")
+            if not cursor:
+                break
+
+        return channels
+
     async def _sync_all_messages(
-    self,
-    db: Session,
-    sync_from: str | None,
+        self,
+        db: Session,
+        sync_from: str | None,
     ) -> dict[str, int]:
         """모든 채널의 Message 동기화"""
         try:
@@ -434,51 +458,42 @@ class SlackIngestionService:
                 oldest_ts=sync_from,
             )
 
+            channels_to_sync = await self._get_syncable_channels()
+            logger.info(f"[SLACK][FULL SYNC] Syncing messages from {len(channels_to_sync)} channels")
+
+            channel_semaphore = asyncio.Semaphore(settings.SLACK_CHANNEL_SYNC_CONCURRENCY)
+            results = await asyncio.gather(
+                *[
+                    self._sync_channel_with_limit(channel_semaphore, ch, sync_from)
+                    for ch in channels_to_sync
+                ],
+                return_exceptions=True
+            )
+
             total_synced = 0
             total_errors = 0
             total_skipped = 0
 
-            # 채널 목록 조회
-            channels_to_sync = []
-            cursor = None
-            while True:
-                response = await self.client.list_conversations(
-                    types="public_channel,private_channel,mpim,im",
-                    cursor=cursor,
-                )
-                for channel in response.get("channels", []):
-                    channel_id = channel.get("id")
-                    channels_to_sync.append({
-                        "id": channel_id,
-                        "name": channel.get("name", channel_id),
-                    })
-
-                cursor = response.get("response_metadata", {}).get("next_cursor")
-                if not cursor:
-                    break
-
-            logger.info(f"Syncing messages from {len(channels_to_sync)} channels")
-
-            for channel in channels_to_sync:
-                result = await self._sync_channel_messages(
-                    db,
-                    channel["id"],
-                    channel["name"],
-                    sync_from,
-                )
-                total_synced += result.get("synced", 0)
-                total_errors += result.get("errors", 0)
-                if result.get("skipped"):
-                    total_skipped += 1
-
-                slack_sync.update_sync_progress(
-                    db, self.team_id, SlackEntityType.MESSAGE,
-                    synced_count=total_synced
-                )
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(
+                        f"[SLACK][FULL SYNC] Channel {channels_to_sync[i]['name']} failed: {result}"
+                    )
+                    total_errors += 1
+                else:
+                    total_synced += result.get("synced", 0)
+                    total_errors += result.get("errors", 0)
+                    if result.get("skipped"):
+                        total_skipped += 1
+            
+            slack_sync.update_sync_progress(
+                db, self.team_id, SlackEntityType.MESSAGE,
+                synced_count=total_synced,
+            )
 
             if total_skipped > 0:
                 logger.info(
-                    f"Message sync: {total_synced} synced, {total_errors} errors, "
+                    f"[SLACK][FULL SYNC] {total_synced} synced, {total_errors} errors, "
                     f"{total_skipped} channels skipped (not_in_channel/missing_scope)"
                 )
 
@@ -488,7 +503,7 @@ class SlackIngestionService:
             return {"synced": total_synced, "errors": total_errors, "skipped": total_skipped}
 
         except Exception as e:
-            logger.error(f"Message sync failed: {e}")
+            logger.error(f"[SLACK][FULL SYNC] Message sync failed: {e}")
             db.rollback()
             try:
                 slack_sync.create_or_update_sync_state(
@@ -499,54 +514,104 @@ class SlackIngestionService:
                 db.rollback()
             return {"synced": 0, "errors": 1}
 
-    async def _sync_channel_messages(
-    self,
-    db: Session,
-    channel_id: str,
-    channel_name: str,
-    sync_from: str | None,
+    async def _sync_channel_with_limit(
+        self,
+        semaphore: asyncio.Semaphore,
+        channel: dict[str, str],
+        sync_from: str | None,
     ) -> dict[str, int]:
-        """단일 채널의 메시지 수집 → 변환 → PGVector 저장"""
-        # Bot이 접근 불가능한 채널은 skip 처리
+        """Semaphore 제한 하에 단일 채널 동기화 실행"""
+        async with semaphore:
+            return await self._sync_channel_messages(
+                channel["id"], channel["name"], sync_from,
+            )
+            
+    async def _sync_channel_messages(
+        self,
+        channel_id: str,
+        channel_name: str,
+        sync_from: str | None,
+    ) -> dict[str, int]:
+        """단일 채널: AsyncGenerator 소비 → 요약 → PGVector 저장"""
         SKIPPABLE_ERRORS = {"not_in_channel", "channel_not_found", "missing_scope"}
 
         synced_count = 0
         errors = 0
+
+        try:
+            async for batch_docs, batch_ids, batch_errors in self._fetch_channel_pages(
+                channel_id, channel_name, sync_from,
+            ):
+                errors += batch_errors
+
+                if self.summarizer:
+                    batch_docs = await self._summarize_documents(batch_docs)
+
+                await self.repository.upsert_documents(batch_docs, batch_ids)
+                synced_count += len(batch_docs)
+
+        except SlackApiError as e:
+            if e.response.get("error", "") in SKIPPABLE_ERRORS:
+                logger.info(
+                    f"[SLACK][SYNC] Skipping channel {channel_name} ({channel_id}): "
+                    f"{e.response.get('error')}"
+                )
+                return {"synced": 0, "errors": 0, "skipped": True}
+            raise
+
+        logger.debug(
+            f"[SLACK][SYNC] Channel {channel_name}: synced {synced_count}, errors {errors}"
+        )
+        return {"synced": synced_count, "errors": errors}
+
+    async def _fetch_channel_pages(
+        self,
+        channel_id: str,
+        channel_name: str,
+        sync_from: str | None,
+    ) -> AsyncGenerator[tuple[list[Document], list[str], int], None]:
+        
         cursor = None
 
         while True:
-            # 1. Slack API로 sync_from 이후 메시지만 메시지 배치 조회
-            try:
-                response = await self.client.get_conversation_history(
-                    channel=channel_id,
-                    oldest=sync_from,
-                    cursor=cursor,
-                    limit=settings.SLACK_MESSAGE_BATCH_SIZE,
-                )
-            except SlackApiError as e:
-                if e.response.get("error", "") in SKIPPABLE_ERRORS:
-                    logger.info(
-                        f"Skipping channel {channel_name} ({channel_id}): "
-                        f"{e.response.get('error')}"
-                    )
-                    return {"synced": 0, "errors": 0, "skipped": True}
-                raise
+            response = await self.client.get_conversation_history(
+                channel=channel_id,
+                oldest=sync_from,
+                cursor=cursor,
+                limit=settings.SLACK_MESSAGE_BATCH_SIZE,
+            )
 
+            messages = response.get("messages", [])
+
+            # 스레드 답글 병렬 조회
+            thread_messages = [
+                msg for msg in messages
+                if not self._should_skip_message(msg) and msg.get("reply_count", 0) > 0
+            ]
+
+            if thread_messages:
+                thread_replies_list = await asyncio.gather(*[
+                    self._fetch_thread_replies(channel_id, msg.get("ts"))
+                    for msg in thread_messages
+                ])
+                reply_map = {
+                    msg.get("ts"): replies
+                    for msg, replies in zip(thread_messages, thread_replies_list)
+                }
+            else:
+                reply_map = {}
+
+            # 메시지 변환
             batch_documents = []
             batch_doc_ids = []
+            errors = 0
 
-            # 2. 메시지별 파싱 → Thread Reply 수집 → LangChain Document 변환
-            for msg_data in response.get("messages", []):
+            for msg_data in messages:
                 if self._should_skip_message(msg_data):
                     continue
 
                 try:
-                    replies = []
-                    if msg_data.get("reply_count", 0) > 0:
-                        replies = await self._fetch_thread_replies(
-                            channel_id, msg_data.get("ts"),
-                        )
-
+                    replies = reply_map.get(msg_data.get("ts"), [])
                     permalink = self._build_permalink(channel_id, msg_data.get("ts"))
                     message = self.transformer.parse_message(
                         msg_data, channel_id, channel_name, permalink, replies,
@@ -560,24 +625,15 @@ class SlackIngestionService:
                     )
                     errors += 1
 
-            # 3. 요약 → PGVector Upsert
             if batch_documents:
-                if self.summarizer:
-                    batch_documents = await self._summarize_documents(batch_documents)
-                await self.repository.upsert_documents(batch_documents, batch_doc_ids)
-                synced_count += len(batch_documents)
+                yield batch_documents, batch_doc_ids, errors
 
-            # 4. 다음 페이지 확인 → 없으면 종료
+            # 다음 페이지 확인
             if not response.get("has_more"):
                 break
             cursor = response.get("response_metadata", {}).get("next_cursor")
             if not cursor:
                 break
-
-        logger.debug(
-            f"Channel {channel_name}: synced {synced_count}, errors {errors}"
-        )
-        return {"synced": synced_count, "errors": errors}
 
     async def _fetch_thread_replies(
         self,
