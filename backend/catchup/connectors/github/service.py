@@ -52,7 +52,8 @@ from catchup.db.github import sync_repository as github_sync
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.domain_repository import RepositoryUpsertData, UserUpsertData
 from catchup.db.github import installation_repository as github_installation
-from catchup.db.models import GithubEntityType, GithubSyncStatus, GithubInstallationType
+from catchup.db.models import GithubEntityType, GithubSyncStatus, GithubInstallationType, SourceType
+from catchup.db.user_source_mapping import find_premapped_name_by_external_user_identifier, find_premapped_names_by_source_type
 
 logger = logging.getLogger(__name__)
 
@@ -138,8 +139,7 @@ class GithubIngestionService:
         self.repository = repository
         self.summarizer: SummarizerService | None = None
 
-        # 사용자 캐시 (멘션 변환용)
-        self.user_cache: dict[str, GithubUser] = {}
+        self._github_name_cache: dict[str, str | None] = {}
 
     async def initialize(self) -> None:
         """
@@ -150,7 +150,7 @@ class GithubIngestionService:
         - Summarizer 초기화 (요약 활성화 시)
         """
         await self.repository.initialize()
-        self.transformer = GithubTransformer(self.user_cache)
+        self.transformer = GithubTransformer()
 
         # Summarizer 초기화 (요약 활성화 시)
         if self.enable_summarization:
@@ -232,15 +232,82 @@ class GithubIngestionService:
             f"(retry after {error.retry_after}s)"
         )
 
-    def _update_user_cache(self, users_data: list[UserUpsertData]) -> None:
-        """User 캐시 업데이트 (멘션 변환용)"""
-        for user in users_data:
-            self.user_cache[user.login] = GithubUser(
-                id=user.database_id,
-                login=user.login,
-                avatar_url=user.avatar_url,
-            )
-        logger.debug(f"[GITHUB][{SyncOperation.USER_SYNC}] Updated user cache: {len(users_data)} users")
+    def _resolve_github_real_name(self, db: Session, login: str | None) -> str | None:
+        """
+        PreMappingBuffer에서 github login → 실명 매핑을 조회한다.
+        결과가 없는 경우 None을 반환하며, 조회 실패 사용자도 캐시.
+        """
+        if not login:
+            return None
+
+        if login in self._github_name_cache:
+            return self._github_name_cache[login]
+
+        resolved_name = find_premapped_name_by_external_user_identifier(
+            db=db,
+            source_type=SourceType.GITHUB,
+            external_user_identifier=login,
+        )
+        self._github_name_cache[login] = resolved_name
+        return resolved_name
+
+    def _preload_premapped_github_names(self, db: Session) -> int:
+        """Full Sync 시작 시점에 github login → 실명 매핑을 일괄 캐싱한다."""
+        premapped = find_premapped_names_by_source_type(db, SourceType.GITHUB)
+        self._github_name_cache = {
+            login: name
+            for login, name in premapped.items()
+            if login
+        }
+        return len(self._github_name_cache)
+
+    def _apply_user_display_name(self, db: Session, user: GithubUser | None) -> GithubUser | None:
+        """
+        사용자 객체의 name을 pre-mapping 이름으로 교체한다.
+        매핑이 없으면 원본 사용자 객체를 그대로 반환.
+        """
+        if user is None:
+            return None
+
+        mapped_name = self._resolve_github_real_name(db, user.login)
+        if not mapped_name:
+            return user
+        return user.model_copy(update={"name": mapped_name})
+
+    def _apply_issue_user_mapping(self, db: Session, issue: GithubIssue) -> GithubIssue:
+        """Issue 하위 사용자(작성자/assignee/comment)의 name을 실명으로 보정한다."""
+        comments = [comment.model_copy(update={"author": self._apply_user_display_name(db, comment.author)})
+                    for comment in issue.comments]
+        return issue.model_copy(update={
+            "author": self._apply_user_display_name(db, issue.author),
+            "assignees": [self._apply_user_display_name(db, assignee) for assignee in issue.assignees],
+            "comments": comments,
+        })
+
+    def _apply_pr_user_mapping(self, db: Session, pr: GithubPullRequest) -> GithubPullRequest:
+        """PR 하위 사용자(작성자/리뷰어/review/comment/merge/commit author)의 name을 실명으로 보정한다."""
+        comments = [comment.model_copy(update={"author": self._apply_user_display_name(db, comment.author)})
+                    for comment in pr.comments]
+        reviews = [review.model_copy(update={"author": self._apply_user_display_name(db, review.author)})
+                   for review in pr.reviews]
+
+        commits = []
+        for commit in pr.commits:
+            commit_author_name = self._resolve_github_real_name(db, commit.author_login)
+            if commit_author_name and commit.author_name != commit_author_name:
+                commits.append(commit.model_copy(update={"author_name": commit_author_name}))
+            else:
+                commits.append(commit)
+
+        return pr.model_copy(update={
+            "author": self._apply_user_display_name(db, pr.author),
+            "assignees": [self._apply_user_display_name(db, assignee) for assignee in pr.assignees],
+            "reviewers": [self._apply_user_display_name(db, reviewer) for reviewer in pr.reviewers],
+            "merged_by": self._apply_user_display_name(db, pr.merged_by),
+            "reviews": reviews,
+            "comments": comments,
+            "commits": commits,
+        })
 
     # ============================================================
     # Full Sync
@@ -255,6 +322,8 @@ class GithubIngestionService:
         """
         Github Full Sync
         """
+        preloaded_count = self._preload_premapped_github_names(db)
+        logger.info(f"[GITHUB][FULL SYNC] Preloaded {preloaded_count} pre-mapping user names")
         results = {
             "repositories": {"synced": 0, "errors": 0},
             "issues": {"synced": 0, "errors": 0},
@@ -389,8 +458,6 @@ class GithubIngestionService:
             # RDBMS에 벌크 저장
             if users_data:
                 github_entities.upsert_users_bulk(db, users_data)
-                # User 캐시 업데이트
-                self._update_user_cache(users_data)
 
             # 동기화 완료
             self._complete_sync(db, repo_full_name, GithubEntityType.USER, len(users_data), SyncOperation.USER_SYNC)
@@ -526,12 +593,12 @@ class GithubIngestionService:
                 for issue_data in issue_batch:
                     try:
                         issue = self.transformer.parse_issue(issue_data)
+                        issue = self._apply_issue_user_mapping(db, issue)
                         doc = self.transformer.transform_issue(
                             issue, owner, repo, self.installation_id
                         )
                         batch_documents.append(doc)
                         batch_doc_ids.append(doc.id)
-
                     except Exception as e:
                         logger.warning(f"[GITHUB][{SyncOperation.ISSUE_SYNC}] Failed to process issue #{issue_data.get('number')}: {e}")
                         errors += 1
@@ -610,12 +677,12 @@ class GithubIngestionService:
                 for pr_data in pr_batch:
                     try:
                         pr = self.transformer.parse_pull_request(pr_data)
+                        pr = self._apply_pr_user_mapping(db, pr)
                         doc = self.transformer.transform_pull_request(
                             pr, owner, repo, self.installation_id
                         )
                         batch_documents.append(doc)
                         batch_doc_ids.append(doc.id)
-
                     except Exception as e:
                         logger.warning(f"[GITHUB][{SyncOperation.PR_SYNC}] Failed to process PR #{pr_data.get('number')}: {e}")
                         logger.debug(f"PR processing error traceback:\n{traceback.format_exc()}")
@@ -668,6 +735,7 @@ class GithubIngestionService:
         Returns:
             동기화 결과 딕셔너리
         """
+        self._github_name_cache = {}
         results = {
             "repositories": {"synced": 0, "errors": 0},
             "issues": {"synced": 0, "errors": 0},
