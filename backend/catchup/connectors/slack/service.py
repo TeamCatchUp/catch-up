@@ -253,7 +253,7 @@ class SlackIngestionService:
             channel_name = channel.name if channel else channel_id
 
             result = await self._sync_channel_messages(
-                channel_id, channel_name, sync_from,
+                channel_id, channel_name, sync_from, db,
             )
             total_synced += result.get("synced", 0)
             total_errors += result.get("errors", 0)
@@ -464,7 +464,7 @@ class SlackIngestionService:
             channel_semaphore = asyncio.Semaphore(settings.SLACK_CHANNEL_SYNC_CONCURRENCY)
             results = await asyncio.gather(
                 *[
-                    self._sync_channel_with_limit(channel_semaphore, ch, sync_from)
+                    self._sync_channel_with_limit(channel_semaphore, ch, sync_from, db)
                     for ch in channels_to_sync
                 ],
                 return_exceptions=True
@@ -519,11 +519,12 @@ class SlackIngestionService:
         semaphore: asyncio.Semaphore,
         channel: dict[str, str],
         sync_from: str | None,
+        db: Session | None = None,
     ) -> dict[str, int]:
         """Semaphore 제한 하에 단일 채널 동기화 실행"""
         async with semaphore:
             return await self._sync_channel_messages(
-                channel["id"], channel["name"], sync_from,
+                channel["id"], channel["name"], sync_from, db,
             )
             
     async def _sync_channel_messages(
@@ -531,6 +532,7 @@ class SlackIngestionService:
         channel_id: str,
         channel_name: str,
         sync_from: str | None,
+        db: Session | None = None,
     ) -> dict[str, int]:
         """단일 채널: AsyncGenerator 소비 → 요약 → PGVector 저장"""
         SKIPPABLE_ERRORS = {"not_in_channel", "channel_not_found", "missing_scope"}
@@ -549,6 +551,12 @@ class SlackIngestionService:
 
                 await self.repository.upsert_documents(batch_docs, batch_ids)
                 synced_count += len(batch_docs)
+
+                if db:
+                    slack_sync.update_sync_progress(
+                        db, self.team_id, SlackEntityType.MESSAGE,
+                        synced_count=synced_count,
+                    )
 
         except SlackApiError as e:
             if e.response.get("error", "") in SKIPPABLE_ERRORS:
