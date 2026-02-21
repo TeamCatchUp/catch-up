@@ -9,10 +9,9 @@ import { cn } from '@/shared/utils/cn';
 interface MemberDetailPanelProps {
   member: {
     name: string;
-    phone: string;
     email: string;
     department: string;
-    teamSize: number;
+    rank: string;
     picture: string | null;
     accountIds: Partial<Record<IntegrationService, string>>;
   } | null;
@@ -47,18 +46,16 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
           {/* 기본 정보 */}
           <div className="text-body-small flex flex-col gap-2 tracking-tight">
             <div className="flex w-full items-center gap-14">
-              <span className="w-19.75 shrink-0 text-gray-50">전화번호</span>
-              <span className="text-gray-70 min-w-0 flex-1 truncate">{member.phone}</span>
-            </div>
-            <div className="flex w-full items-center gap-14">
               <span className="w-19.75 shrink-0 text-gray-50">메일</span>
               <span className="text-gray-70 min-w-0 flex-1 truncate">{member.email}</span>
             </div>
             <div className="flex w-full items-center gap-14">
-              <span className="w-19.75 shrink-0 text-gray-50">부서 / 인원</span>
-              <span className="text-gray-70 min-w-0 flex-1 truncate">
-                {member.department} / {member.teamSize}명
-              </span>
+              <span className="w-19.75 shrink-0 text-gray-50">부서</span>
+              <span className="text-gray-70 min-w-0 flex-1 truncate">{member.department}</span>
+            </div>
+            <div className="flex w-full items-center gap-14">
+              <span className="w-19.75 shrink-0 text-gray-50">직급</span>
+              <span className="text-gray-70 min-w-0 flex-1 truncate">{member.rank}</span>
             </div>
           </div>
 

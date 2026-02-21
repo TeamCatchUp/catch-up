@@ -6,13 +6,21 @@ import { useQuery } from '@tanstack/react-query';
 import IconAddSmall from '@/public/icons/icon/add_small.svg';
 import IconFilter from '@/public/icons/icon/filter-3.svg';
 import { Button } from '@/shared/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
 import { useMemberStatusMutation } from '@/shared/queries/adminMembers.mutations';
 import { adminMembersQueries } from '@/shared/queries/adminMembers.queries';
+import { cn } from '@/shared/utils/cn';
 
-import { ROLE_LABEL } from '../../constants/memberTableConfig';
-import type { AdminMember, MemberTableRow } from '../../types/adminMember';
+import { DEACTIVATION_REASONS, ROLE_LABEL, SORT_OPTIONS } from '../../constants/memberTableConfig';
+import type { AdminMember, AdminSortKey, MemberTableRow } from '../../types/adminMember';
 import MemberDetailPanel from '../shared/MemberDetailPanel';
 import MemberTable from '../shared/MemberTable';
+import ReasonPopover from '../shared/ReasonPopover';
 import SectionHeader from '../shared/SectionHeader';
 
 interface UserListSectionProps {
@@ -24,6 +32,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
   const { data: members = [] } = useQuery(adminMembersQueries.list());
   const statusMutation = useMemberStatusMutation();
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<AdminSortKey>('newest');
 
   /* 검색 필터 */
   const filtered = useMemo(() => members.filter((m) => m.name.includes(searchTerm)), [members, searchTerm]);
@@ -57,9 +66,24 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
               <IconAddSmall className="size-5" />
               이용자 추가하기
             </Button>
-            <Button variant="icon-outline-gray" size="md" className="size-9 p-1.5">
-              <IconFilter className="size-6" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="icon-outline-gray" size="md" className="size-9 p-1.5">
+                  <IconFilter className="size-6" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={2} className="w-50 min-w-0">
+                {SORT_OPTIONS.map((option) => (
+                  <DropdownMenuItem
+                    key={option.key}
+                    onClick={() => setSortKey(option.key)}
+                    className={cn(sortKey === option.key && 'bg-neutral-1')}
+                  >
+                    {option.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
       />
@@ -76,10 +100,9 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
             selectedMember
               ? {
                   name: selectedMember.name,
-                  phone: selectedMember.phone,
                   email: selectedMember.email,
                   department: selectedMember.department,
-                  teamSize: selectedMember.teamSize,
+                  rank: selectedMember.rank,
                   picture: selectedMember.picture,
                   accountIds: selectedMember.accountIds,
                 }
@@ -88,13 +111,19 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
           actionButtons={
             selectedMember && (
               <>
-                <Button
-                  variant="box-outline-gray"
-                  size="md"
-                  onClick={() => statusMutation.mutate({ userId: selectedMember.userId, action: 'deactivate' })}
-                >
-                  비활성화
-                </Button>
+                <ReasonPopover
+                  trigger={
+                    <Button variant="box-outline-gray" size="md">
+                      비활성화
+                    </Button>
+                  }
+                  title="비활성화 사유"
+                  reasonLabel="비활성화 사유를 선택해주세요."
+                  reasons={DEACTIVATION_REASONS}
+                  onSave={() =>
+                    statusMutation.mutate({ userId: selectedMember.userId, action: 'deactivate' })
+                  }
+                />
                 <Button
                   variant="box-outline-gray"
                   size="md"
