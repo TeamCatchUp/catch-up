@@ -22,3 +22,19 @@ class CurrentUserProfile(BaseModel):
 class TokenRefreshResponse(BaseModel):
     status: str
     detail: str
+
+
+class GithubConnectorStatus(BaseModel):
+    tool_name: str = "github"
+    connected: bool
+    oldest: str | None
+    latest: str | None
+    repositories: list[str]
+
+
+class JiraConnectorStatus(BaseModel):
+    tool_name: str = "jira"
+    connected: bool
+    oldest: str | None
+    latest: str | None
+    projects: list[str]

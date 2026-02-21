@@ -12,12 +12,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from catchup.auth.dependencies import get_current_user
+from catchup.auth.dependencies import require_admin_user
 from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.db.jira import sync_repository as jira_sync
 from catchup.db.atlassian.oauth_repository import get_all_tokens
 from catchup.db.dependencies import get_db
-from catchup.db.models import User, UserRole
+from catchup.db.models import User
 from catchup.db.models import JiraEntityType, JiraSyncState
 from catchup.utils.webhook_buffer import get_webhook_buffer
 
@@ -106,16 +106,6 @@ class JiraFlushResponse(BaseModel):
 router = APIRouter(prefix="/api/v1/jira/sync", tags=["jira-sync"])
 
 
-def _require_admin_user(current_user: User = Depends(get_current_user)) -> User:
-    """
-    Jira 동기화 API 접근 권한 검사.
-    """
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="권한이 없습니다. 관리자만 동기화 API를 호출할 수 있습니다.",
-        )
-    return current_user
 
 
 # ================================================================
@@ -126,7 +116,7 @@ def _require_admin_user(current_user: User = Depends(get_current_user)) -> User:
 async def trigger_full_sync(
     request: SyncRequest,
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(_require_admin_user),
+    _admin_user: User = Depends(require_admin_user),
 ):
     """
     전체 동기화 트리거
@@ -184,7 +174,7 @@ async def trigger_full_sync(
 @router.post("/flush", response_model=JiraFlushResponse)
 async def flush_all_jira_buffers(
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(_require_admin_user),
+    _admin_user: User = Depends(require_admin_user),
 ):
     """
     모든 Jira Cloud의 Redis 버퍼를 즉시 flush하고 증분 동기화
@@ -413,7 +403,7 @@ async def flush_all_jira_buffers(
 async def get_sync_status(
     cloud_id: str = Query(..., description="Jira Cloud ID"),
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(_require_admin_user),
+    _admin_user: User = Depends(require_admin_user),
 ):
     """
     동기화 상태 조회

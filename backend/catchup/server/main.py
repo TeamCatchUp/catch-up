@@ -11,6 +11,7 @@ from catchup.configs.config import MeiliEnvironment, settings
 from catchup.db.engine import engine
 from catchup.db.models import Base
 from catchup.server.auth.api import router as auth_router
+from catchup.server.admin.api import router as admin_router
 from catchup.server.chat.api import router as chat_router
 from catchup.server.chat_room.api import router as chatroom_router
 from catchup.server.connector.github.auth_api import router as github_auth_router
@@ -115,6 +116,7 @@ app = FastAPI(
 app.include_router(chat_router)
 app.include_router(chatroom_router)
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(github_auth_router)
 app.include_router(github_sync_router)
 app.include_router(atlassian_auth_router)

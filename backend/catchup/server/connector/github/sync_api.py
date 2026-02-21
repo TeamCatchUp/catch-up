@@ -15,11 +15,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from catchup.auth.dependencies import get_current_user
+from catchup.auth.dependencies import require_admin_user
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.pgvector import PGVectorRepository
-from catchup.db.models import User, UserRole
+from catchup.db.models import User
 from catchup.db.dependencies import get_db
 from catchup.db.github import sync_repository as github_sync
 from catchup.db.github import domain_repository as github_entities
@@ -34,19 +34,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/github/sync", tags=["github-sync"])
 
 
-def _require_admin_user(current_user: User = Depends(get_current_user)) -> User:
-    """
-    GitHub 동기화 API 접근 권한 검사.
-
-    - 인증된 사용자만 허용
-    - 역할이 admin이어야 실행 가능
-    """
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="권한이 없습니다. 관리자만 동기화 API를 호출할 수 있습니다.",
-        )
-    return current_user
 
 
 # ============================================================
@@ -128,7 +115,7 @@ async def _get_ingestion_service(
 async def full_sync(
     request: FullSyncRequest,
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(_require_admin_user),
+    _admin_user: User = Depends(require_admin_user),
 ):
     """
     전체 동기화 수행
@@ -169,7 +156,7 @@ async def full_sync(
 async def get_sync_status(
     installation_id: int,
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(_require_admin_user),
+    _admin_user: User = Depends(require_admin_user),
 ):
     """
     동기화 상태 조회
@@ -226,7 +213,7 @@ async def get_sync_status(
 async def list_repositories(
     installation_id: int,
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(_require_admin_user),
+    _admin_user: User = Depends(require_admin_user),
 ):
     """
     Installation에서 접근 가능한 Repository 목록 조회
@@ -278,7 +265,7 @@ async def list_repositories(
 async def refresh_repositories(
     installation_id: int,
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(_require_admin_user),
+    _admin_user: User = Depends(require_admin_user),
 ):
     """
     GitHub API에서 Repository 목록을 다시 가져와 RDBMS에 저장
@@ -358,7 +345,7 @@ async def refresh_repositories(
 
 @router.post("/flush")
 async def test_flush_webhook_events(
-    _admin_user: User = Depends(_require_admin_user),
+    _admin_user: User = Depends(require_admin_user),
 ):
     """
     Redis에 저장하고 있는 Github Webhook 이벤트들을 즉시 동기화합니다.
