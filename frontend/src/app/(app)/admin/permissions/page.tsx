@@ -140,12 +140,11 @@ export default function AdminPermissionsPage() {
       </div>
 
       <AdminGrantModal
-        key={`grant-${grantModalOpen ? 'open' : 'closed'}-${grantMemberId}-${grantReason}`}
         open={grantModalOpen}
         onOpenChange={setGrantModalOpen}
         members={grantCandidates}
-        initialMemberId={grantMemberId}
-        initialReason={grantReason}
+        memberId={grantMemberId}
+        reason={grantReason}
         isSubmitting={grantMutation.isPending}
         errorMessage={grantErrorMessage}
         onSubmit={handleGrantSubmit}

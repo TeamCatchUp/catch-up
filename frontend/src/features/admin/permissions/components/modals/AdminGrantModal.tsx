@@ -14,20 +14,20 @@ interface AdminGrantModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   members: PermissionMember[];
-  initialMemberId: string;
-  initialReason: string;
+  memberId: string;
+  reason: string;
   isSubmitting: boolean;
   errorMessage?: string;
   onSubmit: (payload: AssignAdminPayload) => void;
 }
 
-/** Admin 권한 부여 모달 */
+/** Admin 권한 부여 확인 모달 */
 const AdminGrantModal = ({
   open,
   onOpenChange,
   members,
-  initialMemberId,
-  initialReason,
+  memberId: initialMemberId,
+  reason: initialReason,
   isSubmitting,
   errorMessage,
   onSubmit,
@@ -70,7 +70,7 @@ const AdminGrantModal = ({
             </Select>
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1">
               <span className="text-body-small text-gray-80">부여 사유를 입력해주세요.</span>
               <span className="size-1.25 rounded-full bg-red-50" />
@@ -82,6 +82,10 @@ const AdminGrantModal = ({
               className="h-[46px]"
             />
           </div>
+
+          <p className="text-label-xsmall text-gray-40">
+            해당 사용자는 워크스페이스 설정, 멤버 권한 제어 등 시스템 관리 기능을 사용할 수 있게 됩니다.
+          </p>
 
           {errorMessage && <p className="text-label-xsmall text-red-50">{errorMessage}</p>}
         </div>
