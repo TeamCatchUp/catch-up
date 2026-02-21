@@ -41,7 +41,6 @@ export const API = {
   jira: {
     // auth
     install: `${API_PREFIX}/auth/jira/install`, // GET OAuth 인가 URL로 리다이렉트
-    status: `${API_PREFIX}/auth/jira/status`, // GET 연동 상태 + accessible resources
     uninstall: `${API_PREFIX}/auth/jira/uninstall`, // DELETE 연동 해제 (?cloud_id=)
     // sync (syncStatus만 사용 중)
     syncFull: `${API_PREFIX}/jira/sync/full`, // POST 전체 재동기화 (?cloud_id=)

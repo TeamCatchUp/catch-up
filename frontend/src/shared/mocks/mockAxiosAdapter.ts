@@ -95,13 +95,6 @@ const mockHandlers: MockHandler[] = [
 
   // Integration status
   {
-    pattern: /^\/api\/v1\/auth\/jira\/status$/,
-    method: 'get',
-    handler: async () => ({
-      resources: [{ id: 'mock-cloud-id-001', name: 'CatchUp Jira', url: 'https://catchup.atlassian.net' }],
-    }),
-  },
-  {
     pattern: /^\/api\/v1\/jira\/sync\/status$/,
     method: 'get',
     handler: async () => [
