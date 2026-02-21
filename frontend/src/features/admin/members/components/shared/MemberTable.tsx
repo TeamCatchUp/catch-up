@@ -3,7 +3,7 @@ import CheckboxUnchecked from '@/public/icons/icon/checkbox_unchecked.svg';
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { cn } from '@/shared/utils/cn';
 
-import { RANK_BADGE_CLASS, ROLE_BADGE_CLASS, TAG_BASE_CLASS } from '../../constants/memberTableConfig';
+import { RANK_BADGE_CLASS, TAG_BASE_CLASS } from '../../constants/memberTableConfig';
 import type { MemberTableRow } from '../../types/adminMember';
 
 interface MemberTableProps {
@@ -11,6 +11,10 @@ interface MemberTableProps {
   activeKey: string | null;
   onSelectKey: (key: string) => void;
   emptyMessage: string;
+  /** 4번째 컬럼 헤더 (기본: '상태') */
+  lastColumnHeader?: string;
+  /** 4번째 컬럼 뱃지 스타일 맵 */
+  lastColumnBadgeClass?: Record<string, string>;
   isSelecting?: boolean;
   selectedKeys?: Set<string>;
   onToggleKey?: (key: string) => void;
@@ -23,6 +27,8 @@ const MemberTable = ({
   activeKey,
   onSelectKey,
   emptyMessage,
+  lastColumnHeader = '상태',
+  lastColumnBadgeClass = {},
   isSelecting,
   selectedKeys,
   onToggleKey,
@@ -54,7 +60,7 @@ const MemberTable = ({
           <span className="text-body-xsmall pl-7.5 text-left text-gray-50">이름</span>
           <span className="text-body-xsmall text-center text-gray-50">직급</span>
           <span className="text-body-xsmall text-center text-gray-50">부서</span>
-          <span className="text-body-xsmall text-center text-gray-50">권한</span>
+          <span className="text-body-xsmall text-center text-gray-50">{lastColumnHeader}</span>
         </div>
       </div>
 
@@ -112,12 +118,12 @@ const MemberTable = ({
                     <span className="text-body-xsmall text-gray-80 truncate">{row.department}</span>
                   </div>
 
-                  {/* 권한 */}
+                  {/* 4번째 컬럼 */}
                   <div className="flex items-center justify-center">
                     <span
-                      className={cn(TAG_BASE_CLASS, ROLE_BADGE_CLASS[row.role] ?? 'bg-neutral-2 text-gray-50')}
+                      className={cn(TAG_BASE_CLASS, lastColumnBadgeClass[row.lastColumn] ?? 'bg-neutral-2 text-gray-50')}
                     >
-                      {row.role}
+                      {row.lastColumn}
                     </span>
                   </div>
                 </div>

@@ -54,5 +54,6 @@ export interface MemberTableRow {
   picture: string | null;
   rank: string;
   department: string;
-  role: string;
+  /** 4번째 컬럼 값 (상태 or 권한) */
+  lastColumn: string;
 }

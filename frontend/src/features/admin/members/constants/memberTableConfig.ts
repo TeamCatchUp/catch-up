@@ -1,3 +1,5 @@
+import type { UserStatus } from '@/shared/queries/auth.types';
+
 import type { AdminSortKey } from '../types/adminMember';
 
 /** 정렬 옵션 */
@@ -23,6 +25,18 @@ export const ROLE_LABEL: Record<string, string> = {
 export const ROLE_BADGE_CLASS: Record<string, string> = {
   관리자: 'bg-blue-5 text-blue-50',
   Member: 'bg-neutral-2 text-gray-50',
+};
+
+/** 상태 → 한글 라벨 */
+export const STATUS_LABEL: Partial<Record<UserStatus, string>> = {
+  active: '이용중',
+  inactive: '비활성화',
+};
+
+/** 상태 Badge 스타일 */
+export const STATUS_BADGE_CLASS: Record<string, string> = {
+  이용중: 'bg-green-10 text-green-60',
+  비활성화: 'bg-neutral-2 text-gray-50',
 };
 
 /** Tag 공통 스타일 */
