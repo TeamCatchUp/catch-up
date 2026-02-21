@@ -12,12 +12,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from catchup.auth.dependencies import get_current_user
+from catchup.auth.dependencies import require_admin_user
 from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.db.jira import sync_repository as jira_sync
 from catchup.db.atlassian.oauth_repository import get_all_tokens
 from catchup.db.dependencies import get_db
-from catchup.db.models import User, UserRole
+from catchup.db.models import User
 from catchup.db.models import JiraEntityType, JiraSyncState
 from catchup.utils.webhook_buffer import get_webhook_buffer
 
@@ -62,6 +62,7 @@ class SyncResponse(BaseModel):
 class SyncStatusResponse(BaseModel):
     """동기화 상태 응답"""
     cloud_id: str
+    project_key: str | None = None
     entity_type: str
     last_sync_status: str | None
     last_successful_sync_at: str | None
@@ -106,16 +107,6 @@ class JiraFlushResponse(BaseModel):
 router = APIRouter(prefix="/api/v1/jira/sync", tags=["jira-sync"])
 
 
-def _require_admin_user(current_user: User = Depends(get_current_user)) -> User:
-    """
-    Jira 동기화 API 접근 권한 검사.
-    """
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="권한이 없습니다. 관리자만 동기화 API를 호출할 수 있습니다.",
-        )
-    return current_user
 
 
 # ================================================================
@@ -126,14 +117,10 @@ def _require_admin_user(current_user: User = Depends(get_current_user)) -> User:
 async def trigger_full_sync(
     request: SyncRequest,
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(_require_admin_user),
+    _admin_user: User = Depends(require_admin_user),
 ):
     """
     전체 동기화 트리거
-
-    지정된 프로젝트(또는 전체)의 모든 Jira 데이터를 PGVector에 동기화.
-    대량의 데이터가 있을 경우 시간이 오래 걸릴 수 있습니다.
-
     """
     cloud_id = request.cloud_id
     try:
@@ -149,12 +136,8 @@ async def trigger_full_sync(
             summary_parts.append(f"Issues={result['issues']['synced']}")
         if result["epics"]["synced"] > 0 or result["epics"]["errors"] > 0:
             summary_parts.append(f"Epics={result['epics']['synced']}")
-        if result["projects"]["synced"] > 0 or result["projects"]["errors"] > 0:
-            summary_parts.append(f"Projects={result['projects']['synced']}")
         if result["sprints"]["synced"] > 0 or result["sprints"]["errors"] > 0:
             summary_parts.append(f"Sprints={result['sprints']['synced']}")
-        if result["users"]["synced"] > 0 or result["users"]["errors"] > 0:
-            summary_parts.append(f"Users={result['users']['synced']}")
 
         message = f"전체 동기화 완료: {', '.join(summary_parts)}" if summary_parts else "동기화할 데이터가 없습니다"
 
@@ -165,9 +148,7 @@ async def trigger_full_sync(
             results={
                 "issues": SyncResultDetail(**result["issues"]),
                 "epics": SyncResultDetail(**result["epics"]),
-                "projects": SyncResultDetail(**result["projects"]),
                 "sprints": SyncResultDetail(**result["sprints"]),
-                "users": SyncResultDetail(**result["users"]),
             },
         )
 
@@ -184,7 +165,7 @@ async def trigger_full_sync(
 @router.post("/flush", response_model=JiraFlushResponse)
 async def flush_all_jira_buffers(
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(_require_admin_user),
+    _admin_user: User = Depends(require_admin_user),
 ):
     """
     모든 Jira Cloud의 Redis 버퍼를 즉시 flush하고 증분 동기화
@@ -247,14 +228,6 @@ async def flush_all_jira_buffers(
                     f"cloud_id={cloud_id}, projects={len(projects_with_events)}"
                 )
 
-                # 3) 프로젝트별 증분 동기화 기준 시각 확보
-                issue_sync_state = jira_sync.get_sync_state(db, cloud_id, JiraEntityType.ISSUE)
-                base_since = (
-                    issue_sync_state.last_successful_sync_at
-                    if issue_sync_state and issue_sync_state.last_successful_sync_at
-                    else None
-                )
-
                 service = await create_jira_ingestion_service(db, cloud_id)
 
                 cloud_flushed_projects = 0
@@ -264,7 +237,7 @@ async def flush_all_jira_buffers(
                 cloud_deleted_documents = 0
                 first_error_message: str | None = None
 
-                # 4) 프로젝트 단위로 이벤트 정규화 후 증분 동기화
+                # 3) 프로젝트 단위로 이벤트 정규화 후 증분 동기화
                 for project_key in projects_with_events:
                     try:
                         events = await buffer.get_jira_project_events(cloud_id, project_key)
@@ -304,10 +277,20 @@ async def flush_all_jira_buffers(
                             if value["type"] == "jira:issue_deleted"
                         )
 
+                        # 프로젝트별 sync state 기준 시각 조회
+                        issue_sync_state = jira_sync.get_sync_state(
+                            db, cloud_id, JiraEntityType.ISSUE, project_key=project_key,
+                        )
+                        base_since = (
+                            issue_sync_state.last_successful_sync_at
+                            if issue_sync_state and issue_sync_state.last_successful_sync_at
+                            else None
+                        )
+
                         sync_result = await service.incremental_sync(
                             db=db,
                             since=base_since,
-                            project_keys=[project_key],
+                            project_key=project_key,
                             event_types=event_types,
                         )
 
@@ -413,7 +396,7 @@ async def flush_all_jira_buffers(
 async def get_sync_status(
     cloud_id: str = Query(..., description="Jira Cloud ID"),
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(_require_admin_user),
+    _admin_user: User = Depends(require_admin_user),
 ):
     """
     동기화 상태 조회
@@ -430,6 +413,7 @@ async def get_sync_status(
     return [
         SyncStatusResponse(
             cloud_id=state.cloud_id,
+            project_key=state.project_key,
             entity_type=state.entity_type,
             last_sync_status=state.last_sync_status,
             last_successful_sync_at=(

@@ -79,6 +79,16 @@ def get_pending_signup_user(
         )
     
 
+def require_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """관리자 권한 검사. 인증된 사용자 중 ADMIN role만 허용."""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="권한이 없습니다. 관리자만 접근할 수 있습니다.",
+        )
+    return current_user
+
+
 def get_current_user_info(
     access_token: str = Depends(cookie_scheme),
     db: Session = Depends(get_db)

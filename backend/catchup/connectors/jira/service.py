@@ -178,7 +178,7 @@ class JiraIngestionService:
         sync_from = datetime.now(timezone.utc) - timedelta(days=days)
 
         logger.info(
-            f"[JIRA][FULL SYNC] Started for cloud_id = {self.cloud_id}"
+            f"[JIRA][FULL SYNC] Started for cloud_id={self.cloud_id}"
             f" projects={project_keys or 'all'}"
             f" since={sync_from.isoformat()}"
         )
@@ -186,227 +186,251 @@ class JiraIngestionService:
         results = {
             "issues": {"synced": 0, "errors": 0},
             "epics": {"synced": 0, "errors": 0},
-            "projects": {"synced": 0, "errors": 0},
             "sprints": {"synced": 0, "errors": 0},
-            "users": {"synced": 0, "errors": 0},
         }
 
         try:
-            user_results = await self._sync_all_users(db)
-            results["users"] = user_results
-
-            project_results = await self._sync_all_projects(db, project_keys)
-            results["projects"] = project_results
-
-            jira_sync.create_or_update_sync_state(
-                db,
-                cloud_id=self.cloud_id,
-                entity_type=JiraEntityType.PROJECT,
-                status = JiraSyncStatus.SUCCESS,
-                synced_count = results["projects"]["synced"]
-            )
-
             if await self.client.is_agile_available():
                 sprint_results = await self._sync_all_sprints(db)
                 results["sprints"] = sprint_results
                 jira_sync.create_or_update_sync_state(
                     db,
-                    cloud_id = self.cloud_id,
+                    cloud_id=self.cloud_id,
                     entity_type = JiraEntityType.SPRINT,
                     status = JiraSyncStatus.SUCCESS,
                     synced_count=results["sprints"]["synced"],
                 )
             else:
-                logger.info("[JIRA][FULL SYNC] Sprint Sync Skipped : Agile API Not Avaiable")
+                logger.info("[JIRA][FULL SYNC] Sprint Sync Skipped : Agile API Not Available")
+
+            if not project_keys:
+                projects = jira_entities.get_projects_by_cloud_id(db, self.cloud_id)
+                project_keys = [p.project_key for p in projects]
             
-            issue_results = await self._sync_all_issues(
-                db,
-                project_keys=project_keys,
-                since=sync_from,
-            )
-            results["issues"]["synced"] = issue_results["issues"]
-            results["epics"]["synced"] = issue_results["epics"]
-            results["issues"]["errors"] = issue_results["errors"]
+            for project_key in project_keys:
+                try:
+                    project_result = await self._sync_project_issues(
+                        db, project_key, since = sync_from,
+                    )
+                    results["issues"]["synced"] += project_result["issues"]
+                    results["epics"]["synced"] += project_result["epics"]
+                    results["issues"]["errors"] += project_result["errors"]
 
-            jira_sync.create_or_update_sync_state(
-                db = db,
-                cloud_id = self.cloud_id,
-                entity_type = JiraEntityType.ISSUE,
-                status = JiraSyncStatus.SUCCESS,
-                synced_count = results["issues"]["synced"],
-            )
-            jira_sync.create_or_update_sync_state(
-                db=db,
-                cloud_id=self.cloud_id,
-                entity_type=JiraEntityType.EPIC,
-                status=JiraSyncStatus.SUCCESS,
-                synced_count=results["epics"]["synced"],
-            )
-
-            logger.info("[JIRA][FULL SYNC] Completed : {results}")
+                    jira_sync.create_or_update_sync_state(
+                        db,
+                        cloud_id=self.cloud_id,
+                        entity_type=JiraEntityType.ISSUE,
+                        project_key=project_key,
+                        status=JiraSyncStatus.SUCCESS,
+                        synced_count=project_result["issues"],
+                    )
+                    jira_sync.create_or_update_sync_state(
+                        db,
+                        cloud_id=self.cloud_id,
+                        entity_type=JiraEntityType.EPIC,
+                        project_key=project_key,
+                        status=JiraSyncStatus.SUCCESS,
+                        synced_count=project_result["epics"],
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"[JIRA][FULL SYNC] Project sync failed: "
+                        f"cloud_id={self.cloud_id}, project_key={project_key}, error={e}"
+                    )
+                    jira_sync.create_or_update_sync_state(
+                        db,
+                        cloud_id=self.cloud_id,
+                        entity_type=JiraEntityType.ISSUE,
+                        project_key=project_key,
+                        status=JiraSyncStatus.FAILED,
+                        synced_count=0,
+                        error=str(e)[:1000],
+                    )
+                    jira_sync.create_or_update_sync_state(
+                        db,
+                        cloud_id=self.cloud_id,
+                        entity_type=JiraEntityType.EPIC,
+                        project_key=project_key,
+                        status=JiraSyncStatus.FAILED,
+                        synced_count=0,
+                        error=str(e)[:1000],
+                    )
+            logger.info(f"[JIRA][FULL SYNC] Completed : {results}")
             return results
 
         except Exception as e:
             logger.error(f"[JIRA][FULL SYNC] Failed : {e}")
-            jira_sync.create_or_update_sync_state(
-                db=db,
-                cloud_id=self.cloud_id,
-                entity_type=JiraEntityType.ISSUE,
-                status=JiraSyncStatus.FAILED,
-                synced_count=0,
-                error=str(e)[:1000],
-            )
-            jira_sync.create_or_update_sync_state(
-                db=db,
-                cloud_id=self.cloud_id,
-                entity_type=JiraEntityType.EPIC,
-                status=JiraSyncStatus.FAILED,
-                synced_count=0,
-                error=str(e)[:1000],
-            )
             raise
-
-    async def _sync_all_issues(
+        
+    async def _sync_project_issues(
         self,
         db: Session,
-        project_keys: list[str] | None = None,
+        project_key: str,
         since: datetime | None = None,
     ) -> dict[str, int]:
         """
-        모든 이슈 동기화 (Batch API 사용)
+        단일 프로젝트의 이슈 동기화 (Pipeline 방식)
 
-        search_issues API로 배치 조회하여 효율적으로 동기화.
-        Epic도 이슈로 조회되지만 별도 entity_type으로 저장.
-        RDBMS에서 Project/Sprint 캐시를 로드하여 Document enrichment에 활용.
+        Stage 1 (Producer): API 조회 + Transform → Queue에 배치 전달
+        Stage 2 (Consumer): Summarize + Embed/Upsert
 
         Returns:
             {"issues": 150, "epics": 10, "errors": 2}
         """
         self._ensure_initialized()
 
-        # RDBMS에서 캐시 로드 (테이블이 없어도 계속 진행)
+        # RDBMS에서 캐시 로드
         project_cache: dict = {}
         sprint_cache: dict = {}
 
         try:
-            # RDBMS에서 Project 캐시 로드
-            if project_keys:
-                project_cache = jira_entities.get_projects_by_keys(
-                    db, self.cloud_id, project_keys
-                )
-            else:
-                projects = jira_entities.get_projects_by_cloud_id(db, self.cloud_id)
-                project_cache = {p.project_key: p for p in projects}
-
-            # RDBMS에서 Sprint 캐시 로드
+            project_cache = jira_entities.get_projects_by_keys(
+                db, self.cloud_id, [project_key]
+            )
             sprints = jira_entities.get_sprints_by_cloud_id(db, self.cloud_id)
             sprint_cache = {s.sprint_id: s for s in sprints}
 
             logger.info(
-                f"Loaded caches: {len(project_cache)} projects, {len(sprint_cache)} sprints"
+                f"[JIRA][FULL SYNC] Loaded caches: "
+                f"project_key={project_key}, {len(sprint_cache)} sprints"
             )
         except Exception as e:
-            # 캐시 로드 실패 시 빈 캐시로 진행 (enrichment 없이)
             db.rollback()
-            logger.warning(f"Failed to load caches, continuing without enrichment: {e}")
+            logger.warning(
+                f"[JIRA][FULL SYNC] Failed to load caches, continuing without enrichment: "
+                f"project_key={project_key}, error={e}"
+            )
 
         # Transformer에 캐시 전달
         self.transformer.project_cache = project_cache
         self.transformer.sprint_cache = sprint_cache
 
-        # JQL 구성
-        jql_parts = []
+        results = {"issues": 0, "epics": 0, "errors": 0}
+        queue: asyncio.Queue = asyncio.Queue(maxsize=2)
+
+        producer = asyncio.create_task(
+            self._fetch_and_transform(project_key, since, queue, results)
+        )
+        consumer = asyncio.create_task(
+            self._summarize_and_store(queue)
+        )
+
+        await asyncio.gather(producer, consumer)
+
+        logger.info(
+            f"[JIRA][FULL SYNC] Project issue sync completed: "
+            f"project_key={project_key}, results={results}"
+        )
+        return results
+
+    async def _fetch_and_transform(
+        self,
+        project_key: str,
+        since: datetime | None,
+        queue: asyncio.Queue,
+        results: dict[str, int],
+    ) -> None:
+        """Stage 1 (Producer): API 조회 + Transform → Queue에 배치 전달"""
+        jql_parts = [f'project = "{project_key}"']
         if since:
             since_str = since.strftime("%Y-%m-%d %H:%M")
-            jql_parts.append(f'updated >= "{since_str}"')
-        if project_keys:
-            projects_str = ", ".join(f'"{pk}"' for pk in project_keys)
-            jql_parts.append(f"project IN ({projects_str})")
+            jql_parts.insert(0, f'updated >= "{since_str}"')
 
-        # 정렬: 최근 업데이트 순
-        jql = " AND ".join(jql_parts) if jql_parts else ""
-        jql += " ORDER BY updated DESC"
-        jql = jql.strip()
+        jql = " AND ".join(jql_parts) + " ORDER BY updated DESC"
 
-        logger.info(f"Syncing issues with JQL: {jql}")
+        logger.info(
+            f"[JIRA][FULL SYNC] Fetching issues: "
+            f"project_key={project_key}, jql={jql}"
+        )
 
-        results = {"issues": 0, "epics": 0, "errors": 0}
         next_page_token: str | None = None
         batch_size = settings.JIRA_SYNC_BATCH_SIZE
         processed_count = 0
 
+        try:
+            while True:
+                try:
+                    response = await self.client.search_issues(
+                        jql=jql,
+                        fields=None,
+                        max_results=batch_size,
+                        next_page_token=next_page_token,
+                    )
+
+                    issues = response.get("issues", [])
+                    is_last = response.get("isLast", True)
+
+                    if not issues:
+                        break
+
+                    processed_count += len(issues)
+                    logger.info(
+                        f"[JIRA][FULL SYNC] Processing batch: "
+                        f"project_key={project_key}, batch={len(issues)}, total={processed_count}"
+                    )
+
+                    documents: list[Document] = []
+                    doc_ids: list[str] = []
+
+                    for issue_data in issues:
+                        try:
+                            doc = self.transformer.transform_issue(
+                                issue_data,
+                                self.site_url,
+                            )
+                            documents.append(doc)
+                            doc_ids.append(doc.id)
+
+                            if doc.metadata.get("entity_type") == "epic":
+                                results["epics"] += 1
+                            else:
+                                results["issues"] += 1
+
+                        except Exception as e:
+                            logger.error(
+                                f"[JIRA][FULL SYNC] Transform failed: "
+                                f"project_key={project_key}, issue_key={issue_data.get('key')}, error={e}"
+                            )
+                            results["errors"] += 1
+
+                    if documents:
+                        await queue.put((documents, doc_ids))
+
+                    if is_last:
+                        break
+
+                    next_page_token = response.get("nextPageToken")
+                    if not next_page_token:
+                        break
+
+                    await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
+
+                except JiraRateLimitError as e:
+                    logger.warning(
+                        f"[JIRA][FULL SYNC] Rate limited: "
+                        f"project_key={project_key}, retry_after={e.retry_after}s"
+                    )
+                    await asyncio.sleep(e.retry_after)
+                    continue
+        finally:
+            await queue.put(None)
+
+    async def _summarize_and_store(
+        self,
+        queue: asyncio.Queue,
+    ) -> None:
+        """Stage 2 (Consumer): Queue에서 배치 수신 → Summarize → Embed/Upsert"""
         while True:
-            try:
-                # 배치 조회 (새 /search/jql API 사용 - nextPageToken 기반 페이지네이션)
-                response = await self.client.search_issues(
-                    jql=jql,
-                    fields=None,  # 모든 필드
-                    max_results=batch_size,
-                    next_page_token=next_page_token,
-                )
+            batch = await queue.get()
+            if batch is None:
+                break
 
-                issues = response.get("issues", [])
-                is_last = response.get("isLast", True)
+            documents, doc_ids = batch
 
-                if not issues:
-                    break
+            if self.summarizer:
+                documents = await self._summarize_documents(documents)
 
-                processed_count += len(issues)
-                logger.info(
-                    f"Processing {len(issues)} issues (total processed: {processed_count})"
-                )
-
-                # 변환 및 저장
-                documents: list[Document] = []
-                doc_ids: list[str] = []
-
-                for issue_data in issues:
-                    try:
-                        doc = self.transformer.transform_issue(
-                            issue_data,
-                            self.site_url,
-                        )
-                        documents.append(doc)
-                        doc_ids.append(doc.id)
-
-                        # Epic인지 Issue인지 카운트
-                        if doc.metadata.get("entity_type") == "epic":
-                            results["epics"] += 1
-                        else:
-                            results["issues"] += 1
-
-                    except Exception as e:
-                        logger.error(
-                            f"Failed to transform issue {issue_data.get('key')}: {e}"
-                        )
-                        results["errors"] += 1
-
-                # PGVector에 Upsert (기존 문서 업데이트, 없으면 추가)
-                if documents:
-                    # 요약 적용 (summarizer가 활성화된 경우)
-                    if self.summarizer:
-                        documents = await self._summarize_documents(documents)
-                    await self.repository.upsert_documents(documents, doc_ids)
-
-                # 마지막 페이지면 종료
-                if is_last:
-                    break
-
-                # 다음 페이지 토큰
-                next_page_token = response.get("nextPageToken")
-                if not next_page_token:
-                    break
-
-                # Rate limit 방지 딜레이
-                await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
-
-            except JiraRateLimitError as e:
-                logger.warning(f"Rate limited, waiting {e.retry_after}s...")
-                await asyncio.sleep(e.retry_after)
-                continue
-
-        logger.info(f"Issue sync completed: {results}")
-        return results
+            await self.repository.upsert_documents(documents, doc_ids)
 
     async def _summarize_documents(
         self,
@@ -691,7 +715,7 @@ class JiraIngestionService:
         self,
         db: Session,
         since: datetime | None = None,
-        project_keys: list[str] | None = None,
+        project_key: str | None = None,
         event_types: set[str] | None = None,
     ) -> dict[str, Any]:
         """
@@ -702,7 +726,7 @@ class JiraIngestionService:
         Args:
             db: SQLAlchemy Session
             since: 기준 시간 (None이면 마지막 성공 동기화 시간 사용)
-            project_keys: 동기화 대상 프로젝트 키 목록 (None이면 전체)
+            project_key: 동기화 대상 프로젝트 키 (None이면 전체)
             event_types: flush에서 관측된 이벤트 타입 집합 (로깅/추적용)
 
         Returns:
@@ -713,25 +737,28 @@ class JiraIngestionService:
         normalized_event_types = {event for event in (event_types or set()) if event}
 
         if since is None:
-            sync_state = jira_sync.get_sync_state(db, self.cloud_id, JiraEntityType.ISSUE)
+            sync_state = jira_sync.get_sync_state(
+                db, self.cloud_id, JiraEntityType.ISSUE, project_key=project_key,
+            )
             if sync_state and sync_state.last_successful_sync_at:
                 since = sync_state.last_successful_sync_at
             else:
-                # 동기화 이력 없음 -> 프로젝트 단위 Full Sync
+                # 동기화 이력 없음 -> Full Sync
                 logger.info(
                     f"[JIRA][INCREMENTAL SYNC] No previous sync state. "
-                    f"Running full sync: cloud_id={self.cloud_id}, projects={project_keys or 'all'}"
+                    f"Running full sync: cloud_id={self.cloud_id}, project_key={project_key or 'all'}"
                 )
-                full_result = await self.full_sync(db, project_keys=project_keys)
+                project_keys_param = [project_key] if project_key else None
+                full_result = await self.full_sync(db, project_keys=project_keys_param)
                 return {
                     "issues": full_result["issues"]["synced"],
                     "epics": full_result["epics"]["synced"],
                     "errors": full_result["issues"]["errors"] + full_result["epics"]["errors"],
                 }
-        
+
         logger.info(
             f"[JIRA][INCREMENTAL SYNC] Started: "
-            f"cloud_id={self.cloud_id}, since={since}, projects={project_keys or 'all'}, "
+            f"cloud_id={self.cloud_id}, since={since}, project_key={project_key or 'all'}, "
             f"event_types={sorted(normalized_event_types) if normalized_event_types else ['all']}"
         )
 
@@ -742,9 +769,8 @@ class JiraIngestionService:
 
             # 프로젝트 범위 + 시점 기반 JQL 구성
             jql_parts = [f'updated >= "{since_str}"']
-            if project_keys:
-                projects_str = ", ".join(f'"{project_key}"' for project_key in project_keys)
-                jql_parts.append(f"project IN ({projects_str})")
+            if project_key:
+                jql_parts.append(f'project = "{project_key}"')
             jql = " AND ".join(jql_parts) + " ORDER BY updated DESC"
 
             next_page_token: str | None = None
@@ -768,7 +794,8 @@ class JiraIngestionService:
                 processed_count += len(issues)
                 logger.info(
                     f"[JIRA][INCREMENTAL SYNC] Processing batch: "
-                    f"cloud_id={self.cloud_id}, batch={len(issues)}, total={processed_count}"
+                    f"cloud_id={self.cloud_id}, project_key={project_key or 'all'}, "
+                    f"batch={len(issues)}, total={processed_count}"
                 )
 
                 documents: list[Document] = []
@@ -811,6 +838,7 @@ class JiraIngestionService:
                 db=db,
                 cloud_id=self.cloud_id,
                 entity_type=JiraEntityType.ISSUE,
+                project_key=project_key,
                 status=JiraSyncStatus.SUCCESS,
                 synced_count=results["issues"],
             )
@@ -818,19 +846,27 @@ class JiraIngestionService:
                 db=db,
                 cloud_id=self.cloud_id,
                 entity_type=JiraEntityType.EPIC,
+                project_key=project_key,
                 status=JiraSyncStatus.SUCCESS,
                 synced_count=results["epics"],
             )
 
-            logger.info(f"[JIRA][INCREMENTAL SYNC] Completed: cloud_id={self.cloud_id}, results={results}")
+            logger.info(
+                f"[JIRA][INCREMENTAL SYNC] Completed: "
+                f"cloud_id={self.cloud_id}, project_key={project_key or 'all'}, results={results}"
+            )
             return results
 
         except Exception as e:
-            logger.error(f"[JIRA][INCREMENTAL SYNC] Failed: cloud_id={self.cloud_id}, error={e}")
+            logger.error(
+                f"[JIRA][INCREMENTAL SYNC] Failed: "
+                f"cloud_id={self.cloud_id}, project_key={project_key or 'all'}, error={e}"
+            )
             jira_sync.create_or_update_sync_state(
                 db=db,
                 cloud_id=self.cloud_id,
                 entity_type=JiraEntityType.ISSUE,
+                project_key=project_key,
                 status=JiraSyncStatus.FAILED,
                 synced_count=0,
                 error=str(e)[:1000],
@@ -839,6 +875,7 @@ class JiraIngestionService:
                 db=db,
                 cloud_id=self.cloud_id,
                 entity_type=JiraEntityType.EPIC,
+                project_key=project_key,
                 status=JiraSyncStatus.FAILED,
                 synced_count=0,
                 error=str(e)[:1000],

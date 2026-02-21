@@ -190,13 +190,6 @@ async def flush_jira_events():
                     f"cloud_id={cloud_id}, projects={len(projects_with_events)}"
                 )
 
-                issue_sync_state = jira_sync.get_sync_state(db, cloud_id, JiraEntityType.ISSUE)
-                base_since = (
-                    issue_sync_state.last_successful_sync_at
-                    if issue_sync_state and issue_sync_state.last_successful_sync_at
-                    else None
-                )
-
                 service = await create_jira_ingestion_service(db, cloud_id)
 
                 for project_key in projects_with_events:
@@ -240,10 +233,20 @@ async def flush_jira_events():
                             if value["type"] == "jira:issue_deleted"
                         )
 
+                        # 프로젝트별 sync state 기준 시각 조회
+                        issue_sync_state = jira_sync.get_sync_state(
+                            db, cloud_id, JiraEntityType.ISSUE, project_key=project_key,
+                        )
+                        base_since = (
+                            issue_sync_state.last_successful_sync_at
+                            if issue_sync_state and issue_sync_state.last_successful_sync_at
+                            else None
+                        )
+
                         sync_result = await service.incremental_sync(
                             db=db,
                             since=base_since,
-                            project_keys=[project_key],
+                            project_key=project_key,
                             event_types=event_types,
                         )
 

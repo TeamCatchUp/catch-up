@@ -38,7 +38,7 @@ class CohereEmbeddingService(BaseEmbeddingService):
 class AwsBedrockEmbeddingService(BaseEmbeddingService):
     def _create_embedder(self):
         config = Config(
-            max_pool_connections=40,
+            max_pool_connections=100,
             retries={"max_attempts": 5, "mode": "standard"},
         )
         client = boto3.client(

@@ -15,7 +15,11 @@ from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
 from catchup.db.models import User
 from catchup.db.users import get_user_by_email, update_user_refresh_token
-from catchup.server.auth.schemas import CurrentUserInfo, TokenRefreshResponse
+from catchup.server.auth.schemas import (
+    CurrentUserInfo,
+    CurrentUserProfile,
+    TokenRefreshResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -214,3 +218,18 @@ def read_users_me(
     user_info: dict = Depends(get_current_user_info)
 ):
     return CurrentUserInfo(**user_info)
+
+
+@router.get(
+    path="/me/profile",
+    description = "마이페이지 - 계정 상세 정보",
+    response_model=CurrentUserProfile,
+)
+async def mypage_profile(current_user: User = Depends(get_current_user)):
+    return CurrentUserProfile(
+        name=current_user.name,
+        email=current_user.email,
+        picture=current_user.picture or "",
+        department=current_user.department,
+        job_level=current_user.job_level,
+    )
