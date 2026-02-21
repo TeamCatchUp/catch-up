@@ -192,6 +192,7 @@ class ConfluenceTransformer:
                 title=title,
                 space_name=space_name,
                 labels=labels,
+                author_name=author_name,
                 author_id=author_id,
                 updated_at=updated_at,
                 section_hierarchy=chunk.section_hierarchy,
@@ -493,6 +494,7 @@ class ConfluenceTransformer:
         title: str,
         space_name: str | None,
         labels: list[str],
+        author_name: str | None,
         author_id: str | None,
         updated_at: str | None,
         section_hierarchy: list[str],
@@ -528,8 +530,9 @@ class ConfluenceTransformer:
 
         # Author & Updated
         info_parts = []
-        if author_id:
-            info_parts.append(f"Author: {author_id}")
+        author_line = author_name or author_id
+        if author_line:
+            info_parts.append(f"Author: {author_line}")
         if updated_at:
             info_parts.append(f"Last Updated: {updated_at}")
         if info_parts:
