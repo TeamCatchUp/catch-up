@@ -20,6 +20,17 @@ class CurrentUserProfile(BaseModel):
 
     
 
+class CurrentUserProfile(BaseModel):
+    name: str
+    email: EmailStr
+    picture: str
+    department: str
+    job_level: str
+    job_role: str
+    department: str
+
+    
+
 
 class TokenRefreshResponse(BaseModel):
     status: str

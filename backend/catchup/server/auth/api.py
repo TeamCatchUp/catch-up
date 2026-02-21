@@ -228,8 +228,20 @@ def read_users_me(
 async def mypage_profile(current_user: User = Depends(get_current_user)):
     return CurrentUserProfile(
         name=current_user.name,
+<<<<<<< Updated upstream
         email=current_user.email,
         picture=current_user.picture or "",
         department=current_user.department,
         job_level=current_user.job_level,
     )
+=======
+        role=current_user.role
+    )
+
+@router.get(
+    path="/me/profile",
+    description = "마이페이지 - 계정 상세 정보"
+)
+async def mypage_profile(current_user: User = Depends(get_current_user)):
+    return 
+>>>>>>> Stashed changes
