@@ -1,3 +1,5 @@
+from typing import Dict, List
+
 from pydantic import BaseModel, EmailStr
 
 from catchup.db.models import UserStatus
@@ -54,3 +56,23 @@ class ConfluenceConnectorStatus(BaseModel):
     oldest: str | None
     latest: str | None
     spaces: list[str]
+
+
+class JiraSyncableProject(BaseModel):
+    project_key: str
+    project_name: str
+
+
+class GithubSyncableRepository(BaseModel):
+    full_name: str
+    repo_id: int
+
+
+class ConfluenceSyncableSpace(BaseModel):
+    space_name: str
+    space_key: str
+
+
+JiraSyncableResponse = Dict[str, List[JiraSyncableProject]]
+GithubSyncableResponse = Dict[str, List[GithubSyncableRepository]]
+ConfluenceSyncableResponse = Dict[str, List[ConfluenceSyncableSpace]]
