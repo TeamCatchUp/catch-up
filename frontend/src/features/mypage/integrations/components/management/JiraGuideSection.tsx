@@ -23,26 +23,16 @@ const JiraGuideSection = () => {
       {/* 1. Atlassian 사이트 연결 및 권한 승인 */}
       <div className="flex flex-col gap-2">
         <h4 className="text-heading-medium text-gray-80">1. Atlassian 사이트 연결 및 권한 승인</h4>
-        <div className="border-neutral-3 relative overflow-clip rounded-xl border bg-white px-4 py-2.5">
-          <Image
-            src={JIRA_GUIDE_IMAGES.integrationPage}
-            alt="Catch Up 협업 툴 연동 페이지 - 연동하기 버튼"
-            quality={100}
-            className="h-auto w-full"
-          />
-          <div className="pointer-events-none absolute bottom-[20px] left-[21px] h-6 w-[125px] border-[3px] border-red-50 rounded-sm" />
-        </div>
         <p className="text-label-small text-gray-80">
-          Catch Up 협업 툴 연동 페이지에서 &apos;연동하기&apos; 버튼을 클릭합니다.
+          Catch Up 협업 툴 연동 페이지에서 &apos;계정 등록하기&apos; 버튼을 클릭합니다.
         </p>
-        <div className="border-neutral-3 relative overflow-clip rounded-xl border bg-white px-4 py-2.5">
+        <div className="border-neutral-3 overflow-clip rounded-xl border bg-white px-4 py-2.5">
           <Image
             src={JIRA_GUIDE_IMAGES.integrationPage}
-            alt="Catch Up 협업 툴 연동 페이지 - 사이트 선택"
+            alt="Catch Up 협업 툴 연동 페이지 - 계정 등록하기 버튼"
             quality={100}
             className="h-auto w-full"
           />
-          <div className="pointer-events-none absolute bottom-[20px] left-[21px] h-6 w-[125px] border-[3px] border-red-50 rounded-sm" />
         </div>
         <p className="text-label-small text-gray-80">
           Catch Up과 연결할 팀의 Site(예:{' '}
@@ -74,14 +64,13 @@ const JiraGuideSection = () => {
       {/* 2. 대상 Project / Space 지정 */}
       <div className="flex flex-col gap-2">
         <h4 className="text-heading-medium text-gray-80">2.대상 Project / Space 지정</h4>
-        <div className="border-neutral-3 relative overflow-clip rounded-xl border bg-white px-4 py-2.5">
+        <div className="border-neutral-3 overflow-clip rounded-xl border bg-white px-4 py-2.5">
           <Image
             src={JIRA_GUIDE_IMAGES.projectSpace}
             alt="Jira Project / Space 지정 화면"
             quality={100}
             className="h-auto w-full"
           />
-          <div className="pointer-events-none absolute left-[235px] top-[20px] h-[25px] w-[87px] border-[3px] border-red-50" />
         </div>
         <p className="text-label-small text-gray-80">
           연동 담당자가 열람할 수 있는 목록이 표시됩니다. 전체 데이터가 아닌, 동기화가 필요한 특정 Project와

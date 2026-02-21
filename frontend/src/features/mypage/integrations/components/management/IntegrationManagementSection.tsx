@@ -1,8 +1,13 @@
-import { cn } from '@/shared/utils/cn';
+import { useMutation } from '@tanstack/react-query';
+
+import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
+import { cn } from '@/shared/utils/cn';
 
 import type { ConnectorDetail, IntegrationMenuItem, IntegrationService } from '../../types/integrations';
+import GithubGuideSection from './GithubGuideSection';
 import JiraGuideSection from './JiraGuideSection';
+import SlackGuideSection from './SlackGuideSection';
 
 import IconCloudCheckFilled from '/public/icons/icon/cloud_check_filled.svg';
 import IconCloudOff from '/public/icons/icon/cloud_off.svg';
@@ -41,6 +46,22 @@ const IntegrationManagementSection = ({
   onSelectService,
   detail,
 }: IntegrationManagementSectionProps) => {
+  const syncMutation = useMutation({
+    mutationKey: ['admin', 'connector', 'sync', selectedService] as const,
+    mutationFn: async () => {
+      switch (selectedService) {
+        case 'github':
+          return api.post(API.github.syncFlush);
+        case 'jira':
+          return api.post(API.jira.syncFlush);
+        case 'slack':
+          return api.post(API.slack.syncFlush);
+        case 'confluence':
+          return;
+      }
+    },
+  });
+
   return (
     <div className="flex gap-8">
       <div className="flex w-81.25 flex-col gap-4">
@@ -86,10 +107,12 @@ const IntegrationManagementSection = ({
             <div className="flex shrink-0 items-center gap-3">
               <button
                 type="button"
-                className="border-neutral-3 text-body-xsmall text-gray-70 flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-white px-2 py-1"
+                onClick={() => syncMutation.mutate()}
+                disabled={syncMutation.isPending || selectedService === 'confluence'}
+                className="border-neutral-3 text-body-xsmall text-gray-70 flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-white px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <IconRotate className="text-gray-70 h-6 w-6" />
-                동기화
+                {syncMutation.isPending ? '동기화 중...' : '동기화'}
               </button>
             </div>
           </div>
@@ -156,7 +179,9 @@ const IntegrationManagementSection = ({
           </div>
         </div>
 
-        {selectedService === 'jira' && <JiraGuideSection />}
+        {(selectedService === 'jira' || selectedService === 'confluence') && <JiraGuideSection />}
+        {selectedService === 'github' && <GithubGuideSection />}
+        {selectedService === 'slack' && <SlackGuideSection />}
       </div>
     </div>
   );

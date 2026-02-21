@@ -8,8 +8,8 @@ import type { AdminIntegrationViewModel, ConnectorDetail, IntegrationService } f
 
 const RESOURCE_LABELS: Record<IntegrationService, string> = {
   jira: '연동된 Jira Project',
-  github: '연동된 GitHub Repository',
-  slack: '연동된 Slack Channel',
+  github: '연동된 Repository',
+  slack: 'Catch Up Slack Bot이 추가된 채널',
   confluence: '연동된 Confluence Space',
 };
 
