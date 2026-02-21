@@ -154,18 +154,12 @@ class BaseSource(BaseModel):
 
         # 2. Slack
         elif source_str == "slack":
-            author_data = metadata.get("author", {})
-            author_name = (
-                author_data.get("real_name")
-                if isinstance(author_data, dict)
-                else str(author_data)
-            )
 
             return SlackSource(
                 **base_data,
                 source=SourceType.SLACK,
                 title=metadata.get("summary", "Slack Message"),
-                author=author_name,
+                author=metadata.get("author_name"),
                 # Slack Specific
                 channel_name=metadata.get("channel_name"),
                 team_id=metadata.get("team_id"),
