@@ -16,7 +16,7 @@ import { useDecideRequestMutation } from '@/shared/queries/adminMembers.mutation
 import { adminMembersQueries } from '@/shared/queries/adminMembers.queries';
 import { cn } from '@/shared/utils/cn';
 
-import { REJECTION_REASONS, ROLE_LABEL, SORT_OPTIONS } from '../../constants/memberTableConfig';
+import { REJECTION_REASONS, ROLE_BADGE_CLASS, ROLE_LABEL, SORT_OPTIONS } from '../../constants/memberTableConfig';
 import type { AdminSortKey, EntryRequest, MemberTableRow } from '../../types/adminMember';
 import MemberDetailPanel from '../shared/MemberDetailPanel';
 import MemberTable from '../shared/MemberTable';
@@ -48,7 +48,7 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
         picture: r.picture,
         rank: r.rank,
         department: r.department,
-        role: ROLE_LABEL[r.role] ?? r.role,
+        lastColumn: ROLE_LABEL[r.role] ?? r.role,
       })),
     [filtered],
   );
@@ -66,7 +66,10 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
     setSelectedKeys((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
-      else next.add(key);
+      else {
+        next.add(key);
+        setActiveKey(key);
+      }
       return next;
     });
   }, []);
@@ -154,6 +157,8 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
           activeKey={activeKey}
           onSelectKey={setActiveKey}
           emptyMessage="입장 신청 내역이 없습니다."
+          lastColumnHeader="권한"
+          lastColumnBadgeClass={ROLE_BADGE_CLASS}
           isSelecting={isSelecting}
           selectedKeys={selectedKeys}
           onToggleKey={handleToggleKey}
