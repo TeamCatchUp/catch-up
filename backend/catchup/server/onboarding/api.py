@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,7 @@ from catchup.db.models import ConfluenceUser, GitHubUser, JiraUser, KnowledgeSou
 from catchup.onboarding.admin import register_admin_from_okta
 from catchup.onboarding.schemas import AdminSignUpRequest, AdminSignUpSchema, CandidateItem, MappingCandidates, UserSignUpRequest, SignUpResponse, UserSignUpSchema
 from catchup.onboarding.user import register_user_from_okta
+from catchup.server.state import state
 
 
 router = APIRouter(
@@ -27,6 +28,11 @@ def signup_okta_user(
     pending_user: dict = Depends(get_pending_signup_user),
     db: Session = Depends(get_db)
 ):
+    if not state.is_admin_initiated:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="시스템 초기 설정이 필요합니다. 관리자가 먼저 등록되어야 합니다."
+        )
 
     signup_data = UserSignUpSchema(
         okta_uid=pending_user["okta_uid"],
@@ -53,6 +59,12 @@ def signup_root_admin(
     pending_user: dict = Depends(get_pending_signup_user),
     db: Session = Depends(get_db)
 ):
+    if state.is_admin_initiated:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="이미 관리자가 등록되어 있으므로 일반 유저로 가입해야 합니다."
+        )
+    
     admin_data = AdminSignUpSchema(
         okta_uid=pending_user["okta_uid"],
         email=pending_user["email"],
@@ -64,6 +76,8 @@ def signup_root_admin(
     )
     
     new_admin = register_admin_from_okta(db, admin_data)
+    
+    state.is_admin_initiated = True
     
     return new_admin
 

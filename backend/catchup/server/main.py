@@ -8,8 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from catchup import __version__
 from catchup.components.vector_db.factory import VectorDbProvider, get_vector_db_service
 from catchup.configs.config import MeiliEnvironment, settings
-from catchup.db.engine import engine
-from catchup.db.models import Base
+from catchup.db.engine import SessionLocal, engine
+from catchup.db.models import Base, Company
+from catchup.server.state import state
 from catchup.server.auth.api import router as auth_router
 from catchup.server.admin.api import router as admin_router
 from catchup.server.chat.api import router as chat_router
@@ -91,7 +92,16 @@ async def lifespan(app: FastAPI):
         logger.info("APScheduler initiated Successfully !")
     except Exception as e:
         logger.critical(f"Failed to initialize APScheduler : {e}")
-        
+    
+    try:
+        db = SessionLocal()
+        company_count = db.query(Company).count()
+        if company_count > 0:
+            state.is_admin_initiated = True
+        db.close()
+    except Exception as e:
+        logger.critical(f"Failed to check whether admin is initiated: {e}")
+    
     yield
 
     #Scheduler Shutdown
