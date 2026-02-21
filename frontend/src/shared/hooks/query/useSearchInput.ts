@@ -16,6 +16,7 @@ export interface UseSearchInputReturn {
   value: string;
   setValue: (v: string) => void;
   hasText: boolean;
+  isMultiLine: boolean;
   isFocused: boolean;
   setIsFocused: (f: boolean) => void;
   handleSubmit: () => void;
@@ -25,6 +26,7 @@ export const useSearchInput = ({ inputRef }: UseSearchInputOptions): UseSearchIn
   const router = useRouter();
   const [value, setValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [isMultiLine, setIsMultiLine] = useState(false);
 
   const hasText = value.trim().length > 0;
 
@@ -39,13 +41,17 @@ export const useSearchInput = ({ inputRef }: UseSearchInputOptions): UseSearchIn
   useEffect(() => {
     if (!inputRef.current) return;
     inputRef.current.style.height = 'auto';
-    inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 26 * 6) + 'px';
+    const scrollHeight = inputRef.current.scrollHeight;
+    inputRef.current.style.height = Math.min(scrollHeight, 26 * 6) + 'px';
+    // 1줄 높이(~26px)를 초과하면 multiline
+    setIsMultiLine(scrollHeight > 30);
   }, [value, inputRef]);
 
   return {
     value,
     setValue,
     hasText,
+    isMultiLine,
     isFocused,
     setIsFocused,
     handleSubmit,
