@@ -29,7 +29,7 @@ const toComparableTimestamp = (iso: string) => {
  * - `sender_type: human|assistant` -> `role: user|assistant`
  * - assistant일 때만 sources/feedback 관련 필드를 채움
  */
-const toUiMessage = (item: ChatHistoryMessageResponse): Message => {
+export const toUiMessage = (item: ChatHistoryMessageResponse): Message => {
   const timestamp = item.created_at || new Date().toISOString();
 
   if (item.sender_type === 'human') {

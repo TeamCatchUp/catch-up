@@ -99,7 +99,7 @@ const SettingsPanel = () => {
           </div>
           <div className="flex flex-col gap-1">
             {section.items.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
 
               return (
                 <button

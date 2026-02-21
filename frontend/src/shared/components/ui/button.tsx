@@ -39,7 +39,8 @@ const buttonVariants = cva(
 
         /* ── Text Buttons ── */
         'text-primary-blue': 'hover:bg-blue-5 active:bg-blue-5 rounded-full text-blue-50',
-        'text-secondary-mono': 'hover:bg-neutral-2 active:bg-neutral-3 text-gray-70 rounded-full',
+        'text-secondary-mono':
+          'hover:bg-neutral-2 active:bg-neutral-3 disabled:text-gray-20 text-gray-70 rounded-full',
 
         /* ── FAB ── */
         'fab-primary': 'bg-neutral-80 shadow-button rounded-full text-white',

@@ -26,7 +26,7 @@ const HistoryListItem = ({ item, group }: HistoryListItemProps) => {
 
   return (
     <Link
-      href={`/chat/${item.sessionId}`}
+      href={`/mypage/history/${item.sessionId}?q=${encodeURIComponent(item.query)}`}
       className="hover:bg-neutral-2 flex h-10 w-full items-center gap-2 rounded-xl bg-white px-2 py-1 transition-colors"
     >
       <div className="border-neutral-3 bg-neutral-1 rounded-rounded flex shrink-0 items-center justify-center border p-1.5">
