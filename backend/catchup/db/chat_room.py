@@ -1,9 +1,9 @@
+from datetime import datetime, time
 from typing import Optional
 import uuid
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session, aliased, joinedload
 
-from catchup.chat.schemas import FeedbackRequest
 from catchup.db.models import ChatHistory, ChatRoom, SenderType
 from catchup.rag.schemas.sources import BaseSource
 
@@ -432,3 +432,58 @@ def get_user_message_with_ownership(
             (ChatRoom.user_id == user_id)
         )
     )
+
+
+def get_all_queries_for_admin(
+    db: Session,
+    user_id: Optional[int] = None,
+    search_term: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    skip: int = 0,
+    limit: int = 50
+) -> tuple[list[ChatHistory], int]:
+    """어드민용: 모든(또는 특정) 유저의 쿼리 히스토리 조회 (pg_bigm 검색 및 기간 필터 포함)"""
+    
+    filters = [
+        ChatHistory.sender_type == SenderType.HUMAN,
+        ChatHistory.is_displayed == True
+    ]
+    
+    if user_id:
+        filters.append(ChatRoom.user_id == user_id)
+    if start_date:
+        filters.append(ChatHistory.created_at >= start_date)
+    if end_date:
+        adjusted_end_date = datetime.combine(end_date.date(), time.max)  # 23:59:59.99... 보장
+        filters.append(ChatHistory.created_at <= adjusted_end_date)
+    if search_term:
+        filters.append(ChatHistory.content.ilike(f"%{search_term}%"))
+
+    count_stmt = (
+        select(func.count())
+        .select_from(ChatHistory)
+        .join(ChatRoom, ChatHistory.chat_room_id == ChatRoom.id)
+        .where(and_(*filters))
+    )
+    total_count = db.scalar(count_stmt) or 0
+    
+    stmt = (
+        select(ChatHistory)
+        .join(ChatRoom, ChatHistory.chat_room_id == ChatRoom.id)
+        .options(joinedload(ChatHistory.chat_room))
+        .where(and_(*filters))
+    )
+
+    # 검색어가 있으면 유사도 순, 없으면 최신순
+    if search_term:
+        # pg_bigm 유사도 함수 기반으로 검색어와 가장 가까운 순으로 정렬
+        stmt = stmt.order_by(func.bigm_similarity(ChatHistory.content, search_term).desc())
+    else:
+        stmt = stmt.order_by(ChatHistory.created_at.desc())
+
+    stmt = stmt.offset(skip).limit(limit)
+    
+    items = db.scalars(stmt).all()
+    
+    return list(items), total_count
