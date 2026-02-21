@@ -27,3 +27,12 @@ def get_workspace_by_id(
     )
     
     return db.scalar(stmt)
+
+
+def get_workspace_limit_one(
+    db: Session
+):
+    return db.scalar(
+        select(Workspace)
+        .limit(1)
+    )
