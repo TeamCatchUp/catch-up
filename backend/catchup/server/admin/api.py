@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
@@ -8,6 +8,7 @@ from catchup.auth.dependencies import require_admin_user
 from catchup.db.dependencies import get_db
 from catchup.db.models import (
     AtlassianOAuthToken,
+    ConfluenceSpace,
     ConfluenceSyncState,
     GithubInstallation,
     GithubRepository,
@@ -20,9 +21,15 @@ from catchup.db.models import (
     User,
 )
 from catchup.server.auth.schemas import (
+    ConfluenceSyncableResponse,
     ConfluenceConnectorStatus,
+    ConfluenceSyncableSpace,
     GithubConnectorStatus,
+    GithubSyncableRepository,
+    GithubSyncableResponse,
     JiraConnectorStatus,
+    JiraSyncableProject,
+    JiraSyncableResponse,
     SlackConnectorStatus,
 )
 
@@ -317,3 +324,99 @@ def get_confluence_connector_status(
     _admin_user: User = Depends(require_admin_user),
 ):
     return _get_confluence_status(db)
+
+
+def _get_syncable_jira_projects(db: Session) -> JiraSyncableResponse:
+    rows = (
+        db.query(JiraProject.cloud_id, JiraProject.project_key, JiraProject.project_name)
+        .order_by(JiraProject.cloud_id, JiraProject.project_key)
+        .all()
+    )
+
+    if not rows:
+        logger.info("[ADMIN][SYNCABLE] Jira syncable projects not found")
+        return {}
+
+    projects: JiraSyncableResponse = {}
+    # cloud_id별로 프로젝트 정보를 묶어서 정리
+    for cloud_id, project_key, project_name in rows:
+        projects.setdefault(cloud_id, []).append(
+            JiraSyncableProject(project_key=project_key, project_name=project_name)
+        )
+    return projects
+
+
+def _get_syncable_github_repositories(db: Session) -> GithubSyncableResponse:
+    rows = (
+        db.query(
+            GithubRepository.installation_id,
+            GithubRepository.full_name,
+            GithubRepository.repo_id,
+        )
+        .order_by(GithubRepository.installation_id, GithubRepository.full_name)
+        .all()
+    )
+
+    if not rows:
+        logger.info("[ADMIN][SYNCABLE] Github syncable repositories not found")
+        return {}
+
+    repositories: GithubSyncableResponse = {}
+    # installation_id별로 repository 정보를 묶어서 정리
+    for installation_id, full_name, repo_id in rows:
+        repositories.setdefault(str(installation_id), []).append(
+            GithubSyncableRepository(full_name=full_name, repo_id=repo_id)
+        )
+    return repositories
+
+
+def _get_syncable_confluence_spaces(db: Session) -> ConfluenceSyncableResponse:
+    rows = (
+        db.query(
+            ConfluenceSpace.cloud_id,
+            ConfluenceSpace.space_name,
+            ConfluenceSpace.space_key,
+        )
+        .order_by(ConfluenceSpace.cloud_id, ConfluenceSpace.space_key)
+        .all()
+    )
+
+    if not rows:
+        logger.info("[ADMIN][SYNCABLE] Confluence syncable spaces not found")
+        return {}
+
+    spaces: ConfluenceSyncableResponse = {}
+    # cloud_id별로 space 정보를 묶어서 정리
+    for cloud_id, space_name, space_key in rows:
+        spaces.setdefault(cloud_id, []).append(
+            ConfluenceSyncableSpace(space_name=space_name, space_key=space_key)
+        )
+    return spaces
+
+
+@router.get(
+    path="/connector/syncable/{source}",
+    description="연동된 소스별 동기화 대상 목록 조회 (admin 전용)",
+    response_model=(
+        JiraSyncableResponse | GithubSyncableResponse | ConfluenceSyncableResponse
+    ),
+)
+def get_syncable_entities(
+    source: str,
+    db: Session = Depends(get_db),
+    _admin_user: User = Depends(require_admin_user),
+):
+    normalized_source = source.lower()
+
+    if normalized_source == "jira":
+        return _get_syncable_jira_projects(db)
+    if normalized_source == "github":
+        return _get_syncable_github_repositories(db)
+    if normalized_source == "confluence":
+        return _get_syncable_confluence_spaces(db)
+
+    logger.info("[ADMIN][SYNCABLE] Unsupported source requested: %s", source)
+    raise HTTPException(
+        status_code=400,
+        detail="source must be one of: jira, github, confluence",
+    )
