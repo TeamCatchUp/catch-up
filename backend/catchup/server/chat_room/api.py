@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import get_current_user
 from catchup.chat.chat_room import process_answer_feedback
-from catchup.chat.dependencies import get_valid_chat_room, get_valid_message
+from catchup.chat.dependencies import get_valid_chat_room, get_valid_message, get_valid_user_query
 from catchup.chat.exceptions import FeedbackImmutableError, LikedWithNegativeFeedbackError
-from catchup.chat.schemas import ChatRoomResponse, FeedbackRequest, UserQueryResponse, UserQueryWithSaveStatusResponse
-from catchup.db.chat_room import get_chat_room_messages, get_chat_rooms, get_queries_by_chat_room, get_queries_by_user, get_queries_by_user_with_save_status, toggle_save_status
+from catchup.chat.schemas import ChatHistoryResponse, ChatRoomResponse, FeedbackRequest, UserQueryResponse, UserQueryWithSaveStatusResponse
+from catchup.db.chat_room import get_chat_room_messages, get_chat_rooms, get_queries_by_chat_room, get_queries_by_user, get_queries_by_user_with_save_status, get_query_answer_pair, toggle_save_status
 from catchup.db.dependencies import get_db
 from catchup.db.models import ChatHistory, ChatRoom, User
 from catchup.server.chat_room.schemas import ChatHistoryListResponse
@@ -238,3 +238,15 @@ def get_query_history_with_status(
         "size": size,
         "items": formatted_items,
     }
+
+@router.get(
+    path="/queries/{message_id}/detail",
+    response_model=list[ChatHistoryResponse],
+    description="마이페이지 질문 히스토리에서 특정 질문 클릭 시 질문-답변 세트 상세 조회"
+)
+def get_query_detail(
+    db: Session = Depends(get_db),
+    query: ChatHistory = Depends(get_valid_user_query)
+):
+    pair = get_query_answer_pair(db, query)
+    return pair
