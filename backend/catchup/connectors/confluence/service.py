@@ -57,7 +57,7 @@ class ConfluenceIngestionService:
     ) -> dict[str, Any]:
         days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
         sync_from = datetime.now(timezone.utc) - timedelta(days=days)
-        
+
         logger.info(
             f"[CONFLUENCE][FULL SYNC] Started: "
             f"cloud_id={self.cloud_id}, spaces={space_keys or 'all'} since={sync_from.isoformat()}"
@@ -72,6 +72,9 @@ class ConfluenceIngestionService:
             space_id_map = domain_repository.get_space_id_map(
                 db, self.cloud_id, space_keys,
             )
+            space_name_map = domain_repository.get_space_name_map(
+                db, self.cloud_id, space_keys,
+            )
             if not space_id_map:
                 logger.warning(f"[CONFLUENCE][FULL SYNC] No spaces found: cloud_id={self.cloud_id}")
                 return results
@@ -81,14 +84,14 @@ class ConfluenceIngestionService:
             for space_key, space_id in space_id_map.items():
                 page_result = await self._sync_space_pages(
                     db, space_id = space_id, space_key = space_key, since = sync_from,
-                    user_name_map=user_name_map,
+                    user_name_map=user_name_map, space_name=space_name_map.get(space_key),
                 )
                 results["pages"]["synced"] += page_result["synced"]
                 results["pages"]["errors"] += page_result["errors"]
 
                 blog_result = await self._sync_space_blogposts(
                     db, space_id = space_id, space_key = space_key, since = sync_from,
-                    user_name_map=user_name_map,
+                    user_name_map=user_name_map, space_name=space_name_map.get(space_key),
                 )
                 results["blogposts"]["synced"] += blog_result["synced"]
                 results["blogposts"]["errors"] += blog_result["errors"]
@@ -370,6 +373,7 @@ class ConfluenceIngestionService:
             space_key: str,
             since: datetime | None = None,
             user_name_map: dict[str, str | None] | None = None,
+            space_name: str | None = None,
     ) -> dict[str, int]:
 
         results = {"synced": 0, "errors": 0}
@@ -396,7 +400,7 @@ class ConfluenceIngestionService:
                             continue
 
                         documents = await self._process_page(
-                            page, space_key=space_key, user_name_map=user_name_map,
+                            page, space_key=space_key, space_name=space_name, user_name_map=user_name_map,
                         )
 
                         if documents:
@@ -446,6 +450,7 @@ class ConfluenceIngestionService:
             space_key: str,
             since: datetime | None = None,
             user_name_map: dict[str, str | None] | None = None,
+            space_name: str | None = None,
     ) -> dict[str, int]:
         
         results = {"synced": 0, "errors": 0}
@@ -472,7 +477,7 @@ class ConfluenceIngestionService:
                             continue
 
                         documents = await self._process_blogpost(
-                            blogpost, space_key = space_key, user_name_map=user_name_map,
+                            blogpost, space_key = space_key, space_name=space_name, user_name_map=user_name_map,
                         )
 
                         if documents:
@@ -520,6 +525,7 @@ class ConfluenceIngestionService:
             self,
             page: ConfluencePageResponse,
             space_key: str,
+            space_name: str | None = None,
             user_name_map: dict[str, str | None] | None = None,
     ) -> list[Document]:
         
@@ -532,6 +538,7 @@ class ConfluenceIngestionService:
         return self.transformer.transform_page(
             page,
             space_key = space_key,
+            space_name = space_name,
             labels=labels,
             footer_comments=footer_comments,
             inline_comments=inline_comments,
@@ -544,6 +551,7 @@ class ConfluenceIngestionService:
         self,
         blogpost: ConfluenceBlogPostResponse,
         space_key: str,
+        space_name: str | None = None,
         user_name_map: dict[str, str | None] | None = None,
     ) -> list[Document]:
 
@@ -556,6 +564,7 @@ class ConfluenceIngestionService:
         return self.transformer.transform_blogpost(
             blogpost,
             space_key=space_key,
+            space_name=space_name,
             labels=labels,
             footer_comments=footer_comments,
             attachment_images=attachment_images,

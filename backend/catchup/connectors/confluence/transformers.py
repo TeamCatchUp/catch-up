@@ -13,6 +13,7 @@ page.body.value (Storage Format HTML)
 - confluence:page:{page_id}:chunk:{chunk_index}
 - confluence:blogpost:{page_id}:chunk:{chunk_index}
 """
+import json
 import logging
 from datetime import datetime
 
@@ -191,6 +192,7 @@ class ConfluenceTransformer:
                 title=title,
                 space_name=space_name,
                 labels=labels,
+                author_name=author_name,
                 author_id=author_id,
                 updated_at=updated_at,
                 section_hierarchy=chunk.section_hierarchy,
@@ -367,11 +369,45 @@ class ConfluenceTransformer:
 
         # 이미 plain text인 경우
         if comment.body.representation == "plain":
-            return value.strip()
+            return value.strip() if isinstance(value, str) else ""
+
+        # atlas_doc_format(A DF) → JSON을 파싱해 text 노드만 추출
+        if comment.body.representation == "atlas_doc_format":
+            try:
+                adf = json.loads(value) if isinstance(value, str) else value
+                if isinstance(adf, (dict, list)):
+                    extracted = self._extract_text_from_adf(adf)
+                    if extracted:
+                        return extracted.strip()
+            except Exception:
+                # 파싱 실패 시 아래 HTML 처리로 fallback
+                logger.debug(
+                    "[CONFLUENCE][TRANSFORM] Failed to parse ADF comment body; falling back to HTML strip"
+                )
 
         # Storage Format → 텍스트 추출 (태그 제거)
-        soup = BeautifulSoup(value, "lxml")
+        # dict 형태로 올 경우 문자열로 변환 후 HTML 태그 제거
+        soup = BeautifulSoup(str(value), "lxml")
         return soup.get_text(strip=True)
+
+    def _extract_text_from_adf(self, node) -> str:
+        """atlas_doc_format(JSON)에서 text 필드만 모아 단일 문자열로 반환"""
+        texts: list[str] = []
+
+        def walk(item):
+            if isinstance(item, dict):
+                if item.get("type") == "text" and isinstance(item.get("text"), str):
+                    texts.append(item["text"])
+                content = item.get("content")
+                if isinstance(content, list):
+                    for child in content:
+                        walk(child)
+            elif isinstance(item, list):
+                for child in item:
+                    walk(child)
+
+        walk(node)
+        return " ".join(texts)
 
     def _extract_inline_selection(
         self, comment: ConfluenceCommentResponse
@@ -458,6 +494,7 @@ class ConfluenceTransformer:
         title: str,
         space_name: str | None,
         labels: list[str],
+        author_name: str | None,
         author_id: str | None,
         updated_at: str | None,
         section_hierarchy: list[str],
@@ -493,8 +530,9 @@ class ConfluenceTransformer:
 
         # Author & Updated
         info_parts = []
-        if author_id:
-            info_parts.append(f"Author: {author_id}")
+        author_line = author_name or author_id
+        if author_line:
+            info_parts.append(f"Author: {author_line}")
         if updated_at:
             info_parts.append(f"Last Updated: {updated_at}")
         if info_parts:
