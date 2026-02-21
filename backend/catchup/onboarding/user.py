@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from catchup.db.models import User, UserSourceMapping
+from catchup.db.models import User, UserSourceMapping, UserStatus
 from catchup.db.user_source_mapping import get_pending_source_premappings
 from catchup.db.users import get_okta_user_with_okta_uid
 from catchup.db.workspaces import add_user_to_workspace, get_workspace_by_id
@@ -26,6 +26,7 @@ def register_user_from_okta(
         provider="okta",
         department=payload.department,
         job_level=payload.job_level,
+        status=UserStatus.ACTIVE
     )
     
     db.add(new_user)
