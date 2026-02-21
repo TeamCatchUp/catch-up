@@ -78,6 +78,19 @@ def get_space_id_map(
     return dict(db.execute(stmt).all())
 
 
+def get_space_name_map(
+        db: Session, cloud_id: str, space_keys: list[str],
+) -> dict[str, str | None]:
+    """space_key → space_name 매핑 반환 (Full Sync에서 캐싱용)."""
+    stmt = select(
+        ConfluenceSpace.space_key, ConfluenceSpace.space_name,
+    ).where(
+        ConfluenceSpace.cloud_id == cloud_id,
+        ConfluenceSpace.space_key.in_(space_keys)
+    )
+    return dict(db.execute(stmt).all())
+
+
 # ------------------------------------------------------------
 # Confluence Users
 # ------------------------------------------------------------

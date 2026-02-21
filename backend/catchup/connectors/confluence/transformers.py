@@ -13,6 +13,7 @@ page.body.value (Storage Format HTML)
 - confluence:page:{page_id}:chunk:{chunk_index}
 - confluence:blogpost:{page_id}:chunk:{chunk_index}
 """
+import json
 import logging
 from datetime import datetime
 
@@ -367,11 +368,45 @@ class ConfluenceTransformer:
 
         # 이미 plain text인 경우
         if comment.body.representation == "plain":
-            return value.strip()
+            return value.strip() if isinstance(value, str) else ""
+
+        # atlas_doc_format(A DF) → JSON을 파싱해 text 노드만 추출
+        if comment.body.representation == "atlas_doc_format":
+            try:
+                adf = json.loads(value) if isinstance(value, str) else value
+                if isinstance(adf, (dict, list)):
+                    extracted = self._extract_text_from_adf(adf)
+                    if extracted:
+                        return extracted.strip()
+            except Exception:
+                # 파싱 실패 시 아래 HTML 처리로 fallback
+                logger.debug(
+                    "[CONFLUENCE][TRANSFORM] Failed to parse ADF comment body; falling back to HTML strip"
+                )
 
         # Storage Format → 텍스트 추출 (태그 제거)
-        soup = BeautifulSoup(value, "lxml")
+        # dict 형태로 올 경우 문자열로 변환 후 HTML 태그 제거
+        soup = BeautifulSoup(str(value), "lxml")
         return soup.get_text(strip=True)
+
+    def _extract_text_from_adf(self, node) -> str:
+        """atlas_doc_format(JSON)에서 text 필드만 모아 단일 문자열로 반환"""
+        texts: list[str] = []
+
+        def walk(item):
+            if isinstance(item, dict):
+                if item.get("type") == "text" and isinstance(item.get("text"), str):
+                    texts.append(item["text"])
+                content = item.get("content")
+                if isinstance(content, list):
+                    for child in content:
+                        walk(child)
+            elif isinstance(item, list):
+                for child in item:
+                    walk(child)
+
+        walk(node)
+        return " ".join(texts)
 
     def _extract_inline_selection(
         self, comment: ConfluenceCommentResponse
