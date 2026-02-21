@@ -13,11 +13,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
-import { useMemberStatusMutation } from '@/shared/queries/adminMembers.mutations';
-import { adminMembersQueries } from '@/shared/queries/adminMembers.queries';
 import { cn } from '@/shared/utils/cn';
 
 import { DEACTIVATION_REASONS, SORT_OPTIONS, STATUS_BADGE_CLASS, STATUS_LABEL } from '../../constants/memberTableConfig';
+import { useMemberStatusMutation } from '../../queries/adminMembers.mutations';
+import { adminMembersQueries } from '../../queries/adminMembers.queries';
 import type { AdminMember, AdminSortKey, MemberTableRow } from '../../types/adminMember';
 import MemberDetailPanel from '../shared/MemberDetailPanel';
 import MemberTable from '../shared/MemberTable';

@@ -1,6 +1,4 @@
-import type { AdminMember, EntryRequest } from '@/features/admin/members/types/adminMember';
-
-export const MOCK_ENTRY_REQUESTS: EntryRequest[] = [
+export const MOCK_ENTRY_REQUESTS = [
   {
     requestId: 'req-001',
     userId: 'u-new-001',
@@ -171,7 +169,7 @@ export const MOCK_ENTRY_REQUESTS: EntryRequest[] = [
   },
 ];
 
-export const MOCK_ADMIN_MEMBERS: AdminMember[] = [
+export const MOCK_ADMIN_MEMBERS = [
   {
     userId: 'u-001',
     name: '직원06',

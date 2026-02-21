@@ -12,11 +12,11 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 import { Separator } from '@/shared/components/ui/separator';
-import { useDecideRequestMutation } from '@/shared/queries/adminMembers.mutations';
-import { adminMembersQueries } from '@/shared/queries/adminMembers.queries';
 import { cn } from '@/shared/utils/cn';
 
 import { REJECTION_REASONS, ROLE_BADGE_CLASS, ROLE_LABEL, SORT_OPTIONS } from '../../constants/memberTableConfig';
+import { useDecideRequestMutation } from '../../queries/adminMembers.mutations';
+import { adminMembersQueries } from '../../queries/adminMembers.queries';
 import type { AdminSortKey, EntryRequest, MemberTableRow } from '../../types/adminMember';
 import MemberDetailPanel from '../shared/MemberDetailPanel';
 import MemberTable from '../shared/MemberTable';
