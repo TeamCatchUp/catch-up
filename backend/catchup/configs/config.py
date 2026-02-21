@@ -131,7 +131,7 @@ class Settings(BaseSettings):
 
     # Slack Sync Settings
     SLACK_SYNC_MAX_CONCURRENT_REQUESTS: int = 10  # 동시 요청 수
-    SLACK_CHANNEL_SYNC_CONCURRENCY: int = 5
+    SLACK_CHANNEL_SYNC_CONCURRENCY: int = 5  # 채널 병렬 동기화 최대 동시 실행 수
     SLACK_API_RATE_LIMIT_DELAY: float = 0.1  # 요청 간 딜레이 (초)
     SLACK_MIN_TEXT_LENGTH: int = 5  # 이 길이 이하의 텍스트는 제외 (Reply 등)
     SLACK_MESSAGE_BATCH_SIZE: int = 500  # 한 번에 가져올 메시지 수
