@@ -2,12 +2,10 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import { authMutations } from '@/shared/queries/auth.mutations';
 import { useUserStore } from '@/shared/store/userStore';
 import { cn } from '@/shared/utils/cn';
 
-import EditPencil from '/public/icons/icon/edit_pencil.svg';
 import Profile from '/public/icons/icon/profile.svg';
 
 /**
@@ -40,26 +38,11 @@ const ProfilePage = () => {
       <div className="flex flex-col gap-8">
         <div className="flex items-end gap-4">
           <Profile className="h-27.5 w-27.5 rounded-2xl ring-4 ring-white" />
-          <div className="flex items-end gap-4">
-            <div className="flex flex-col gap-1">
-              <span className="text-heading-xlarge text-gray-80">{user?.name ?? ''}</span>
-              <div className="flex gap-1 text-gray-50">
-                <span className="text-body-small">사업개발팀</span>
-              </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-heading-xlarge text-gray-80">{user?.name ?? ''}</span>
+            <div className="flex gap-1 text-gray-50">
+              <span className="text-body-small">사업개발팀</span>
             </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="icon-button-outline-gray flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg p-1.5"
-                >
-                  <EditPencil className="h-6 w-6" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" size="sm">
-                프로필 이미지 변경하기
-              </TooltipContent>
-            </Tooltip>
           </div>
         </div>
 
