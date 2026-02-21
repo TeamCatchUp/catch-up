@@ -35,7 +35,12 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
       .map((s: { last_successful_sync_at?: string | null }) => s.last_successful_sync_at)
       .filter((d): d is string => !!d);
     if (dates.length === 0) return USE_MOCK ? MOCK_INTEGRATION_LAST_SYNC_AT : '-';
-    return dates.sort().at(-1) ?? '-';
+    const latest = dates.sort().at(-1);
+    if (!latest) return '-';
+    const d = new Date(latest);
+    const h = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}. ${h}:${min}`;
   }, [jiraSyncStatus]);
 
   const integrationMenu = useMemo(
