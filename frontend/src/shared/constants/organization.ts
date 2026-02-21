@@ -1,5 +1,15 @@
-export const RANK_OPTIONS = ['경영진', '팀장', '팀원'] as const;
-export const TEAM_SIZE_OPTIONS = ['1~5명', '6~20명', '51~ 100명', '100명 이상'] as const;
+export const JOB_LEVEL_OPTIONS = [
+  { value: 'executive', label: '경영진' },
+  { value: 'leader', label: '팀장' },
+  { value: 'member', label: '팀원' },
+] as const;
+
+export const COMPANY_SIZE_OPTIONS = [
+  { value: 'small', label: '1~5명' },
+  { value: 'medium', label: '6~20명' },
+  { value: 'large', label: '51~100명' },
+  { value: 'enterprise', label: '100명 이상' },
+] as const;
 
 export const DEPARTMENT_OPTIONS = [
   // 제품 계열
