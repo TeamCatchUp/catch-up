@@ -44,3 +44,36 @@ def get_current_user(
         )
 
     return user
+
+
+def get_pending_signup_user(
+    access_token: str = Depends(cookie_scheme)
+) -> dict:
+    """
+    회원가입 전용.
+    User DB 조회 없이 토큰 payload를 기반으로 회원가입을 처리하기 위함이다.
+    """
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="인증 쿠키가 없습니다."
+        )
+        
+    try:
+        payload = verify_token(access_token, "access")
+        email: str = payload.get("sub")
+        okta_uid: str = payload.get("okta_uid")
+
+        if not email or not okta_uid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, 
+                detail="토큰에 필수 정보가 없습니다."
+            )
+            
+        return {"email": email, "okta_uid": okta_uid, "name": payload.get("name")}
+        
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="토큰이 만료되었거나 유효하지 않습니다."
+        )

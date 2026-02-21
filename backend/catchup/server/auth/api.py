@@ -61,12 +61,22 @@ async def okta_callback(
     okta_user = await oauth_service.get_okta_user(code)
     
     def _handle_login_sync():
-        user = oauth_service.get_or_register_okta_user(db, okta_user)
+        okta_record = oauth_service.get_or_register_okta_user(db, okta_user)
         
-        access_token = create_access_token(data={"sub": user.email})
-        refresh_token = create_refresh_token(data={"sub": user.email})
+        token_data = {
+            "sub": okta_user.email,
+            "okta_uid": okta_user.sub,
+            "name": okta_user.name
+        }
+        access_token = create_access_token(data=token_data)
         
-        update_user_refresh_token(db, user.id, refresh_token)
+        if okta_record.user_id is not None:
+            # 기존 유저: 리프레시 토큰 정상 발급
+            refresh_token = create_refresh_token(data=token_data)
+            update_user_refresh_token(db, okta_record.user_id, refresh_token)
+        else:
+            # 아직 온보딩 전인 신규 유저: 임시로 엑세스 토큰만 발급
+            refresh_token = None
         db.commit()
         
         return access_token, refresh_token
