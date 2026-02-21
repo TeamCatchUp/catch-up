@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { USE_MOCK } from '@/shared/mocks/config';
 import { MOCK_RECENT_QUERIES } from '@/shared/mocks/search/data';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
+import type { RecentQueryWithSaveStatusResponse } from '@/shared/types/query/api';
 import type { GroupedSection } from '@/shared/utils/dateGrouping';
 import type { DatePeriod, SortOrder } from '@/shared/utils/dateGrouping';
 import { groupItemsByDate, isInPeriod as isInPeriodShared } from '@/shared/utils/dateGrouping';
@@ -40,11 +41,15 @@ export const usePageModel = (): UsePageModelReturn => {
   const [savedOnly, setSavedOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const recentQueriesQuery = useQuery(chatQueries.recentQueries());
+  const recentQueriesQuery = useQuery(chatQueries.recentQueriesWithSaveStatus());
 
-  const sourceItems = useMemo(() => {
+  const sourceItems = useMemo<RecentQueryWithSaveStatusResponse[]>(() => {
     if (USE_MOCK) {
-      return MOCK_RECENT_QUERIES.items;
+      return MOCK_RECENT_QUERIES.items.map((item) => ({
+        ...item,
+        is_answer_saved: false,
+        answer_id: null,
+      }));
     }
     return recentQueriesQuery.data?.items ?? [];
   }, [recentQueriesQuery.data?.items]);

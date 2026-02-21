@@ -5,6 +5,7 @@ import { API } from '@/shared/api/endpoints';
 import type {
   ChatroomsResponse,
   RecentQueriesResponse,
+  RecentQueriesWithSaveStatusResponse,
   SessionMessagesResponse,
   SessionQueriesResponse,
 } from '@/shared/types/query/api';
@@ -30,6 +31,15 @@ export const chatQueries = {
       queryKey: [...chatQueries.lists(), 'queries'] as const,
       queryFn: async (): Promise<RecentQueriesResponse> => {
         const res = await api.get<RecentQueriesResponse>(API.chatrooms.queries);
+        return res.data;
+      },
+    }),
+
+  recentQueriesWithSaveStatus: () =>
+    queryOptions({
+      queryKey: [...chatQueries.lists(), 'queries', 'saved-status'] as const,
+      queryFn: async (): Promise<RecentQueriesWithSaveStatusResponse> => {
+        const res = await api.get<RecentQueriesWithSaveStatusResponse>(API.chatrooms.queriesWithSaveStatus);
         return res.data;
       },
     }),

@@ -1,30 +1,96 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import Cancel from '@/public/icons/icon/cancel.svg';
 import CheckboxChecked from '@/public/icons/icon/checkbox_checked.svg';
 import CheckboxUnchecked from '@/public/icons/icon/checkbox_unchecked.svg';
+import api from '@/shared/api/client';
+import { API } from '@/shared/api/endpoints';
 import { Button } from '@/shared/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
+import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
+import type {
+  SyncableConfluenceSpace,
+  SyncableEntity,
+  SyncableGithubRepo,
+  SyncableJiraProject,
+} from '../../../types/api';
+
 const PERIOD_OPTIONS = ['1개월', '3개월', '6개월', '1년', '3년'] as const;
+
+const PERIOD_TO_DAYS: Record<string, number> = {
+  '1개월': 30,
+  '3개월': 90,
+  '6개월': 180,
+  '1년': 365,
+  '3년': 1095,
+};
 
 /** 서비스별 항목 용어 */
 const getItemLabel = (service: IntegrationService) => (service === 'github' ? 'Repository' : 'Space');
 
-/** 임시 Mock 데이터 (추후 API 연동) */
-const MOCK_ITEMS = [
-  { id: '1', name: 'Project Alpha' },
-  { id: '2', name: 'Project Beta' },
-  { id: '3', name: 'Project Gamma' },
-  { id: '4', name: 'Project Delta' },
-  { id: '5', name: 'Project Epsilon' },
-  { id: '6', name: 'Project Zeta' },
-  { id: '7', name: 'Project Eta' },
-];
+/** SyncableEntity에서 표시명 추출 */
+const getEntityName = (entity: SyncableEntity): string => {
+  if ('full_name' in entity) return (entity as SyncableGithubRepo).full_name;
+  if ('project_name' in entity)
+    return `${(entity as SyncableJiraProject).project_key}: ${(entity as SyncableJiraProject).project_name}`;
+  if ('space_name' in entity) return (entity as SyncableConfluenceSpace).space_name;
+  return String(entity);
+};
+
+/** SyncableEntity에서 고유 ID 추출 */
+const getEntityId = (entity: SyncableEntity): string => {
+  if ('repo_id' in entity) return String((entity as SyncableGithubRepo).repo_id);
+  if ('project_key' in entity) return (entity as SyncableJiraProject).project_key;
+  if ('space_key' in entity) return (entity as SyncableConfluenceSpace).space_key;
+  return getEntityName(entity);
+};
+
+interface SyncableItem {
+  id: string;
+  name: string;
+  parentId: string;
+  entity: SyncableEntity;
+}
+
+/** 서비스별 sync/full API 호출 생성 */
+const buildSyncCall = (
+  service: IntegrationService,
+  parentId: string,
+  groupItems: SyncableItem[],
+  syncDays: number,
+) => {
+  switch (service) {
+    case 'github':
+      return api.post(API.github.syncFull, {
+        installation_id: Number(parentId),
+        repo_ids: groupItems.map((i) => (i.entity as SyncableGithubRepo).repo_id),
+        sync_days: syncDays,
+      });
+    case 'jira':
+      return api.post(API.jira.syncFull, {
+        cloud_id: parentId,
+        project_keys: groupItems.map((i) => (i.entity as SyncableJiraProject).project_key),
+        sync_days: syncDays,
+      });
+    case 'confluence':
+      return api.post(API.confluence.syncFull, {
+        cloud_id: parentId,
+        space_keys: groupItems.map((i) => (i.entity as SyncableConfluenceSpace).space_key),
+        sync_days: syncDays,
+      });
+    case 'slack':
+      return api.post(API.slack.syncFull, {
+        team_id: parentId,
+        sync_days: syncDays,
+      });
+  }
+};
 
 interface EmbeddingModalProps {
   open: boolean;
@@ -38,8 +104,50 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
   const [selectedPeriod, setSelectedPeriod] = useState<string>('1개월');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
+  const { data: syncableData, isLoading } = useQuery({
+    ...adminConnectorQueries.syncable(service),
+    enabled: open && service !== 'slack',
+  });
+
+  const items = useMemo<SyncableItem[]>(() => {
+    if (!syncableData) return [];
+    return Object.entries(syncableData).flatMap(([parentId, entities]) =>
+      entities.map((entity) => ({
+        id: getEntityId(entity),
+        name: getEntityName(entity),
+        parentId,
+        entity,
+      })),
+    );
+  }, [syncableData]);
+
+  const syncMutation = useMutation({
+    mutationKey: ['admin', 'connector', 'syncFull', service] as const,
+    mutationFn: async (params: { syncDays: number; selected: SyncableItem[] }) => {
+      const groups: Record<string, SyncableItem[]> = {};
+      for (const item of params.selected) {
+        (groups[item.parentId] ??= []).push(item);
+      }
+
+      await Promise.all(
+        Object.entries(groups).map(([parentId, groupItems]) =>
+          buildSyncCall(service, parentId, groupItems, params.syncDays),
+        ),
+      );
+    },
+    onSuccess: () => {
+      toast('임베딩이 시작되었습니다.', {
+        description: '준비가 끝나면 즉시 알려드릴게요.',
+      });
+      handleClose();
+    },
+    onError: () => {
+      toast.error('임베딩 요청 중 오류가 발생했습니다.');
+    },
+  });
+
   const itemLabel = getItemLabel(service);
-  const isSubmitDisabled = selectedItems.size === 0;
+  const isSubmitDisabled = selectedItems.size === 0 || syncMutation.isPending;
 
   const toggleItem = (id: string) => {
     setSelectedItems((prev) => {
@@ -61,6 +169,12 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
   };
 
   const handleClose = () => handleDialogOpenChange(false);
+
+  const handleSubmit = () => {
+    const syncDays = PERIOD_TO_DAYS[selectedPeriod] ?? 30;
+    const selected = items.filter((item) => selectedItems.has(item.id));
+    syncMutation.mutate({ syncDays, selected });
+  };
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
@@ -108,26 +222,36 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
                 <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
               </div>
               <div className="thin-scrollbar border-neutral-2 bg-neutral-1 flex h-[200px] flex-col gap-2.5 overflow-y-auto rounded-xl border p-3">
-                {MOCK_ITEMS.map((item) => {
-                  const checked = selectedItems.has(item.id);
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => toggleItem(item.id)}
-                      className="flex w-full cursor-pointer items-center gap-3"
-                    >
-                      <span className="text-body-small text-gray-60 min-w-0 flex-1 truncate text-left">
-                        {item.name}
-                      </span>
-                      {checked ? (
-                        <CheckboxChecked className="size-6 shrink-0 text-blue-50" />
-                      ) : (
-                        <CheckboxUnchecked className="text-gray-30 size-6 shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
+                {isLoading ? (
+                  <div className="text-body-small text-gray-40 flex h-full items-center justify-center">
+                    목록을 불러오는 중...
+                  </div>
+                ) : items.length === 0 ? (
+                  <div className="text-body-small text-gray-40 flex h-full items-center justify-center">
+                    항목이 없습니다.
+                  </div>
+                ) : (
+                  items.map((item) => {
+                    const checked = selectedItems.has(item.id);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => toggleItem(item.id)}
+                        className="flex w-full cursor-pointer items-center gap-3"
+                      >
+                        <span className="text-body-small text-gray-60 min-w-0 flex-1 truncate text-left">
+                          {item.name}
+                        </span>
+                        {checked ? (
+                          <CheckboxChecked className="size-6 shrink-0 text-blue-50" />
+                        ) : (
+                          <CheckboxUnchecked className="text-gray-30 size-6 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -141,14 +265,9 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
             variant="capsule-solid-primary"
             size="md"
             disabled={isSubmitDisabled}
-            onClick={() => {
-              toast('잠시만 기다려주세요', {
-                description: '임베딩을 진행하고 있습니다. 준비가 끝나면 즉시 알려드릴게요.',
-              });
-              handleClose();
-            }}
+            onClick={handleSubmit}
           >
-            임베딩하기
+            {syncMutation.isPending ? '임베딩 중...' : '임베딩하기'}
           </Button>
         </div>
       </DialogContent>
