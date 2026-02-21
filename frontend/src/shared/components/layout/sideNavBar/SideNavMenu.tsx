@@ -13,10 +13,11 @@ import { cn } from '@/shared/utils/cn';
 
 import AI from '/public/icons/icon/ai.svg';
 import Home from '/public/icons/icon/home.svg';
-import Inbox from '/public/icons/icon/inbox.svg';
+// TODO: 수신함 기능 활성화 시 Inbox import 복원
+// import Inbox from '/public/icons/icon/inbox.svg';
 import Settings from '/public/icons/icon/settings.svg';
 
-const UNREAD_COUNT = 100; // mock
+// TODO: 수신함 기능 활성화 시 UNREAD_COUNT 복원
 
 /** 메뉴 아이템 정의 (href: 페이지 이동, panel: 사이드 패널 토글) */
 const navItems = [
@@ -90,16 +91,7 @@ export default function SideNavMenu({ isOpen, setIsOpen: setSidebarOpen }: SideN
                       {item.name}
                     </span>
                   )}
-                  {/* 수신함 배지 (열림) */}
-                  {isOpen && item.panel === 'inbox' && UNREAD_COUNT > 0 && (
-                    <span className="bg-blue-1 border-blue-40 text-blue-40 text-body-small min-w-[23px] rounded-md border-[0.5px] px-0.5 text-center">
-                      {UNREAD_COUNT > 99 ? '99+' : UNREAD_COUNT}
-                    </span>
-                  )}
-                  {/* 수신함 blue dot (닫힘) */}
-                  {!isOpen && item.panel === 'inbox' && UNREAD_COUNT > 0 && (
-                    <span className="bg-blue-40 absolute top-1.25 right-1 h-1.5 w-1.5 rounded-full" />
-                  )}
+                  {/* TODO: 수신함 기능 활성화 시 배지 복원 */}
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">{isOpen ? item.tooltipOpen : item.tooltipClosed}</TooltipContent>
