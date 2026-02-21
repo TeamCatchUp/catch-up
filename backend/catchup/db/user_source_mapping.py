@@ -113,3 +113,20 @@ def upsert_okta_users(
     )
     
     db.execute(update_stmt)
+
+
+def get_pending_source_premappings(
+    db: Session,
+    email: str
+) -> Optional[list[PreMappingBuffer]]:
+    """
+    어드민이 미리 연동해둔 외부 툴 데이터를 찾는다.
+    """
+    stmt = (
+        select(PreMappingBuffer)
+        .where(
+            (PreMappingBuffer.email == email) &
+            (PreMappingBuffer.is_registered == False)
+        )
+    )
+    return db.scalars(stmt).all()

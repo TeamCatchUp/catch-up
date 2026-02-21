@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from httpx import HTTPStatusError, RequestError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.connectors.slack.auth import get_slack_oauth_service, SlackOAuthService
@@ -16,9 +17,10 @@ from catchup.connectors.slack.schemas import (
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
 from catchup.db.knowledge_source import add_knowledge_source
-from catchup.db.models import KnowledgeSource, SourceType
+from catchup.db.models import KnowledgeSource, SourceType, Workspace
 from catchup.db.slack import oauth_repository as slack_crud
 from catchup.db.user_source_mapping import upsert_okta_users
+from catchup.db.workspaces import get_workspace_limit_one
 from catchup.mapping.okta import OktaClient
 from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
@@ -202,8 +204,27 @@ async def slack_uninstall(
 async def _register_knowledge_source(team_id: str):
     def _sync_task():
         with SessionLocal() as db:
+            workspace = get_workspace_limit_one(db)
+            
+            if not workspace:
+                logger.error("[SLACK] 등록된 워크스페이스가 없습니다. 관리자에게 문의하세요.")
+                return
+            
+            # 중복 등록 방지
+            existing_source = db.scalar(
+                select(KnowledgeSource).where(
+                    (KnowledgeSource.workspace_id == workspace.id) &
+                    (KnowledgeSource.source_type == SourceType.SLACK) &
+                    (KnowledgeSource.external_identifier == team_id)
+                )
+            )
+            
+            if existing_source:
+                logger.info(f"[SLACK] 이미 등록된 지식 소스입니다. (team_id={team_id})")
+                return
+            
             new_source = KnowledgeSource(
-                workspace_id=1,
+                workspace_id=workspace.id,
                 source_type=SourceType.SLACK,
                 display_name="Slack",
                 external_identifier=team_id    

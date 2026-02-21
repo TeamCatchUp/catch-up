@@ -12,6 +12,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from httpx import HTTPStatusError, RequestError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.oauth_client import (
@@ -37,6 +38,7 @@ from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.models import KnowledgeSource, SourceType
 from catchup.db.user_source_mapping import upsert_okta_users
+from catchup.db.workspaces import get_workspace_limit_one
 from catchup.mapping.okta import OktaClient
 from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
 from catchup.utils.redis import store_oauth_state
@@ -167,9 +169,28 @@ async def atlassian_uninstall(
 async def _register_knowledge_source(cloud_id: str, source_type: SourceType):
     def _sync_task():
         with SessionLocal() as db:
+            workspace = get_workspace_limit_one(db)
+            
+            if not workspace:
+                logger.error(f"[{source_type.value}] 등록된 워크스페이스가 없습니다.")
+                return
+            
+            # 중복 등록 방지
+            existing_source = db.scalar(
+                select(KnowledgeSource).where(
+                    (KnowledgeSource.workspace_id == workspace.id) &
+                    (KnowledgeSource.source_type == source_type) &
+                    (KnowledgeSource.external_identifier == cloud_id)
+                )
+            )
+            
+            if existing_source:
+                logger.info(f"[{source_type.value}] 이미 등록된 지식 소스입니다. (cloud_id={cloud_id})")
+                return
+            
             name = "Jira" if source_type == SourceType.JIRA else "Confluence"
             new_source = KnowledgeSource(
-                workspace_id=1,
+                workspace_id=workspace.id,
                 source_type=source_type,
                 display_name=name,
                 external_identifier=cloud_id    
