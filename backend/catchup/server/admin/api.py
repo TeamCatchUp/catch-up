@@ -13,9 +13,16 @@ from catchup.db.models import (
     GithubSyncState,
     JiraProject,
     JiraSyncState,
+    SlackChannelSyncState,
+    SlackOAuthToken,
+    SlackSyncState,
     User,
 )
-from catchup.server.auth.schemas import GithubConnectorStatus, JiraConnectorStatus
+from catchup.server.auth.schemas import (
+    GithubConnectorStatus,
+    JiraConnectorStatus,
+    SlackConnectorStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -169,3 +176,72 @@ def get_jira_connector_status(
     _admin_user: User = Depends(require_admin_user),
 ):
     return _get_jira_status(db)
+
+
+def _get_slack_status(db: Session) -> SlackConnectorStatus:
+    team_ids = [row[0] for row in db.query(SlackOAuthToken.team_id).all()]
+
+    if not team_ids:
+        logger.info("[SLACK][FULL SYNC] Slack connector status: no oauth token found")
+        return SlackConnectorStatus(
+            connected=False,
+            oldest=None,
+            latest=None,
+            channels=[],
+        )
+
+    channels = [
+        row[0]
+        for row in db.query(SlackChannelSyncState.channel_name)
+        .filter(SlackChannelSyncState.team_id.in_(team_ids))
+        .distinct()
+        .all()
+        if row[0]
+    ]
+
+    latest_dt = (
+        db.query(func.max(SlackSyncState.last_successful_sync_at))
+        .filter(SlackSyncState.team_id.in_(team_ids))
+        .scalar()
+    )
+
+    oldest_dt = None
+    try:
+        sql = text(
+            """
+            SELECT MIN(
+                COALESCE(
+                    cmetadata ->> 'created_at',
+                    cmetadata ->> 'updated_at',
+                    cmetadata ->> 'synced_at'
+                )::timestamptz
+            ) AS oldest
+            FROM langchain_pg_embedding
+            WHERE cmetadata ->> 'source' = 'slack'
+            """
+        )
+        result = db.execute(sql).first()
+        oldest_dt = result[0] if result and result[0] else None
+    except Exception as e:
+        logger.warning(
+            "[SLACK][FULL SYNC] Failed to fetch slack oldest embedding date: %s", e
+        )
+
+    return SlackConnectorStatus(
+        connected=True,
+        oldest=_format_date(oldest_dt),
+        latest=_format_date(latest_dt),
+        channels=channels,
+    )
+
+
+@router.get(
+    path="/connector/slack/status",
+    description="Slack 연동 상태 조회 (admin 전용)",
+    response_model=SlackConnectorStatus,
+)
+def get_slack_connector_status(
+    db: Session = Depends(get_db),
+    _admin_user: User = Depends(require_admin_user),
+):
+    return _get_slack_status(db)

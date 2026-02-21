@@ -38,3 +38,11 @@ class JiraConnectorStatus(BaseModel):
     oldest: str | None
     latest: str | None
     projects: list[str]
+
+
+class SlackConnectorStatus(BaseModel):
+    tool_name: str = "slack"
+    connected: bool
+    oldest: str | None
+    latest: str | None
+    channels: list[str]
