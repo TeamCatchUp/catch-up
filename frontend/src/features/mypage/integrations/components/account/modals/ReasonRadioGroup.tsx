@@ -15,6 +15,7 @@ interface ReasonRadioGroupProps {
   onSelect: (key: string) => void;
   customValue: string;
   onCustomValueChange: (value: string) => void;
+  customPlaceholder?: string;
 }
 
 const ReasonRadio = ({
@@ -51,6 +52,7 @@ const ReasonRadioGroup = ({
   onSelect,
   customValue,
   onCustomValueChange,
+  customPlaceholder = '반려 사유를 입력해주세요.',
 }: ReasonRadioGroupProps) => (
   <div className="mt-4 flex w-full flex-col gap-2">
     <div className="text-body-small text-gray-80 flex items-center gap-1">
@@ -85,7 +87,7 @@ const ReasonRadioGroup = ({
                   inputSize="lg"
                   value={customValue}
                   onChange={(event) => onCustomValueChange(event.target.value)}
-                  placeholder="반려 사유를 입력해주세요."
+                  placeholder={customPlaceholder}
                   className="h-[46px]"
                 />
               )}
