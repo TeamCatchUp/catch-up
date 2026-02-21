@@ -1,18 +1,16 @@
 'use client';
 
-import LockIcon from '@/public/icons/icon/lock_filled.svg';
 import CatchUpIcon from '@/public/icons/logo/logo_catchup.svg';
 import CatchUpLetter from '@/public/icons/logo/logo_catchup_letter_blue.svg';
 import { Button } from '@/shared/components/ui/button';
 
 interface WelcomeStepProps {
   onStart: () => void;
-  isLoading?: boolean;
 }
 
-export function WelcomeStep({ onStart, isLoading }: WelcomeStepProps) {
+export function WelcomeStep({ onStart }: WelcomeStepProps) {
   return (
-    <div className="flex size-full flex-col items-center justify-center">
+    <div className="bg-onboarding-gradient flex size-full flex-col items-center justify-center">
       <div className="flex w-[440px] flex-col items-start gap-10 pb-[120px]">
         {/* 텍스트 섹션 */}
         <div className="flex w-full flex-col items-start gap-9">
@@ -33,25 +31,14 @@ export function WelcomeStep({ onStart, isLoading }: WelcomeStepProps) {
         </div>
 
         {/* 액션 섹션 */}
-        <div className="flex w-full flex-col items-start gap-2.5">
-          <div className="flex w-full items-center gap-1.5">
-            <div className="size-[22px] shrink-0 overflow-clip">
-              <LockIcon className="text-gray-30 size-full" />
-            </div>
-            <span className="text-body-medium text-gray-80 tracking-tight">
-              소속 조직의 계정으로 안전하게 로그인하세요.
-            </span>
-          </div>
-          <Button
-            variant="box-solid-primary"
-            size="lg"
-            onClick={onStart}
-            disabled={isLoading}
-            className="h-[46px] w-full"
-          >
-            SSO 통합 로그인하기
-          </Button>
-        </div>
+        <Button
+          variant="box-solid-primary"
+          size="lg"
+          onClick={onStart}
+          className="h-[46px] w-full"
+        >
+          온보딩 시작하기
+        </Button>
       </div>
     </div>
   );
