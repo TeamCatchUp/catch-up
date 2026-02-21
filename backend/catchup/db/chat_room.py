@@ -391,3 +391,44 @@ def toggle_save_status(
     db.add(message)
     
     return message
+
+
+def get_query_answer_pair(
+    db: Session,
+    message: ChatHistory
+) -> list[ChatHistory]:
+    """
+    마이페이지 상세: 특정 사용자 질문과 그에 대응하는 바로 다음 AI 답변을 조회한다.
+    """
+    query = db.get(ChatHistory, message.id)
+    if not query or query.sender_type != SenderType.HUMAN:
+        return []
+
+    answer = db.scalar(
+        select(ChatHistory)
+        .where(
+            (ChatHistory.chat_room_id == query.chat_room_id) &
+            (ChatHistory.sender_type == SenderType.ASSISTANT) &
+            (ChatHistory.id > query.id)
+        )
+        .order_by(ChatHistory.id.asc())
+        .limit(1)
+    )
+
+    return [query, answer] if answer else [query]
+
+
+def get_user_message_with_ownership(
+    db: Session,
+    message_id: int, 
+    user_id: int
+) -> ChatHistory | None:
+    """메시지 ID와 유저 ID를 통해 소유권이 확인된 메시지 조회"""
+    return db.scalar(
+        select(ChatHistory)
+        .join(ChatRoom, ChatHistory.chat_room_id == ChatRoom.id)
+        .where(
+            (ChatHistory.id == message_id) &
+            (ChatRoom.user_id == user_id)
+        )
+    )

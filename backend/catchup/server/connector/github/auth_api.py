@@ -232,7 +232,7 @@ async def _register_knowledge_source(installation_id: int):
             workspace = get_workspace_limit_one(db)
             
             if not workspace:
-                logger.error("[SLACK] 등록된 워크스페이스가 없습니다. 관리자에게 문의하세요.")
+                logger.error("[GitHub] 등록된 워크스페이스가 없습니다. 관리자에게 문의하세요.")
                 return
             
             # 중복 등록 방지

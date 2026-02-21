@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import get_current_user
-from catchup.db.chat_room import get_chat_room, get_message
+from catchup.db.chat_room import get_chat_room, get_message, get_user_message_with_ownership
 from catchup.db.dependencies import get_db
 from catchup.db.models import ChatHistory, ChatRoom, User
 
@@ -49,4 +49,24 @@ async def get_valid_message(
             detail="Message not found."
         )
     
-    return message    
+    return message
+
+
+async def get_valid_user_query(
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> ChatHistory:
+    
+    message = get_user_message_with_ownership(
+        db=db,
+        message_id=message_id,
+        user_id=current_user.id
+    )
+    
+    if not message:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="질문 메시지를 찾을 수 없거나 접근 권한이 없습니다."
+        )
+    return message
