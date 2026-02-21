@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 from catchup.db.models import CompanySize, JobLevel
@@ -28,6 +29,20 @@ class SignUpResponse(BaseModel):
     provider: str
     
     model_config = ConfigDict(from_attributes=True)
+    
+
+# Pre-mapped 계정 정보
+class CandidateItem(BaseModel):
+    external_id: str
+    full_name: str
+    display_name: str
+    email: str
+    picture: Optional[str]
+
+
+class MappingCandidates(BaseModel):
+    source_type: str
+    candidates: Optional[list[CandidateItem]]
 
 
 # Internal

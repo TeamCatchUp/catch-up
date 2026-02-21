@@ -151,7 +151,7 @@ class PreMappingBuffer(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     
     okta_uid: Mapped[str] = mapped_column(String(128), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), index=True)
+    email: Mapped[str] = mapped_column(String(255), index=True, comment="Catch Up 사용자 이메일 (예: Okta 이메일)")
     name: Mapped[str] = mapped_column(String(100), comment="Okta에 등록된 임직원 실명") 
     
     source_type: Mapped[SourceType] = mapped_column(String(20), nullable=False)
@@ -387,7 +387,6 @@ class SlackUser(Base):
     __tablename__ = "slack_users"
 
     team_id: Mapped[str] = mapped_column(String(20), primary_key=True, comment="WorkSpaceId")
-    user_id: Mapped[str] = mapped_column(String(20), primary_key=True, comment="UserId")
     user_id: Mapped[str] = mapped_column(String(20), primary_key=True, comment="UserId")
     name: Mapped[str] = mapped_column(String(255), nullable=False, comment="Login Name Used for Mention")
     real_name: Mapped[str] = mapped_column(String(255), nullable=False, comment="실제 이름")
