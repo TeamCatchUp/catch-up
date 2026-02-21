@@ -3,6 +3,7 @@ const API_PREFIX = '/api/v1';
 export const API = {
   auth: {
     me: `${API_PREFIX}/auth/me`, // GET 현재 사용자 정보 (email, name, role)
+    profile: `${API_PREFIX}/auth/me/profile`, // GET 마이페이지 프로필 (name, email, picture, department, job_level)
     logout: `${API_PREFIX}/auth/logout`, // POST 로그아웃 (쿠키 삭제)
     refresh: `${API_PREFIX}/auth/refresh`, // POST JWT 토큰 갱신
   },
