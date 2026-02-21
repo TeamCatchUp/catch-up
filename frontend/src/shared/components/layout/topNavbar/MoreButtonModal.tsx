@@ -1,50 +1,16 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import {
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-} from '@/shared/components/ui/dropdown-menu';
+import { DropdownMenuContent, DropdownMenuItem } from '@/shared/components/ui/dropdown-menu';
 
-import ArrowRight from '/public/icons/icon/arrow_right.svg';
-import CloudCheck from '/public/icons/icon/cloud_check.svg';
 import Error from '/public/icons/icon/error.svg';
-import Storage from '/public/icons/icon/storage.svg';
-import ConfluenceLogo from '/public/icons/logo/Confluence.svg';
-import GithubLogo from '/public/icons/logo/GitHub.svg';
-import JiraLogo from '/public/icons/logo/Jira.svg';
-import SlackLogo from '/public/icons/logo/Slack.svg';
-
-/**
- * 연동 가능한 외부 서비스 목록
- */
-const linkServices = [
-  { key: 'Jira', label: 'Jira', Icon: JiraLogo },
-  { key: 'Confluence', label: 'Confluence', Icon: ConfluenceLogo },
-  { key: 'Github', label: 'Github', Icon: GithubLogo },
-  { key: 'Slack', label: 'Slack', Icon: SlackLogo },
-] as const;
-
-type LinkService = (typeof linkServices)[number]['key'];
 
 /**
  * 상단 More 버튼 드롭다운 메뉴를 렌더링
  */
 export function MoreButtonContent() {
   const router = useRouter();
-  const [linked, setLinked] = useState<Record<LinkService, boolean>>({
-    Jira: true,
-    Confluence: true,
-    Github: false,
-    Slack: false,
-  });
-
-  const linkedList = linkServices.filter((service) => linked[service.key]);
 
   return (
     <DropdownMenuContent
@@ -57,45 +23,6 @@ export function MoreButtonContent() {
         <Error className="h-6 w-6 shrink-0 text-gray-50" />
         <span>도움말</span>
       </DropdownMenuItem>
-
-      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-        <Storage className="h-6 w-6 shrink-0 text-gray-50" />
-        <span>버전 기록</span>
-      </DropdownMenuItem>
-
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger className="justify-between">
-          <div className="flex items-center gap-2.5">
-            <CloudCheck className="h-6 w-6 shrink-0 text-gray-50" />
-            <span>연결</span>
-          </div>
-          <div className="text-body-xsmall flex items-center text-gray-50">
-            {linkedList.length > 0 && (
-              <span className="max-w-19.5 truncate">{linkedList.map((service) => service.label).join(', ')}</span>
-            )}
-            <ArrowRight className="text-gray-30 h-6 w-6" />
-          </div>
-        </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent className="w-[250px]">
-          {linkServices.map(({ key, label, Icon }) => (
-            <DropdownMenuItem
-              key={key}
-              onSelect={(e) => e.preventDefault()}
-              onClick={() => setLinked((prev) => ({ ...prev, [key]: !prev[key] }))}
-              className="justify-between"
-            >
-              <div className="flex items-center gap-2">
-                <Icon className="h-5 w-5" />
-                <span>{label}</span>
-              </div>
-              <div className="text-body-xsmall flex items-center text-gray-50">
-                <span>{linked[key] ? '연동' : '미연동'}</span>
-                <ArrowRight className="text-gray-30 h-6 w-6" />
-              </div>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
     </DropdownMenuContent>
   );
 }
