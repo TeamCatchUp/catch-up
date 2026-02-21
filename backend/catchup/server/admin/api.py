@@ -26,6 +26,7 @@ from catchup.db.models import (
     SlackUser,
     SourceType,
     User,
+    UserSourceMapping,
 )
 from catchup.server.auth.schemas import (
     ConfluenceSyncableResponse,
@@ -44,6 +45,14 @@ from catchup.server.admin.schemas import (
     UserSyncMapping,
     UserSyncStatusResponse,
     SourceUserCount,
+    AdminUserListResponse,
+    AdminUserListItem,
+    AdminUserDetailResponse,
+    UserIntegrations,
+    JiraAccount,
+    GithubAccount,
+    SlackAccount,
+    ConfluenceAccount,
 )
 
 logger = logging.getLogger(__name__)
@@ -337,6 +346,163 @@ def get_confluence_connector_status(
     _admin_user: User = Depends(require_admin_user),
 ):
     return _get_confluence_status(db)
+
+
+# ============================
+# Admin - User management
+# ============================
+def _get_admin_user_list(db: Session) -> AdminUserListResponse:
+    rows = (
+        db.query(
+            User.id,
+            User.name,
+            User.department,
+            User.job_level,
+            User.status,
+        )
+        .order_by(User.name)
+        .all()
+    )
+
+    users = [
+        AdminUserListItem(
+            id=row.id,
+            name=row.name,
+            department=row.department,
+            jobLevel=row.job_level,
+            status=row.status,
+        )
+        for row in rows
+    ]
+
+    logger.info("[ADMIN][USER_LIST] fetched users (count=%d)", len(users))
+    return AdminUserListResponse(total=len(users), users=users)
+
+
+def _get_integration_accounts(
+    db: Session, user_id: int
+) -> UserIntegrations:
+    mappings = {
+        m.source_type: m.external_user_identifier
+        for m in db.query(UserSourceMapping)
+        .filter(UserSourceMapping.user_id == user_id)
+        .all()
+    }
+
+    jira = None
+    if SourceType.JIRA in mappings:
+        account_id = mappings[SourceType.JIRA]
+        row = (
+            db.query(JiraUser)
+            .filter(JiraUser.account_id == account_id)
+            .order_by(JiraUser.synced_at.desc())
+            .first()
+        )
+        if row:
+            jira = JiraAccount(
+                accountId=row.account_id,
+                name=row.display_name,
+                email=row.email_address,
+                avatarUrl=row.avatar_url,
+            )
+
+    github = None
+    if SourceType.GITHUB in mappings:
+        login = mappings[SourceType.GITHUB]
+        row = (
+            db.query(GitHubUser)
+            .filter(GitHubUser.login == login)
+            .first()
+        )
+        if row:
+            github = GithubAccount(
+                login=row.login,
+                name=row.name,
+                email=row.email,
+                avatarUrl=row.avatar_url,
+            )
+
+    slack = None
+    if SourceType.SLACK in mappings:
+        user_key = mappings[SourceType.SLACK]
+        row = (
+            db.query(SlackUser)
+            .filter(SlackUser.user_id == user_key)
+            .order_by(SlackUser.synced_at.desc())
+            .first()
+        )
+        if row:
+            slack = SlackAccount(
+                userId=row.user_id,
+                name=row.display_name or row.real_name,
+                email=row.email,
+                avatarUrl=row.avatar_url,
+            )
+
+    confluence = None
+    if SourceType.CONFLUENCE in mappings:
+        account_id = mappings[SourceType.CONFLUENCE]
+        row = (
+            db.query(ConfluenceUser)
+            .filter(ConfluenceUser.account_id == account_id)
+            .order_by(ConfluenceUser.synced_at.desc())
+            .first()
+        )
+        if row:
+            confluence = ConfluenceAccount(
+                accountId=row.account_id,
+                name=row.display_name or row.public_name,
+                email=row.email,
+                avatarUrl=row.avatar_url,
+            )
+
+    return UserIntegrations(
+        jira=jira,
+        github=github,
+        slack=slack,
+        confluence=confluence,
+    )
+
+
+@router.get(
+    path="/users",
+    description="관리자용 사용자 목록 조회",
+    response_model=AdminUserListResponse,
+)
+def get_admin_users(
+    db: Session = Depends(get_db),
+    _admin_user: User = Depends(require_admin_user),
+):
+    return _get_admin_user_list(db)
+
+
+@router.get(
+    path="/users/{user_id}",
+    description="관리자용 사용자 상세 조회",
+    response_model=AdminUserDetailResponse,
+)
+def get_admin_user_detail(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _admin_user: User = Depends(require_admin_user),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        logger.info("[ADMIN][USER_DETAIL] user not found (user_id=%s)", user_id)
+        raise HTTPException(status_code=404, detail="User not found")
+
+    integrations = _get_integration_accounts(db, user_id)
+    logger.info("[ADMIN][USER_DETAIL] fetched detail (user_id=%s)", user_id)
+
+    return AdminUserDetailResponse(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        department=user.department,
+        jobLevel=user.job_level,
+        status=user.status,
+        integrations=integrations,
+    )
 
 
 # ============================
