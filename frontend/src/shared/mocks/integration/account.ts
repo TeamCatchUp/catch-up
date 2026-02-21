@@ -23,7 +23,7 @@ export const MOCK_SELECTABLE_ROWS = [
     department: '개발팀',
     teamSizeLabel: '8명',
     picture: null,
-    accountIdByService: { jira: 'yumi.lee' },
+    accountIdByService: { github: 'yumi.lee@gmail.com', jira: 'yumi.lee@gmail.com', slack: 'yumi.lee@gmail.com' },
     statusByService: {
       jira: '완료' as const,
       github: '완료' as const,
@@ -39,7 +39,7 @@ export const MOCK_SELECTABLE_ROWS = [
     department: '기획팀',
     teamSizeLabel: '5명',
     picture: null,
-    accountIdByService: { jira: 'minsu.kim' },
+    accountIdByService: { github: 'minsu.kim@gmail.com', jira: 'minsu.kim@gmail.com', slack: 'minsu.kim@gmail.com' },
     statusByService: {
       jira: '완료' as const,
       github: '미사용' as const,
@@ -55,7 +55,7 @@ export const MOCK_SELECTABLE_ROWS = [
     department: '디자인팀',
     teamSizeLabel: '4명',
     picture: null,
-    accountIdByService: { jira: 'seoyeon.park' },
+    accountIdByService: { github: 'seoyeon.park@gmail.com', jira: 'seoyeon.park@gmail.com', slack: 'seoyeon.park@gmail.com' },
     statusByService: {
       jira: '완료' as const,
       github: '미사용' as const,
@@ -71,7 +71,7 @@ export const MOCK_SELECTABLE_ROWS = [
     department: '개발팀',
     teamSizeLabel: '8명',
     picture: null,
-    accountIdByService: { jira: 'haneul.jung' },
+    accountIdByService: { github: 'haneul.jung@gmail.com', jira: 'haneul.jung@gmail.com', slack: 'haneul.jung@gmail.com' },
     statusByService: {
       jira: '완료' as const,
       github: '완료' as const,
@@ -87,7 +87,7 @@ export const MOCK_SELECTABLE_ROWS = [
     department: 'QA팀',
     teamSizeLabel: '3명',
     picture: null,
-    accountIdByService: { jira: 'jiho.choi' },
+    accountIdByService: { github: 'jiho.choi@gmail.com', jira: 'jiho.choi@gmail.com', slack: 'jiho.choi@gmail.com' },
     statusByService: {
       jira: '완료' as const,
       github: '미사용' as const,

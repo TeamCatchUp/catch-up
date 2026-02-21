@@ -1,5 +1,5 @@
 export type UserRole = 'admin' | 'user';
-export type UserStatus = 'new' | 'pending' | 'active' | 'inactive' | 'deleted';
+export type UserStatus = 'new' | 'active' | 'inactive';
 
 /** GET /api/v1/auth/me 응답 */
 export interface AuthUser {

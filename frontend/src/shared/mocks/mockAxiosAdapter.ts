@@ -1,5 +1,3 @@
-import type { UserStatus } from '@/shared/queries/auth.types';
-
 import { MOCK_ADMIN_MEMBERS, MOCK_ENTRY_REQUESTS } from './admin/adminMembersMockData';
 import { MOCK_JWT_TOKENS, MOCK_USER } from './auth/data';
 import delay from './delay';
@@ -112,45 +110,39 @@ const mockHandlers: MockHandler[] = [
     handler: async () => [{ id: 12345678, account: { login: 'catchup-org' }, app_slug: 'catchup-bot' }],
   },
 
-  // Onboarding
+  // Onboarding — 일반 유저 가입
   {
-    pattern: /^\/api\/v1\/onboarding\/complete$/,
+    pattern: /^\/api\/v1\/onboarding$/,
     method: 'post',
-    handler: async () => {
-      const nextStatus: UserStatus = MOCK_USER.role === 'admin' ? 'active' : 'pending';
-      MOCK_USER.status = nextStatus;
-      return { success: true };
+    handler: async (_, data) => {
+      MOCK_USER.status = 'active';
+      const req = data as { name?: string; job_level?: string; department?: string } | undefined;
+      return {
+        id: 1,
+        email: MOCK_USER.email,
+        name: req?.name ?? MOCK_USER.name,
+        department: req?.department ?? '',
+        job_level: req?.job_level ?? 'member',
+        provider: 'okta',
+      };
     },
   },
+  // Onboarding — 어드민 가입
   {
-    pattern: /^\/api\/v1\/onboarding\/connectors$/,
-    method: 'get',
-    handler: async () => ({
-      jira: [
-        { id: 'jira-kimdev', name: 'Kim Dev', email: 'dev1@catchup.io', picture: null },
-        { id: 'jira-leedev', name: 'Lee Dev', email: 'dev2@catchup.io', picture: null },
-        { id: 'jira-parkdev', name: 'Park Dev', email: 'dev3@catchup.io', picture: null },
-        { id: 'jira-choidev', name: 'Choi Dev', email: 'dev4@catchup.io', picture: null },
-        { id: 'jira-jungdev', name: 'Jung Dev', email: 'dev5@catchup.io', picture: null },
-        { id: 'jira-handev', name: 'Han Dev', email: 'dev6@catchup.io', picture: null },
-        { id: 'jira-limdev', name: 'Lim Dev', email: 'dev7@catchup.io', picture: null },
-        { id: 'jira-yoondev', name: 'Yoon Dev', email: 'dev8@catchup.io', picture: null },
-        { id: 'jira-jangdev', name: 'Jang Dev', email: 'dev9@catchup.io', picture: null },
-        { id: 'jira-kangdev', name: 'Kang Dev', email: 'dev10@catchup.io', picture: null },
-        { id: 'jira-shindev', name: 'Shin Dev', email: 'dev11@catchup.io', picture: null },
-        { id: 'jira-chodev', name: 'Cho Dev', email: 'dev12@catchup.io', picture: null },
-      ],
-      github: [
-        { id: 'kimdev', name: 'Kim Dev', email: 'dev1@catchup.io', picture: null },
-        { id: 'parkdev', name: 'Park Dev', email: 'dev3@catchup.io', picture: null },
-        { id: 'jungdev', name: 'Jung Dev', email: 'dev5@catchup.io', picture: null },
-      ],
-      slack: [
-        { id: 'U04ABC12DEF', name: 'Kim Dev', email: 'dev1@catchup.io', picture: null },
-        { id: 'U04PARK03XYZ', name: 'Park Dev', email: 'dev3@catchup.io', picture: null },
-        { id: 'U04JUNG05XYZ', name: 'Jung Dev', email: 'dev5@catchup.io', picture: null },
-      ],
-    }),
+    pattern: /^\/api\/v1\/onboarding\/admin$/,
+    method: 'post',
+    handler: async (_, data) => {
+      MOCK_USER.status = 'active';
+      const req = data as { name?: string; job_level?: string; company_name?: string } | undefined;
+      return {
+        id: 1,
+        email: MOCK_USER.email,
+        name: req?.name ?? MOCK_USER.name,
+        department: req?.company_name ?? '',
+        job_level: req?.job_level ?? 'executive',
+        provider: 'okta',
+      };
+    },
   },
 
   // Admin — 이용자 관리

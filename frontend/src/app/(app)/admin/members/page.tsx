@@ -27,8 +27,8 @@ export default function AdminMembersPage() {
         </label>
       </div>
 
-      {/* 입장 신청 목록 */}
-      <EntryRequestSection searchTerm={searchTerm} />
+      {/* 입장 신청 목록
+      <EntryRequestSection searchTerm={searchTerm} /> */}
 
       {/* 이용자 목록 */}
       <UserListSection searchTerm={searchTerm} />

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import ErrorIcon from '@/public/icons/icon/error.svg';
 import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
-import { DEPARTMENT_OPTIONS, RANK_OPTIONS } from '@/shared/constants/organization';
+import { DEPARTMENT_OPTIONS, JOB_LEVEL_OPTIONS } from '@/shared/constants/organization';
 
 import type { ProfileFormData } from '../../types/onboarding';
 import { StepIndicator } from '../StepIndicator';
@@ -15,7 +15,7 @@ interface ProfileStepProps {
   isAdmin: boolean;
   defaultValues: {
     name: string;
-    rank: string;
+    job_level: string;
     department: string;
   };
   onSubmit: (data: ProfileFormData) => void;
@@ -24,17 +24,15 @@ interface ProfileStepProps {
 
 export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: ProfileStepProps) {
   const [name, setName] = useState(defaultValues.name);
-  const [rank, setRank] = useState(defaultValues.rank);
+  const [jobLevel, setJobLevel] = useState(defaultValues.job_level);
   const [department, setDepartment] = useState(defaultValues.department);
 
   const [errors, setErrors] = useState<Record<string, boolean>>({});
 
-  const totalSteps = 2;
-
   const validate = () => {
     const newErrors: Record<string, boolean> = {};
     if (!name.trim()) newErrors.name = true;
-    if (!rank) newErrors.rank = true;
+    if (!jobLevel) newErrors.jobLevel = true;
     if (!isAdmin && !department) newErrors.department = true;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -44,19 +42,19 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
     if (!validate()) return;
     onSubmit({
       name: name.trim(),
-      rank,
+      job_level: jobLevel as ProfileFormData['job_level'],
       ...(isAdmin ? {} : { department }),
     });
   };
 
-  const isComplete = name.trim() && rank && (isAdmin || department);
+  const isComplete = name.trim() && jobLevel && (isAdmin || department);
 
   return (
     <div className="flex size-full flex-col justify-between">
       <div className="flex flex-col gap-12">
         {/* 헤더 영역: 스텝 인디케이터 + 타이틀 + 설명 */}
         <div className="flex flex-col gap-4">
-          <StepIndicator totalSteps={totalSteps} currentStep={1} />
+          {isAdmin && <StepIndicator totalSteps={2} currentStep={1} />}
           <h1 className="text-display-large text-gray-80 tracking-tight">
             잠시만 시간을 내어
             <br />
@@ -86,31 +84,31 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
           </div>
 
           {/* 직급 + 부서명 */}
-          <div className={isAdmin ? '' : 'flex gap-2'}>
-            <div className={`flex flex-col gap-1.5 ${isAdmin ? '' : 'flex-1'}`}>
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-1.5">
               <label className="text-heading-medium text-gray-80 flex items-center gap-1 tracking-tight">
                 <span className="size-[5px] rounded-full bg-red-50" />
                 직급을 알려주세요.
               </label>
               <Select
-                value={rank}
+                value={jobLevel}
                 onValueChange={(v) => {
-                  setRank(v);
-                  if (errors.rank) setErrors((p) => ({ ...p, rank: false }));
+                  setJobLevel(v);
+                  if (errors.jobLevel) setErrors((p) => ({ ...p, jobLevel: false }));
                 }}
               >
-                <SelectTrigger className={`h-[46px] ${errors.rank ? 'border-red-50' : ''}`}>
+                <SelectTrigger className={`h-[46px] ${errors.jobLevel ? 'border-red-50' : ''}`}>
                   <SelectValue placeholder="선택 안됨" />
                 </SelectTrigger>
                 <SelectContent position="popper" side="bottom" sideOffset={4} avoidCollisions={false}>
-                  {RANK_OPTIONS.map((opt) => (
-                    <SelectItem key={opt} value={opt}>
-                      {opt}
+                  {JOB_LEVEL_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {errors.rank && (
+              {errors.jobLevel && (
                 <div className="flex items-center gap-0.5">
                   <ErrorIcon className="size-4 shrink-0 text-red-50" />
                   <span className="text-label-xsmall text-red-50">직급을 선택해주세요.</span>
@@ -120,7 +118,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
 
             {/* 부서명 — MEMBER only */}
             {!isAdmin && (
-              <div className="flex flex-1 flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5">
                 <label className="text-heading-medium text-gray-80 flex items-center gap-1 tracking-tight">
                   <span className="size-[5px] rounded-full bg-red-50" />
                   부서명을 알려주세요.

@@ -1,7 +1,7 @@
 import type { UserRole, UserStatus } from '@/shared/queries/auth.types';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 시나리오 선택 (admin/user, new/pending/active/inactive/deleted)
+// 시나리오 선택 (admin/user, new/active/inactive)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const MOCK_ROLE: UserRole = (process.env.NEXT_PUBLIC_USER_ROLE as UserRole) ?? 'user';
 const MOCK_STATUS: UserStatus = (process.env.NEXT_PUBLIC_USER_STATUS as UserStatus) ?? 'active';

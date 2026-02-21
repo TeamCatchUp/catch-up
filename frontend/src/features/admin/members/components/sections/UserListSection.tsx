@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import IconAddSmall from '@/public/icons/icon/add_small.svg';
 import IconFilter from '@/public/icons/icon/filter-3.svg';
 import { Button } from '@/shared/components/ui/button';
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
@@ -69,10 +68,6 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
         description="이용자 현황을 확인하고 관리하세요."
         actions={
           <>
-            <Button variant="box-outline-gray" size="md">
-              <IconAddSmall className="size-5" />
-              이용자 추가하기
-            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="icon-outline-gray" size="md" className="size-9 p-1.5">
@@ -100,7 +95,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
           rows={tableRows}
           activeKey={activeKey}
           onSelectKey={setActiveKey}
-          emptyMessage="등록된 이용자가 없습니다."
+          emptyMessage="이용자 목록이 없습니다."
           lastColumnHeader="상태"
           lastColumnBadgeClass={STATUS_BADGE_CLASS}
         />

@@ -1,30 +1,30 @@
-﻿import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
-import IconError from '@/public/icons/icon/error.svg';
-import { cn } from '@/shared/utils/cn';
 
-import {
-  getMemberStatusBadgeClassName,
-  MEMBER_LIST_STATUS_BADGE_BASE_CLASS,
-  MEMBER_TABLE_SERVICES,
-} from '../../../constants/memberUi';
+import { MEMBER_TABLE_SERVICES } from '../../../constants/memberUi';
 import type { MemberDisplayRow } from '../../../types/memberDisplay';
+
+/** 서비스 키 → 테이블 헤더 레이블 */
+const SERVICE_HEADER_LABELS: Record<string, string> = {
+  github: 'Github',
+  jira: 'Atlassian',
+  slack: 'Slack',
+};
 
 interface UsersTableProps {
   displayRows: MemberDisplayRow[];
-  activeRenderKey: string | null;
-  onSelectRenderKey: (renderKey: string) => void;
 }
 
-/** 이용자 연동 좌측 상태 테이블 */
-const UsersTable = ({ displayRows, activeRenderKey, onSelectRenderKey }: UsersTableProps) => {
+/** 이용자 연동 상태 테이블 */
+const UsersTable = ({ displayRows }: UsersTableProps) => {
   return (
-    <section className="border-neutral-3 flex h-full min-h-0 flex-col overflow-clip border-r bg-white">
+    <section className="flex h-full min-h-0 flex-col overflow-clip bg-white">
       <div className="border-neutral-3 bg-neutral-1 grid h-9 shrink-0 grid-cols-4 items-center border-b px-5">
         <span className="text-body-xsmall text-center text-gray-50">이름</span>
-        <span className="text-body-xsmall text-center text-gray-50">Github</span>
-        <span className="text-body-xsmall text-center text-gray-50">Jira</span>
-        <span className="text-body-xsmall text-center text-gray-50">Slack</span>
+        {MEMBER_TABLE_SERVICES.map((service) => (
+          <span key={service} className="text-body-xsmall text-center text-gray-50">
+            {SERVICE_HEADER_LABELS[service] ?? service}
+          </span>
+        ))}
       </div>
 
       {displayRows.length === 0 ? (
@@ -33,41 +33,26 @@ const UsersTable = ({ displayRows, activeRenderKey, onSelectRenderKey }: UsersTa
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-x-clip overflow-y-auto">
-          {displayRows.map(({ renderKey, row, displayStatusByService }) => {
-            const isSelected = activeRenderKey === renderKey;
+          {displayRows.map(({ renderKey, row }) => (
+            <div
+              key={renderKey}
+              className="border-neutral-3 grid h-12.5 shrink-0 grid-cols-4 items-center border-b bg-white px-5"
+            >
+              <div className="flex items-center gap-4">
+                <DefaultProfile className="border-neutral-2 text-gray-30 size-7 shrink-0 rounded-full border" />
+                <span className="text-body-small text-gray-80 truncate">{row.userName}</span>
+              </div>
 
-            return (
-              <button
-                key={renderKey}
-                type="button"
-                onClick={() => onSelectRenderKey(renderKey)}
-                className={cn(
-                  'border-neutral-3 grid h-12.5 shrink-0 cursor-pointer grid-cols-4 items-center border-b px-5 text-left',
-                  isSelected ? 'bg-blue-1' : 'hover:bg-neutral-1 bg-white',
-                )}
-              >
-                <div className="flex items-center gap-4">
-                  <DefaultProfile className="border-neutral-2 text-gray-30 size-7.5 shrink-0 rounded-full border" />
-                  <span className="text-body-small text-gray-80 truncate">{row.userName}</span>
-                </div>
-
-                {MEMBER_TABLE_SERVICES.map((service) => (
-                  <div key={`${renderKey}-${service}`} className="flex items-center justify-center">
-                    <span
-                      className={cn(
-                        MEMBER_LIST_STATUS_BADGE_BASE_CLASS,
-                        getMemberStatusBadgeClassName(displayStatusByService[service]),
-                      )}
-                    >
-                      {displayStatusByService[service] === '완료' && <IconCheckCircle className="size-4" />}
-                      {displayStatusByService[service] === '미등록' && <IconError className="size-4" />}
-                      {displayStatusByService[service]}
-                    </span>
-                  </div>
-                ))}
-              </button>
-            );
-          })}
+              {MEMBER_TABLE_SERVICES.map((service) => (
+                <span
+                  key={`${renderKey}-${service}`}
+                  className="text-body-small truncate text-center text-gray-60"
+                >
+                  {row.accountIdByService[service] ?? '-'}
+                </span>
+              ))}
+            </div>
+          ))}
         </div>
       )}
     </section>

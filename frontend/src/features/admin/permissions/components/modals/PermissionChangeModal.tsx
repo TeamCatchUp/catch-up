@@ -49,7 +49,7 @@ const PermissionChangeModal = ({
         className="border-neutral-3 shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-white px-5 pt-3 pb-4"
       >
         <div className="flex h-9 items-center justify-between">
-          <DialogTitle className="text-heading-medium text-gray-80">권한 변경하기</DialogTitle>
+          <DialogTitle className="text-heading-medium text-gray-80">Admin 권한 부여</DialogTitle>
           <button type="button" onClick={() => onOpenChange(false)} className="cursor-pointer" aria-label="닫기">
             <Cancel className="size-5 text-gray-50" />
           </button>
@@ -58,7 +58,7 @@ const PermissionChangeModal = ({
         <div className="border-neutral-3 flex w-[360px] flex-col gap-4 border-t pt-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1">
-              <span className="text-body-small text-gray-80">변경할 멤버</span>
+              <span className="text-body-small text-gray-80">부여할 멤버</span>
               <span className="size-1.25 rounded-full bg-red-50" />
             </div>
 
@@ -78,7 +78,7 @@ const PermissionChangeModal = ({
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-1">
-              <span className="text-body-small text-gray-80">권한 변경 사유를 선택해주세요.</span>
+              <span className="text-body-small text-gray-80">권한 부여 사유를 선택해주세요.</span>
               <span className="size-1.25 rounded-full bg-red-50" />
             </div>
 

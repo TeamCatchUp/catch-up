@@ -64,33 +64,26 @@ const IntegrationManagementSection = ({
 
       <div className="flex w-160.75 flex-none flex-col gap-6">
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-small text-gray-80">연동 상태 관리</h3>
-          <div className="border-neutral-3 bg-neutral-1 overflow-hidden rounded-xl border">
-            <div className="border-neutral-3 flex h-13 items-center justify-between border-b px-4 py-3">
-              <span className="text-body-small text-gray-70">동기화</span>
-              <div className="flex items-center gap-3">
-                <div className="text-body-xsmall flex items-center gap-1.5">
-                  <span className="text-gray-50">최근 동기화</span>
-                  <span className="text-gray-70">{lastSyncedAt}</span>
-                </div>
-                <button
-                  type="button"
-                  className="border-neutral-3 text-body-xsmall text-gray-70 flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-white px-2 py-1"
-                >
-                  <IconRotate className="text-gray-70 h-6 w-6" />
-                  동기화
-                </button>
+          <div className="flex items-center gap-5">
+            <h3 className="text-heading-small text-gray-80 flex-1">연동 상태 관리</h3>
+            <div className="flex shrink-0 items-center gap-3">
+              <div className="text-body-xsmall flex items-center gap-1.5">
+                <span className="text-gray-50">최근 동기화</span>
+                <span className="text-gray-70">{lastSyncedAt}</span>
               </div>
+              <button
+                type="button"
+                className="border-neutral-3 text-body-xsmall text-gray-70 flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-white px-2 py-1"
+              >
+                <IconRotate className="text-gray-70 h-6 w-6" />
+                동기화
+              </button>
             </div>
+          </div>
+          <div className="border-neutral-3 bg-neutral-1 overflow-hidden rounded-xl border">
             <div className="border-neutral-3 flex h-13 items-center justify-between border-b px-4 py-3">
               <span className="text-body-small text-gray-70">연동 상태</span>
               <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  className="text-body-xsmall text-gray-70 h-7 cursor-pointer rounded-full px-1.5 py-1"
-                >
-                  재연결
-                </button>
                 <button
                   type="button"
                   className="text-body-xsmall h-7 cursor-pointer rounded-full px-1.5 py-1 text-red-50"

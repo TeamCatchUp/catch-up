@@ -106,6 +106,7 @@ const AccountRegisterModal = ({ open, onOpenChange, allRows, serviceName }: Acco
             onSelect={setSelectedReason}
             customValue={customReason}
             onCustomValueChange={setCustomReason}
+            customPlaceholder="등록 사유를 입력해주세요."
           />
 
           <p className="text-label-xsmall mt-4 text-gray-50">

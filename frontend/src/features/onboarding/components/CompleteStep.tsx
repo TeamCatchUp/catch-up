@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/components/ui/button';
 import { authQueries } from '@/shared/queries/auth.queries';
 
-import { useCompleteOnboarding } from '../mutations';
+import { useAdminSignUp, useUserSignUp } from '../mutations';
 import type { OnboardingSteps } from '../types/onboarding';
 
 interface CompleteStepProps {
@@ -18,34 +18,39 @@ interface CompleteStepProps {
 export function CompleteStep({ data, isAdmin }: CompleteStepProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { mutate: complete, isPending, isError } = useCompleteOnboarding();
+  const userSignUp = useUserSignUp();
+  const adminSignUp = useAdminSignUp();
+
+  const { isPending, isError } = isAdmin ? adminSignUp : userSignUp;
 
   const submitOnboarding = useCallback(() => {
-    complete(
-      {
-        name: data.name,
-        rank: data.rank,
-        department: data.department,
-        company_name: data.company_name,
-        team_size: data.team_size,
-        connectors: {
-          jira_account_id: data.jira_account_id,
-          github_account_id: data.github_account_id,
-          slack_account_id: data.slack_account_id,
+    const onSuccess = async () => {
+      await queryClient.invalidateQueries({ queryKey: authQueries.all() });
+      router.replace('/');
+    };
+
+    if (isAdmin) {
+      adminSignUp.mutate(
+        {
+          name: data.name,
+          job_level: data.job_level,
+          company_name: data.company_name!,
+          company_size: data.company_size!,
+          workspace_name: 'main',
         },
-      },
-      {
-        onSuccess: async () => {
-          await queryClient.invalidateQueries({ queryKey: authQueries.all() });
-          if (isAdmin) {
-            router.replace('/');
-          } else {
-            router.replace('/pending');
-          }
+        { onSuccess },
+      );
+    } else {
+      userSignUp.mutate(
+        {
+          name: data.name,
+          job_level: data.job_level,
+          department: data.department!,
         },
-      },
-    );
-  }, [complete, data, isAdmin, queryClient, router]);
+        { onSuccess },
+      );
+    }
+  }, [adminSignUp, userSignUp, data, isAdmin, queryClient, router]);
 
   useEffect(() => {
     submitOnboarding();

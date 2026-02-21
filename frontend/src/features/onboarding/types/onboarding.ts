@@ -1,77 +1,66 @@
+/** 백엔드 JobLevel enum */
+export type JobLevel = 'executive' | 'leader' | 'member';
+
+/** 백엔드 CompanySize enum */
+export type CompanySize = 'small' | 'medium' | 'large' | 'enterprise';
+
 /** useFunnel 스텝별 context 타입 */
 export type OnboardingSteps = {
   Profile: {
     name?: string;
-    rank?: string;
+    job_level?: JobLevel;
     department?: string;
   };
 
   OrgInfo: {
     name: string;
-    rank: string;
+    job_level: JobLevel;
     company_name?: string;
-    team_size?: string;
-  };
-
-  Connector: {
-    name: string;
-    rank: string;
-    department?: string;
-    company_name?: string;
-    team_size?: string;
-    jira_account_id?: string;
-    github_account_id?: string;
-    slack_account_id?: string;
+    company_size?: CompanySize;
   };
 
   Complete: {
     name: string;
-    rank: string;
+    job_level: JobLevel;
     department?: string;
     company_name?: string;
-    team_size?: string;
-    jira_account_id?: string;
-    github_account_id?: string;
-    slack_account_id?: string;
+    company_size?: CompanySize;
   };
 };
 
 export interface ProfileFormData {
   name: string;
-  rank: string;
+  job_level: JobLevel;
   department?: string;
 }
 
 export interface OrgInfoFormData {
   company_name: string;
-  team_size: string;
+  company_size: CompanySize;
 }
 
-export interface ConnectorFormData {
-  jira_account_id?: string;
-  github_account_id?: string;
-  slack_account_id?: string;
-}
-
-export interface ConnectorAccount {
-  id: string;
+/** POST /api/v1/onboarding 요청 바디 */
+export interface UserSignUpRequest {
   name: string;
+  job_level: JobLevel;
+  department: string;
+}
+
+/** POST /api/v1/onboarding/admin 요청 바디 */
+export interface AdminSignUpRequest {
+  name: string;
+  job_level: JobLevel;
+  company_name: string;
+  company_size: CompanySize;
+  workspace_name: string;
+}
+
+/** 온보딩 가입 응답 */
+export interface SignUpResponse {
+  id: number;
   email: string;
-  picture: string | null;
-}
-
-export interface ConnectorOptions {
-  jira: ConnectorAccount[];
-  github: ConnectorAccount[];
-  slack: ConnectorAccount[];
-}
-
-/** POST /api/v1/onboarding/complete 요청 바디 */
-export interface OnboardingCompleteRequest {
   name: string;
-  rank: string;
-  department?: string;
-  company_name?: string;
-  team_size?: string;
-  connectors: ConnectorFormData;
+  department: string;
+  job_level: string;
+  provider: string;
 }
