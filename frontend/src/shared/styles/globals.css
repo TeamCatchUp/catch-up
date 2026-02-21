@@ -147,3 +147,8 @@
       var(--color-white);
   }
 }
+
+/* 날짜 하나만 선택 시 range 꼬리 숨김 (unlayered → Tailwind 유틸리티보다 우선) */
+.rdp-range_start.rdp-range_end::before {
+  display: none;
+}

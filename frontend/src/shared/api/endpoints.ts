@@ -65,6 +65,7 @@ export const API = {
       decide: `${API_PREFIX}/admin/members/requests/decide`, // POST 승인/반려
       status: (userId: string) => `${API_PREFIX}/admin/members/${userId}/status`, // PATCH 비활성화/삭제
     },
+    // auditLogs / permissions: 엔드포인트 미확정, mock 직접 사용
   },
 
   // 백엔드 미구현 — 라우터 미등록 상태
