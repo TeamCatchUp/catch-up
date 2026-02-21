@@ -31,6 +31,12 @@ class JobLevel(StrEnum):
     MEMBER = "member"  # 팀원
 
 
+class UserStatus(StrEnum):
+    NEW = "new"  # Okta 로그인만 마친 상태
+    ACTIVE = "active"  # 회원가입 후 승인 완료 상태
+    INACTIVE = "inactive"  # 관리자에 의해 비활성화된 상태
+
+
 class Company(Base):
     __tablename__ = "companies"
     
@@ -90,6 +96,7 @@ class User(Base):
         default=JobLevel.MEMBER, 
         server_default=text(f"'{JobLevel.MEMBER}'")
     )
+    status: Mapped[UserStatus] = mapped_column(String(10), nullable=False)
     
     # Objects
     workspace_links: Mapped[list["UserWorkspace"]] = relationship(

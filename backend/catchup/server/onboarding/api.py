@@ -31,7 +31,7 @@ def signup_okta_user(
     signup_data = UserSignUpSchema(
         okta_uid=pending_user["okta_uid"],
         email=pending_user["email"],
-        name=pending_user["name"],
+        name=payload.name,
         department=payload.department,
         job_level=payload.job_level,
     )
@@ -56,7 +56,7 @@ def signup_root_admin(
     admin_data = AdminSignUpSchema(
         okta_uid=pending_user["okta_uid"],
         email=pending_user["email"],
-        name=pending_user["name"],
+        name=payload.name,
         job_level=payload.job_level,
         company_name=payload.company_name,
         company_size=payload.company_size,

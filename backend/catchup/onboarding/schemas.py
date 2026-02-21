@@ -6,6 +6,7 @@ from catchup.db.models import CompanySize, JobLevel
 
 # External
 class BaseSignUpRequest(BaseModel):
+    name: str  # 온보딩 화면에서 입력한 이름
     job_level: JobLevel
 
 

@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from catchup.auth.cookies import delete_auth_cookies, set_auth_cookies
-from catchup.auth.dependencies import get_current_user
+from catchup.auth.dependencies import get_current_user, get_current_user_info
 from catchup.auth.google_oauth import GoogleOAuthService
 from catchup.auth.jwt import create_access_token, create_refresh_token, verify_token
 from catchup.auth.okta_oauth import OktaOAuthService
@@ -208,11 +208,9 @@ async def logout(
 
 @router.get(
     path="/me",
-    description="인증된 사용자의 정보를 반환한다."    
+    description="인증된 사용자의 정보를 반환한다. (미가입 상태 포함)" 
 )
-async def read_users_me(current_user: User = Depends(get_current_user)):
-    return CurrentUserInfo(
-        email=current_user.email,
-        name=current_user.name,
-        role=current_user.role
-    )
+def read_users_me(
+    user_info: dict = Depends(get_current_user_info)
+):
+    return CurrentUserInfo(**user_info)

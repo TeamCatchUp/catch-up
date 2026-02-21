@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from catchup.db.models import Company, Workspace, User, UserRole, UserWorkspace
+from catchup.db.models import Company, UserStatus, Workspace, User, UserRole, UserWorkspace
 from catchup.db.users import get_okta_user_with_okta_uid
 from catchup.onboarding.schemas import AdminSignUpSchema
 
@@ -37,6 +37,7 @@ def register_admin_from_okta(db: Session, data: AdminSignUpSchema) -> User:
             role=UserRole.ADMIN, 
             department=data.company_name,  # TODO: 예시고객사 PoC 한정
             job_level=data.job_level,
+            status=UserStatus.ACTIVE
         )
         db.add(new_user)
         db.flush()

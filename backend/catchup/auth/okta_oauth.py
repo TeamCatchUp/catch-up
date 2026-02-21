@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from catchup.auth.schemas import OktaUserInfoResponse, UserCreate
 from catchup.configs.config import auth_settings
-from catchup.db.models import OktaUser, User, UserRole
+from catchup.db.models import OktaUser, User, UserRole, UserStatus
 from catchup.db.users import get_okta_user_with_okta_uid, get_user_by_email
 
 logger = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ class OktaOAuthService:
                 okta_uid=okta_user.sub,
                 email=okta_user.email,
                 name=okta_user.name,
-                status="ACTIVE"
+                status=UserStatus.ACTIVE
             )
             db.add(new_okta_record)
             db.flush()
