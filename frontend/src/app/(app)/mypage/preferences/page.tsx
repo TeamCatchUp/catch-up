@@ -4,26 +4,20 @@ import { useState } from 'react';
 
 import InstructionCard from '@/features/mypage/preferences/components/InstructionCard';
 import InstructionInput from '@/features/mypage/preferences/components/InstructionInput';
-import SettingDropdownRow from '@/features/mypage/preferences/components/SettingDropdownRow';
-import {
-  EMOJI_OPTIONS,
-  type EmojiValue,
-  TONE_OPTIONS,
-  type ToneValue,
-} from '@/features/mypage/preferences/constants/preferences';
 
 export default function PreferencesPage() {
-  const [tone, setTone] = useState<ToneValue>('default');
-  const [emojiLevel, setEmojiLevel] = useState<EmojiValue>('default');
   const [instructions, setInstructions] = useState<string[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
+  const hasInstruction = instructions.length > 0;
+  const isEditing = editingIndex != null;
+
   const handleSaveInstruction = (value: string) => {
-    if (editingIndex != null) {
+    if (isEditing) {
       setInstructions((prev) => prev.map((item, i) => (i === editingIndex ? value : item)));
       setEditingIndex(null);
     } else {
-      setInstructions((prev) => [...prev, value]);
+      setInstructions([value]);
     }
   };
 
@@ -44,32 +38,13 @@ export default function PreferencesPage() {
     <section className="flex min-w-[600px] flex-col gap-6 px-16 pt-9 pb-[120px]">
       <h1 className="text-heading-xlarge text-gray-80">개인 맞춤 설정</h1>
 
-      {/* 프롬프트 지침 섹션 */}
+      {/* 개인 지침 섹션 */}
       <div className="flex flex-col gap-1">
         <div className="bg-neutral-1 rounded-md px-5 py-1.5">
           <span className="text-heading-small text-gray-70">프롬프트 지침</span>
         </div>
 
         <div className="flex flex-col px-4">
-          {/* 답변 톤 */}
-          <SettingDropdownRow
-            label="답변 톤"
-            description="AI의 말투와 표현 방식을 설정합니다."
-            options={TONE_OPTIONS}
-            value={tone}
-            onChange={(v) => setTone(v as ToneValue)}
-          />
-
-          {/* 이모지 사용 */}
-          <SettingDropdownRow
-            label="이모지 사용"
-            description="AI의 말투와 표현 방식을 설정합니다."
-            options={EMOJI_OPTIONS}
-            value={emojiLevel}
-            onChange={(v) => setEmojiLevel(v as EmojiValue)}
-          />
-
-          {/* 지침 작성 */}
           <div className="flex flex-col gap-3 py-3">
             <div className="flex flex-col gap-1.5">
               <span className="text-heading-small text-gray-80">지침 작성</span>
@@ -78,13 +53,16 @@ export default function PreferencesPage() {
               </span>
             </div>
 
-            <InstructionInput
-              key={editingIndex ?? 'new'}
-              onSave={handleSaveInstruction}
-              defaultValue={editingIndex != null ? instructions[editingIndex] : ''}
-              defaultActive={editingIndex != null}
-              onCancelEdit={handleCancelEdit}
-            />
+            {/* 지침이 없거나 수정 중일 때만 입력창 표시 (최대 1개) */}
+            {(!hasInstruction || isEditing) && (
+              <InstructionInput
+                key={editingIndex ?? 'new'}
+                onSave={handleSaveInstruction}
+                defaultValue={isEditing ? instructions[editingIndex] : ''}
+                defaultActive={isEditing}
+                onCancelEdit={handleCancelEdit}
+              />
+            )}
 
             {instructions.map((instruction, index) => (
               <InstructionCard
