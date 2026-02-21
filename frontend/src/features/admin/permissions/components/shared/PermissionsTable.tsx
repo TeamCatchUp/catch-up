@@ -79,7 +79,7 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
                       className="h-7.5 w-[110px]"
                       onClick={() => onChangeRoleClick(member)}
                     >
-                      권한 변경
+                      Admin 권한 부여
                     </Button>
                   </div>
                 </div>
