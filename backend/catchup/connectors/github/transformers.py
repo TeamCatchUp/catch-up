@@ -189,6 +189,7 @@ class GithubTransformer:
     def _build_issue_contextual_content(self, issue: GithubIssue) -> str:
         """Issue contextual_content 생성 - LLM 답변 생성용"""
         lines = []
+        display = self._display_name
 
         # 제목
         lines.append(f"[Issue #{issue.number}] {issue.title}")
@@ -200,10 +201,10 @@ class GithubTransformer:
         # 담당자 정보
         people_parts = []
         if issue.assignees:
-            assignee_names = ", ".join(f"@{a.login}" for a in issue.assignees)
+            assignee_names = ", ".join(display(a) for a in issue.assignees)
             people_parts.append(f"Assigned to: {assignee_names}")
         if issue.author:
-            people_parts.append(f"Reported by: @{issue.author.login}")
+            people_parts.append(f"Reported by: {display(issue.author)}")
         if people_parts:
             lines.append(" | ".join(people_parts))
 
@@ -222,9 +223,9 @@ class GithubTransformer:
         if issue.comments:
             lines.append(f"Recent Discussion ({len(issue.comments)}):")
             for comment in issue.comments[:5]:  # 최근 5개만
-                author_name = comment.author.login if comment.author else "unknown"
+                author_name = display(comment.author)
                 date_str = comment.created_at.strftime("%Y-%m-%d %H:%M")
-                lines.append(f"[{date_str} @{author_name}]: {comment.body}")
+                lines.append(f"[{date_str} {author_name}]: {comment.body}")
             lines.append("")
 
         return "\n".join(lines)
@@ -264,7 +265,9 @@ class GithubTransformer:
             "state": issue.state,
             "state_reason": issue.state_reason,
             "author": _user_info(issue.author) if issue.author else None,
+            "author_display": self._display_name(issue.author),
             "assignees": [_user_info(a) for a in issue.assignees],
+            "assignee_displays": [self._display_name(a) for a in issue.assignees],
             "comments_count": issue.comments_count,
             # Note: closed_by는 GitHub GraphQL API에서 지원하지 않음 (PR만 지원)
         }
@@ -450,6 +453,7 @@ class GithubTransformer:
     def _build_pr_contextual_content(self, pr: GithubPullRequest) -> str:
         """PR contextual_content 생성 - LLM 답변 생성용"""
         lines = []
+        display = self._display_name
 
         # 제목
         lines.append(f"[PR #{pr.number}] {pr.title}")
@@ -459,7 +463,7 @@ class GithubTransformer:
         state = "merged" if pr.merged else pr.state
         status_parts = [f"Status: {state}"]
         if pr.author:
-            status_parts.append(f"Author: @{pr.author.login}")
+            status_parts.append(f"Author: {display(pr.author)}")
         lines.append(" | ".join(status_parts))
 
         # 브랜치 정보
@@ -467,7 +471,7 @@ class GithubTransformer:
 
         # 리뷰어
         if pr.reviewers:
-            reviewer_names = ", ".join(f"@{r.login}" for r in pr.reviewers)
+            reviewer_names = ", ".join(display(r) for r in pr.reviewers)
             lines.append(f"Reviewers: {reviewer_names}")
 
         lines.append("")
@@ -488,8 +492,8 @@ class GithubTransformer:
             for commit in pr.commits[:10]:  # 최대 10개
                 short_sha = commit.sha[:7]
                 message_first_line = commit.message.split("\n")[0] if commit.message else ""
-                author = commit.author_login or commit.author_name or "unknown"
-                lines.append(f"- [{short_sha}] {message_first_line} (@{author})")
+                author = commit.author_name or commit.author_login or "unknown"
+                lines.append(f"- [{short_sha}] {message_first_line} ({author})")
             if len(pr.commits) > 10:
                 lines.append(f"  ... and {len(pr.commits) - 10} more commits")
             lines.append("")
@@ -498,9 +502,9 @@ class GithubTransformer:
         if pr.reviews:
             lines.append("Reviews:")
             for review in pr.reviews:
-                author_name = review.author.login if review.author else "unknown"
+                author_name = display(review.author)
                 date_str = review.submitted_at.strftime("%Y-%m-%d") if review.submitted_at else "pending"
-                lines.append(f"[{review.state} @{author_name} at {date_str}]")
+                lines.append(f"[{review.state} {author_name} at {date_str}]")
                 if review.body:
                     lines.append(review.body)
                 lines.append("")
@@ -510,7 +514,7 @@ class GithubTransformer:
             lines.append(f"Code Review Comments ({len(pr.comments)}):")
             lines.append("")
             for comment in pr.comments:
-                author_name = comment.author.login if comment.author else "unknown"
+                author_name = display(comment.author)
                 date_str = comment.created_at.strftime("%Y-%m-%d") if comment.created_at else ""
 
                 location_info = ""
@@ -521,7 +525,7 @@ class GithubTransformer:
                     elif comment.original_line:
                         location_info += f":{comment.original_line}"
 
-                lines.append(f"--- @{author_name} ({date_str}) on {location_info} ---")
+                lines.append(f"--- {author_name} ({date_str}) on {location_info} ---")
 
                 if comment.diff_hunk:
                     hunk_summary = self._summarize_diff_hunk(comment.diff_hunk)
@@ -585,9 +589,13 @@ class GithubTransformer:
             "base_ref": pr.base_ref,
             "head_ref": pr.head_ref,
             "author": _user_info(pr.author) if pr.author else None,
+            "author_display": self._display_name(pr.author),
             "assignees": [_user_info(a) for a in pr.assignees],
+            "assignee_displays": [self._display_name(a) for a in pr.assignees],
             "reviewers": [_user_info(r) for r in pr.reviewers],
+            "reviewer_displays": [self._display_name(r) for r in pr.reviewers],
             "merged_by": _user_info(pr.merged_by) if pr.merged_by else None,
+            "merged_by_display": self._display_name(pr.merged_by),
 
             # 코드 변경 통계
             "changed_files": pr.changed_files,
@@ -739,7 +747,11 @@ class GithubTransformer:
         lines.append("")
 
         # 작성자 정보
-        author_str = commit.author.login if commit.author else commit.author_name or "unknown"
+        author_str = (
+            (commit.author.name or commit.author.login) if commit.author else None
+        )
+        if not author_str:
+            author_str = commit.author_name or commit.author_login or "unknown"
         if commit.author_email:
             author_str += f" <{commit.author_email}>"
         lines.append(f"Author: {author_str}")
@@ -798,6 +810,7 @@ class GithubTransformer:
 
             # 작성자
             "author": commit.author.login if commit.author else None,
+            "author_display": (commit.author.name or commit.author.login) if commit.author else (commit.author_name or commit.author_login),
             "author_name": commit.author_name,
             "author_email": commit.author_email,
             "committer": commit.committer.login if commit.committer else None,
@@ -815,6 +828,12 @@ class GithubTransformer:
     # ============================================================
     # 유틸리티 메서드
     # ============================================================
+
+    def _display_name(self, user: GithubUser | None) -> str:
+        """실명 우선 표시용 헬퍼"""
+        if not user:
+            return "unknown"
+        return user.name or user.login or "unknown"
 
     def _parse_graphql_user(self, data: dict[str, Any] | None) -> GithubUser | None:
         """GraphQL User/Actor 노드를 GithubUser로 변환"""
