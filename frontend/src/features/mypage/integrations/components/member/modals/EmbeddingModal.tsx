@@ -91,9 +91,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
                     type="button"
                     onClick={() => setSelectedPeriod(period)}
                     className={`text-body-small h-9 cursor-pointer rounded-full px-3 ${
-                      selectedPeriod === period
-                        ? 'bg-gray-80 text-white'
-                        : 'border-neutral-3 text-gray-60 border'
+                      selectedPeriod === period ? 'bg-gray-80 text-white' : 'border-neutral-3 text-gray-60 border'
                     }`}
                   >
                     {period}
@@ -118,13 +116,13 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
                       onClick={() => toggleItem(item.id)}
                       className="flex w-full cursor-pointer items-center gap-3"
                     >
-                      <span className="text-body-small min-w-0 flex-1 truncate text-left text-gray-60">
+                      <span className="text-body-small text-gray-60 min-w-0 flex-1 truncate text-left">
                         {item.name}
                       </span>
                       {checked ? (
                         <CheckboxChecked className="size-6 shrink-0 text-blue-50" />
                       ) : (
-                        <CheckboxUnchecked className="size-6 shrink-0 text-gray-30" />
+                        <CheckboxUnchecked className="text-gray-30 size-6 shrink-0" />
                       )}
                     </button>
                   );

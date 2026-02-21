@@ -1,11 +1,47 @@
-/**
- * 사용자 질문 기록 조회 화면의 기본 플레이스홀더 페이지
- */
+'use client';
+
+import { useMemo, useState } from 'react';
+
+import QuestionLogListSection from '@/features/admin/question-logs/components/sections/QuestionLogListSection';
+import SelectedUserProfile from '@/features/admin/question-logs/components/sections/SelectedUserProfile';
+import UserSelectSection from '@/features/admin/question-logs/components/sections/UserSelectSection';
+import { MOCK_QUESTION_LOGS } from '@/features/admin/question-logs/mocks/questionLogsMockData';
+import { MOCK_ADMIN_MEMBERS } from '@/shared/mocks/admin/adminMembersMockData';
+
+/** 관리자 — 이용자 질문 기록 페이지 */
 export default function AdminQuestionLogsPage() {
+  const [selectedUserId, setSelectedUserId] = useState('');
+
+  const userOptions = useMemo(
+    () =>
+      MOCK_ADMIN_MEMBERS.filter((m) => m.status === 'active').map((m) => ({
+        id: m.userId,
+        name: m.name,
+        department: m.department,
+        rank: m.rank,
+        picture: m.picture,
+      })),
+    [],
+  );
+
+  const selectedUser = userOptions.find((u) => u.id === selectedUserId);
+
   return (
-    <section className="border-neutral-3 mx-16 mt-6 mb-25 rounded-xl border bg-white p-6">
-      <h1 className="text-heading-large text-gray-80">이용자 질문 기록</h1>
-      <p className="text-body-small text-gray-60 mt-3">이용자의 질문과 답변 기록을 조회할 수 있습니다.</p>
+    <section className="flex flex-col gap-4 px-16 pt-9 pb-25">
+      <h1 className="text-heading-xlarge text-gray-80">이용자 질문 기록</h1>
+
+      <div className="flex flex-col gap-8">
+        <div className="bg-blue-1 flex flex-col rounded-xl p-4">
+          <UserSelectSection users={userOptions} selectedUserId={selectedUserId} onUserChange={setSelectedUserId} />
+        </div>
+
+        {selectedUser && (
+          <>
+            <SelectedUserProfile user={selectedUser} />
+            <QuestionLogListSection items={MOCK_QUESTION_LOGS} userId={selectedUserId} />
+          </>
+        )}
+      </div>
     </section>
   );
 }

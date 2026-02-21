@@ -64,8 +64,8 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
                             <span className="text-white">연동 완료율</span>
                           </div>
                           <p className="text-white/75">
-                            {name}를 사용하는 사람 중에서 Catch Up에 자신의 계정을 등록한 사람의 비율이에요. 이
-                            수치가 낮을 때 임베딩을 진행하면 특정 사람의 작업이 빠지거나 결과가 달라질 수 있어요.
+                            {name}를 사용하는 사람 중에서 Catch Up에 자신의 계정을 등록한 사람의 비율이에요. 이 수치가
+                            낮을 때 임베딩을 진행하면 특정 사람의 작업이 빠지거나 결과가 달라질 수 있어요.
                           </p>
                         </div>
                       </TooltipContent>

@@ -5,8 +5,8 @@ import { useState } from 'react';
 import ErrorIcon from '@/public/icons/icon/error.svg';
 import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
+import { TEAM_SIZE_OPTIONS } from '@/shared/constants/organization';
 
-import { TEAM_SIZE_OPTIONS } from '../../constants/onboarding';
 import type { OrgInfoFormData } from '../../types/onboarding';
 import { StepIndicator } from '../StepIndicator';
 import { StepNavButtons } from '../StepNavButtons';

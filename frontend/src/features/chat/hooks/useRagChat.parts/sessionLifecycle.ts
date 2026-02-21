@@ -74,8 +74,13 @@ export const useSessionLifecycle = ({
   // Shared setters/refs
   // ---------------------------------------------------------------------------
   const { setChatData, setIsLoading, setIsError, setCurrentStep } = stateSetters;
-  const { syncedSessionRef, sessionSyncGuardRef, pendingReplaceSessionIdRef, hasPlaceholderReplacedRef, canReplacePlaceholderRef } =
-    sessionRefs;
+  const {
+    syncedSessionRef,
+    sessionSyncGuardRef,
+    pendingReplaceSessionIdRef,
+    hasPlaceholderReplacedRef,
+    canReplacePlaceholderRef,
+  } = sessionRefs;
   const { streamInFlightRef, hasAttemptedInitialStreamRef } = streamRefs;
 
   /**

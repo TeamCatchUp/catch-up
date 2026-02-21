@@ -68,8 +68,8 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
   };
 
   return (
-    <div className="bg-gradient-to-b from-transparent to-white px-6 lg:px-24 py-8 backdrop-blur-[10px]">
-      <div className="shadow-rag-bar border-neutral-4 mx-auto flex max-w-[776px] w-full flex-none flex-col rounded-3xl border bg-white px-3 py-4">
+    <div className="bg-gradient-to-b from-transparent to-white px-6 py-8 backdrop-blur-[10px] lg:px-24">
+      <div className="shadow-rag-bar border-neutral-4 mx-auto flex w-full max-w-[776px] flex-none flex-col rounded-3xl border bg-white px-3 py-4">
         {/* Filter Bar (카드 내부 상단) */}
         <div
           className={cn(

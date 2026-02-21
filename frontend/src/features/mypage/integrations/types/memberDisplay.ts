@@ -8,4 +8,4 @@ export interface MemberDisplayRow {
 }
 
 /** 이용자 연동 테이블 정렬 키 */
-export type MemberSortKey = 'rank' | 'newest' | 'oldest';
+export type MemberSortKey = 'newest' | 'oldest';

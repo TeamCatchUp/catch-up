@@ -7,16 +7,16 @@ import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { useUserStore } from '@/shared/store/userStore';
 import { cn } from '@/shared/utils/cn';
 
-import AdminPanelSettings from '/public/icons/icon/admin_panel_settings.svg';
 import ArticlePerson from '/public/icons/icon/article_person.svg';
 import Clock from '/public/icons/icon/clock.svg';
 import CloudCheck from '/public/icons/icon/cloud_check.svg';
+import Database from '/public/icons/icon/database.svg';
 import Explore from '/public/icons/icon/explore.svg';
 import Group from '/public/icons/icon/group.svg';
 import Help from '/public/icons/icon/help.svg';
 import Lock from '/public/icons/icon/lock.svg';
 import Person from '/public/icons/icon/person.svg';
-import Tree from '/public/icons/icon/tree.svg';
+import Shield from '/public/icons/icon/shield.svg';
 
 interface SettingsMenuItem {
   name: string;
@@ -58,10 +58,10 @@ const SETTINGS_SECTIONS_BY_ROLE: Record<UserRole, SettingsSection[]> = {
     {
       label: '조직 관리',
       items: [
-        { name: '조직도', href: '/admin/organization', Icon: Tree },
         { name: '이용자 관리', href: '/admin/members', Icon: Group },
         { name: '이용자 질문 기록', href: '/admin/question-logs', Icon: ArticlePerson },
-        { name: '감사 로그', href: '/admin/audit-logs', Icon: AdminPanelSettings },
+        { name: '감사 로그', href: '/admin/audit-logs', Icon: Shield },
+        { name: '토큰 사용량 관리', href: '/admin/token-usage', Icon: Database },
       ],
     },
     {
@@ -99,7 +99,7 @@ const SettingsPanel = () => {
           </div>
           <div className="flex flex-col gap-1">
             {section.items.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
 
               return (
                 <button

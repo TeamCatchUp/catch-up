@@ -5,8 +5,8 @@ import { useState } from 'react';
 import ErrorIcon from '@/public/icons/icon/error.svg';
 import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
+import { DEPARTMENT_OPTIONS, RANK_OPTIONS } from '@/shared/constants/organization';
 
-import { DEPARTMENT_OPTIONS, RANK_OPTIONS } from '../../constants/onboarding';
 import type { ProfileFormData } from '../../types/onboarding';
 import { StepIndicator } from '../StepIndicator';
 import { StepNavButtons } from '../StepNavButtons';
@@ -135,7 +135,13 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
                   <SelectTrigger className={`h-[46px] ${errors.department ? 'border-red-50' : ''}`}>
                     <SelectValue placeholder="선택 안됨" />
                   </SelectTrigger>
-                  <SelectContent position="popper" side="bottom" sideOffset={4} avoidCollisions={false} className="max-h-45">
+                  <SelectContent
+                    position="popper"
+                    side="bottom"
+                    sideOffset={4}
+                    avoidCollisions={false}
+                    className="max-h-45"
+                  >
                     {DEPARTMENT_OPTIONS.map((opt) => (
                       <SelectItem key={opt} value={opt}>
                         {opt}

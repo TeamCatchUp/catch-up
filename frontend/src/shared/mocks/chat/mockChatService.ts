@@ -38,8 +38,7 @@ const toTokenChunks = (text: string, chunkSize = TOKEN_CHUNK_SIZE): string[] => 
   return chunks;
 };
 
-const toCandidateSources = (sources: typeof MOCK_SOURCES) =>
-  sources.map((source) => ({ ...source, is_cited: false }));
+const toCandidateSources = (sources: typeof MOCK_SOURCES) => sources.map((source) => ({ ...source, is_cited: false }));
 
 const getTurnForRequest = (session_id: string, requestSignature: string) => {
   const now = Date.now();

@@ -1,8 +1,9 @@
 import { queryOptions } from '@tanstack/react-query';
 
-import type { AdminMember, EntryRequest } from '@/features/admin/members/types/adminMember';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
+
+import type { AdminMember, EntryRequest } from '../types/adminMember';
 
 export const adminMembersQueries = {
   all: () => ['admin', 'members'] as const,

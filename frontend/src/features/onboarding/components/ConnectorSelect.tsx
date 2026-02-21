@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import Image from 'next/image';
 
-import DefaultProfile from '@/public/icons/icon/default_profile.svg';
-import UnfoldMore from '@/public/icons/icon/unfold_more.svg';
 import CheckboxChecked from '@/public/icons/icon/checkbox_checked.svg';
 import CheckboxUnchecked from '@/public/icons/icon/checkbox_unchecked.svg';
+import DefaultProfile from '@/public/icons/icon/default_profile.svg';
+import UnfoldMore from '@/public/icons/icon/unfold_more.svg';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/shared/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
 import { cn } from '@/shared/utils/cn';
@@ -80,7 +80,7 @@ export function ConnectorSelect({
             {disabled ? (
               <>
                 <span className="text-gray-30">사용하지 않는 도구로 설정되어 있습니다</span>
-                <UnfoldMore className="size-5 shrink-0 text-gray-30" />
+                <UnfoldMore className="text-gray-30 size-5 shrink-0" />
               </>
             ) : selected ? (
               <>

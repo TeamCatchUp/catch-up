@@ -6,32 +6,24 @@ import { useQuery } from '@tanstack/react-query';
 import { USE_MOCK } from '@/shared/mocks/config';
 import { MOCK_RECENT_QUERIES } from '@/shared/mocks/search/data';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
+import type { GroupedSection } from '@/shared/utils/dateGrouping';
+import type { DatePeriod, SortOrder } from '@/shared/utils/dateGrouping';
+import { groupItemsByDate, isInPeriod as isInPeriodShared } from '@/shared/utils/dateGrouping';
 
-import { HISTORY_GROUP_ORDER, HISTORY_SECTION_LABELS } from '../constants/filterConfig';
-import type { HistoryGroup, HistoryItem, HistoryPeriod, HistorySort } from '../types/models';
-import { getHistoryGroup, isInPeriod, toHistoryItem } from '../utils/transformers';
-
-/** 날짜 그룹별로 묶인 히스토리 섹션 */
-interface GroupedSection {
-  /** 섹션 식별 그룹 키 */
-  key: HistoryGroup;
-  /** 섹션 헤더에 표시할 제목 */
-  title: string;
-  /** 해당 그룹에 속하는 히스토리 아이템 목록 */
-  items: HistoryItem[];
-}
+import type { HistoryItem } from '../types/models';
+import { toHistoryItem } from '../utils/transformers';
 
 /** {@link usePageModel} 훅의 반환 타입 */
 interface UsePageModelReturn {
-  sort: HistorySort;
-  setSort: React.Dispatch<React.SetStateAction<HistorySort>>;
-  period: HistoryPeriod;
-  setPeriod: React.Dispatch<React.SetStateAction<HistoryPeriod>>;
+  sort: SortOrder;
+  setSort: React.Dispatch<React.SetStateAction<SortOrder>>;
+  period: DatePeriod;
+  setPeriod: React.Dispatch<React.SetStateAction<DatePeriod>>;
   savedOnly: boolean;
   setSavedOnly: React.Dispatch<React.SetStateAction<boolean>>;
   searchTerm: string;
   setSearchTerm: React.Dispatch<React.SetStateAction<string>>;
-  groupedSections: GroupedSection[];
+  groupedSections: GroupedSection<HistoryItem>[];
   isLoading: boolean;
   isError: boolean;
 }
@@ -43,8 +35,8 @@ interface UsePageModelReturn {
  * 결과를 날짜 그룹(오늘 / 최근 7일 / 이전)별 섹션으로 반환한다.
  */
 export const usePageModel = (): UsePageModelReturn => {
-  const [sort, setSort] = useState<HistorySort>('latest');
-  const [period, setPeriod] = useState<HistoryPeriod>('all');
+  const [sort, setSort] = useState<SortOrder>('latest');
+  const [period, setPeriod] = useState<DatePeriod>('all');
   const [savedOnly, setSavedOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -64,7 +56,7 @@ export const usePageModel = (): UsePageModelReturn => {
 
     const next = historyItems
       .filter((item) => (savedOnly ? item.isSaved : true))
-      .filter((item) => isInPeriod(item, period))
+      .filter((item) => isInPeriodShared(item.rawDate, period))
       .filter((item) => {
         if (!normalizedKeyword) {
           return true;
@@ -77,24 +69,7 @@ export const usePageModel = (): UsePageModelReturn => {
     );
   }, [historyItems, period, savedOnly, searchTerm, sort]);
 
-  const groupedSections = useMemo<GroupedSection[]>(() => {
-    const grouped: Record<HistoryGroup, HistoryItem[]> = {
-      today: [],
-      sevenDays: [],
-      older: [],
-    };
-
-    for (const item of filteredItems) {
-      const group = getHistoryGroup(item.rawDate);
-      grouped[group].push(item);
-    }
-
-    return HISTORY_GROUP_ORDER.filter((group) => grouped[group].length > 0).map((group) => ({
-      key: group,
-      title: HISTORY_SECTION_LABELS[group],
-      items: grouped[group],
-    }));
-  }, [filteredItems]);
+  const groupedSections = useMemo(() => groupItemsByDate(filteredItems, (item) => item.rawDate), [filteredItems]);
 
   return {
     sort,

@@ -83,7 +83,12 @@ const realChatService = {
    * - 이벤트 타입: status, sources, token, result, error
    * - session_id는 선택 값이며, 없으면 서버가 새 세션을 생성
    */
-  streamChat: async (query: string, sessionId: string | undefined, onEvent: (event: StreamEvent) => void, signal?: AbortSignal) => {
+  streamChat: async (
+    query: string,
+    sessionId: string | undefined,
+    onEvent: (event: StreamEvent) => void,
+    signal?: AbortSignal,
+  ) => {
     const payload: { query: string; session_id?: string } = { query };
     if (sessionId) {
       payload.session_id = sessionId;
@@ -121,7 +126,6 @@ const realChatService = {
 
     return res.json();
   },
-
 };
 
 export default realChatService;

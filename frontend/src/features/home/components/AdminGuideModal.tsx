@@ -65,10 +65,7 @@ export default function AdminGuideModal({ onDismiss }: AdminGuideModalProps) {
         <DialogOverlay />
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           {showCloseConfirm ? (
-            <CloseConfirmContent
-              onDismiss={handleConfirmDismiss}
-              onNavigate={handleNavigateIntegration}
-            />
+            <CloseConfirmContent onDismiss={handleConfirmDismiss} onNavigate={handleNavigateIntegration} />
           ) : (
             <GuideContent
               step={step}
@@ -108,7 +105,7 @@ function GuideContent({
   onPrev: () => void;
 }) {
   return (
-    <div className="shadow-modal flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border border-neutral-5 bg-white p-6">
+    <div className="shadow-modal border-neutral-5 flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border bg-white p-6">
       {/* 콘텐츠 영역 */}
       <div
         className={`flex min-h-0 flex-1 flex-col gap-5 overflow-hidden transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}
@@ -126,7 +123,7 @@ function GuideContent({
           <button
             type="button"
             onClick={onClose}
-            className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-50 hover:bg-neutral-2"
+            className="hover:bg-neutral-2 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-50"
           >
             <CloseIcon className="size-5" />
           </button>
@@ -134,12 +131,7 @@ function GuideContent({
 
         {/* 일러스트 이미지 */}
         <div className="relative h-[160px] w-full overflow-hidden rounded-lg">
-          <Image
-            src={currentStep.image}
-            alt={currentStep.title.join(' ')}
-            fill
-            className="object-cover"
-          />
+          <Image src={currentStep.image} alt={currentStep.title.join(' ')} fill className="object-cover" />
         </div>
 
         {/* 본문 텍스트 */}
@@ -149,25 +141,17 @@ function GuideContent({
       </div>
 
       {/* Footer: 페이지네이션 + 버튼 */}
-      <div className="flex shrink-0 items-center justify-between border-t border-neutral-4 pt-5">
+      <div className="border-neutral-4 flex shrink-0 items-center justify-between border-t pt-5">
         {/* Pagination Dots */}
         <div className="flex gap-2.5 px-2">
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <div
-              key={i}
-              className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-gray-20'}`}
-            />
+            <div key={i} className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-gray-20'}`} />
           ))}
         </div>
 
         {/* Navigation Buttons */}
         <div className="flex gap-3">
-          <Button
-            variant="box-outline-gray"
-            size="lg"
-            className={isFirstStep ? 'invisible' : ''}
-            onClick={onPrev}
-          >
+          <Button variant="box-outline-gray" size="lg" className={isFirstStep ? 'invisible' : ''} onClick={onPrev}>
             이전
           </Button>
           <Button variant="box-solid-primary" size="lg" onClick={onNext}>
@@ -180,15 +164,9 @@ function GuideContent({
 }
 
 /** 닫기 확인 모달 본문 */
-function CloseConfirmContent({
-  onDismiss,
-  onNavigate,
-}: {
-  onDismiss: () => void;
-  onNavigate: () => void;
-}) {
+function CloseConfirmContent({ onDismiss, onNavigate }: { onDismiss: () => void; onNavigate: () => void }) {
   return (
-    <div className="shadow-modal flex w-[400px] flex-col gap-3 overflow-clip rounded-2xl border border-neutral-5 bg-white p-5">
+    <div className="shadow-modal border-neutral-5 flex w-[400px] flex-col gap-3 overflow-clip rounded-2xl border bg-white p-5">
       {/* 텍스트 */}
       <div className="flex flex-col gap-3">
         <p className="text-heading-medium text-orange-60">

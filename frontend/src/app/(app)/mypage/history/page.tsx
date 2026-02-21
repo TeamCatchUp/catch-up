@@ -2,14 +2,14 @@
 
 import { Fragment } from 'react';
 
-import FilterDropdown from '@/features/mypage/history/components/FilterDropdown';
 import ListItem from '@/features/mypage/history/components/ListItem';
-import { HISTORY_PERIOD_OPTIONS, HISTORY_SORT_OPTIONS } from '@/features/mypage/history/constants/filterConfig';
 import { usePageModel } from '@/features/mypage/history/hooks/pageModel';
 import BookmarkIcon from '@/public/icons/icon/bookmark.svg';
 import SearchIcon from '@/public/icons/icon/search.svg';
+import FilterDropdown from '@/shared/components/ui/filter-dropdown';
 import { Separator } from '@/shared/components/ui/separator';
 import { cn } from '@/shared/utils/cn';
+import { PERIOD_OPTIONS, SORT_OPTIONS } from '@/shared/utils/dateGrouping';
 
 export default function HistoryPage() {
   const {
@@ -33,8 +33,8 @@ export default function HistoryPage() {
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <FilterDropdown options={HISTORY_SORT_OPTIONS} value={sort} onChange={setSort} />
-            <FilterDropdown options={HISTORY_PERIOD_OPTIONS} value={period} onChange={setPeriod} />
+            <FilterDropdown options={SORT_OPTIONS} value={sort} onChange={setSort} />
+            <FilterDropdown options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
             <button
               type="button"
               onClick={() => setSavedOnly((prev) => !prev)}

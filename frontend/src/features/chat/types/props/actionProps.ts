@@ -18,10 +18,13 @@ export interface AnswerActionButtonsProps {
   icons: IconItem[];
   messageId: string;
   answerContent: string;
+  sessionId: string;
+  chatHistoryId?: string;
   hasFeedback?: boolean;
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: Dispatch<SetStateAction<Record<string, boolean>>>;
   onRetry?: () => void;
+  onFeedbackSubmitted?: (messageId: string) => void;
 }
 
 /**

@@ -1,5 +1,5 @@
-import type { IntegrationService } from '@/shared/types/integrationService';
 import type { UserRole, UserStatus } from '@/shared/queries/auth.types';
+import type { IntegrationService } from '@/shared/types/integrationService';
 
 /** 입장 신청 목록 행 */
 export interface EntryRequest {
@@ -44,6 +44,9 @@ export interface MemberStatusPayload {
   action: 'deactivate' | 'delete';
 }
 
+/** 이용자 테이블 정렬 키 */
+export type AdminSortKey = 'newest' | 'oldest';
+
 /** 테이블 행 렌더용 공통 인터페이스 */
 export interface MemberTableRow {
   key: string;
@@ -51,5 +54,6 @@ export interface MemberTableRow {
   picture: string | null;
   rank: string;
   department: string;
-  role: string;
+  /** 4번째 컬럼 값 (상태 or 권한) */
+  lastColumn: string;
 }

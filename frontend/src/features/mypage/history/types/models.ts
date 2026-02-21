@@ -1,22 +1,17 @@
+import type { FilterOption } from '@/shared/components/ui/filter-dropdown';
+import type { DateGroup, DatePeriod, SortOrder } from '@/shared/utils/dateGrouping';
+
+/** @deprecated shared FilterOption 사용 */
+export type HistoryFilterOption<T extends string> = FilterOption<T>;
+
 /** 히스토리 정렬 기준 */
-export type HistorySort = 'latest' | 'oldest';
+export type HistorySort = SortOrder;
 
 /** 히스토리 기간 필터 값 (전체 포함) */
-export type HistoryPeriod = 'all' | 'today' | 'sevenDays' | 'older';
+export type HistoryPeriod = DatePeriod;
 
-/** 히스토리 그룹 키 (`'all'` 제외한 실제 섹션 단위) */
-export type HistoryGroup = Exclude<HistoryPeriod, 'all'>;
-
-/**
- * 드롭다운 필터에서 사용하는 옵션 항목
- * @typeParam T - 옵션 값의 문자열 리터럴 유니온 타입
- */
-export interface HistoryFilterOption<T extends string> {
-  /** 옵션 식별 값 */
-  value: T;
-  /** 사용자에게 표시되는 라벨 */
-  label: string;
-}
+/** 히스토리 그룹 키 */
+export type HistoryGroup = DateGroup;
 
 /** API 응답을 가공한 히스토리 아이템 */
 export interface HistoryItem {

@@ -29,7 +29,7 @@ const toComparableTimestamp = (iso: string) => {
  * - `sender_type: human|assistant` -> `role: user|assistant`
  * - assistant일 때만 sources/feedback 관련 필드를 채움
  */
-const toUiMessage = (item: ChatHistoryMessageResponse): Message => {
+export const toUiMessage = (item: ChatHistoryMessageResponse): Message => {
   const timestamp = item.created_at || new Date().toISOString();
 
   if (item.sender_type === 'human') {
@@ -59,11 +59,7 @@ const toUiMessage = (item: ChatHistoryMessageResponse): Message => {
  * "메시지 없는 빈 세션"을 프론트 표준 ChatData 형태로 생성
  * - 신규 UUID 세션 첫 진입, hydrate 실패 fallback 등에 사용
  */
-export const createEmptyChatData = (
-  sessionId: string,
-  repo: string | null,
-  initialQuery: string | null,
-): ChatData => ({
+export const createEmptyChatData = (sessionId: string, repo: string | null, initialQuery: string | null): ChatData => ({
   session_id: sessionId,
   title: initialQuery ?? '',
   repo: repo ?? '',
@@ -122,5 +118,4 @@ export const loadSessionChatData = async ({
 /**
  * 신규 세션에서 room 생성 전 messages 조회 시 발생할 수 있는 정상 404 판별 헬퍼
  */
-export const isSessionMessagesNotFoundError = (err: unknown) =>
-  isAxiosError(err) && err.response?.status === 404;
+export const isSessionMessagesNotFoundError = (err: unknown) => isAxiosError(err) && err.response?.status === 404;

@@ -116,7 +116,7 @@ const mockHandlers: MockHandler[] = [
   {
     pattern: /^\/api\/v1\/onboarding\/complete$/,
     method: 'post',
-    handler: async (_, _data) => {
+    handler: async () => {
       const nextStatus: UserStatus = MOCK_USER.role === 'admin' ? 'active' : 'pending';
       MOCK_USER.status = nextStatus;
       return { success: true };
