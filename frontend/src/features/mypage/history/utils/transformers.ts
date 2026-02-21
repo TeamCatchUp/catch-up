@@ -1,7 +1,9 @@
 import type { RecentQueriesResponse } from '@/shared/types/query/api';
+import { getDateGroup, isInPeriod as isInPeriodShared } from '@/shared/utils/dateGrouping';
+import type { DatePeriod } from '@/shared/utils/dateGrouping';
 import { formatFullDate, formatRelativeDate } from '@/shared/utils/formatDate';
 
-import type { HistoryGroup, HistoryItem, HistoryPeriod } from '../types/models';
+import type { HistoryItem } from '../types/models';
 
 type RecentQueryItem = RecentQueriesResponse['items'][number];
 
@@ -11,44 +13,11 @@ type RecentQueryItemWithSaved = RecentQueryItem & {
   bookmarked?: boolean;
 };
 
-/**
- * 날짜의 시분초를 00:00:00으로 초기화하여 일(day) 단위 비교를 가능하게 한다.
- * @param date - 정규화할 Date 객체
- * @returns 시분초가 0으로 설정된 새 Date 객체
- */
-const normalizeDate = (date: Date): Date => {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
-  return normalized;
-};
-
-/**
- * 날짜를 기준으로 히스토리 그룹(오늘 / 최근 7일 / 이전)을 결정한다.
- * @param rawDate - 판별 대상 Date 객체
- * @returns 해당 날짜가 속하는 {@link HistoryGroup} 키
- */
-export const getHistoryGroup = (rawDate: Date): HistoryGroup => {
-  const itemDate = normalizeDate(rawDate);
-  const today = normalizeDate(new Date());
-
-  if (itemDate.getTime() === today.getTime()) {
-    return 'today';
-  }
-
-  const sevenDaysAgo = normalizeDate(new Date());
-  sevenDaysAgo.setDate(today.getDate() - 7);
-
-  if (itemDate.getTime() >= sevenDaysAgo.getTime()) {
-    return 'sevenDays';
-  }
-
-  return 'older';
-};
+/** shared getDateGroup 래퍼 (기존 호출부 호환) */
+export const getHistoryGroup = getDateGroup;
 
 /**
  * API 응답의 최근 질문 아이템을 화면용 {@link HistoryItem}으로 변환한다.
- * @param item - API에서 받은 원시 질문 아이템
- * @returns 포맷된 날짜·저장 여부가 포함된 히스토리 아이템
  */
 export const toHistoryItem = (item: RecentQueryItem): HistoryItem => {
   const rawDate = new Date(item.created_at);
@@ -67,15 +36,7 @@ export const toHistoryItem = (item: RecentQueryItem): HistoryItem => {
   };
 };
 
-/**
- * 히스토리 아이템이 지정된 기간 필터에 해당하는지 판별한다.
- * @param item - 검사 대상 히스토리 아이템
- * @param period - 적용할 기간 필터 (`'all'`이면 항상 `true`)
- * @returns 필터 조건 충족 여부
- */
-export const isInPeriod = (item: HistoryItem, period: HistoryPeriod): boolean => {
-  if (period === 'all') {
-    return true;
-  }
-  return getHistoryGroup(item.rawDate) === period;
+/** 히스토리 아이템이 지정된 기간 필터에 해당하는지 판별 */
+export const isInPeriod = (item: HistoryItem, period: DatePeriod): boolean => {
+  return isInPeriodShared(item.rawDate, period);
 };
