@@ -61,12 +61,8 @@ class GithubTransformer:
         API Response (dict) → parse_*() → Schema → transform_*() → Document
     """
 
-    def __init__(self, user_cache: dict[str, GithubUser] | None = None):
-        """
-        Args:
-            user_cache: 사용자 ID -> GithubUser 매핑 (멘션 변환용)
-        """
-        self.user_cache = user_cache or {}
+    def __init__(self):
+        pass
 
     # ============================================================
     # Issue 파싱 및 변환
