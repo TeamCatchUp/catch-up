@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Optional
-from sqlalchemy import ForeignKey, UniqueConstraint, func, text
+from sqlalchemy import ForeignKey, Index, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -97,6 +97,11 @@ class User(Base):
         server_default=text(f"'{JobLevel.MEMBER}'")
     )
     status: Mapped[UserStatus] = mapped_column(String(10), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
     
     # Objects
     workspace_links: Mapped[list["UserWorkspace"]] = relationship(
@@ -188,6 +193,11 @@ class OktaUser(Base):
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     email: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
+    picture: Mapped[str] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
@@ -1260,6 +1270,15 @@ class ChatHistory(Base):
         comment="사용자가 수정한 쿼리인 경우에만 False이며 화면에 노출되지 않음."
     )
     
+    is_saved: Mapped[bool] = mapped_column(
+        Boolean, 
+        default=False, 
+        server_default=text("false"),
+        nullable=False,
+        index=True,
+        comment="사용자가 저장한 답변"
+    )
+    
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
     
@@ -1270,3 +1289,9 @@ class ChatHistory(Base):
     @property
     def session_id(self) -> uuid.UUID:
         return self.chat_room.session_id
+
+Index(
+    "ix_chat_histories_is_saved_true",
+    ChatHistory.is_saved,
+    postgresql_where=(ChatHistory.is_saved == True)
+)

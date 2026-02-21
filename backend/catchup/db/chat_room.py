@@ -1,7 +1,7 @@
 from typing import Optional
 import uuid
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import and_, func, select
+from sqlalchemy.orm import Session, aliased, joinedload
 
 from catchup.chat.schemas import FeedbackRequest
 from catchup.db.models import ChatHistory, ChatRoom, SenderType
@@ -163,6 +163,88 @@ def get_queries_by_user(
     return list(items), total_count
 
 
+def get_queries_by_user_with_save_status(
+    db: Session,
+    user_id: int,
+    skip: int = 0,
+    limit: int = 20
+) -> tuple[list[tuple[ChatHistory, bool, int]], int]:
+    
+    # Alias 설정 (서브쿼리 내부에서 외부 ChatHistory와 충돌 방지)
+    Answer = aliased(ChatHistory)
+    
+    # 저장 여부 스칼라 서브쿼리
+    is_saved_sq = (
+        select(Answer.is_saved)
+        .where(
+            and_(
+                Answer.chat_room_id == ChatHistory.chat_room_id,
+                Answer.sender_type == SenderType.ASSISTANT,
+                Answer.id > ChatHistory.id
+            )
+        )
+        .order_by(Answer.id.asc())
+        .limit(1)
+        .correlate(ChatHistory)
+        .scalar_subquery()
+    )
+    
+    # 답변 ID 스칼라 서브쿼리
+    answer_id_sq = (
+        select(Answer.id)
+        .where(
+            and_(
+                Answer.chat_room_id == ChatHistory.chat_room_id,
+                Answer.sender_type == SenderType.ASSISTANT,
+                Answer.id > ChatHistory.id
+            )
+        )
+        .order_by(Answer.id.asc())
+        .limit(1)
+        .correlate(ChatHistory)
+        .scalar_subquery()
+    )
+    
+    # 메인 쿼리
+    stmt = (
+        select(
+            ChatHistory,
+            is_saved_sq.label("is_answer_saved"),
+            answer_id_sq.label("answer_id")
+        )
+        .join(ChatRoom, ChatHistory.chat_room_id == ChatRoom.id)
+        .where(
+            and_(
+                ChatRoom.user_id == user_id,
+                ChatHistory.sender_type == SenderType.HUMAN,
+                ChatHistory.is_displayed == True
+            )
+        )
+        .order_by(ChatHistory.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    
+
+    results = db.execute(stmt).all()
+    
+    count_stmt = (
+        select(func.count())
+        .select_from(ChatHistory)
+        .join(ChatRoom, ChatHistory.chat_room_id == ChatRoom.id)
+        .where(
+            and_(
+                ChatRoom.user_id == user_id,
+                ChatHistory.sender_type == SenderType.HUMAN,
+                ChatHistory.is_displayed == True
+            )
+        )
+    )
+    total_count = db.scalar(count_stmt) or 0
+    
+    return results, total_count
+
+
 def get_queries_by_chat_room(
     db: Session,
     room_id: int,
@@ -288,3 +370,24 @@ def get_recent_messages(
     )
     
     return db.scalars(stmt).all()
+
+
+def toggle_save_status(
+    db: Session,
+    message: ChatHistory
+) ->Optional[ChatHistory]:
+    
+    message = db.scalar(
+        select(ChatHistory)
+        .where(ChatHistory.id == message.id)
+    )
+    
+    if not message:
+        return None
+    
+    # save 상태 토글
+    message.is_saved = not message.is_saved
+    
+    db.add(message)
+    
+    return message

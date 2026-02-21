@@ -99,6 +99,8 @@ class ChatHistoryResponse(BaseModel):
     content: str = Field(..., description="메시지 내용")
     created_at: datetime = Field(..., description="메시지 생성 시각")
     sources: Optional[list[BaseSource]] = Field(default_factory=list, description="출처 목록 (sender_type='assistant'인 경우에만 존재)")
+    is_liked: Optional[bool] = Field(default=None, description="답변 평가 여부 (True: 긍정, False: 부정, None: 없음)")
+    is_saved: bool = Field(default=False, description="사용자의 답변 저장 여부")
 
     model_config = ConfigDict(from_attributes=True)
     
@@ -108,6 +110,19 @@ class UserQueryResponse(BaseModel):
     session_id: uuid.UUID = Field(..., description="사용자 쿼리가 속한 채팅방 세션 ID")
     content: str = Field(..., description="메시지 내용")
     created_at: datetime = Field(..., description="메시지 생성 시각")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserQueryWithSaveStatusResponse(UserQueryResponse):    
+    is_answer_saved: bool = Field(
+        default=False, 
+        description="이 질문에 대한 AI 답변이 저장되었는지 여부"
+    )
+    answer_id: Optional[int] = Field(
+        default=None, 
+        description="토글(저장/해제) 시 타겟이 될 AI 답변의 메시지 ID"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
