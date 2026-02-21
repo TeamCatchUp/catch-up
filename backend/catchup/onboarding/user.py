@@ -26,7 +26,6 @@ def register_user_from_okta(
         provider="okta",
         department=payload.department,
         job_level=payload.job_level,
-        job_role=payload.job_role
     )
     
     db.add(new_user)

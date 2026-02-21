@@ -51,7 +51,7 @@ def get_pending_signup_user(
 ) -> dict:
     """
     회원가입 전용.
-    User DB 조회 없이 토큰 payload를 기반으로 회원가입을 처리하기 위함이다.
+    User DB 조회 없이 토큰 access token payload를 기반으로 회원가입을 처리하기 위함이다.
     """
     if not access_token:
         raise HTTPException(

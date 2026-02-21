@@ -90,12 +90,6 @@ class User(Base):
         default=JobLevel.MEMBER, 
         server_default=text(f"'{JobLevel.MEMBER}'")
     )
-    job_role: Mapped[str] = mapped_column(
-        String(50), 
-        nullable=False, 
-        default="unregistered", 
-        server_default=text("'unregistered'")
-    )
     
     # Objects
     workspace_links: Mapped[list["UserWorkspace"]] = relationship(

@@ -56,6 +56,6 @@ def _extract_workspace_context(user: User) -> GlobalWorkspaceContext:
     
     # Fallback
     return GlobalWorkspaceContext(
-        id=0,
+        id=1,  # TODO: 예시고객사 PoC 한정
         name="Default Workspace" 
     )
