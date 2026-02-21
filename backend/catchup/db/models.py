@@ -35,6 +35,7 @@ class UserStatus(StrEnum):
     NEW = "new"  # Okta 로그인만 마친 상태
     ACTIVE = "active"  # 회원가입 후 승인 완료 상태
     INACTIVE = "inactive"  # 관리자에 의해 비활성화된 상태
+    DELETED = "deleted" # 관리자에 의해 삭제된 상태
 
 
 class Company(Base):
@@ -109,8 +110,25 @@ class User(Base):
         cascade="all, delete-orphan"
     )
     workspaces: Mapped[list["Workspace"]] = association_proxy("workspace_links", "workspace")
-    
-    
+
+
+class InactiveUser(Base):
+    __tablename__ = "inactive_users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    deactivated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    reactivated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    admin_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "deactivated_at", name="uq_inactive_user_timestamp"),
+        Index("idx_inactive_users_user_id", "user_id"),
+    )
+
 class UserWorkspace(Base):
     __tablename__ = "user_workspaces"
     
