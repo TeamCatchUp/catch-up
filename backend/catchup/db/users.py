@@ -1,8 +1,9 @@
+from typing import Optional
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
 from catchup.auth.schemas import UserCreate
-from catchup.db.models import User, UserWorkspace, Workspace
+from catchup.db.models import OktaUser, User, UserWorkspace, Workspace
 
 
 def get_user_by_email(
@@ -46,4 +47,17 @@ def get_user_with_full_context(
             .selectinload(Workspace.company)
         )
     )
+    return db.scalar(stmt)
+
+
+def get_okta_user_with_okta_uid(
+    db: Session,
+    okta_uid: str
+) -> Optional[OktaUser]:
+    
+    stmt = (
+        select(OktaUser)
+        .where(OktaUser.okta_uid == okta_uid)
+    )
+    
     return db.scalar(stmt)

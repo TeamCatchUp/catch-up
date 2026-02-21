@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.connectors.github.schemas import(
@@ -12,6 +13,7 @@ from catchup.connectors.github.schemas import(
 )
 from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.user_source_mapping import upsert_okta_users
+from catchup.db.workspaces import get_workspace_limit_one
 from catchup.mapping.okta import OktaClient
 from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
 from catchup.utils.webhook_buffer import get_webhook_buffer
@@ -227,8 +229,27 @@ async def _sync_installation_metadata(installation_id: int) -> None:
 async def _register_knowledge_source(installation_id: int):
     def _sync_task():
         with SessionLocal() as db:
+            workspace = get_workspace_limit_one(db)
+            
+            if not workspace:
+                logger.error("[SLACK] 등록된 워크스페이스가 없습니다. 관리자에게 문의하세요.")
+                return
+            
+            # 중복 등록 방지
+            existing_source = db.scalar(
+                select(KnowledgeSource).where(
+                    (KnowledgeSource.workspace_id == workspace.id) &
+                    (KnowledgeSource.source_type == SourceType.GITHUB) &
+                    (KnowledgeSource.external_identifier == str(installation_id))
+                )
+            )
+            
+            if existing_source:
+                logger.info(f"[GitHub] 이미 등록된 지식 소스입니다. (installation_id={installation_id})")
+                return
+            
             new_source = KnowledgeSource(
-                workspace_id=1,
+                workspace_id=workspace.id,
                 source_type=SourceType.GITHUB,
                 display_name="GitHub",
                 external_identifier=str(installation_id)    

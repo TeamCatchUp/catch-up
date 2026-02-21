@@ -55,6 +55,35 @@ def find_premapped_user_by_email(
     )
 
 
+def find_premapped_name_by_external_user_identifier(
+    db: Session,
+    source_type: SourceType,
+    external_user_identifier: str,
+) -> Optional[str]:
+    """협업 도구 식별자로 매핑된 실명을 조회한다."""
+    if not external_user_identifier:
+        return None
+
+    return db.scalar(
+        select(PreMappingBuffer.name).where(
+            PreMappingBuffer.source_type == source_type,
+            PreMappingBuffer.external_user_identifier == external_user_identifier,
+        )
+    )
+
+
+def find_premapped_names_by_source_type(db: Session, source_type: SourceType) -> dict[str, str]:
+    """소스 타입별로 external_user_identifier -> 실명 매핑을 조회한다."""
+    rows = db.execute(
+        select(
+            PreMappingBuffer.external_user_identifier,
+            PreMappingBuffer.name,
+        ).where(PreMappingBuffer.source_type == source_type)
+    ).all()
+
+    return {external_user_identifier: name for external_user_identifier, name in rows}
+
+
 def add_new_mapping(
     db: Session,
     new_mapping: PreMappingBuffer
@@ -84,3 +113,20 @@ def upsert_okta_users(
     )
     
     db.execute(update_stmt)
+
+
+def get_pending_source_premappings(
+    db: Session,
+    email: str
+) -> Optional[list[PreMappingBuffer]]:
+    """
+    어드민이 미리 연동해둔 외부 툴 데이터를 찾는다.
+    """
+    stmt = (
+        select(PreMappingBuffer)
+        .where(
+            (PreMappingBuffer.email == email) &
+            (PreMappingBuffer.is_registered == False)
+        )
+    )
+    return db.scalars(stmt).all()

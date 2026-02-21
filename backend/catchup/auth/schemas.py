@@ -36,6 +36,7 @@ class UserCreate(BaseModel):
     picture: Optional[str] = None
     provider: str
     role: UserRole = UserRole.USER
+    is_registred: bool = False
 
     @classmethod
     def from_google_user(cls, google_user: GoogleUserInfoResponse) -> "UserCreate":

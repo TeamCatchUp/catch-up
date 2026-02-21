@@ -25,6 +25,18 @@ class CompanySize(StrEnum):
     ENTERPRISE = "enterprise"  # 100인 이상
 
 
+class JobLevel(StrEnum):
+    EXECUTIVE = "executive"  # 경영진
+    LEADER = "leader"  # 팀장
+    MEMBER = "member"  # 팀원
+
+
+class UserStatus(StrEnum):
+    NEW = "new"  # Okta 로그인만 마친 상태
+    ACTIVE = "active"  # 회원가입 후 승인 완료 상태
+    INACTIVE = "inactive"  # 관리자에 의해 비활성화된 상태
+
+
 class Company(Base):
     __tablename__ = "companies"
     
@@ -71,9 +83,20 @@ class User(Base):
     )
     provider: Mapped[str] = mapped_column(String(20), nullable=False)
     refresh_token: Mapped[str] = mapped_column(String(500), nullable=True)
-    department_id: Mapped[int] = mapped_column(ForeignKey("departments.id"), nullable=True)
-    job_level_id: Mapped[int] = mapped_column(ForeignKey("job_levels.id"), nullable=True)
-    job_role_id: Mapped[int] = mapped_column(ForeignKey("job_roles.id"), nullable=True)
+    
+    department: Mapped[str] = mapped_column(
+        String(50), 
+        nullable=False, 
+        default="unregistered", 
+        server_default=text("'unregistered'")
+    )
+    job_level: Mapped[JobLevel] = mapped_column(
+        String(20), 
+        nullable=False, 
+        default=JobLevel.MEMBER, 
+        server_default=text(f"'{JobLevel.MEMBER}'")
+    )
+    status: Mapped[UserStatus] = mapped_column(String(10), nullable=False)
     
     # Objects
     workspace_links: Mapped[list["UserWorkspace"]] = relationship(
@@ -81,9 +104,6 @@ class User(Base):
         cascade="all, delete-orphan"
     )
     workspaces: Mapped[list["Workspace"]] = association_proxy("workspace_links", "workspace")
-    department: Mapped["Department"] = relationship(back_populates="users")
-    job_level: Mapped["JobLevel"] = relationship()
-    job_role: Mapped["JobRole"] = relationship()
     
     
 class UserWorkspace(Base):
@@ -95,28 +115,6 @@ class UserWorkspace(Base):
     
     user: Mapped["User"] = relationship(back_populates="workspace_links")
     workspace: Mapped["Workspace"] = relationship(back_populates="user_links")
-    
-    
-class Department(Base):
-    __tablename__ = "departments"
-    
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
-    
-    users: Mapped[list["User"]] = relationship(back_populates="department")
-
-
-class JobLevel(Base):
-    __tablename__ = "job_levels"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(20), unique=True)
-    rank_order: Mapped[int] = mapped_column(default=10)  # 기본: 10 단위로 관리
-
-
-class JobRole(Base):
-    __tablename__ = "job_roles"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(20), unique=True)
 
 
 class SourceType(StrEnum):
@@ -160,7 +158,7 @@ class PreMappingBuffer(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     
     okta_uid: Mapped[str] = mapped_column(String(128), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), index=True)
+    email: Mapped[str] = mapped_column(String(255), index=True, comment="Catch Up 사용자 이메일 (예: Okta 이메일)")
     name: Mapped[str] = mapped_column(String(100), comment="Okta에 등록된 임직원 실명") 
     
     source_type: Mapped[SourceType] = mapped_column(String(20), nullable=False)
@@ -396,7 +394,6 @@ class SlackUser(Base):
     __tablename__ = "slack_users"
 
     team_id: Mapped[str] = mapped_column(String(20), primary_key=True, comment="WorkSpaceId")
-    user_id: Mapped[str] = mapped_column(String(20), primary_key=True, comment="UserId")
     user_id: Mapped[str] = mapped_column(String(20), primary_key=True, comment="UserId")
     name: Mapped[str] = mapped_column(String(255), nullable=False, comment="Login Name Used for Mention")
     real_name: Mapped[str] = mapped_column(String(255), nullable=False, comment="실제 이름")
