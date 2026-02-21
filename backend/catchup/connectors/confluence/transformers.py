@@ -134,6 +134,8 @@ class ConfluenceTransformer:
             )
             return []
         
+        web_url = self._absolutize_web_url(web_url, site_url)
+
         # 2) Storage -> Section Tree
         sections = self.parser.parse(storage_html)
         if not sections:
@@ -426,6 +428,16 @@ class ConfluenceTransformer:
                     f"{base}/wiki/download/attachments/{content_id}/{block.image_filename}"
                 )
         return urls
+
+    def _absolutize_web_url(self, web_url: str | None, site_url: str | None) -> str | None:
+        """Confluence webui 경로를 site_url과 결합해 절대 URL로 만든다."""
+        if not web_url:
+            return None
+        if web_url.startswith("http://") or web_url.startswith("https://"):
+            return web_url
+        if not site_url:
+            return web_url
+        return f"{site_url.rstrip('/')}/{web_url.lstrip('/')}"
 
     # ================================================================
     # Dual Content Strategy
