@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
 import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
+import IconCloudOff from '@/public/icons/icon/cloud_off.svg';
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import IconDelete2 from '@/public/icons/icon/delete_2.svg';
 import IconDropdownDown from '@/public/icons/icon/dropdown_down.svg';
@@ -276,14 +277,15 @@ const IntegrationAccountsSection = ({
 
     <div className="border-neutral-2 flex flex-col overflow-clip rounded-xl border">
       {INTEGRATION_ACCOUNTS.map((account, index) => {
-        const accountId = accountIds[account.service] ?? '-';
+        const accountId = accountIds[account.service];
+        const isLinked = !!accountId;
         const iconClassName = account.service === 'confluence' ? 'h-5.75 w-6 shrink-0' : 'h-6 w-6 shrink-0';
 
         return (
           <div
             key={account.service}
             className={cn(
-              'border-neutral-2 flex h-15.75 shrink-0 items-center gap-5 overflow-clip px-4',
+              'border-neutral-2 flex h-15.75 shrink-0 items-center gap-5 overflow-clip px-4 py-2',
               index !== INTEGRATION_ACCOUNTS.length - 1 && 'border-b',
             )}
           >
@@ -292,16 +294,25 @@ const IntegrationAccountsSection = ({
               <span className="text-body-small text-gray-80 truncate">{account.name}</span>
             </div>
 
-            <div className="flex shrink-0 flex-col items-start justify-center gap-0.5">
-              <div className="flex shrink-0 items-center gap-2.5">
-                <DefaultProfile className="border-neutral-2 text-gray-30 size-6.25 shrink-0 rounded-full border" />
-                <span className="text-body-xsmall text-gray-80 max-w-33.25 shrink-0 truncate">{name}</span>
-                <span className="rounded-md2 bg-neutral-2 text-body-xsmall shrink-0 px-1.5 py-0.5 tracking-tight text-gray-50">
-                  {accountId}
-                </span>
+            {isLinked ? (
+              <div className="flex shrink-0 flex-col items-start justify-center gap-0.5">
+                <div className="flex shrink-0 items-center gap-2.5">
+                  <DefaultProfile className="border-neutral-2 text-gray-30 size-6.25 shrink-0 rounded-full border" />
+                  <span className="text-body-xsmall text-gray-80 max-w-33.25 shrink-0 truncate">{name}</span>
+                  <span className="rounded-md2 bg-neutral-2 text-body-xsmall shrink-0 px-1.5 py-0.5 tracking-tight text-gray-50">
+                    {accountId}
+                  </span>
+                </div>
+                <span className="text-body-xsmall shrink-0 truncate text-gray-50">{email}</span>
               </div>
-              <span className="text-body-xsmall shrink-0 truncate text-gray-50">{email}</span>
-            </div>
+            ) : (
+              <div className="bg-neutral-1 flex w-[259px] shrink-0 self-stretch items-center justify-center rounded-lg">
+                <div className="flex items-center gap-1">
+                  <IconCloudOff className="text-gray-50 size-6" />
+                  <span className="text-body-xsmall text-gray-50">연동 안됨</span>
+                </div>
+              </div>
+            )}
           </div>
         );
       })}

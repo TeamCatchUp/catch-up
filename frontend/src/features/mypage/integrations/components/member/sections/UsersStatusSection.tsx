@@ -11,27 +11,16 @@ import {
 import { cn } from '@/shared/utils/cn';
 
 import { SORT_OPTIONS } from '../../../constants/memberUi';
-import type { MemberIntegrationRow } from '../../../types/integrations';
 import type { MemberDisplayRow, MemberSortKey } from '../../../types/memberDisplay';
-import UserDetailPanel from '../panels/UserDetailPanel';
 import UsersTable from '../tables/UsersTable';
 
 interface UsersStatusSectionProps {
   rowCount: number;
   displayRows: MemberDisplayRow[];
-  activeRenderKey: string | null;
-  onSelectRenderKey: (renderKey: string) => void;
-  selectedRow: MemberIntegrationRow | null;
 }
 
 /** 이용자 계정 연동 상태 섹션 */
-const UsersStatusSection = ({
-  rowCount,
-  displayRows,
-  activeRenderKey,
-  onSelectRenderKey,
-  selectedRow,
-}: UsersStatusSectionProps) => {
+const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) => {
   const [sortKey, setSortKey] = useState<MemberSortKey>('newest');
 
   return (
@@ -41,7 +30,7 @@ const UsersStatusSection = ({
           <h2 className="text-heading-large text-gray-80">
             이용자 계정 연동 상태 <span className="text-blue-40">{rowCount}</span>
           </h2>
-          <p className="text-body-small text-gray-50">신규 회원의 가입 요청을 확인하고 승인하세요.</p>
+          <p className="text-body-small text-gray-50">계정 정보가 올바르게 입력되었는지 확인해주세요.</p>
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -69,9 +58,8 @@ const UsersStatusSection = ({
         </div>
       </div>
 
-      <div className="border-neutral-3 grid h-124 min-h-0 w-250 grid-cols-[500px_500px] overflow-clip border-y">
-        <UsersTable displayRows={displayRows} activeRenderKey={activeRenderKey} onSelectRenderKey={onSelectRenderKey} />
-        <UserDetailPanel selectedRow={selectedRow} />
+      <div className="border-neutral-3 h-124 min-h-0 w-250 overflow-clip border-y">
+        <UsersTable displayRows={displayRows} />
       </div>
     </section>
   );

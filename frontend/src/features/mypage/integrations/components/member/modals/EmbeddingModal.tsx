@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 import Cancel from '@/public/icons/icon/cancel.svg';
 import CheckboxChecked from '@/public/icons/icon/checkbox_checked.svg';
@@ -136,7 +137,17 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
           <Button variant="capsule-outline-mono" size="md" onClick={handleClose}>
             취소
           </Button>
-          <Button variant="capsule-solid-primary" size="md" disabled={isSubmitDisabled} onClick={handleClose}>
+          <Button
+            variant="capsule-solid-primary"
+            size="md"
+            disabled={isSubmitDisabled}
+            onClick={() => {
+              toast('잠시만 기다려주세요', {
+                description: '임베딩을 진행하고 있습니다. 준비가 끝나면 즉시 알려드릴게요.',
+              });
+              handleClose();
+            }}
+          >
             임베딩하기
           </Button>
         </div>

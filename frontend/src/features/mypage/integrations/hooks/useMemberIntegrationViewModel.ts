@@ -33,9 +33,8 @@ export const useMemberIntegrationViewModel = (): MemberIntegrationViewModel => {
   const { data: jiraStatus } = useQuery(integrationQueries.jira.status());
   const { data: slackStatus } = useQuery(integrationQueries.slack.status());
   const { data: githubInstallations } = useQuery(integrationQueries.github.installations());
-  const { data: connectorsData } = useQuery(integrationQueries.onboarding.connectors());
-
-  const connectors = connectorsData as ConnectorResponse | undefined;
+  // TODO: 커넥터 계정 조회 API 백엔드 구현 후 연동
+  const connectors: ConnectorResponse = {};
 
   const serviceConnected = useMemo<Record<IntegrationService, boolean>>(
     () => ({

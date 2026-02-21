@@ -41,13 +41,13 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
     </div>
   );
 
-  const buttonText = isConnected ? '수정하기' : '계정 등록하기';
-
   return (
     <article
       className={cn(
         'border-neutral-3 flex w-58.75 shrink-0 rounded-xl border bg-white',
-        isAdmin ? 'min-h-52.25 flex-col gap-4 p-4' : 'min-h-62.25 flex-col gap-3 p-5',
+        isAdmin
+          ? cn('flex-col gap-4 p-4', !isConnected && 'min-h-52.25')
+          : cn('flex-col gap-3 p-5', !isConnected && 'min-h-62.25'),
       )}
     >
       {isAdmin ? (
@@ -58,13 +58,15 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
           </div>
           <div className="flex w-full flex-col gap-3">
             {details}
-            <button
-              type="button"
-              onClick={onEditClick}
-              className="box-button-outline-gray text-body-small text-gray-70 h-9 w-full cursor-pointer"
-            >
-              {buttonText}
-            </button>
+            {!isConnected && (
+              <button
+                type="button"
+                onClick={onEditClick}
+                className="box-button-outline-gray text-body-small text-gray-70 h-9 w-full cursor-pointer"
+              >
+                계정 등록하기
+              </button>
+            )}
           </div>
         </>
       ) : (
@@ -74,13 +76,15 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
             <span className="text-heading-medium text-gray-80">{name}</span>
           </div>
           {details}
-          <button
-            type="button"
-            onClick={onEditClick}
-            className="box-button-outline-gray text-body-small text-gray-70 h-9 w-full cursor-pointer"
-          >
-            {buttonText}
-          </button>
+          {!isConnected && (
+            <button
+              type="button"
+              onClick={onEditClick}
+              className="box-button-outline-gray text-body-small text-gray-70 h-9 w-full cursor-pointer"
+            >
+              계정 등록하기
+            </button>
+          )}
         </>
       )}
     </article>

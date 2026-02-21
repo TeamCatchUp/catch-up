@@ -68,9 +68,8 @@ export const API = {
     // auditLogs / permissions: 엔드포인트 미확정, mock 직접 사용
   },
 
-  // 백엔드 미구현 — 라우터 미등록 상태
   onboarding: {
-    complete: `${API_PREFIX}/onboarding/complete`, // POST 온보딩 완료 처리
-    connectors: `${API_PREFIX}/onboarding/connectors`, // GET 커넥터 연동 현황
+    signup: `${API_PREFIX}/onboarding`, // POST 일반 유저 온보딩 가입
+    adminSignup: `${API_PREFIX}/onboarding/admin`, // POST 루트 어드민 온보딩 가입
   },
 } as const;

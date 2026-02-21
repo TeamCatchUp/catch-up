@@ -29,7 +29,7 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
     <section className="flex w-250 flex-col gap-3">
       <div className="flex flex-col gap-0.5">
         <h2 className="text-heading-large text-gray-80">계정 등록 상태</h2>
-        <p className="text-body-small text-gray-50">팀의 계정 등록 상태를 확인할 수 있어요.</p>
+        <p className="text-body-small text-gray-50">팀의 매핑 등록 상태를 확인할 수 있어요.</p>
       </div>
 
       <div className="flex items-center gap-5">

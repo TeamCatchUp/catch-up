@@ -25,6 +25,8 @@ const AdminGrantSection = ({
   onOpenGrantModal,
   disabled = false,
 }: AdminGrantSectionProps) => {
+  const isSubmitDisabled = disabled || !selectedMemberId || !reason.trim();
+
   return (
     <section className="border-neutral-3 flex w-250 flex-col gap-2 bg-white">
       <div className="flex h-9 items-center justify-between">
@@ -34,7 +36,7 @@ const AdminGrantSection = ({
           size="md"
           className="text-heading-small h-9 w-[99px]"
           onClick={onOpenGrantModal}
-          disabled={disabled}
+          disabled={isSubmitDisabled}
         >
           <IconAddSmall className="size-6 shrink-0" />
           부여하기

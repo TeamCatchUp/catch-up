@@ -3,23 +3,27 @@
 import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+import { useCurrentUser } from '@/shared/hooks/useCurrentUser';
+
 function CallbackHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data } = useCurrentUser();
 
   useEffect(() => {
-    const success = searchParams.get('success');
     const err = searchParams.get('error');
-
     if (err) {
       console.error('로그인 실패:', err);
       router.replace('/login');
-    } else if (success === 'true') {
-      router.replace('/');
-    } else {
-      router.replace('/login');
+      return;
     }
-  }, [router, searchParams]);
+
+    // useCurrentUser가 처리: new → /onboarding, inactive → /inactive, 에러 → /login
+    // active 유저만 홈으로 보내면 됨
+    if (data?.status === 'active') {
+      router.replace('/');
+    }
+  }, [data, router, searchParams]);
 
   return (
     <div className="flex h-screen flex-col items-center justify-center">
