@@ -46,3 +46,11 @@ class SlackConnectorStatus(BaseModel):
     oldest: str | None
     latest: str | None
     channels: list[str]
+
+
+class ConfluenceConnectorStatus(BaseModel):
+    tool_name: str = "confluence"
+    connected: bool
+    oldest: str | None
+    latest: str | None
+    spaces: list[str]

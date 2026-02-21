@@ -8,6 +8,7 @@ from catchup.auth.dependencies import require_admin_user
 from catchup.db.dependencies import get_db
 from catchup.db.models import (
     AtlassianOAuthToken,
+    ConfluenceSyncState,
     GithubInstallation,
     GithubRepository,
     GithubSyncState,
@@ -19,6 +20,7 @@ from catchup.db.models import (
     User,
 )
 from catchup.server.auth.schemas import (
+    ConfluenceConnectorStatus,
     GithubConnectorStatus,
     JiraConnectorStatus,
     SlackConnectorStatus,
@@ -245,3 +247,73 @@ def get_slack_connector_status(
     _admin_user: User = Depends(require_admin_user),
 ):
     return _get_slack_status(db)
+
+
+def _get_confluence_status(db: Session) -> ConfluenceConnectorStatus:
+    # Jira와 동일한 AtlassianOAuthToken 사용 (공용 토큰)
+    cloud_ids = [row[0] for row in db.query(AtlassianOAuthToken.cloud_id).all()]
+
+    if not cloud_ids:
+        logger.info("[CONFLUENCE][FULL SYNC] Confluence connector status: no oauth token found")
+        return ConfluenceConnectorStatus(
+            connected=False,
+            oldest=None,
+            latest=None,
+            spaces=[],
+        )
+
+    # Sync 이력이 있는 Space만 조회
+    spaces = [
+        row[0]
+        for row in db.query(ConfluenceSyncState.space_key)
+        .filter(ConfluenceSyncState.cloud_id.in_(cloud_ids))
+        .distinct()
+        .all()
+    ]
+
+    latest_dt = (
+        db.query(func.max(ConfluenceSyncState.last_successful_sync_at))
+        .filter(ConfluenceSyncState.cloud_id.in_(cloud_ids))
+        .scalar()
+    )
+
+    oldest_dt = None
+    try:
+        sql = text(
+            """
+            SELECT MIN(
+                COALESCE(
+                    cmetadata ->> 'created_at',
+                    cmetadata ->> 'updated_at',
+                    cmetadata ->> 'synced_at'
+                )::timestamptz
+            ) AS oldest
+            FROM langchain_pg_embedding
+            WHERE cmetadata ->> 'source' = 'confluence'
+            """
+        )
+        result = db.execute(sql).first()
+        oldest_dt = result[0] if result and result[0] else None
+    except Exception as e:
+        logger.warning(
+            "[CONFLUENCE][FULL SYNC] Failed to fetch confluence oldest embedding date: %s", e
+        )
+
+    return ConfluenceConnectorStatus(
+        connected=True,
+        oldest=_format_date(oldest_dt),
+        latest=_format_date(latest_dt),
+        spaces=spaces,
+    )
+
+
+@router.get(
+    path="/connector/confluence/status",
+    description="Confluence 연동 상태 조회 (admin 전용)",
+    response_model=ConfluenceConnectorStatus,
+)
+def get_confluence_connector_status(
+    db: Session = Depends(get_db),
+    _admin_user: User = Depends(require_admin_user),
+):
+    return _get_confluence_status(db)
