@@ -232,4 +232,5 @@ async def mypage_profile(current_user: User = Depends(get_current_user)):
         picture=current_user.picture or "",
         department=current_user.department,
         job_level=current_user.job_level,
+        role=current_user.role,
     )

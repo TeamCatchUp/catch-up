@@ -2,7 +2,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr
 
-from catchup.db.models import JobLevel, UserStatus
+from catchup.db.models import JobLevel, UserRole, UserStatus
 
 
 class SourceUserCount(BaseModel):
@@ -37,6 +37,7 @@ class AdminUserListItem(BaseModel):
     name: str
     department: str
     jobLevel: JobLevel
+    role: UserRole
     status: UserStatus
 
 
@@ -88,3 +89,23 @@ class AdminUserDetailResponse(BaseModel):
     jobLevel: JobLevel
     status: UserStatus
     integrations: UserIntegrations
+
+
+# =====================
+# Admin user state change
+# =====================
+class DeactivateUserRequest(BaseModel):
+    reason: str
+
+
+class DeactivateUserResponse(BaseModel):
+    userId: int
+    status: UserStatus
+    inactiveRecordId: int
+    deactivatedAt: str
+    reason: str
+
+
+class DeleteUserResponse(BaseModel):
+    userId: int
+    status: UserStatus

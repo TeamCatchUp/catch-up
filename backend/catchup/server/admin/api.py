@@ -19,6 +19,7 @@ from catchup.db.models import (
     GithubInstallation,
     GithubRepository,
     GithubSyncState,
+    InactiveUser,
     JiraAccountType,
     JiraProject,
     JiraSyncState,
@@ -31,6 +32,8 @@ from catchup.db.models import (
     SourceType,
     User,
     UserSourceMapping,
+    UserStatus,
+    UserRole,
 )
 from catchup.server.auth.schemas import (
     ConfluenceSyncableResponse,
@@ -52,6 +55,9 @@ from catchup.server.admin.schemas import (
     AdminUserListResponse,
     AdminUserListItem,
     AdminUserDetailResponse,
+    DeactivateUserRequest,
+    DeactivateUserResponse,
+    DeleteUserResponse,
     UserIntegrations,
     JiraAccount,
     GithubAccount,
@@ -354,6 +360,105 @@ def get_confluence_connector_status(
 
 
 # ============================
+# Admin - User state change
+# ============================
+def _deactivate_user(
+    db: Session,
+    admin_user: User,
+    user_id: int,
+    reason: str,
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        logger.info("[ADMIN][USER_DEACTIVATE] user not found (user_id=%s)", user_id)
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.role == UserRole.ADMIN:
+        logger.info(
+            "[ADMIN][USER_DEACTIVATE] cannot deactivate admin user (user_id=%s)",
+            user_id,
+        )
+        raise HTTPException(status_code=403, detail="Cannot deactivate admin user")
+
+    if user.status == UserStatus.DELETED:
+        logger.info(
+            "[ADMIN][USER_DEACTIVATE] cannot deactivate deleted user (user_id=%s)",
+            user_id,
+        )
+        raise HTTPException(status_code=409, detail="User already deleted")
+
+    if user.status == UserStatus.INACTIVE:
+        logger.info(
+            "[ADMIN][USER_DEACTIVATE] already inactive (user_id=%s)", user_id
+        )
+        raise HTTPException(status_code=409, detail="User already inactive")
+
+    inactive = InactiveUser(
+        user_id=user.id,
+        reason=reason,
+        admin_id=admin_user.id,
+    )
+
+    user.status = UserStatus.INACTIVE
+    db.add(inactive)
+    db.commit()
+    db.refresh(user)
+    db.refresh(inactive)
+
+    logger.info(
+        "[ADMIN][USER_DEACTIVATE] action=deactivate user_id=%s admin_id=%s reason=%s",
+        user_id,
+        admin_user.id,
+        reason,
+    )
+
+    return DeactivateUserResponse(
+        userId=user.id,
+        status=user.status,
+        inactiveRecordId=inactive.id,
+        deactivatedAt=inactive.deactivated_at.isoformat(),
+        reason=inactive.reason,
+    )
+
+
+def _delete_user(db: Session, admin_user: User, user_id: int):
+    # 비활성 로그 없이 상태만 DELETED로 전환한다.
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        logger.info("[ADMIN][USER_DELETE] user not found (user_id=%s)", user_id)
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.role == UserRole.ADMIN:
+        logger.info("[ADMIN][USER_DELETE] cannot delete admin user (user_id=%s)", user_id)
+        raise HTTPException(status_code=403, detail="Cannot delete admin user")
+
+    if user.status == UserStatus.DELETED:
+        logger.info("[ADMIN][USER_DELETE] already deleted (user_id=%s)", user_id)
+        raise HTTPException(status_code=409, detail="User already deleted")
+
+    # 기존 비활성화 기록은 삭제한다 (상태 삭제 시 남기지 않음).
+    removed_logs = (
+        db.query(InactiveUser)
+        .filter(InactiveUser.user_id == user.id)
+        .delete(synchronize_session=False)
+    )
+
+    user.status = UserStatus.DELETED
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    logger.info(
+        "[ADMIN][USER_DELETE] action=delete user_id=%s admin_id=%s removed_inactive_logs=%s",
+        user_id,
+        admin_user.id,
+        removed_logs,
+    )
+
+    return DeleteUserResponse(userId=user.id, status=user.status)
+
+
+# ============================
 # Admin - User management
 # ============================
 def _get_admin_user_list(db: Session) -> AdminUserListResponse:
@@ -362,6 +467,7 @@ def _get_admin_user_list(db: Session) -> AdminUserListResponse:
             User.id,
             User.name,
             User.department,
+            User.role,
             User.job_level,
             User.status,
         )
@@ -374,6 +480,7 @@ def _get_admin_user_list(db: Session) -> AdminUserListResponse:
             id=row.id,
             name=row.name,
             department=row.department,
+            role=row.role,
             jobLevel=row.job_level,
             status=row.status,
         )
@@ -621,6 +728,38 @@ def get_user_sync_status(
         len(mappings),
     )
     return UserSyncStatusResponse(counts=counts, mappings=mappings)
+
+
+@router.post(
+    path="/users/deactivate/{user_id}",
+    description="관리자용 사용자 비활성화",
+    response_model=DeactivateUserResponse,
+)
+def deactivate_user(
+    user_id: int,
+    payload: DeactivateUserRequest,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin_user),
+):
+    return _deactivate_user(
+        db=db,
+        admin_user=admin_user,
+        user_id=user_id,
+        reason=payload.reason,
+    )
+
+
+@router.post(
+    path="/users/delete/{user_id}",
+    description="관리자용 사용자 삭제",
+    response_model=DeleteUserResponse,
+)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin_user),
+):
+    return _delete_user(db=db, admin_user=admin_user, user_id=user_id)
 
 
 def _get_syncable_jira_projects(db: Session) -> JiraSyncableResponse:
