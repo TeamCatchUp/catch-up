@@ -18,11 +18,11 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 import { INTEGRATION_ACCOUNTS } from '@/shared/constants/integrationAccounts';
-import { auditLogsQueries } from '../../queries/auditLogs.queries';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
 import { ACTION_LABEL, SORT_OPTIONS, STATUS_BADGE_CLASS, STATUS_LABEL } from '../../constants/auditLogConfig';
+import { auditLogsQueries } from '../../queries/auditLogs.queries';
 import type { AuditLog, AuditLogTableRow, AuditSortKey } from '../../types/auditLog';
 
 /** 날짜 포맷: "2026.01.01. 10:32" */

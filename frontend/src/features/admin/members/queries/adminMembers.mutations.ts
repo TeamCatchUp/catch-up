@@ -2,8 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
-import type { MemberStatusPayload, RequestDecisionPayload } from '../types/adminMember';
 
+import type { MemberStatusPayload, RequestDecisionPayload } from '../types/adminMember';
 import { adminMembersQueries } from './adminMembers.queries';
 
 /** 입장 신청 승인/반려 */

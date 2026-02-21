@@ -7,6 +7,8 @@ import { useParams, useSearchParams } from 'next/navigation';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 
+// admin/question-logs feature
+import DetailHeader from '@/features/admin/question-logs/components/DetailHeader';
 // chat feature (app layer can import from any feature)
 import { MarkDownComponents } from '@/features/chat/components/answer/markdown/MarkDownComponents';
 import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/renderWithBadges';
@@ -16,8 +18,6 @@ import SourceList from '@/features/chat/components/sidebar/source/SourceList';
 import { toUiMessage } from '@/features/chat/hooks/useRagChat.parts/sessionDataLoader';
 import { extractQAPairs, findQAPairIndexByQuery } from '@/features/chat/utils/render/chat';
 import { formatMarkdownString } from '@/features/chat/utils/render/markdown';
-// admin/question-logs feature
-import DetailHeader from '@/features/admin/question-logs/components/DetailHeader';
 // shared
 import { Badge } from '@/shared/components/ui/badge';
 import { MOCK_ADMIN_MEMBERS } from '@/shared/mocks/admin/adminMembersMockData';

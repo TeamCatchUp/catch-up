@@ -3,12 +3,12 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import type { GroupedSection } from '@/shared/utils/dateGrouping';
-import { groupItemsByDate, isInPeriod as isInPeriodShared } from '@/shared/utils/dateGrouping';
-import type { DatePeriod, SortOrder } from '@/shared/utils/dateGrouping';
 import { USE_MOCK } from '@/shared/mocks/config';
 import { MOCK_RECENT_QUERIES } from '@/shared/mocks/search/data';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
+import type { GroupedSection } from '@/shared/utils/dateGrouping';
+import type { DatePeriod, SortOrder } from '@/shared/utils/dateGrouping';
+import { groupItemsByDate, isInPeriod as isInPeriodShared } from '@/shared/utils/dateGrouping';
 
 import type { HistoryItem } from '../types/models';
 import { toHistoryItem } from '../utils/transformers';

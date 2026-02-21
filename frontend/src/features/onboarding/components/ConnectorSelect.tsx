@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import Image from 'next/image';
 
-import DefaultProfile from '@/public/icons/icon/default_profile.svg';
-import UnfoldMore from '@/public/icons/icon/unfold_more.svg';
 import CheckboxChecked from '@/public/icons/icon/checkbox_checked.svg';
 import CheckboxUnchecked from '@/public/icons/icon/checkbox_unchecked.svg';
+import DefaultProfile from '@/public/icons/icon/default_profile.svg';
+import UnfoldMore from '@/public/icons/icon/unfold_more.svg';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/shared/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
 import { cn } from '@/shared/utils/cn';

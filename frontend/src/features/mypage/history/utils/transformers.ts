@@ -1,6 +1,6 @@
 import type { RecentQueriesResponse } from '@/shared/types/query/api';
-import { getDateGroup, isInPeriod as isInPeriodShared } from '@/shared/utils/dateGrouping';
 import type { DatePeriod } from '@/shared/utils/dateGrouping';
+import { getDateGroup, isInPeriod as isInPeriodShared } from '@/shared/utils/dateGrouping';
 import { formatFullDate, formatRelativeDate } from '@/shared/utils/formatDate';
 
 import type { HistoryItem } from '../types/models';

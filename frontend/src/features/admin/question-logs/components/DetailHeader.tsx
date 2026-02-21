@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 
-import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import ArrowLeft from '@/public/icons/icon/arrow_left.svg';
 import ArrowRight from '@/public/icons/icon/arrow_right.svg';
+import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { Button } from '@/shared/components/ui/button';
 import { Separator } from '@/shared/components/ui/separator';
 

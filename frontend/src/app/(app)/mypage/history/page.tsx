@@ -4,12 +4,12 @@ import { Fragment } from 'react';
 
 import ListItem from '@/features/mypage/history/components/ListItem';
 import { usePageModel } from '@/features/mypage/history/hooks/pageModel';
-import FilterDropdown from '@/shared/components/ui/filter-dropdown';
-import { PERIOD_OPTIONS, SORT_OPTIONS } from '@/shared/utils/dateGrouping';
 import BookmarkIcon from '@/public/icons/icon/bookmark.svg';
 import SearchIcon from '@/public/icons/icon/search.svg';
+import FilterDropdown from '@/shared/components/ui/filter-dropdown';
 import { Separator } from '@/shared/components/ui/separator';
 import { cn } from '@/shared/utils/cn';
+import { PERIOD_OPTIONS, SORT_OPTIONS } from '@/shared/utils/dateGrouping';
 
 export default function HistoryPage() {
   const {

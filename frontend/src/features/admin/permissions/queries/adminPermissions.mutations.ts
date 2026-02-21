@@ -4,7 +4,6 @@ import delay from '@/shared/mocks/delay';
 
 import { MOCK_ADMIN_PERMISSIONS } from '../mocks/adminPermissionsMockData';
 import type { AssignAdminPayload, AssignAdminResponse } from '../types/adminPermission';
-
 import { adminPermissionsQueries } from './adminPermissions.queries';
 
 const USE_ADMIN_PERMISSIONS_ASSIGN_ERROR = process.env.NEXT_PUBLIC_MOCK_ADMIN_PERMISSIONS_ASSIGN_ERROR === 'true';
