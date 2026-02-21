@@ -25,6 +25,7 @@ const AnswerError = ({
           icons={icons}
           messageId={messageId}
           answerContent=""
+          sessionId={sessionId}
           hasFeedback={hasFeedback}
           feedbackVisibleMap={feedbackVisibleMap}
           setFeedbackVisibleMap={setFeedbackVisibleMap}

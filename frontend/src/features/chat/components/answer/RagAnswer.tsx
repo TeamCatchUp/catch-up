@@ -21,10 +21,12 @@ import BookmarkFilled from '/public/icons/icon/bookmark_filled.svg';
 import Copy from '/public/icons/icon/copy.svg';
 import Rotate from '/public/icons/icon/rotate.svg';
 import ThumbsDown from '/public/icons/icon/thumbs-down.svg';
+import ThumbsUp from '/public/icons/icon/thumbs-up.svg';
 
 const ANSWER_ICONS = [
   { name: 'Copy', icon: Copy },
   { name: 'Bookmark', icon: Bookmark, activeIcon: BookmarkFilled },
+  { name: 'ThumbsUp', icon: ThumbsUp },
   { name: 'ThumbsDown', icon: ThumbsDown },
   { name: 'Rotate', icon: Rotate },
 ];
@@ -81,10 +83,13 @@ const RagAnswer = ({
               icons={ANSWER_ICONS}
               messageId={currentQA.answer.id}
               answerContent={currentQA.answer.content}
+              sessionId={sessionId}
+              chatHistoryId={currentQA.answer.chat_history_id}
               hasFeedback={currentQA.answer.has_feedback}
               feedbackVisibleMap={feedbackVisibleMap}
               setFeedbackVisibleMap={setFeedbackVisibleMap}
               onRetry={() => onRetry?.(currentQA.question.id, currentQA.question.content)}
+              onFeedbackSubmitted={onFeedbackSubmitted}
             />
 
             {/* 피드백 */}
