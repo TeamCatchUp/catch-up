@@ -32,7 +32,7 @@ const UsersStatusSection = ({
   onSelectRenderKey,
   selectedRow,
 }: UsersStatusSectionProps) => {
-  const [sortKey, setSortKey] = useState<MemberSortKey>('rank');
+  const [sortKey, setSortKey] = useState<MemberSortKey>('newest');
 
   return (
     <section className="flex w-250 flex-col gap-3">
