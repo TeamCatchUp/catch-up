@@ -114,3 +114,10 @@ class DeleteUserResponse(BaseModel):
 class PromoteUserResponse(BaseModel):
     userId: int
     role: UserRole
+
+
+# =====================
+# Confluence utilities
+# =====================
+class ConfluenceCloudIdListResponse(BaseModel):
+    cloudIds: List[str]

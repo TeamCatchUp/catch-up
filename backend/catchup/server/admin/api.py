@@ -64,6 +64,7 @@ from catchup.server.admin.schemas import (
     GithubAccount,
     SlackAccount,
     ConfluenceAccount,
+    ConfluenceCloudIdListResponse,
 )
 from catchup.server.schemas import BasePagination, calculate_skip
 
@@ -875,6 +876,26 @@ def _get_syncable_confluence_spaces(db: Session) -> ConfluenceSyncableResponse:
             ConfluenceSyncableSpace(space_name=space_name, space_key=space_key)
         )
     return spaces
+
+
+@router.get(
+    path="/confluence/cloud-ids",
+    description="ConfluenceSpace 테이블의 cloud_id 목록(중복 제거) 임시 제공",
+    response_model=ConfluenceCloudIdListResponse,
+)
+def list_confluence_cloud_ids(
+    db: Session = Depends(get_db),
+    _admin_user: User = Depends(require_admin_user),
+):
+    # cloud_id 중복 제거 후 문자열 리스트로 반환
+    cloud_ids = [row[0] for row in db.query(ConfluenceSpace.cloud_id).distinct().all()]
+
+    logger.info(
+        "[ADMIN][CONFLUENCE][CLOUD_IDS] fetched cloud ids (count=%d)",
+        len(cloud_ids),
+    )
+
+    return ConfluenceCloudIdListResponse(cloudIds=cloud_ids)
 
 
 @router.get(
