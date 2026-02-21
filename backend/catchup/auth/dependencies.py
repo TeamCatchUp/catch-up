@@ -6,6 +6,7 @@ from catchup.auth.jwt import verify_token
 from catchup.db.dependencies import get_db
 from catchup.db.models import User, UserRole, UserStatus
 from catchup.db.users import get_user_by_email
+from catchup.server.state import state
 
 
 cookie_scheme = APIKeyCookie(name="access_token", auto_error=False)
@@ -118,7 +119,7 @@ def get_current_user_info(
             detail="토큰이 만료되었거나 유효하지 않습니다.",
         )
 
-    user = get_user_by_email(db, email)
+    user = get_user_by_email(db, email)    
     
     if user:
         return {
@@ -128,10 +129,16 @@ def get_current_user_info(
             "status": user.status
         }
     else:
-        # Okta 로그인 O, 회원가입 X
+        suggested_role = UserRole.USER
+        
+        # 아직 어드민이 생성되지 않은 상태라면 어드민 권한 부여
+        if not state.is_admin_initiated:
+            suggested_role = UserRole.ADMIN
+        
+        # Okta 로그인 O, 회원가입 X (일반 유저)
         return {
             "email": email,
             "name": name or "Unknown",
-            "role": UserRole.USER,
+            "role": suggested_role,
             "status": UserStatus.NEW 
         }
