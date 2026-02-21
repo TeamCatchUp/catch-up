@@ -326,4 +326,17 @@ export const MOCK_ADMIN_MEMBERS = [
     status: 'active',
     accountIds: { jira: 'donghyuk.shin', github: 'donghyuk-shin', confluence: 'donghyuk.shin' },
   },
+  {
+    userId: 'u-013',
+    name: '오승우',
+    email: 'user@example.com',
+    phone: '010-5555-6666',
+    picture: null,
+    department: '부서C',
+    teamSize: 7,
+    rank: '팀원',
+    role: 'user',
+    status: 'active',
+    accountIds: {},
+  },
 ];
