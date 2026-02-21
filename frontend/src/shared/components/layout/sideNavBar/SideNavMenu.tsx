@@ -28,7 +28,8 @@ const navItems = [
     tooltipOpen: '사내 지식 물어보기',
     tooltipClosed: '캐치스턴트 AI',
   },
-  { name: '수신함', panel: 'inbox' as const, Icon: Inbox, tooltipOpen: '수신함', tooltipClosed: '수신함' },
+  // TODO: 수신함 기능 임시 비활성화
+  // { name: '수신함', panel: 'inbox' as const, Icon: Inbox, tooltipOpen: '수신함', tooltipClosed: '수신함' },
   { name: '설정', panel: 'settings' as const, Icon: Settings, tooltipOpen: '설정', tooltipClosed: '설정' },
 ];
 
