@@ -1,6 +1,7 @@
-﻿import { cn } from '@/shared/utils/cn';
+import { cn } from '@/shared/utils/cn';
+import { API } from '@/shared/api/endpoints';
 
-import type { IntegrationMenuItem, IntegrationService } from '../../types/integrations';
+import type { ConnectorDetail, IntegrationMenuItem, IntegrationService } from '../../types/integrations';
 import JiraGuideSection from './JiraGuideSection';
 
 import IconCloudCheckFilled from '/public/icons/icon/cloud_check_filled.svg';
@@ -8,12 +9,29 @@ import IconCloudOff from '/public/icons/icon/cloud_off.svg';
 import IconOpenInNew from '/public/icons/icon/open_in_new.svg';
 import IconRotate from '/public/icons/icon/rotate.svg';
 
+const GITHUB_APP_URL = 'https://github.com/apps/catchup-connector';
+
+/** 서비스별 연동 설치 핸들러 */
+const handleInstall = (service: IntegrationService) => {
+  switch (service) {
+    case 'github':
+      window.open(GITHUB_APP_URL, '_blank');
+      break;
+    case 'slack':
+      window.location.href = API.slack.install;
+      break;
+    case 'jira':
+    case 'confluence':
+      window.location.href = API.atlassian.install;
+      break;
+  }
+};
+
 interface IntegrationManagementSectionProps {
   integrationMenu: IntegrationMenuItem[];
   selectedService: IntegrationService;
   onSelectService: (service: IntegrationService) => void;
-  lastSyncedAt: string;
-  spaceRows: string[];
+  detail: ConnectorDetail;
 }
 
 /** 관리자 협업툴 연동 관리 섹션 */
@@ -21,8 +39,7 @@ const IntegrationManagementSection = ({
   integrationMenu,
   selectedService,
   onSelectService,
-  lastSyncedAt,
-  spaceRows,
+  detail,
 }: IntegrationManagementSectionProps) => {
   return (
     <div className="flex gap-8">
@@ -67,10 +84,6 @@ const IntegrationManagementSection = ({
           <div className="flex items-center gap-5">
             <h3 className="text-heading-small text-gray-80 flex-1">연동 상태 관리</h3>
             <div className="flex shrink-0 items-center gap-3">
-              <div className="text-body-xsmall flex items-center gap-1.5">
-                <span className="text-gray-50">최근 동기화</span>
-                <span className="text-gray-70">{lastSyncedAt}</span>
-              </div>
               <button
                 type="button"
                 className="border-neutral-3 text-body-xsmall text-gray-70 flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-white px-2 py-1"
@@ -83,13 +96,24 @@ const IntegrationManagementSection = ({
           <div className="border-neutral-3 bg-neutral-1 overflow-hidden rounded-xl border">
             <div className="border-neutral-3 flex h-13 items-center justify-between border-b px-4 py-3">
               <span className="text-body-small text-gray-70">연동 상태</span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  className="text-body-xsmall h-7 cursor-pointer rounded-full px-1.5 py-1 text-red-50"
-                >
-                  연결 해제
-                </button>
+              <div className="flex items-center gap-1">
+                {detail.connected ? (
+                  <span className="text-body-xsmall text-blue-50">연동됨</span>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-1 px-1.5 py-1">
+                      <IconCloudOff className="size-5 text-gray-20" />
+                      <span className="text-body-xsmall text-gray-50">연동 안됨</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleInstall(selectedService)}
+                      className="text-body-xsmall cursor-pointer rounded-full px-1.5 py-1 text-blue-50"
+                    >
+                      연동하기
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             <div className="border-neutral-3 flex h-13 items-center justify-between border-b px-4 py-3">
@@ -108,31 +132,31 @@ const IntegrationManagementSection = ({
         <div className="flex flex-col gap-1.5">
           <h3 className="text-heading-small text-gray-70">연동된 데이터 범위</h3>
           <div className="border-neutral-3 bg-neutral-1 text-body-small text-gray-70 flex h-10.75 items-center justify-center rounded-xl border px-5">
-            2000.00.00 ~ 2000.00.00
+            {detail.dataRange}
           </div>
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-small text-gray-70">연동된 Jira Space</h3>
+          <h3 className="text-heading-small text-gray-70">{detail.resourceLabel}</h3>
           <div className="border-neutral-3 bg-neutral-1 overflow-hidden rounded-xl border">
-            {spaceRows.map((row, index) => (
-              <div
-                key={`${row}-${index}`}
-                className="border-neutral-3 text-body-small text-gray-70 flex h-13 items-center border-b px-4 py-3"
-              >
-                <span className="truncate">{row}</span>
+            {detail.resources.length > 0 ? (
+              detail.resources.map((row, index) => (
+                <div
+                  key={`${row}-${index}`}
+                  className="border-neutral-3 text-body-small text-gray-70 flex h-13 items-center border-b px-4 py-3"
+                >
+                  <span className="truncate">{row}</span>
+                </div>
+              ))
+            ) : (
+              <div className="text-body-small text-gray-40 flex h-13 items-center px-4 py-3">
+                연동된 항목이 없습니다.
               </div>
-            ))}
+            )}
           </div>
         </div>
 
-        {selectedService === 'jira' ? (
-          <JiraGuideSection />
-        ) : (
-          <div className="border-neutral-3 bg-neutral-1 text-body-small text-gray-60 rounded-xl border px-5 py-4">
-            선택한 연동 서비스의 상세 설정 UI는 다음 단계에서 확장할 예정입니다.
-          </div>
-        )}
+        {selectedService === 'jira' && <JiraGuideSection />}
       </div>
     </div>
   );

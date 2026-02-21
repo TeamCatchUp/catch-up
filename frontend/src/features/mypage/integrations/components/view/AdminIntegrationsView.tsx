@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 
 import { cn } from '@/shared/utils/cn';
 
@@ -12,7 +12,7 @@ import IntegrationsSection from '../member/sections/IntegrationsSection';
 const AdminIntegrationsView = () => {
   const [activeTab, setActiveTab] = useState<AdminIntegrationTab>('my');
   const [selectedService, setSelectedService] = useState<IntegrationService>('jira');
-  const { integrationMenu, lastSyncedAt, spaceRows } = useAdminIntegrationViewModel();
+  const { integrationMenu, getConnectorDetail } = useAdminIntegrationViewModel();
 
   return (
     <section className="flex flex-col gap-6 px-16 pt-9 pb-30">
@@ -51,8 +51,7 @@ const AdminIntegrationsView = () => {
                 integrationMenu={integrationMenu}
                 selectedService={selectedService}
                 onSelectService={setSelectedService}
-                lastSyncedAt={lastSyncedAt}
-                spaceRows={spaceRows}
+                detail={getConnectorDetail(selectedService)}
               />
             </section>
           </section>

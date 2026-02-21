@@ -61,6 +61,14 @@ export const API = {
     channels: `${API_PREFIX}/slack/sync/accessible/channels`, // GET Bot 접근 가능 채널 목록 (?team_id=)
   },
 
+  atlassian: {
+    install: `${API_PREFIX}/auth/atlassian/install`, // GET OAuth 인가 URL로 리다이렉트 (Jira + Confluence)
+  },
+
+  confluence: {
+    syncFull: `${API_PREFIX}/confluence/sync/full`, // POST 전체 재동기화 (body: cloud_id, space_keys?)
+  },
+
   // 관리자 — 이용자 관리
   admin: {
     members: {
@@ -70,6 +78,16 @@ export const API = {
       status: (userId: string) => `${API_PREFIX}/admin/members/${userId}/status`, // PATCH 비활성화/삭제
     },
     // auditLogs / permissions: 엔드포인트 미확정, mock 직접 사용
+    connector: {
+      githubStatus: `${API_PREFIX}/admin/connector/github/status`, // GET GitHub 연동 상태
+      jiraStatus: `${API_PREFIX}/admin/connector/jira/status`, // GET Jira 연동 상태
+      slackStatus: `${API_PREFIX}/admin/connector/slack/status`, // GET Slack 연동 상태
+      confluenceStatus: `${API_PREFIX}/admin/connector/confluence/status`, // GET Confluence 연동 상태
+      syncable: (source: string) => `${API_PREFIX}/admin/connector/syncable/${source}`, // GET 임베딩 대상 리소스 목록
+    },
+    users: {
+      syncStatus: `${API_PREFIX}/admin/users/sync-status`, // GET 서비스별 사용자 매핑 현황
+    },
   },
 
   onboarding: {
