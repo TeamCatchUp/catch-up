@@ -5,8 +5,8 @@ import { useState } from 'react';
 import ErrorIcon from '@/public/icons/icon/error.svg';
 import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
+import { DEPARTMENT_OPTIONS, RANK_OPTIONS } from '@/shared/constants/organization';
 
-import { DEPARTMENT_OPTIONS, RANK_OPTIONS } from '../../constants/onboarding';
 import type { ProfileFormData } from '../../types/onboarding';
 import { StepIndicator } from '../StepIndicator';
 import { StepNavButtons } from '../StepNavButtons';
