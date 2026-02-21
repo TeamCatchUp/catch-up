@@ -112,6 +112,19 @@ class UserQueryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserQueryWithSaveStatusResponse(UserQueryResponse):    
+    is_answer_saved: bool = Field(
+        default=False, 
+        description="이 질문에 대한 AI 답변이 저장되었는지 여부"
+    )
+    answer_id: Optional[int] = Field(
+        default=None, 
+        description="토글(저장/해제) 시 타겟이 될 AI 답변의 메시지 ID"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class FeedbackRequest(BaseModel):
     is_liked: Optional[bool] = Field(default=None, description="사용자 긍정/부정 피드백")
     reasons: Optional[list[FeedbackLiteral]] = Field(default_factory=list, description="부정 피드백 사유 목록")
