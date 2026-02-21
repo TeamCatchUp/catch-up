@@ -109,3 +109,8 @@ class DeactivateUserResponse(BaseModel):
 class DeleteUserResponse(BaseModel):
     userId: int
     status: UserStatus
+
+
+class PromoteUserResponse(BaseModel):
+    userId: int
+    role: UserRole

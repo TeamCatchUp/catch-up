@@ -21,6 +21,19 @@ class CurrentUserProfile(BaseModel):
     role: UserRole
 
 
+class IntegrationProfileItem(BaseModel):
+    avatar_url: str | None = None
+    name: str | None = None
+    email: EmailStr | None = None
+
+
+class IntegrationProfileResponse(BaseModel):
+    github: IntegrationProfileItem | None = None
+    jira: IntegrationProfileItem | None = None
+    confluence: IntegrationProfileItem | None = None
+    slack: IntegrationProfileItem | None = None
+
+
 class TokenRefreshResponse(BaseModel):
     status: str
     detail: str
