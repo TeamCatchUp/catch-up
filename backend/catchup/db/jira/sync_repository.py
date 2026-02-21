@@ -17,11 +17,13 @@ def get_sync_state(
     db: Session,
     cloud_id: str,
     entity_type: JiraEntityType,
+    project_key: str | None = None
 ) -> JiraSyncState | None:
     """특정 entity_type의 동기화 상태 조회"""
     stmt = select(JiraSyncState).where(
         JiraSyncState.cloud_id == cloud_id,
         JiraSyncState.entity_type == entity_type,
+        JiraSyncState.project_key == project_key,
     )
     return db.execute(stmt).scalar_one_or_none()
 
@@ -31,12 +33,13 @@ def create_or_update_sync_state(
     cloud_id: str,
     entity_type: JiraEntityType,
     status: JiraSyncStatus,
+    project_key: str | None = None,
     synced_count: int = 0,
     total_count: int = 0,
     error: str | None = None,
 ) -> JiraSyncState:
     """동기화 상태 생성 또는 업데이트 (Upsert)"""
-    state = get_sync_state(db, cloud_id, entity_type)
+    state = get_sync_state(db, cloud_id, entity_type, project_key)
     now = datetime.now(timezone.utc)
 
     if state:
@@ -51,6 +54,7 @@ def create_or_update_sync_state(
         state = JiraSyncState(
             cloud_id=cloud_id,
             entity_type=entity_type,
+            project_key=project_key,
             last_sync_at=now,
             last_sync_status=status,
             synced_entities=synced_count,

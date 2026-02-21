@@ -781,6 +781,10 @@ class JiraSyncState(Base):
         String(128), nullable=False, index=True,
         comment="Jira Cloud ID"
     )
+    project_key: Mapped[str | None] = mapped_column(
+        String(50), nullable = True, index = True,
+        comment = "Jira Project Key",
+    )
     entity_type: Mapped[JiraEntityType] = mapped_column(
         String(50), nullable=False,
         comment="issue, epic, project, sprint"
