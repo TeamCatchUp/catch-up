@@ -211,7 +211,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
             {/* 기간 선택 */}
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center gap-1">
-                <span className="text-body-small text-gray-90">등록 사유를 선택해주세요.</span>
+                <span className="text-body-small text-gray-90">등록 기간을 선택해주세요.</span>
                 <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
               </div>
               <div className="flex gap-2">
