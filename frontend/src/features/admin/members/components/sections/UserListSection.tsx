@@ -16,13 +16,14 @@ import { cn } from '@/shared/utils/cn';
 
 import {
   DEACTIVATION_REASONS,
+  JOB_LEVEL_LABEL,
   SORT_OPTIONS,
   STATUS_BADGE_CLASS,
   STATUS_LABEL,
 } from '../../constants/memberTableConfig';
-import { useMemberStatusMutation } from '../../queries/adminMembers.mutations';
+import { useDeactivateUserMutation, useDeleteUserMutation } from '../../queries/adminMembers.mutations';
 import { adminMembersQueries } from '../../queries/adminMembers.queries';
-import type { AdminMember, AdminSortKey, MemberTableRow } from '../../types/adminMember';
+import type { AdminSortKey, MemberTableRow } from '../../types/adminMember';
 import MemberDetailPanel from '../shared/MemberDetailPanel';
 import MemberTable from '../shared/MemberTable';
 import ReasonPopover from '../shared/ReasonPopover';
@@ -34,31 +35,38 @@ interface UserListSectionProps {
 
 /** 이용자 목록 섹션 */
 const UserListSection = ({ searchTerm }: UserListSectionProps) => {
-  const { data: members = [] } = useQuery(adminMembersQueries.list());
-  const statusMutation = useMemberStatusMutation();
-  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const { data } = useQuery(adminMembersQueries.list());
+
+  const deactivateMutation = useDeactivateUserMutation();
+  const deleteMutation = useDeleteUserMutation();
+
+  const [activeUserId, setActiveUserId] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<AdminSortKey>('newest');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   /* 검색 필터 */
-  const filtered = useMemo(() => members.filter((m) => m.name.includes(searchTerm)), [members, searchTerm]);
+  const filtered = useMemo(() => (data?.users ?? []).filter((m) => m.name.includes(searchTerm)), [data?.users, searchTerm]);
 
   /* 테이블 행 변환 */
   const tableRows: MemberTableRow[] = useMemo(
     () =>
       filtered.map((m) => ({
-        key: m.userId,
+        key: m.id.toString(),
         name: m.name,
-        picture: m.picture,
-        rank: m.rank,
+        picture: null,
+        rank: JOB_LEVEL_LABEL[m.jobLevel] ?? m.jobLevel,
         department: m.department,
         lastColumn: STATUS_LABEL[m.status] ?? m.status,
       })),
     [filtered],
   );
 
-  /* 선택된 이용자 데이터 */
-  const selectedMember: AdminMember | null = filtered.find((m) => m.userId === activeKey) ?? null;
+  /* 선택된 이용자 */
+  const selectedUser = filtered.find((m) => m.id === activeUserId) ?? null;
+  const isAdmin = selectedUser?.role === 'admin';
+
+  /* 상세 조회 */
+  const { data: userDetail } = useQuery(adminMembersQueries.detail(activeUserId ?? 0));
 
   return (
     <section className="flex w-250 flex-col gap-3">
@@ -93,27 +101,26 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
       <div className="border-neutral-3 grid h-124 min-h-0 w-250 grid-cols-[500px_500px] overflow-clip border-y">
         <MemberTable
           rows={tableRows}
-          activeKey={activeKey}
-          onSelectKey={setActiveKey}
+          activeKey={activeUserId?.toString() ?? null}
+          onSelectKey={(key) => setActiveUserId(Number(key))}
           emptyMessage="이용자 목록이 없습니다."
           lastColumnHeader="상태"
           lastColumnBadgeClass={STATUS_BADGE_CLASS}
         />
         <MemberDetailPanel
           member={
-            selectedMember
+            userDetail
               ? {
-                  name: selectedMember.name,
-                  email: selectedMember.email,
-                  department: selectedMember.department,
-                  rank: selectedMember.rank,
-                  picture: selectedMember.picture,
-                  accountIds: selectedMember.accountIds,
+                  name: userDetail.name,
+                  email: userDetail.email,
+                  department: userDetail.department,
+                  rank: JOB_LEVEL_LABEL[userDetail.jobLevel] ?? userDetail.jobLevel,
+                  integrations: userDetail.integrations,
                 }
               : null
           }
           actionButtons={
-            selectedMember && (
+            selectedUser && !isAdmin ? (
               <>
                 <ReasonPopover
                   trigger={
@@ -124,7 +131,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
                   title="비활성화 사유"
                   reasonLabel="비활성화 사유를 선택해주세요."
                   reasons={DEACTIVATION_REASONS}
-                  onSave={() => statusMutation.mutate({ userId: selectedMember.userId, action: 'deactivate' })}
+                  onSave={(reason) => deactivateMutation.mutate({ userId: selectedUser.id, reason })}
                 />
                 <Button
                   variant="box-outline-gray"
@@ -141,10 +148,10 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
                   description="계정을 삭제하면 모든 데이터가 영구 삭제되며 복구할 수 없습니다."
                   confirmLabel="삭제"
                   variant="danger"
-                  onConfirm={() => statusMutation.mutate({ userId: selectedMember.userId, action: 'delete' })}
+                  onConfirm={() => deleteMutation.mutate(selectedUser.id)}
                 />
               </>
-            )
+            ) : null
           }
         />
       </div>
