@@ -18,7 +18,7 @@ import type {
 // ─── SessionStorage 키 / 유틸 ───
 
 const STORAGE_KEY_PREFIX = 'catchup:embedding:';
-const STORAGE_COMPLETED_KEY = 'catchup:embedding:completed';
+const LOCAL_COMPLETED_KEY = 'catchup:embedding:completed';
 const POLL_INTERVAL = 15_000; // 15초
 const TIMEOUT_MS = 30 * 60_000; // 30분
 
@@ -47,10 +47,10 @@ const removeStored = (service: IntegrationService) => {
   sessionStorage.removeItem(getStorageKey(service));
 };
 
-/** 완료된 서비스 목록 (sessionStorage persist) */
+/** 완료된 서비스 목록 (localStorage persist — 영구 유지) */
 const loadCompletedServices = (): Set<IntegrationService> => {
   try {
-    const raw = sessionStorage.getItem(STORAGE_COMPLETED_KEY);
+    const raw = localStorage.getItem(LOCAL_COMPLETED_KEY);
     return raw ? new Set(JSON.parse(raw) as IntegrationService[]) : new Set();
   } catch {
     return new Set();
@@ -58,7 +58,7 @@ const loadCompletedServices = (): Set<IntegrationService> => {
 };
 
 const saveCompletedServices = (services: Set<IntegrationService>) => {
-  sessionStorage.setItem(STORAGE_COMPLETED_KEY, JSON.stringify([...services]));
+  localStorage.setItem(LOCAL_COMPLETED_KEY, JSON.stringify([...services]));
 };
 
 // ─── Sync Status → "진행 중?" 판별 ───
@@ -108,7 +108,7 @@ export const useEmbeddingStatus = () => {
     return initial;
   });
 
-  /** 완료된 서비스 (sessionStorage persist — 탭 내 유지) */
+  /** 완료된 서비스 (localStorage persist — 영구 유지) */
   const [completedServices, setCompletedServices] = useState<Set<IntegrationService>>(loadCompletedServices);
 
   /** 완료 모달 */
