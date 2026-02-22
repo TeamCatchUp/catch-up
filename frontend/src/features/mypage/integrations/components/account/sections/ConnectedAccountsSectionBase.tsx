@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { USE_MOCK } from '@/shared/mocks/config';
 import { MOCK_ACCOUNT_INFO_MAP, MOCK_SELECTABLE_ROWS } from '@/shared/mocks/integration';
+import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
 import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
+import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
 import type { IntegrationAccountInfo, MemberIntegrationRow } from '../../../types/integrations';
 import ConnectedAccountCard from '../cards/ConnectedAccountCard';
 import AccountEditModal from '../modals/AccountEditModal';
@@ -22,7 +25,7 @@ const EMPTY_ACCOUNT_INFO: IntegrationAccountInfo = {
   userEmail: '-',
 };
 
-const buildModalRow = (accountInfo: IntegrationAccountInfo): MemberIntegrationRow => ({
+const buildModalRow = (accountInfo: IntegrationAccountInfo, service: IntegrationService): MemberIntegrationRow => ({
   userKey: `${accountInfo.userEmail}:${accountInfo.userId}`,
   userName: accountInfo.userName || '-',
   email: accountInfo.userEmail || '-',
@@ -31,15 +34,31 @@ const buildModalRow = (accountInfo: IntegrationAccountInfo): MemberIntegrationRo
   teamSizeLabel: '-',
   picture: null,
   accountIdByService: {
-    jira: accountInfo.userId || '-',
+    [service]: accountInfo.userId || '-',
   },
   statusByService: {
-    jira: '완료',
-    github: '미사용',
-    slack: '미사용',
-    confluence: '미사용',
+    jira: service === 'jira' ? '완료' : '미사용',
+    github: service === 'github' ? '완료' : '미사용',
+    slack: service === 'slack' ? '완료' : '미사용',
+    confluence: service === 'confluence' ? '완료' : '미사용',
   },
 });
+
+/** sync-status mappings → 서비스별 accountId 포함 행 변환 */
+const getAccountId = (
+  mapping: { githubLogin: string | null; atlassianEmail: string | null; slackEmail: string | null },
+  service: IntegrationService,
+): string | undefined => {
+  switch (service) {
+    case 'github':
+      return mapping.githubLogin ?? undefined;
+    case 'jira':
+    case 'confluence':
+      return mapping.atlassianEmail ?? undefined;
+    case 'slack':
+      return mapping.slackEmail ?? undefined;
+  }
+};
 
 type ModalType = 'edit' | 'register' | null;
 
@@ -52,6 +71,7 @@ const ConnectedAccountsSectionBase = ({
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [selectedRow, setSelectedRow] = useState<MemberIntegrationRow | null>(null);
   const [serviceName, setServiceName] = useState('');
+  const [selectedService, setSelectedService] = useState<IntegrationService>('jira');
 
   const resolvedCards = useMemo(
     () =>
@@ -62,16 +82,44 @@ const ConnectedAccountsSectionBase = ({
         return {
           account,
           accountInfo,
-          modalRow: buildModalRow(accountInfo),
+          modalRow: buildModalRow(accountInfo, account.service),
         };
       }),
     [accountInfoMap],
   );
 
-  const allRows = useMemo(
-    () => (USE_MOCK ? MOCK_SELECTABLE_ROWS : resolvedCards.map((card) => card.modalRow)),
-    [resolvedCards],
-  );
+  const { data: syncStatus } = useQuery({
+    ...adminConnectorQueries.userSyncStatus(),
+    enabled: !USE_MOCK,
+  });
+
+  const allRows = useMemo<MemberIntegrationRow[]>(() => {
+    if (USE_MOCK) return MOCK_SELECTABLE_ROWS;
+    if (!syncStatus?.mappings) return [];
+
+    return syncStatus.mappings.map((mapping) => {
+      const accountIdByService: Partial<Record<IntegrationService, string>> = {};
+      const statusByService = {} as Record<IntegrationService, '미사용' | '완료' | '미등록'>;
+
+      for (const svc of ['jira', 'github', 'slack', 'confluence'] as IntegrationService[]) {
+        const id = getAccountId(mapping, svc);
+        if (id) accountIdByService[svc] = id;
+        statusByService[svc] = id ? '완료' : '미등록';
+      }
+
+      return {
+        userKey: mapping.name,
+        userName: mapping.name,
+        email: mapping.atlassianEmail ?? mapping.slackEmail ?? '-',
+        phone: '-',
+        department: '-',
+        teamSizeLabel: '-',
+        picture: null,
+        accountIdByService,
+        statusByService,
+      };
+    });
+  }, [syncStatus]);
 
   const handleModalClose = (open: boolean) => {
     if (!open) {
@@ -96,6 +144,7 @@ const ConnectedAccountsSectionBase = ({
               setActiveModal(isConnected ? 'edit' : 'register');
               setSelectedRow(modalRow);
               setServiceName(account.name);
+              setSelectedService(account.service);
             }}
           />
         ))}
@@ -107,12 +156,19 @@ const ConnectedAccountsSectionBase = ({
           onOpenChange={handleModalClose}
           selectedRow={selectedRow}
           allRows={allRows}
+          service={selectedService}
           serviceName={serviceName}
         />
       )}
 
       {activeModal === 'register' && (
-        <AccountRegisterModal open onOpenChange={handleModalClose} allRows={allRows} serviceName={serviceName} />
+        <AccountRegisterModal
+          open
+          onOpenChange={handleModalClose}
+          allRows={allRows}
+          service={selectedService}
+          serviceName={serviceName}
+        />
       )}
     </section>
   );

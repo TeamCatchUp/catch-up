@@ -6,6 +6,7 @@ import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import IconError from '@/public/icons/icon/error-1.svg';
 import { Button } from '@/shared/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
+import type { IntegrationService } from '@/shared/types/integrationService';
 
 import type { MemberIntegrationRow } from '../../../types/integrations';
 import AccountSelectorPopover, { type AccountOption } from './AccountSelectorPopover';
@@ -22,11 +23,19 @@ interface AccountEditModalProps {
   onOpenChange: (open: boolean) => void;
   selectedRow: MemberIntegrationRow;
   allRows: MemberIntegrationRow[];
+  service: IntegrationService;
   serviceName: string;
 }
 
 /** 계정 정보 수정 모달 */
-const AccountEditModal = ({ open, onOpenChange, selectedRow, allRows, serviceName }: AccountEditModalProps) => {
+const AccountEditModal = ({
+  open,
+  onOpenChange,
+  selectedRow,
+  allRows,
+  service,
+  serviceName,
+}: AccountEditModalProps) => {
   const [selectedReason, setSelectedReason] = useState('not-my-account');
   const [customReason, setCustomReason] = useState('');
   const [selectedAccountKey, setSelectedAccountKey] = useState('');
@@ -36,21 +45,21 @@ const AccountEditModal = ({ open, onOpenChange, selectedRow, allRows, serviceNam
   const accountOptions = useMemo<AccountOption[]>(() => {
     const deduped = new Map<string, AccountOption>();
     allRows.forEach((row) => {
-      const jiraAccountId = row.accountIdByService.jira;
-      if (!jiraAccountId) return;
-      const key = `${jiraAccountId}:${row.email}`;
+      const accountId = row.accountIdByService[service];
+      if (!accountId) return;
+      const key = `${accountId}:${row.email}`;
       if (deduped.has(key)) return;
-      deduped.set(key, { key, userName: row.userName, userEmail: row.email, accountId: jiraAccountId });
+      deduped.set(key, { key, userName: row.userName, userEmail: row.email, accountId });
     });
     return Array.from(deduped.values());
-  }, [allRows]);
+  }, [allRows, service]);
 
   const selectedAccount = useMemo(
     () => accountOptions.find((o) => o.key === selectedAccountKey) ?? null,
     [accountOptions, selectedAccountKey],
   );
 
-  const currentJiraAccountId = selectedRow.accountIdByService.jira ?? '-';
+  const currentAccountId = selectedRow.accountIdByService[service] ?? '-';
   const isSubmitDisabled = !selectedAccount || (selectedReason === 'custom' && customReason.trim().length === 0);
 
   const resetFormState = () => {
@@ -90,7 +99,7 @@ const AccountEditModal = ({ open, onOpenChange, selectedRow, allRows, serviceNam
                   <DefaultProfile className="border-neutral-1 text-gray-30 size-6.25 shrink-0 rounded-full border" />
                   <span className="text-body-small text-gray-80 truncate">{selectedRow.userName}</span>
                   <span className="rounded-md2 bg-neutral-2 text-body-xsmall shrink-0 px-1.5 py-0.5 text-gray-50">
-                    {currentJiraAccountId}
+                    {currentAccountId}
                   </span>
                 </div>
                 <span className="text-body-xsmall truncate text-gray-50">{selectedRow.email}</span>

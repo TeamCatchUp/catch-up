@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 
 import ListItem from '@/features/mypage/history/components/ListItem';
 import { usePageModel } from '@/features/mypage/history/hooks/pageModel';
@@ -24,7 +24,29 @@ export default function HistoryPage() {
     groupedSections,
     isLoading,
     isError,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
   } = usePageModel();
+
+  /* 무한 스크롤 sentinel */
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
     <section className="flex flex-col gap-6 px-16 pt-9 pb-[120px]">
@@ -95,6 +117,10 @@ export default function HistoryPage() {
             ))}
           </div>
         )}
+
+        {/* 무한 스크롤 sentinel + 로딩 표시 */}
+        <div ref={sentinelRef} className="h-1" />
+        {isFetchingNextPage && <div className="text-body-small text-gray-40 py-2 text-center">불러오는 중...</div>}
       </div>
     </section>
   );

@@ -28,7 +28,7 @@ export const SORT_OPTIONS: readonly FilterOption<SortOrder>[] = [
 
 /** 기간 필터 드롭다운 옵션 */
 export const PERIOD_OPTIONS: readonly FilterOption<DatePeriod>[] = [
-  { value: 'all', label: '기간' },
+  { value: 'all', label: '전체' },
   { value: 'today', label: '오늘' },
   { value: 'sevenDays', label: '최근 7일' },
   { value: 'older', label: '이전' },
@@ -70,7 +70,9 @@ export const getDateGroup = (rawDate: Date): DateGroup => {
 /** 아이템이 지정된 기간 필터에 해당하는지 판별 */
 export const isInPeriod = (rawDate: Date, period: DatePeriod): boolean => {
   if (period === 'all') return true;
-  return getDateGroup(rawDate) === period;
+  const group = getDateGroup(rawDate);
+  if (period === 'sevenDays') return group === 'today' || group === 'sevenDays';
+  return group === period;
 };
 
 /** 아이템 목록을 날짜 그룹별 섹션으로 변환 */

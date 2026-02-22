@@ -14,6 +14,7 @@ interface QuestionLogListItemProps {
 /** 질문 로그 리스트 행 */
 const QuestionLogListItem = ({ item, group, userId }: QuestionLogListItemProps) => {
   const showDate = group !== 'today';
+  const showSavedLabel = item.isSaved;
   const dateText = group === 'sevenDays' ? item.relativeDate : item.fullDate;
 
   return (
@@ -25,7 +26,12 @@ const QuestionLogListItem = ({ item, group, userId }: QuestionLogListItemProps) 
         <ChatIcon className="size-5 text-gray-50" />
       </div>
       <div className="text-body-small text-gray-80 min-w-0 flex-1 truncate text-left">{item.query}</div>
-      {showDate && <span className="text-body-xsmall text-gray-30 shrink-0 whitespace-nowrap">{dateText}</span>}
+      {(showSavedLabel || showDate) && (
+        <div className="text-body-xsmall text-gray-30 flex shrink-0 items-center gap-2 whitespace-nowrap">
+          {showSavedLabel && <span>저장한 답변</span>}
+          {showDate && <span>{dateText}</span>}
+        </div>
+      )}
     </Link>
   );
 };
