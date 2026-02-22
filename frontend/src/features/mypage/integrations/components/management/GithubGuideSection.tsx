@@ -10,13 +10,11 @@ const GithubGuideSection = () => {
     <div className="border-neutral-3 flex flex-col gap-10 overflow-clip rounded-xl border bg-white p-6">
       {/* 인트로 */}
       <div className="flex flex-col gap-2">
-        <h4 className="text-heading-medium text-gray-80">
-          코드가 담고 있는 맥락, 이제 한 번에 찾아요.
-        </h4>
+        <h4 className="text-heading-medium text-gray-80">코드가 담고 있는 맥락, 이제 한 번에 찾아요.</h4>
         <p className="text-label-small text-gray-80">
-          개발자의 코드는 확실한 결과물이지만, &apos;왜 이렇게 짰는지&apos;에 대한 맥락은 파편화되어
-          있습니다. PR을 뒤지고, 커밋 기록을 따라가다 보면 흐름이 끊기고 시간만 새게 되죠. Catch Up은
-          흩어진 코드의 맥락을 연결해, 팀이 다시 일의 흐름을 이어갈 수 있게 돕습니다.
+          개발자의 코드는 확실한 결과물이지만, &apos;왜 이렇게 짰는지&apos;에 대한 맥락은 파편화되어 있습니다. PR을
+          뒤지고, 커밋 기록을 따라가다 보면 흐름이 끊기고 시간만 새게 되죠. Catch Up은 흩어진 코드의 맥락을 연결해, 팀이
+          다시 일의 흐름을 이어갈 수 있게 돕습니다.
         </p>
       </div>
 
@@ -43,8 +41,7 @@ const GithubGuideSection = () => {
           />
         </div>
         <p className="text-label-small text-gray-80">
-          이후 GitHub 연동 페이지로 이동하여 팀이 함께 볼 Organization을 선택하고 접근 권한을
-          승인해주세요.
+          이후 GitHub 연동 페이지로 이동하여 팀이 함께 볼 Organization을 선택하고 접근 권한을 승인해주세요.
         </p>
         <button
           type="button"
@@ -73,8 +70,8 @@ const GithubGuideSection = () => {
           />
         </div>
         <p className="text-label-small text-gray-80">
-          권한이 확인된 Repository 목록 중, 팀의 지식으로 활용할 곳만 최종 선택합니다. 명시적으로
-          선택하지 않은 공간의 데이터는 절대 접근하지 않습니다.
+          권한이 확인된 Repository 목록 중, 팀의 지식으로 활용할 곳만 최종 선택합니다. 명시적으로 선택하지 않은 공간의
+          데이터는 절대 접근하지 않습니다.
         </p>
       </div>
 
@@ -82,8 +79,8 @@ const GithubGuideSection = () => {
       <div className="flex flex-col gap-2">
         <h4 className="text-heading-medium text-gray-80">3. Github 데이터의 지식화</h4>
         <p className="text-label-small text-gray-80">
-          동기화된 텍스트는 Catch Up의 AI가 요약하고 임베딩하여, 질문에 맞는 핵심 답과 코드
-          원문(딥링크)을 함께 제공할 준비를 마칩니다. 이후의 모든 업데이트는 실시간으로 반영됩니다.
+          동기화된 텍스트는 Catch Up의 AI가 요약하고 임베딩하여, 질문에 맞는 핵심 답과 코드 원문(딥링크)을 함께 제공할
+          준비를 마칩니다. 이후의 모든 업데이트는 실시간으로 반영됩니다.
         </p>
       </div>
 

@@ -44,10 +44,7 @@ const UsersTable = ({ displayRows }: UsersTableProps) => {
               </div>
 
               {MEMBER_TABLE_SERVICES.map((service) => (
-                <span
-                  key={`${renderKey}-${service}`}
-                  className="text-body-small truncate text-center text-gray-60"
-                >
+                <span key={`${renderKey}-${service}`} className="text-body-small text-gray-60 truncate text-center">
                   {row.accountIdByService[service] ?? '-'}
                 </span>
               ))}

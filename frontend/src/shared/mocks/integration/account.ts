@@ -55,7 +55,11 @@ export const MOCK_SELECTABLE_ROWS = [
     department: '디자인팀',
     teamSizeLabel: '4명',
     picture: null,
-    accountIdByService: { github: 'seoyeon.park@gmail.com', jira: 'seoyeon.park@gmail.com', slack: 'seoyeon.park@gmail.com' },
+    accountIdByService: {
+      github: 'seoyeon.park@gmail.com',
+      jira: 'seoyeon.park@gmail.com',
+      slack: 'seoyeon.park@gmail.com',
+    },
     statusByService: {
       jira: '완료' as const,
       github: '미사용' as const,
@@ -71,7 +75,11 @@ export const MOCK_SELECTABLE_ROWS = [
     department: '개발팀',
     teamSizeLabel: '8명',
     picture: null,
-    accountIdByService: { github: 'haneul.jung@gmail.com', jira: 'haneul.jung@gmail.com', slack: 'haneul.jung@gmail.com' },
+    accountIdByService: {
+      github: 'haneul.jung@gmail.com',
+      jira: 'haneul.jung@gmail.com',
+      slack: 'haneul.jung@gmail.com',
+    },
     statusByService: {
       jira: '완료' as const,
       github: '완료' as const,

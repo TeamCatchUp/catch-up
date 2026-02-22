@@ -306,9 +306,9 @@ const IntegrationAccountsSection = ({
                 <span className="text-body-xsmall shrink-0 truncate text-gray-50">{email}</span>
               </div>
             ) : (
-              <div className="bg-neutral-1 flex w-[259px] shrink-0 self-stretch items-center justify-center rounded-lg">
+              <div className="bg-neutral-1 flex w-[259px] shrink-0 items-center justify-center self-stretch rounded-lg">
                 <div className="flex items-center gap-1">
-                  <IconCloudOff className="text-gray-50 size-6" />
+                  <IconCloudOff className="size-6 text-gray-50" />
                   <span className="text-body-xsmall text-gray-50">연동 안됨</span>
                 </div>
               </div>

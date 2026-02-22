@@ -45,7 +45,10 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   /* 검색 필터 */
-  const filtered = useMemo(() => (data?.users ?? []).filter((m) => m.name.includes(searchTerm)), [data?.users, searchTerm]);
+  const filtered = useMemo(
+    () => (data?.users ?? []).filter((m) => m.name.includes(searchTerm)),
+    [data?.users, searchTerm],
+  );
 
   /* 테이블 행 변환 */
   const tableRows: MemberTableRow[] = useMemo(

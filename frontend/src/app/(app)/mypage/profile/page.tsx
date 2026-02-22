@@ -57,9 +57,7 @@ const ProfilePage = () => {
             <Profile className="h-27.5 w-27.5 rounded-2xl ring-4 ring-white" />
           )}
           <div className="flex flex-col gap-1">
-            <span className="text-heading-xlarge text-gray-80">
-              {profile?.name ?? user?.name ?? ''}
-            </span>
+            <span className="text-heading-xlarge text-gray-80">{profile?.name ?? user?.name ?? ''}</span>
             <div className="flex gap-1 text-gray-50">
               <span className="text-body-small">{profile?.department ?? ''}</span>
             </div>

@@ -67,9 +67,7 @@ const ACTIVE_STATUSES: SyncStatusValue[] = ['pending', 'in_progress'];
 
 const isGithubSyncing = (data: GithubSyncStatusResponse): boolean =>
   data.repositories.some((repo) =>
-    Object.values(repo.entities).some(
-      (e) => e.status != null && ACTIVE_STATUSES.includes(e.status as SyncStatusValue),
-    ),
+    Object.values(repo.entities).some((e) => e.status != null && ACTIVE_STATUSES.includes(e.status as SyncStatusValue)),
   );
 
 const isServiceSyncing = (items: Array<{ last_sync_status: SyncStatusValue | null }>): boolean =>
@@ -170,9 +168,7 @@ export const useEmbeddingStatus = () => {
         const syncing =
           entry.service === 'github'
             ? isGithubSyncing(data as GithubSyncStatusResponse)
-            : isServiceSyncing(
-                data as (JiraSyncStatusItem | SlackSyncStatusItem | ConfluenceSyncStatusItem)[],
-              );
+            : isServiceSyncing(data as (JiraSyncStatusItem | SlackSyncStatusItem | ConfluenceSyncStatusItem)[]);
 
         if (syncing) serviceStillSyncing = true;
       }
@@ -234,14 +230,11 @@ export const useEmbeddingStatus = () => {
 
   // ─── Public API ───
 
-  const startEmbedding = useCallback(
-    (service: IntegrationService, parentIds: string[], serviceName: string) => {
-      const entry: EmbeddingEntry = { service, parentIds, serviceName, startedAt: Date.now() };
-      saveStored(service, { parentIds, startedAt: entry.startedAt, serviceName });
-      setActiveEmbeddings((prev) => new Map(prev).set(service, entry));
-    },
-    [],
-  );
+  const startEmbedding = useCallback((service: IntegrationService, parentIds: string[], serviceName: string) => {
+    const entry: EmbeddingEntry = { service, parentIds, serviceName, startedAt: Date.now() };
+    saveStored(service, { parentIds, startedAt: entry.startedAt, serviceName });
+    setActiveEmbeddings((prev) => new Map(prev).set(service, entry));
+  }, []);
 
   /**
    * 서비스별 임베딩 상태:

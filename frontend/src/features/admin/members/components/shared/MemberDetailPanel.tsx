@@ -103,16 +103,16 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
                   // integrations 모드 vs legacy accountIds 모드
                   const accountId = member.integrations
                     ? getAccountIdentifier(account.service, member.integrations)
-                    : member.accountIds?.[account.service] ?? null;
+                    : (member.accountIds?.[account.service] ?? null);
                   const isLinked = !!accountId;
 
                   const integrationAccount = member.integrations?.[account.service];
-                  const accountName = integrationAccount && 'name' in integrationAccount ? integrationAccount.name : null;
+                  const accountName =
+                    integrationAccount && 'name' in integrationAccount ? integrationAccount.name : null;
                   const accountEmail =
                     integrationAccount && 'email' in integrationAccount ? integrationAccount.email : null;
 
-                  const iconClassName =
-                    account.service === 'confluence' ? 'h-5.75 w-6 shrink-0' : 'h-6 w-6 shrink-0';
+                  const iconClassName = account.service === 'confluence' ? 'h-5.75 w-6 shrink-0' : 'h-6 w-6 shrink-0';
 
                   return (
                     <div
@@ -143,7 +143,7 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
                           </span>
                         </div>
                       ) : (
-                        <div className="bg-neutral-1 flex w-[259px] shrink-0 self-stretch items-center justify-center rounded-lg">
+                        <div className="bg-neutral-1 flex w-[259px] shrink-0 items-center justify-center self-stretch rounded-lg">
                           <div className="flex items-center gap-1">
                             <IconCloudOff className="text-gray-20 size-5" />
                             <span className="text-body-xsmall text-gray-50">연동 안됨</span>

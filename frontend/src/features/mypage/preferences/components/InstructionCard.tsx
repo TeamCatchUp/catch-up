@@ -19,7 +19,7 @@ interface InstructionCardProps {
 
 const InstructionCard = ({ content, onEdit, onDelete }: InstructionCardProps) => {
   return (
-    <div className="border-neutral-3 flex min-h-[46px] max-h-[160px] items-start gap-6 overflow-y-auto rounded-xl border bg-white px-4 py-3">
+    <div className="border-neutral-3 flex max-h-[160px] min-h-[46px] items-start gap-6 overflow-y-auto rounded-xl border bg-white px-4 py-3">
       <p className="text-body-small text-gray-70 w-full wrap-break-word whitespace-pre-wrap">{content}</p>
 
       <DropdownMenu>

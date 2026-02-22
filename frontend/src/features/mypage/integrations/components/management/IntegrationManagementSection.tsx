@@ -112,7 +112,9 @@ const IntegrationManagementSection = ({
               <button
                 type="button"
                 onClick={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending || selectedService === 'confluence' || !embeddingCompleted.has(selectedService)}
+                disabled={
+                  syncMutation.isPending || selectedService === 'confluence' || !embeddingCompleted.has(selectedService)
+                }
                 className="border-neutral-3 text-body-xsmall text-gray-70 flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-white px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <IconRotate className="text-gray-70 h-6 w-6" />
@@ -129,7 +131,7 @@ const IntegrationManagementSection = ({
                 ) : (
                   <>
                     <div className="flex items-center gap-1 px-1.5 py-1">
-                      <IconCloudOff className="size-5 text-gray-20" />
+                      <IconCloudOff className="text-gray-20 size-5" />
                       <span className="text-body-xsmall text-gray-50">연동 안됨</span>
                     </div>
                     <button

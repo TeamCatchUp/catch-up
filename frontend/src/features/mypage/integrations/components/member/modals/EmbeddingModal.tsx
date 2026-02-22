@@ -59,12 +59,7 @@ interface SyncableItem {
 }
 
 /** 서비스별 sync/full API 호출 생성 */
-const buildSyncCall = (
-  service: IntegrationService,
-  parentId: string,
-  groupItems: SyncableItem[],
-  syncDays: number,
-) => {
+const buildSyncCall = (service: IntegrationService, parentId: string, groupItems: SyncableItem[], syncDays: number) => {
   switch (service) {
     case 'github':
       return api.post(API.github.syncFull, {
@@ -265,12 +260,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onEmbeddingS
           <Button variant="capsule-outline-mono" size="md" onClick={handleClose}>
             취소
           </Button>
-          <Button
-            variant="capsule-solid-primary"
-            size="md"
-            disabled={isSubmitDisabled}
-            onClick={handleSubmit}
-          >
+          <Button variant="capsule-solid-primary" size="md" disabled={isSubmitDisabled} onClick={handleSubmit}>
             임베딩하기
           </Button>
         </div>
