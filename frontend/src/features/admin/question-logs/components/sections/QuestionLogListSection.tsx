@@ -1,61 +1,108 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import BookmarkIcon from '@/public/icons/icon/bookmark.svg';
 import SearchIcon from '@/public/icons/icon/search.svg';
 import FilterDropdown from '@/shared/components/ui/filter-dropdown';
 import { Separator } from '@/shared/components/ui/separator';
 import { cn } from '@/shared/utils/cn';
-import {
-  type DatePeriod,
-  groupItemsByDate,
-  isInPeriod,
-  PERIOD_OPTIONS,
-  SORT_OPTIONS,
-  type SortOrder,
-} from '@/shared/utils/dateGrouping';
+import { type DatePeriod, groupItemsByDate, isInPeriod, PERIOD_OPTIONS, SORT_OPTIONS, type SortOrder } from '@/shared/utils/dateGrouping';
 
-import type { QuestionLogItem } from '../../types/questionLog';
+import PermissionsPagination from '../../../permissions/components/shared/PermissionsPagination';
+import { adminQueriesQueries } from '../../queries/adminQueries.queries';
+import type { AdminQueryParams } from '../../types/questionLog';
+import { toQuestionLogItem } from '../../utils/transformers';
 import QuestionLogListItem from '../QuestionLogListItem';
 
+/** DatePeriod → API period 변환 (서버 사전 필터용) */
+const toApiPeriod = (period: DatePeriod): AdminQueryParams['period'] => {
+  switch (period) {
+    case 'today':
+      return 'today';
+    case 'sevenDays':
+      return '7d';
+    default:
+      // 'older'와 'all'은 서버에서 전체 조회 후 클라이언트에서 후처리
+      return 'all';
+  }
+};
+
+const PAGE_SIZE = 50;
+
 interface QuestionLogListSectionProps {
-  items: QuestionLogItem[];
-  userId: string;
+  userId: number;
 }
 
-/** 이용자 질문 기록 — 필터 + 날짜별 그룹 리스트 섹션 */
-const QuestionLogListSection = ({ items, userId }: QuestionLogListSectionProps) => {
+/** 이용자 질문 기록 — 서버사이드 필터 + 날짜별 그룹 리스트 섹션 */
+const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
   const [sort, setSort] = useState<SortOrder>('latest');
   const [period, setPeriod] = useState<DatePeriod>('all');
   const [savedOnly, setSavedOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
 
-  const filteredItems = useMemo(() => {
-    const keyword = searchTerm.trim().toLowerCase();
+  // 검색어 디바운스 (300ms) — timer 기반 외부 시스템 구독
+   
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+   
 
-    const filtered = items
-      .filter((item) => (savedOnly ? item.isSaved : true))
-      .filter((item) => isInPeriod(item.rawDate, period))
-      .filter((item) => !keyword || item.query.toLowerCase().includes(keyword));
+  const handleSortChange = (value: SortOrder) => {
+    setSort(value);
+    setPage(1);
+  };
 
-    return filtered.sort((a, b) =>
-      sort === 'latest' ? b.rawDate.getTime() - a.rawDate.getTime() : a.rawDate.getTime() - b.rawDate.getTime(),
-    );
-  }, [items, sort, period, savedOnly, searchTerm]);
+  const handlePeriodChange = (value: DatePeriod) => {
+    setPeriod(value);
+    setPage(1);
+  };
 
-  const groupedSections = useMemo(() => groupItemsByDate(filteredItems, (item) => item.rawDate), [filteredItems]);
+  const handleSavedOnlyToggle = () => {
+    setSavedOnly((prev) => !prev);
+    setPage(1);
+  };
+
+  const params: AdminQueryParams = {
+    page,
+    size: PAGE_SIZE,
+    target_user_id: userId,
+    sort: sort === 'latest' ? 'desc' : 'asc',
+    period: toApiPeriod(period),
+    ...(savedOnly && { is_saved: true }),
+    ...(debouncedSearch && { search: debouncedSearch }),
+  };
+
+  const { data, isLoading } = useQuery(adminQueriesQueries.list(params));
+
+  const items = useMemo(() => {
+    const all = (data?.items ?? []).map(toQuestionLogItem);
+    // 서버 period는 시간 윈도우 기반이므로 클라이언트에서 날짜 그룹 기준 후처리
+    if (period === 'all') return all;
+    return all.filter((item) => isInPeriod(item.rawDate, period));
+  }, [data?.items, period]);
+
+  const groupedSections = useMemo(() => groupItemsByDate(items, (item) => item.rawDate), [items]);
+
+  const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
 
   return (
     <div className="flex flex-col gap-4">
       {/* 필터 툴바 */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <FilterDropdown options={SORT_OPTIONS} value={sort} onChange={setSort} />
-          <FilterDropdown options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
+          <FilterDropdown options={SORT_OPTIONS} value={sort} onChange={handleSortChange} />
+          <FilterDropdown options={PERIOD_OPTIONS} value={period} onChange={handlePeriodChange} />
           <button
             type="button"
-            onClick={() => setSavedOnly((prev) => !prev)}
+            onClick={handleSavedOnlyToggle}
             className={cn(
               'flex h-9 max-w-[145px] min-w-9 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1.5',
               savedOnly
@@ -82,11 +129,15 @@ const QuestionLogListSection = ({ items, userId }: QuestionLogListSectionProps) 
         </label>
       </div>
 
-      {/* 그룹별 리스트 */}
-      {groupedSections.length === 0 && (
+      {/* 로딩 */}
+      {isLoading && <div className="text-body-small text-gray-40 px-1 py-4">불러오는 중...</div>}
+
+      {/* 빈 결과 */}
+      {!isLoading && groupedSections.length === 0 && (
         <div className="text-body-small text-gray-40 px-1 py-4">조건에 맞는 질문 기록이 없습니다.</div>
       )}
 
+      {/* 그룹별 리스트 */}
       {groupedSections.length > 0 && (
         <div className="flex flex-col">
           {groupedSections.map((section, index) => (
@@ -97,13 +148,20 @@ const QuestionLogListSection = ({ items, userId }: QuestionLogListSectionProps) 
                 </div>
                 <div className="flex flex-col gap-2">
                   {section.items.map((item) => (
-                    <QuestionLogListItem key={item.id} item={item} group={section.key} userId={userId} />
+                    <QuestionLogListItem key={item.id} item={item} group={section.key} userId={String(userId)} />
                   ))}
                 </div>
               </section>
               {index < groupedSections.length - 1 && <Separator className="my-6" />}
             </Fragment>
           ))}
+        </div>
+      )}
+
+      {/* 페이지네이션 */}
+      {totalPages > 1 && (
+        <div className="flex justify-center pt-2">
+          <PermissionsPagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
       )}
     </div>

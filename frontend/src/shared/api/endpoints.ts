@@ -75,6 +75,7 @@ export const API = {
       requests: `${API_PREFIX}/admin/members/requests`, // GET 입장 신청 목록
       decide: `${API_PREFIX}/admin/members/requests/decide`, // POST 승인/반려
     },
+    queries: `${API_PREFIX}/admin/queries`, // GET 이용자 질문 기록 (페이지네이션, 필터, 검색)
     // auditLogs / permissions: 엔드포인트 미확정, mock 직접 사용
     connector: {
       githubStatus: `${API_PREFIX}/admin/connector/github/status`, // GET GitHub 연동 상태

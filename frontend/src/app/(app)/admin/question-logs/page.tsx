@@ -3,12 +3,11 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
+import { JOB_LEVEL_LABEL } from '@/features/admin/members/constants/memberTableConfig';
+import { adminMembersQueries } from '@/features/admin/members/queries/adminMembers.queries';
 import QuestionLogListSection from '@/features/admin/question-logs/components/sections/QuestionLogListSection';
 import SelectedUserProfile from '@/features/admin/question-logs/components/sections/SelectedUserProfile';
 import UserSelectSection from '@/features/admin/question-logs/components/sections/UserSelectSection';
-import { MOCK_QUESTION_LOGS } from '@/features/admin/question-logs/mocks/questionLogsMockData';
-import { JOB_LEVEL_LABEL } from '@/features/admin/members/constants/memberTableConfig';
-import { adminMembersQueries } from '@/features/admin/members/queries/adminMembers.queries';
 
 /** 관리자 — 이용자 질문 기록 페이지 */
 export default function AdminQuestionLogsPage() {
@@ -44,7 +43,7 @@ export default function AdminQuestionLogsPage() {
         {selectedUser && (
           <>
             <SelectedUserProfile user={selectedUser} />
-            <QuestionLogListSection items={MOCK_QUESTION_LOGS} userId={selectedUserId} />
+            <QuestionLogListSection userId={Number(selectedUserId)} />
           </>
         )}
       </div>
