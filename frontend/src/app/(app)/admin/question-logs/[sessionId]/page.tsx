@@ -7,10 +7,10 @@ import { useParams, useSearchParams } from 'next/navigation';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 
-// admin/question-logs feature
-import DetailHeader from '@/features/admin/question-logs/components/DetailHeader';
 // admin/members feature
 import { adminMembersQueries } from '@/features/admin/members/queries/adminMembers.queries';
+// admin/question-logs feature
+import DetailHeader from '@/features/admin/question-logs/components/DetailHeader';
 // chat feature (app layer can import from any feature)
 import { MarkDownComponents } from '@/features/chat/components/answer/markdown/MarkDownComponents';
 import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/renderWithBadges';

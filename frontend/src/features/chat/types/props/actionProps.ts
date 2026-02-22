@@ -21,6 +21,8 @@ export interface AnswerActionButtonsProps {
   sessionId: string;
   chatHistoryId?: string;
   hasFeedback?: boolean;
+  isLiked?: boolean;
+  isSaved?: boolean;
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: Dispatch<SetStateAction<Record<string, boolean>>>;
   onRetry?: () => void;

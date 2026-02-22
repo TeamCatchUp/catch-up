@@ -52,6 +52,8 @@ export const toUiMessage = (item: ChatHistoryMessageResponse): Message => {
     timestamp,
     chat_history_id: item.chat_history_id ? String(item.chat_history_id) : String(item.id),
     has_feedback: Boolean(item.has_feedback),
+    is_liked: item.is_liked === true ? true : item.is_liked === false ? false : undefined,
+    is_saved: item.is_saved ?? undefined,
   };
 };
 

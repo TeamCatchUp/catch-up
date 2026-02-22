@@ -1,14 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { USE_MOCK } from '@/shared/mocks/config';
 import { MOCK_RECENT_QUERIES } from '@/shared/mocks/search/data';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import type { RecentQueryWithSaveStatusResponse } from '@/shared/types/query/api';
-import type { GroupedSection } from '@/shared/utils/dateGrouping';
-import type { DatePeriod, SortOrder } from '@/shared/utils/dateGrouping';
+import type { DatePeriod, GroupedSection, SortOrder } from '@/shared/utils/dateGrouping';
 import { groupItemsByDate, isInPeriod as isInPeriodShared } from '@/shared/utils/dateGrouping';
 
 import type { HistoryItem } from '../types/models';
@@ -27,12 +26,19 @@ interface UsePageModelReturn {
   groupedSections: GroupedSection<HistoryItem>[];
   isLoading: boolean;
   isError: boolean;
+  /** 무한 스크롤: 다음 페이지 존재 여부 */
+  hasNextPage: boolean;
+  /** 무한 스크롤: 다음 페이지 로딩 중 여부 */
+  isFetchingNextPage: boolean;
+  /** 무한 스크롤: 다음 페이지 요청 */
+  fetchNextPage: () => void;
 }
 
 /**
  * 질문 히스토리 페이지의 상태·데이터 로직을 관리하는 페이지 모델 훅.
  *
- * 정렬, 기간 필터, 저장 필터, 키워드 검색을 적용하고
+ * 무한 스크롤로 페이지를 누적 로드하고,
+ * 정렬, 기간 필터, 저장 필터, 키워드 검색을 적용하여
  * 결과를 날짜 그룹(오늘 / 최근 7일 / 이전)별 섹션으로 반환한다.
  */
 export const usePageModel = (): UsePageModelReturn => {
@@ -41,7 +47,7 @@ export const usePageModel = (): UsePageModelReturn => {
   const [savedOnly, setSavedOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const recentQueriesQuery = useQuery(chatQueries.recentQueriesWithSaveStatus());
+  const infiniteQuery = useInfiniteQuery(chatQueries.recentQueriesWithSaveStatusInfinite());
 
   const sourceItems = useMemo<RecentQueryWithSaveStatusResponse[]>(() => {
     if (USE_MOCK) {
@@ -51,8 +57,8 @@ export const usePageModel = (): UsePageModelReturn => {
         answer_id: null,
       }));
     }
-    return recentQueriesQuery.data?.items ?? [];
-  }, [recentQueriesQuery.data?.items]);
+    return infiniteQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  }, [infiniteQuery.data?.pages]);
 
   const historyItems = useMemo<HistoryItem[]>(() => sourceItems.map(toHistoryItem), [sourceItems]);
 
@@ -86,7 +92,10 @@ export const usePageModel = (): UsePageModelReturn => {
     searchTerm,
     setSearchTerm,
     groupedSections,
-    isLoading: !USE_MOCK && recentQueriesQuery.isLoading,
-    isError: !USE_MOCK && recentQueriesQuery.isError,
+    isLoading: !USE_MOCK && infiniteQuery.isLoading,
+    isError: !USE_MOCK && infiniteQuery.isError,
+    hasNextPage: infiniteQuery.hasNextPage,
+    isFetchingNextPage: infiniteQuery.isFetchingNextPage,
+    fetchNextPage: infiniteQuery.fetchNextPage,
   };
 };
