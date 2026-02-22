@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { MemberStatusPayload, RequestDecisionPayload } from '../types/adminMember';
+import type { RequestDecisionPayload } from '../types/adminMember';
 import { adminMembersQueries } from './adminMembers.queries';
 
 /** 입장 신청 승인/반려 */
@@ -20,14 +20,26 @@ export const useDecideRequestMutation = () => {
   });
 };
 
-/** 이용자 비활성화/삭제 */
-export const useMemberStatusMutation = () => {
+/** 이용자 비활성화 */
+export const useDeactivateUserMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: MemberStatusPayload) => {
-      const res = await api.patch(API.admin.members.status(payload.userId), {
-        action: payload.action,
-      });
+    mutationFn: async ({ userId, reason }: { userId: number; reason: string }) => {
+      const res = await api.post(API.admin.users.deactivate(userId), { reason });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminMembersQueries.all() });
+    },
+  });
+};
+
+/** 이용자 삭제 */
+export const useDeleteUserMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: number) => {
+      const res = await api.post(API.admin.users.delete(userId));
       return res.data;
     },
     onSuccess: () => {
