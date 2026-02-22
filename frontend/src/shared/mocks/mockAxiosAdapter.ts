@@ -1,4 +1,4 @@
-import { MOCK_ADMIN_MEMBERS, MOCK_ENTRY_REQUESTS } from './admin/adminMembersMockData';
+import { MOCK_ENTRY_REQUESTS } from './admin/adminMembersMockData';
 import { MOCK_JWT_TOKENS, MOCK_USER } from './auth/data';
 import delay from './delay';
 import { MOCK_FEEDBACK_RESPONSE } from './feedback/data';
@@ -149,12 +149,7 @@ const mockHandlers: MockHandler[] = [
     },
   },
 
-  // Admin — 이용자 관리
-  {
-    pattern: /^\/api\/v1\/admin\/members$/,
-    method: 'get',
-    handler: async () => MOCK_ADMIN_MEMBERS,
-  },
+  // Admin — 입장 신청
   {
     pattern: /^\/api\/v1\/admin\/members\/requests$/,
     method: 'get',
@@ -163,13 +158,6 @@ const mockHandlers: MockHandler[] = [
   {
     pattern: /^\/api\/v1\/admin\/members\/requests\/decide$/,
     method: 'post',
-    handler: async () => {
-      return { success: true };
-    },
-  },
-  {
-    pattern: /^\/api\/v1\/admin\/members\/[^/]+\/status$/,
-    method: 'patch',
     handler: async () => {
       return { success: true };
     },
