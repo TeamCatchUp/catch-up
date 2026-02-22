@@ -85,7 +85,7 @@ export const API = {
     },
     users: {
       list: `${API_PREFIX}/admin/users`, // GET 이용자 목록
-      detail: (userId: number) => `${API_PREFIX}/admin/users/${userId}`, // GET 이용자 상세
+      detail: (userId: number) => `${API_PREFIX}/admin/users/${userId}/detail`, // GET 이용자 상세
       syncStatus: `${API_PREFIX}/admin/users/sync-status`, // GET 서비스별 사용자 매핑 현황
       deactivate: (userId: number) => `${API_PREFIX}/admin/users/deactivate/${userId}`, // POST 비활성화
       delete: (userId: number) => `${API_PREFIX}/admin/users/delete/${userId}`, // POST 삭제

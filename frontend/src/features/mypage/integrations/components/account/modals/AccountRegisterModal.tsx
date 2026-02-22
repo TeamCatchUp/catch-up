@@ -4,6 +4,7 @@ import Cancel from '@/public/icons/icon/cancel.svg';
 import IconError from '@/public/icons/icon/error-1.svg';
 import { Button } from '@/shared/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
+import type { IntegrationService } from '@/shared/types/integrationService';
 
 import type { MemberIntegrationRow } from '../../../types/integrations';
 import AccountSelectorPopover, { type AccountOption } from './AccountSelectorPopover';
@@ -19,11 +20,12 @@ interface AccountRegisterModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   allRows: MemberIntegrationRow[];
+  service: IntegrationService;
   serviceName: string;
 }
 
 /** 계정 등록 모달 */
-const AccountRegisterModal = ({ open, onOpenChange, allRows, serviceName }: AccountRegisterModalProps) => {
+const AccountRegisterModal = ({ open, onOpenChange, allRows, service, serviceName }: AccountRegisterModalProps) => {
   const [selectedReason, setSelectedReason] = useState('new-tool');
   const [customReason, setCustomReason] = useState('');
   const [selectedAccountKey, setSelectedAccountKey] = useState('');
@@ -33,14 +35,14 @@ const AccountRegisterModal = ({ open, onOpenChange, allRows, serviceName }: Acco
   const accountOptions = useMemo<AccountOption[]>(() => {
     const deduped = new Map<string, AccountOption>();
     allRows.forEach((row) => {
-      const jiraAccountId = row.accountIdByService.jira;
-      if (!jiraAccountId) return;
-      const key = `${jiraAccountId}:${row.email}`;
+      const accountId = row.accountIdByService[service];
+      if (!accountId) return;
+      const key = `${accountId}:${row.email}`;
       if (deduped.has(key)) return;
-      deduped.set(key, { key, userName: row.userName, userEmail: row.email, accountId: jiraAccountId });
+      deduped.set(key, { key, userName: row.userName, userEmail: row.email, accountId });
     });
     return Array.from(deduped.values());
-  }, [allRows]);
+  }, [allRows, service]);
 
   const selectedAccount = useMemo(
     () => accountOptions.find((o) => o.key === selectedAccountKey) ?? null,
