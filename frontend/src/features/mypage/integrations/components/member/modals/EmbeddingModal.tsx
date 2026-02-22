@@ -97,10 +97,11 @@ interface EmbeddingModalProps {
   onOpenChange: (open: boolean) => void;
   service: IntegrationService;
   serviceName: string;
+  onEmbeddingStarted?: (service: IntegrationService, parentIds: string[], serviceName: string) => void;
 }
 
 /** 임베딩 모달 */
-const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingModalProps) => {
+const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onEmbeddingStarted }: EmbeddingModalProps) => {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('1개월');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
@@ -135,19 +136,11 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
         ),
       );
     },
-    onSuccess: () => {
-      toast('임베딩이 시작되었습니다.', {
-        description: '준비가 끝나면 즉시 알려드릴게요.',
-      });
-      handleClose();
-    },
-    onError: () => {
-      toast.error('임베딩 요청 중 오류가 발생했습니다.');
-    },
+    // onSuccess/onError 제거: 모달이 즉시 닫혀 unmount 후 콜백 실행 불가
   });
 
   const itemLabel = getItemLabel(service);
-  const isSubmitDisabled = selectedItems.size === 0 || syncMutation.isPending;
+  const isSubmitDisabled = selectedItems.size === 0;
 
   const toggleItem = (id: string) => {
     setSelectedItems((prev) => {
@@ -173,7 +166,18 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
   const handleSubmit = () => {
     const syncDays = PERIOD_TO_DAYS[selectedPeriod] ?? 30;
     const selected = items.filter((item) => selectedItems.has(item.id));
+
+    // Fire-and-forget: mutation은 MutationCache에서 unmount 후에도 계속 실행됨
     syncMutation.mutate({ syncDays, selected });
+
+    // 사용된 parentId 목록 추출
+    const parentIds = [...new Set(selected.map((item) => item.parentId))];
+
+    toast('임베딩이 시작되었습니다.', {
+      description: '준비가 끝나면 즉시 알려드릴게요.',
+    });
+    onEmbeddingStarted?.(service, parentIds, serviceName);
+    handleClose();
   };
 
   return (
@@ -267,7 +271,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
             disabled={isSubmitDisabled}
             onClick={handleSubmit}
           >
-            {syncMutation.isPending ? '임베딩 중...' : '임베딩하기'}
+            임베딩하기
           </Button>
         </div>
       </DialogContent>

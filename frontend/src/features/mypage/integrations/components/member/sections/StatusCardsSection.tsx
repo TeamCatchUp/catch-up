@@ -1,11 +1,13 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 
 import IconHelp from '@/public/icons/icon/help.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
 import { Button } from '@/shared/components/ui/button';
+import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
+import { useEmbeddingStatus } from '../../../hooks/useEmbeddingStatus';
 import type { MemberIntegrationCardItem } from '../../../types/integrations';
 import EmbeddingModal from '../modals/EmbeddingModal';
 
@@ -20,6 +22,8 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
     service: IntegrationService;
     serviceName: string;
   }>({ open: false, service: 'jira', serviceName: '' });
+
+  const { startEmbedding, getStatus, completionModal, closeCompletionModal } = useEmbeddingStatus();
 
   const openEmbeddingModal = (service: IntegrationService, serviceName: string) => {
     setEmbeddingModal({ open: true, service, serviceName });
@@ -36,6 +40,7 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
         {cards.map((card) => {
           const { service, name, Icon, completedCount, totalCount, completionRate } = card;
           const iconClassName = service === 'confluence' ? 'h-5.75 w-6 shrink-0' : 'h-6 w-6 shrink-0';
+          const status = getStatus(service);
 
           return (
             <article
@@ -83,14 +88,17 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
                   />
                 </div>
 
-                <Button
-                  variant="box-outline-blue"
-                  size="md"
-                  className="text-body-small h-9 w-full"
-                  onClick={() => service !== 'slack' && openEmbeddingModal(service, name)}
-                >
-                  임베딩하기
-                </Button>
+                {status === 'completed' ? null : (
+                  <Button
+                    variant="box-outline-blue"
+                    size="md"
+                    className="text-body-small h-9 w-full"
+                    disabled={status === 'syncing' || service === 'slack'}
+                    onClick={() => openEmbeddingModal(service, name)}
+                  >
+                    {status === 'syncing' ? '임베딩 진행 중' : '임베딩하기'}
+                  </Button>
+                )}
               </div>
             </article>
           );
@@ -102,6 +110,17 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
         onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
         service={embeddingModal.service}
         serviceName={embeddingModal.serviceName}
+        onEmbeddingStarted={startEmbedding}
+      />
+
+      <ConfirmDialog
+        open={completionModal.open}
+        onOpenChange={closeCompletionModal}
+        title="임베딩이 완료되었어요!"
+        description={`이제 Catch Up에서 ${completionModal.serviceName} 정보를 검색할 수 있어요.`}
+        confirmLabel="확인"
+        hideCancel
+        onConfirm={closeCompletionModal}
       />
     </section>
   );
