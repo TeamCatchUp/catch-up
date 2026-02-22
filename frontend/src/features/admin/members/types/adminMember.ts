@@ -1,7 +1,69 @@
 import type { UserRole, UserStatus } from '@/shared/queries/auth.types';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
-/** 입장 신청 목록 행 */
+// ─── JobLevel ───
+
+export type JobLevel = 'executive' | 'leader' | 'member';
+
+// ─── 목록 (GET /admin/users) ───
+
+export interface AdminUserListItem {
+  id: number;
+  name: string;
+  department: string;
+  jobLevel: JobLevel;
+  role: UserRole;
+  status: UserStatus;
+}
+
+export interface AdminUserListResponse {
+  total: number;
+  users: AdminUserListItem[];
+}
+
+// ─── 상세 (GET /admin/users/{id}) ───
+
+interface IntegrationAccountBase {
+  name?: string | null;
+  email?: string | null;
+  avatarUrl?: string | null;
+}
+
+export interface JiraAccount extends IntegrationAccountBase {
+  accountId: string;
+}
+
+export interface GithubAccount extends IntegrationAccountBase {
+  login: string;
+}
+
+export interface SlackAccount extends IntegrationAccountBase {
+  userId: string;
+}
+
+export interface ConfluenceAccount extends IntegrationAccountBase {
+  accountId: string;
+}
+
+export interface UserIntegrations {
+  jira: JiraAccount | null;
+  github: GithubAccount | null;
+  slack: SlackAccount | null;
+  confluence: ConfluenceAccount | null;
+}
+
+export interface AdminUserDetailResponse {
+  id: number;
+  name: string;
+  email: string;
+  department: string;
+  jobLevel: JobLevel;
+  status: UserStatus;
+  integrations: UserIntegrations;
+}
+
+// ─── 입장 신청 (기존 유지) ───
+
 export interface EntryRequest {
   requestId: string;
   userId: string;
@@ -17,43 +79,20 @@ export interface EntryRequest {
   accountIds: Partial<Record<IntegrationService, string>>;
 }
 
-/** 이용자 목록 행 */
-export interface AdminMember {
-  userId: string;
-  name: string;
-  email: string;
-  phone: string;
-  picture: string | null;
-  department: string;
-  teamSize: number;
-  rank: string;
-  role: UserRole;
-  status: UserStatus;
-  accountIds: Partial<Record<IntegrationService, string>>;
-}
-
-/** 승인/반려 요청 body */
 export interface RequestDecisionPayload {
   requestIds: string[];
   decision: 'approve' | 'reject';
 }
 
-/** 이용자 상태 변경 body */
-export interface MemberStatusPayload {
-  userId: string;
-  action: 'deactivate' | 'delete';
-}
+// ─── 테이블 공통 ───
 
-/** 이용자 테이블 정렬 키 */
 export type AdminSortKey = 'newest' | 'oldest';
 
-/** 테이블 행 렌더용 공통 인터페이스 */
 export interface MemberTableRow {
   key: string;
   name: string;
   picture: string | null;
   rank: string;
   department: string;
-  /** 4번째 컬럼 값 (상태 or 권한) */
   lastColumn: string;
 }

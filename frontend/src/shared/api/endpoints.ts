@@ -71,10 +71,8 @@ export const API = {
   // 관리자 — 이용자 관리
   admin: {
     members: {
-      list: `${API_PREFIX}/admin/members`, // GET 이용자 목록
       requests: `${API_PREFIX}/admin/members/requests`, // GET 입장 신청 목록
       decide: `${API_PREFIX}/admin/members/requests/decide`, // POST 승인/반려
-      status: (userId: string) => `${API_PREFIX}/admin/members/${userId}/status`, // PATCH 비활성화/삭제
     },
     // auditLogs / permissions: 엔드포인트 미확정, mock 직접 사용
     connector: {
@@ -85,7 +83,11 @@ export const API = {
       syncable: (source: string) => `${API_PREFIX}/admin/connector/syncable/${source}`, // GET 임베딩 대상 리소스 목록
     },
     users: {
+      list: `${API_PREFIX}/admin/users`, // GET 이용자 목록
+      detail: (userId: number) => `${API_PREFIX}/admin/users/${userId}`, // GET 이용자 상세
       syncStatus: `${API_PREFIX}/admin/users/sync-status`, // GET 서비스별 사용자 매핑 현황
+      deactivate: (userId: number) => `${API_PREFIX}/admin/users/deactivate/${userId}`, // POST 비활성화
+      delete: (userId: number) => `${API_PREFIX}/admin/users/delete/${userId}`, // POST 삭제
     },
   },
 
