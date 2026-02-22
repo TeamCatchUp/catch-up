@@ -25,10 +25,10 @@ from catchup.db.models import (
     JiraSyncState,
     JiraUser,
     PreMappingBuffer,
-    SlackChannelSyncState,
     SlackOAuthToken,
     SlackSyncState,
     SlackUser,
+    SlackChannel,
     SourceType,
     User,
     UserSourceMapping,
@@ -238,8 +238,8 @@ def _get_slack_status(db: Session) -> SlackConnectorStatus:
 
     channels = [
         row[0]
-        for row in db.query(SlackChannelSyncState.channel_name)
-        .filter(SlackChannelSyncState.team_id.in_(team_ids))
+        for row in db.query(SlackChannel.name)
+        .filter(SlackChannel.team_id.in_(team_ids))
         .distinct()
         .all()
         if row[0]
@@ -306,11 +306,10 @@ def _get_confluence_status(db: Session) -> ConfluenceConnectorStatus:
             spaces=[],
         )
 
-    # Sync 이력이 있는 Space만 조회
     spaces = [
         row[0]
-        for row in db.query(ConfluenceSyncState.space_key)
-        .filter(ConfluenceSyncState.cloud_id.in_(cloud_ids))
+        for row in db.query(ConfluenceSpace.space_key)
+        .filter(ConfluenceSpace.cloud_id.in_(cloud_ids))
         .distinct()
         .all()
     ]
