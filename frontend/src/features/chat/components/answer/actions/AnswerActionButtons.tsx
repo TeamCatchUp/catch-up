@@ -34,6 +34,9 @@ const AnswerActionButtons = ({
   const [bookmarked, setBookmarked] = useState(isSaved ?? false);
   const [liked, setLiked] = useState(isLiked ?? false);
 
+  // is_liked가 true/false로 내려오면 has_feedback 없어도 피드백 완료로 판단
+  const feedbackGiven = hasFeedback || isLiked !== undefined;
+
   const saveMutation = useMutation({
     ...chatMutations.toggleSave(),
     meta: { skipGlobalErrorHandler: true },
@@ -48,7 +51,7 @@ const AnswerActionButtons = ({
   });
 
   const handleLike = async () => {
-    if (!chatHistoryId || likeMutation.isPending || hasFeedback || liked) return;
+    if (!chatHistoryId || likeMutation.isPending || feedbackGiven || liked) return;
 
     setLiked(true);
     try {
@@ -72,10 +75,10 @@ const AnswerActionButtons = ({
         const isThumbsDown = item.name === 'ThumbsDown';
         const isThumbsUp = item.name === 'ThumbsUp';
         const isFeedbackButton = isThumbsDown || isThumbsUp;
-        const isFeedbackDisabled = isFeedbackButton && hasFeedback;
+        const isFeedbackDisabled = isFeedbackButton && feedbackGiven;
         const isBookmark = item.name === 'Bookmark';
         const isThumbsDownPanelOpen = isThumbsDown && feedbackVisibleMap[messageId];
-        const isDislikedActive = isThumbsDown && hasFeedback && !liked;
+        const isDislikedActive = isThumbsDown && feedbackGiven && !liked;
         const tooltipLabel = TOOLTIP_LABELS[item.name];
         const isLikedActive = isThumbsUp && liked;
         const Icon =
