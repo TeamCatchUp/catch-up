@@ -1,7 +1,7 @@
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Optional
 import uuid
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, aliased, joinedload
 
 from catchup.db.models import ChatHistory, ChatRoom, SenderType
@@ -163,21 +163,13 @@ def get_queries_by_user(
     return list(items), total_count
 
 
-# backend/catchup/db/chat_room.py
-
-from datetime import datetime, time, timedelta
-from typing import Optional
-from sqlalchemy import and_, func, select
-from sqlalchemy.orm import Session, aliased
-
-from catchup.db.models import ChatHistory, ChatRoom, SenderType
-
 def get_queries_with_save_status(
     db: Session,
     user_id: Optional[int] = None,
     room_id: Optional[int] = None,
     search_term: Optional[str] = None,
     period: str = "all",
+    is_saved: Optional[bool] = None,
     sort: str = "desc",
     skip: int = 0,
     limit: int = 20
@@ -217,9 +209,15 @@ def get_queries_with_save_status(
         filters.append(ChatHistory.created_at >= datetime.now() - timedelta(days=7))
     elif period == "30d":
         filters.append(ChatHistory.created_at >= datetime.now() - timedelta(days=30))
-        
+    
+    # 검색 필터
     if search_term:
         filters.append(func.bigm_similarity(ChatHistory.content, search_term) > 0)
+    if is_saved is True:
+        filters.append(is_saved_sq == True)
+    elif is_saved is False:
+        # 답변이 명시적으로 False이거나, 아직 답변이 안 달려서 NULL인 경우를 모두 포함
+        filters.append(or_(is_saved_sq == False, is_saved_sq.is_(None)))
 
     total_count = db.scalar(
         select(func.count()).select_from(ChatHistory).join(ChatRoom).where(and_(*filters))

@@ -209,6 +209,7 @@ def get_query_history_with_status(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     search: Optional[str] = Query(None, description="검색어 (질문 내용)"),
+    is_saved: Optional[bool] = Query(None, description="저장 여부 (true/false)"),
     sort: str = Query("desc", pattern="^(asc|desc)$", description="정렬: asc(오래된순), desc(최신순)"),
     period: str = Query("all", description="조회 기간: today, 7d, all"),
     db: Session = Depends(get_db),
@@ -221,6 +222,7 @@ def get_query_history_with_status(
         user_id=current_user.id,
         search_term=search,
         period=period,
+        is_saved=is_saved,
         sort=sort,
         skip=skip,
         limit=size

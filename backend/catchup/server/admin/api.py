@@ -562,6 +562,7 @@ def get_admin_query_history(
     size: int = Query(50, ge=1, le=100),
     search: Optional[str] = Query(None),
     target_user_id: Optional[int] = Query(None),
+    is_saved: Optional[bool] = Query(None, description="저장 여부 (true/false)"),
     period: str = Query("all", description="today, 7d, 30d, all"),
     sort: str = Query("desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
@@ -574,6 +575,7 @@ def get_admin_query_history(
         user_id=target_user_id,
         search_term=search,
         period=period,
+        is_saved=is_saved,
         sort=sort,
         skip=skip,
         limit=size
