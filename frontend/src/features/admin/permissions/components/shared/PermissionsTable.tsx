@@ -3,7 +3,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
 import { cn } from '@/shared/utils/cn';
 
-import { RANK_BADGE_CLASS, ROLE_BADGE_CLASS, ROLE_LABEL, TAG_BASE_CLASS } from '../../constants/permissionsConfig';
+import { JOB_LEVEL_LABEL, RANK_BADGE_CLASS, ROLE_BADGE_CLASS, ROLE_LABEL, TAG_BASE_CLASS } from '../../constants/permissionsConfig';
 import type { PermissionMember } from '../../types/adminPermission';
 
 interface PermissionsTableProps {
@@ -43,8 +43,8 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
                   </div>
 
                   <div className="flex items-center justify-center">
-                    <span className={cn(TAG_BASE_CLASS, RANK_BADGE_CLASS[member.rank] ?? 'bg-neutral-2 text-gray-50')}>
-                      {member.rank}
+                    <span className={cn(TAG_BASE_CLASS, RANK_BADGE_CLASS[JOB_LEVEL_LABEL[member.jobLevel]] ?? 'bg-neutral-2 text-gray-50')}>
+                      {JOB_LEVEL_LABEL[member.jobLevel]}
                     </span>
                   </div>
 
@@ -73,14 +73,16 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
                   </div>
 
                   <div className="flex w-[110px] items-center justify-end">
-                    <Button
-                      variant="box-outline-gray"
-                      size="sm"
-                      className="h-7.5 w-[110px]"
-                      onClick={() => onChangeRoleClick(member)}
-                    >
-                      Admin 권한 부여
-                    </Button>
+                    {member.role !== 'admin' && (
+                      <Button
+                        variant="box-outline-gray"
+                        size="sm"
+                        className="h-7.5 w-[110px]"
+                        onClick={() => onChangeRoleClick(member)}
+                      >
+                        Admin 권한 부여
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

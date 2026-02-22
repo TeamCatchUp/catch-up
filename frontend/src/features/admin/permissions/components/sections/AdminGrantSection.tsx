@@ -7,9 +7,9 @@ import type { PermissionMember } from '../../types/adminPermission';
 
 interface AdminGrantSectionProps {
   members: PermissionMember[];
-  selectedMemberId: string;
+  selectedMemberId: number | null;
   reason: string;
-  onMemberChange: (memberId: string) => void;
+  onMemberChange: (memberId: number) => void;
   onReasonChange: (reason: string) => void;
   onOpenGrantModal: () => void;
   disabled?: boolean;
@@ -46,13 +46,13 @@ const AdminGrantSection = ({
       <div className="border-neutral-3 flex items-start gap-5 rounded-xl border px-5 py-5">
         <div className="flex w-[470px] flex-col gap-1.5">
           <span className="text-body-small text-gray-80">멤버</span>
-          <Select value={selectedMemberId} onValueChange={onMemberChange} disabled={disabled}>
+          <Select value={selectedMemberId != null ? String(selectedMemberId) : ''} onValueChange={(v) => onMemberChange(Number(v))} disabled={disabled}>
             <SelectTrigger className="h-[46px]">
               <SelectValue placeholder="멤버 선택" />
             </SelectTrigger>
             <SelectContent>
               {members.map((member) => (
-                <SelectItem key={member.id} value={member.id}>
+                <SelectItem key={member.id} value={String(member.id)}>
                   {member.name} ({member.department})
                 </SelectItem>
               ))}

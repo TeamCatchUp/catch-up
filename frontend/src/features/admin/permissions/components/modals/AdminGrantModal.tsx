@@ -8,17 +8,17 @@ import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialo
 import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 
-import type { AssignAdminPayload, PermissionMember } from '../../types/adminPermission';
+import type { PermissionMember } from '../../types/adminPermission';
 
 interface AdminGrantModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   members: PermissionMember[];
-  memberId: string;
+  memberId: number | null;
   reason: string;
   isSubmitting: boolean;
   errorMessage?: string;
-  onSubmit: (payload: AssignAdminPayload) => void;
+  onSubmit: (userId: number) => void;
 }
 
 /** Admin 권한 부여 확인 모달 */
@@ -32,7 +32,7 @@ const AdminGrantModal = ({
   errorMessage,
   onSubmit,
 }: AdminGrantModalProps) => {
-  const [memberId, setMemberId] = useState(initialMemberId);
+  const [memberId, setMemberId] = useState<number | null>(initialMemberId);
   const [reason, setReason] = useState(initialReason);
 
   const isSubmitDisabled = !memberId || !reason.trim() || isSubmitting;
@@ -56,13 +56,13 @@ const AdminGrantModal = ({
               <span className="text-body-small text-gray-80">부여할 멤버</span>
               <span className="size-1.25 rounded-full bg-red-50" />
             </div>
-            <Select value={memberId} onValueChange={setMemberId}>
+            <Select value={memberId != null ? String(memberId) : ''} onValueChange={(v) => setMemberId(Number(v))}>
               <SelectTrigger className="h-[46px]">
                 <SelectValue placeholder="멤버 선택" />
               </SelectTrigger>
               <SelectContent>
                 {members.map((member) => (
-                  <SelectItem key={member.id} value={member.id}>
+                  <SelectItem key={member.id} value={String(member.id)}>
                     {member.name} ({member.department})
                   </SelectItem>
                 ))}
@@ -98,7 +98,7 @@ const AdminGrantModal = ({
             variant="capsule-solid-primary"
             size="md"
             disabled={isSubmitDisabled}
-            onClick={() => onSubmit({ memberId, reason: reason.trim(), source: 'grant' })}
+            onClick={() => memberId != null && onSubmit(memberId)}
           >
             권한 부여
           </Button>

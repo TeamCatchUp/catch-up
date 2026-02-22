@@ -76,7 +76,7 @@ export const API = {
       decide: `${API_PREFIX}/admin/members/requests/decide`, // POST 승인/반려
     },
     queries: `${API_PREFIX}/admin/queries`, // GET 이용자 질문 기록 (페이지네이션, 필터, 검색)
-    // auditLogs / permissions: 엔드포인트 미확정, mock 직접 사용
+    // auditLogs: 엔드포인트 미확정, mock 직접 사용
     connector: {
       githubStatus: `${API_PREFIX}/admin/connector/github/status`, // GET GitHub 연동 상태
       jiraStatus: `${API_PREFIX}/admin/connector/jira/status`, // GET Jira 연동 상태
@@ -90,6 +90,7 @@ export const API = {
       syncStatus: `${API_PREFIX}/admin/users/sync-status`, // GET 서비스별 사용자 매핑 현황
       deactivate: (userId: number) => `${API_PREFIX}/admin/users/deactivate/${userId}`, // POST 비활성화
       delete: (userId: number) => `${API_PREFIX}/admin/users/delete/${userId}`, // POST 삭제
+      promote: (userId: number) => `${API_PREFIX}/admin/users/promote/${userId}`, // POST Admin 승격
     },
   },
 
