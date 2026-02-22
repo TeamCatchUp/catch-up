@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query';
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
@@ -10,6 +10,8 @@ import type {
   SessionQueriesResponse,
 } from '@/shared/types/query/api';
 import { isValidSessionId } from '@/shared/utils/sessionId';
+
+const HISTORY_PAGE_SIZE = 50;
 
 export const chatQueries = {
   all: () => ['chatrooms'] as const,
@@ -41,6 +43,23 @@ export const chatQueries = {
       queryFn: async (): Promise<RecentQueriesWithSaveStatusResponse> => {
         const res = await api.get<RecentQueriesWithSaveStatusResponse>(API.chatrooms.queriesWithSaveStatus);
         return res.data;
+      },
+    }),
+
+  /** 무한 스크롤용 질문 히스토리 + 저장 여부 */
+  recentQueriesWithSaveStatusInfinite: () =>
+    infiniteQueryOptions({
+      queryKey: [...chatQueries.lists(), 'queries', 'saved-status', 'infinite'] as const,
+      queryFn: async ({ pageParam }): Promise<RecentQueriesWithSaveStatusResponse> => {
+        const res = await api.get<RecentQueriesWithSaveStatusResponse>(API.chatrooms.queriesWithSaveStatus, {
+          params: { page: pageParam, size: HISTORY_PAGE_SIZE },
+        });
+        return res.data;
+      },
+      initialPageParam: 1,
+      getNextPageParam: (lastPage, allPages) => {
+        const totalPages = Math.ceil(lastPage.total / HISTORY_PAGE_SIZE);
+        return allPages.length < totalPages ? allPages.length + 1 : undefined;
       },
     }),
 

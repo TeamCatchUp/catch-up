@@ -1,7 +1,7 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 
 import BookmarkIcon from '@/public/icons/icon/bookmark.svg';
 import SearchIcon from '@/public/icons/icon/search.svg';
@@ -10,14 +10,12 @@ import { Separator } from '@/shared/components/ui/separator';
 import { cn } from '@/shared/utils/cn';
 import { type DatePeriod, groupItemsByDate, isInPeriod, PERIOD_OPTIONS, SORT_OPTIONS, type SortOrder } from '@/shared/utils/dateGrouping';
 
-import PermissionsPagination from '../../../permissions/components/shared/PermissionsPagination';
 import { adminQueriesQueries } from '../../queries/adminQueries.queries';
-import type { AdminQueryParams } from '../../types/questionLog';
 import { toQuestionLogItem } from '../../utils/transformers';
 import QuestionLogListItem from '../QuestionLogListItem';
 
 /** DatePeriod → API period 변환 (서버 사전 필터용) */
-const toApiPeriod = (period: DatePeriod): AdminQueryParams['period'] => {
+const toApiPeriod = (period: DatePeriod): 'today' | '7d' | '30d' | 'all' => {
   switch (period) {
     case 'today':
       return 'today';
@@ -29,69 +27,79 @@ const toApiPeriod = (period: DatePeriod): AdminQueryParams['period'] => {
   }
 };
 
-const PAGE_SIZE = 50;
-
 interface QuestionLogListSectionProps {
   userId: number;
 }
 
-/** 이용자 질문 기록 — 서버사이드 필터 + 날짜별 그룹 리스트 섹션 */
+/** 이용자 질문 기록 — 서버사이드 필터 + 무한 스크롤 + 날짜별 그룹 리스트 섹션 */
 const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
   const [sort, setSort] = useState<SortOrder>('latest');
   const [period, setPeriod] = useState<DatePeriod>('all');
   const [savedOnly, setSavedOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [page, setPage] = useState(1);
 
   // 검색어 디바운스 (300ms) — timer 기반 외부 시스템 구독
-   
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchTerm.trim());
-      setPage(1);
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
-   
+
 
   const handleSortChange = (value: SortOrder) => {
     setSort(value);
-    setPage(1);
   };
 
   const handlePeriodChange = (value: DatePeriod) => {
     setPeriod(value);
-    setPage(1);
   };
 
   const handleSavedOnlyToggle = () => {
     setSavedOnly((prev) => !prev);
-    setPage(1);
   };
 
-  const params: AdminQueryParams = {
-    page,
-    size: PAGE_SIZE,
+  const params = {
     target_user_id: userId,
-    sort: sort === 'latest' ? 'desc' : 'asc',
+    sort: sort === 'latest' ? ('desc' as const) : ('asc' as const),
     period: toApiPeriod(period),
-    ...(savedOnly && { is_saved: true }),
+    ...(savedOnly && { is_saved: true as const }),
     ...(debouncedSearch && { search: debouncedSearch }),
   };
 
-  const { data, isLoading } = useQuery(adminQueriesQueries.list(params));
+  const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteQuery(
+    adminQueriesQueries.list(params),
+  );
 
   const items = useMemo(() => {
-    const all = (data?.items ?? []).map(toQuestionLogItem);
+    const all = (data?.pages.flatMap((page) => page.items) ?? []).map(toQuestionLogItem);
     // 서버 period는 시간 윈도우 기반이므로 클라이언트에서 날짜 그룹 기준 후처리
     if (period === 'all') return all;
     return all.filter((item) => isInPeriod(item.rawDate, period));
-  }, [data?.items, period]);
+  }, [data?.pages, period]);
 
   const groupedSections = useMemo(() => groupItemsByDate(items, (item) => item.rawDate), [items]);
 
-  const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
+  /* 무한 스크롤 sentinel */
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -158,11 +166,10 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
         </div>
       )}
 
-      {/* 페이지네이션 */}
-      {totalPages > 1 && (
-        <div className="flex justify-center pt-2">
-          <PermissionsPagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
-        </div>
+      {/* 무한 스크롤 sentinel + 로딩 표시 */}
+      <div ref={sentinelRef} className="h-1" />
+      {isFetchingNextPage && (
+        <div className="text-body-small text-gray-40 py-2 text-center">불러오는 중...</div>
       )}
     </div>
   );
