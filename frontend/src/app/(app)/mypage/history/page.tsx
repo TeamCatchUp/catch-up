@@ -120,9 +120,7 @@ export default function HistoryPage() {
 
         {/* 무한 스크롤 sentinel + 로딩 표시 */}
         <div ref={sentinelRef} className="h-1" />
-        {isFetchingNextPage && (
-          <div className="text-body-small text-gray-40 py-2 text-center">불러오는 중...</div>
-        )}
+        {isFetchingNextPage && <div className="text-body-small text-gray-40 py-2 text-center">불러오는 중...</div>}
       </div>
     </section>
   );

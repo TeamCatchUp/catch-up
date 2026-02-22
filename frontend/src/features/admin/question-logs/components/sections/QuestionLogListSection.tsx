@@ -8,7 +8,14 @@ import SearchIcon from '@/public/icons/icon/search.svg';
 import FilterDropdown from '@/shared/components/ui/filter-dropdown';
 import { Separator } from '@/shared/components/ui/separator';
 import { cn } from '@/shared/utils/cn';
-import { type DatePeriod, groupItemsByDate, isInPeriod, PERIOD_OPTIONS, SORT_OPTIONS, type SortOrder } from '@/shared/utils/dateGrouping';
+import {
+  type DatePeriod,
+  groupItemsByDate,
+  isInPeriod,
+  PERIOD_OPTIONS,
+  SORT_OPTIONS,
+  type SortOrder,
+} from '@/shared/utils/dateGrouping';
 
 import { adminQueriesQueries } from '../../queries/adminQueries.queries';
 import { toQuestionLogItem } from '../../utils/transformers';
@@ -47,7 +54,6 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
-
 
   const handleSortChange = (value: SortOrder) => {
     setSort(value);
@@ -168,9 +174,7 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
 
       {/* 무한 스크롤 sentinel + 로딩 표시 */}
       <div ref={sentinelRef} className="h-1" />
-      {isFetchingNextPage && (
-        <div className="text-body-small text-gray-40 py-2 text-center">불러오는 중...</div>
-      )}
+      {isFetchingNextPage && <div className="text-body-small text-gray-40 py-2 text-center">불러오는 중...</div>}
     </div>
   );
 };
