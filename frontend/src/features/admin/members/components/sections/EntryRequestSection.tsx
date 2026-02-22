@@ -170,7 +170,6 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
                   email: selectedRequest.email,
                   department: selectedRequest.department,
                   rank: selectedRequest.rank,
-                  picture: selectedRequest.picture,
                   accountIds: selectedRequest.accountIds,
                 }
               : null

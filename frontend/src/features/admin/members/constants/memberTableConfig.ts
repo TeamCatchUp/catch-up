@@ -1,12 +1,19 @@
 import type { UserStatus } from '@/shared/queries/auth.types';
 
-import type { AdminSortKey } from '../types/adminMember';
+import type { AdminSortKey, JobLevel } from '../types/adminMember';
 
 /** 정렬 옵션 */
 export const SORT_OPTIONS: { key: AdminSortKey; label: string }[] = [
   { key: 'newest', label: '최신 순' },
   { key: 'oldest', label: '오래된 순' },
 ];
+
+/** jobLevel → 한글 라벨 */
+export const JOB_LEVEL_LABEL: Record<JobLevel, string> = {
+  executive: '경영진',
+  leader: '팀장',
+  member: '팀원',
+};
 
 /** 직급 Badge 스타일 */
 export const RANK_BADGE_CLASS: Record<string, string> = {

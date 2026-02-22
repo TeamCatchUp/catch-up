@@ -9,6 +9,8 @@ import remarkGfm from 'remark-gfm';
 
 // admin/question-logs feature
 import DetailHeader from '@/features/admin/question-logs/components/DetailHeader';
+// admin/members feature
+import { adminMembersQueries } from '@/features/admin/members/queries/adminMembers.queries';
 // chat feature (app layer can import from any feature)
 import { MarkDownComponents } from '@/features/chat/components/answer/markdown/MarkDownComponents';
 import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/renderWithBadges';
@@ -20,7 +22,6 @@ import { extractQAPairs, findQAPairIndexByQuery } from '@/features/chat/utils/re
 import { formatMarkdownString } from '@/features/chat/utils/render/markdown';
 // shared
 import { Badge } from '@/shared/components/ui/badge';
-import { MOCK_ADMIN_MEMBERS } from '@/shared/mocks/admin/adminMembersMockData';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 
 export default function QuestionLogDetailPage() {
@@ -32,7 +33,11 @@ export default function QuestionLogDetailPage() {
   const userId = searchParams.get('userId') ?? '';
 
   // 유저 정보 조회
-  const user = useMemo(() => MOCK_ADMIN_MEMBERS.find((m) => m.userId === userId), [userId]);
+  const { data: usersData } = useQuery(adminMembersQueries.list());
+  const user = useMemo(() => {
+    const u = usersData?.users?.find((m) => m.id === Number(userId));
+    return u ? { name: u.name, department: u.department } : undefined;
+  }, [usersData?.users, userId]);
 
   // 세션 메시지 로드
   const messagesQuery = useQuery(chatQueries.sessionMessages(sessionId));

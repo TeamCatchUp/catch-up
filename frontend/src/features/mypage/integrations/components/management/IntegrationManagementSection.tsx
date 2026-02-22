@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 import { cn } from '@/shared/utils/cn';
 
+import { loadCompletedServices } from '../../hooks/useEmbeddingStatus';
 import type { ConnectorDetail, IntegrationMenuItem, IntegrationService } from '../../types/integrations';
 import GithubGuideSection from './GithubGuideSection';
 import JiraGuideSection from './JiraGuideSection';
@@ -46,6 +48,8 @@ const IntegrationManagementSection = ({
   onSelectService,
   detail,
 }: IntegrationManagementSectionProps) => {
+  const [embeddingCompleted] = useState(loadCompletedServices);
+
   const syncMutation = useMutation({
     mutationKey: ['admin', 'connector', 'sync', selectedService] as const,
     mutationFn: async () => {
@@ -108,7 +112,9 @@ const IntegrationManagementSection = ({
               <button
                 type="button"
                 onClick={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending || selectedService === 'confluence'}
+                disabled={
+                  syncMutation.isPending || selectedService === 'confluence' || !embeddingCompleted.has(selectedService)
+                }
                 className="border-neutral-3 text-body-xsmall text-gray-70 flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-white px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <IconRotate className="text-gray-70 h-6 w-6" />
@@ -125,7 +131,7 @@ const IntegrationManagementSection = ({
                 ) : (
                   <>
                     <div className="flex items-center gap-1 px-1.5 py-1">
-                      <IconCloudOff className="size-5 text-gray-20" />
+                      <IconCloudOff className="text-gray-20 size-5" />
                       <span className="text-body-xsmall text-gray-50">연동 안됨</span>
                     </div>
                     <button

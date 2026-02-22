@@ -5,9 +5,13 @@ import { API } from '@/shared/api/endpoints';
 
 import type {
   ConfluenceConnectorStatus,
+  ConfluenceSyncStatusItem,
   GithubConnectorStatus,
+  GithubSyncStatusResponse,
   JiraConnectorStatus,
+  JiraSyncStatusItem,
   SlackConnectorStatus,
+  SlackSyncStatusItem,
   SyncableEntity,
   SyncableResponse,
   UserSyncStatusResponse,
@@ -69,5 +73,53 @@ export const adminConnectorQueries = {
         const res = await api.get<UserSyncStatusResponse>(API.admin.users.syncStatus);
         return res.data;
       },
+    }),
+
+  // ─── Sync Status (임베딩 진행 상태 폴링) ───
+
+  githubSyncStatus: (installationId: string) =>
+    queryOptions({
+      queryKey: [...adminConnectorQueries.all(), 'syncStatus', 'github', installationId] as const,
+      queryFn: async (): Promise<GithubSyncStatusResponse> => {
+        const res = await api.get<GithubSyncStatusResponse>(API.github.syncStatus(installationId));
+        return res.data;
+      },
+      enabled: !!installationId,
+    }),
+
+  jiraSyncStatus: (cloudId: string) =>
+    queryOptions({
+      queryKey: [...adminConnectorQueries.all(), 'syncStatus', 'jira', cloudId] as const,
+      queryFn: async (): Promise<JiraSyncStatusItem[]> => {
+        const res = await api.get<JiraSyncStatusItem[]>(API.jira.syncStatus, {
+          params: { cloud_id: cloudId },
+        });
+        return res.data;
+      },
+      enabled: !!cloudId,
+    }),
+
+  slackSyncStatus: (teamId: string) =>
+    queryOptions({
+      queryKey: [...adminConnectorQueries.all(), 'syncStatus', 'slack', teamId] as const,
+      queryFn: async (): Promise<SlackSyncStatusItem[]> => {
+        const res = await api.get<SlackSyncStatusItem[]>(API.slack.syncStatus, {
+          params: { team_id: teamId },
+        });
+        return res.data;
+      },
+      enabled: !!teamId,
+    }),
+
+  confluenceSyncStatus: (cloudId: string) =>
+    queryOptions({
+      queryKey: [...adminConnectorQueries.all(), 'syncStatus', 'confluence', cloudId] as const,
+      queryFn: async (): Promise<ConfluenceSyncStatusItem[]> => {
+        const res = await api.get<ConfluenceSyncStatusItem[]>(API.confluence.syncStatus, {
+          params: { cloud_id: cloudId },
+        });
+        return res.data;
+      },
+      enabled: !!cloudId,
     }),
 };

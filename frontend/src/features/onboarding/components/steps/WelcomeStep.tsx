@@ -31,12 +31,7 @@ export function WelcomeStep({ onStart }: WelcomeStepProps) {
         </div>
 
         {/* 액션 섹션 */}
-        <Button
-          variant="box-solid-primary"
-          size="lg"
-          onClick={onStart}
-          className="h-[46px] w-full"
-        >
+        <Button variant="box-solid-primary" size="lg" onClick={onStart} className="h-[46px] w-full">
           온보딩 시작하기
         </Button>
       </div>

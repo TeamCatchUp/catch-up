@@ -41,7 +41,6 @@ export const API = {
   jira: {
     // auth
     install: `${API_PREFIX}/auth/jira/install`, // GET OAuth 인가 URL로 리다이렉트
-    status: `${API_PREFIX}/auth/jira/status`, // GET 연동 상태 + accessible resources
     uninstall: `${API_PREFIX}/auth/jira/uninstall`, // DELETE 연동 해제 (?cloud_id=)
     // sync (syncStatus만 사용 중)
     syncFull: `${API_PREFIX}/jira/sync/full`, // POST 전체 재동기화 (?cloud_id=)
@@ -67,15 +66,14 @@ export const API = {
 
   confluence: {
     syncFull: `${API_PREFIX}/confluence/sync/full`, // POST 전체 재동기화 (body: cloud_id, space_keys?)
+    syncStatus: `${API_PREFIX}/confluence/sync/status`, // GET 엔티티별 동기화 상태 (?cloud_id=)
   },
 
   // 관리자 — 이용자 관리
   admin: {
     members: {
-      list: `${API_PREFIX}/admin/members`, // GET 이용자 목록
       requests: `${API_PREFIX}/admin/members/requests`, // GET 입장 신청 목록
       decide: `${API_PREFIX}/admin/members/requests/decide`, // POST 승인/반려
-      status: (userId: string) => `${API_PREFIX}/admin/members/${userId}/status`, // PATCH 비활성화/삭제
     },
     // auditLogs / permissions: 엔드포인트 미확정, mock 직접 사용
     connector: {
@@ -86,8 +84,16 @@ export const API = {
       syncable: (source: string) => `${API_PREFIX}/admin/connector/syncable/${source}`, // GET 임베딩 대상 리소스 목록
     },
     users: {
+      list: `${API_PREFIX}/admin/users`, // GET 이용자 목록
+      detail: (userId: number) => `${API_PREFIX}/admin/users/${userId}`, // GET 이용자 상세
       syncStatus: `${API_PREFIX}/admin/users/sync-status`, // GET 서비스별 사용자 매핑 현황
+      deactivate: (userId: number) => `${API_PREFIX}/admin/users/deactivate/${userId}`, // POST 비활성화
+      delete: (userId: number) => `${API_PREFIX}/admin/users/delete/${userId}`, // POST 삭제
     },
+  },
+
+  mapping: {
+    upload: `${API_PREFIX}/mapping/upload`, // POST GitHub 매핑 CSV/Excel 일괄 업로드 (multipart/form-data)
   },
 
   onboarding: {

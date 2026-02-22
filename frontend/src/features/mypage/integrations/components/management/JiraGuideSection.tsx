@@ -10,13 +10,11 @@ const JiraGuideSection = () => {
     <div className="border-neutral-3 flex flex-col gap-10 overflow-clip rounded-xl border bg-white p-6">
       {/* 인트로 */}
       <div className="flex flex-col gap-2">
-        <h4 className="text-heading-medium text-gray-80">
-          기획과 태스크의 흐름, 질문 대신 검색으로 해결하세요.
-        </h4>
+        <h4 className="text-heading-medium text-gray-80">기획과 태스크의 흐름, 질문 대신 검색으로 해결하세요.</h4>
         <p className="text-label-small text-gray-80">
           기획 문서는 Confluence에, 구체적인 업무 할당은 Jira에 남아있습니다. &quot;그때 왜 이 스펙으로
-          결정했더라?&quot; 누군가에게 묻는 순간, 질문하는 사람도 답하는 사람도 일이 멈춥니다. Catch Up은 흩어진
-          문서를 한데 모아, 필요한 답을 근거와 함께 바로 보여줍니다.
+          결정했더라?&quot; 누군가에게 묻는 순간, 질문하는 사람도 답하는 사람도 일이 멈춥니다. Catch Up은 흩어진 문서를
+          한데 모아, 필요한 답을 근거와 함께 바로 보여줍니다.
         </p>
       </div>
 
@@ -36,12 +34,7 @@ const JiraGuideSection = () => {
         </div>
         <p className="text-label-small text-gray-80">
           Catch Up과 연결할 팀의 Site(예:{' '}
-          <a
-            href="http://company.atlassian.net/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline"
-          >
+          <a href="http://company.atlassian.net/" target="_blank" rel="noopener noreferrer" className="underline">
             company.atlassian.net
           </a>
           )를 선택하고 권한을 승인해주세요.
@@ -73,8 +66,8 @@ const JiraGuideSection = () => {
           />
         </div>
         <p className="text-label-small text-gray-80">
-          연동 담당자가 열람할 수 있는 목록이 표시됩니다. 전체 데이터가 아닌, 동기화가 필요한 특정 Project와
-          Space만 지정할 수 있습니다. 허락하지 않은 공간은 들여다보지 않습니다.
+          연동 담당자가 열람할 수 있는 목록이 표시됩니다. 전체 데이터가 아닌, 동기화가 필요한 특정 Project와 Space만
+          지정할 수 있습니다. 허락하지 않은 공간은 들여다보지 않습니다.
         </p>
       </div>
 

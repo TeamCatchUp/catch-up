@@ -13,6 +13,8 @@ interface ConfirmDialogProps {
   cancelLabel?: string;
   /** 'danger' 시 확인 버튼이 빨간색 아웃라인으로 표시 */
   variant?: 'primary' | 'danger';
+  /** 취소 버튼 숨김 (알림형 모달) */
+  hideCancel?: boolean;
   onConfirm: () => void;
 }
 
@@ -24,6 +26,7 @@ function ConfirmDialog({
   confirmLabel = '확인',
   cancelLabel = '취소',
   variant = 'primary',
+  hideCancel = false,
   onConfirm,
 }: ConfirmDialogProps) {
   return (
@@ -34,9 +37,11 @@ function ConfirmDialog({
           {description && <DialogDescription>{description}</DialogDescription>}
         </div>
         <div className="flex justify-end gap-2.5">
-          <Button variant="capsule-outline-mono" size="lg" onClick={() => onOpenChange(false)}>
-            {cancelLabel}
-          </Button>
+          {!hideCancel && (
+            <Button variant="capsule-outline-mono" size="lg" onClick={() => onOpenChange(false)}>
+              {cancelLabel}
+            </Button>
+          )}
           <Button
             variant={variant === 'danger' ? 'capsule-outline-mono' : 'capsule-solid-primary'}
             size="lg"

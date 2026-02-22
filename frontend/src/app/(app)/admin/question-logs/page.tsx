@@ -1,27 +1,33 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import QuestionLogListSection from '@/features/admin/question-logs/components/sections/QuestionLogListSection';
 import SelectedUserProfile from '@/features/admin/question-logs/components/sections/SelectedUserProfile';
 import UserSelectSection from '@/features/admin/question-logs/components/sections/UserSelectSection';
 import { MOCK_QUESTION_LOGS } from '@/features/admin/question-logs/mocks/questionLogsMockData';
-import { MOCK_ADMIN_MEMBERS } from '@/shared/mocks/admin/adminMembersMockData';
+import { JOB_LEVEL_LABEL } from '@/features/admin/members/constants/memberTableConfig';
+import { adminMembersQueries } from '@/features/admin/members/queries/adminMembers.queries';
 
 /** 관리자 — 이용자 질문 기록 페이지 */
 export default function AdminQuestionLogsPage() {
   const [selectedUserId, setSelectedUserId] = useState('');
 
+  const { data } = useQuery(adminMembersQueries.list());
+
   const userOptions = useMemo(
     () =>
-      MOCK_ADMIN_MEMBERS.filter((m) => m.status === 'active').map((m) => ({
-        id: m.userId,
-        name: m.name,
-        department: m.department,
-        rank: m.rank,
-        picture: m.picture,
-      })),
-    [],
+      (data?.users ?? [])
+        .filter((m) => m.status === 'active')
+        .map((m) => ({
+          id: m.id.toString(),
+          name: m.name,
+          department: m.department,
+          rank: JOB_LEVEL_LABEL[m.jobLevel] ?? m.jobLevel,
+          picture: null as string | null,
+        })),
+    [data?.users],
   );
 
   const selectedUser = userOptions.find((u) => u.id === selectedUserId);
