@@ -9,16 +9,16 @@ import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 
 import { PERMISSION_CHANGE_REASONS } from '../../constants/permissionsConfig';
-import type { AssignAdminPayload, PermissionMember } from '../../types/adminPermission';
+import type { PermissionMember } from '../../types/adminPermission';
 
 interface PermissionChangeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   members: PermissionMember[];
-  initialMemberId: string;
+  initialMemberId: number | null;
   isSubmitting: boolean;
   errorMessage?: string;
-  onSubmit: (payload: AssignAdminPayload) => void;
+  onSubmit: (userId: number) => void;
 }
 
 /** 권한 변경 모달 */
@@ -31,7 +31,7 @@ const PermissionChangeModal = ({
   errorMessage,
   onSubmit,
 }: PermissionChangeModalProps) => {
-  const [memberId, setMemberId] = useState(initialMemberId);
+  const [memberId, setMemberId] = useState<number | null>(initialMemberId);
   const [selectedReason, setSelectedReason] = useState<string>(PERMISSION_CHANGE_REASONS[0]);
   const [customReason, setCustomReason] = useState('');
 
@@ -62,13 +62,13 @@ const PermissionChangeModal = ({
               <span className="size-1.25 rounded-full bg-red-50" />
             </div>
 
-            <Select value={memberId} onValueChange={setMemberId}>
+            <Select value={memberId != null ? String(memberId) : ''} onValueChange={(v) => setMemberId(Number(v))}>
               <SelectTrigger className="h-[46px]">
                 <SelectValue placeholder="멤버 선택" />
               </SelectTrigger>
               <SelectContent>
                 {members.map((member) => (
-                  <SelectItem key={member.id} value={member.id}>
+                  <SelectItem key={member.id} value={String(member.id)}>
                     {member.name} ({member.department})
                   </SelectItem>
                 ))}
@@ -133,7 +133,7 @@ const PermissionChangeModal = ({
             variant="capsule-solid-primary"
             size="md"
             disabled={isSubmitDisabled}
-            onClick={() => onSubmit({ memberId, reason: finalReason, source: 'change' })}
+            onClick={() => memberId != null && onSubmit(memberId)}
           >
             권한 부여
           </Button>

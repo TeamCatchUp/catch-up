@@ -1,4 +1,5 @@
 import {
+  JOB_LEVEL_LABEL as MEMBER_JOB_LEVEL_LABEL,
   RANK_BADGE_CLASS as MEMBER_RANK_BADGE_CLASS,
   TAG_BASE_CLASS as MEMBER_TAG_BASE_CLASS,
 } from '@/features/admin/members/constants/memberTableConfig';
@@ -12,12 +13,13 @@ export const ADMIN_OWNER_LINE_1 = '현재 Admin 권한 소유자 : 직원01(CTO)
 export const ADMIN_OWNER_LINE_2 =
   'Admin 주요 기능 : 워크스페이스 설정, 멤버 관리 및 권한 제어를 포함한 모든 관리 도구에 접근할 수 있습니다.';
 
+export const JOB_LEVEL_LABEL = MEMBER_JOB_LEVEL_LABEL;
 export const RANK_BADGE_CLASS = MEMBER_RANK_BADGE_CLASS;
 export const TAG_BASE_CLASS = MEMBER_TAG_BASE_CLASS;
 
 export const ROLE_LABEL: Record<PermissionRole, 'Admin' | 'Member'> = {
   admin: 'Admin',
-  member: 'Member',
+  user: 'Member',
 };
 
 export const ROLE_BADGE_CLASS: Record<'Admin' | 'Member', string> = {
@@ -28,7 +30,7 @@ export const ROLE_BADGE_CLASS: Record<'Admin' | 'Member', string> = {
 export const ROLE_FILTER_OPTIONS = [
   { key: 'all', label: '전체' },
   { key: 'admin', label: 'Admin' },
-  { key: 'member', label: 'Member' },
+  { key: 'user', label: 'Member' },
 ] as const;
 
 export type RoleFilter = (typeof ROLE_FILTER_OPTIONS)[number]['key'];
