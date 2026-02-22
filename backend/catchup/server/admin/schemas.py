@@ -1,6 +1,9 @@
+from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
+
+from catchup.db.models import UserRole
 
 from catchup.db.models import JobLevel, UserRole, UserStatus
 
@@ -121,3 +124,13 @@ class PromoteUserResponse(BaseModel):
 # =====================
 class ConfluenceCloudIdListResponse(BaseModel):
     cloudIds: List[str]
+    
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    role: UserRole
+    department: str
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)

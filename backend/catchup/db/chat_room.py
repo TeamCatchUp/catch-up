@@ -223,8 +223,12 @@ def get_queries_with_save_status(
         select(func.count()).select_from(ChatHistory).join(ChatRoom).where(and_(*filters))
     ) or 0
 
-    stmt = select(ChatHistory, is_saved_sq.label("is_answer_saved"), answer_id_sq.label("answer_id")) \
-           .join(ChatRoom).where(and_(*filters))
+    stmt = (
+        select(ChatHistory, is_saved_sq.label("is_answer_saved"), answer_id_sq.label("answer_id"))
+        .join(ChatRoom)
+        .options(joinedload(ChatHistory.chat_room))
+        .where(and_(*filters))
+    )
 
     # 정렬
     if search_term:
