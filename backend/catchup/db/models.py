@@ -98,6 +98,7 @@ class User(Base):
         server_default=text(f"'{JobLevel.MEMBER}'")
     )
     status: Mapped[UserStatus] = mapped_column(String(10), nullable=False)
+    custom_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
