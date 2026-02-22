@@ -9,11 +9,11 @@ from catchup.rag.schemas.context import GlobalCompanyContext, GlobalContext, Glo
 
 
 async def get_rag_global_context(
-    authorized_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db_session: Session = Depends(get_db),
 ) -> GlobalContext:
     
-    db_user_full = get_user_with_full_context(db_session, authorized_user.id)
+    db_user_full = get_user_with_full_context(db_session, current_user.id)
     
     if not db_user_full:
         raise HTTPException(
@@ -21,41 +21,23 @@ async def get_rag_global_context(
             detail="User context not found"
         )
     
-    user_context = GlobalUserContext.from_db_user(db_user_full)
-    company_context = _extract_company_context(db_user_full)
-    workspace_context = _extract_workspace_context(db_user_full)
-    
-    return GlobalContext(
-        user=user_context,
-        workspace=workspace_context,
-        company=company_context
-    )
-
-def _extract_company_context(user: User) -> GlobalCompanyContext:
-    """User로부터 Company 정보를 추출하는 과정"""
-    if user.workspace_links:
-        workspace = user.workspace_links[0].workspace  # TODO: workspace가 늘어날 경우 [0] 수정 필요
-        if workspace.company:
-            return GlobalCompanyContext.from_db_company(workspace.company)
-            
-    # Fallback
-    return GlobalCompanyContext(
-        id=0, 
-        name="Unknown", 
-        description="No company context available"
-    )
-
-def _extract_workspace_context(user: User) -> GlobalWorkspaceContext:
-    """User로부터 Workspace 정보를 추출하는 과정"""
-    if user.workspace_links:
-        workspace = user.workspace_links[0].workspace
-        return GlobalWorkspaceContext(
-            id=workspace.id,
-            name=workspace.name
+    if not db_user_full.workspace_links:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User does not belong to any workspace"
         )
+        
+    # TODO: 향후 클라이언트에서 전달받은 workspace_id로 매칭하는 로직 추가
+    target_workspace = db_user_full.workspace_links[0].workspace
     
-    # Fallback
-    return GlobalWorkspaceContext(
-        id=1,  # TODO: 예시고객사 PoC 한정
-        name="Default Workspace" 
+    if not target_workspace.company:
+         raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company context not found for this workspace"
+        )
+
+    return GlobalContext(
+        user=GlobalUserContext.model_validate(db_user_full),
+        workspace=GlobalWorkspaceContext.model_validate(target_workspace),
+        company=GlobalCompanyContext.model_validate(target_workspace.company)
     )
