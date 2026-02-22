@@ -18,5 +18,4 @@ REQUIRED_CONFLUENCE_SCOPES: set[str] = {
     "read:blogpost:confluence",
     "read:comment:confluence",
     "read:attachment:confluence",
-    "read:label:confluence",
 }
