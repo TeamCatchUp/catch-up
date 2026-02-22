@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from catchup.auth.schemas import UserCreate
@@ -61,3 +61,27 @@ def get_okta_user_with_okta_uid(
     )
     
     return db.scalar(stmt)
+
+
+def get_all_users_for_admin(
+    db: Session,
+    skip: int = 0,
+    limit: int = 50
+) -> tuple[list[User], int]:
+    """어드민용: 전체 Catch Up 유저 목록 조회"""
+    
+    total_count = db.scalar(
+        select(func.count())
+        .select_from(User)
+    ) or 0    
+    
+    stmt = (
+        select(User)
+        .order_by(User.name.asc())
+        .offset(skip)
+        .limit(limit)
+    )
+    
+    items = db.scalars(stmt).all()
+    
+    return list(items), total_count

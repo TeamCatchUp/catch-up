@@ -35,6 +35,7 @@ from catchup.db.models import (
     UserStatus,
     UserRole,
 )
+from catchup.db.users import get_all_users_for_admin
 from catchup.server.auth.schemas import (
     ConfluenceSyncableResponse,
     ConfluenceConnectorStatus,
@@ -49,6 +50,7 @@ from catchup.server.auth.schemas import (
 )
 from catchup.server.admin.schemas import (
     SyncStatusCounts,
+    UserResponse,
     UserSyncMapping,
     UserSyncStatusResponse,
     SourceUserCount,
@@ -950,6 +952,33 @@ def get_admin_query_history(
         period=period,
         is_saved=is_saved,
         sort=sort,
+        skip=skip,
+        limit=size
+    )
+    
+    return {
+        "total": total,
+        "page": page,
+        "size": size,
+        "items": items
+    }
+
+
+@router.get(
+    path="/users",
+    response_model=BasePagination[UserResponse],
+    description="[어드민] 전체 유저 목록 조회"
+)
+def get_admin_user_list(
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin_user)
+):
+    skip = calculate_skip(page, size)
+    
+    items, total = get_all_users_for_admin(
+        db=db,
         skip=skip,
         limit=size
     )
