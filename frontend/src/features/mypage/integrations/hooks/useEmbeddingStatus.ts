@@ -145,9 +145,11 @@ export const useEmbeddingStatus = () => {
   });
 
   // ─── 폴링 결과로 완료 감지 ───
+  // 폴링 데이터 변화 → 완료 전이 감지 → 상태 업데이트가 이 effect 내에서만 가능하므로 suppress
 
   const prevSyncingRef = useRef<Set<string>>(new Set());
 
+  /* eslint-disable react-hooks/set-state-in-effect -- 폴링 완료 감지 후 상태 전이 (외부 시스템 구독 패턴) */
   useEffect(() => {
     if (activeEntries.length === 0) return;
 
@@ -187,7 +189,6 @@ export const useEmbeddingStatus = () => {
       const isNowSyncing = nowSyncing.has(entry.service);
 
       if (wasSyncing && !isNowSyncing) {
-        // 완료 처리: active에서 제거, completed에 추가
         removeStored(entry.service);
         setActiveEmbeddings((prev) => {
           const next = new Map(prev);
@@ -200,14 +201,13 @@ export const useEmbeddingStatus = () => {
           return next;
         });
         setCompletionModal({ open: true, serviceName: entry.serviceName });
-
-        // 관련 쿼리 무효화
         queryClient.invalidateQueries({ queryKey: adminConnectorQueries.all() });
       }
     }
 
     prevSyncingRef.current = nowSyncing;
   }, [syncStatusQueries, activeEntries, activeEmbeddings, queryClient]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ─── 타임아웃 ───
 
