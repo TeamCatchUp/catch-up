@@ -66,6 +66,7 @@ export const API = {
 
   confluence: {
     syncFull: `${API_PREFIX}/confluence/sync/full`, // POST 전체 재동기화 (body: cloud_id, space_keys?)
+    syncStatus: `${API_PREFIX}/confluence/sync/status`, // GET 엔티티별 동기화 상태 (?cloud_id=)
   },
 
   // 관리자 — 이용자 관리
