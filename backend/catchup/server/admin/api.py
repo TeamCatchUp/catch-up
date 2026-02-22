@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time, timedelta
 import logging
 from typing import Optional
 
@@ -928,18 +928,18 @@ def get_syncable_entities(
 
 @router.get(
     path="/queries",
-    response_model=BasePagination[UserQueryWithSaveStatusResponse],
-    description="[어드민] 전체 유저 대상 감사 로그 조회 (키워드/기간/유저 필터)"
+    response_model=BasePagination[UserQueryWithSaveStatusResponse]
 )
-def get_query_history(
+def get_admin_query_history(
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=100),
-    search: Optional[str] = Query(None, description="검색어 (질문 내용)"),
-    target_user_id: Optional[int] = Query(None, description="특정 유저 ID 필터"),
-    start_date: Optional[datetime] = Query(None, description="조회 시작일 (ISO 8601)"),
-    end_date: Optional[datetime] = Query(None, description="조회 종료일 (ISO 8601)"),
+    search: Optional[str] = Query(None),
+    target_user_id: Optional[int] = Query(None),
+    is_saved: Optional[bool] = Query(None, description="저장 여부 (true/false)"),
+    period: str = Query("all", description="today, 7d, 30d, all"),
+    sort: str = Query("desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(require_admin_user)
+    _admin: User = Depends(require_admin_user)
 ):
     skip = calculate_skip(page, size)
     
@@ -947,8 +947,9 @@ def get_query_history(
         db=db,
         user_id=target_user_id,
         search_term=search,
-        start_date=start_date,
-        end_date=end_date,
+        period=period,
+        is_saved=is_saved,
+        sort=sort,
         skip=skip,
         limit=size
     )

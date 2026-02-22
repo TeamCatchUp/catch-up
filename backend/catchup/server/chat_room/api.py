@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time, timedelta
 import logging
 from typing import Optional
 import uuid
@@ -12,7 +12,7 @@ from catchup.chat.chat_room import process_answer_feedback
 from catchup.chat.dependencies import get_valid_chat_room, get_valid_message, get_valid_user_query
 from catchup.chat.exceptions import FeedbackImmutableError, LikedWithNegativeFeedbackError
 from catchup.chat.schemas import ChatHistoryResponse, ChatRoomResponse, FeedbackRequest, UserQueryResponse, UserQueryWithSaveStatusResponse
-from catchup.db.chat_room import get_all_queries_for_admin, get_chat_room_messages, get_chat_rooms, get_queries_by_chat_room, get_queries_by_user, get_queries_by_user_with_save_status, get_query_answer_pair, toggle_save_status
+from catchup.db.chat_room import get_chat_room_messages, get_chat_rooms, get_queries_by_chat_room, get_queries_by_user, get_queries_with_save_status, get_query_answer_pair, toggle_save_status
 from catchup.db.dependencies import get_db
 from catchup.db.models import ChatHistory, ChatRoom, User, UserRole
 from catchup.server.chat_room.schemas import ChatHistoryListResponse
@@ -206,40 +206,35 @@ def update_answer_saved_status(
     description="(마이페이지) 답변 저장 여부를 포함하여 특정 사용자가 남긴 모든 쿼리 목록 조회"
 )
 def get_query_history_with_status(
-    page: int = Query(1, ge=1, description="페이지 번호 (1부터 시작)"),
-    size: int = Query(20, ge=1, le=100, description="페이지 크기 (1 ~ 100)"),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None, description="검색어 (질문 내용)"),
+    is_saved: Optional[bool] = Query(None, description="저장 여부 (true/false)"),
+    sort: str = Query("desc", pattern="^(asc|desc)$", description="정렬: asc(오래된순), desc(최신순)"),
+    period: str = Query("all", description="조회 기간: today, 7d, all"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     skip = calculate_skip(page, size)
     
-    items, total = get_queries_by_user_with_save_status(
+    items, total = get_queries_with_save_status(
         db=db,
         user_id=current_user.id,
+        search_term=search,
+        period=period,
+        is_saved=is_saved,
+        sort=sort,
         skip=skip,
         limit=size
     )
     
-    formatted_items = []
-    for row in items:
-        # row[0]: ChatHistory (질문), row[1]: is_answer_saved, row[2]: answer_id
-        query_obj = row[0]
-        
-        formatted_items.append({
-            "id": query_obj.id,
-            "content": query_obj.content,
-            "created_at": query_obj.created_at,
-            "session_id": query_obj.session_id,
-            "is_answer_saved": row[1] or False,
-            "answer_id": row[2]
-        })
-    
     return {
-        "total": total,
-        "page": page,
-        "size": size,
-        "items": formatted_items,
+        "total": total, 
+        "page": page, 
+        "size": size, 
+        "items": items
     }
+
 
 @router.get(
     path="/queries/{message_id}/detail",

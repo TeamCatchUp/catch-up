@@ -1,7 +1,7 @@
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Optional
 import uuid
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, aliased, joinedload
 
 from catchup.db.models import ChatHistory, ChatRoom, SenderType
@@ -163,86 +163,91 @@ def get_queries_by_user(
     return list(items), total_count
 
 
-def get_queries_by_user_with_save_status(
+def get_queries_with_save_status(
     db: Session,
-    user_id: int,
+    user_id: Optional[int] = None,
+    room_id: Optional[int] = None,
+    search_term: Optional[str] = None,
+    period: str = "all",
+    is_saved: Optional[bool] = None,
+    sort: str = "desc",
     skip: int = 0,
     limit: int = 20
-) -> tuple[list[tuple[ChatHistory, bool, int]], int]:
+) -> tuple[list[dict], int]:
     
-    # Alias 설정 (서브쿼리 내부에서 외부 ChatHistory와 충돌 방지)
     Answer = aliased(ChatHistory)
     
-    # 저장 여부 스칼라 서브쿼리
     is_saved_sq = (
         select(Answer.is_saved)
-        .where(
-            and_(
-                Answer.chat_room_id == ChatHistory.chat_room_id,
-                Answer.sender_type == SenderType.ASSISTANT,
-                Answer.id > ChatHistory.id
-            )
-        )
-        .order_by(Answer.id.asc())
-        .limit(1)
-        .correlate(ChatHistory)
-        .scalar_subquery()
+        .where(and_(
+            Answer.chat_room_id == ChatHistory.chat_room_id,
+            Answer.sender_type == SenderType.ASSISTANT,
+            Answer.id > ChatHistory.id
+        ))
+        .order_by(Answer.id.asc()).limit(1).correlate(ChatHistory).scalar_subquery()
     )
-    
-    # 답변 ID 스칼라 서브쿼리
     answer_id_sq = (
         select(Answer.id)
-        .where(
-            and_(
-                Answer.chat_room_id == ChatHistory.chat_room_id,
-                Answer.sender_type == SenderType.ASSISTANT,
-                Answer.id > ChatHistory.id
-            )
-        )
-        .order_by(Answer.id.asc())
-        .limit(1)
-        .correlate(ChatHistory)
-        .scalar_subquery()
+        .where(and_(
+            Answer.chat_room_id == ChatHistory.chat_room_id,
+            Answer.sender_type == SenderType.ASSISTANT,
+            Answer.id > ChatHistory.id
+        ))
+        .order_by(Answer.id.asc()).limit(1).correlate(ChatHistory).scalar_subquery()
     )
-    
-    # 메인 쿼리
-    stmt = (
-        select(
-            ChatHistory,
-            is_saved_sq.label("is_answer_saved"),
-            answer_id_sq.label("answer_id")
-        )
-        .join(ChatRoom, ChatHistory.chat_room_id == ChatRoom.id)
-        .where(
-            and_(
-                ChatRoom.user_id == user_id,
-                ChatHistory.sender_type == SenderType.HUMAN,
-                ChatHistory.is_displayed == True
-            )
-        )
-        .order_by(ChatHistory.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-    )
-    
 
-    results = db.execute(stmt).all()
+    # 기본 필터
+    filters = [ChatHistory.sender_type == SenderType.HUMAN, ChatHistory.is_displayed == True]
+    if user_id:
+        filters.append(ChatRoom.user_id == user_id)
+    if room_id:
+        filters.append(ChatHistory.chat_room_id == room_id)
+        
+    if period == "today":
+        filters.append(ChatHistory.created_at >= datetime.combine(datetime.now().date(), time.min))
+    elif period == "7d":
+        filters.append(ChatHistory.created_at >= datetime.now() - timedelta(days=7))
+    elif period == "30d":
+        filters.append(ChatHistory.created_at >= datetime.now() - timedelta(days=30))
     
-    count_stmt = (
-        select(func.count())
-        .select_from(ChatHistory)
-        .join(ChatRoom, ChatHistory.chat_room_id == ChatRoom.id)
-        .where(
-            and_(
-                ChatRoom.user_id == user_id,
-                ChatHistory.sender_type == SenderType.HUMAN,
-                ChatHistory.is_displayed == True
-            )
-        )
-    )
-    total_count = db.scalar(count_stmt) or 0
-    
-    return results, total_count
+    # 검색 필터
+    if search_term:
+        filters.append(func.bigm_similarity(ChatHistory.content, search_term) > 0)
+    if is_saved is True:
+        filters.append(is_saved_sq == True)
+    elif is_saved is False:
+        # 답변이 명시적으로 False이거나, 아직 답변이 안 달려서 NULL인 경우를 모두 포함
+        filters.append(or_(is_saved_sq == False, is_saved_sq.is_(None)))
+
+    total_count = db.scalar(
+        select(func.count()).select_from(ChatHistory).join(ChatRoom).where(and_(*filters))
+    ) or 0
+
+    stmt = select(ChatHistory, is_saved_sq.label("is_answer_saved"), answer_id_sq.label("answer_id")) \
+           .join(ChatRoom).where(and_(*filters))
+
+    # 정렬
+    if search_term:
+        stmt = stmt.order_by(func.bigm_similarity(ChatHistory.content, search_term).desc())
+    else:
+        stmt = stmt.order_by(ChatHistory.created_at.asc() if sort == "asc" else ChatHistory.created_at.desc())
+
+    results = db.execute(stmt.offset(skip).limit(limit)).all()
+
+    items = [{
+        "id": r[0].id, "content": r[0].content, "created_at": r[0].created_at,
+        "session_id": r[0].session_id, "is_answer_saved": r[1] or False, "answer_id": r[2]
+    } for r in results]
+
+    return items, total_count
+
+
+def get_queries_by_user_with_save_status(db: Session, user_id: int, **kwargs):
+    return get_queries_with_save_status(db, user_id=user_id, **kwargs)
+
+
+def get_all_queries_for_admin(db: Session, **kwargs):
+    return get_queries_with_save_status(db, **kwargs)
 
 
 def get_queries_by_chat_room(
@@ -432,58 +437,3 @@ def get_user_message_with_ownership(
             (ChatRoom.user_id == user_id)
         )
     )
-
-
-def get_all_queries_for_admin(
-    db: Session,
-    user_id: Optional[int] = None,
-    search_term: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    skip: int = 0,
-    limit: int = 50
-) -> tuple[list[ChatHistory], int]:
-    """어드민용: 모든(또는 특정) 유저의 쿼리 히스토리 조회 (pg_bigm 검색 및 기간 필터 포함)"""
-    
-    filters = [
-        ChatHistory.sender_type == SenderType.HUMAN,
-        ChatHistory.is_displayed == True
-    ]
-    
-    if user_id:
-        filters.append(ChatRoom.user_id == user_id)
-    if start_date:
-        filters.append(ChatHistory.created_at >= start_date)
-    if end_date:
-        adjusted_end_date = datetime.combine(end_date.date(), time.max)  # 23:59:59.99... 보장
-        filters.append(ChatHistory.created_at <= adjusted_end_date)
-    if search_term:
-        filters.append(ChatHistory.content.ilike(f"%{search_term}%"))
-
-    count_stmt = (
-        select(func.count())
-        .select_from(ChatHistory)
-        .join(ChatRoom, ChatHistory.chat_room_id == ChatRoom.id)
-        .where(and_(*filters))
-    )
-    total_count = db.scalar(count_stmt) or 0
-    
-    stmt = (
-        select(ChatHistory)
-        .join(ChatRoom, ChatHistory.chat_room_id == ChatRoom.id)
-        .options(joinedload(ChatHistory.chat_room))
-        .where(and_(*filters))
-    )
-
-    # 검색어가 있으면 유사도 순, 없으면 최신순
-    if search_term:
-        # pg_bigm 유사도 함수 기반으로 검색어와 가장 가까운 순으로 정렬
-        stmt = stmt.order_by(func.bigm_similarity(ChatHistory.content, search_term).desc())
-    else:
-        stmt = stmt.order_by(ChatHistory.created_at.desc())
-
-    stmt = stmt.offset(skip).limit(limit)
-    
-    items = db.scalars(stmt).all()
-    
-    return list(items), total_count
