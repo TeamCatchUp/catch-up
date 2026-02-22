@@ -551,7 +551,7 @@ def _get_integration_accounts(
             jira = JiraAccount(
                 accountId=row.account_id,
                 name=row.display_name,
-                email=row.email_address,
+                email=row.email_address or None,
                 avatarUrl=row.avatar_url,
             )
 
@@ -567,7 +567,7 @@ def _get_integration_accounts(
             github = GithubAccount(
                 login=row.login,
                 name=row.name,
-                email=row.email,
+                email=row.email or None,
                 avatarUrl=row.avatar_url,
             )
 
@@ -584,7 +584,7 @@ def _get_integration_accounts(
             slack = SlackAccount(
                 userId=row.user_id,
                 name=row.display_name or row.real_name,
-                email=row.email,
+                email=row.email or None,
                 avatarUrl=row.avatar_url,
             )
 
@@ -601,7 +601,7 @@ def _get_integration_accounts(
             confluence = ConfluenceAccount(
                 accountId=row.account_id,
                 name=row.display_name or row.public_name,
-                email=row.email,
+                email=row.email or None,
                 avatarUrl=row.avatar_url,
             )
 
