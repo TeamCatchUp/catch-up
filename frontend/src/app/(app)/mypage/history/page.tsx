@@ -18,7 +18,7 @@ export default function HistoryPage() {
     period,
     setPeriod,
     savedOnly,
-    setSavedOnly,
+    toggleSavedOnly,
     searchTerm,
     setSearchTerm,
     groupedSections,
@@ -59,7 +59,7 @@ export default function HistoryPage() {
             <FilterDropdown options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
             <button
               type="button"
-              onClick={() => setSavedOnly((prev) => !prev)}
+              onClick={toggleSavedOnly}
               className={cn(
                 'flex h-9 max-w-[145px] min-w-9 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1.5',
                 savedOnly

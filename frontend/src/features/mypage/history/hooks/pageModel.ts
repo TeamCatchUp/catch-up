@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { USE_MOCK } from '@/shared/mocks/config';
@@ -10,19 +10,20 @@ import type { RecentQueryWithSaveStatusResponse } from '@/shared/types/query/api
 import type { DatePeriod, GroupedSection, SortOrder } from '@/shared/utils/dateGrouping';
 import { groupItemsByDate, isInPeriod as isInPeriodShared } from '@/shared/utils/dateGrouping';
 
+import { useHistoryFilterStore } from '../store/historyFilterStore';
 import type { HistoryItem } from '../types/models';
 import { toHistoryItem } from '../utils/transformers';
 
 /** {@link usePageModel} 훅의 반환 타입 */
 interface UsePageModelReturn {
   sort: SortOrder;
-  setSort: React.Dispatch<React.SetStateAction<SortOrder>>;
+  setSort: (sort: SortOrder) => void;
   period: DatePeriod;
-  setPeriod: React.Dispatch<React.SetStateAction<DatePeriod>>;
+  setPeriod: (period: DatePeriod) => void;
   savedOnly: boolean;
-  setSavedOnly: React.Dispatch<React.SetStateAction<boolean>>;
+  toggleSavedOnly: () => void;
   searchTerm: string;
-  setSearchTerm: React.Dispatch<React.SetStateAction<string>>;
+  setSearchTerm: (term: string) => void;
   groupedSections: GroupedSection<HistoryItem>[];
   isLoading: boolean;
   isError: boolean;
@@ -42,10 +43,14 @@ interface UsePageModelReturn {
  * 결과를 날짜 그룹(오늘 / 최근 7일 / 이전)별 섹션으로 반환한다.
  */
 export const usePageModel = (): UsePageModelReturn => {
-  const [sort, setSort] = useState<SortOrder>('latest');
-  const [period, setPeriod] = useState<DatePeriod>('all');
-  const [savedOnly, setSavedOnly] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const sort = useHistoryFilterStore((s) => s.sort);
+  const setSort = useHistoryFilterStore((s) => s.setSort);
+  const period = useHistoryFilterStore((s) => s.period);
+  const setPeriod = useHistoryFilterStore((s) => s.setPeriod);
+  const savedOnly = useHistoryFilterStore((s) => s.savedOnly);
+  const toggleSavedOnly = useHistoryFilterStore((s) => s.toggleSavedOnly);
+  const searchTerm = useHistoryFilterStore((s) => s.searchTerm);
+  const setSearchTerm = useHistoryFilterStore((s) => s.setSearchTerm);
 
   const infiniteQuery = useInfiniteQuery(chatQueries.recentQueriesWithSaveStatusInfinite());
 
@@ -88,7 +93,7 @@ export const usePageModel = (): UsePageModelReturn => {
     period,
     setPeriod,
     savedOnly,
-    setSavedOnly,
+    toggleSavedOnly,
     searchTerm,
     setSearchTerm,
     groupedSections,

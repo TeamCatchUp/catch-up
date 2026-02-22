@@ -2,36 +2,45 @@
 
 import { useState } from 'react';
 
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
 import InstructionCard from '@/features/mypage/preferences/components/InstructionCard';
 import InstructionInput from '@/features/mypage/preferences/components/InstructionInput';
+import { promptMutations } from '@/features/mypage/preferences/mutations/prompt.mutations';
+import { promptQueries } from '@/features/mypage/preferences/queries/prompt.queries';
 
 export default function PreferencesPage() {
-  const [instructions, setInstructions] = useState<string[]>([]);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const queryClient = useQueryClient();
+  const [isEditing, setIsEditing] = useState(false);
 
-  const hasInstruction = instructions.length > 0;
-  const isEditing = editingIndex != null;
+  // 커스텀 프롬프트 조회
+  const { data, isLoading } = useQuery(promptQueries.customPrompt());
+  const customPrompt = data?.custom_prompt ?? null;
+  const hasPrompt = customPrompt !== null;
 
-  const handleSaveInstruction = (value: string) => {
-    if (isEditing) {
-      setInstructions((prev) => prev.map((item, i) => (i === editingIndex ? value : item)));
-      setEditingIndex(null);
-    } else {
-      setInstructions([value]);
-    }
+  // 프롬프트 저장/삭제 mutation
+  const updateMutation = useMutation({
+    ...promptMutations.updateCustomPrompt(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: promptQueries.all() });
+      setIsEditing(false);
+    },
+  });
+
+  const handleSave = (value: string) => {
+    updateMutation.mutate({ custom_prompt: value });
   };
 
-  const handleEditInstruction = (index: number) => {
-    setEditingIndex(index);
+  const handleEdit = () => {
+    setIsEditing(true);
   };
 
-  const handleDeleteInstruction = (index: number) => {
-    setInstructions((prev) => prev.filter((_, i) => i !== index));
-    if (editingIndex === index) setEditingIndex(null);
+  const handleDelete = () => {
+    updateMutation.mutate({ custom_prompt: null });
   };
 
   const handleCancelEdit = () => {
-    setEditingIndex(null);
+    setIsEditing(false);
   };
 
   return (
@@ -53,25 +62,33 @@ export default function PreferencesPage() {
               </span>
             </div>
 
-            {/* 지침이 없거나 수정 중일 때만 입력창 표시 (최대 1개) */}
-            {(!hasInstruction || isEditing) && (
+            {/* 로딩 상태 */}
+            {isLoading && (
+              <div className="border-neutral-3 flex h-[46px] items-center justify-center rounded-xl border bg-white">
+                <span className="text-body-small text-gray-30">불러오는 중...</span>
+              </div>
+            )}
+
+            {/* 프롬프트가 없거나 수정 중일 때만 입력창 표시 */}
+            {!isLoading && (!hasPrompt || isEditing) && (
               <InstructionInput
-                key={editingIndex ?? 'new'}
-                onSave={handleSaveInstruction}
-                defaultValue={isEditing ? instructions[editingIndex] : ''}
+                key={isEditing ? 'edit' : 'new'}
+                onSave={handleSave}
+                defaultValue={isEditing ? (customPrompt ?? '') : ''}
                 defaultActive={isEditing}
                 onCancelEdit={handleCancelEdit}
+                isPending={updateMutation.isPending}
               />
             )}
 
-            {instructions.map((instruction, index) => (
+            {/* 저장된 프롬프트 카드 (수정 중이 아닐 때만 표시) */}
+            {!isLoading && hasPrompt && !isEditing && (
               <InstructionCard
-                key={`${index}-${instruction.slice(0, 20)}`}
-                content={instruction}
-                onEdit={() => handleEditInstruction(index)}
-                onDelete={() => handleDeleteInstruction(index)}
+                content={customPrompt}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
               />
-            ))}
+            )}
           </div>
         </div>
       </div>

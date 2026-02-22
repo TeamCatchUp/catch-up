@@ -18,6 +18,7 @@ import {
 } from '@/shared/utils/dateGrouping';
 
 import { adminQueriesQueries } from '../../queries/adminQueries.queries';
+import { useQuestionLogFilterStore } from '../../store/questionLogFilterStore';
 import { toQuestionLogItem } from '../../utils/transformers';
 import QuestionLogListItem from '../QuestionLogListItem';
 
@@ -40,11 +41,16 @@ interface QuestionLogListSectionProps {
 
 /** 이용자 질문 기록 — 서버사이드 필터 + 무한 스크롤 + 날짜별 그룹 리스트 섹션 */
 const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
-  const [sort, setSort] = useState<SortOrder>('latest');
-  const [period, setPeriod] = useState<DatePeriod>('all');
-  const [savedOnly, setSavedOnly] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const sort = useQuestionLogFilterStore((s) => s.sort);
+  const setSort = useQuestionLogFilterStore((s) => s.setSort);
+  const period = useQuestionLogFilterStore((s) => s.period);
+  const setPeriod = useQuestionLogFilterStore((s) => s.setPeriod);
+  const savedOnly = useQuestionLogFilterStore((s) => s.savedOnly);
+  const toggleSavedOnly = useQuestionLogFilterStore((s) => s.toggleSavedOnly);
+  const searchTerm = useQuestionLogFilterStore((s) => s.searchTerm);
+  const setSearchTerm = useQuestionLogFilterStore((s) => s.setSearchTerm);
+
+  const [debouncedSearch, setDebouncedSearch] = useState(searchTerm.trim());
 
   // 검색어 디바운스 (300ms) — timer 기반 외부 시스템 구독
 
@@ -55,17 +61,9 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  const handleSortChange = (value: SortOrder) => {
-    setSort(value);
-  };
-
-  const handlePeriodChange = (value: DatePeriod) => {
-    setPeriod(value);
-  };
-
-  const handleSavedOnlyToggle = () => {
-    setSavedOnly((prev) => !prev);
-  };
+  const handleSortChange = (value: SortOrder) => setSort(value);
+  const handlePeriodChange = (value: DatePeriod) => setPeriod(value);
+  const handleSavedOnlyToggle = () => toggleSavedOnly();
 
   const params = {
     target_user_id: userId,

@@ -1,17 +1,19 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { JOB_LEVEL_LABEL } from '@/features/admin/members/constants/memberTableConfig';
 import { adminMembersQueries } from '@/features/admin/members/queries/adminMembers.queries';
 import QuestionLogListSection from '@/features/admin/question-logs/components/sections/QuestionLogListSection';
 import SelectedUserProfile from '@/features/admin/question-logs/components/sections/SelectedUserProfile';
+import { useQuestionLogFilterStore } from '@/features/admin/question-logs/store/questionLogFilterStore';
 import UserSelectSection from '@/features/admin/question-logs/components/sections/UserSelectSection';
 
 /** 관리자 — 이용자 질문 기록 페이지 */
 export default function AdminQuestionLogsPage() {
-  const [selectedUserId, setSelectedUserId] = useState('');
+  const selectedUserId = useQuestionLogFilterStore((s) => s.selectedUserId);
+  const setSelectedUserId = useQuestionLogFilterStore((s) => s.setSelectedUserId);
 
   const { data } = useQuery(adminMembersQueries.list());
 
