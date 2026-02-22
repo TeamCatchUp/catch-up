@@ -20,6 +20,17 @@ const mockHandlers: MockHandler[] = [
     handler: async () => MOCK_USER,
   },
   {
+    pattern: /^\/api\/v1\/auth\/me\/profile$/,
+    method: 'get',
+    handler: async () => ({
+      name: MOCK_USER.name,
+      email: MOCK_USER.email,
+      picture: MOCK_USER.picture ?? '',
+      department: '사업개발팀',
+      job_level: 'member',
+    }),
+  },
+  {
     pattern: /^\/api\/v1\/auth\/logout$/,
     method: 'post',
     handler: async () => ({ success: true }),

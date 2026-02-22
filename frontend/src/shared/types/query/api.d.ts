@@ -28,6 +28,15 @@ export interface ChatHistoryMessageResponse {
 /** 최근 검색 쿼리 목록 API 응답 */
 export type RecentQueriesResponse = PaginatedResponse<RecentQueryResponse>;
 
+/** 저장 여부를 포함한 쿼리 API 응답 항목 (마이페이지 히스토리) */
+export interface RecentQueryWithSaveStatusResponse extends RecentQueryResponse {
+  is_answer_saved: boolean;
+  answer_id: number | null;
+}
+
+/** 저장 여부 포함 쿼리 목록 API 응답 */
+export type RecentQueriesWithSaveStatusResponse = PaginatedResponse<RecentQueryWithSaveStatusResponse>;
+
 /** 채팅방 API 응답 항목 */
 export interface ChatroomResponse {
   session_id: string;

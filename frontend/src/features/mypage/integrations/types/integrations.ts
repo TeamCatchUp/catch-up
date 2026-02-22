@@ -18,11 +18,20 @@ export interface IntegrationMenuItem extends IntegrationAccountMeta {
   connected: boolean;
 }
 
+/** 서비스별 연동 상세 정보 */
+export interface ConnectorDetail {
+  connected: boolean;
+  dataRange: string;
+  resources: string[];
+  resourceLabel: string;
+}
+
 /** 관리자 연동 화면에서 사용하는 데이터 모델 */
 export interface AdminIntegrationViewModel {
   integrationMenu: IntegrationMenuItem[];
-  lastSyncedAt: string;
-  spaceRows: string[];
+  /** 선택된 서비스의 연동 상세 */
+  getConnectorDetail: (service: IntegrationService) => ConnectorDetail;
+  isLoading: boolean;
 }
 
 /** 이용자 연동 상태 값 */

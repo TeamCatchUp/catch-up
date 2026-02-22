@@ -2,6 +2,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr
 
+from catchup.db.models import JobLevel, UserRole, UserStatus
+
 
 class SourceUserCount(BaseModel):
     users: int
@@ -25,3 +27,97 @@ class UserSyncMapping(BaseModel):
 class UserSyncStatusResponse(BaseModel):
     counts: SyncStatusCounts
     mappings: List[UserSyncMapping]
+
+
+# =====================
+# Admin user management
+# =====================
+class AdminUserListItem(BaseModel):
+    id: int
+    name: str
+    department: str
+    jobLevel: JobLevel
+    role: UserRole
+    status: UserStatus
+
+
+class AdminUserListResponse(BaseModel):
+    total: int
+    users: List[AdminUserListItem]
+
+
+class JiraAccount(BaseModel):
+    accountId: str
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    avatarUrl: Optional[str] = None
+
+
+class GithubAccount(BaseModel):
+    login: str
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    avatarUrl: Optional[str] = None
+
+
+class SlackAccount(BaseModel):
+    userId: str
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    avatarUrl: Optional[str] = None
+
+
+class ConfluenceAccount(BaseModel):
+    accountId: str
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    avatarUrl: Optional[str] = None
+
+
+class UserIntegrations(BaseModel):
+    jira: Optional[JiraAccount] = None
+    github: Optional[GithubAccount] = None
+    slack: Optional[SlackAccount] = None
+    confluence: Optional[ConfluenceAccount] = None
+
+
+class AdminUserDetailResponse(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    department: str
+    jobLevel: JobLevel
+    status: UserStatus
+    integrations: UserIntegrations
+
+
+# =====================
+# Admin user state change
+# =====================
+class DeactivateUserRequest(BaseModel):
+    reason: str
+
+
+class DeactivateUserResponse(BaseModel):
+    userId: int
+    status: UserStatus
+    inactiveRecordId: int
+    deactivatedAt: str
+    reason: str
+
+
+class DeleteUserResponse(BaseModel):
+    userId: int
+    status: UserStatus
+
+
+class PromoteUserResponse(BaseModel):
+    userId: int
+    role: UserRole
+
+
+# =====================
+# Confluence utilities
+# =====================
+class ConfluenceCloudIdListResponse(BaseModel):
+    cloudIds: List[str]

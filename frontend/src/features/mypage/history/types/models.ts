@@ -31,4 +31,6 @@ export interface HistoryItem {
   relativeDate: string;
   /** 저장(북마크) 여부 */
   isSaved: boolean;
+  /** 저장 토글 대상 답변 메시지 ID (없으면 null) */
+  answerId: number | null;
 }

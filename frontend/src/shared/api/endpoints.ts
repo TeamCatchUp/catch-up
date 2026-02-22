@@ -3,6 +3,7 @@ const API_PREFIX = '/api/v1';
 export const API = {
   auth: {
     me: `${API_PREFIX}/auth/me`, // GET 현재 사용자 정보 (email, name, role)
+    profile: `${API_PREFIX}/auth/me/profile`, // GET 마이페이지 프로필 (name, email, picture, department, job_level)
     logout: `${API_PREFIX}/auth/logout`, // POST 로그아웃 (쿠키 삭제)
     refresh: `${API_PREFIX}/auth/refresh`, // POST JWT 토큰 갱신
   },
@@ -13,12 +14,15 @@ export const API = {
     feedback: (sessionId: string, messageId: string | number) =>
       `${API_PREFIX}/rooms/${sessionId}/messages/${messageId}/feedback`, // PATCH 답변 피드백 (is_liked, reasons, comment)
     resetLast: (sessionId: string) => `${API_PREFIX}/chat/${sessionId}/reset-last`, // POST 마지막 턴 soft-delete
+    save: (sessionId: string, messageId: string | number) =>
+      `${API_PREFIX}/rooms/${sessionId}/messages/${messageId}/saves`, // PATCH 답변 저장 상태 토글
   },
 
   // 채팅방 목록, 질문 히스토리, 메시지 조회 — 모두 ?page=&size= 페이지네이션
   chatrooms: {
     list: `${API_PREFIX}/rooms`, // GET 채팅방 목록
     queries: `${API_PREFIX}/rooms/queries`, // GET 전체 질문 히스토리
+    queriesWithSaveStatus: `${API_PREFIX}/rooms/queries/saved-status`, // GET 질문 히스토리 + 저장 여부 (마이페이지)
     session: (id: string) => `${API_PREFIX}/rooms/${id}/queries`, // GET 특정 채팅방 질문 목록
     messages: (sessionId: string) => `${API_PREFIX}/rooms/${sessionId}/messages`, // GET 채팅방 메시지 전체 조회
   },
@@ -57,6 +61,14 @@ export const API = {
     channels: `${API_PREFIX}/slack/sync/accessible/channels`, // GET Bot 접근 가능 채널 목록 (?team_id=)
   },
 
+  atlassian: {
+    install: `${API_PREFIX}/auth/atlassian/install`, // GET OAuth 인가 URL로 리다이렉트 (Jira + Confluence)
+  },
+
+  confluence: {
+    syncFull: `${API_PREFIX}/confluence/sync/full`, // POST 전체 재동기화 (body: cloud_id, space_keys?)
+  },
+
   // 관리자 — 이용자 관리
   admin: {
     members: {
@@ -66,6 +78,16 @@ export const API = {
       status: (userId: string) => `${API_PREFIX}/admin/members/${userId}/status`, // PATCH 비활성화/삭제
     },
     // auditLogs / permissions: 엔드포인트 미확정, mock 직접 사용
+    connector: {
+      githubStatus: `${API_PREFIX}/admin/connector/github/status`, // GET GitHub 연동 상태
+      jiraStatus: `${API_PREFIX}/admin/connector/jira/status`, // GET Jira 연동 상태
+      slackStatus: `${API_PREFIX}/admin/connector/slack/status`, // GET Slack 연동 상태
+      confluenceStatus: `${API_PREFIX}/admin/connector/confluence/status`, // GET Confluence 연동 상태
+      syncable: (source: string) => `${API_PREFIX}/admin/connector/syncable/${source}`, // GET 임베딩 대상 리소스 목록
+    },
+    users: {
+      syncStatus: `${API_PREFIX}/admin/users/sync-status`, // GET 서비스별 사용자 매핑 현황
+    },
   },
 
   onboarding: {

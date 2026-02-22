@@ -1,61 +1,81 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import { USE_MOCK } from '@/shared/mocks/config';
-import { MOCK_INTEGRATION_LAST_SYNC_AT, MOCK_INTEGRATION_SPACE_ROWS } from '@/shared/mocks/integration';
-import { integrationQueries } from '@/shared/queries/integration.queries';
-
 import { INTEGRATION_ACCOUNTS } from '../constants/integrations';
-import type { AdminIntegrationViewModel, IntegrationService } from '../types/integrations';
-import { parseConnected } from '../utils/integrationParsers';
+import { adminConnectorQueries } from '../queries/adminConnector.queries';
+import type { ConnectorStatusBase } from '../types/api';
+import type { AdminIntegrationViewModel, ConnectorDetail, IntegrationService } from '../types/integrations';
+
+const RESOURCE_LABELS: Record<IntegrationService, string> = {
+  jira: '연동된 Jira Project',
+  github: '연동된 Repository',
+  slack: 'Catch Up Slack Bot이 추가된 채널',
+  confluence: '연동된 Confluence Space',
+};
+
+/** ISO 날짜 → "YYYY. M. D. HH:mm" */
+const formatDate = (iso: string | null): string => {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}. ${h}:${min}`;
+};
+
+/** oldest ~ latest 범위 문자열 */
+const formatRange = (status: ConnectorStatusBase | undefined): string => {
+  if (!status?.oldest || !status?.latest) return '-';
+  return `${formatDate(status.oldest)} ~ ${formatDate(status.latest)}`;
+};
+
+/** 커넥터 상태에서 리소스 목록 추출 */
+const getResources = (status: unknown): string[] => {
+  if (!status || typeof status !== 'object') return [];
+  if ('repositories' in status) return (status as { repositories: string[] }).repositories;
+  if ('projects' in status) return (status as { projects: string[] }).projects;
+  if ('channels' in status) return (status as { channels: string[] }).channels;
+  if ('spaces' in status) return (status as { spaces: string[] }).spaces;
+  return [];
+};
 
 /** 관리자 연동 화면에서 필요한 데이터를 조합해 반환 */
 export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
-  const { data: jiraStatus } = useQuery(integrationQueries.jira.status());
-  const cloudId = (jiraStatus as { resources?: { id: string }[] })?.resources?.[0]?.id ?? '';
-  const { data: jiraSyncStatus } = useQuery(integrationQueries.jira.syncStatus(cloudId));
-  const { data: slackStatus } = useQuery(integrationQueries.slack.status());
-  const { data: githubInstallations } = useQuery(integrationQueries.github.installations());
+  const { data: github, isLoading: githubLoading } = useQuery(adminConnectorQueries.githubStatus());
+  const { data: jira, isLoading: jiraLoading } = useQuery(adminConnectorQueries.jiraStatus());
+  const { data: slack, isLoading: slackLoading } = useQuery(adminConnectorQueries.slackStatus());
+  const { data: confluence, isLoading: confluenceLoading } = useQuery(adminConnectorQueries.confluenceStatus());
 
-  const serviceConnected = useMemo<Record<IntegrationService, boolean>>(
-    () => ({
-      jira: parseConnected(jiraStatus, true),
-      github: parseConnected(githubInstallations, true),
-      slack: parseConnected(slackStatus, true),
-      confluence: false,
-    }),
-    [jiraStatus, githubInstallations, slackStatus],
+  const statusMap = useMemo<Record<IntegrationService, ConnectorStatusBase | undefined>>(
+    () => ({ github, jira, slack, confluence }),
+    [github, jira, slack, confluence],
   );
-
-  const lastSyncedAt = useMemo(() => {
-    if (!Array.isArray(jiraSyncStatus) || jiraSyncStatus.length === 0) {
-      return USE_MOCK ? MOCK_INTEGRATION_LAST_SYNC_AT : '-';
-    }
-    const dates = jiraSyncStatus
-      .map((s: { last_successful_sync_at?: string | null }) => s.last_successful_sync_at)
-      .filter((d): d is string => !!d);
-    if (dates.length === 0) return USE_MOCK ? MOCK_INTEGRATION_LAST_SYNC_AT : '-';
-    const latest = dates.sort().at(-1);
-    if (!latest) return '-';
-    const d = new Date(latest);
-    const h = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
-    return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}. ${h}:${min}`;
-  }, [jiraSyncStatus]);
 
   const integrationMenu = useMemo(
     () =>
       INTEGRATION_ACCOUNTS.map((item) => ({
         ...item,
         actionText: `${item.name} 연동하기`,
-        connected: serviceConnected[item.service],
+        connected: statusMap[item.service]?.connected ?? false,
       })),
-    [serviceConnected],
+    [statusMap],
+  );
+
+  const getConnectorDetail = useCallback(
+    (service: IntegrationService): ConnectorDetail => {
+      const status = statusMap[service];
+      return {
+        connected: status?.connected ?? false,
+        dataRange: formatRange(status),
+        resources: getResources(status),
+        resourceLabel: RESOURCE_LABELS[service],
+      };
+    },
+    [statusMap],
   );
 
   return {
     integrationMenu,
-    lastSyncedAt,
-    spaceRows: USE_MOCK ? MOCK_INTEGRATION_SPACE_ROWS : [],
+    getConnectorDetail,
+    isLoading: githubLoading || jiraLoading || slackLoading || confluenceLoading,
   };
 };

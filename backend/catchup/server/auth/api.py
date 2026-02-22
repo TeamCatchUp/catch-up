@@ -13,11 +13,22 @@ from catchup.auth.jwt import create_access_token, create_refresh_token, verify_t
 from catchup.auth.okta_oauth import OktaOAuthService
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
-from catchup.db.models import User
+from catchup.db.models import (
+    ConfluenceUser,
+    GitHubUser,
+    JiraUser,
+    PreMappingBuffer,
+    SlackUser,
+    SourceType,
+    User,
+)
 from catchup.db.users import get_user_by_email, update_user_refresh_token
+from sqlalchemy import select
 from catchup.server.auth.schemas import (
     CurrentUserInfo,
     CurrentUserProfile,
+    IntegrationProfileItem,
+    IntegrationProfileResponse,
     TokenRefreshResponse,
 )
 
@@ -232,4 +243,84 @@ async def mypage_profile(current_user: User = Depends(get_current_user)):
         picture=current_user.picture or "",
         department=current_user.department,
         job_level=current_user.job_level,
+        role=current_user.role,
     )
+
+
+@router.get(
+    path="/me/integrations",
+    description="마이페이지 - 외부 툴 프로필 (GitHub/Jira/Confluence/Slack)",
+    response_model=IntegrationProfileResponse,
+)
+async def mypage_integrations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    premapped_rows = db.scalars(
+        select(PreMappingBuffer).where(PreMappingBuffer.email == current_user.email)
+    ).all()
+
+    response = IntegrationProfileResponse()
+
+    def _to_item(avatar_url: str | None, name: str | None, email: str | None):
+        return IntegrationProfileItem(
+            avatar_url=avatar_url,
+            name=name,
+            email=email,
+        )
+
+    for row in premapped_rows:
+        if row.source_type == SourceType.GITHUB:
+            github = db.scalar(
+                select(GitHubUser).where(GitHubUser.login == row.external_user_identifier)
+            )
+            response.github = _to_item(
+                avatar_url=github.avatar_url if github else None,
+                name=row.external_user_identifier,  # GitHub는 로그인 ID 우선
+                email=github.email if github else None,
+            )
+
+        elif row.source_type == SourceType.JIRA:
+            jira_user = db.scalar(
+                select(JiraUser).where(JiraUser.account_id == row.external_user_identifier)
+            )
+            response.jira = _to_item(
+                avatar_url=jira_user.avatar_url if jira_user else None,
+                name=jira_user.display_name if jira_user else row.name,
+                email=jira_user.email_address if jira_user else None,
+            )
+
+        elif row.source_type == SourceType.CONFLUENCE:
+            confluence_user = db.scalar(
+                select(ConfluenceUser).where(
+                    ConfluenceUser.account_id == row.external_user_identifier
+                )
+            )
+            response.confluence = _to_item(
+                avatar_url=confluence_user.avatar_url if confluence_user else None,
+                name=confluence_user.display_name
+                if confluence_user and confluence_user.display_name
+                else row.name,
+                email=confluence_user.email if confluence_user else None,
+            )
+
+        elif row.source_type == SourceType.SLACK:
+            slack_user = db.scalar(
+                select(SlackUser).where(SlackUser.user_id == row.external_user_identifier)
+            )
+            response.slack = _to_item(
+                avatar_url=slack_user.avatar_url if slack_user else None,
+                name=slack_user.display_name if slack_user else row.name,
+                email=slack_user.email if slack_user else None,
+            )
+
+    logger.info(
+        "[AUTH][ME-INTEGRATIONS] user_id=%s github=%s jira=%s confluence=%s slack=%s",
+        current_user.id,
+        bool(response.github),
+        bool(response.jira),
+        bool(response.confluence),
+        bool(response.slack),
+    )
+
+    return response

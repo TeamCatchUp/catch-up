@@ -4,7 +4,7 @@ import type { AxiosError } from 'axios';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { AuthUser } from './auth.types';
+import type { AuthUser, UserProfile } from './auth.types';
 
 export const authQueries = {
   all: () => ['auth'] as const,
@@ -20,6 +20,15 @@ export const authQueries = {
         const status = (error as AxiosError)?.response?.status;
         if (status && status < 500) return false;
         return failureCount < 2;
+      },
+    }),
+
+  profile: () =>
+    queryOptions({
+      queryKey: [...authQueries.all(), 'profile'] as const,
+      queryFn: async (): Promise<UserProfile> => {
+        const res = await api.get<UserProfile>(API.auth.profile);
+        return res.data;
       },
     }),
 };
