@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 import IconFilter from '@/public/icons/icon/filter-3.svg';
+import api from '@/shared/api/client';
+import { API } from '@/shared/api/endpoints';
 import { Button } from '@/shared/components/ui/button';
 import {
   DropdownMenu,
@@ -14,6 +18,12 @@ import { SORT_OPTIONS } from '../../../constants/memberUi';
 import type { MemberDisplayRow, MemberSortKey } from '../../../types/memberDisplay';
 import UsersTable from '../tables/UsersTable';
 
+interface MappingUploadResponse {
+  status: string;
+  file_type: string;
+  stats: { created: number; updated: number; skipped: number };
+}
+
 interface UsersStatusSectionProps {
   rowCount: number;
   displayRows: MemberDisplayRow[];
@@ -22,6 +32,36 @@ interface UsersStatusSectionProps {
 /** 이용자 계정 연동 상태 섹션 */
 const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) => {
   const [sortKey, setSortKey] = useState<MemberSortKey>('newest');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+
+  const uploadMutation = useMutation({
+    mutationKey: ['mapping', 'upload'] as const,
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post<MappingUploadResponse>(API.mapping.upload, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      const { created, updated, skipped } = data.stats;
+      toast.success('CSV 일괄등록 완료', {
+        description: `등록 ${created}건, 수정 ${updated}건, 건너뜀 ${skipped}건`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'syncStatus'] });
+    },
+    onError: () => {
+      toast.error('CSV 업로드에 실패했습니다.');
+    },
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadMutation.mutate(file);
+    e.target.value = '';
+  };
 
   return (
     <section className="flex w-250 flex-col gap-3">
@@ -34,8 +74,15 @@ const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) 
         </div>
 
         <div className="flex items-center gap-2.5">
-          <Button variant="box-outline-gray" size="md" className="text-body-small h-9">
-            CSV 일괄등록
+          <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" hidden onChange={handleFileChange} />
+          <Button
+            variant="box-outline-gray"
+            size="md"
+            className="text-body-small h-9"
+            disabled={uploadMutation.isPending}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {uploadMutation.isPending ? '업로드 중...' : 'CSV 일괄등록'}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

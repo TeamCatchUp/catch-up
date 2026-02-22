@@ -92,6 +92,10 @@ export const API = {
     },
   },
 
+  mapping: {
+    upload: `${API_PREFIX}/mapping/upload`, // POST GitHub 매핑 CSV/Excel 일괄 업로드 (multipart/form-data)
+  },
+
   onboarding: {
     signup: `${API_PREFIX}/onboarding`, // POST 일반 유저 온보딩 가입
     adminSignup: `${API_PREFIX}/onboarding/admin`, // POST 루트 어드민 온보딩 가입
