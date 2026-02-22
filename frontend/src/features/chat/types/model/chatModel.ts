@@ -56,6 +56,8 @@ export interface MessageModel {
   detailed_tasks?: JiraTaskModel[];
   timestamp: string;
   has_feedback?: boolean;
+  is_liked?: boolean;
+  is_saved?: boolean;
 }
 
 /**
