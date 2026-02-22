@@ -73,14 +73,16 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
                   </div>
 
                   <div className="flex w-[110px] items-center justify-end">
-                    <Button
-                      variant="box-outline-gray"
-                      size="sm"
-                      className="h-7.5 w-[110px]"
-                      onClick={() => onChangeRoleClick(member)}
-                    >
-                      Admin 권한 부여
-                    </Button>
+                    {member.role !== 'admin' && (
+                      <Button
+                        variant="box-outline-gray"
+                        size="sm"
+                        className="h-7.5 w-[110px]"
+                        onClick={() => onChangeRoleClick(member)}
+                      >
+                        Admin 권한 부여
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
