@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import type { IntegrationService } from '@/shared/types/integrationService';
@@ -18,6 +18,7 @@ import type {
 // ─── SessionStorage 키 / 유틸 ───
 
 const STORAGE_KEY_PREFIX = 'catchup:embedding:';
+const STORAGE_COMPLETED_KEY = 'catchup:embedding:completed';
 const POLL_INTERVAL = 15_000; // 15초
 const TIMEOUT_MS = 30 * 60_000; // 30분
 
@@ -44,6 +45,20 @@ const saveStored = (service: IntegrationService, data: StoredEmbedding) => {
 
 const removeStored = (service: IntegrationService) => {
   sessionStorage.removeItem(getStorageKey(service));
+};
+
+/** 완료된 서비스 목록 (sessionStorage persist) */
+const loadCompletedServices = (): Set<IntegrationService> => {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_COMPLETED_KEY);
+    return raw ? new Set(JSON.parse(raw) as IntegrationService[]) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
+const saveCompletedServices = (services: Set<IntegrationService>) => {
+  sessionStorage.setItem(STORAGE_COMPLETED_KEY, JSON.stringify([...services]));
 };
 
 // ─── Sync Status → "진행 중?" 판별 ───
@@ -78,19 +93,6 @@ const ALL_SERVICES: IntegrationService[] = ['github', 'jira', 'slack', 'confluen
 export const useEmbeddingStatus = () => {
   const queryClient = useQueryClient();
 
-  // ─── Connector Status로 초기 완료 상태 판별 ───
-  const { data: githubConnector } = useQuery(adminConnectorQueries.githubStatus());
-  const { data: jiraConnector } = useQuery(adminConnectorQueries.jiraStatus());
-  const { data: slackConnector } = useQuery(adminConnectorQueries.slackStatus());
-  const { data: confluenceConnector } = useQuery(adminConnectorQueries.confluenceStatus());
-
-  /** connector status의 latest 필드로 "임베딩 완료 여부" 판별 */
-  const connectorSynced = new Set<IntegrationService>();
-  if (githubConnector?.latest) connectorSynced.add('github');
-  if (jiraConnector?.latest) connectorSynced.add('jira');
-  if (slackConnector?.latest) connectorSynced.add('slack');
-  if (confluenceConnector?.latest) connectorSynced.add('confluence');
-
   // ─── 활성 임베딩 (sessionStorage 복원) ───
 
   const [activeEmbeddings, setActiveEmbeddings] = useState<Map<IntegrationService, EmbeddingEntry>>(() => {
@@ -106,8 +108,8 @@ export const useEmbeddingStatus = () => {
     return initial;
   });
 
-  /** 폴링으로 감지된 완료 (세션 내 상태) */
-  const [justCompleted, setJustCompleted] = useState<Set<IntegrationService>>(new Set());
+  /** 완료된 서비스 (sessionStorage persist — 탭 내 유지) */
+  const [completedServices, setCompletedServices] = useState<Set<IntegrationService>>(loadCompletedServices);
 
   /** 완료 모달 */
   const [completionModal, setCompletionModal] = useState<{
@@ -185,16 +187,21 @@ export const useEmbeddingStatus = () => {
       const isNowSyncing = nowSyncing.has(entry.service);
 
       if (wasSyncing && !isNowSyncing) {
+        // 완료 처리: active에서 제거, completed에 추가
         removeStored(entry.service);
         setActiveEmbeddings((prev) => {
           const next = new Map(prev);
           next.delete(entry.service);
           return next;
         });
-        setJustCompleted((prev) => new Set(prev).add(entry.service));
+        setCompletedServices((prev) => {
+          const next = new Set(prev).add(entry.service);
+          saveCompletedServices(next);
+          return next;
+        });
         setCompletionModal({ open: true, serviceName: entry.serviceName });
 
-        // connector status 등 관련 쿼리 무효화 → latest 갱신
+        // 관련 쿼리 무효화
         queryClient.invalidateQueries({ queryKey: adminConnectorQueries.all() });
       }
     }
@@ -238,19 +245,20 @@ export const useEmbeddingStatus = () => {
 
   /**
    * 서비스별 임베딩 상태:
-   * 1. 폴링으로 방금 완료됨 → 'completed'
-   * 2. 활성 폴링 중 → 'syncing'
-   * 3. connector status latest가 존재 → 'completed' (이전에 임베딩 완료)
-   * 4. 그 외 → 'idle'
+   * 1. 폴링으로 완료 감지됨 → 'completed' (버튼 숨김)
+   * 2. 활성 폴링 중 → 'syncing' (버튼 비활성화)
+   * 3. 그 외 → 'idle' (버튼 표시)
+   *
+   * connector status latest는 사용하지 않음:
+   * flush(동기화)로도 latest가 갱신되어 풀 임베딩 완료와 구분 불가
    */
   const getStatus = useCallback(
     (service: IntegrationService): EmbeddingState => {
-      if (justCompleted.has(service)) return 'completed';
+      if (completedServices.has(service)) return 'completed';
       if (activeEmbeddings.has(service)) return 'syncing';
-      if (connectorSynced.has(service)) return 'completed';
       return 'idle';
     },
-    [justCompleted, activeEmbeddings, connectorSynced],
+    [completedServices, activeEmbeddings],
   );
 
   const closeCompletionModal = useCallback(() => {
