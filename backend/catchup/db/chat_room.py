@@ -430,14 +430,17 @@ def get_query_answer_pair(
 def get_user_message_with_ownership(
     db: Session,
     message_id: int, 
-    user_id: int
+    user_id: int,
+    is_admin: bool
 ) -> ChatHistory | None:
-    """메시지 ID와 유저 ID를 통해 소유권이 확인된 메시지 조회"""
-    return db.scalar(
-        select(ChatHistory)
-        .join(ChatRoom, ChatHistory.chat_room_id == ChatRoom.id)
-        .where(
-            (ChatHistory.id == message_id) &
-            (ChatRoom.user_id == user_id)
+    """메시지 ID로 조회하되, 일반 유저라면 소유권을 확인하고 관리자라면 바로 반환"""
+    
+    stmt = select(ChatHistory).where(ChatHistory.id == message_id)
+    
+    if not is_admin:
+        stmt = (
+            stmt.join(ChatRoom, ChatHistory.chat_room_id == ChatRoom.id)
+            .where(ChatRoom.user_id == user_id)
         )
-    )
+        
+    return db.scalar(stmt)

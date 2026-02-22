@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from catchup.auth.dependencies import get_current_user
 from catchup.db.chat_room import get_chat_room, get_message, get_user_message_with_ownership
 from catchup.db.dependencies import get_db
-from catchup.db.models import ChatHistory, ChatRoom, User
+from catchup.db.models import ChatHistory, ChatRoom, User, UserRole
 
 
 async def get_valid_chat_room(
@@ -58,10 +58,13 @@ async def get_valid_user_query(
     current_user: User = Depends(get_current_user)
 ) -> ChatHistory:
     
+    is_admin = current_user.role == UserRole.ADMIN
+    
     message = get_user_message_with_ownership(
         db=db,
         message_id=message_id,
-        user_id=current_user.id
+        user_id=current_user.id,
+        is_admin=is_admin
     )
     
     if not message:
