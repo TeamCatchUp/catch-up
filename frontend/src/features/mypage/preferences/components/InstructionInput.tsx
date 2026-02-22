@@ -12,6 +12,7 @@ interface InstructionInputProps {
   defaultValue?: string;
   defaultActive?: boolean;
   onCancelEdit?: () => void;
+  isPending?: boolean;
 }
 
 const InstructionInput = ({
@@ -19,6 +20,7 @@ const InstructionInput = ({
   defaultValue = '',
   defaultActive = false,
   onCancelEdit,
+  isPending = false,
 }: InstructionInputProps) => {
   const [value, setValue] = useState(defaultValue);
   const [isActive, setIsActive] = useState(defaultActive);
@@ -107,10 +109,10 @@ const InstructionInput = ({
                 variant="capsule-solid-primary"
                 size="md"
                 className="h-9"
-                disabled={isEmpty}
+                disabled={isEmpty || isPending}
                 onClick={handleSave}
               >
-                저장
+                {isPending ? '저장 중...' : '저장'}
               </Button>
             </div>
           </div>
