@@ -92,17 +92,31 @@ interface EmbeddingModalProps {
   onOpenChange: (open: boolean) => void;
   service: IntegrationService;
   serviceName: string;
-  onEmbeddingStarted?: (service: IntegrationService, parentIds: string[], serviceName: string) => void;
+}
+
+interface SlackInstallationStatus {
+  installed: boolean;
+  workspaces: { team_id: string; team_name: string }[];
 }
 
 /** 임베딩 모달 */
-const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onEmbeddingStarted }: EmbeddingModalProps) => {
+const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingModalProps) => {
+  const isSlack = service === 'slack';
   const [selectedPeriod, setSelectedPeriod] = useState<string>('1개월');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
   const { data: syncableData, isLoading } = useQuery({
     ...adminConnectorQueries.syncable(service),
-    enabled: open && service !== 'slack',
+    enabled: open && !isSlack,
+  });
+
+  const { data: slackStatus } = useQuery<SlackInstallationStatus>({
+    queryKey: ['slack', 'installationStatus'],
+    queryFn: async () => {
+      const res = await api.get<SlackInstallationStatus>(API.slack.status);
+      return res.data;
+    },
+    enabled: open && isSlack,
   });
 
   const items = useMemo<SyncableItem[]>(() => {
@@ -120,6 +134,12 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onEmbeddingS
   const syncMutation = useMutation({
     mutationKey: ['admin', 'connector', 'syncFull', service] as const,
     mutationFn: async (params: { syncDays: number; selected: SyncableItem[] }) => {
+      if (isSlack) {
+        const teamId = slackStatus?.workspaces[0]?.team_id;
+        if (!teamId) throw new Error('Slack team_id not found');
+        return api.post(API.slack.syncFull, { team_id: teamId, sync_days: params.syncDays });
+      }
+
       const groups: Record<string, SyncableItem[]> = {};
       for (const item of params.selected) {
         (groups[item.parentId] ??= []).push(item);
@@ -135,7 +155,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onEmbeddingS
   });
 
   const itemLabel = getItemLabel(service);
-  const isSubmitDisabled = selectedItems.size === 0;
+  const isSubmitDisabled = !isSlack && selectedItems.size === 0;
 
   const toggleItem = (id: string) => {
     setSelectedItems((prev) => {
@@ -165,13 +185,9 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onEmbeddingS
     // Fire-and-forget: mutation은 MutationCache에서 unmount 후에도 계속 실행됨
     syncMutation.mutate({ syncDays, selected });
 
-    // 사용된 parentId 목록 추출
-    const parentIds = [...new Set(selected.map((item) => item.parentId))];
-
     toast('임베딩이 시작되었습니다.', {
       description: '준비가 끝나면 즉시 알려드릴게요.',
     });
-    onEmbeddingStarted?.(service, parentIds, serviceName);
     handleClose();
   };
 
@@ -183,7 +199,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onEmbeddingS
       >
         <div className="flex h-9 items-center justify-between">
           <DialogTitle className="text-heading-medium text-gray-80">
-            임베딩 할 {serviceName} {itemLabel} 선택하기
+            {isSlack ? `${serviceName} 임베딩` : `임베딩 할 ${serviceName} ${itemLabel} 선택하기`}
           </DialogTitle>
           <button type="button" onClick={handleClose} className="cursor-pointer" aria-label="닫기">
             <Cancel className="size-5 text-gray-50" />
@@ -195,7 +211,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onEmbeddingS
             {/* 기간 선택 */}
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center gap-1">
-                <span className="text-body-small text-gray-90">등록 사유를 선택해주세요.</span>
+                <span className="text-body-small text-gray-90">등록 기간을 선택해주세요.</span>
                 <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
               </div>
               <div className="flex gap-2">
@@ -214,45 +230,47 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onEmbeddingS
               </div>
             </div>
 
-            {/* Space/Repository 선택 */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-1">
-                <span className="text-body-small text-gray-90">{itemLabel}를 선택해주세요.</span>
-                <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
+            {/* Space/Repository 선택 (Slack 제외) */}
+            {!isSlack && (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-1">
+                  <span className="text-body-small text-gray-90">{itemLabel}를 선택해주세요.</span>
+                  <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
+                </div>
+                <div className="thin-scrollbar border-neutral-2 bg-neutral-1 flex h-[200px] flex-col gap-2.5 overflow-y-auto rounded-xl border p-3">
+                  {isLoading ? (
+                    <div className="text-body-small text-gray-40 flex h-full items-center justify-center">
+                      목록을 불러오는 중...
+                    </div>
+                  ) : items.length === 0 ? (
+                    <div className="text-body-small text-gray-40 flex h-full items-center justify-center">
+                      항목이 없습니다.
+                    </div>
+                  ) : (
+                    items.map((item) => {
+                      const checked = selectedItems.has(item.id);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => toggleItem(item.id)}
+                          className="flex w-full cursor-pointer items-center gap-3"
+                        >
+                          <span className="text-body-small text-gray-60 min-w-0 flex-1 truncate text-left">
+                            {item.name}
+                          </span>
+                          {checked ? (
+                            <CheckboxChecked className="size-6 shrink-0 text-blue-50" />
+                          ) : (
+                            <CheckboxUnchecked className="text-gray-30 size-6 shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-              <div className="thin-scrollbar border-neutral-2 bg-neutral-1 flex h-[200px] flex-col gap-2.5 overflow-y-auto rounded-xl border p-3">
-                {isLoading ? (
-                  <div className="text-body-small text-gray-40 flex h-full items-center justify-center">
-                    목록을 불러오는 중...
-                  </div>
-                ) : items.length === 0 ? (
-                  <div className="text-body-small text-gray-40 flex h-full items-center justify-center">
-                    항목이 없습니다.
-                  </div>
-                ) : (
-                  items.map((item) => {
-                    const checked = selectedItems.has(item.id);
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => toggleItem(item.id)}
-                        className="flex w-full cursor-pointer items-center gap-3"
-                      >
-                        <span className="text-body-small text-gray-60 min-w-0 flex-1 truncate text-left">
-                          {item.name}
-                        </span>
-                        {checked ? (
-                          <CheckboxChecked className="size-6 shrink-0 text-blue-50" />
-                        ) : (
-                          <CheckboxUnchecked className="text-gray-30 size-6 shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            </div>
+            )}
           </div>
         </div>
 

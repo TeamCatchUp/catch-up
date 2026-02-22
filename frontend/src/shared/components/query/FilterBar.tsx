@@ -55,7 +55,7 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
           onClick={() => filters.toggleSource('slack')}
         />
       </div>
-      <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
+      {/* <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
       <div className="flex items-center gap-2.5">
         <FilterDropdown
           open={filters.openPopover === 'person'}
@@ -129,7 +129,7 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
             Icon={IconSpace}
           />
         </FilterDropdown>
-      </div>
+      </div> */}
     </div>
   );
 }

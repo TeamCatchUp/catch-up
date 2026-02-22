@@ -1,20 +1,22 @@
-export type PermissionRole = 'admin' | 'member';
+export type PermissionJobLevel = 'executive' | 'leader' | 'member';
+
+export type PermissionRole = 'admin' | 'user';
 
 export interface PermissionMember {
-  id: string;
+  id: number;
   name: string;
-  rank: string;
   department: string;
+  jobLevel: PermissionJobLevel;
   role: PermissionRole;
+  status: 'new' | 'active' | 'inactive' | 'deleted';
 }
 
-export interface AssignAdminPayload {
-  memberId: string;
-  reason: string;
-  source: 'grant' | 'change';
+export interface PermissionUserListResponse {
+  total: number;
+  users: PermissionMember[];
 }
 
-export interface AssignAdminResponse {
-  success: boolean;
-  member: PermissionMember;
+export interface PromoteAdminResponse {
+  userId: number;
+  role: PermissionRole;
 }

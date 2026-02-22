@@ -3,9 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import AdminGrantModal from '@/features/admin/permissions/components/modals/AdminGrantModal';
 import PermissionChangeModal from '@/features/admin/permissions/components/modals/PermissionChangeModal';
-import AdminGrantSection from '@/features/admin/permissions/components/sections/AdminGrantSection';
 import PermissionsListSection from '@/features/admin/permissions/components/sections/PermissionsListSection';
 import AdminOwnerInfoTag from '@/features/admin/permissions/components/shared/AdminOwnerInfoTag';
 import {
@@ -13,30 +11,23 @@ import {
   ROLE_FILTER_OPTIONS,
   type RoleFilter,
 } from '@/features/admin/permissions/constants/permissionsConfig';
-import { useAssignAdminRoleMutation } from '@/features/admin/permissions/queries/adminPermissions.mutations';
+import { usePromoteToAdminMutation } from '@/features/admin/permissions/queries/adminPermissions.mutations';
 import { adminPermissionsQueries } from '@/features/admin/permissions/queries/adminPermissions.queries';
-import type { AssignAdminPayload, PermissionMember } from '@/features/admin/permissions/types/adminPermission';
+import type { PermissionMember } from '@/features/admin/permissions/types/adminPermission';
 
 const DEFAULT_ROLE_FILTER: RoleFilter = ROLE_FILTER_OPTIONS[0].key;
 
 export default function AdminPermissionsPage() {
   const { data: members = [], isLoading, isError, refetch } = useQuery(adminPermissionsQueries.list());
 
-  const grantMutation = useAssignAdminRoleMutation();
-  const changeMutation = useAssignAdminRoleMutation();
+  const promoteMutation = usePromoteToAdminMutation();
 
-  const [grantModalOpen, setGrantModalOpen] = useState(false);
   const [changeModalOpen, setChangeModalOpen] = useState(false);
-  const [selectedChangeMemberId, setSelectedChangeMemberId] = useState('');
-
-  const [grantMemberId, setGrantMemberId] = useState('');
-  const [grantReason, setGrantReason] = useState('');
+  const [selectedChangeMemberId, setSelectedChangeMemberId] = useState<number | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(DEFAULT_ROLE_FILTER);
   const [currentPage, setCurrentPage] = useState(1);
-
-  const grantCandidates = useMemo(() => members.filter((member) => member.role === 'member'), [members]);
 
   const filteredMembers = useMemo(() => {
     const keyword = searchTerm.trim();
@@ -60,37 +51,18 @@ export default function AdminPermissionsPage() {
     return filteredMembers.slice(start, start + LIST_PAGE_SIZE);
   }, [filteredMembers, safeCurrentPage]);
 
-  const grantErrorMessage = grantMutation.isError
-    ? ((grantMutation.error as Error | null)?.message ?? '권한 부여 요청에 실패했습니다.')
+  const changeErrorMessage = promoteMutation.isError
+    ? ((promoteMutation.error as Error | null)?.message ?? '권한 부여 요청에 실패했습니다.')
     : undefined;
-
-  const changeErrorMessage = changeMutation.isError
-    ? ((changeMutation.error as Error | null)?.message ?? '권한 변경 요청에 실패했습니다.')
-    : undefined;
-
-  const handleOpenGrantModal = () => {
-    grantMutation.reset();
-    setGrantModalOpen(true);
-  };
 
   const handleOpenChangeModal = (member: PermissionMember) => {
-    changeMutation.reset();
+    promoteMutation.reset();
     setSelectedChangeMemberId(member.id);
     setChangeModalOpen(true);
   };
 
-  const handleGrantSubmit = (payload: AssignAdminPayload) => {
-    grantMutation.mutate(payload, {
-      onSuccess: () => {
-        setGrantModalOpen(false);
-        setGrantMemberId('');
-        setGrantReason('');
-      },
-    });
-  };
-
-  const handleChangeSubmit = (payload: AssignAdminPayload) => {
-    changeMutation.mutate(payload, {
+  const handleChangeSubmit = (userId: number) => {
+    promoteMutation.mutate(userId, {
       onSuccess: () => {
         setChangeModalOpen(false);
       },
@@ -105,16 +77,6 @@ export default function AdminPermissionsPage() {
       </div>
 
       <div className="flex flex-col gap-8">
-        <AdminGrantSection
-          members={grantCandidates}
-          selectedMemberId={grantMemberId}
-          reason={grantReason}
-          onMemberChange={setGrantMemberId}
-          onReasonChange={setGrantReason}
-          onOpenGrantModal={handleOpenGrantModal}
-          disabled={isLoading || isError}
-        />
-
         <PermissionsListSection
           searchTerm={searchTerm}
           onSearchTermChange={(term) => {
@@ -139,24 +101,13 @@ export default function AdminPermissionsPage() {
         />
       </div>
 
-      <AdminGrantModal
-        open={grantModalOpen}
-        onOpenChange={setGrantModalOpen}
-        members={grantCandidates}
-        memberId={grantMemberId}
-        reason={grantReason}
-        isSubmitting={grantMutation.isPending}
-        errorMessage={grantErrorMessage}
-        onSubmit={handleGrantSubmit}
-      />
-
       <PermissionChangeModal
         key={`change-${changeModalOpen ? 'open' : 'closed'}-${selectedChangeMemberId}`}
         open={changeModalOpen}
         onOpenChange={setChangeModalOpen}
         members={members}
         initialMemberId={selectedChangeMemberId}
-        isSubmitting={changeMutation.isPending}
+        isSubmitting={promoteMutation.isPending}
         errorMessage={changeErrorMessage}
         onSubmit={handleChangeSubmit}
       />
