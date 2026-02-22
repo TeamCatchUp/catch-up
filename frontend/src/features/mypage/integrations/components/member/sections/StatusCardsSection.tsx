@@ -1,13 +1,15 @@
 import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 import IconHelp from '@/public/icons/icon/help.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
+import api from '@/shared/api/client';
+import { API } from '@/shared/api/endpoints';
 import { Button } from '@/shared/components/ui/button';
-import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
-import { useEmbeddingStatus } from '../../../hooks/useEmbeddingStatus';
 import type { MemberIntegrationCardItem } from '../../../types/integrations';
 import EmbeddingModal from '../modals/EmbeddingModal';
 
@@ -23,9 +25,19 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
     serviceName: string;
   }>({ open: false, service: 'jira', serviceName: '' });
 
-  const { startEmbedding, getStatus, completionModal, closeCompletionModal } = useEmbeddingStatus();
+  const slackSyncMutation = useMutation({
+    mutationKey: ['admin', 'connector', 'syncFull', 'slack'] as const,
+    mutationFn: () => api.post(API.slack.syncFull, { sync_days: 30 }),
+  });
 
-  const openEmbeddingModal = (service: IntegrationService, serviceName: string) => {
+  const handleEmbedding = (service: IntegrationService, serviceName: string) => {
+    if (service === 'slack') {
+      slackSyncMutation.mutate(undefined, {
+        onSuccess: () => toast('임베딩이 시작되었습니다.', { description: '준비가 끝나면 즉시 알려드릴게요.' }),
+        onError: () => toast.error('Slack 임베딩 요청에 실패했습니다.'),
+      });
+      return;
+    }
     setEmbeddingModal({ open: true, service, serviceName });
   };
 
@@ -40,7 +52,6 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
         {cards.map((card) => {
           const { service, name, Icon, completedCount, totalCount, completionRate } = card;
           const iconClassName = service === 'confluence' ? 'h-5.75 w-6 shrink-0' : 'h-6 w-6 shrink-0';
-          const status = getStatus(service);
 
           return (
             <article
@@ -88,17 +99,14 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
                   />
                 </div>
 
-                {status === 'completed' ? null : (
-                  <Button
-                    variant="box-outline-blue"
-                    size="md"
-                    className="text-body-small h-9 w-full"
-                    disabled={status === 'syncing' || service === 'slack'}
-                    onClick={() => openEmbeddingModal(service, name)}
-                  >
-                    {status === 'syncing' ? '임베딩 진행 중' : '임베딩하기'}
-                  </Button>
-                )}
+                <Button
+                  variant="box-outline-blue"
+                  size="md"
+                  className="text-body-small h-9 w-full"
+                  onClick={() => handleEmbedding(service, name)}
+                >
+                  임베딩하기
+                </Button>
               </div>
             </article>
           );
@@ -110,17 +118,6 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
         onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
         service={embeddingModal.service}
         serviceName={embeddingModal.serviceName}
-        onEmbeddingStarted={startEmbedding}
-      />
-
-      <ConfirmDialog
-        open={completionModal.open}
-        onOpenChange={closeCompletionModal}
-        title="임베딩이 완료되었어요!"
-        description={`이제 Catch Up에서 ${completionModal.serviceName} 정보를 검색할 수 있어요.`}
-        confirmLabel="확인"
-        hideCancel
-        onConfirm={closeCompletionModal}
       />
     </section>
   );

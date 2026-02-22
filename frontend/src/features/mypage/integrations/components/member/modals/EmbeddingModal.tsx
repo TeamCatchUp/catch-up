@@ -92,11 +92,10 @@ interface EmbeddingModalProps {
   onOpenChange: (open: boolean) => void;
   service: IntegrationService;
   serviceName: string;
-  onEmbeddingStarted?: (service: IntegrationService, parentIds: string[], serviceName: string) => void;
 }
 
 /** 임베딩 모달 */
-const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onEmbeddingStarted }: EmbeddingModalProps) => {
+const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingModalProps) => {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('1개월');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
@@ -165,13 +164,9 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onEmbeddingS
     // Fire-and-forget: mutation은 MutationCache에서 unmount 후에도 계속 실행됨
     syncMutation.mutate({ syncDays, selected });
 
-    // 사용된 parentId 목록 추출
-    const parentIds = [...new Set(selected.map((item) => item.parentId))];
-
     toast('임베딩이 시작되었습니다.', {
       description: '준비가 끝나면 즉시 알려드릴게요.',
     });
-    onEmbeddingStarted?.(service, parentIds, serviceName);
     handleClose();
   };
 
