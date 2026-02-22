@@ -5,7 +5,7 @@ from catchup.auth.dependencies import get_current_user
 from catchup.db.dependencies import get_db
 from catchup.db.models import User
 from catchup.db.users import get_user_with_full_context
-from catchup.rag.schemas.context import GlobalCompanyContext, GlobalContext, GlobalUserContext, GlobalWorkspaceContext
+from catchup.rag.schemas.context import GlobalCompanyContext, GlobalContext, GlobalCurrentTimeContext, GlobalUserContext, GlobalWorkspaceContext
 
 
 async def get_rag_global_context(
@@ -39,5 +39,5 @@ async def get_rag_global_context(
     return GlobalContext(
         user=GlobalUserContext.model_validate(db_user_full),
         workspace=GlobalWorkspaceContext.model_validate(target_workspace),
-        company=GlobalCompanyContext.model_validate(target_workspace.company)
+        company=GlobalCompanyContext.model_validate(target_workspace.company),
     )

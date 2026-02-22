@@ -1,7 +1,13 @@
 # GLOBAL CONTEXT
 {% if current_time %}
-[Current Context]
-- Time: << current_time >>
+[Time Context]
+- User Local Time: << current_time.kst >> (Asia/Seoul)
+- System UTC Time: << current_time.utc >>
+
+※ Important: All data in the database is stored in UTC. 
+When considering about "today's tasks" or "yesterday's messages", 
+calculate the time range based on the User Local Time, 
+then convert it to UTC to match the database records.
 {% endif %}
 
 {% if company %}
@@ -14,7 +20,9 @@
 [User Info]
 - name: << user.name >>
 - email: << user.email >>
+{% if user.custom_prompt %}
 
 [Custom Prompt]
 << user.custom_prompt >>
+{% endif %}
 {% endif %}
