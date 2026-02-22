@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { useMutationState } from '@tanstack/react-query';
 
 import IconHelp from '@/public/icons/icon/help.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
-import IconRotate from '@/public/icons/icon/rotate.svg';
 import { Button } from '@/shared/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import type { IntegrationService } from '@/shared/types/integrationService';
@@ -22,20 +20,6 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
     service: IntegrationService;
     serviceName: string;
   }>({ open: false, service: 'jira', serviceName: '' });
-
-  /** 서비스별 syncFull mutation의 최신 상태를 관찰 */
-  const syncMutations = useMutationState({
-    filters: { mutationKey: ['admin', 'connector', 'syncFull'] },
-    select: (mutation) => ({
-      service: mutation.options.mutationKey?.[3] as IntegrationService,
-      status: mutation.state.status,
-    }),
-  });
-
-  const getSyncStatus = (svc: IntegrationService) => {
-    const matched = syncMutations.filter((m) => m.service === svc);
-    return matched[matched.length - 1]?.status;
-  };
 
   const openEmbeddingModal = (service: IntegrationService, serviceName: string) => {
     setEmbeddingModal({ open: true, service, serviceName });
@@ -99,34 +83,14 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
                   />
                 </div>
 
-                {(() => {
-                  const syncStatus = getSyncStatus(service);
-                  if (syncStatus === 'pending') {
-                    return (
-                      <Button variant="box-outline-gray" size="md" className="text-body-small h-9 w-full" disabled>
-                        <IconRotate className="size-4 text-gray-20" />
-                        임베딩 진행 중...
-                      </Button>
-                    );
-                  }
-                  if (syncStatus === 'success') {
-                    return (
-                      <Button variant="box-outline-gray" size="md" className="text-body-small h-9 w-full" disabled>
-                        임베딩 완료
-                      </Button>
-                    );
-                  }
-                  return (
-                    <Button
-                      variant="box-outline-blue"
-                      size="md"
-                      className="text-body-small h-9 w-full"
-                      onClick={() => openEmbeddingModal(service, name)}
-                    >
-                      임베딩하기
-                    </Button>
-                  );
-                })()}
+                <Button
+                  variant="box-outline-blue"
+                  size="md"
+                  className="text-body-small h-9 w-full"
+                  onClick={() => openEmbeddingModal(service, name)}
+                >
+                  임베딩하기
+                </Button>
               </div>
             </article>
           );
