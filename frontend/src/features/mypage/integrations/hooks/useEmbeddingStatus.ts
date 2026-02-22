@@ -48,7 +48,7 @@ const removeStored = (service: IntegrationService) => {
 };
 
 /** 완료된 서비스 목록 (localStorage persist — 영구 유지) */
-const loadCompletedServices = (): Set<IntegrationService> => {
+export const loadCompletedServices = (): Set<IntegrationService> => {
   try {
     const raw = localStorage.getItem(LOCAL_COMPLETED_KEY);
     return raw ? new Set(JSON.parse(raw) as IntegrationService[]) : new Set();
