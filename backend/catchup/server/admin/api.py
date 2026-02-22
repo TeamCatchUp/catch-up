@@ -626,7 +626,7 @@ def get_admin_users(
 
 
 @router.get(
-    path="/users/{user_id}",
+    path="/users/{user_id}/detail",
     description="관리자용 사용자 상세 조회",
     response_model=AdminUserDetailResponse,
 )
