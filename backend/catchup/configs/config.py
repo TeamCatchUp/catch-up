@@ -109,6 +109,10 @@ class Settings(BaseSettings):
     PGVECTOR_COLLECTION_NAME: str = "vectorstore"  # 통합 Collection (Jira, Slack, GitHub 등)
     PGVECTOR_EMBEDDING_DIMENSIONS: int = 1536  # Cohere embed-v4.0
 
+    # Embedding Settings
+    EMBEDDING_MAX_CONCURRENCY: int = 5  # 동시 Embedding API 호출 수
+    EMBEDDING_BATCH_SIZE: int = 96  # Cohere embed-v4 max texts per request
+
     # Jira Sync Settings
     JIRA_SYNC_BATCH_SIZE: int = 100  # Jira API max per request
     JIRA_SYNC_MAX_CONCURRENT_REQUESTS: int = 5  # Rate limit safe

@@ -33,7 +33,7 @@ from catchup.configs.config import settings
 
 logger = logging.getLogger(__name__)
 
-_embedding_semaphore = asyncio.Semaphore(25)
+_embedding_semaphore = asyncio.Semaphore(settings.EMBEDDING_MAX_CONCURRENCY)
 
 
 class PGVectorRepository:
@@ -159,6 +159,103 @@ class PGVectorRepository:
 
         except Exception as e:
             logger.error(f"Failed to add documents: {e}")
+            raise
+
+    async def generate_embeddings(
+        self,
+        documents: list[Document],
+    ) -> list[list[float]]:
+        """
+        문서 임베딩만 생성 (DB 저장 없음)
+
+        EMBEDDING_BATCH_SIZE 단위로 서브배치 분할하여 Embedding API를 호출합니다.
+        서브배치별로 _embedding_semaphore를 획득하므로, 전체 동시 API 호출 수가
+        EMBEDDING_MAX_CONCURRENCY 이내로 제한됩니다.
+
+        Args:
+            documents: 임베딩을 생성할 Document 리스트
+
+        Returns:
+            임베딩 벡터 리스트 (documents와 동일 순서)
+        """
+        self._ensure_initialized()
+
+        if not documents:
+            return []
+
+        texts = [doc.page_content for doc in documents]
+        batch_size = settings.EMBEDDING_BATCH_SIZE
+
+        logger.info(f"Generating embeddings for {len(documents)} documents (batch_size={batch_size})")
+
+        try:
+            # 서브배치 분할 후 병렬 호출
+            async def _embed_sub_batch(sub_texts: list[str]) -> list[list[float]]:
+                async with _embedding_semaphore:
+                    return await asyncio.to_thread(
+                        self.embeddings.embed_documents, sub_texts
+                    )
+
+            tasks = [
+                _embed_sub_batch(texts[i : i + batch_size])
+                for i in range(0, len(texts), batch_size)
+            ]
+            sub_results = await asyncio.gather(*tasks)
+
+            # 서브배치 결과를 순서대로 합침
+            embeddings = [emb for sub in sub_results for emb in sub]
+
+            logger.info(f"Successfully generated {len(embeddings)} embeddings")
+            return embeddings
+
+        except Exception as e:
+            logger.error(f"Failed to generate embeddings: {e}")
+            raise
+
+    async def store_with_embeddings(
+        self,
+        documents: list[Document],
+        embeddings: list[list[float]],
+        ids: list[str],
+    ) -> list[str]:
+        """
+        사전 생성된 임베딩과 함께 문서 저장 (임베딩 생성 없음)
+
+        generate_embeddings로 생성한 임베딩을 받아 DB INSERT만 수행합니다.
+        Embedding API 호출이 없으므로 _embedding_semaphore를 사용하지 않습니다.
+
+        Args:
+            documents: 저장할 Document 리스트
+            embeddings: 사전 생성된 임베딩 벡터 리스트
+            ids: 문서 ID 리스트
+
+        Returns:
+            저장된 문서 ID 리스트
+        """
+        self._ensure_initialized()
+
+        if not documents:
+            return []
+
+        texts = [doc.page_content for doc in documents]
+        metadatas = [doc.metadata for doc in documents]
+
+        logger.info(f"Storing {len(documents)} documents with pre-computed embeddings")
+
+        try:
+            result_ids = await asyncio.to_thread(
+                self.vector_store.add_embeddings,
+                texts=texts,
+                embeddings=embeddings,
+                metadatas=metadatas,
+                ids=ids,
+            )
+
+            logger.info(f"Successfully stored {len(result_ids)} documents")
+            return result_ids
+
+        except Exception as e:
+            logger.error(f"Failed to store documents with embeddings: {e}")
             raise
 
     async def add_documents_batch(

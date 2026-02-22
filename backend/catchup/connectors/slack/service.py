@@ -1,4 +1,5 @@
 import asyncio
+from builtins import ExceptionGroup
 import logging
 from _collections_abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
@@ -464,7 +465,9 @@ class SlackIngestionService:
             channel_semaphore = asyncio.Semaphore(settings.SLACK_CHANNEL_SYNC_CONCURRENCY)
             results = await asyncio.gather(
                 *[
-                    self._sync_channel_with_limit(channel_semaphore, ch, sync_from, db)
+                    self._sync_channel_with_limit(
+                        channel_semaphore, ch, sync_from, db, skip_delete=True,
+                    )
                     for ch in channels_to_sync
                 ],
                 return_exceptions=True
@@ -520,11 +523,13 @@ class SlackIngestionService:
         channel: dict[str, str],
         sync_from: str | None,
         db: Session | None = None,
+        skip_delete: bool = False,
     ) -> dict[str, int]:
         """Semaphore 제한 하에 단일 채널 동기화 실행"""
         async with semaphore:
             return await self._sync_channel_messages(
                 channel["id"], channel["name"], sync_from, db,
+                skip_delete=skip_delete,
             )
             
     async def _sync_channel_messages(
@@ -533,44 +538,106 @@ class SlackIngestionService:
         channel_name: str,
         sync_from: str | None,
         db: Session | None = None,
+        skip_delete: bool = False,
     ) -> dict[str, int]:
-        """단일 채널: AsyncGenerator 소비 → 요약 → PGVector 저장"""
+        """단일 채널: fetch → summarize → embed → store 4단계 파이프라인"""
         SKIPPABLE_ERRORS = {"not_in_channel", "channel_not_found", "missing_scope"}
 
-        synced_count = 0
-        errors = 0
+        if db:
+            slack_sync.start_channel_sync(
+                db, self.team_id, channel_id,
+                channel_name=channel_name,
+                oldest_ts=sync_from,
+            )
 
-        try:
-            async for batch_docs, batch_ids, batch_errors in self._fetch_channel_pages(
+        fetch_q: asyncio.Queue = asyncio.Queue(maxsize=2)
+        embed_q: asyncio.Queue = asyncio.Queue(maxsize=2)
+        store_q: asyncio.Queue = asyncio.Queue(maxsize=2)
+
+        async def _fetch_stage():
+            async for batch in self._fetch_channel_pages(
                 channel_id, channel_name, sync_from,
             ):
-                errors += batch_errors
+                await fetch_q.put(batch)
+            await fetch_q.put(None)
 
+        async def _summarize_stage():
+            while (batch := await fetch_q.get()) is not None:
+                batch_docs, batch_ids, batch_errors = batch
                 if self.summarizer:
                     batch_docs = await self._summarize_documents(batch_docs)
+                await embed_q.put((batch_docs, batch_ids, batch_errors))
+            await embed_q.put(None)
 
-                await self.repository.upsert_documents(batch_docs, batch_ids)
+        async def _embed_stage():
+            while (batch := await embed_q.get()) is not None:
+                batch_docs, batch_ids, batch_errors = batch
+                embeddings = await self.repository.generate_embeddings(batch_docs)
+                await store_q.put((batch_docs, batch_ids, batch_errors, embeddings))
+            await store_q.put(None)
+
+        async def _store_stage() -> tuple[int, int]:
+            synced_count = 0
+            errors = 0
+            while (batch := await store_q.get()) is not None:
+                batch_docs, batch_ids, batch_errors, embeddings = batch
+                errors += batch_errors
+                if not skip_delete:
+                    await self.repository.delete_documents(batch_ids)
+                await self.repository.store_with_embeddings(
+                    batch_docs, embeddings, batch_ids,
+                )
                 synced_count += len(batch_docs)
-
                 if db:
                     slack_sync.update_sync_progress(
                         db, self.team_id, SlackEntityType.MESSAGE,
                         synced_count=synced_count,
                     )
+                    slack_sync.update_channel_sync_progress(
+                        db, self.team_id, channel_id,
+                        synced_count=synced_count,
+                    )
+            return synced_count, errors
 
-        except SlackApiError as e:
-            if e.response.get("error", "") in SKIPPABLE_ERRORS:
-                logger.info(
-                    f"[SLACK][SYNC] Skipping channel {channel_name} ({channel_id}): "
-                    f"{e.response.get('error')}"
+        try:
+            async with asyncio.TaskGroup() as tg:
+                tg.create_task(_fetch_stage())
+                tg.create_task(_summarize_stage())
+                tg.create_task(_embed_stage())
+                store_task = tg.create_task(_store_stage())
+            
+            synced_count, errors = store_task.result()
+        
+        except ExceptionGroup as eg:
+            for exc in eg.exceptions:
+                if isinstance(exc, SlackApiError):
+                    if exc.response.get("error", "") in SKIPPABLE_ERRORS:
+                        logger.info(
+                            f"[SLACK][SYNC] Skipping channel {channel_name} ({channel_id}): "
+                            f"{exc.response.get('error')}"
+                        )
+                        return {"synced": 0, "errors": 0, "skipped": True}
+
+            # 채널 동기화 실패
+            if db:
+                slack_sync.mark_channel_sync_failed(
+                    db, self.team_id, channel_id,
+                    error=str(eg.exceptions[0]),
                 )
-                return {"synced": 0, "errors": 0, "skipped": True}
-            raise
+            raise eg.exceptions[0] from None
+
+        # 채널 동기화 완료
+        if db:
+            slack_sync.mark_channel_sync_completed(
+                db, self.team_id, channel_id,
+                synced_count=synced_count,
+            )
 
         logger.debug(
             f"[SLACK][SYNC] Channel {channel_name}: synced {synced_count}, errors {errors}"
         )
         return {"synced": synced_count, "errors": errors}
+
 
     async def _fetch_channel_pages(
         self,

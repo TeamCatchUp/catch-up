@@ -31,7 +31,6 @@ from catchup.db.models import (
     SlackChannel,
     SourceType,
     User,
-    UserSourceMapping,
     UserStatus,
     UserRole,
 )
@@ -307,11 +306,12 @@ def _get_confluence_status(db: Session) -> ConfluenceConnectorStatus:
         )
 
     spaces = [
-        row[0]
-        for row in db.query(ConfluenceSpace.space_key)
+        f"{row[0]}:{row[1]}"
+        for row in db.query(ConfluenceSpace.space_name, ConfluenceSpace.space_key)
         .filter(ConfluenceSpace.cloud_id.in_(cloud_ids))
         .distinct()
         .all()
+        if row[0] and row[1]
     ]
 
     latest_dt = (
@@ -528,12 +528,13 @@ def _get_admin_user_list(db: Session) -> AdminUserListResponse:
 
 
 def _get_integration_accounts(
-    db: Session, user_id: int
+    db: Session,
+    user_email: str,
 ) -> UserIntegrations:
     mappings = {
         m.source_type: m.external_user_identifier
-        for m in db.query(UserSourceMapping)
-        .filter(UserSourceMapping.user_id == user_id)
+        for m in db.query(PreMappingBuffer)
+        .filter(PreMappingBuffer.email == user_email)
         .all()
     }
 
@@ -639,7 +640,7 @@ def get_admin_user_detail(
         logger.info("[ADMIN][USER_DETAIL] user not found (user_id=%s)", user_id)
         raise HTTPException(status_code=404, detail="User not found")
 
-    integrations = _get_integration_accounts(db, user_id)
+    integrations = _get_integration_accounts(db, user.email)
     logger.info("[ADMIN][USER_DETAIL] fetched detail (user_id=%s)", user_id)
 
     return AdminUserDetailResponse(
