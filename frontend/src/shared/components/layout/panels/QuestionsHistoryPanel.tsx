@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
 import { SearchHistory } from '@/shared/components/SearchHistory';
@@ -22,8 +22,26 @@ const QuestionsHistoryPanel = () => {
   const router = useRouter();
   const { setActivePanel } = useSidebarStore();
   const [searchValue, setSearchValue] = useState('');
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const { data, isLoading } = useQuery(chatQueries.recentQueries());
+  const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteQuery(
+    chatQueries.recentQueriesInfinite(),
+  );
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const recentQueries = useMemo<SearchQueryWithRawDate[]>(() => {
     // Mock 데이터 사용 모드 (NEXT_PUBLIC_USE_MOCK=true)
@@ -38,15 +56,16 @@ const QuestionsHistoryPanel = () => {
     }
 
     // 실제 API 데이터 사용
-    if (!data?.items) return [];
-    return data.items.map((item) => ({
+    const items = data?.pages.flatMap((page) => page.items) ?? [];
+    if (items.length === 0) return [];
+    return items.map((item) => ({
       query: item.content,
       session_id: item.session_id,
       date: formatFullDate(item.created_at),
       rawDate: new Date(item.created_at),
       message_id: item.id,
     }));
-  }, [data]);
+  }, [data?.pages]);
 
   const handleNewQuestion = () => {
     setActivePanel(null);
@@ -108,6 +127,10 @@ const QuestionsHistoryPanel = () => {
         ) : (
           <SearchHistory querys={recentQueries} isModal={false} onItemClick={handleItemClick} />
         )}
+        {isFetchingNextPage && (
+          <div className="text-gray-30 flex items-center justify-center py-4">불러오는 중...</div>
+        )}
+        <div ref={sentinelRef} className="h-1" />
       </div>
     </div>
   );
