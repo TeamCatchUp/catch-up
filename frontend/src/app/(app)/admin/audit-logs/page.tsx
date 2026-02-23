@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import AccountLogSection from '@/features/admin/audit-logs/components/sections/AccountLogSection';
+import IntegrationLogSection from '@/features/admin/audit-logs/components/sections/IntegrationLogSection';
 import QuestionLogSection from '@/features/admin/audit-logs/components/sections/QuestionLogSection';
 import {
   AUDIT_TABS,
@@ -58,11 +59,7 @@ export default function AdminAuditLogsPage() {
       {/* 탭 콘텐츠 */}
       {activeTab === '계정관리' && <AccountLogSection />}
       {activeTab === '질문' && <QuestionLogSection />}
-      {activeTab === '연동' && (
-        <div className="text-body-small flex h-80 items-center justify-center text-gray-50">
-          연동 로그 기능은 준비 중입니다.
-        </div>
-      )}
+      {activeTab === '연동' && <IntegrationLogSection />}
     </section>
   );
 }
