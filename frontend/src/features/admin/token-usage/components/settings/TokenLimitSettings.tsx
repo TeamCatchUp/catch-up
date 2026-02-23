@@ -60,7 +60,7 @@ function LimitRow({ title, description, defaultValue, hasBorder }: LimitRowProps
             $
           </span>
         </div>
-        <Button variant="capsule-solid-primary" size="sm" disabled={!isDirty} onClick={handleSave}>
+        <Button variant="capsule-solid-primary" size="sm" className="w-16" disabled={!isDirty} onClick={handleSave}>
           {isDirty ? '저장' : '저장됨'}
         </Button>
       </div>
