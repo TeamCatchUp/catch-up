@@ -11,10 +11,14 @@ interface DetailHeaderProps {
   userId: string;
   userName: string;
   userDepartment: string;
+  /** 진입 경로 (감사 로그에서 진입 시 'audit-logs') */
+  from?: string;
 }
 
 /** 질문 로그 상세 — 헤더 (타이틀 + 유저 정보 + 목록 복귀) */
-const DetailHeader = ({ userId, userName, userDepartment }: DetailHeaderProps) => {
+const DetailHeader = ({ userId, userName, userDepartment, from }: DetailHeaderProps) => {
+  const backHref = from === 'audit-logs' ? '/admin/audit-logs' : '/admin/question-logs';
+
   return (
     <div className="flex flex-col gap-6">
       {/* 타이틀 + 유저 정보 */}
@@ -34,7 +38,7 @@ const DetailHeader = ({ userId, userName, userDepartment }: DetailHeaderProps) =
       {/* 전체 목록 보기 */}
       <div className="flex items-center">
         <Button variant="text-secondary-mono" size="md" asChild>
-          <Link href="/admin/question-logs">
+          <Link href={backHref}>
             <ArrowLeft className="size-5" />
             전체 목록 보기
           </Link>
