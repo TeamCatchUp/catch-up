@@ -19,7 +19,7 @@ const QuestionLogListItem = ({ item, group, userId }: QuestionLogListItemProps) 
 
   return (
     <Link
-      href={`/admin/question-logs/${item.sessionId}?q=${encodeURIComponent(item.query)}&userId=${userId}`}
+      href={`/admin/question-logs/${item.messageId}?userId=${userId}`}
       className="hover:bg-neutral-2 flex h-10 w-full items-center gap-2 rounded-xl px-2 py-1 transition-colors"
     >
       <div className="border-neutral-3 bg-neutral-1 rounded-rounded flex shrink-0 items-center justify-center border p-1.5">

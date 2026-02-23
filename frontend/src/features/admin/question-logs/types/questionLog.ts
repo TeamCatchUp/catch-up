@@ -1,6 +1,7 @@
 /** 관리자용 이용자 질문 로그 아이템 (UI 모델) */
 export interface QuestionLogItem {
   id: string;
+  messageId: number;
   sessionId: string;
   query: string;
   createdAt: string;
