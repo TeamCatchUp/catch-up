@@ -3,10 +3,12 @@
 # ===========
 services:
   api_server:
-    image: "${DOCKER_REGISTRY_URL}/catchup-backend:${IMAGE_TAG}"
+    image: "${DOCKER_REGISTRY_URL}/catchup-backend:${IMAGE_TAG:-latest}"
     depends_on:
       - redis
     restart: always
+    env_file:
+      - .env
     environment:
     # RDS Connection Info
       - DB_HOST=${DB_HOST}
@@ -21,8 +23,7 @@ services:
         max-file: "5"
   
   web_client:
-    image: "${DOCKER_REGISTRY_URL}/catchup-web:${IMAGE_TAG}"
+    image: "${DOCKER_REGISTRY_URL}/catchup-web:${IMAGE_TAG:-latest}"
+    env_file:
+      - .env
     restart: always
-    environment:
-      - NEXT_PUBLIC_API_URL=http://${NEXT_PUBLIC_API_URL}
-  
