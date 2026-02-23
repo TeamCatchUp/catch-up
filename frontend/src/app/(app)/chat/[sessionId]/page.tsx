@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 
 // Chat Components
@@ -21,6 +22,7 @@ export default function RagAnswerPage() {
   const sessionId = params.sessionId as string;
   const repo = searchParams.get('repo');
   const initialQuery = searchParams.get('q');
+  const scrollToMessageId = searchParams.get('scrollTo');
 
   // Core hooks
   const chat = useRagChat({
@@ -29,9 +31,18 @@ export default function RagAnswerPage() {
     initialQuery: initialQuery ?? null,
   });
 
+  // 스크롤 완료 후 URL에서 scrollTo 파라미터 제거 (React 리렌더링 없이 URL만 변경)
+  const handleScrollToComplete = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('scrollTo');
+    window.history.replaceState(null, '', url.toString());
+  }, []);
+
   const { qaPairs, qaRefs, scrollContainerCallbackRef, scrollContainerHeight, scrollToLatest, activePairIndex } =
     useRagScroll({
       messages: chat.chatData?.messages ?? [],
+      scrollToMessageId,
+      onScrollToComplete: handleScrollToComplete,
     });
 
   const filters = useRagFilters();
