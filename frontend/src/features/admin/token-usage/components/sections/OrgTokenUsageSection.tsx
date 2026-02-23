@@ -5,11 +5,12 @@
 import { useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
-import { isWithinInterval, parseISO } from 'date-fns';
+import { parseISO } from 'date-fns';
 
 import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
 
 import { DEFAULT_DAILY_LIMIT } from '../../constants/tokenUsageConfig';
+import useFilteredByDateRange from '../../hooks/useFilteredByDateRange';
 import { tokenUsageQueries } from '../../queries/tokenUsage.queries';
 import DailyUsageBarChart from '../charts/DailyUsageBarChart';
 import TotalQuestionBarChart from '../charts/TotalQuestionBarChart';
@@ -44,29 +45,9 @@ export default function OrgTokenUsageSection() {
   });
 
   // 날짜 범위 필터링
-  const filteredDaily = useMemo(() => {
-    if (!dailyUsage) return [];
-    if (!dateRange?.from) return dailyUsage;
-    const from = dateRange.from;
-    const to = dateRange.to ?? dateRange.from;
-    return dailyUsage.filter((d) => isWithinInterval(parseISO(d.date), { start: from, end: to }));
-  }, [dailyUsage, dateRange]);
-
-  const filteredTrend = useMemo(() => {
-    if (!totalTrend) return [];
-    if (!dateRange?.from) return totalTrend;
-    const from = dateRange.from;
-    const to = dateRange.to ?? dateRange.from;
-    return totalTrend.filter((d) => isWithinInterval(parseISO(d.date), { start: from, end: to }));
-  }, [totalTrend, dateRange]);
-
-  const filteredQuestions = useMemo(() => {
-    if (!questionCounts) return [];
-    if (!dateRange?.from) return questionCounts;
-    const from = dateRange.from;
-    const to = dateRange.to ?? dateRange.from;
-    return questionCounts.filter((d) => isWithinInterval(parseISO(d.date), { start: from, end: to }));
-  }, [questionCounts, dateRange]);
+  const filteredDaily = useFilteredByDateRange(dailyUsage, dateRange);
+  const filteredTrend = useFilteredByDateRange(totalTrend, dateRange);
+  const filteredQuestions = useFilteredByDateRange(questionCounts, dateRange);
 
   const filteredTotalCost = useMemo(() => filteredDaily.reduce((sum, d) => sum + d.cost, 0), [filteredDaily]);
 
@@ -93,13 +74,13 @@ export default function OrgTokenUsageSection() {
       </div>
 
       {/* 멤버 선택 모드 — 프로필 카드 */}
-      {viewMode === 'member' && members && (
+      {viewMode === 'member' && members ? (
         <MemberProfileCard
           members={members}
           selectedMemberId={selectedMemberId}
           onSelectMember={setSelectedMemberId}
         />
-      )}
+      ) : null}
 
       {/* 차트 3개 + 순위 */}
       <div className="flex h-142 gap-6">

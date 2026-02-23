@@ -2,11 +2,12 @@
 
 /** 조직 토큰 사용량 > 멤버 선택 모드 — 멤버 프로필 카드 (드롭다운 + 프로필 정보 + 액션 버튼) */
 
+import { useMemo } from 'react';
 import Image from 'next/image';
 
+import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import IconError from '@/public/icons/icon/error.svg';
 import IconKebab from '@/public/icons/icon/kebab.svg';
-import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { Button } from '@/shared/components/ui/button';
 import FilterDropdown, { type FilterOption } from '@/shared/components/ui/filter-dropdown';
 
@@ -21,10 +22,10 @@ interface MemberProfileCardProps {
 export default function MemberProfileCard({ members, selectedMemberId, onSelectMember }: MemberProfileCardProps) {
   const selectedMember = members.find((m) => m.id === selectedMemberId);
 
-  const memberOptions: FilterOption<string>[] = members.map((m) => ({
-    value: m.id,
-    label: `${m.name}(${m.team})`,
-  }));
+  const memberOptions = useMemo<FilterOption<string>[]>(
+    () => members.map((m) => ({ value: m.id, label: `${m.name}(${m.team})` })),
+    [members],
+  );
 
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-neutral-3 bg-white px-6 py-5">
