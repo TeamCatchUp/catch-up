@@ -2,7 +2,7 @@ import ArrowLeft from '@/public/icons/icon/arrow_left.svg';
 import ArrowRight from '@/public/icons/icon/arrow_right.svg';
 import { cn } from '@/shared/utils/cn';
 
-interface PermissionsPaginationProps {
+interface PaginationProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -27,8 +27,8 @@ const getVisiblePages = (currentPage: number, totalPages: number) => {
   return Array.from({ length: end - start + 1 }, (_, idx) => start + idx);
 };
 
-/** 권한 목록 페이지네이션 */
-const PermissionsPagination = ({ currentPage, totalPages, onPageChange }: PermissionsPaginationProps) => {
+/** 공통 숫자 페이지네이션 */
+const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) => {
   const visiblePages = getVisiblePages(currentPage, totalPages);
 
   return (
@@ -73,4 +73,4 @@ const PermissionsPagination = ({ currentPage, totalPages, onPageChange }: Permis
   );
 };
 
-export default PermissionsPagination;
+export default Pagination;
