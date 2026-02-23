@@ -21,21 +21,13 @@ const GithubGuideSection = () => {
       {/* 1. GitHub 앱 설치 및 권한 승인 */}
       <div className="flex flex-col gap-2">
         <h4 className="text-heading-medium text-gray-80">1. GitHub 앱 설치 및 권한 승인</h4>
-        <div className="border-neutral-3 overflow-clip rounded-xl border bg-white px-4 py-2.5">
-          <Image
-            src={GITHUB_GUIDE_IMAGES.integrationPage}
-            alt="Catch Up 협업 툴 연동 페이지 - GitHub 계정 등록하기"
-            quality={100}
-            className="h-auto w-full"
-          />
-        </div>
         <p className="text-label-small text-gray-80">
-          Catch Up 협업 툴 연동 페이지에서 &apos;계정 등록하기&apos; 버튼을 클릭합니다.
+          Catch Up 협업 툴 연동 페이지에서 &apos;연동하기&apos; 버튼을 클릭합니다.
         </p>
         <div className="border-neutral-3 overflow-clip rounded-xl border bg-white px-4 py-2.5">
           <Image
-            src={GITHUB_GUIDE_IMAGES.appInstall}
-            alt="GitHub 앱 설치 및 Organization 선택 화면"
+            src={GITHUB_GUIDE_IMAGES.integrationPage}
+            alt="Catch Up 협업 툴 연동 페이지 - GitHub 연동하기 버튼"
             quality={100}
             className="h-auto w-full"
           />
@@ -43,6 +35,14 @@ const GithubGuideSection = () => {
         <p className="text-label-small text-gray-80">
           이후 GitHub 연동 페이지로 이동하여 팀이 함께 볼 Organization을 선택하고 접근 권한을 승인해주세요.
         </p>
+        <div className="border-neutral-3 overflow-clip rounded-xl border bg-white px-4 py-2.5">
+          <Image
+            src={GITHUB_GUIDE_IMAGES.install}
+            alt="GitHub CatchUp Connector 설치 화면"
+            quality={100}
+            className="h-auto w-full"
+          />
+        </div>
         <button
           type="button"
           onClick={() => window.open(GITHUB_PROFILE_URL, '_blank')}
@@ -70,8 +70,9 @@ const GithubGuideSection = () => {
           />
         </div>
         <p className="text-label-small text-gray-80">
-          권한이 확인된 Repository 목록 중, 팀의 지식으로 활용할 곳만 최종 선택합니다. 명시적으로 선택하지 않은 공간의
-          데이터는 절대 접근하지 않습니다.
+          권한이 확인된 Repository 목록 중, 팀의 지식으로 활용할 곳만 최종 선택합니다.{' '}
+          <br />
+          명시적으로 선택하지 않은 공간의 데이터는 절대 접근하지 않습니다.
         </p>
       </div>
 
