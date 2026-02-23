@@ -194,12 +194,20 @@ class AuthSettings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
     
-    # Okta
+    # Okta (Deprecated)
     OKTA_DOMAIN: str
     OKTA_CLIENT_ID: str
     OKTA_CLIENT_SECRET: str
     OKTA_REDIRECT_URI: str
     OKTA_API_KEY: str
+    
+    # Keycloak
+    KC_PUBLIC_URL: str
+    KC_INTERNAL_URL: str
+    KC_REALM: str
+    KC_CLIENT_ID: str
+    KC_CLIENT_SECRET: str
+    KC_REDIRECT_URI: str
 
     FRONTEND_REDIRECT_URI: str
 

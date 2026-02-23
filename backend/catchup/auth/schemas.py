@@ -13,7 +13,7 @@ class GoogleUserInfoResponse(BaseModel):
     provider_id: str
     
 
-# TODO: 공통 필드 추상화
+# TODO: 공통 필드 추상화 -> Keycloak
 class OktaUserInfoResponse(BaseModel):
     sub: str
     name: str

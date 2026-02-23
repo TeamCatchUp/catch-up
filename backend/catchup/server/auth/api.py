@@ -48,11 +48,13 @@ GOOGLE_USER_INFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
     description="Okta OAuth2 로그인"
 )
 async def okta_oauth2_login():
-    base_url = f"https://{auth_settings.OKTA_DOMAIN}/oauth2/v1/authorize"
+    # base_url = f"https://{auth_settings.OKTA_DOMAIN}/oauth2/v1/authorize"
+    realm = auth_settings.KC_REALM
+    base_url = f"{auth_settings.KC_PUBLIC_URL}/realms/{realm}/protocol/openid-connect/auth"
     
     params = {
-        "client_id": auth_settings.OKTA_CLIENT_ID,
-        "redirect_uri": auth_settings.OKTA_REDIRECT_URI,
+        "client_id": auth_settings.KC_CLIENT_ID,
+        "redirect_uri": auth_settings.KC_REDIRECT_URI,
         "response_type": "code",
         "scope": "openid email profile offline_access",
         "state": "random_state_string_check_needed",
