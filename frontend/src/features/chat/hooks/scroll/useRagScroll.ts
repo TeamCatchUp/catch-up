@@ -153,6 +153,11 @@ export const useRagScroll = ({ messages, scrollToMessageId, onScrollToComplete }
   // scrollToMessageId가 지정된 경우 해당 Q&A pair로 스크롤
   const scrollToHandledRef = useRef(false);
 
+  // scrollToMessageId 변경 시 handled 플래그 초기화 (같은 세션 내 재스크롤 지원)
+  useEffect(() => {
+    scrollToHandledRef.current = false;
+  }, [scrollToMessageId]);
+
   useEffect(() => {
     if (!scrollToMessageId || scrollToHandledRef.current || qaPairs.length === 0) return;
 

@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation';
 import { MoreButtonContent } from '@/shared/components/layout/topNavbar/MoreButtonModal';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
-import { isValidSessionId } from '@/shared/utils/sessionId';
 import { cn } from '@/shared/utils/cn';
+import { isValidSessionId } from '@/shared/utils/sessionId';
 
 import SessionQuestionsModal from './SessionQuestionsModal';
 
@@ -39,8 +39,9 @@ const RagHeader = ({ title, sessionId }: RagHeaderProps) => {
     }
   };
 
-  const handleSelectQuestion = (query: string) => {
-    router.push(`/search?q=${encodeURIComponent(query)}`);
+  const handleSelectQuestion = (messageId: number) => {
+    setIsSessionQuestionsOpen(false);
+    router.push(`/chat/${sessionId}?scrollTo=${messageId}`);
   };
 
   return (

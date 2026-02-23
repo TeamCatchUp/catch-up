@@ -11,7 +11,7 @@ import { isValidSessionId } from '@/shared/utils/sessionId';
 interface SessionQuestionsModalProps {
   sessionId: string;
   onClose: () => void;
-  onSelect: (query: string) => void;
+  onSelect: (messageId: number) => void;
 }
 
 const SessionQuestionsModal = ({ sessionId, onClose, onSelect }: SessionQuestionsModalProps) => {
@@ -66,7 +66,7 @@ const SessionQuestionsModal = ({ sessionId, onClose, onSelect }: SessionQuestion
                 key={idx}
                 className="hover:bg-neutral-2 flex h-10 w-full cursor-pointer items-center rounded-xl px-2 py-1 transition-colors"
                 onClick={() => {
-                  onSelect(item.content);
+                  onSelect(item.id);
                   onClose();
                 }}
               >

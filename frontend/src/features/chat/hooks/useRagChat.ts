@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
@@ -74,6 +74,7 @@ export const useRagChat = ({ sessionId, repo, initialQuery, scrollToMessageId }:
   const [oldestLoadedPage, setOldestLoadedPage] = useState<number | null>(null);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  const scrollToFullLoadRef = useRef<string | null>(null);
 
   const refreshRecentChatsNow = useCallback(() => {
     refreshRecentChats(queryClient);
@@ -260,6 +261,43 @@ export const useRagChat = ({ sessionId, repo, initialQuery, scrollToMessageId }:
     setIsLoading,
     streamRefs,
   });
+
+  // ---------------------------------------------------------------------------
+  // 같은 세션 내 scrollTo 네비게이션: 미로드 메시지 전체 로드
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!scrollToMessageId || !chatData || !resolvedSessionId || !isValidSessionId(resolvedSessionId)) return;
+    if (!hasOlderMessages) return;
+    if (scrollToFullLoadRef.current === scrollToMessageId) return;
+
+    const targetId = `history_${scrollToMessageId}`;
+    const targetExists = chatData.messages.some((m) => m.id === targetId);
+    if (targetExists) return;
+
+    scrollToFullLoadRef.current = scrollToMessageId;
+
+    let cancelled = false;
+    const loadAllForScrollTo = async () => {
+      try {
+        const data = await loadSessionChatData({
+          queryClient,
+          sessionId: resolvedSessionId,
+          repo,
+          initialQuery: effectiveInitialQuery,
+        });
+        if (cancelled) return;
+        setChatData(data);
+        setOldestLoadedPage(1);
+        setHasOlderMessages(false);
+      } catch (err) {
+        if (!cancelled) console.error('[useRagChat] scrollTo full load error:', err);
+      }
+    };
+    void loadAllForScrollTo();
+    return () => {
+      cancelled = true;
+    };
+  }, [scrollToMessageId, chatData, resolvedSessionId, hasOlderMessages, queryClient, repo, effectiveInitialQuery, setChatData]);
 
   // ---------------------------------------------------------------------------
   // Public API
