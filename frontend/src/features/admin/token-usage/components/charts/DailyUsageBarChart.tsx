@@ -15,6 +15,7 @@ interface DailyUsageBarChartProps {
   data: DailyTokenUsage[];
   totalCost: number;
   dailyLimit: number;
+  title?: string;
 }
 
 const chartConfig = {
@@ -24,7 +25,7 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export default function DailyUsageBarChart({ data, totalCost, dailyLimit }: DailyUsageBarChartProps) {
+export default function DailyUsageBarChart({ data, totalCost, dailyLimit, title = '일자별 토큰 사용량' }: DailyUsageBarChartProps) {
   const modelName = data[0]?.model_name ?? '';
 
   const ticks = useMemo(() => {
@@ -38,7 +39,7 @@ export default function DailyUsageBarChart({ data, totalCost, dailyLimit }: Dail
       {/* 헤더 */}
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
-          <span className="text-heading-small text-gray-50">일자별 토큰 사용량</span>
+          <span className="text-heading-small text-gray-50">{title}</span>
           <span className="text-heading-large text-gray-80">{totalCost.toFixed(2)} $</span>
         </div>
         {modelName && (

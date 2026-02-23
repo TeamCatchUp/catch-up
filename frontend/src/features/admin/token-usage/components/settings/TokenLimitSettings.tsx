@@ -68,25 +68,39 @@ function LimitRow({ title, description, defaultValue, hasBorder }: LimitRowProps
   );
 }
 
-export default function TokenLimitSettings() {
+type TokenLimitMode = 'my' | 'member' | 'org';
+
+const MODE_CONFIG: Record<TokenLimitMode, { header: string; subject: string }> = {
+  my: { header: '나의 토큰 사용 제한 설정', subject: '자신의' },
+  member: { header: '멤버 토큰 사용 제한 설정', subject: '선택된 멤버 개인의' },
+  org: { header: '조직 토큰 사용 제한 설정', subject: '조직의' },
+};
+
+interface TokenLimitSettingsProps {
+  mode?: TokenLimitMode;
+}
+
+export default function TokenLimitSettings({ mode = 'my' }: TokenLimitSettingsProps) {
+  const { header, subject } = MODE_CONFIG[mode];
+
   return (
     <div className="flex flex-col gap-1">
       {/* 헤더 */}
       <div className="rounded bg-neutral-1 px-5 py-1.5">
-        <span className="text-heading-small text-gray-70">나의 토큰 사용 제한 설정</span>
+        <span className="text-heading-small text-gray-70">{header}</span>
       </div>
 
       {/* 설정 행들 */}
       <div className="flex flex-col px-4">
         <LimitRow
           title="하루 최대 토큰 비용"
-          description={`자신의 하루 최대 토큰 비용을 설정할 수 있습니다.\n비용을 초과할 경우, 토큰 비용이 발생하는 모든 기능이 정지됩니다.`}
+          description={`${subject} 하루 최대 토큰 비용을 설정할 수 있습니다.\n비용을 초과할 경우, 토큰 비용이 발생하는 모든 기능이 정지됩니다.`}
           defaultValue={DEFAULT_DAILY_LIMIT}
           hasBorder
         />
         <LimitRow
           title="월 최대 토큰 비용"
-          description={`자신의 월 최대 토큰 비용을 설정할 수 있습니다.\n비용을 초과할 경우, 토큰 비용이 발생하는 모든 기능이 정지됩니다.`}
+          description={`${subject} 월 최대 토큰 비용을 설정할 수 있습니다.\n비용을 초과할 경우, 토큰 비용이 발생하는 모든 기능이 정지됩니다.`}
           defaultValue={DEFAULT_MONTHLY_LIMIT}
           hasBorder={false}
         />
