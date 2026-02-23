@@ -56,8 +56,15 @@ const IntegrationManagementSection = ({
           return api.post(API.jira.syncFlush);
         case 'slack':
           return api.post(API.slack.syncFlush);
-        case 'confluence':
+        case 'confluence': {
+          const { data } = await api.get<{ cloudIds: string[] }>(API.confluence.cloudIds);
+          await Promise.all(
+            data.cloudIds.map((cloudId) =>
+              api.post(API.confluence.syncIncremental, null, { params: { cloud_id: cloudId } }),
+            ),
+          );
           return;
+        }
       }
     },
   });
@@ -108,7 +115,7 @@ const IntegrationManagementSection = ({
               <button
                 type="button"
                 onClick={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending || selectedService === 'confluence'}
+                disabled={syncMutation.isPending}
                 className="border-neutral-3 text-body-xsmall text-gray-70 flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-white px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <IconRotate className="text-gray-70 h-6 w-6" />
