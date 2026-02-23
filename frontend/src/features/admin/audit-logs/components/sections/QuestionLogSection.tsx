@@ -1,38 +1,18 @@
 'use client';
 
 import { useMemo } from 'react';
-import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
-import IconDropdownDown from '@/public/icons/icon/dropdown_down.svg';
-import IconSearch from '@/public/icons/icon/search.svg';
-import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/shared/components/ui/dropdown-menu';
 import Pagination from '@/shared/components/ui/pagination';
-import { cn } from '@/shared/utils/cn';
 
-import { SORT_OPTIONS } from '../../constants/auditLogConfig';
 import { auditLogsQueries } from '../../queries/auditLogs.queries';
 import { useAuditQuestionFilterStore } from '../../store/auditQuestionFilterStore';
+import { formatDate } from '../../utils/formatDate';
+import AuditLogFilterBar from '../AuditLogFilterBar';
 
 const PAGE_SIZE = 15;
-
-/** 날짜 포맷: "2026.01.01. 10:32" */
-const formatDate = (iso: string) => {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const h = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${y}.${m}.${day}. ${h}:${min}`;
-};
 
 /** 감사 로그 — 질문 탭 섹션 */
 const QuestionLogSection = () => {
@@ -86,50 +66,14 @@ const QuestionLogSection = () => {
   return (
     <div className="flex w-full flex-col gap-3">
       {/* 필터바 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {/* 정렬 드롭다운 */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="border-neutral-3 flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border bg-white px-2.5 py-2"
-              >
-                <span className="text-body-small text-gray-70">
-                  {SORT_OPTIONS.find((o) => o.key === sort)?.label}
-                </span>
-                <IconDropdownDown className="size-4.5 text-gray-50" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" sideOffset={2} className="w-30 min-w-0">
-              {SORT_OPTIONS.map((option) => (
-                <DropdownMenuItem
-                  key={option.key}
-                  onClick={() => setSort(option.key)}
-                  className={cn(sort === option.key && 'bg-neutral-1')}
-                >
-                  {option.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* 날짜 범위 선택 */}
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
-        </div>
-
-        {/* 검색 */}
-        <label className="bg-neutral-1 border-neutral-2 flex h-10 w-70 items-center gap-1.5 rounded-lg border px-3 py-2">
-          <IconSearch className="text-gray-30 size-5 shrink-0" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="질문, 키워드로 검색하세요."
-            className="text-body-small text-gray-70 placeholder:text-gray-30 w-full bg-transparent outline-none"
-          />
-        </label>
-      </div>
+      <AuditLogFilterBar
+        sortKey={sort}
+        onSortChange={setSort}
+        dateRange={dateRange}
+        onDateRangeChange={setDateRange}
+        searchTerm={searchTerm}
+        onSearchTermChange={setSearchTerm}
+      />
 
       {/* 테이블 + 페이지네이션 */}
       <div className="flex flex-col gap-14">
