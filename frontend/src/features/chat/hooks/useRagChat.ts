@@ -8,7 +8,12 @@ import { useInitialQueryBootstrap } from '@/features/chat/hooks/useRagChat.parts
 import { useMessageActions } from '@/features/chat/hooks/useRagChat.parts/messageActions';
 import { refreshRecentChats } from '@/features/chat/hooks/useRagChat.parts/refreshRecentChats';
 import { useRagChatRefs } from '@/features/chat/hooks/useRagChat.parts/refs';
-import { createEmptyChatData, loadSessionChatData } from '@/features/chat/hooks/useRagChat.parts/sessionDataLoader';
+import {
+  createEmptyChatData,
+  loadLatestSessionPage,
+  loadPreviousSessionPage,
+  loadSessionChatData,
+} from '@/features/chat/hooks/useRagChat.parts/sessionDataLoader';
 import { useSessionLifecycle } from '@/features/chat/hooks/useRagChat.parts/sessionLifecycle';
 import { useStreamProcessing } from '@/features/chat/hooks/useRagChat.parts/streamProcessing';
 import type { UseRagChatOptions, UseRagChatReturn } from '@/features/chat/hooks/useRagChat.parts/types';
@@ -30,7 +35,7 @@ import { isValidSessionId } from '@/shared/utils/sessionId';
  * 4) user actions (send/edit/stop/feedback) 연결
  * 5) initial q bootstrap (첫 질문 자동 실행 1회) 연결
  */
-export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions): UseRagChatReturn => {
+export const useRagChat = ({ sessionId, repo, initialQuery, scrollToMessageId }: UseRagChatOptions): UseRagChatReturn => {
   // ---------------------------------------------------------------------------
   // External hooks/services
   // ---------------------------------------------------------------------------
@@ -63,6 +68,13 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
   // 모든 ref 기반 런타임 상태(세션 전환 가드, 스트림 플래그)를 전담 훅에서 관리
   const { sessionRefs, streamRefs, resetStreamStateRefs } = useRagChatRefs(resolvedSessionId);
 
+  // ---------------------------------------------------------------------------
+  // 역방향 무한 스크롤 pagination state
+  // ---------------------------------------------------------------------------
+  const [oldestLoadedPage, setOldestLoadedPage] = useState<number | null>(null);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+
   const refreshRecentChatsNow = useCallback(() => {
     refreshRecentChats(queryClient);
   }, [queryClient]);
@@ -74,29 +86,84 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
   );
 
   // sessionDataLoader에 현재 컨텍스트(repo/initialQuery/queryClient)를 주입한 래퍼
+  // scrollToMessageId 유무에 따라 전체 로드 vs 마지막 페이지만 로드 분기
   const loadSessionChatDataWithContext = useCallback(
-    (targetSessionId: string) =>
-      loadSessionChatData({
+    async (targetSessionId: string) => {
+      if (scrollToMessageId) {
+        // scrollTo 있으면 전체 로드 (대상 메시지가 어디 있을지 모르므로)
+        const data = await loadSessionChatData({
+          queryClient,
+          sessionId: targetSessionId,
+          repo,
+          initialQuery: effectiveInitialQuery,
+        });
+        setOldestLoadedPage(1);
+        setHasOlderMessages(false);
+        return data;
+      }
+
+      // scrollTo 없으면 최신 페이지만 로드 (역방향 무한 스크롤)
+      const result = await loadLatestSessionPage({
         queryClient,
         sessionId: targetSessionId,
         repo,
         initialQuery: effectiveInitialQuery,
-      }),
-    [effectiveInitialQuery, queryClient, repo],
+      });
+      setOldestLoadedPage(result.oldestLoadedPage);
+      setHasOlderMessages(result.oldestLoadedPage > 1);
+      return result.chatData;
+    },
+    [effectiveInitialQuery, queryClient, repo, scrollToMessageId],
   );
+
+  // 역방향 무한 스크롤: 이전 페이지 로드
+  const loadPreviousMessages = useCallback(async () => {
+    const targetId = resolvedSessionId;
+    if (!targetId || !oldestLoadedPage || oldestLoadedPage <= 1 || isLoadingOlderMessages) return;
+
+    setIsLoadingOlderMessages(true);
+    try {
+      const prevPage = oldestLoadedPage - 1;
+      const olderMessages = await loadPreviousSessionPage({
+        queryClient,
+        sessionId: targetId,
+        page: prevPage,
+      });
+
+      setChatData((prev) => {
+        if (!prev) return prev;
+        return { ...prev, messages: [...olderMessages, ...prev.messages] };
+      });
+
+      setOldestLoadedPage(prevPage);
+      setHasOlderMessages(prevPage > 1);
+    } catch (err) {
+      console.error('[useRagChat] loadPreviousMessages error:', err);
+    } finally {
+      setIsLoadingOlderMessages(false);
+    }
+  }, [resolvedSessionId, oldestLoadedPage, isLoadingOlderMessages, queryClient]);
 
   // 스트림 종료 후 서버 기준 최종 메시지로 1회 동기화
   const syncChatDataFromServer = useCallback(
     async (targetSessionId: string) => {
       if (!isValidSessionId(targetSessionId)) return;
       try {
-        const nextData = await loadSessionChatDataWithContext(targetSessionId);
+        // 스트림 후 동기화는 전체 로드 (최신 상태 보장)
+        const nextData = await loadSessionChatData({
+          queryClient,
+          sessionId: targetSessionId,
+          repo,
+          initialQuery: effectiveInitialQuery,
+        });
         setChatData(nextData);
+        setOldestLoadedPage(1);
+        setHasOlderMessages(false);
       } catch (err) {
         console.error('[useRagChat] syncChatDataFromServer error:', err);
       }
     },
-    [loadSessionChatDataWithContext],
+    [effectiveInitialQuery, queryClient, repo],
   );
 
   // ---------------------------------------------------------------------------
@@ -213,6 +280,11 @@ export const useRagChat = ({ sessionId, repo, initialQuery }: UseRagChatOptions)
     // 외부 연동(필요 시 강제 업데이트)
     setChatData,
     updateMessageFeedback,
+
+    // 역방향 무한 스크롤
+    hasOlderMessages,
+    isLoadingOlderMessages,
+    loadPreviousMessages,
   };
 };
 

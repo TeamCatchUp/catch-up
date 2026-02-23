@@ -12,6 +12,7 @@ export interface UseRagChatOptions {
   sessionId: string;
   repo: string | null;
   initialQuery: string | null;
+  scrollToMessageId?: string | null;
 }
 
 /**
@@ -29,6 +30,11 @@ export interface UseRagChatReturn {
   handleStop: () => void;
   setChatData: Dispatch<SetStateAction<ChatData | null>>;
   updateMessageFeedback: (messageId: string) => void;
+
+  // 역방향 무한 스크롤
+  hasOlderMessages: boolean;
+  isLoadingOlderMessages: boolean;
+  loadPreviousMessages: () => Promise<void>;
 }
 
 /**
