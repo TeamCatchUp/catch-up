@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import MyTokenUsageSection from '@/features/admin/token-usage/components/sections/MyTokenUsageSection';
 import OrgTokenUsageSection from '@/features/admin/token-usage/components/sections/OrgTokenUsageSection';
+import UserManagementSection from '@/features/admin/token-usage/components/sections/UserManagementSection';
 import {
   DEFAULT_TAB_SLUG,
   fromTabSlug,
@@ -99,6 +100,8 @@ export default function AdminTokenUsagePage() {
           <MyTokenUsageSection />
         ) : activeTab === '조직 토큰 사용량' ? (
           <OrgTokenUsageSection />
+        ) : activeTab === '이용자 관리' ? (
+          <UserManagementSection />
         ) : (
           <div className="text-body-small flex h-80 items-center justify-center text-gray-50">
             {activeTab} 기능은 준비 중입니다.
