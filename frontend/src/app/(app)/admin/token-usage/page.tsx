@@ -4,6 +4,7 @@ import { type KeyboardEvent, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import MyTokenUsageSection from '@/features/admin/token-usage/components/sections/MyTokenUsageSection';
+import OrgTokenUsageSection from '@/features/admin/token-usage/components/sections/OrgTokenUsageSection';
 import {
   DEFAULT_TAB_SLUG,
   fromTabSlug,
@@ -96,6 +97,8 @@ export default function AdminTokenUsagePage() {
       <div role="tabpanel" id={`tabpanel-${activeSlug}`} aria-labelledby={`tab-${activeSlug}`} tabIndex={0}>
         {activeTab === '나의 토큰 사용량' ? (
           <MyTokenUsageSection />
+        ) : activeTab === '조직 토큰 사용량' ? (
+          <OrgTokenUsageSection />
         ) : (
           <div className="text-body-small flex h-80 items-center justify-center text-gray-50">
             {activeTab} 기능은 준비 중입니다.
