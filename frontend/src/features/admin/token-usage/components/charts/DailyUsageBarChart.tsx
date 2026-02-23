@@ -34,7 +34,7 @@ export default function DailyUsageBarChart({ data, totalCost, dailyLimit }: Dail
   }, [data]);
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-neutral-3 bg-white px-6 py-5">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-neutral-3 bg-white px-6 py-5">
       {/* 헤더 */}
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">

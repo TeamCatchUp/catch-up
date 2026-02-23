@@ -84,16 +84,16 @@ export default function MyTokenUsageSection() {
       {/* 차트 3개 */}
       <div className="flex h-100 gap-4">
         {/* 메인 바차트 */}
-        <div className="min-w-0 flex-1">
+        <div className="min-h-0 min-w-0 flex-1">
           <DailyUsageBarChart data={filteredDaily} totalCost={filteredTotalCost} dailyLimit={DEFAULT_DAILY_LIMIT} />
         </div>
 
         {/* 우측 소형 차트 2개 */}
         <div className="flex w-81 shrink-0 flex-col gap-4">
-          <div className="flex-1">
+          <div className="min-h-0 flex-1">
             <TotalTokenLineChart data={filteredTrend} />
           </div>
-          <div className="flex-1">
+          <div className="min-h-0 flex-1">
             <TotalQuestionBarChart data={filteredQuestions} />
           </div>
         </div>
