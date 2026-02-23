@@ -31,6 +31,8 @@ export interface OrgMember {
   position: string;
   role: string;
   profileImage?: string;
+  tokenEnabled: boolean;
+  cost: number;
 }
 
 /** 토큰 사용량 순위 항목 */

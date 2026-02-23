@@ -39,3 +39,21 @@ export const STATUS_CONFIG: Record<
 /** 설정 기본값 (프론트 고정) */
 export const DEFAULT_DAILY_LIMIT = 5;
 export const DEFAULT_MONTHLY_LIMIT = 100;
+
+/** ── 이용자 관리 ── */
+
+export type UserMgmtSortKey = 'newest' | 'name' | 'cost';
+export const USER_MGMT_SORT_OPTIONS: { key: UserMgmtSortKey; label: string }[] = [
+  { key: 'newest', label: '최신 순' },
+  { key: 'name', label: '이름 순' },
+  { key: 'cost', label: '사용량 순' },
+];
+
+/** 직급 Badge 색상 */
+export const POSITION_BADGE_CLASS = 'bg-violet-5 text-violet-60';
+
+/** 부서 Badge 색상 */
+export const TEAM_BADGE_CLASS = 'bg-green-5 text-green-60';
+
+/** 페이지당 행 수 */
+export const USERS_PER_PAGE = 10;

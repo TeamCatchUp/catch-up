@@ -79,4 +79,12 @@ export const tokenUsageQueries = {
       queryKey: [...tokenUsageQueries.all(), 'orgRanking'] as const,
       queryFn: async () => MOCK_ORG_RANKING,
     }),
+
+  /* ── 이용자 관리 ── */
+
+  userManagement: () =>
+    queryOptions({
+      queryKey: [...tokenUsageQueries.all(), 'userManagement'] as const,
+      queryFn: async () => MOCK_ORG_MEMBERS,
+    }),
 };
