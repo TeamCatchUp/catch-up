@@ -90,8 +90,8 @@ class OktaClient:
         url = f"{auth_settings.KC_INTERNAL_URL}/realms/master/protocol/openid-connect/token"
         data = {
             "grant_type": "client_credentials",
-            "client_id": auth_settings.KC_ADMIN_CLIENT_ID, # Admin 권한 Client ID
-            "client_secret": auth_settings.KC_ADMIN_CLIENT_SECRET,
+            "client_id": auth_settings.KC_CLIENT_ID, # Admin 권한 Client ID
+            "client_secret": auth_settings.KC_CLIENT_SECRET,
         }
         async with httpx.AsyncClient() as client:
             response = await client.post(url, data=data)

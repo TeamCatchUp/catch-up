@@ -78,8 +78,7 @@ class AwsBedrockLlmService(BaseLlmService):
         return ChatBedrock(
             model_id=model_id,
             region_name=settings.AWS_REGION,
-            aws_access_key_id=None,
-            aws_secret_access_key=None,
+            credentials_profile_name=settings.AWS_CREDENTIALS_PROFILE_NAME,
             temperature=0,
             max_tokens=4096,
             streaming=True,

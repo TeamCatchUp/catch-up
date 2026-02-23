@@ -151,12 +151,13 @@ class Settings(BaseSettings):
     WEBHOOK_ENABLE_AUTO_SYNC: bool = True
     
     # AWS
-    AWS_ACCESS_KEY_ID: str
-    AWS_SECRET_ACCESS_KEY: str
+    AWS_ACCESS_KEY_ID: Optional[str] = None
+    AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    AWS_CREDENTIALS_PROFILE_NAME: Optional[str] = None
 
     # AWS Bedrock
     # Bedrock API Key
-    AWS_BEARER_TOKEN_BEDROCK: str
+    AWS_BEARER_TOKEN_BEDROCK: Optional[str] = None
     AWS_REGION: str
     AWS_BEDROCK_EMBEDDING_MODEL: str
     AWS_BEDROCK_SMALL_MODEL: str
