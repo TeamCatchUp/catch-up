@@ -1,8 +1,12 @@
-import { infiniteQueryOptions } from '@tanstack/react-query';
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
-import type { PaginatedResponse, RecentQueryWithSaveStatusResponse } from '@/shared/types/query/api';
+import type {
+  PaginatedResponse,
+  QueryDetailResponse,
+  RecentQueryWithSaveStatusResponse,
+} from '@/shared/types/query/api';
 
 import type { AdminQueryParams } from '../types/questionLog';
 
@@ -27,5 +31,16 @@ export const adminQueriesQueries = {
         return allPages.length < totalPages ? allPages.length + 1 : undefined;
       },
       enabled: !!params.target_user_id,
+    }),
+
+  /** 질문-답변 상세 조회 (QA 1쌍) */
+  detail: (messageId: number) =>
+    queryOptions({
+      queryKey: [...adminQueriesQueries.all(), 'detail', messageId] as const,
+      queryFn: async (): Promise<QueryDetailResponse> => {
+        const res = await api.get<QueryDetailResponse>(API.chatrooms.queryDetail(messageId));
+        return res.data;
+      },
+      enabled: messageId > 0,
     }),
 };
