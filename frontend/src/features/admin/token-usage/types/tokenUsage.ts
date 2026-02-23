@@ -1,0 +1,24 @@
+/** 일자별 토큰 사용 데이터 (bar chart) */
+export interface DailyTokenUsage {
+  date: string;
+  cost: number;
+  model_name: string;
+}
+
+/** 전체 토큰 사용량 추이 (line chart) */
+export interface TotalTokenUsageTrend {
+  date: string;
+  cumulative_tokens: number;
+}
+
+/** 전체 질문 횟수 (bar chart) */
+export interface TotalQuestionCount {
+  date: string;
+  count: number;
+}
+
+/** 나의 토큰 사용 요약 */
+export interface TokenUsageSummary {
+  total_cost: number;
+  status: 'normal' | 'warning' | 'exceeded';
+}
