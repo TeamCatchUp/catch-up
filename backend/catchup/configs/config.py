@@ -21,6 +21,8 @@ class MeiliEnvironment(StrEnum):
 
 class Settings(BaseSettings):
     ENV: Environment = Environment.development
+    
+    LOG_LEVEL: str
 
     DB_DIALECT: str = "postgresql"
     DB_DRIVER: str = "psycopg"  # psycopg3 (langchain-postgres 호환)
