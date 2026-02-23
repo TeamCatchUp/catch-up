@@ -22,3 +22,20 @@ export interface TokenUsageSummary {
   total_cost: number;
   status: 'normal' | 'warning' | 'exceeded';
 }
+
+/** 조직 멤버 정보 */
+export interface OrgMember {
+  id: string;
+  name: string;
+  team: string;
+  position: string;
+  role: string;
+  profileImage?: string;
+}
+
+/** 토큰 사용량 순위 항목 */
+export interface TokenUsageRankingEntry {
+  rank: number;
+  member: OrgMember;
+  cost: number;
+}
