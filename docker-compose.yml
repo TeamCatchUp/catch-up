@@ -14,10 +14,6 @@ services:
       - catchup_net
     environment:
       - ENABLE_NEO4J=${ENABLE_NEO4J:-False}
-      - DB_HOST
-      - DB_USER
-      - DB_PASSWORD
-      - REDIS_URL
 
   redis:
     container_name: catchup_redis
