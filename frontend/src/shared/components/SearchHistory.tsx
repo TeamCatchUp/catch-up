@@ -72,7 +72,7 @@ export function SearchHistory({ querys, isModal = false, onItemClick }: Recently
           <div className="flex flex-col gap-2">
             {section.data.map((item, index) => (
               <Link
-                href={`/chat/${item.session_id}`}
+                href={`/chat/${item.session_id}${item.message_id != null ? `?scrollTo=${item.message_id}` : ''}`}
                 onClick={() => onItemClick?.()}
                 key={`${item.session_id}-${index}`}
                 className="hover:bg-neutral-2 group flex h-10 w-full items-center gap-2 rounded-lg bg-white px-2 py-1 transition-colors"

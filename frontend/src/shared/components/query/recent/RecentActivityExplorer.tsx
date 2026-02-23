@@ -18,6 +18,7 @@ export const RecentActivityExplorer = () => {
       query: item.content,
       session_id: item.session_id,
       date: formatFullDate(item.created_at),
+      message_id: item.id,
     }));
   }, [queriesQuery.data]);
 
