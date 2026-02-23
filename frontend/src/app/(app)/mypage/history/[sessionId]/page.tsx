@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { useParams, useSearchParams } from 'next/navigation';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
@@ -30,16 +30,25 @@ export default function HistoryDetailPage() {
   const sessionId = params.sessionId as string;
   const query = searchParams.get('q');
 
-  // 세션 메시지 로드
-  const messagesQuery = useQuery(chatQueries.sessionMessages(sessionId));
+  // 세션 메시지 로드 — 무한 스크롤로 전체 페이지 자동 로드
+  const messagesQuery = useInfiniteQuery(chatQueries.sessionMessagesInfinite(sessionId));
+
+  // 모든 페이지가 로드될 때까지 자동으로 다음 페이지 fetch
+  useEffect(() => {
+    if (messagesQuery.hasNextPage && !messagesQuery.isFetchingNextPage) {
+      messagesQuery.fetchNextPage();
+    }
+  }, [messagesQuery.hasNextPage, messagesQuery.isFetchingNextPage, messagesQuery.fetchNextPage]);
 
   // 메시지 → QA pair 변환 + 세션 내 이전/다음 계산
   const { currentQA, prevQuery, nextQuery, sources, sourceCount } = useMemo(() => {
-    if (!messagesQuery.data) {
+    const pages = messagesQuery.data?.pages;
+    if (!pages || pages.length === 0) {
       return { currentQA: undefined, prevQuery: null, nextQuery: null, sources: [], sourceCount: 0 };
     }
 
-    const sortedItems = [...messagesQuery.data.items].sort(
+    const allItems = pages.flatMap((page) => page.items);
+    const sortedItems = [...allItems].sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
     const messages = sortedItems.map(toUiMessage);
@@ -58,7 +67,7 @@ export default function HistoryDetailPage() {
       sources: qaSources,
       sourceCount: qaSources.filter((s) => s.is_cited).length,
     };
-  }, [messagesQuery.data, query]);
+  }, [messagesQuery.data?.pages, query]);
 
   // 마크다운 렌더링 준비
   const formattedAnswer = useMemo(
