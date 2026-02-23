@@ -30,3 +30,23 @@ export const STATUS_BADGE_CLASS: Record<string, string> = {
 /** 탭 목록 */
 export const AUDIT_TABS = ['질문', '연동', '계정관리'] as const;
 export type AuditTab = (typeof AUDIT_TABS)[number];
+
+/** 탭 ↔ URL slug 매핑 */
+export type AuditTabSlug = 'question' | 'integration' | 'account';
+
+const TAB_TO_SLUG: Record<AuditTab, AuditTabSlug> = {
+  질문: 'question',
+  연동: 'integration',
+  계정관리: 'account',
+};
+
+const SLUG_TO_TAB: Record<AuditTabSlug, AuditTab> = {
+  question: '질문',
+  integration: '연동',
+  account: '계정관리',
+};
+
+export const DEFAULT_TAB_SLUG: AuditTabSlug = 'question';
+
+export const toTabSlug = (tab: AuditTab): AuditTabSlug => TAB_TO_SLUG[tab];
+export const fromTabSlug = (slug: string): AuditTab => SLUG_TO_TAB[slug as AuditTabSlug] ?? '질문';
