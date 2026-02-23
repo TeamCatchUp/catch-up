@@ -1,3 +1,6 @@
+import type { IntegrationService } from '@/shared/types/integrationService';
+
+import type { IntegrationLogCategory } from '../types/auditIntegrationLog';
 import type { AuditAction, AuditSortKey, AuditStatus } from '../types/auditLog';
 
 /** 정렬 옵션 */
@@ -25,6 +28,21 @@ export const STATUS_LABEL: Record<AuditStatus, string> = {
 export const STATUS_BADGE_CLASS: Record<string, string> = {
   성공: 'bg-green-10 text-green-60',
   실패: 'bg-neutral-2 text-gray-50',
+};
+
+/** 연동 로그 구분 라벨 */
+export const CATEGORY_LABEL: Record<IntegrationLogCategory, string> = {
+  sync: '동기화',
+  api_call: 'API 호출',
+  integration: '연동',
+};
+
+/** 서비스별 리소스 섹션 라벨 */
+export const RESOURCE_LABEL: Record<IntegrationService, string> = {
+  jira: '연동된 Jira Space',
+  github: '연동된 Repository',
+  slack: '연동된 채널',
+  confluence: '연동된 스페이스',
 };
 
 /** 탭 목록 */
