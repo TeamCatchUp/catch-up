@@ -61,12 +61,18 @@ const GithubGuideSection = () => {
       {/* 2. 동기화할 Repository 선택 */}
       <div className="flex flex-col gap-2">
         <h4 className="text-heading-medium text-gray-80">2. 동기화할 Repository 선택</h4>
-        <div className="border-neutral-3 overflow-clip rounded-xl border bg-white px-4 py-2.5">
+        <div className="border-neutral-3 flex flex-col gap-2.5 overflow-clip rounded-xl border bg-white px-4 py-2.5">
           <Image
             src={GITHUB_GUIDE_IMAGES.repository}
             alt="GitHub Repository 선택 화면"
             quality={100}
             className="h-auto w-full"
+          />
+          <Image
+            src={GITHUB_GUIDE_IMAGES.repositoryInstall}
+            alt="GitHub Repository Install 버튼"
+            quality={100}
+            className="h-auto w-[58%]"
           />
         </div>
         <p className="text-label-small text-gray-80">
