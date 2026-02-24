@@ -7,7 +7,8 @@ from catchup.db.user_source_mapping import (
     find_external_user_id_by_email,
     find_premapped_user_by_email
 )
-from catchup.mapping.schemas import OktaUser as OktaUserSchema
+from catchup.db.users import get_user_by_sub
+from catchup.mapping.schemas import OAuthUserSchema
 
 
 logger = logging.getLogger(__name__)
@@ -15,13 +16,13 @@ logger = logging.getLogger(__name__)
 def sync_users_to_pre_mapping_buffer(
     db: Session,
     source_type: SourceType,
-    okta_users: list[OktaUserSchema]
+    oauth_users: list[OAuthUserSchema]
 ) -> dict:
     sync_results = {"success": 0, "failed": 0, "mapping_created": 0, "mapping_updated": 0}
     
-    for user in okta_users:
+    for user in oauth_users:
         email = user.email
-        okta_uid = user.okta_uid
+        sub = user.sub
         display_name = user.name  # 추후 임베딩에 활용되는 이름
         
         if not email:
@@ -39,7 +40,7 @@ def sync_users_to_pre_mapping_buffer(
         
         created = upsert_pre_mapping(
             db,
-            okta_uid=okta_uid,
+            sub=sub,
             email=email,
             name=display_name,
             source_type=source_type,
@@ -60,7 +61,7 @@ def sync_users_to_pre_mapping_buffer(
 
 def upsert_pre_mapping(
     db: Session,
-    okta_uid: str,
+    sub: str,
     email: str,
     name: str,
     source_type: SourceType,
@@ -78,18 +79,23 @@ def upsert_pre_mapping(
         premapped.external_user_identifier = external_user_id
         if name:
             premapped.name = name
-        if okta_uid not in ["FILE_IMPORTED"]:
-            premapped.okta_uid = okta_uid
+        if sub not in ["FILE_IMPORTED"]:
+            premapped.sub = sub
         return False
     
     else:
+        existing = get_user_by_sub(db, sub)
+        is_registered = False
+        if existing:
+            is_registered = True
+                
         new_entry = PreMappingBuffer(
-            okta_uid=okta_uid,
+            sub=sub,
             email=email,
             name=name,
             source_type=source_type,
             external_user_identifier=external_user_id,
-            is_registered=False
+            is_registered=is_registered
         )
         add_new_mapping(db, new_entry)
         return True

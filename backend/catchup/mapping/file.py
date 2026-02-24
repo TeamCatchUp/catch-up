@@ -53,7 +53,7 @@ def process_mapping_file_sync(filename: str, content: bytes) -> dict:
                 
                 is_created = upsert_pre_mapping(
                     db=db,
-                    okta_uid="FILE_IMPORTED",
+                    sub="FILE_IMPORTED",
                     email=company_email,
                     name=full_name,
                     source_type=SourceType.GITHUB,

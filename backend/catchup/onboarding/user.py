@@ -15,7 +15,7 @@ def register_user_from_oauth(
     oauth_user_record = get_oauth_user_with_sub(db, payload.sub)
     
     if not oauth_user_record:
-        raise HTTPException(status_code=404, detail="어드민에 의해 등록된 Okta 유저가 아닙니다.")
+        raise HTTPException(status_code=404, detail="어드민에 의해 등록된 OAuth 유저가 아닙니다.")
     
     if oauth_user_record.user_id is not None:
         raise HTTPException(status_code=400, detail="이미 가입이 완료된 유저입니다.")

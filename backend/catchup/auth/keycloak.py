@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from catchup.auth.schemas import KeycloakUserInfoResponse
 from catchup.configs.config import auth_settings
-from catchup.db.models import OauthUser, UserStatus
+from catchup.db.models import OAuthUser, UserStatus
 from catchup.db.users import get_oauth_user_with_sub
 
 logger = logging.getLogger(__name__)
@@ -79,11 +79,11 @@ class KeycloakOAuthService:
         self,
         db: Session,
         oauth_user: KeycloakUserInfoResponse
-    ) -> OauthUser:
+    ) -> OAuthUser:
         oauth_user_record = get_oauth_user_with_sub(db, oauth_user.sub)
         
         if not oauth_user_record:
-            new_oauth_user = OauthUser(
+            new_oauth_user = OAuthUser(
                 sub=oauth_user.sub,
                 email=oauth_user.email,
                 name=oauth_user.name,

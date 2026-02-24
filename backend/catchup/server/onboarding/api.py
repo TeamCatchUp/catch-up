@@ -21,9 +21,9 @@ router = APIRouter(
     path="",
     response_model=SignUpResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Okta 유저 최초 회원가입 및 정보 매핑",
+    summary="OAuth 유저 최초 회원가입 및 정보 매핑",
 )
-def signup_okta_user(
+def signup_oauth_user(
     payload: UserSignUpRequest,
     pending_user: dict = Depends(get_pending_signup_user),
     db: Session = Depends(get_db)
@@ -54,7 +54,7 @@ def signup_okta_user(
     summary="루트 어드민 온보딩",
     description="루트 어드민이 회사를 등록하고 워크스페이스를 생성한다."
 )
-def signup_root_admin(
+def signup_oauth_admin(
     payload: AdminSignUpRequest,
     pending_user: dict = Depends(get_pending_signup_user),
     db: Session = Depends(get_db)

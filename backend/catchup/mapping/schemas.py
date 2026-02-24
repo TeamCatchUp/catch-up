@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 
-class OktaUser(BaseModel):
+class OAuthUserSchema(BaseModel):
     sub: str
     email: str
     name: str

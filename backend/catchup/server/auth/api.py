@@ -68,7 +68,7 @@ async def oauth2_login():
     path="/oauth/callback",
     description="OAuth2 리다이렉트 URI"
 )
-async def okta_callback(
+async def oauth_callback(
     code: str,
     state: str,
     db: Session = Depends(get_db),

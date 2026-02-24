@@ -3,9 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from catchup.db.models import ConfluenceUser, GitHubUser, JiraUser, OktaUser, PreMappingBuffer, SlackUser, SourceType
-from catchup.mapping.schemas import OktaUser as OktaUserSchema
-
+from catchup.db.models import ConfluenceUser, GitHubUser, JiraUser, OAuthUser, PreMappingBuffer, SlackUser, SourceType
+from catchup.mapping.schemas import OAuthUserSchema
 
 def find_external_user_id_by_email(
     db: Session,
@@ -72,7 +71,10 @@ def find_premapped_name_by_external_user_identifier(
     )
 
 
-def find_premapped_names_by_source_type(db: Session, source_type: SourceType) -> dict[str, str]:
+def find_premapped_names_by_source_type(
+    db: Session,
+    source_type: SourceType
+) -> dict[str, str]:
     """소스 타입별로 external_user_identifier -> 실명 매핑을 조회한다."""
     rows = db.execute(
         select(
@@ -93,18 +95,18 @@ def add_new_mapping(
     return new_mapping
 
 
-def upsert_okta_users(
+def upsert_oauth_users(
     db: Session,
-    users: list[OktaUserSchema]
+    users: list[OAuthUserSchema]
 ):
     """PostgreSQL의 ON CONFLICT를 이용한 Upsert 로직"""
     values = [user.model_dump() for user in users]
     
-    stmt = insert(OktaUser).values(values)
+    stmt = insert(OAuthUser).values(values)
     
-    # okta_uid가 충돌할 경우(이미 존재할 경우) 업데이트
+    # sub가 충돌할 경우(이미 존재할 경우) 업데이트
     update_stmt = stmt.on_conflict_do_update(
-        index_elements=['okta_uid'],
+        index_elements=['sub'],
         set_={
             "name": stmt.excluded.name,
             "email": stmt.excluded.email,

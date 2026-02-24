@@ -49,7 +49,7 @@ def register_admin_from_oauth(db: Session, data: AdminSignUpSchema) -> User:
         )
         db.add(user_workspace)
 
-        # OktaUser에 CatchUp user_id 업데이트
+        # OAuthUser CatchUp user_id 업데이트
         oauth_user_record.user_id = new_user.id
 
         db.commit()

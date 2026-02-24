@@ -125,7 +125,6 @@ class Settings(BaseSettings):
     CONFLUENCE_SYNC_MAX_CONCURRENT_REQUEST: int = 5
     CONFLUENCE_SYNC_RATE_LIMIT_DELAY: float = 0.1
     
-    
     # Neo4j
     NEO4J_USER:Optional[str] 
     NEO4J_PASSWORD: Optional[str]
@@ -196,13 +195,6 @@ class AuthSettings(BaseSettings):
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
-    
-    # Okta (Deprecated)
-    OKTA_DOMAIN: str
-    OKTA_CLIENT_ID: str
-    OKTA_CLIENT_SECRET: str
-    OKTA_REDIRECT_URI: str
-    OKTA_API_KEY: str
     
     # Keycloak
     KC_PUBLIC_URL: str

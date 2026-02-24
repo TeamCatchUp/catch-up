@@ -12,9 +12,9 @@ from catchup.connectors.github.schemas import(
      IssueWebhookPayload, PullRequestWebhookPayload
 )
 from catchup.db.knowledge_source import add_knowledge_source
-from catchup.db.user_source_mapping import upsert_okta_users
+from catchup.db.user_source_mapping import upsert_oauth_users
 from catchup.db.workspaces import get_workspace_limit_one
-from catchup.mapping.okta import OktaClient
+from catchup.mapping.oauth import OAuthClient
 from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
 from catchup.utils.webhook_buffer import get_webhook_buffer
 from catchup.connectors.github.factory import create_github_ingestion_service
@@ -166,23 +166,23 @@ async def _sync_installation_metadata_and_map_user(installation_id: int) -> None
     
     await _sync_installation_metadata(installation_id)
 
-    logger.info(f"[OKTA][MAPPING] Starting Okta sync and Github mapping for installation_id={installation_id}")
+    logger.info(f"[OAuth][MAPPING] Starting OAuth sync and Github mapping for installation_id={installation_id}")
 
-    # Okta Users 기반 GitHub Users 매핑
+    # OAuth Users 기반 GitHub Users 매핑
     try:
-        okta_client = OktaClient()
-        okta_users = await okta_client.get_parsed_users()
+        oauth_client = OAuthClient()
+        oauth_users = await oauth_client.get_parsed_users()
         
-        if okta_users:
+        if oauth_users:
             def _mapping_task_sync():
                 with SessionLocal() as db:
                     try:
-                        upsert_okta_users(db, okta_users)
+                        upsert_oauth_users(db, oauth_users)
                         
                         mapping_result = sync_users_to_pre_mapping_buffer(
                             db=db,
                             source_type=SourceType.GITHUB,
-                            okta_users=okta_users
+                            oauth_users=oauth_users
                         )
                         
                         db.commit() 
@@ -194,13 +194,13 @@ async def _sync_installation_metadata_and_map_user(installation_id: int) -> None
                         raise
                 
             mapping_result = await run_in_threadpool(_mapping_task_sync)
-            logger.info(f"[OKTA][MAPPING] Mapping completed: {mapping_result}")
+            logger.info(f"[OAuth][MAPPING] Mapping completed: {mapping_result}")
         else:
-            logger.warning("[OKTA][MAPPING] No active users found in Okta. Skipping mapping.")
+            logger.warning("[OAuth][MAPPING] No active users found in OAuth. Skipping mapping.")
             
     except Exception as e:
         logger.error(
-            f"[GITHUB][AUTH] Okta mapping failed after GitHub sync: "
+            f"[GITHUB][AUTH] OAuth mapping failed after GitHub sync: "
             f"installation_id={installation_id}, error={e}",
             exc_info=True
         )

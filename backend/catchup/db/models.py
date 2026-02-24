@@ -32,7 +32,7 @@ class JobLevel(StrEnum):
 
 
 class UserStatus(StrEnum):
-    NEW = "new"  # Okta 로그인만 마친 상태
+    NEW = "new"  # Oauth 로그인만 마친 상태
     ACTIVE = "active"  # 회원가입 후 승인 완료 상태
     INACTIVE = "inactive"  # 관리자에 의해 비활성화된 상태
     DELETED = "deleted" # 관리자에 의해 삭제된 상태
@@ -111,7 +111,7 @@ class User(Base):
         cascade="all, delete-orphan"
     )
     workspaces: Mapped[list["Workspace"]] = association_proxy("workspace_links", "workspace")
-    oauth_user: Mapped["OauthUser"] = relationship(back_populates="user")
+    oauth_user: Mapped["OAuthUser"] = relationship(back_populates="user")
 
 
 class InactiveUser(Base):
@@ -182,9 +182,9 @@ class PreMappingBuffer(Base):
     
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     
-    okta_uid: Mapped[str] = mapped_column(String(128), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), index=True, comment="Catch Up 사용자 이메일 (예: Okta 이메일)")
-    name: Mapped[str] = mapped_column(String(100), comment="Okta에 등록된 임직원 실명") 
+    sub: Mapped[str] = mapped_column(String(128), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), index=True, comment="Catch Up 사용자 이메일 (예: Keycloak 이메일)")
+    name: Mapped[str] = mapped_column(String(100), comment="IDP에 등록된 임직원 실명") 
     
     source_type: Mapped[SourceType] = mapped_column(String(20), nullable=False)
     
@@ -203,13 +203,9 @@ class PreMappingBuffer(Base):
     __table_args__ = (
         UniqueConstraint("email", "source_type", name="uq_email_source_buffer"),
     )
-    
-class OktaUser(Base):
-    __tablename__ = "okta_users"
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
 
-class OauthUser(Base):
+class OAuthUser(Base):
     __tablename__ = "oauth_users"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
