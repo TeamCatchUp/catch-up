@@ -12,6 +12,7 @@ services:
       - ./backend/pyproject.toml:/app/pyproject.toml
       - ./backend/uv.lock:/app/uv.lock
       - ./backend/.secrets:/app/.secrets
+      - ${HOME}/.aws:/root/.aws:ro
     env_file:
       - .env
     environment:

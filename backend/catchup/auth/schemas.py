@@ -11,18 +11,14 @@ class GoogleUserInfoResponse(BaseModel):
     family_name: Optional[str] = None
     picture: Optional[str] = None
     provider_id: str
-    
 
-# TODO: 공통 필드 추상화
-class OktaUserInfoResponse(BaseModel):
+
+class KeycloakUserInfoResponse(BaseModel):
     sub: str
     name: str
     email: EmailStr
-    preferred_username: Optional[str] = None
-    given_name: Optional[str] = None
-    family_name: Optional[str] = None
     picture: Optional[str] = None
-
+    
     @property
     def provider_id(self) -> str:
         return self.sub

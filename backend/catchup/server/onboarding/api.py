@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 from catchup.auth.dependencies import get_current_user, get_pending_signup_user
 from catchup.db.dependencies import get_db
 from catchup.db.models import ConfluenceUser, GitHubUser, JiraUser, KnowledgeSource, PreMappingBuffer, SlackUser, SourceType, User
-from catchup.onboarding.admin import register_admin_from_okta
+from catchup.onboarding.admin import register_admin_from_oauth
 from catchup.onboarding.schemas import AdminSignUpRequest, AdminSignUpSchema, CandidateItem, MappingCandidates, UserSignUpRequest, SignUpResponse, UserSignUpSchema
-from catchup.onboarding.user import register_user_from_okta
+from catchup.onboarding.user import register_user_from_oauth
 from catchup.server.state import state
 
 
@@ -21,9 +21,9 @@ router = APIRouter(
     path="",
     response_model=SignUpResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Okta 유저 최초 회원가입 및 정보 매핑",
+    summary="OAuth 유저 최초 회원가입 및 정보 매핑",
 )
-def signup_okta_user(
+def signup_oauth_user(
     payload: UserSignUpRequest,
     pending_user: dict = Depends(get_pending_signup_user),
     db: Session = Depends(get_db)
@@ -35,14 +35,14 @@ def signup_okta_user(
         )
 
     signup_data = UserSignUpSchema(
-        okta_uid=pending_user["okta_uid"],
+        sub=pending_user["sub"],
         email=pending_user["email"],
         name=payload.name,
         department=payload.department,
         job_level=payload.job_level,
     )
     
-    new_user = register_user_from_okta(db, signup_data)
+    new_user = register_user_from_oauth(db, signup_data)
 
     return new_user
 
@@ -54,7 +54,7 @@ def signup_okta_user(
     summary="루트 어드민 온보딩",
     description="루트 어드민이 회사를 등록하고 워크스페이스를 생성한다."
 )
-def signup_root_admin(
+def signup_oauth_admin(
     payload: AdminSignUpRequest,
     pending_user: dict = Depends(get_pending_signup_user),
     db: Session = Depends(get_db)
@@ -66,7 +66,7 @@ def signup_root_admin(
         )
     
     admin_data = AdminSignUpSchema(
-        okta_uid=pending_user["okta_uid"],
+        sub=pending_user["sub"],
         email=pending_user["email"],
         name=payload.name,
         job_level=payload.job_level,
@@ -75,7 +75,7 @@ def signup_root_admin(
         workspace_name=payload.workspace_name
     )
     
-    new_admin = register_admin_from_okta(db, admin_data)
+    new_admin = register_admin_from_oauth(db, admin_data)
     
     state.is_admin_initiated = True
     

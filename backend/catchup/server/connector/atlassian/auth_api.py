@@ -37,9 +37,9 @@ from catchup.db.engine import SessionLocal
 from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.models import KnowledgeSource, SourceType
-from catchup.db.user_source_mapping import upsert_okta_users
+from catchup.db.user_source_mapping import upsert_oauth_users
 from catchup.db.workspaces import get_workspace_limit_one
-from catchup.mapping.okta import OktaClient
+from catchup.mapping.oauth import OAuthClient
 from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
 from catchup.utils.redis import store_oauth_state
 
@@ -113,7 +113,7 @@ async def atlassian_oauth_callback(
         background_tasks.add_task(_sync_confluence_metadata, cloud_id)
         
     if result.jira_targets or result.confluence_targets:
-        background_tasks.add_task(_sync_okta_users_and_map_all_sources)
+        background_tasks.add_task(_sync_oauth_users_and_map_all_sources)
 
     logger.info(
         f"[ATLASSIAN][AUTH] 설치 완료: {len(result.resources)}개 사이트 연결 (Jira + Confluence)"
@@ -200,24 +200,24 @@ async def _register_knowledge_source(cloud_id: str, source_type: SourceType):
     await run_in_threadpool(_sync_task)
 
 
-async def _sync_okta_users_and_map_all_sources() -> None:
+async def _sync_oauth_users_and_map_all_sources() -> None:
     """Atlassian 메타데이터 fetching 이후 사용자 매핑까지 수행하는 Wrapper 함수 (임시)"""
     
-    logger.info("[MAPPING] Starting integrated Okta sync and multi-source mapping")
+    logger.info("[MAPPING] Starting integrated Oauth sync and multi-source mapping")
     
-    # Okta Users 기반 Atlassian Users 매핑
+    # OAuth Users 기반 Atlassian Users 매핑
     try:
-        okta_client = OktaClient()
-        okta_users = await okta_client.get_parsed_users()
+        oauth_client = OAuthClient()
+        oauth_users = await oauth_client.get_parsed_users()
         
-        if not okta_users:
-            logger.warning("[MAPPING] No active users found in Okta. Skipping.")
+        if not oauth_users:
+            logger.warning("[MAPPING] No active users found in OAuth. Skipping.")
             return
         
         def _mapping_task_sync():
             with SessionLocal() as db:
                 try:
-                    upsert_okta_users(db, okta_users)
+                    upsert_oauth_users(db, oauth_users)
                     
                     sources_to_map = [SourceType.JIRA, SourceType.CONFLUENCE]
                     results = {}
@@ -225,7 +225,7 @@ async def _sync_okta_users_and_map_all_sources() -> None:
                         results[source_type.value] = sync_users_to_pre_mapping_buffer(
                             db=db,
                             source_type=source_type,
-                            okta_users=okta_users
+                            oauth_users=oauth_users
                         )
                     db.commit()
                     return results
@@ -236,7 +236,7 @@ async def _sync_okta_users_and_map_all_sources() -> None:
                     raise
             
         combined_mapping_result = await run_in_threadpool(_mapping_task_sync)
-        logger.info(f"[OKTA][MAPPING] Mapping completed: {combined_mapping_result}")
+        logger.info(f"[OAuth][MAPPING] Mapping completed: {combined_mapping_result}")
             
     except Exception as e:
         logger.error(f"[MAPPING] Integrated mapping failed: {e}", exc_info=True)

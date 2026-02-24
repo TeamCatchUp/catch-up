@@ -48,7 +48,7 @@ class MappingCandidates(BaseModel):
 
 # Internal
 class BaseSignUpSchema(BaseModel):
-    okta_uid: str
+    sub: str
     email: str
     name: str
     job_level: JobLevel

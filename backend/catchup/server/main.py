@@ -35,11 +35,15 @@ from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.settings.api import router as settings_router
 
 # logging 설정
+log_level = logging.INFO
+if settings.LOG_LEVEL == "debug":
+    log_level = logging.DEBUG
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format="(%(asctime)s) %(name)s.%(funcName)s:%(lineno)d: [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
-) 
+)
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -55,6 +59,7 @@ async def lifespan(app: FastAPI):
 
         logger.info(f"Meilisearch HTTP address: {settings.MEILI_HTTP_ADDR}")
         logger.info(f"MeilSsearch environment: {settings.MEILI_ENVIRONMENT}")
+        logger.info(f"Log level: {settings.LOG_LEVEL}")
 
         # Fastapi 서버와 Meilisearch 운영 환경이 다를 경우 인덱스 초기화 과정 생략
         if settings.ENV != settings.MEILI_ENVIRONMENT:
@@ -257,9 +262,9 @@ app.add_middleware(
 )
 
 # 헬스 체크
-@app.get("/")
+@app.get("/api/v1/health")
 async def health_check():
-    return {"status": "ok", "message": "RAG Server is running."}
+    return {"status": "ok", "message": "Catch Up backend is running."}
 
 
 # 응답 시간 추출

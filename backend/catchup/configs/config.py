@@ -21,6 +21,8 @@ class MeiliEnvironment(StrEnum):
 
 class Settings(BaseSettings):
     ENV: Environment = Environment.development
+    
+    LOG_LEVEL: str
 
     DB_DIALECT: str = "postgresql"
     DB_DRIVER: str = "psycopg"  # psycopg3 (langchain-postgres 호환)
@@ -123,7 +125,6 @@ class Settings(BaseSettings):
     CONFLUENCE_SYNC_MAX_CONCURRENT_REQUEST: int = 5
     CONFLUENCE_SYNC_RATE_LIMIT_DELAY: float = 0.1
     
-    
     # Neo4j
     NEO4J_USER:Optional[str] 
     NEO4J_PASSWORD: Optional[str]
@@ -151,12 +152,13 @@ class Settings(BaseSettings):
     WEBHOOK_ENABLE_AUTO_SYNC: bool = True
     
     # AWS
-    AWS_ACCESS_KEY_ID: str
-    AWS_SECRET_ACCESS_KEY: str
+    AWS_ACCESS_KEY_ID: Optional[str] = None
+    AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    AWS_CREDENTIALS_PROFILE_NAME: Optional[str] = None
 
     # AWS Bedrock
     # Bedrock API Key
-    AWS_BEARER_TOKEN_BEDROCK: str
+    AWS_BEARER_TOKEN_BEDROCK: Optional[str] = None
     AWS_REGION: str
     AWS_BEDROCK_EMBEDDING_MODEL: str
     AWS_BEDROCK_SMALL_MODEL: str
@@ -194,12 +196,13 @@ class AuthSettings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
     
-    # Okta
-    OKTA_DOMAIN: str
-    OKTA_CLIENT_ID: str
-    OKTA_CLIENT_SECRET: str
-    OKTA_REDIRECT_URI: str
-    OKTA_API_KEY: str
+    # Keycloak
+    KC_PUBLIC_URL: str
+    KC_INTERNAL_URL: str
+    KC_REALM: str
+    KC_CLIENT_ID: str
+    KC_CLIENT_SECRET: str
+    KC_REDIRECT_URI: str
 
     FRONTEND_REDIRECT_URI: str
 

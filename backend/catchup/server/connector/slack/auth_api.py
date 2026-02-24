@@ -17,11 +17,11 @@ from catchup.connectors.slack.schemas import (
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
 from catchup.db.knowledge_source import add_knowledge_source
-from catchup.db.models import KnowledgeSource, SourceType, Workspace
+from catchup.db.models import KnowledgeSource, SourceType
 from catchup.db.slack import oauth_repository as slack_crud
-from catchup.db.user_source_mapping import upsert_okta_users
+from catchup.db.user_source_mapping import upsert_oauth_users
 from catchup.db.workspaces import get_workspace_limit_one
-from catchup.mapping.okta import OktaClient
+from catchup.mapping.oauth import OAuthClient
 from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
 from catchup.connectors.slack.factory import create_slack_ingestion_service
@@ -239,23 +239,23 @@ async def _sync_workspace_metadata_and_map_user(team_id: str) -> None:
     
     await _sync_workspace_metadata(team_id)
     
-    logger.info(f"[OKTA][MAPPING] Starting Okta sync and Slack mapping for team_id={team_id}")
+    logger.info(f"[OAuth][MAPPING] Starting OAuth sync and Slack mapping for team_id={team_id}")
     
-     # Okta Users 기반 Slack Users 매핑
+     # OAuth Users 기반 Slack Users 매핑
     try:
-        okta_client = OktaClient()
-        okta_users = await okta_client.get_parsed_users()
+        oauth_client = OAuthClient()
+        oauth_users = await oauth_client.get_parsed_users()
         
-        if okta_users:
+        if oauth_users:
             def _mapping_task_sync():
                 with SessionLocal() as db:
                     try:
-                        upsert_okta_users(db, okta_users)
+                        upsert_oauth_users(db, oauth_users)
                         
                         mapping_result = sync_users_to_pre_mapping_buffer(
                             db=db,
                             source_type=SourceType.SLACK,
-                            okta_users=okta_users
+                            oauth_users=oauth_users
                         )
                         
                         db.commit() 
@@ -267,13 +267,13 @@ async def _sync_workspace_metadata_and_map_user(team_id: str) -> None:
                         raise
                 
             mapping_result = await run_in_threadpool(_mapping_task_sync)
-            logger.info(f"[OKTA][MAPPING] Mapping completed: {mapping_result}")
+            logger.info(f"[OAuth][MAPPING] Mapping completed: {mapping_result}")
         else:
-            logger.warning("[OKTA][MAPPING] No active users found in Okta. Skipping mapping.")
+            logger.warning("[OAuth][MAPPING] No active users found in OAuth. Skipping mapping.")
             
     except Exception as e:
         logger.error(
-            f"[SLACK][AUTH] Okta mapping failed after Slack sync: "
+            f"[SLACK][AUTH] OAuth mapping failed after Slack sync: "
             f"team_id={team_id}, error={e}",
             exc_info=True
         )
