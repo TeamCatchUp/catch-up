@@ -40,9 +40,7 @@ const ApiCallDetail = ({ log }: { log: AuditIntegrationLog }) => {
             <div className="flex flex-col gap-2">
               <h3 className="text-heading-small text-gray-70">수신 데이터</h3>
               <div className="bg-neutral-1 border-neutral-2 max-h-80 overflow-y-auto rounded-xl border px-5 py-4">
-                <pre className="text-label-small text-gray-80 whitespace-pre-wrap break-all">
-                  {log.receivedData}
-                </pre>
+                <pre className="text-label-small text-gray-80 break-all whitespace-pre-wrap">{log.receivedData}</pre>
               </div>
             </div>
           )}

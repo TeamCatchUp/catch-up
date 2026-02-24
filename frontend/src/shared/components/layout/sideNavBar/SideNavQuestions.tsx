@@ -32,9 +32,7 @@ export default function SideNavQuestions() {
   const { togglePanel } = useSidebarStore();
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteQuery(
-    chatQueries.recentRoomsInfinite(),
-  );
+  const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteQuery(chatQueries.recentRoomsInfinite());
 
   const recentChatrooms = useMemo<ChatRoomQuery[]>(() => {
     const items = data?.pages.flatMap((page) => page.items) ?? [];
@@ -94,9 +92,7 @@ export default function SideNavQuestions() {
             </Link>
           );
         })}
-        {isFetchingNextPage && (
-          <div className="text-body-xsmall text-gray-30 py-2 text-center">불러오는 중...</div>
-        )}
+        {isFetchingNextPage && <div className="text-body-xsmall text-gray-30 py-2 text-center">불러오는 중...</div>}
         <div ref={sentinelRef} className="h-1" />
       </div>
     </div>

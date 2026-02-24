@@ -148,9 +148,7 @@ export const loadLatestSessionPage = async ({
   initialQuery,
 }: LoadSessionChatDataOptions): Promise<LatestPageResult> => {
   // page 1을 먼저 가져와서 total 확인
-  const firstResponse = await queryClient.fetchQuery(
-    chatQueries.sessionMessages(sessionId, 1, MESSAGE_PAGE_SIZE),
-  );
+  const firstResponse = await queryClient.fetchQuery(chatQueries.sessionMessages(sessionId, 1, MESSAGE_PAGE_SIZE));
 
   const total = firstResponse.total;
   const totalPages = Math.max(1, Math.ceil(total / MESSAGE_PAGE_SIZE));
@@ -198,9 +196,7 @@ export const loadPreviousSessionPage = async ({
   sessionId: string;
   page: number;
 }): Promise<Message[]> => {
-  const response = await queryClient.fetchQuery(
-    chatQueries.sessionMessages(sessionId, page, MESSAGE_PAGE_SIZE),
-  );
+  const response = await queryClient.fetchQuery(chatQueries.sessionMessages(sessionId, page, MESSAGE_PAGE_SIZE));
 
   return sortItems(response.items).map(toUiMessage);
 };

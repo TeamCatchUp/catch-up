@@ -15,9 +15,9 @@ interface TokenUsageRankingListProps {
 
 export default function TokenUsageRankingList({ data }: TokenUsageRankingListProps) {
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-neutral-3 bg-white">
+    <div className="border-neutral-3 flex h-full flex-col overflow-hidden rounded-xl border bg-white">
       {/* 헤더 */}
-      <div className="rounded-md bg-neutral-1 px-5 py-1.5">
+      <div className="bg-neutral-1 rounded-md px-5 py-1.5">
         <span className="text-heading-small text-gray-70">토큰 사용량 순위</span>
       </div>
 
@@ -26,7 +26,7 @@ export default function TokenUsageRankingList({ data }: TokenUsageRankingListPro
         {data.map((entry, index) => (
           <div
             key={entry.member.id}
-            className={`flex items-center gap-3 px-5 py-3 ${index < data.length - 1 ? 'border-b border-neutral-3' : ''}`}
+            className={`flex items-center gap-3 px-5 py-3 ${index < data.length - 1 ? 'border-neutral-3 border-b' : ''}`}
           >
             {/* 순위 */}
             <span className="text-body-small w-5 shrink-0 text-center text-gray-50">{entry.rank}</span>
@@ -41,19 +41,19 @@ export default function TokenUsageRankingList({ data }: TokenUsageRankingListPro
                 className="size-7.5 shrink-0 rounded-full object-cover"
               />
             ) : (
-              <DefaultProfile className="size-7.5 shrink-0 rounded-full border border-neutral-2 text-gray-30" />
+              <DefaultProfile className="border-neutral-2 text-gray-30 size-7.5 shrink-0 rounded-full border" />
             )}
 
             {/* 이름 */}
-            <span className="text-body-small w-15.5 shrink-0 truncate text-gray-80">{entry.member.name}</span>
+            <span className="text-body-small text-gray-80 w-15.5 shrink-0 truncate">{entry.member.name}</span>
 
             {/* 팀 태그 */}
-            <Badge variant="success" size="sm" className="shrink-0 rounded-md2 px-1.5 py-0.5">
+            <Badge variant="success" size="sm" className="rounded-md2 shrink-0 px-1.5 py-0.5">
               {entry.member.team}
             </Badge>
 
             {/* 비용 (우측 정렬) */}
-            <span className="text-body-small ml-auto shrink-0 text-right text-gray-80">{entry.cost.toFixed(1)} $</span>
+            <span className="text-body-small text-gray-80 ml-auto shrink-0 text-right">{entry.cost.toFixed(1)} $</span>
           </div>
         ))}
       </div>

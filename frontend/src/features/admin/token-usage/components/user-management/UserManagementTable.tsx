@@ -30,9 +30,9 @@ interface UserManagementTableProps {
 
 export default function UserManagementTable({ data, onToggleToken }: UserManagementTableProps) {
   return (
-    <div className="overflow-hidden rounded-xl border border-neutral-3 bg-white">
+    <div className="border-neutral-3 overflow-hidden rounded-xl border bg-white">
       {/* 헤더 */}
-      <div className="text-heading-small grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center bg-neutral-1 px-5 py-1.5 text-gray-70">
+      <div className="text-heading-small bg-neutral-1 text-gray-70 grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center px-5 py-1.5">
         <span>이름</span>
         <span>사용량</span>
         <span>직급</span>
@@ -44,7 +44,7 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
       {data.map((member) => (
         <div
           key={member.id}
-          className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center border-t border-neutral-3 px-5 py-3"
+          className="border-neutral-3 grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center border-t px-5 py-3"
         >
           {/* 이름 */}
           <div className="flex items-center gap-2.5">
@@ -57,12 +57,12 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
                 className="size-7.5 shrink-0 rounded-full object-cover"
               />
             ) : (
-              <DefaultProfile className="size-7.5 shrink-0 rounded-full border border-neutral-2 text-gray-30" />
+              <DefaultProfile className="border-neutral-2 text-gray-30 size-7.5 shrink-0 rounded-full border" />
             )}
-            <span className="text-body-small truncate text-gray-80">{member.name}</span>
+            <span className="text-body-small text-gray-80 truncate">{member.name}</span>
             {!member.tokenEnabled && (
-              <div className="flex shrink-0 items-center gap-0.5 rounded-md2 bg-pink-5 px-1.5 py-0.5">
-                <IconError className="size-3.5 text-pink-60" />
+              <div className="rounded-md2 bg-pink-5 flex shrink-0 items-center gap-0.5 px-1.5 py-0.5">
+                <IconError className="text-pink-60 size-3.5" />
                 <span className="text-body-xsmall text-pink-60">이용 중지</span>
               </div>
             )}
@@ -73,7 +73,9 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
 
           {/* 직급 */}
           <div>
-            <span className={`${TAG_BASE} ${POSITION_BADGE_CLASS[member.position] ?? 'bg-neutral-2 text-gray-50'}`}>{member.position}</span>
+            <span className={`${TAG_BASE} ${POSITION_BADGE_CLASS[member.position] ?? 'bg-neutral-2 text-gray-50'}`}>
+              {member.position}
+            </span>
           </div>
 
           {/* 부서 */}

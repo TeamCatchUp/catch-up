@@ -76,9 +76,7 @@ const SessionQuestionsModal = ({ sessionId, onClose, onSelect }: SessionQuestion
           ) : (
             <div className="text-body-small text-gray-40 py-10 text-center">질문 내역이 없습니다.</div>
           )}
-          {isFetchingNextPage && (
-            <div className="text-body-small text-gray-40 py-2 text-center">불러오는 중...</div>
-          )}
+          {isFetchingNextPage && <div className="text-body-small text-gray-40 py-2 text-center">불러오는 중...</div>}
           <div ref={sentinelRef} className="h-1" />
         </div>
       </div>

@@ -41,9 +41,7 @@ const AuditLogFilterBar = ({
             type="button"
             className="border-neutral-3 flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border bg-white px-2.5 py-2"
           >
-            <span className="text-body-small text-gray-70">
-              {SORT_OPTIONS.find((o) => o.key === sortKey)?.label}
-            </span>
+            <span className="text-body-small text-gray-70">{SORT_OPTIONS.find((o) => o.key === sortKey)?.label}</span>
             <IconDropdownDown className="size-4.5 text-gray-50" />
           </button>
         </DropdownMenuTrigger>

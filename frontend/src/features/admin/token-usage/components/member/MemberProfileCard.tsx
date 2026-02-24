@@ -28,7 +28,7 @@ export default function MemberProfileCard({ members, selectedMemberId, onSelectM
   );
 
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-neutral-3 bg-white px-6 py-5">
+    <div className="border-neutral-3 flex flex-col gap-4 rounded-2xl border bg-white px-6 py-5">
       {/* 드롭다운 */}
       <FilterDropdown options={memberOptions} value={selectedMemberId} onChange={onSelectMember} />
 
@@ -46,15 +46,15 @@ export default function MemberProfileCard({ members, selectedMemberId, onSelectM
                 className="size-17.5 shrink-0 rounded-full object-cover"
               />
             ) : (
-              <DefaultProfile className="size-17.5 shrink-0 rounded-full border border-neutral-2 text-gray-30" />
+              <DefaultProfile className="border-neutral-2 text-gray-30 size-17.5 shrink-0 rounded-full border" />
             )}
 
             {/* 이름 + 상태 태그 + 팀/직책 */}
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2.5">
                 <span className="text-heading-large text-gray-80">{selectedMember.name}</span>
-                <div className="flex items-center gap-1 rounded-md2 bg-pink-5 px-1.5 py-0.5">
-                  <IconError className="size-4 text-pink-60" />
+                <div className="rounded-md2 bg-pink-5 flex items-center gap-1 px-1.5 py-0.5">
+                  <IconError className="text-pink-60 size-4" />
                   <span className="text-body-xsmall text-pink-60">이용 중지</span>
                 </div>
               </div>

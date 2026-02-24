@@ -66,7 +66,7 @@ const RagHeader = ({ title, sessionId }: RagHeaderProps) => {
           <ArrowRight2 className="h-5 w-5 text-gray-50" />
           <button
             onClick={handleTitleClick}
-            className="text-heading-small text-gray-80! max-w-50 cursor-pointer truncate px-2 py-1 hover:bg-neutral-2 rounded-lg transition-colors"
+            className="text-heading-small text-gray-80! hover:bg-neutral-2 max-w-50 cursor-pointer truncate rounded-lg px-2 py-1 transition-colors"
           >
             {title}
           </button>

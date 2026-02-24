@@ -15,15 +15,21 @@ import type { AuditIntegrationLog } from '../../types/auditIntegrationLog';
 import { formatDate } from '../../utils/formatDate';
 import AuditLogFilterBar from '../AuditLogFilterBar';
 import ApiCallDetail from '../integration/ApiCallDetail';
-import { getServiceIconCls,ServiceIcon } from '../integration/helpers';
+import { getServiceIconCls, ServiceIcon } from '../integration/helpers';
 import SyncIntegrationDetail from '../integration/SyncIntegrationDetail';
 
 /** 연동 감사 로그 섹션 */
 const IntegrationLogSection = () => {
   const { data: logs = [] } = useQuery(auditLogsQueries.integrations());
 
-  const { sort: sortKey, setSort: setSortKey, searchTerm, setSearchTerm, dateRange, setDateRange } =
-    useAuditIntegrationFilterStore();
+  const {
+    sort: sortKey,
+    setSort: setSortKey,
+    searchTerm,
+    setSearchTerm,
+    dateRange,
+    setDateRange,
+  } = useAuditIntegrationFilterStore();
   const [activeKey, setActiveKey] = useState<string | null>(null);
 
   /* 검색 + 날짜 범위 필터 + 정렬 */
@@ -133,11 +139,7 @@ const IntegrationLogSection = () => {
                           badgeCls,
                         )}
                       >
-                        {isSuccess ? (
-                          <IconCheckCircle className="size-4" />
-                        ) : (
-                          <IconDelete2 className="size-4" />
-                        )}
+                        {isSuccess ? <IconCheckCircle className="size-4" /> : <IconDelete2 className="size-4" />}
                         {statusLabel}
                       </span>
                     </div>

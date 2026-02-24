@@ -76,8 +76,7 @@ const GithubGuideSection = () => {
           />
         </div>
         <p className="text-label-small text-gray-80">
-          권한이 확인된 Repository 목록 중, 팀의 지식으로 활용할 곳만 최종 선택합니다.{' '}
-          <br />
+          권한이 확인된 Repository 목록 중, 팀의 지식으로 활용할 곳만 최종 선택합니다. <br />
           명시적으로 선택하지 않은 공간의 데이터는 절대 접근하지 않습니다.
         </p>
       </div>

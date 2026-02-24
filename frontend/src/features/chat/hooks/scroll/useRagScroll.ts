@@ -33,7 +33,11 @@ const OBSERVER_THRESHOLDS = [0, 0.15, 0.3, 0.5, 0.7, 1.0];
 const HYSTERESIS_PX = 48;
 const MIN_ACTIVE_RATIO = 0.15;
 
-export const useRagScroll = ({ messages, scrollToMessageId, onScrollToComplete }: UseRagScrollOptions): UseRagScrollReturn => {
+export const useRagScroll = ({
+  messages,
+  scrollToMessageId,
+  onScrollToComplete,
+}: UseRagScrollOptions): UseRagScrollReturn => {
   const qaPairs = useMemo(() => extractQAPairs(messages), [messages]);
   const qaRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);

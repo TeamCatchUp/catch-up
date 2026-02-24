@@ -24,7 +24,8 @@ const SLUG_TO_TAB: Record<TokenUsageTabSlug, TokenUsageTab> = {
 export const DEFAULT_TAB_SLUG: TokenUsageTabSlug = 'my-usage';
 
 export const toTabSlug = (tab: TokenUsageTab): TokenUsageTabSlug => TAB_TO_SLUG[tab];
-export const fromTabSlug = (slug: string): TokenUsageTab => SLUG_TO_TAB[slug as TokenUsageTabSlug] ?? '나의 토큰 사용량';
+export const fromTabSlug = (slug: string): TokenUsageTab =>
+  SLUG_TO_TAB[slug as TokenUsageTabSlug] ?? '나의 토큰 사용량';
 
 /** 상태 Badge 매핑 */
 export const STATUS_CONFIG: Record<

@@ -53,7 +53,7 @@ export default function MyTokenUsageSection() {
           <span className="text-heading-small text-gray-50">전체 사용 토큰량</span>
           <div className="flex items-center gap-3">
             <span className="text-heading-xlarge text-gray-80">{filteredTotalCost.toFixed(2)} $</span>
-            <Badge variant={statusConfig.variant} size="sm" className="gap-1 rounded-md2 py-0.5">
+            <Badge variant={statusConfig.variant} size="sm" className="rounded-md2 gap-1 py-0.5">
               <IconCheckCircle className="size-4" aria-hidden="true" />
               {statusConfig.label}
             </Badge>

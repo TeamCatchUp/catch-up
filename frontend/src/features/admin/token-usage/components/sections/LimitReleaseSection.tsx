@@ -26,10 +26,7 @@ const LimitReleaseSection = () => {
   const [approveAllDialogOpen, setApproveAllDialogOpen] = useState(false);
 
   /* 처리되지 않은 요청만 표시 */
-  const pendingRequests = useMemo(
-    () => requests.filter((r) => !processedIds.has(r.id)),
-    [requests, processedIds],
-  );
+  const pendingRequests = useMemo(() => requests.filter((r) => !processedIds.has(r.id)), [requests, processedIds]);
 
   /* 테이블 행 변환 */
   const tableRows: LimitReleaseTableRow[] = useMemo(
@@ -47,8 +44,7 @@ const LimitReleaseSection = () => {
   );
 
   /* 선택된 요청 */
-  const selectedRequest: LimitReleaseRequest | null =
-    pendingRequests.find((r) => r.id === activeKey) ?? null;
+  const selectedRequest: LimitReleaseRequest | null = pendingRequests.find((r) => r.id === activeKey) ?? null;
 
   const handleApprove = useCallback((id: string, grantAmount: number) => {
     setProcessedIds((prev) => new Set(prev).add(id));
@@ -182,12 +178,8 @@ const LimitReleaseSection = () => {
 
                       {/* 사용량 + 추가 신청량 */}
                       <div className="flex items-center gap-1">
-                        <span className="text-body-small flex-1 text-center text-gray-70">
-                          {row.cost} $
-                        </span>
-                        <span className="text-body-small flex-1 text-center text-gray-70">
-                          {row.requestedAmount} $
-                        </span>
+                        <span className="text-body-small text-gray-70 flex-1 text-center">{row.cost} $</span>
+                        <span className="text-body-small text-gray-70 flex-1 text-center">{row.requestedAmount} $</span>
                       </div>
 
                       {/* 직급 + 부서 */}
@@ -203,12 +195,7 @@ const LimitReleaseSection = () => {
                           </span>
                         </div>
                         <div className="flex flex-1 justify-center">
-                          <span
-                            className={cn(
-                              'rounded-md2 text-body-xsmall truncate px-1.5 py-0.5',
-                              TEAM_BADGE_CLASS,
-                            )}
-                          >
+                          <span className={cn('rounded-md2 text-body-xsmall truncate px-1.5 py-0.5', TEAM_BADGE_CLASS)}>
                             {row.team}
                           </span>
                         </div>

@@ -11,14 +11,16 @@ import { cn } from '@/shared/utils/cn';
 import { STATUS_BADGE_CLASS, STATUS_LABEL } from '../../constants/auditLogConfig';
 
 /** 서비스 → 아이콘 컴포넌트 (module-level stable reference) */
-export const SERVICE_ICONS = Object.fromEntries(
-  INTEGRATION_ACCOUNTS.map((a) => [a.service, a.Icon]),
-) as Record<IntegrationService, (typeof INTEGRATION_ACCOUNTS)[number]['Icon']>;
+export const SERVICE_ICONS = Object.fromEntries(INTEGRATION_ACCOUNTS.map((a) => [a.service, a.Icon])) as Record<
+  IntegrationService,
+  (typeof INTEGRATION_ACCOUNTS)[number]['Icon']
+>;
 
 /** 서비스 → 이름 */
-export const SERVICE_NAMES = Object.fromEntries(
-  INTEGRATION_ACCOUNTS.map((a) => [a.service, a.name]),
-) as Record<IntegrationService, string>;
+export const SERVICE_NAMES = Object.fromEntries(INTEGRATION_ACCOUNTS.map((a) => [a.service, a.name])) as Record<
+  IntegrationService,
+  string
+>;
 
 /** 서비스 아이콘 렌더러 (createElement 사용으로 react-hooks/static-components 회피) */
 export const ServiceIcon = ({ service, className }: { service: IntegrationService; className?: string }) =>
@@ -53,10 +55,7 @@ export const StatusBadgeRow = ({ status }: { status: 'success' | 'failure' }) =>
     <div className="text-body-small flex w-full items-center gap-14">
       <span className="w-19.75 shrink-0 text-gray-50">상태</span>
       <span
-        className={cn(
-          'rounded-md2 text-body-xsmall inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5',
-          badgeCls,
-        )}
+        className={cn('rounded-md2 text-body-xsmall inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5', badgeCls)}
       >
         {isSuccess ? <IconCheckCircle className="size-4" /> : <IconDelete2 className="size-4" />}
         {statusLabel}

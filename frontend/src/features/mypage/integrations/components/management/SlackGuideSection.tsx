@@ -58,9 +58,8 @@ const SlackGuideSection = () => {
       <div className="flex flex-col gap-2">
         <h4 className="text-heading-medium text-gray-80">2. Catch Up 봇 초대</h4>
         <p className="text-label-small text-gray-80">
-          데이터 수집을 허용할 채널에 접속하여{' '}
-          <span className="font-semibold">/invite @CatchUp</span> 명령어를 입력해 봇을 초대해주세요. 정보 보호를 위해
-          개인 간 다이렉트 메시지(DM) 및 그룹 DM은 철저히 연동 대상에서 제외됩니다.
+          데이터 수집을 허용할 채널에 접속하여 <span className="font-semibold">/invite @CatchUp</span> 명령어를 입력해
+          봇을 초대해주세요. 정보 보호를 위해 개인 간 다이렉트 메시지(DM) 및 그룹 DM은 철저히 연동 대상에서 제외됩니다.
         </p>
       </div>
 
@@ -68,9 +67,8 @@ const SlackGuideSection = () => {
       <div className="flex flex-col gap-2">
         <h4 className="text-heading-medium text-gray-80">3. 채널 확인 및 동기화</h4>
         <p className="text-label-small text-gray-80">
-          Catch Up 화면에서 봇이 정상적으로 초대된 채널을 확인한 뒤 동기화를 시작합니다.{' '}
-          <br />긴 스레드의 대화라도 AI가 핵심만 먼저 정리하여 답을 주고, 필요할 땐 원문 스레드로 바로 넘어가 전체 맥락을
-          확인할 수 있습니다.
+          Catch Up 화면에서 봇이 정상적으로 초대된 채널을 확인한 뒤 동기화를 시작합니다. <br />긴 스레드의 대화라도 AI가
+          핵심만 먼저 정리하여 답을 주고, 필요할 땐 원문 스레드로 바로 넘어가 전체 맥락을 확인할 수 있습니다.
         </p>
       </div>
 

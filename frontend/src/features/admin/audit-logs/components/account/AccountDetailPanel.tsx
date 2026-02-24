@@ -97,11 +97,7 @@ const AccountDetailPanel = ({ log }: { log: AuditLog }) => (
       </div>
 
       {/* 연동된 계정 정보 */}
-      <IntegrationAccountsSection
-        name={log.name}
-        email={log.email}
-        accountIds={log.accountIds}
-      />
+      <IntegrationAccountsSection name={log.name} email={log.email} accountIds={log.accountIds} />
     </div>
   </div>
 );

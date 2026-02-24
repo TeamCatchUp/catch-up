@@ -33,7 +33,7 @@ function LimitRow({ title, description, defaultValue, hasBorder }: LimitRowProps
   };
 
   return (
-    <div className={`flex items-center gap-5 py-3 ${hasBorder ? 'border-b border-neutral-3' : ''}`}>
+    <div className={`flex items-center gap-5 py-3 ${hasBorder ? 'border-neutral-3 border-b' : ''}`}>
       {/* 설명 */}
       <div className="flex flex-1 flex-col gap-1.5">
         <label htmlFor={inputId} className="text-heading-small text-gray-80">
@@ -86,7 +86,7 @@ export default function TokenLimitSettings({ mode = 'my' }: TokenLimitSettingsPr
   return (
     <div className="flex flex-col gap-1">
       {/* 헤더 */}
-      <div className="rounded bg-neutral-1 px-5 py-1.5">
+      <div className="bg-neutral-1 rounded px-5 py-1.5">
         <span className="text-heading-small text-gray-70">{header}</span>
       </div>
 

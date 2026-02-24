@@ -35,7 +35,12 @@ import { isValidSessionId } from '@/shared/utils/sessionId';
  * 4) user actions (send/edit/stop/feedback) 연결
  * 5) initial q bootstrap (첫 질문 자동 실행 1회) 연결
  */
-export const useRagChat = ({ sessionId, repo, initialQuery, scrollToMessageId }: UseRagChatOptions): UseRagChatReturn => {
+export const useRagChat = ({
+  sessionId,
+  repo,
+  initialQuery,
+  scrollToMessageId,
+}: UseRagChatOptions): UseRagChatReturn => {
   // ---------------------------------------------------------------------------
   // External hooks/services
   // ---------------------------------------------------------------------------
@@ -297,7 +302,16 @@ export const useRagChat = ({ sessionId, repo, initialQuery, scrollToMessageId }:
     return () => {
       cancelled = true;
     };
-  }, [scrollToMessageId, chatData, resolvedSessionId, hasOlderMessages, queryClient, repo, effectiveInitialQuery, setChatData]);
+  }, [
+    scrollToMessageId,
+    chatData,
+    resolvedSessionId,
+    hasOlderMessages,
+    queryClient,
+    repo,
+    effectiveInitialQuery,
+    setChatData,
+  ]);
 
   // ---------------------------------------------------------------------------
   // Public API

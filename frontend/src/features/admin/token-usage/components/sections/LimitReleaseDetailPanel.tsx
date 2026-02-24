@@ -102,7 +102,7 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
             <span className="text-heading-small text-gray-70">설정된 개인 토큰 사용 제한 설정</span>
             <Link
               href="/admin/token-usage?tab=user-management"
-              className="border-neutral-3 flex h-7 items-center gap-1 rounded-md2 border bg-white px-1.5 py-1"
+              className="border-neutral-3 rounded-md2 flex h-7 items-center gap-1 border bg-white px-1.5 py-1"
             >
               <IconArrowOutward className="size-6 text-gray-50" />
               <span className="text-body-xsmall text-gray-50">수정 페이지 바로가기</span>
@@ -134,7 +134,7 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
           <span className="text-heading-small text-gray-70">사용자 토큰 사용량 분석</span>
           <Link
             href="/admin/token-usage?tab=org-usage"
-            className="border-neutral-3 flex h-7 items-center gap-1 rounded-md2 border bg-white px-1.5 py-1"
+            className="border-neutral-3 rounded-md2 flex h-7 items-center gap-1 border bg-white px-1.5 py-1"
           >
             <IconArrowOutward className="size-6 text-gray-50" />
             <span className="text-body-xsmall text-gray-50">페이지 바로가기</span>

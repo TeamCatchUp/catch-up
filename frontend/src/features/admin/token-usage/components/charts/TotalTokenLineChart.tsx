@@ -5,7 +5,7 @@
 import { format, parseISO } from 'date-fns';
 import { Area, AreaChart, XAxis, YAxis } from 'recharts';
 
-import { type ChartConfig,ChartContainer, ChartTooltip } from '@/shared/components/ui/chart';
+import { type ChartConfig, ChartContainer, ChartTooltip } from '@/shared/components/ui/chart';
 
 import type { TotalTokenUsageTrend } from '../../types/tokenUsage';
 import ChartCustomTooltip from './ChartCustomTooltip';
@@ -25,7 +25,7 @@ export default function TotalTokenLineChart({ data }: TotalTokenLineChartProps) 
   const latestValue = data.length > 0 ? data[data.length - 1].cumulative_tokens : 0;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-neutral-3 bg-white px-6 py-5">
+    <div className="border-neutral-3 flex h-full flex-col overflow-hidden rounded-xl border bg-white px-6 py-5">
       {/* 헤더 */}
       <div className="flex flex-col gap-1">
         <span className="text-heading-small text-gray-50">전체 토큰 사용량</span>

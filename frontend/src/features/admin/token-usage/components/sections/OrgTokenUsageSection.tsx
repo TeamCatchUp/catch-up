@@ -75,11 +75,7 @@ export default function OrgTokenUsageSection() {
 
       {/* 멤버 선택 모드 — 프로필 카드 */}
       {viewMode === 'member' && members ? (
-        <MemberProfileCard
-          members={members}
-          selectedMemberId={selectedMemberId}
-          onSelectMember={setSelectedMemberId}
-        />
+        <MemberProfileCard members={members} selectedMemberId={selectedMemberId} onSelectMember={setSelectedMemberId} />
       ) : null}
 
       {/* 차트 3개 + 순위 */}
@@ -87,7 +83,12 @@ export default function OrgTokenUsageSection() {
         {/* 좌측: 차트 영역 */}
         <div className="flex w-150 shrink-0 flex-col gap-3">
           <div className="min-h-0 flex-[2.2]">
-            <DailyUsageBarChart data={filteredDaily} totalCost={filteredTotalCost} dailyLimit={DEFAULT_DAILY_LIMIT} title={chartTitle} />
+            <DailyUsageBarChart
+              data={filteredDaily}
+              totalCost={filteredTotalCost}
+              dailyLimit={DEFAULT_DAILY_LIMIT}
+              title={chartTitle}
+            />
           </div>
           <div className="flex min-h-0 flex-1 gap-3">
             <div className="min-h-0 flex-1">
@@ -100,9 +101,7 @@ export default function OrgTokenUsageSection() {
         </div>
 
         {/* 우측: 순위 */}
-        <div className="min-w-0 flex-1">
-          {ranking && <TokenUsageRankingList data={ranking} />}
-        </div>
+        <div className="min-w-0 flex-1">{ranking && <TokenUsageRankingList data={ranking} />}</div>
       </div>
 
       {/* 설정 */}

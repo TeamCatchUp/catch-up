@@ -51,9 +51,7 @@ export default function QuestionLogDetailPage() {
     const humanMsg = detailQuery.data.find((m) => m.sender_type === 'human');
     const assistantMsg = detailQuery.data.find((m) => m.sender_type === 'assistant');
 
-    const rawSources = Array.isArray(assistantMsg?.sources)
-      ? (assistantMsg.sources as SourceResponse[])
-      : [];
+    const rawSources = Array.isArray(assistantMsg?.sources) ? (assistantMsg.sources as SourceResponse[]) : [];
     const normalizedSources = normalizeHistorySources(rawSources);
 
     return {
@@ -65,24 +63,14 @@ export default function QuestionLogDetailPage() {
   }, [detailQuery.data]);
 
   // 마크다운 렌더링 준비
-  const formattedAnswer = useMemo(
-    () => formatMarkdownString(answer?.content ?? ''),
-    [answer?.content],
-  );
+  const formattedAnswer = useMemo(() => formatMarkdownString(answer?.content ?? ''), [answer?.content]);
   const citationOrderMap = useMemo(() => getCitationDisplayOrderMap(formattedAnswer), [formattedAnswer]);
 
   return (
     <section className="flex flex-col gap-6 px-16 pt-9 pb-[120px]">
-      <DetailHeader
-        userId={userId}
-        userName={user?.name ?? ''}
-        userDepartment={user?.department ?? ''}
-        from={from}
-      />
+      <DetailHeader userId={userId} userName={user?.name ?? ''} userDepartment={user?.department ?? ''} from={from} />
 
-      {detailQuery.isLoading && (
-        <div className="text-body-small text-gray-40 py-4">데이터를 불러오는 중입니다...</div>
-      )}
+      {detailQuery.isLoading && <div className="text-body-small text-gray-40 py-4">데이터를 불러오는 중입니다...</div>}
 
       {detailQuery.isError && (
         <div className="text-body-small py-4 text-red-50">

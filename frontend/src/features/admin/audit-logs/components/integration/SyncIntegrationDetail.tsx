@@ -4,14 +4,7 @@ import { CATEGORY_LABEL, RESOURCE_LABEL } from '../../constants/auditLogConfig';
 import type { AuditIntegrationLog } from '../../types/auditIntegrationLog';
 import { formatDate } from '../../utils/formatDate';
 
-import {
-  InfoRow,
-  ResourceIcon,
-  SERVICE_NAMES,
-  ServiceIcon,
-  StatusBadgeRow,
-  getServiceIconCls,
-} from './helpers';
+import { InfoRow, ResourceIcon, SERVICE_NAMES, ServiceIcon, StatusBadgeRow, getServiceIconCls } from './helpers';
 
 /** 동기화/연동 상세 패널 */
 const SyncIntegrationDetail = ({ log }: { log: AuditIntegrationLog }) => {
@@ -61,9 +54,7 @@ const SyncIntegrationDetail = ({ log }: { log: AuditIntegrationLog }) => {
                     <div className="border-neutral-3 flex items-center justify-center overflow-clip rounded-full border bg-white/50 p-1.5">
                       <ResourceIcon service={log.service} />
                     </div>
-                    <span className="text-body-small text-gray-80 min-w-0 flex-1 truncate">
-                      {name}
-                    </span>
+                    <span className="text-body-small text-gray-80 min-w-0 flex-1 truncate">{name}</span>
                   </div>
                 ))}
               </div>

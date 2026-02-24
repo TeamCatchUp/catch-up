@@ -127,9 +127,7 @@ const QuestionsHistoryPanel = () => {
         ) : (
           <SearchHistory querys={recentQueries} isModal={false} onItemClick={handleItemClick} />
         )}
-        {isFetchingNextPage && (
-          <div className="text-gray-30 flex items-center justify-center py-4">불러오는 중...</div>
-        )}
+        {isFetchingNextPage && <div className="text-gray-30 flex items-center justify-center py-4">불러오는 중...</div>}
         <div ref={sentinelRef} className="h-1" />
       </div>
     </div>

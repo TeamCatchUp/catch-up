@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Bar, BarChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from 'recharts';
 
-import { type ChartConfig,ChartContainer, ChartTooltip } from '@/shared/components/ui/chart';
+import { type ChartConfig, ChartContainer, ChartTooltip } from '@/shared/components/ui/chart';
 
 import type { DailyTokenUsage } from '../../types/tokenUsage';
 import ChartCustomTooltip from './ChartCustomTooltip';
@@ -25,7 +25,12 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export default function DailyUsageBarChart({ data, totalCost, dailyLimit, title = '일자별 토큰 사용량' }: DailyUsageBarChartProps) {
+export default function DailyUsageBarChart({
+  data,
+  totalCost,
+  dailyLimit,
+  title = '일자별 토큰 사용량',
+}: DailyUsageBarChartProps) {
   const modelName = data[0]?.model_name ?? '';
 
   const ticks = useMemo(() => {
@@ -35,7 +40,7 @@ export default function DailyUsageBarChart({ data, totalCost, dailyLimit, title 
   }, [data]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-neutral-3 bg-white px-6 py-5">
+    <div className="border-neutral-3 flex h-full flex-col overflow-hidden rounded-xl border bg-white px-6 py-5">
       {/* 헤더 */}
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
@@ -43,7 +48,7 @@ export default function DailyUsageBarChart({ data, totalCost, dailyLimit, title 
           <span className="text-heading-large text-gray-80">{totalCost.toFixed(2)} $</span>
         </div>
         {modelName && (
-          <span className="text-body-xsmall rounded-md2 bg-blue-5 px-1.5 py-0.5 text-blue-55">{modelName}</span>
+          <span className="text-body-xsmall rounded-md2 bg-blue-5 text-blue-55 px-1.5 py-0.5">{modelName}</span>
         )}
       </div>
 
