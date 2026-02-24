@@ -127,7 +127,7 @@ const mockHandlers: MockHandler[] = [
         name: req?.name ?? MOCK_USER.name,
         department: req?.department ?? '',
         job_level: req?.job_level ?? 'member',
-        provider: 'okta',
+        provider: 'keycloak',
       };
     },
   },
@@ -144,7 +144,7 @@ const mockHandlers: MockHandler[] = [
         name: req?.name ?? MOCK_USER.name,
         department: req?.company_name ?? '',
         job_level: req?.job_level ?? 'executive',
-        provider: 'okta',
+        provider: 'keycloak',
       };
     },
   },

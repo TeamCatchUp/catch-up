@@ -8,8 +8,8 @@ import DashboardImage from '@/public/image/catchup-login.jpg';
 import { Button } from '@/shared/components/ui/button';
 
 export default function Login() {
-  const handleOktaLogin = () => {
-    window.location.href = '/api/v1/auth/okta/login';
+  const handleOAuthLogin = () => {
+    window.location.href = '/api/v1/auth/oauth/login';
   };
 
   return (
@@ -25,7 +25,7 @@ export default function Login() {
               <p className="text-body-medium text-gray-60 tracking-tight">
                 소속 조직의 계정으로 안전하게 로그인하세요.
               </p>
-              <Button variant="box-solid-primary" size="lg" className="h-[46px] w-full" onClick={handleOktaLogin}>
+              <Button variant="box-solid-primary" size="lg" className="h-[46px] w-full" onClick={handleOAuthLogin}>
                 SSO 통합 로그인하기
               </Button>
             </div>
