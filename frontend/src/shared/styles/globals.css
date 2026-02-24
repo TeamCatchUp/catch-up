@@ -30,6 +30,13 @@
     --input: var(--color-neutral-3);
     --ring: var(--color-blue-50);
     --radius: 0.5rem;
+
+    /* shadcn chart tokens */
+    --chart-1: var(--color-blue-30);
+    --chart-2: var(--color-pink-40);
+    --chart-3: var(--color-blue-50);
+    --chart-4: var(--color-green-60);
+    --chart-5: var(--color-red-50);
   }
 
   ::-webkit-scrollbar {

@@ -34,6 +34,7 @@ const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
       session_id: item.session_id,
       date: formatFullDate(item.created_at),
       rawDate: new Date(item.created_at),
+      message_id: item.id,
     }));
   }, [data]);
 

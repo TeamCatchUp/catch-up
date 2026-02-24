@@ -1,11 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { MoreButtonContent } from '@/shared/components/layout/topNavbar/MoreButtonModal';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
+import { isValidSessionId } from '@/shared/utils/sessionId';
+
+import SessionQuestionsModal from './SessionQuestionsModal';
 
 import Add from '/public/icons/icon/add_small.svg';
 import AI from '/public/icons/icon/ai.svg';
@@ -14,17 +18,30 @@ import Kebeb from '/public/icons/icon/kebeb 2.svg';
 
 interface RagHeaderProps {
   title: string;
+  sessionId: string;
 }
 
-const RagHeader = ({ title }: RagHeaderProps) => {
+const RagHeader = ({ title, sessionId }: RagHeaderProps) => {
   const { activePanel, setActivePanel } = useSidebarStore();
   const router = useRouter();
   const isQuestionsHistoryPanelOpen = activePanel === 'questionsHistory';
+  const [isSessionQuestionsOpen, setIsSessionQuestionsOpen] = useState(false);
 
   const handleNewQuestion = () => {
     router.push(`/search`);
 
     setActivePanel(null);
+  };
+
+  const handleTitleClick = () => {
+    if (isValidSessionId(sessionId)) {
+      setIsSessionQuestionsOpen((prev) => !prev);
+    }
+  };
+
+  const handleSelectQuestion = (messageId: number) => {
+    setIsSessionQuestionsOpen(false);
+    router.push(`/chat/${sessionId}?scrollTo=${messageId}`);
   };
 
   return (
@@ -47,7 +64,23 @@ const RagHeader = ({ title }: RagHeaderProps) => {
             </span>
           </button>
           <ArrowRight2 className="h-5 w-5 text-gray-50" />
-          <span className="text-heading-small text-gray-80! max-w-50 truncate px-2 py-1">{title}</span>
+          <button
+            onClick={handleTitleClick}
+            className="text-heading-small text-gray-80! hover:bg-neutral-2 max-w-50 cursor-pointer truncate rounded-lg px-2 py-1 transition-colors"
+          >
+            {title}
+          </button>
+
+          {/* 세션 질문 목록 모달 */}
+          {isSessionQuestionsOpen && (
+            <div className="absolute top-full left-0 z-20 mt-1">
+              <SessionQuestionsModal
+                sessionId={sessionId}
+                onClose={() => setIsSessionQuestionsOpen(false)}
+                onSelect={handleSelectQuestion}
+              />
+            </div>
+          )}
         </div>
 
         {/* 우측 메뉴 */}

@@ -5,6 +5,7 @@ import { API } from '@/shared/api/endpoints';
 import { cn } from '@/shared/utils/cn';
 
 import type { ConnectorDetail, IntegrationMenuItem, IntegrationService } from '../../types/integrations';
+import ConfluenceGuideSection from './ConfluenceGuideSection';
 import GithubGuideSection from './GithubGuideSection';
 import JiraGuideSection from './JiraGuideSection';
 import SlackGuideSection from './SlackGuideSection';
@@ -13,6 +14,17 @@ import IconCloudCheckFilled from '/public/icons/icon/cloud_check_filled.svg';
 import IconCloudOff from '/public/icons/icon/cloud_off.svg';
 import IconOpenInNew from '/public/icons/icon/open_in_new.svg';
 import IconRotate from '/public/icons/icon/rotate.svg';
+import IconSpace from '/public/icons/icon/space.svg';
+import IconTag from '/public/icons/icon/tag.svg';
+import IconGithubLogo from '/public/icons/logo/GitHub.svg';
+
+/** 서비스별 리소스 아이템 아이콘 */
+const RESOURCE_ICONS: Record<IntegrationService, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  jira: IconSpace,
+  github: IconGithubLogo,
+  slack: IconTag,
+  confluence: IconSpace,
+};
 
 const GITHUB_APP_URL = 'https://github.com/apps/catchup-connector';
 
@@ -56,8 +68,15 @@ const IntegrationManagementSection = ({
           return api.post(API.jira.syncFlush);
         case 'slack':
           return api.post(API.slack.syncFlush);
-        case 'confluence':
+        case 'confluence': {
+          const { data } = await api.get<{ cloudIds: string[] }>(API.confluence.cloudIds);
+          await Promise.all(
+            data.cloudIds.map((cloudId) =>
+              api.post(API.confluence.syncIncremental, null, { params: { cloud_id: cloudId } }),
+            ),
+          );
           return;
+        }
       }
     },
   });
@@ -108,7 +127,7 @@ const IntegrationManagementSection = ({
               <button
                 type="button"
                 onClick={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending || selectedService === 'confluence'}
+                disabled={syncMutation.isPending}
                 className="border-neutral-3 text-body-xsmall text-gray-70 flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-white px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <IconRotate className="text-gray-70 h-6 w-6" />
@@ -163,14 +182,20 @@ const IntegrationManagementSection = ({
           <h3 className="text-heading-small text-gray-70">{detail.resourceLabel}</h3>
           <div className="border-neutral-3 bg-neutral-1 overflow-hidden rounded-xl border">
             {detail.resources.length > 0 ? (
-              detail.resources.map((row, index) => (
-                <div
-                  key={`${row}-${index}`}
-                  className="border-neutral-3 text-body-small text-gray-70 flex h-13 items-center border-b px-4 py-3"
-                >
-                  <span className="truncate">{row}</span>
-                </div>
-              ))
+              detail.resources.map((row, index) => {
+                const ResourceIcon = RESOURCE_ICONS[selectedService];
+                return (
+                  <div
+                    key={`${row}-${index}`}
+                    className="border-neutral-3 text-body-small text-gray-70 flex h-13 items-center gap-3 border-b px-4 py-3"
+                  >
+                    <div className="border-neutral-3 flex shrink-0 items-center justify-center overflow-hidden rounded-full border bg-white/75 p-1.5">
+                      <ResourceIcon className="size-5" />
+                    </div>
+                    <span className="truncate">{row}</span>
+                  </div>
+                );
+              })
             ) : (
               <div className="text-body-small text-gray-40 flex h-13 items-center px-4 py-3">
                 연동된 항목이 없습니다.
@@ -179,7 +204,8 @@ const IntegrationManagementSection = ({
           </div>
         </div>
 
-        {(selectedService === 'jira' || selectedService === 'confluence') && <JiraGuideSection />}
+        {selectedService === 'jira' && <JiraGuideSection />}
+        {selectedService === 'confluence' && <ConfluenceGuideSection />}
         {selectedService === 'github' && <GithubGuideSection />}
         {selectedService === 'slack' && <SlackGuideSection />}
       </div>

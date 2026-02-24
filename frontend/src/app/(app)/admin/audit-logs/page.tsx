@@ -1,14 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import AccountLogSection from '@/features/admin/audit-logs/components/sections/AccountLogSection';
-import { AUDIT_TABS, type AuditTab } from '@/features/admin/audit-logs/constants/auditLogConfig';
+import IntegrationLogSection from '@/features/admin/audit-logs/components/sections/IntegrationLogSection';
+import QuestionLogSection from '@/features/admin/audit-logs/components/sections/QuestionLogSection';
+import {
+  AUDIT_TABS,
+  type AuditTab,
+  DEFAULT_TAB_SLUG,
+  fromTabSlug,
+  toTabSlug,
+} from '@/features/admin/audit-logs/constants/auditLogConfig';
 import { cn } from '@/shared/utils/cn';
 
 /** 관리자 — 감사 로그 페이지 */
 export default function AdminAuditLogsPage() {
-  const [activeTab, setActiveTab] = useState<AuditTab>('계정관리');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeTab = fromTabSlug(searchParams.get('tab') ?? DEFAULT_TAB_SLUG);
+
+  const setActiveTab = useCallback(
+    (tab: AuditTab) => {
+      const slug = toTabSlug(tab);
+      router.replace(`/admin/audit-logs?tab=${slug}`);
+    },
+    [router],
+  );
 
   return (
     <section className="flex flex-col gap-5 px-16 pt-9 pb-25">
@@ -39,16 +58,8 @@ export default function AdminAuditLogsPage() {
 
       {/* 탭 콘텐츠 */}
       {activeTab === '계정관리' && <AccountLogSection />}
-      {activeTab === '질문' && (
-        <div className="text-body-small flex h-80 items-center justify-center text-gray-50">
-          질문 로그 기능은 준비 중입니다.
-        </div>
-      )}
-      {activeTab === '연동' && (
-        <div className="text-body-small flex h-80 items-center justify-center text-gray-50">
-          연동 로그 기능은 준비 중입니다.
-        </div>
-      )}
+      {activeTab === '질문' && <QuestionLogSection />}
+      {activeTab === '연동' && <IntegrationLogSection />}
     </section>
   );
 }

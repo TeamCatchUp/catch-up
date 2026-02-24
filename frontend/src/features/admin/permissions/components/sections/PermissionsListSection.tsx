@@ -11,7 +11,7 @@ import { cn } from '@/shared/utils/cn';
 
 import { ROLE_FILTER_OPTIONS, type RoleFilter } from '../../constants/permissionsConfig';
 import type { PermissionMember } from '../../types/adminPermission';
-import PermissionsPagination from '../shared/PermissionsPagination';
+import Pagination from '@/shared/components/ui/pagination';
 import PermissionsTable from '../shared/PermissionsTable';
 
 interface PermissionsListSectionProps {
@@ -104,7 +104,7 @@ const PermissionsListSection = ({
           <>
             <PermissionsTable rows={rows} onChangeRoleClick={onChangeRoleClick} />
             <div className="flex h-21 shrink-0 items-center justify-center">
-              <PermissionsPagination currentPage={currentPage} totalPages={totalPages} onPageChange={onPageChange} />
+              <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={onPageChange} />
             </div>
           </>
         )}

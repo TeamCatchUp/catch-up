@@ -117,6 +117,90 @@ export const loadSessionChatData = async ({
   };
 };
 
+// ---------------------------------------------------------------------------
+// 역방향 무한 스크롤용 로더
+// ---------------------------------------------------------------------------
+
+export interface LatestPageResult {
+  chatData: ChatData;
+  /** 현재 로드된 가장 오래된 페이지 번호 */
+  oldestLoadedPage: number;
+  /** 총 페이지 수 */
+  totalPages: number;
+}
+
+const sortItems = (items: ChatHistoryMessageResponse[]) =>
+  [...items].sort((a, b) => {
+    const byCreatedAt = toComparableTimestamp(a.created_at) - toComparableTimestamp(b.created_at);
+    if (byCreatedAt !== 0) return byCreatedAt;
+    return a.id - b.id;
+  });
+
+/**
+ * 마지막 페이지(최신 메시지)만 로드하는 로더.
+ * - page 1을 먼저 fetch해 total을 확인하고, 마지막 페이지를 계산해 로드
+ * - 1페이지뿐이면 그대로 사용
+ */
+export const loadLatestSessionPage = async ({
+  queryClient,
+  sessionId,
+  repo,
+  initialQuery,
+}: LoadSessionChatDataOptions): Promise<LatestPageResult> => {
+  // page 1을 먼저 가져와서 total 확인
+  const firstResponse = await queryClient.fetchQuery(chatQueries.sessionMessages(sessionId, 1, MESSAGE_PAGE_SIZE));
+
+  const total = firstResponse.total;
+  const totalPages = Math.max(1, Math.ceil(total / MESSAGE_PAGE_SIZE));
+
+  if (totalPages <= 1) {
+    return {
+      chatData: {
+        session_id: sessionId,
+        title: firstResponse.title || initialQuery || '',
+        repo: repo ?? '',
+        messages: sortItems(firstResponse.items).map(toUiMessage),
+      },
+      oldestLoadedPage: 1,
+      totalPages: 1,
+    };
+  }
+
+  // 마지막 페이지 로드
+  const lastResponse = await queryClient.fetchQuery(
+    chatQueries.sessionMessages(sessionId, totalPages, MESSAGE_PAGE_SIZE),
+  );
+
+  return {
+    chatData: {
+      session_id: sessionId,
+      title: lastResponse.title || firstResponse.title || initialQuery || '',
+      repo: repo ?? '',
+      messages: sortItems(lastResponse.items).map(toUiMessage),
+    },
+    oldestLoadedPage: totalPages,
+    totalPages,
+  };
+};
+
+/**
+ * 이전 페이지 1개를 로드하여 Message[] 배열로 반환한다.
+ * 채팅 역방향 무한 스크롤에서 위로 스크롤 시 호출.
+ */
+export const loadPreviousSessionPage = async ({
+  queryClient,
+  sessionId,
+  page,
+}: {
+  queryClient: QueryClient;
+  sessionId: string;
+  page: number;
+}): Promise<Message[]> => {
+  const response = await queryClient.fetchQuery(chatQueries.sessionMessages(sessionId, page, MESSAGE_PAGE_SIZE));
+
+  return sortItems(response.items).map(toUiMessage);
+};
+
 /**
  * 신규 세션에서 room 생성 전 messages 조회 시 발생할 수 있는 정상 404 판별 헬퍼
  */

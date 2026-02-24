@@ -6,6 +6,7 @@ import type { QuestionLogItem } from '../types/questionLog';
 /** API 응답 → QuestionLogItem UI 모델 변환 */
 export const toQuestionLogItem = (item: RecentQueryWithSaveStatusResponse): QuestionLogItem => ({
   id: `${item.id}-${item.session_id}`,
+  messageId: item.id,
   sessionId: item.session_id,
   query: item.content,
   createdAt: item.created_at,

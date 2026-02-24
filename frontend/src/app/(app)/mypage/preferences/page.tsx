@@ -83,11 +83,7 @@ export default function PreferencesPage() {
 
             {/* 저장된 프롬프트 카드 (수정 중이 아닐 때만 표시) */}
             {!isLoading && hasPrompt && !isEditing && (
-              <InstructionCard
-                content={customPrompt}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-              />
+              <InstructionCard content={customPrompt} onEdit={handleEdit} onDelete={handleDelete} />
             )}
           </div>
         </div>

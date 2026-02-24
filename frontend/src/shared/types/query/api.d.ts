@@ -58,3 +58,6 @@ export interface SessionMessagesResponse extends PaginatedResponse<ChatHistoryMe
   title: string;
   session_id: string;
 }
+
+/** 질문-답변 상세 API 응답 (QA 1쌍) */
+export type QueryDetailResponse = ChatHistoryMessageResponse[];

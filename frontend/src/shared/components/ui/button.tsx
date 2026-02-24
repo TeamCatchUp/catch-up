@@ -33,7 +33,7 @@ const buttonVariants = cva(
         'capsule-outline-mono':
           'border-neutral-4 hover:bg-neutral-2 active:border-neutral-3 active:bg-neutral-3 disabled:border-neutral-4 disabled:bg-neutral-1 disabled:text-gray-30 rounded-full border bg-white',
         'capsule-outline-blue':
-          'border-blue-30 bg-blue-1 hover:bg-blue-5 active:bg-blue-5 active:border-blue-45 disabled:text-gray-30 disabled:bg-neutral-1 disabled:border-neutral-2 rounded-full border',
+          'border-blue-30 bg-blue-1 text-blue-55 hover:bg-blue-5 active:bg-blue-5 active:border-blue-45 disabled:text-gray-30 disabled:bg-neutral-1 disabled:border-neutral-2 rounded-full border',
         'capsule-solid-purple': 'bg-violet-5 rounded-full',
         'capsule-solid-light-blue': 'bg-light-blue-5 rounded-full',
 

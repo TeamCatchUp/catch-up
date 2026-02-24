@@ -14,6 +14,10 @@ import { extractQAPairs, type QAPair } from '@/features/chat/utils/render/chat';
 
 interface UseRagScrollOptions {
   messages: Message[];
+  /** 특정 메시지로 스크롤하기 위한 메시지 ID (RecentQueryResponse.id) */
+  scrollToMessageId?: string | null;
+  /** 스크롤 완료 후 호출되는 콜백 (URL 파라미터 정리 등) */
+  onScrollToComplete?: () => void;
 }
 
 interface UseRagScrollReturn {
@@ -29,7 +33,11 @@ const OBSERVER_THRESHOLDS = [0, 0.15, 0.3, 0.5, 0.7, 1.0];
 const HYSTERESIS_PX = 48;
 const MIN_ACTIVE_RATIO = 0.15;
 
-export const useRagScroll = ({ messages }: UseRagScrollOptions): UseRagScrollReturn => {
+export const useRagScroll = ({
+  messages,
+  scrollToMessageId,
+  onScrollToComplete,
+}: UseRagScrollOptions): UseRagScrollReturn => {
   const qaPairs = useMemo(() => extractQAPairs(messages), [messages]);
   const qaRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -145,6 +153,30 @@ export const useRagScroll = ({ messages }: UseRagScrollOptions): UseRagScrollRet
       observedEntries.clear();
     };
   }, [observerSeed, qaPairs.length]);
+
+  // scrollToMessageId가 지정된 경우 해당 Q&A pair로 스크롤
+  const scrollToHandledRef = useRef(false);
+
+  // scrollToMessageId 변경 시 handled 플래그 초기화 (같은 세션 내 재스크롤 지원)
+  useEffect(() => {
+    scrollToHandledRef.current = false;
+  }, [scrollToMessageId]);
+
+  useEffect(() => {
+    if (!scrollToMessageId || scrollToHandledRef.current || qaPairs.length === 0) return;
+
+    const targetId = `history_${scrollToMessageId}`;
+    const targetIndex = qaPairs.findIndex((p) => p.question.id === targetId);
+    if (targetIndex < 0) return;
+
+    scrollToHandledRef.current = true;
+
+    requestAnimationFrame(() => {
+      const element = qaRefs.current.get(targetIndex);
+      element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      onScrollToComplete?.();
+    });
+  }, [scrollToMessageId, qaPairs, onScrollToComplete]);
 
   useEffect(() => {
     if (!pendingScrollRef.current) return;

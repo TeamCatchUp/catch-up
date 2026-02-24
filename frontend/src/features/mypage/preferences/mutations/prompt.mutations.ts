@@ -10,7 +10,6 @@ export const promptMutations = {
   updateCustomPrompt: () =>
     ({
       mutationKey: ['settings', 'prompts', 'update'] as const,
-      mutationFn: (body: CustomPromptRequest) =>
-        api.patch<CustomPromptResponse>(API.settings.prompts, body),
+      mutationFn: (body: CustomPromptRequest) => api.patch<CustomPromptResponse>(API.settings.prompts, body),
     }) satisfies UseMutationOptions<AxiosResponse<CustomPromptResponse>, Error, CustomPromptRequest>,
 };

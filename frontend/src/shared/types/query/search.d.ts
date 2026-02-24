@@ -14,4 +14,6 @@ export interface SearchQuery {
   session_id: string;
   date: string;
   rawDate?: Date;
+  /** 메시지 ID — 채팅방 내 해당 질문 위치로 스크롤하기 위해 사용 */
+  message_id?: number;
 }

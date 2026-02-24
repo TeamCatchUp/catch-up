@@ -10,6 +10,10 @@ const nextConfig = {
 
   output: 'standalone',
 
+  experimental: {
+    optimizePackageImports: ['recharts', 'date-fns'],
+  },
+
   async rewrites() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
     if (!apiUrl || !apiUrl.startsWith('http')) return [];

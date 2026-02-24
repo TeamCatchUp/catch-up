@@ -25,6 +25,7 @@ export const API = {
     queriesWithSaveStatus: `${API_PREFIX}/rooms/queries/saved-status`, // GET 질문 히스토리 + 저장 여부 (마이페이지)
     session: (id: string) => `${API_PREFIX}/rooms/${id}/queries`, // GET 특정 채팅방 질문 목록
     messages: (sessionId: string) => `${API_PREFIX}/rooms/${sessionId}/messages`, // GET 채팅방 메시지 전체 조회
+    queryDetail: (messageId: number) => `${API_PREFIX}/rooms/queries/${messageId}/detail`, // GET 질문-답변 상세 (QA 1쌍)
   },
 
   github: {
@@ -66,7 +67,9 @@ export const API = {
 
   confluence: {
     syncFull: `${API_PREFIX}/confluence/sync/full`, // POST 전체 재동기화 (body: cloud_id, space_keys?)
+    syncIncremental: `${API_PREFIX}/confluence/sync/incremental`, // POST 증분 동기화 (?cloud_id=)
     syncStatus: `${API_PREFIX}/confluence/sync/status`, // GET 엔티티별 동기화 상태 (?cloud_id=)
+    cloudIds: `${API_PREFIX}/admin/confluence/cloud-ids`, // GET 연동된 cloud_id 목록
   },
 
   // 관리자 — 이용자 관리

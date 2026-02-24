@@ -1,8 +1,7 @@
 'use client';
 
-import { useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'next/navigation';
+import { useEffect, useMemo, useRef } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { useEscapeKey } from '@/shared/hooks/useEscapeKey';
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick';
@@ -10,24 +9,38 @@ import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { isValidSessionId } from '@/shared/utils/sessionId';
 
 interface SessionQuestionsModalProps {
+  sessionId: string;
   onClose: () => void;
-  onSelect: (query: string) => void;
+  onSelect: (messageId: number) => void;
 }
 
-const SessionQuestionsModal = ({ onClose, onSelect }: SessionQuestionsModalProps) => {
-  const params = useParams();
-  const sessionIdParam = params.sessionId;
-  const sessionId = typeof sessionIdParam === 'string' ? sessionIdParam : '';
-  // /chat/new 단계에서는 세션 질문 목록 API를 호출하지 않는다.
+const SessionQuestionsModal = ({ sessionId, onClose, onSelect }: SessionQuestionsModalProps) => {
   const canLoadSessionQueries = isValidSessionId(sessionId);
 
   const modalRef = useRef<HTMLDivElement>(null);
-  const { data, isLoading } = useQuery({
-    ...chatQueries.sessionQueries(sessionId),
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteQuery({
+    ...chatQueries.sessionQueriesInfinite(sessionId),
     enabled: canLoadSessionQueries,
   });
 
-  const allQueries = data?.items ?? [];
+  const allQueries = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data?.pages]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   useEscapeKey(onClose);
   useOutsideClick(modalRef, onClose);
@@ -53,7 +66,7 @@ const SessionQuestionsModal = ({ onClose, onSelect }: SessionQuestionsModalProps
                 key={idx}
                 className="hover:bg-neutral-2 flex h-10 w-full cursor-pointer items-center rounded-xl px-2 py-1 transition-colors"
                 onClick={() => {
-                  onSelect(item.content);
+                  onSelect(item.id);
                   onClose();
                 }}
               >
@@ -63,6 +76,8 @@ const SessionQuestionsModal = ({ onClose, onSelect }: SessionQuestionsModalProps
           ) : (
             <div className="text-body-small text-gray-40 py-10 text-center">질문 내역이 없습니다.</div>
           )}
+          {isFetchingNextPage && <div className="text-body-small text-gray-40 py-2 text-center">불러오는 중...</div>}
+          <div ref={sentinelRef} className="h-1" />
         </div>
       </div>
     </div>

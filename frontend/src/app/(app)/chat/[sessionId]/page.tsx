@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 
 // Chat Components
@@ -21,33 +22,93 @@ export default function RagAnswerPage() {
   const sessionId = params.sessionId as string;
   const repo = searchParams.get('repo');
   const initialQuery = searchParams.get('q');
+  const scrollToMessageId = searchParams.get('scrollTo');
 
   // Core hooks
   const chat = useRagChat({
     sessionId,
     repo: repo ?? null,
     initialQuery: initialQuery ?? null,
+    scrollToMessageId,
   });
+
+  // 스크롤 완료 후 URL에서 scrollTo 파라미터 제거 (React 리렌더링 없이 URL만 변경)
+  const handleScrollToComplete = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('scrollTo');
+    window.history.replaceState(null, '', url.toString());
+  }, []);
 
   const { qaPairs, qaRefs, scrollContainerCallbackRef, scrollContainerHeight, scrollToLatest, activePairIndex } =
     useRagScroll({
       messages: chat.chatData?.messages ?? [],
+      scrollToMessageId,
+      onScrollToComplete: handleScrollToComplete,
     });
 
   const filters = useRagFilters();
+
+  // ---------------------------------------------------------------------------
+  // 역방향 무한 스크롤: 위로 스크롤 시 이전 메시지 로드
+  // ---------------------------------------------------------------------------
+  const topSentinelRef = useRef<HTMLDivElement>(null);
+  const scrollContainerForPaginationRef = useRef<HTMLDivElement | null>(null);
+
+  // scrollContainerCallbackRef와 병행하여 scroll container 참조 유지
+  const combinedScrollContainerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      scrollContainerCallbackRef(node);
+      scrollContainerForPaginationRef.current = node;
+    },
+    [scrollContainerCallbackRef],
+  );
+
+  useEffect(() => {
+    const el = topSentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && chat.hasOlderMessages && !chat.isLoadingOlderMessages) {
+          // 스크롤 위치 보정을 위해 로드 전 상태 저장
+          const container = scrollContainerForPaginationRef.current;
+          const prevScrollHeight = container?.scrollHeight ?? 0;
+          const prevScrollTop = container?.scrollTop ?? 0;
+
+          chat.loadPreviousMessages().then(() => {
+            // 이전 메시지가 위에 삽입된 후 스크롤 위치 보정
+            requestAnimationFrame(() => {
+              if (!container) return;
+              const newScrollHeight = container.scrollHeight;
+              container.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+            });
+          });
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [chat.hasOlderMessages, chat.isLoadingOlderMessages, chat.loadPreviousMessages]);
 
   return (
     <div className="flex h-screen w-full">
       {/* 메인 영역 */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <RagContentHeader title={chat.chatData?.title ?? ''} />
+        <RagContentHeader title={chat.chatData?.title ?? ''} sessionId={sessionId} />
 
         {/* 스크롤 가능한 콘텐츠 영역 */}
         <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
           <div
-            ref={scrollContainerCallbackRef}
+            ref={combinedScrollContainerRef}
             className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-6 pt-3 pb-9 lg:px-24"
           >
+            {/* 역방향 무한 스크롤 sentinel (위쪽) */}
+            <div ref={topSentinelRef} className="h-1 w-full" />
+            {chat.isLoadingOlderMessages && (
+              <div className="text-body-small text-gray-30 w-full py-4 text-center">이전 메시지를 불러오는 중...</div>
+            )}
+
             {/* 날짜 구분선 */}
             <DateDivider className="mb-8 w-full max-w-192.75" />
 

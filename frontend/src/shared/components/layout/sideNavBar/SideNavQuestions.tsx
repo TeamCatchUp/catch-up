@@ -5,8 +5,8 @@
 
 'use client';
 
-import { useEffect, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef } from 'react';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -30,16 +30,18 @@ export default function SideNavQuestions() {
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const { togglePanel } = useSidebarStore();
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const { data: chatroomData } = useQuery(chatQueries.recentRooms());
+  const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteQuery(chatQueries.recentRoomsInfinite());
 
   const recentChatrooms = useMemo<ChatRoomQuery[]>(() => {
-    if (!chatroomData?.items) return [];
-    return chatroomData.items.map((item) => ({
+    const items = data?.pages.flatMap((page) => page.items) ?? [];
+    if (items.length === 0) return [];
+    return items.map((item) => ({
       title: item.title,
       session_id: item.session_id,
     }));
-  }, [chatroomData]);
+  }, [data?.pages]);
 
   // refresh_sidebar 이벤트 → TanStack Query invalidation
   useEffect(() => {
@@ -49,6 +51,21 @@ export default function SideNavQuestions() {
     window.addEventListener('refresh_sidebar', handleRefresh);
     return () => window.removeEventListener('refresh_sidebar', handleRefresh);
   }, [queryClient]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -75,6 +92,8 @@ export default function SideNavQuestions() {
             </Link>
           );
         })}
+        {isFetchingNextPage && <div className="text-body-xsmall text-gray-30 py-2 text-center">불러오는 중...</div>}
+        <div ref={sentinelRef} className="h-1" />
       </div>
     </div>
   );

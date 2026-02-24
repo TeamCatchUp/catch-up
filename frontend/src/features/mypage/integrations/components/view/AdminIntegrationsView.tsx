@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { cn } from '@/shared/utils/cn';
 
@@ -8,9 +9,23 @@ import ConnectedAccountsAdminSection from '../account/sections/ConnectedAccounts
 import IntegrationManagementSection from '../management/IntegrationManagementSection';
 import IntegrationsSection from '../member/sections/IntegrationsSection';
 
+const DEFAULT_TAB: AdminIntegrationTab = 'my';
+const isValidTab = (v: string | null): v is AdminIntegrationTab => v === 'my' || v === 'member';
+
 /** 관리자 협업툴 연동 화면 */
 const AdminIntegrationsView = () => {
-  const [activeTab, setActiveTab] = useState<AdminIntegrationTab>('my');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeTab: AdminIntegrationTab = isValidTab(tabParam) ? tabParam : DEFAULT_TAB;
+
+  const setActiveTab = useCallback(
+    (tab: AdminIntegrationTab) => {
+      router.replace(`/mypage/integrations?tab=${tab}`);
+    },
+    [router],
+  );
+
   const [selectedService, setSelectedService] = useState<IntegrationService>('jira');
   const { integrationMenu, getConnectorDetail } = useAdminIntegrationViewModel();
 
