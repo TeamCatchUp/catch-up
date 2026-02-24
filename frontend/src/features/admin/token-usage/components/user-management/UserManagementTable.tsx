@@ -73,7 +73,7 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
 
           {/* 직급 */}
           <div>
-            <span className={`${TAG_BASE} ${POSITION_BADGE_CLASS}`}>{member.position}</span>
+            <span className={`${TAG_BASE} ${POSITION_BADGE_CLASS[member.position] ?? 'bg-neutral-2 text-gray-50'}`}>{member.position}</span>
           </div>
 
           {/* 부서 */}

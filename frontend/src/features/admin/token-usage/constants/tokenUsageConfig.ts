@@ -49,8 +49,12 @@ export const USER_MGMT_SORT_OPTIONS: { key: UserMgmtSortKey; label: string }[] =
   { key: 'cost', label: '사용량 순' },
 ];
 
-/** 직급 Badge 색상 */
-export const POSITION_BADGE_CLASS = 'bg-violet-5 text-violet-60';
+/** 직급 Badge 색상 (members RANK_BADGE_CLASS 동일) */
+export const POSITION_BADGE_CLASS: Record<string, string> = {
+  경영진: 'bg-orange-5 text-orange-60',
+  팀장: 'bg-violet-5 text-violet-60',
+  팀원: 'bg-blue-5 text-blue-50',
+};
 
 /** 부서 Badge 색상 */
 export const TEAM_BADGE_CLASS = 'bg-green-5 text-green-60';

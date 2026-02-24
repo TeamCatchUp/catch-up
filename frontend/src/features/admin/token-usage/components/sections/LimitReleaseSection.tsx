@@ -196,7 +196,7 @@ const LimitReleaseSection = () => {
                           <span
                             className={cn(
                               'rounded-md2 text-body-xsmall truncate px-1.5 py-0.5',
-                              POSITION_BADGE_CLASS,
+                              POSITION_BADGE_CLASS[row.position] ?? 'bg-neutral-2 text-gray-50',
                             )}
                           >
                             {row.position}
