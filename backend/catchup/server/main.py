@@ -8,7 +8,7 @@ from sqlalchemy import inspect
 
 from catchup import __version__
 from catchup.components.vector_db.factory import VectorDbProvider, get_vector_db_service
-from catchup.configs.config import MeiliEnvironment, settings
+from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal, engine
 from catchup.db.models import Base, Company
 from catchup.server.state import state
@@ -50,40 +50,13 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-# Meilisearch 설정 (서버 가동 시점에 최초 1회 실행)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
-        logger.info("[SERVER][SETUP] Starting ...")
+    logger.info(f"Log level: {settings.LOG_LEVEL}")
 
-
-        logger.info(f"Meilisearch HTTP address: {settings.MEILI_HTTP_ADDR}")
-        logger.info(f"MeilSsearch environment: {settings.MEILI_ENVIRONMENT}")
-        logger.info(f"Log level: {settings.LOG_LEVEL}")
-
-        # Fastapi 서버와 Meilisearch 운영 환경이 다를 경우 인덱스 초기화 과정 생략
-        if settings.ENV != settings.MEILI_ENVIRONMENT:
-            logger.info("Skipping Meilisearch index initialization.")
-
-        # Meilisearch가 개발 환경에서 구동 중인 경우에만 테스트용 인덱스에 대한 초기화 수행
-        elif settings.MEILI_ENVIRONMENT == MeiliEnvironment.development:
-            repo = get_vector_db_service(VectorDbProvider.MEILISEARCH)
-            if hasattr(repo, "initialize"):
-                await repo.initialize(
-                    [
-                        settings.MEILI_GITHUB_CODEBASE_INDEX,
-                        settings.MEILI_GITHUB_ISSUES_INDEX,
-                        settings.MEILI_GITHUB_PRS_INDEX,
-                    ]
-                )
-            print("Successfully initilized server setup.")
-    except Exception as e:
-        logger.info(f"Falied to connect to Meilisearch. {e}")
-
-    # DB INIT
     try:
         db_init_started_at = time.perf_counter()
-
+        
         # 1) 메타데이터 기준 테이블 목록 수집
         metadata_table_names = sorted(Base.metadata.tables.keys())
         logger.info("[APP][STARTUP][DB][INIT] Starting DB initialization")

@@ -21,8 +21,6 @@ dependencies = [
     "langchain-text-splitters",
     "langfuse",
     "langgraph",
-    "meilisearch",
-    "meilisearch-python-sdk",
     "openai",
     "tiktoken",
     "cohere",
