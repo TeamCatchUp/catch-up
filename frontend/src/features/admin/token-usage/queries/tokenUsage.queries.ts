@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 
 import {
   MOCK_DAILY_USAGE,
+  MOCK_LIMIT_RELEASE_REQUESTS,
   MOCK_ORG_DAILY_USAGE,
   MOCK_ORG_MEMBERS,
   MOCK_ORG_QUESTION_COUNTS,
@@ -86,5 +87,13 @@ export const tokenUsageQueries = {
     queryOptions({
       queryKey: [...tokenUsageQueries.all(), 'userManagement'] as const,
       queryFn: async () => MOCK_ORG_MEMBERS,
+    }),
+
+  /* ── 제한 해제 요청 ── */
+
+  limitReleaseRequests: () =>
+    queryOptions({
+      queryKey: [...tokenUsageQueries.all(), 'limitReleaseRequests'] as const,
+      queryFn: async () => MOCK_LIMIT_RELEASE_REQUESTS,
     }),
 };

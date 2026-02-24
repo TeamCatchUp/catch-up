@@ -1,5 +1,6 @@
 import type {
   DailyTokenUsage,
+  LimitReleaseRequest,
   OrgMember,
   TokenUsageRankingEntry,
   TokenUsageSummary,
@@ -122,3 +123,20 @@ export const MOCK_ORG_SUMMARY: TokenUsageSummary = {
   total_cost: 118.6,
   status: 'normal',
 };
+
+/* ─── 제한 해제 요청 ─── */
+
+export const MOCK_LIMIT_RELEASE_REQUESTS: LimitReleaseRequest[] = [
+  { id: 'lr-1', userId: '2', name: '직원20', email: 'yumi.lee@company.com', team: '부서O', position: '팀장', cost: 754, requestedAmount: 50, reason: '긴급 프로젝트 마감 기한 임박', dailyLimit: 5, monthlyLimit: 90, requestedAt: '2026-02-20T09:00:00Z' },
+  { id: 'lr-2', userId: '3', name: '직원04', email: 'minsu.kim@company.com', team: '부서O', position: '팀장', cost: 754, requestedAmount: 30, reason: '대규모 데이터 분석 작업 필요', dailyLimit: 5, monthlyLimit: 90, requestedAt: '2026-02-20T10:30:00Z' },
+  { id: 'lr-3', userId: '4', name: '박지현', email: 'jihyun.park@company.com', team: '부서O', position: '팀장', cost: 754, requestedAmount: 754, reason: '분기 보고서 작성 지원', dailyLimit: 5, monthlyLimit: 90, requestedAt: '2026-02-19T14:00:00Z' },
+  { id: 'lr-4', userId: '5', name: '최영호', email: 'youngho.choi@company.com', team: '부서O', position: '팀장', cost: 754, requestedAmount: 26, reason: '고객 미팅 자료 준비', dailyLimit: 5, monthlyLimit: 90, requestedAt: '2026-02-19T11:00:00Z' },
+  { id: 'lr-5', userId: '6', name: '정수진', email: 'sujin.jung@company.com', team: '부서O', position: '팀장', cost: 754, requestedAmount: 130, reason: '신규 서비스 기획안 작성', dailyLimit: 5, monthlyLimit: 90, requestedAt: '2026-02-18T16:00:00Z' },
+  { id: 'lr-6', userId: '7', name: '한동훈', email: 'donghun.han@company.com', team: '부서O', position: '팀장', cost: 754, requestedAmount: 150, reason: 'API 연동 테스트 진행', dailyLimit: 5, monthlyLimit: 90, requestedAt: '2026-02-18T09:30:00Z' },
+  { id: 'lr-7', userId: '8', name: '오세린', email: 'serin.oh@company.com', team: '부서O', position: '팀장', cost: 754, requestedAmount: 600, reason: '대규모 번역 작업 진행', dailyLimit: 5, monthlyLimit: 90, requestedAt: '2026-02-17T13:00:00Z' },
+  { id: 'lr-8', userId: '9', name: '윤재석', email: 'jaeseok.yoon@company.com', team: '부서O', position: '팀장', cost: 754, requestedAmount: 3, reason: '간단한 문서 검토', dailyLimit: 5, monthlyLimit: 90, requestedAt: '2026-02-17T10:00:00Z' },
+  { id: 'lr-9', userId: '10', name: '송하나', email: 'hana.song@company.com', team: '부서O', position: '팀장', cost: 754, requestedAmount: 5, reason: '이메일 초안 작성', dailyLimit: 5, monthlyLimit: 90, requestedAt: '2026-02-16T15:00:00Z' },
+  { id: 'lr-10', userId: '11', name: '임도현', email: 'dohyun.lim@company.com', team: '부서O', position: '팀장', cost: 754, requestedAmount: 5, reason: '프레젠테이션 자료 보완', dailyLimit: 5, monthlyLimit: 90, requestedAt: '2026-02-16T09:00:00Z' },
+  { id: 'lr-11', userId: '12', name: '강서연', email: 'seoyeon.kang@company.com', team: '마케팅 팀', position: '대리', cost: 320, requestedAmount: 45, reason: '마케팅 캠페인 콘텐츠 제작', dailyLimit: 5, monthlyLimit: 90, requestedAt: '2026-02-15T14:30:00Z' },
+  { id: 'lr-12', userId: '13', name: '조현우', email: 'hyunwoo.jo@company.com', team: '개발 팀', position: '사원', cost: 890, requestedAmount: 200, reason: '코드 리뷰 및 리팩토링 지원', dailyLimit: 5, monthlyLimit: 90, requestedAt: '2026-02-15T11:00:00Z' },
+];

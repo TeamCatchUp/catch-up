@@ -41,3 +41,31 @@ export interface TokenUsageRankingEntry {
   member: OrgMember;
   cost: number;
 }
+
+/** 제한 해제 요청 */
+export interface LimitReleaseRequest {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  profileImage?: string;
+  team: string;
+  position: string;
+  cost: number;
+  requestedAmount: number;
+  reason: string;
+  dailyLimit: number;
+  monthlyLimit: number;
+  requestedAt: string;
+}
+
+/** 제한 해제 요청 테이블 행 */
+export interface LimitReleaseTableRow {
+  key: string;
+  name: string;
+  profileImage?: string;
+  cost: number;
+  requestedAmount: number;
+  position: string;
+  team: string;
+}
