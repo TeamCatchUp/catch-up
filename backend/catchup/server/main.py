@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect
 
 from catchup import __version__
 from catchup.components.vector_db.factory import VectorDbProvider, get_vector_db_service
@@ -49,7 +50,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        logger.info("Initializing server setup ...")
+        logger.info("[SERVER][SETUP] Starting ...")
+
+
         logger.info(f"Meilisearch HTTP address: {settings.MEILI_HTTP_ADDR}")
         logger.info(f"MeilSsearch environment: {settings.MEILI_ENVIRONMENT}")
 
@@ -72,15 +75,116 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.info(f"Falied to connect to Meilisearch. {e}")
 
+    # DB INIT
     try:
-        logger.info("Creating tables...")
+        db_init_started_at = time.perf_counter()
+
+        # 1) 메타데이터 기준 테이블 목록 수집
+        metadata_table_names = sorted(Base.metadata.tables.keys())
+        logger.info("[APP][STARTUP][DB][INIT] Starting DB initialization")
+        logger.debug(
+            "[APP][STARTUP][DB][INIT] Metadata tables loaded: count=%s, tables=%s",
+            len(metadata_table_names),
+            metadata_table_names,
+        )
+
+        # 2) create_all 이전 DB 상태 확인
+        with engine.connect() as connection:
+            db_inspector_before = inspect(connection)
+            db_table_names_before = sorted(db_inspector_before.get_table_names())
+
+        missing_tables_before = sorted(
+            set(metadata_table_names) - set(db_table_names_before)
+        )
+        logger.debug(
+            "[APP][STARTUP][DB][INIT] DB tables before create_all: count=%s, tables=%s",
+            len(db_table_names_before),
+            db_table_names_before,
+        )
+        logger.debug(
+            "[APP][STARTUP][DB][INIT] Missing tables before create_all: count=%s, tables=%s",
+            len(missing_tables_before),
+            missing_tables_before,
+        )
+
+        # 3) SQLAlchemy create_all 실행
+        create_all_started_at = time.perf_counter()
         Base.metadata.create_all(bind=engine)
-        logger.info("Done creating tables.")
+        create_all_elapsed_ms = (time.perf_counter() - create_all_started_at) * 1000
+        logger.debug(
+            "[APP][STARTUP][DB][INIT] create_all completed: elapsed_ms=%.2f",
+            create_all_elapsed_ms,
+        )
+
+        # 4) create_all 이후 DB 상태 확인 및 스키마 드리프트 탐지
+        with engine.connect() as connection:
+            db_inspector_after = inspect(connection)
+            db_table_names_after = sorted(db_inspector_after.get_table_names())
+
+            missing_columns_by_table: dict[str, list[str]] = {}
+            for table_name in metadata_table_names:
+                if table_name not in db_table_names_after:
+                    continue
+
+                model_columns = sorted(Base.metadata.tables[table_name].c.keys())
+                db_columns = sorted(
+                    column["name"] for column in db_inspector_after.get_columns(table_name)
+                )
+                missing_columns = sorted(set(model_columns) - set(db_columns))
+                if missing_columns:
+                    missing_columns_by_table[table_name] = missing_columns
+
+        created_tables = sorted(set(db_table_names_after) - set(db_table_names_before))
+        missing_tables_after = sorted(set(metadata_table_names) - set(db_table_names_after))
+
+        logger.debug(
+            "[APP][STARTUP][DB][INIT] DB tables after create_all: count=%s, tables=%s",
+            len(db_table_names_after),
+            db_table_names_after,
+        )
+        logger.debug(
+            "[APP][STARTUP][DB][INIT] Created tables in this startup: count=%s, tables=%s",
+            len(created_tables),
+            created_tables,
+        )
+
+        if missing_tables_after:
+            logger.warning(
+                "[APP][STARTUP][DB][INIT] Missing tables after create_all: count=%s, tables=%s",
+                len(missing_tables_after),
+                missing_tables_after,
+            )
+
+        if missing_columns_by_table:
+            for table_name, missing_columns in missing_columns_by_table.items():
+                logger.warning(
+                    "[APP][STARTUP][DB][SCHEMA_DRIFT] Missing DB columns detected: table=%s, missing_columns=%s",
+                    table_name,
+                    missing_columns,
+                )
+        else:
+            logger.debug(
+                "[APP][STARTUP][DB][SCHEMA_DRIFT] No missing DB columns detected"
+            )
+
+        db_init_elapsed_ms = (time.perf_counter() - db_init_started_at) * 1000
+        logger.info(
+            "[APP][STARTUP][DB][INIT] Completed DB initialization: elapsed_ms=%.2f, metadata_tables=%s, db_tables_before=%s, db_tables_after=%s",
+            db_init_elapsed_ms,
+            len(metadata_table_names),
+            len(db_table_names_before),
+            len(db_table_names_after),
+        )
 
     except Exception as e:
-        logger.critical(f"Failed to create DB tables: {e}")
-        raise e
+        logger.critical(
+            "[APP][STARTUP][DB][INIT] Failed to initialize DB tables: %s",
+            e,
+            exc_info=True,
+        )
+        raise
     
+    # Langgraph Checkpoint INIT
     try:
         await init_langgraph_checkpointer()
     
