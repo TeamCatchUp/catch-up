@@ -415,10 +415,19 @@ def init_scheduler():
 
     interval_hours = settings.WEBHOOK_FLUSH_INTERVAL_HOURS
     token_refresh_minutes = settings.ATLASSIAN_TOKEN_REFRESH_INTERVAL_MINUTES
+    
+    # 증분 동기화/웹훅 유지 작업을 5분 간격으로 분산해 정시 부하를 완화한다.
+    job_minutes = {
+        "github_flush": 0,
+        "slack_flush": 5,
+        "jira_flush": 10,
+        "confluence_poll": 15,
+        "jira_webhook_refresh": 20,
+    }
 
     _scheduler.add_job(
         flush_github_events,
-        trigger = CronTrigger(hour=f"*/{interval_hours}", minute = 0),
+        trigger = CronTrigger(hour=f"*/{interval_hours}", minute=job_minutes["github_flush"]),
         id="github_webhook_flush",
         name= "Github Webhook Event Flush",
         replace_existing = True,
@@ -427,7 +436,7 @@ def init_scheduler():
 
     _scheduler.add_job(
         flush_slack_events,
-        trigger=CronTrigger(hour=f"*/{interval_hours}", minute=0),
+        trigger=CronTrigger(hour=f"*/{interval_hours}", minute=job_minutes["slack_flush"]),
         id="slack_webhook_flush",
         name="Slack Webhook Event Flush",
         replace_existing=True,
@@ -436,7 +445,7 @@ def init_scheduler():
 
     _scheduler.add_job(
         flush_jira_events,
-        trigger=CronTrigger(hour=f"*/{interval_hours}", minute=0),
+        trigger=CronTrigger(hour=f"*/{interval_hours}", minute=job_minutes["jira_flush"]),
         id="jira_webhook_flush",
         name="Jira Webhook Event Flush",
         replace_existing=True,
@@ -446,7 +455,10 @@ def init_scheduler():
     jira_webhook_refresh_hours = settings.JIRA_WEBHOOK_REFRESH_INTERVAL_HOURS
     _scheduler.add_job(
         refresh_jira_dynamic_webhooks,
-        trigger=CronTrigger(hour=f"*/{jira_webhook_refresh_hours}", minute=10),
+        trigger=CronTrigger(
+            hour=f"*/{jira_webhook_refresh_hours}",
+            minute=job_minutes["jira_webhook_refresh"],
+        ),
         id="jira_dynamic_webhook_refresh",
         name="Jira Dynamic Webhook Refresh",
         replace_existing=True,
@@ -455,7 +467,7 @@ def init_scheduler():
 
     _scheduler.add_job(
         poll_confluence_sync,
-        trigger=CronTrigger(hour=f"*/{interval_hours}", minute=0),
+        trigger=CronTrigger(hour=f"*/{interval_hours}", minute=job_minutes["confluence_poll"]),
         id="confluence_polling_sync",
         name="Confluence Polling Sync",
         replace_existing=True,
@@ -472,7 +484,15 @@ def init_scheduler():
     )
     
     _scheduler.start()
-    logger.info(f"Scheduler initialized with {interval_hours}-hour interval")
+    logger.info(
+        "[SCHEDULER][INIT] Scheduler initialized: interval_hours=%s, github=%s, slack=%s, jira=%s, confluence=%s, jira_webhook_refresh=%s",
+        interval_hours,
+        job_minutes["github_flush"],
+        job_minutes["slack_flush"],
+        job_minutes["jira_flush"],
+        job_minutes["confluence_poll"],
+        job_minutes["jira_webhook_refresh"],
+    )
 
 
 def shutdown_scheduler():
