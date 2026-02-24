@@ -3,6 +3,7 @@
 import { type KeyboardEvent, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+import LimitReleaseSection from '@/features/admin/token-usage/components/sections/LimitReleaseSection';
 import MyTokenUsageSection from '@/features/admin/token-usage/components/sections/MyTokenUsageSection';
 import OrgTokenUsageSection from '@/features/admin/token-usage/components/sections/OrgTokenUsageSection';
 import UserManagementSection from '@/features/admin/token-usage/components/sections/UserManagementSection';
@@ -102,11 +103,9 @@ export default function AdminTokenUsagePage() {
           <OrgTokenUsageSection />
         ) : activeTab === '이용자 관리' ? (
           <UserManagementSection />
-        ) : (
-          <div className="text-body-small flex h-80 items-center justify-center text-gray-50">
-            {activeTab} 기능은 준비 중입니다.
-          </div>
-        )}
+        ) : activeTab === '제한 해제 요청' ? (
+          <LimitReleaseSection />
+        ) : null}
       </div>
     </section>
   );
