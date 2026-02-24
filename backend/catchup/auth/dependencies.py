@@ -1,3 +1,4 @@
+import logging
 from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyCookie
 from sqlalchemy.orm import Session
@@ -5,11 +6,13 @@ from sqlalchemy.orm import Session
 from catchup.auth.jwt import verify_token
 from catchup.db.dependencies import get_db
 from catchup.db.models import User, UserRole, UserStatus
-from catchup.db.users import get_user_by_email
+from catchup.db.users import get_user_by_sub
 from catchup.server.state import state
 
 
 cookie_scheme = APIKeyCookie(name="access_token", auto_error=False)
+
+logger = logging.getLogger(__name__)
 
 def get_current_user(
     access_token: str = Depends(cookie_scheme),
@@ -24,8 +27,8 @@ def get_current_user(
         
     try:
         payload = verify_token(access_token, "access")
-        email: str = payload.get("sub")
-        if not email:
+        sub: str = payload.get("sub")
+        if not sub:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="토큰에 사용자 정보가 없습니다.",
@@ -37,7 +40,7 @@ def get_current_user(
             detail="토큰이 만료되었거나 유효하지 않습니다.",
         )
 
-    user = get_user_by_email(db, email)
+    user = get_user_by_sub(db, sub)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -62,16 +65,16 @@ def get_pending_signup_user(
         
     try:
         payload = verify_token(access_token, "access")
-        email: str = payload.get("sub")
-        okta_uid: str = payload.get("okta_uid")
+        email: str = payload.get("email")
+        sub: str = payload.get("sub")
 
-        if not email or not okta_uid:
+        if not email or not sub:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, 
                 detail="토큰에 필수 정보가 없습니다."
             )
             
-        return {"email": email, "okta_uid": okta_uid, "name": payload.get("name")}
+        return {"sub": sub, "email": email, "name": payload.get("name")}
         
     except Exception:
         raise HTTPException(
@@ -82,6 +85,7 @@ def get_pending_signup_user(
 
 def require_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """관리자 권한 검사. 인증된 사용자 중 ADMIN role만 허용."""
+    logger.debug(f"Checking user role: {current_user.role}")
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -104,10 +108,11 @@ def get_current_user_info(
         
     try:
         payload = verify_token(access_token, "access")
-        email: str = payload.get("sub")
+        sub: str = payload.get("sub")
+        email: str = payload.get("email")
         name: str = payload.get("name")
         
-        if not email:
+        if not sub:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="토큰에 사용자 정보가 없습니다.",
@@ -119,7 +124,7 @@ def get_current_user_info(
             detail="토큰이 만료되었거나 유효하지 않습니다.",
         )
 
-    user = get_user_by_email(db, email)    
+    user = get_user_by_sub(db, sub)    
     
     if user:
         return {
@@ -135,7 +140,7 @@ def get_current_user_info(
         if not state.is_admin_initiated:
             suggested_role = UserRole.ADMIN
         
-        # Okta 로그인 O, 회원가입 X (일반 유저)
+        # Oauth 로그인 O, 회원가입 X (일반 유저)
         return {
             "email": email,
             "name": name or "Unknown",

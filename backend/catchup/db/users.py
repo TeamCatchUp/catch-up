@@ -3,7 +3,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from catchup.auth.schemas import UserCreate
-from catchup.db.models import OktaUser, User, UserWorkspace, Workspace
+from catchup.db.models import OauthUser, User, UserWorkspace, Workspace
 
 
 def get_user_by_email(
@@ -13,6 +13,17 @@ def get_user_by_email(
     return db.scalar(
         select(User)
         .filter_by(email=email)
+    )
+
+
+def get_user_by_sub(
+    db: Session,
+    sub: str
+) -> User | None:
+    return db.scalar(
+        select(User)
+        .join(OauthUser)
+        .where(OauthUser.sub == sub)
     )
 
 
@@ -50,14 +61,14 @@ def get_user_with_full_context(
     return db.scalar(stmt)
 
 
-def get_okta_user_with_okta_uid(
+def get_oauth_user_with_sub(
     db: Session,
-    okta_uid: str
-) -> Optional[OktaUser]:
+    sub: str
+) -> Optional[OauthUser]:
     
     stmt = (
-        select(OktaUser)
-        .where(OktaUser.okta_uid == okta_uid)
+        select(OauthUser)
+        .where(OauthUser.sub == sub)
     )
     
     return db.scalar(stmt)

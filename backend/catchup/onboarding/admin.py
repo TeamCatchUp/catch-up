@@ -1,15 +1,15 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from catchup.db.models import Company, UserStatus, Workspace, User, UserRole, UserWorkspace
-from catchup.db.users import get_okta_user_with_okta_uid
+from catchup.db.users import get_oauth_user_with_sub
 from catchup.onboarding.schemas import AdminSignUpSchema
 
-def register_admin_from_okta(db: Session, data: AdminSignUpSchema) -> User:
+def register_admin_from_oauth(db: Session, data: AdminSignUpSchema) -> User:
 
-    okta_record = get_okta_user_with_okta_uid(db, data.okta_uid)
-    if not okta_record:
-        raise HTTPException(status_code=404, detail="Okta 유저 정보가 존재하지 않습니다.")
-    if okta_record.user_id:
+    oauth_user_record = get_oauth_user_with_sub(db, data.sub)
+    if not oauth_user_record:
+        raise HTTPException(status_code=404, detail="Oauth 유저 정보가 존재하지 않습니다.")
+    if oauth_user_record.user_id:
         raise HTTPException(status_code=400, detail="이미 가입이 완료된 유저입니다.")
 
     try:
@@ -33,7 +33,7 @@ def register_admin_from_okta(db: Session, data: AdminSignUpSchema) -> User:
         new_user = User(
             email=data.email,
             name=data.name,
-            provider="okta",
+            provider="keycloak",
             role=UserRole.ADMIN, 
             department=data.company_name,  # TODO: 예시고객사 PoC 한정
             job_level=data.job_level,
@@ -50,7 +50,7 @@ def register_admin_from_okta(db: Session, data: AdminSignUpSchema) -> User:
         db.add(user_workspace)
 
         # OktaUser에 CatchUp user_id 업데이트
-        okta_record.user_id = new_user.id
+        oauth_user_record.user_id = new_user.id
 
         db.commit()
         db.refresh(new_user)

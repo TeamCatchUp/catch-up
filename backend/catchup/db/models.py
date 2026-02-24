@@ -111,6 +111,7 @@ class User(Base):
         cascade="all, delete-orphan"
     )
     workspaces: Mapped[list["Workspace"]] = association_proxy("workspace_links", "workspace")
+    oauth_user: Mapped["OauthUser"] = relationship(back_populates="user")
 
 
 class InactiveUser(Base):
@@ -203,12 +204,16 @@ class PreMappingBuffer(Base):
         UniqueConstraint("email", "source_type", name="uq_email_source_buffer"),
     )
     
-
 class OktaUser(Base):
     __tablename__ = "okta_users"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+
+class OauthUser(Base):
+    __tablename__ = "oauth_users"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    okta_uid: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    sub: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     email: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -218,6 +223,8 @@ class OktaUser(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=True)
+    
+    user: Mapped["User"] = relationship(back_populates="oauth_user")
 
 
 # =================
