@@ -2,9 +2,9 @@ from datetime import datetime
 import uuid
 from typing import Annotated, Any, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from catchup.db.models import FeedbackLiteral, SenderType, UserRole
+from catchup.db.models import FeedbackLiteral, SenderType, SourceType, UserRole
 from catchup.rag.schemas.sources import BaseSource, SourceResponse
 
 
@@ -25,8 +25,16 @@ NODE_STATUS_MAP = {
 
 class ChatRequest(BaseModel):
     query: str = Field(..., description="사용자 질문")
-    role: Optional[str] = Field(default=UserRole.USER, description="사용자 역할 (admin 또는 user)") # TODO: 직군으로 바꿔야 하나?
+    role: Optional[str] = Field(default=UserRole.USER, description="사용자 역할 (admin 또는 user)")
     session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
+    tool_filters: list[SourceType] = Field(default_factory=list, description="협업 툴 검색 필터")
+    
+    @field_validator('tool_filters', mode='before')
+    @classmethod
+    def validate_tool_filters(cls, v):
+        if v is None:
+            return []
+        return v
 
 
 class ChatResponse(BaseModel):

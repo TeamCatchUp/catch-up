@@ -13,7 +13,7 @@ from catchup.chat.chat_room import generate_chat_room_title
 from catchup.chat.utils import restore_conversation_context
 from catchup.configs.config import settings
 from catchup.db.chat_room import add_message, create_chat_room, get_chat_room, soft_delete_last_conversation_turn
-from catchup.db.models import ChatRoom
+from catchup.db.models import ChatRoom, SourceType
 from catchup.observability.langfuse import observe
 from catchup.chat.schemas import (
     NODE_STATUS_MAP,
@@ -51,6 +51,7 @@ class ChatService:
         db: Session,
         global_context: GlobalContext,
         session_id: uuid.UUID,
+        tool_filters: Optional[list[SourceType]] = None,
         query: str = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         
@@ -81,12 +82,13 @@ class ChatService:
                 query,
                 lg_current_state
             )
-            
+                        
             # 초기 AgentState
             inputs = {
                 "messages": input_messages,
                 "original_query": query,
-                "global_context": global_context
+                "global_context": global_context,
+                "tool_filters": tool_filters,
             }
             
             stream_state = {
