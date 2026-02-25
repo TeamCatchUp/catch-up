@@ -97,7 +97,6 @@ class PGVectorService(BaseVectorDbService):
         session_factory: Any = SessionLocal,
     ):
         logger.info(f"PGVectorService initialized with Collection Name: '{collection_name}'")
-        logger.info(f"DB URL Host: {postgresql_engine.url.host}")
         self.session_factory = session_factory
         self.collection_name = collection_name
         self.vector_store = self._create_pgvector(
