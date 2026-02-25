@@ -3,6 +3,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import URL
 
 load_dotenv()
 
@@ -160,12 +161,15 @@ class Settings(BaseSettings):
 
     @property
     def sqlalchemy_database_url(self) -> str:
-        return (
-            f"{self.DB_DIALECT}+{self.DB_DRIVER}://"
-            f"{self.DB_USERNAME}:{self.DB_PASSWORD}@"
-            f"{self.DB_HOST}:{self.DB_PORT}/"
-            f"{self.DB_DATABASE}"
-        )
+        
+        return URL.create(
+            drivername=f"{self.DB_DIALECT}+{self.DB_DRIVER}",
+            username=self.DB_USERNAME,
+            password=self.DB_PASSWORD,
+            host=self.DB_HOST,
+            port=self.DB_PORT,
+            database=self.DB_DATABASE
+        ).render_as_string(hide_password=False)
 
 
 class AuthSettings(BaseSettings):

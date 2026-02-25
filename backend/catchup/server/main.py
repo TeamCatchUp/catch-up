@@ -5,9 +5,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
+from uvicorn.logging import DefaultFormatter
 
 from catchup import __version__
-from catchup.components.vector_db.factory import VectorDbProvider, get_vector_db_service
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal, engine
 from catchup.db.models import Base, Company
@@ -36,17 +36,25 @@ from catchup.server.settings.api import router as settings_router
 
 # logging 설정
 log_level = logging.INFO
-if settings.LOG_LEVEL == "debug":
+if settings.LOG_LEVEL.upper() == "DEBUG":
     log_level = logging.DEBUG
 
-logging.basicConfig(
-    level=log_level,
-    format="(%(asctime)s) %(name)s.%(funcName)s:%(lineno)d: [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+handler = logging.StreamHandler()
+handler.setFormatter(
+    DefaultFormatter(
+        fmt="%(levelprefix)s %(asctime)s (%(name)s) %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 )
 
+root_logger = logging.getLogger()
+root_logger.handlers = [handler]
+root_logger.setLevel(log_level)
+
+logging.getLogger("catchup").setLevel(log_level)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,6 +76,7 @@ async def lifespan(app: FastAPI):
 
         # 2) create_all 이전 DB 상태 확인
         with engine.connect() as connection:
+            logger.debug(f"DB Connection Info: {engine.url}")
             db_inspector_before = inspect(connection)
             db_table_names_before = sorted(db_inspector_before.get_table_names())
 
