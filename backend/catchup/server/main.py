@@ -76,7 +76,6 @@ async def lifespan(app: FastAPI):
 
         # 2) create_all 이전 DB 상태 확인
         with engine.connect() as connection:
-            logger.debug(f"DB Connection Info: {engine.url}")
             db_inspector_before = inspect(connection)
             db_table_names_before = sorted(db_inspector_before.get_table_names())
 
