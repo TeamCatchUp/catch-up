@@ -16,7 +16,6 @@ services:
     env_file:
       - .env
     environment:
-      - LOG_LEVEL=DEBUG
       - DB_HOST=${DB_HOST}
       - ENABLE_NEO4J=False
     ports:

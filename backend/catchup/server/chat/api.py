@@ -52,6 +52,7 @@ async def chat_response_stream(
             db=db,
             query=request.query,
             session_id=request.session_id,
+            tool_filters=request.tool_filters,
             global_context=global_context
         ):
             yield f"data: {chunk.model_dump_json(ensure_ascii=False)}\n\n"
