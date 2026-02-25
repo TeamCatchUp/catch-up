@@ -1,9 +1,8 @@
 import type { ErrorResponseProps } from '@/features/chat/types/props/actionProps';
+import Error from '@/public/icons/icon/error.svg';
 
 import AnswerActionButtons from './AnswerActionButtons';
 import FeedbackSection from './FeedbackSection';
-
-import Error from '/public/icons/icon/error.svg';
 
 const AnswerError = ({
   icons,

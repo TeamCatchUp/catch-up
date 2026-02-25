@@ -2,9 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 
+import Error from '@/public/icons/icon/error.svg';
 import { DropdownMenuContent, DropdownMenuItem } from '@/shared/components/ui/dropdown-menu';
-
-import Error from '/public/icons/icon/error.svg';
 
 /**
  * 상단 More 버튼 드롭다운 메뉴를 렌더링

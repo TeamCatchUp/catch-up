@@ -4,12 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 
 import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
 import type { ChatSource } from '@/features/chat/types';
+import AddCircle from '@/public/icons/icon/add_circle.svg';
 import { cn } from '@/shared/utils/cn';
 
 import SourceCard from './SourceCard';
 import SourceError from './SourceError';
-
-import AddCircle from '/public/icons/icon/add_circle.svg';
 
 interface Props {
   sources: ChatSource[];

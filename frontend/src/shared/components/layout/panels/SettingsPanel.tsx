@@ -2,21 +2,20 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 
+import ArticlePerson from '@/public/icons/icon/article_person.svg';
+import Clock from '@/public/icons/icon/clock.svg';
+import CloudCheck from '@/public/icons/icon/cloud_check.svg';
+import Database from '@/public/icons/icon/database.svg';
+import Explore from '@/public/icons/icon/explore.svg';
+import Group from '@/public/icons/icon/group.svg';
+import Help from '@/public/icons/icon/help.svg';
+import Lock from '@/public/icons/icon/lock.svg';
+import Person from '@/public/icons/icon/person.svg';
+import Shield from '@/public/icons/icon/shield.svg';
 import type { UserRole } from '@/shared/queries/auth.types';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { useUserStore } from '@/shared/store/userStore';
 import { cn } from '@/shared/utils/cn';
-
-import ArticlePerson from '/public/icons/icon/article_person.svg';
-import Clock from '/public/icons/icon/clock.svg';
-import CloudCheck from '/public/icons/icon/cloud_check.svg';
-import Database from '/public/icons/icon/database.svg';
-import Explore from '/public/icons/icon/explore.svg';
-import Group from '/public/icons/icon/group.svg';
-import Help from '/public/icons/icon/help.svg';
-import Lock from '/public/icons/icon/lock.svg';
-import Person from '/public/icons/icon/person.svg';
-import Shield from '/public/icons/icon/shield.svg';
 
 interface SettingsMenuItem {
   name: string;

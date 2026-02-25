@@ -1,6 +1,6 @@
 import Image from 'next/image';
 
-import Book from '/public/icons/icon/book.svg';
+import Book from '@/public/icons/icon/book.svg';
 
 interface QuestionTipsProps {
   onTipClick: (query: string) => void;

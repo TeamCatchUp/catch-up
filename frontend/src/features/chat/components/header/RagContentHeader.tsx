@@ -3,6 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+import Add from '@/public/icons/icon/add_small.svg';
+import AI from '@/public/icons/icon/ai.svg';
+import ArrowRight2 from '@/public/icons/icon/arrow_right2.svg';
+import Kebeb from '@/public/icons/icon/kebeb 2.svg';
 import { MoreButtonContent } from '@/shared/components/layout/topNavbar/MoreButtonModal';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
@@ -10,11 +14,6 @@ import { cn } from '@/shared/utils/cn';
 import { isValidSessionId } from '@/shared/utils/sessionId';
 
 import SessionQuestionsModal from './SessionQuestionsModal';
-
-import Add from '/public/icons/icon/add_small.svg';
-import AI from '/public/icons/icon/ai.svg';
-import ArrowRight2 from '/public/icons/icon/arrow_right2.svg';
-import Kebeb from '/public/icons/icon/kebeb 2.svg';
 
 interface RagHeaderProps {
   title: string;

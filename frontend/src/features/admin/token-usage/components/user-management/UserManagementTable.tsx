@@ -4,9 +4,9 @@
 
 import Image from 'next/image';
 
+import IconChip from '@/public/icons/icon/chip.svg';
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import IconError from '@/public/icons/icon/error.svg';
-import IconChip from '@/public/icons/icon/chip.svg';
 import IconGraph from '@/public/icons/icon/graph.svg';
 import IconKebab from '@/public/icons/icon/kebab.svg';
 import { Button } from '@/shared/components/ui/button';

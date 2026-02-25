@@ -1,8 +1,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 
-import ArrowRight from '/public/icons/icon/arrow_right.svg';
-import Explore from '/public/icons/icon/explore.svg';
+import ArrowRight from '@/public/icons/icon/arrow_right.svg';
+import Explore from '@/public/icons/icon/explore.svg';
 
 const cardData = [
   {

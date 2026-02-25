@@ -4,6 +4,11 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
+import AdminPanelSettings from '@/public/icons/icon/admin_panel_settings.svg';
+import Logout from '@/public/icons/icon/logout.svg';
+import Person from '@/public/icons/icon/person.svg';
+import DefaultProfile from '@/public/icons/icon/profile.svg';
+import Settings from '@/public/icons/icon/settings.svg';
 import {
   DropdownMenuContent,
   DropdownMenuItem,
@@ -12,12 +17,6 @@ import {
 } from '@/shared/components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import { authMutations } from '@/shared/queries/auth.mutations';
-
-import AdminPanelSettings from '/public/icons/icon/admin_panel_settings.svg';
-import Logout from '/public/icons/icon/logout.svg';
-import Person from '/public/icons/icon/person.svg';
-import DefaultProfile from '/public/icons/icon/profile.svg';
-import Settings from '/public/icons/icon/settings.svg';
 
 interface UserMenuContentProps {
   userName?: string;

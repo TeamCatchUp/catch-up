@@ -1,8 +1,8 @@
 import Image from 'next/image';
 
-import { ATLASSIAN_PROFILE_URL, CONFLUENCE_GUIDE_IMAGES } from '../../constants/integrations';
+import IconAT from '@/public/icons/logo/atlassian.svg';
 
-import IconAT from '/public/icons/logo/atlassian.svg';
+import { ATLASSIAN_PROFILE_URL, CONFLUENCE_GUIDE_IMAGES } from '../../constants/integrations';
 
 /** Confluence (Atlassian) 연동 가이드 섹션 */
 const ConfluenceGuideSection = () => {

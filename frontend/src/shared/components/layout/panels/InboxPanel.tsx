@@ -2,16 +2,15 @@
 
 import { useState } from 'react';
 
+import AdminPanelSettings from '@/public/icons/icon/admin_panel_settings.svg';
+import Assignment from '@/public/icons/icon/assignment.svg';
+import CheckCircle from '@/public/icons/icon/check_circle.svg';
+import DefaultProfile from '@/public/icons/icon/default_profile.svg';
+import FilterList from '@/public/icons/icon/filter_list.svg';
+import Kebab2 from '@/public/icons/icon/kebeb 2.svg';
+import Settings from '@/public/icons/icon/settings.svg';
+import Share2 from '@/public/icons/icon/share_2.svg';
 import { cn } from '@/shared/utils/cn';
-
-import AdminPanelSettings from '/public/icons/icon/admin_panel_settings.svg';
-import Assignment from '/public/icons/icon/assignment.svg';
-import CheckCircle from '/public/icons/icon/check_circle.svg';
-import DefaultProfile from '/public/icons/icon/default_profile.svg';
-import FilterList from '/public/icons/icon/filter_list.svg';
-import Kebab2 from '/public/icons/icon/kebeb 2.svg';
-import Settings from '/public/icons/icon/settings.svg';
-import Share2 from '/public/icons/icon/share_2.svg';
 
 type FilterTab = '모두' | '공유' | '보고' | '관리' | '요청';
 

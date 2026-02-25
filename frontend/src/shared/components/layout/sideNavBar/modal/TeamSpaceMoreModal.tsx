@@ -1,9 +1,8 @@
 'use client';
 
+import GroupAdd from '@/public/icons/icon/group_add.svg';
+import Settings from '@/public/icons/icon/settings.svg';
 import { DropdownMenuContent, DropdownMenuItem } from '@/shared/components/ui/dropdown-menu';
-
-import GroupAdd from '/public/icons/icon/group_add.svg';
-import Settings from '/public/icons/icon/settings.svg';
 
 export function TeamSpaceMoreContent() {
   return (

@@ -1,10 +1,9 @@
 import type { ChatSource } from '@/features/chat/types';
-
-import LightbulbFilled from '/public/icons/icon/lightbulb_filled.svg';
-import Confluence from '/public/icons/logo/Confluence.svg';
-import Github from '/public/icons/logo/GitHub.svg';
-import Jira from '/public/icons/logo/Jira.svg';
-import Slack from '/public/icons/logo/Slack.svg';
+import LightbulbFilled from '@/public/icons/icon/lightbulb_filled.svg';
+import Confluence from '@/public/icons/logo/Confluence.svg';
+import Github from '@/public/icons/logo/GitHub.svg';
+import Jira from '@/public/icons/logo/Jira.svg';
+import Slack from '@/public/icons/logo/Slack.svg';
 
 interface Props {
   source: ChatSource;

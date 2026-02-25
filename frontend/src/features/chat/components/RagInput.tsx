@@ -3,9 +3,13 @@
 import { useRef, useState } from 'react';
 
 import type { UseRagFiltersReturn } from '@/features/chat/hooks/filter/useRagFilters';
+import ArrowSend from '@/public/icons/icon/arrow_send.svg';
 import IconDivider from '@/public/icons/icon/divider.svg';
+import DropdownDown from '@/public/icons/icon/dropdown_down.svg';
+import DropdownUp from '@/public/icons/icon/dropdown_up.svg';
 import IconPerson from '@/public/icons/icon/person.svg';
 import IconSpace from '@/public/icons/icon/space.svg';
+import Stop from '@/public/icons/icon/stop.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import IconConfluence from '@/public/icons/logo/Confluence.svg';
 import IconGithub from '@/public/icons/logo/GitHub.svg';
@@ -20,11 +24,6 @@ import {
   MOCK_PROJECT_FILTER_OPTIONS,
 } from '@/shared/mocks/search/filterOptions';
 import { cn } from '@/shared/utils/cn';
-
-import ArrowSend from '/public/icons/icon/arrow_send.svg';
-import DropdownDown from '/public/icons/icon/dropdown_down.svg';
-import DropdownUp from '/public/icons/icon/dropdown_up.svg';
-import Stop from '/public/icons/icon/stop.svg';
 
 interface RagInputProps {
   filters: UseRagFiltersReturn;

@@ -10,12 +10,11 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import ArrowRight from '@/public/icons/icon/arrow_right.svg';
+import Kebeb from '@/public/icons/icon/kebeb 2.svg';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
-
-import ArrowRight from '/public/icons/icon/arrow_right.svg';
-import Kebeb from '/public/icons/icon/kebeb 2.svg';
 
 interface ChatRoomQuery {
   title: string;

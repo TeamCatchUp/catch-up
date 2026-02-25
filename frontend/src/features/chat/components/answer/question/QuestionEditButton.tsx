@@ -1,6 +1,5 @@
+import EditPencil from '@/public/icons/icon/edit_pencil.svg';
 import { cn } from '@/shared/utils/cn';
-
-import EditPencil from '/public/icons/icon/edit_pencil.svg';
 
 interface QuestionEditButtonProps {
   onClick: () => void;

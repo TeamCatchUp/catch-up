@@ -1,8 +1,8 @@
 import Image from 'next/image';
 
-import { GITHUB_GUIDE_IMAGES, GITHUB_PROFILE_URL } from '../../constants/integrations';
+import IconGitHub from '@/public/icons/logo/GitHub.svg';
 
-import IconGitHub from '/public/icons/logo/GitHub.svg';
+import { GITHUB_GUIDE_IMAGES, GITHUB_PROFILE_URL } from '../../constants/integrations';
 
 /** GitHub 연동 가이드 섹션 */
 const GithubGuideSection = () => {
