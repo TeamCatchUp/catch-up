@@ -29,7 +29,7 @@ export interface UseRagChatReturn {
   submitEdit: (messageId: string, newContent: string) => Promise<void>;
   handleStop: () => void;
   setChatData: Dispatch<SetStateAction<ChatData | null>>;
-  updateMessageFeedback: (messageId: string) => void;
+  updateMessageFeedback: (messageId: string, isLiked: boolean | undefined) => void;
 
   // 역방향 무한 스크롤
   hasOlderMessages: boolean;

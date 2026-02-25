@@ -26,7 +26,7 @@ export interface AnswerActionButtonsProps {
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: Dispatch<SetStateAction<Record<string, boolean>>>;
   onRetry?: () => void;
-  onFeedbackSubmitted?: (messageId: string) => void;
+  onFeedbackSubmitted?: (messageId: string, isLiked: boolean | undefined) => void;
 }
 
 /**
@@ -40,7 +40,7 @@ export interface ErrorResponseProps {
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: Dispatch<SetStateAction<Record<string, boolean>>>;
   hasFeedback?: boolean;
-  onFeedbackSubmitted?: (messageId: string) => void;
+  onFeedbackSubmitted?: (messageId: string, isLiked: boolean | undefined) => void;
 }
 
 /**
@@ -54,5 +54,5 @@ export interface FeedbackSectionProps {
   hasFeedback?: boolean;
   feedbackVisibleMap: Record<string, boolean>;
   setFeedbackVisibleMap: Dispatch<SetStateAction<Record<string, boolean>>>;
-  onFeedbackSubmitted?: (messageId: string) => void;
+  onFeedbackSubmitted?: (messageId: string, isLiked: boolean | undefined) => void;
 }

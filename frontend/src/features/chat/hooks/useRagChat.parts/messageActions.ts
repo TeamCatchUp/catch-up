@@ -35,7 +35,7 @@ interface UseMessageActionsReturn {
   sendMessage: (message: string) => Promise<void>;
   submitEdit: (messageId: string, newContent: string) => Promise<void>;
   handleStop: () => void;
-  updateMessageFeedback: (messageId: string) => void;
+  updateMessageFeedback: (messageId: string, isLiked: boolean | undefined) => void;
 }
 
 /**
@@ -231,13 +231,15 @@ export const useMessageActions = ({
    * 특정 assistant 메시지의 feedback 제출 완료 상태를 로컬에 반영
    */
   const updateMessageFeedback = useCallback(
-    (messageId: string) => {
+    (messageId: string, isLiked: boolean | undefined) => {
       setChatData((prev) => {
         if (!prev) return prev;
         return {
           ...prev,
           messages: prev.messages.map((message) =>
-            message.id === messageId ? { ...message, has_feedback: true } : message,
+            message.id === messageId
+              ? { ...message, has_feedback: isLiked !== undefined, is_liked: isLiked }
+              : message,
           ),
         };
       });

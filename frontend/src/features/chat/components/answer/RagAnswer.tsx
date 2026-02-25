@@ -39,7 +39,7 @@ interface RagAnswerProps {
   isLoading: boolean;
   isError: boolean;
   currentStep: RagUIStepKey;
-  onFeedbackSubmitted: (messageId: string) => void;
+  onFeedbackSubmitted: (messageId: string, isLiked: boolean | undefined) => void;
   onRetry?: (questionId: string, questionContent: string) => void;
 }
 
