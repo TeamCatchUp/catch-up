@@ -33,7 +33,6 @@ const FeedbackSection = ({
   messageId,
   sessionId,
   chatHistoryId,
-  hasFeedback,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
   onFeedbackSubmitted,
@@ -53,7 +52,6 @@ const FeedbackSection = ({
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailText, setDetailText] = useState('');
   const [selectedChipId, setSelectedChipId] = useState<number | null>(null);
-  const [localHasFeedback, setLocalHasFeedback] = useState(hasFeedback);
   const [submitError, setSubmitError] = useState(false);
 
   const isSubmitting = feedbackMutation.isPending;
@@ -66,11 +64,6 @@ const FeedbackSection = ({
   // 스크롤
   const scrollSection = useScrollIntoContainer(feedbackRef, 80);
   const scrollDetail = useScrollIntoContainer(detailRef, 100);
-
-  // hasFeedback prop 동기화
-  useEffect(() => {
-    setLocalHasFeedback(hasFeedback);
-  }, [hasFeedback]);
 
   // 섹션 닫힐 때 상태 초기화
   useEffect(() => {
@@ -103,8 +96,7 @@ const FeedbackSection = ({
 
   // 제출 성공 처리
   const handleSubmitSuccess = useCallback(() => {
-    setLocalHasFeedback(true);
-    onFeedbackSubmitted?.(messageId);
+    onFeedbackSubmitted?.(messageId, false);
     toast('피드백을 주셔서 감사합니다.');
     closeSection();
   }, [messageId, onFeedbackSubmitted, closeSection]);
@@ -118,7 +110,7 @@ const FeedbackSection = ({
         return;
       }
 
-      if (isSubmitting || localHasFeedback) return;
+      if (isSubmitting) return;
 
       const isDetail = isDetailOpen;
       const reasons: FeedbackReason[] = selectedReason ? [selectedReason] : [];
@@ -143,10 +135,10 @@ const FeedbackSection = ({
         feedbackMutationRef.current.reset();
       }
     },
-    [chatHistoryId, sessionId, detailText, isDetailOpen, isSubmitting, localHasFeedback, handleSubmitSuccess],
+    [chatHistoryId, sessionId, detailText, isDetailOpen, isSubmitting, handleSubmitSuccess],
   );
 
-  if (!section.mounted || localHasFeedback) return null;
+  if (!section.mounted) return null;
 
   const rootClass = cn(
     'border-neutral-3 mx-auto flex w-193.25 flex-col gap-4 rounded-xl border p-4',
