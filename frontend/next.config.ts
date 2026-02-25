@@ -1,5 +1,4 @@
 import type { NextConfig } from 'next';
-import path from 'path';
 
 const nextConfig = {
   reactStrictMode: true,
@@ -14,6 +13,23 @@ const nextConfig = {
     optimizePackageImports: ['recharts', 'date-fns'],
   },
 
+  // Turbopack SVGR 로더 설정
+  turbopack: {
+    rules: {
+      '*.svg': {
+        loaders: [
+          {
+            loader: '@svgr/webpack',
+            options: {
+              dimensions: false,
+            },
+          },
+        ],
+        as: '*.js',
+      },
+    },
+  },
+
   async rewrites() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
     if (!apiUrl || !apiUrl.startsWith('http')) return [];
@@ -26,6 +42,7 @@ const nextConfig = {
     ];
   },
 
+  // Webpack fallback (--webpack 모드 실행 시 동작)
   webpack(config) {
     const fileLoaderRule = config.module.rules.find(
       (rule: { test?: RegExp }) => rule?.test instanceof RegExp && rule.test.test('.svg'),
@@ -44,13 +61,7 @@ const nextConfig = {
       ],
     });
 
-    // fileLoaderRule.exclude = /\.svg$/i;
     if (fileLoaderRule) fileLoaderRule.exclude = /\.svg$/i;
-
-    config.resolve.alias = {
-      ...(config.resolve.alias || {}),
-      '@': path.resolve(__dirname, 'src'),
-    };
 
     return config;
   },
