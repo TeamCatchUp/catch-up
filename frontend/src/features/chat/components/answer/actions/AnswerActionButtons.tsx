@@ -22,7 +22,6 @@ const AnswerActionButtons = ({
   answerContent,
   sessionId,
   chatHistoryId,
-  hasFeedback,
   isLiked,
   isSaved,
   feedbackVisibleMap,
@@ -32,10 +31,12 @@ const AnswerActionButtons = ({
 }: AnswerActionButtonsProps) => {
   const queryClient = useQueryClient();
   const [bookmarked, setBookmarked] = useState(isSaved ?? false);
-  const [liked, setLiked] = useState(isLiked ?? false);
 
-  // is_liked가 true/false로 내려오면 has_feedback 없어도 피드백 완료로 판단
-  const feedbackGiven = hasFeedback || isLiked !== undefined;
+  // 3-state: true(좋아요), false(싫어요 확정), undefined(미평가)
+  const [currentLiked, setCurrentLiked] = useState<boolean | undefined>(isLiked);
+
+  // 싫어요 확정 시 피드백 버튼 비활성화
+  const isDislikeConfirmed = currentLiked === false;
 
   const saveMutation = useMutation({
     ...chatMutations.toggleSave(),
@@ -51,22 +52,39 @@ const AnswerActionButtons = ({
   });
 
   const handleLike = async () => {
-    if (!chatHistoryId || likeMutation.isPending || feedbackGiven || liked) return;
+    if (!chatHistoryId || likeMutation.isPending || isDislikeConfirmed) return;
 
-    setLiked(true);
+    const wasLiked = currentLiked === true;
+    const newValue = wasLiked ? undefined : true;
+
+    setCurrentLiked(newValue);
+
+    // 좋아요로 전환 시 싫어요 패널 닫기
+    if (!wasLiked) {
+      setFeedbackVisibleMap((prev) => ({ ...prev, [messageId]: false }));
+    }
+
     try {
       await likeMutation.mutateAsync({
         params: { sessionId, messageId: chatHistoryId },
-        body: { is_liked: true, reasons: [], comment: null },
+        body: { is_liked: newValue ?? null, reasons: [], comment: null },
       });
-      onFeedbackSubmitted?.(messageId);
-      toast('피드백을 주셔서 감사합니다.');
+      onFeedbackSubmitted?.(messageId, newValue);
+      toast(wasLiked ? '피드백이 취소되었습니다.' : '피드백을 주셔서 감사합니다.');
     } catch {
-      setLiked(false);
+      setCurrentLiked(currentLiked);
       toast('피드백 제출에 실패했습니다.');
     } finally {
       likeMutation.reset();
     }
+  };
+
+  const handleThumbsDown = () => {
+    if (isDislikeConfirmed) return;
+    setFeedbackVisibleMap((prev) => ({
+      ...prev,
+      [messageId]: !prev[messageId],
+    }));
   };
 
   return (
@@ -75,12 +93,12 @@ const AnswerActionButtons = ({
         const isThumbsDown = item.name === 'ThumbsDown';
         const isThumbsUp = item.name === 'ThumbsUp';
         const isFeedbackButton = isThumbsDown || isThumbsUp;
-        const isFeedbackDisabled = isFeedbackButton && feedbackGiven;
+        const isFeedbackDisabled = isFeedbackButton && isDislikeConfirmed;
         const isBookmark = item.name === 'Bookmark';
         const isThumbsDownPanelOpen = isThumbsDown && feedbackVisibleMap[messageId];
-        const isDislikedActive = isThumbsDown && feedbackGiven && !liked;
+        const isDislikedActive = isThumbsDown && isDislikeConfirmed;
         const tooltipLabel = TOOLTIP_LABELS[item.name];
-        const isLikedActive = isThumbsUp && liked;
+        const isLikedActive = isThumbsUp && currentLiked === true;
         const Icon =
           ((isBookmark && bookmarked) || isLikedActive || isDislikedActive) && item.activeIcon
             ? item.activeIcon
@@ -99,10 +117,7 @@ const AnswerActionButtons = ({
                 handleLike();
               }
               if (isThumbsDown) {
-                setFeedbackVisibleMap((prev) => ({
-                  ...prev,
-                  [messageId]: !prev[messageId],
-                }));
+                handleThumbsDown();
               }
               if (isBookmark) {
                 setBookmarked((prev) => !prev);
