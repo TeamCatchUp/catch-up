@@ -40,13 +40,12 @@ const selectedClass = 'ring-1 ring-neutral-2 bg-blue-1 hover:bg-blue-5';
 
 interface SideNavMenuProps {
   isOpen: boolean;
-  setIsOpen: (open: boolean) => void;
 }
 
-export default function SideNavMenu({ isOpen, setIsOpen: setSidebarOpen }: SideNavMenuProps) {
+export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { activePanel, togglePanel, setActivePanel } = useSidebarStore();
+  const { activePanel, setActivePanel } = useSidebarStore();
 
   return (
     <div className={`flex flex-col ${isOpen ? 'gap-1' : 'gap-2'}`}>
@@ -55,8 +54,9 @@ export default function SideNavMenu({ isOpen, setIsOpen: setSidebarOpen }: SideN
 
         const handleClick = () => {
           if (item.panel) {
-            if (item.panel === 'settings' && isOpen) setSidebarOpen(false);
-            togglePanel(item.panel);
+            // TODO: 수신함 등 다른 패널 활성화 시 패널별 분기 추가
+            setActivePanel(null);
+            router.push(useSidebarStore.getState().lastSettingsPath);
           } else {
             setActivePanel(null);
             router.push(item.href!);

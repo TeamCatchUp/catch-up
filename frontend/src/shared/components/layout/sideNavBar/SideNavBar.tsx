@@ -97,7 +97,7 @@ const SideNavBar = () => {
           )}
         </div>
 
-        <SideNavMenu isOpen={isOpen} setIsOpen={setSidebarOpen} />
+        <SideNavMenu isOpen={isOpen} />
         {isOpen && <SideNavQuestions />}
         <SideNavUser isOpen={isOpen} />
       </nav>

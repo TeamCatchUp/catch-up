@@ -20,15 +20,18 @@ import { cn } from '@/shared/utils/cn';
 export default function AfterLoginLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { isLoading } = useCurrentUser();
-  const { activePanel, isSidebarOpen, setActivePanel } = useSidebarStore();
+  const { activePanel, isSidebarOpen, setActivePanel, setLastSettingsPath } = useSidebarStore();
   const isSettingsRoute = pathname.startsWith('/mypage') || pathname.startsWith('/admin');
 
-  // mypage/admin 경로 진입 시 설정 패널을 기본 패널로 유지
+  // mypage/admin 경로 진입 시 설정 패널 열기 + 경로 저장, 이탈 시 패널 닫기
   useEffect(() => {
     if (isSettingsRoute) {
       setActivePanel('settings');
+      setLastSettingsPath(pathname);
+    } else if (useSidebarStore.getState().activePanel === 'settings') {
+      setActivePanel(null);
     }
-  }, [isSettingsRoute, pathname, setActivePanel]);
+  }, [isSettingsRoute, pathname, setActivePanel, setLastSettingsPath]);
 
   // mypage/admin 경로에서 패널이 닫히면(null) 설정 패널 자동 열림 (수신함이 여기에 해당)
   useEffect(() => {
