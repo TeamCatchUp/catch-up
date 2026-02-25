@@ -1,8 +1,7 @@
 import { CATEGORY_LABEL } from '../../constants/auditLogConfig';
 import type { AuditIntegrationLog } from '../../types/auditIntegrationLog';
 import { formatDate } from '../../utils/formatDate';
-
-import { InfoRow, SERVICE_NAMES, ServiceIcon, getServiceIconCls } from './helpers';
+import { getServiceIconCls,InfoRow, SERVICE_NAMES, ServiceIcon } from './helpers';
 
 /** API 호출 상세 패널 */
 const ApiCallDetail = ({ log }: { log: AuditIntegrationLog }) => {

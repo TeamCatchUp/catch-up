@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
+import AddSmall from '@/public/icons/icon/add_small.svg';
+import Cancel from '@/public/icons/icon/cancel.svg';
+import Search from '@/public/icons/icon/search.svg';
 import { SearchHistory } from '@/shared/components/SearchHistory';
 import { USE_MOCK } from '@/shared/mocks/config';
 import { MOCK_RECENT_QUERIES } from '@/shared/mocks/search/data';
@@ -11,10 +14,6 @@ import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import type { SearchQuery } from '@/shared/types/query/search';
 import { formatFullDate } from '@/shared/utils/formatDate';
-
-import AddSmall from '/public/icons/icon/add_small.svg';
-import Cancel from '/public/icons/icon/cancel.svg';
-import Search from '/public/icons/icon/search.svg';
 
 type SearchQueryWithRawDate = SearchQuery & { rawDate: Date };
 

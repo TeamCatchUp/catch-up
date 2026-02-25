@@ -2,12 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import Profile from '@/public/icons/icon/profile.svg';
 import { authMutations } from '@/shared/queries/auth.mutations';
 import { authQueries } from '@/shared/queries/auth.queries';
 import { useUserStore } from '@/shared/store/userStore';
 import { cn } from '@/shared/utils/cn';
-
-import Profile from '/public/icons/icon/profile.svg';
 
 const JOB_LEVEL_LABEL: Record<string, string> = {
   executive: '경영진',

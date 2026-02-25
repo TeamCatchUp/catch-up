@@ -1,8 +1,8 @@
 import Image from 'next/image';
 
-import { SLACK_GUIDE_IMAGES } from '../../constants/integrations';
+import IconSlack from '@/public/icons/logo/Slack.svg';
 
-import IconSlack from '/public/icons/logo/Slack.svg';
+import { SLACK_GUIDE_IMAGES } from '../../constants/integrations';
 
 /** Slack 연동 가이드 섹션 */
 const SlackGuideSection = () => {

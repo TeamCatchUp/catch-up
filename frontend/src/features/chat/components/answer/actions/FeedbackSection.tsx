@@ -9,11 +9,10 @@ import { useAnimatedMount } from '@/features/chat/hooks/ui/useAnimatedMount';
 import { chatMutations } from '@/features/chat/mutations';
 import type { FeedbackReason } from '@/features/chat/types/api/feedbackApi';
 import type { FeedbackSectionProps } from '@/features/chat/types/props/actionProps';
+import Cancel from '@/public/icons/icon/cancel.svg';
 import { cn } from '@/shared/utils/cn';
 
 import FeedbackDetailInput from './FeedbackDetailInput';
-
-import Cancel from '/public/icons/icon/cancel.svg';
 
 const FEEDBACK_CHIPS: { id: number; label: string; reason: FeedbackReason }[] = [
   { id: 1, label: '존재하지 않는 자료를 참고했어요', reason: 'HALLUCINATION' },

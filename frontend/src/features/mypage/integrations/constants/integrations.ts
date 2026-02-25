@@ -1,18 +1,18 @@
 export { INTEGRATION_ACCOUNTS } from '@/shared/constants/integrationAccounts';
 
-import ImgGuideJiraIntegrationPage from '/public/image/guide/guide_jira_integration_page.png';
-import ImgGuideJiraConnectorInstall from '/public/image/guide/guide_jira_connector_install.png';
-import ImgGuideJiraSiteSelection from '/public/image/guide/guide_jira_site_selection.png';
-import ImgGuideJiraAccept from '/public/image/guide/guide_jira_accept.png';
-import ImgGuideGithubIntegrationPage from '/public/image/guide/guide_github_integration_page.png';
-import ImgGuideGithubInstall from '/public/image/guide/guide_github_install.png';
-import ImgGuideGithubRepository from '/public/image/guide/guide_github_repository.png';
-import ImgGuideGithubRepositoryInstall from '/public/image/guide/guide_github_repository_install.png';
-import ImgGuideSlackIntegrationPage from '/public/image/guide/guide_slack_integration_page.png';
-import ImgGuideSlackPermissions from '/public/image/guide/guide_slack_permissions.png';
-import ImgGuideConfluenceIntegrationPage from '/public/image/guide/guide_confluence_integration_page.png';
-import ImgGuideConfluenceSiteSelection from '/public/image/guide/guide_confluence_site_selection.png';
-import ImgGuideConfluenceAccept from '/public/image/guide/guide_confluence_accept.png';
+import ImgGuideConfluenceAccept from '@/public/image/guide/guide_confluence_accept.png';
+import ImgGuideConfluenceIntegrationPage from '@/public/image/guide/guide_confluence_integration_page.png';
+import ImgGuideConfluenceSiteSelection from '@/public/image/guide/guide_confluence_site_selection.png';
+import ImgGuideGithubInstall from '@/public/image/guide/guide_github_install.png';
+import ImgGuideGithubIntegrationPage from '@/public/image/guide/guide_github_integration_page.png';
+import ImgGuideGithubRepository from '@/public/image/guide/guide_github_repository.png';
+import ImgGuideGithubRepositoryInstall from '@/public/image/guide/guide_github_repository_install.png';
+import ImgGuideJiraAccept from '@/public/image/guide/guide_jira_accept.png';
+import ImgGuideJiraConnectorInstall from '@/public/image/guide/guide_jira_connector_install.png';
+import ImgGuideJiraIntegrationPage from '@/public/image/guide/guide_jira_integration_page.png';
+import ImgGuideJiraSiteSelection from '@/public/image/guide/guide_jira_site_selection.png';
+import ImgGuideSlackIntegrationPage from '@/public/image/guide/guide_slack_integration_page.png';
+import ImgGuideSlackPermissions from '@/public/image/guide/guide_slack_permissions.png';
 
 /** Atlassian 계정 관리 페이지 링크 */
 export const ATLASSIAN_PROFILE_URL = 'https://id.atlassian.com/manage-profile/profile-and-visibility';

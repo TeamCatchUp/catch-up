@@ -1,8 +1,7 @@
 'use client';
 
+import LoadingProfile from '@/public/icons/icon/loading_profile.svg';
 import { PopoverContent } from '@/shared/components/ui/popover';
-
-import LoadingProfile from '/public/icons/icon/loading_profile.svg';
 
 const members = [
   { name: '팀원G', role: 'PM' },

@@ -1,5 +1,12 @@
 import { useMutation } from '@tanstack/react-query';
 
+import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
+import IconCloudOff from '@/public/icons/icon/cloud_off.svg';
+import IconOpenInNew from '@/public/icons/icon/open_in_new.svg';
+import IconRotate from '@/public/icons/icon/rotate.svg';
+import IconSpace from '@/public/icons/icon/space.svg';
+import IconTag from '@/public/icons/icon/tag.svg';
+import IconGithubLogo from '@/public/icons/logo/GitHub.svg';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 import { cn } from '@/shared/utils/cn';
@@ -9,14 +16,6 @@ import ConfluenceGuideSection from './ConfluenceGuideSection';
 import GithubGuideSection from './GithubGuideSection';
 import JiraGuideSection from './JiraGuideSection';
 import SlackGuideSection from './SlackGuideSection';
-
-import IconCloudCheckFilled from '/public/icons/icon/cloud_check_filled.svg';
-import IconCloudOff from '/public/icons/icon/cloud_off.svg';
-import IconOpenInNew from '/public/icons/icon/open_in_new.svg';
-import IconRotate from '/public/icons/icon/rotate.svg';
-import IconSpace from '/public/icons/icon/space.svg';
-import IconTag from '/public/icons/icon/tag.svg';
-import IconGithubLogo from '/public/icons/logo/GitHub.svg';
 
 /** 서비스별 리소스 아이템 아이콘 */
 const RESOURCE_ICONS: Record<IntegrationService, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {

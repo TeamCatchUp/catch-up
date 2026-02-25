@@ -2,15 +2,14 @@
 
 import Link from 'next/link';
 
+import Settings from '@/public/icons/icon/admin_panel_settings.svg';
+import AI from '@/public/icons/icon/ai.svg';
+import Home from '@/public/icons/icon/home.svg';
+import Kebab2 from '@/public/icons/icon/kebeb 2.svg';
+import MyPage from '@/public/icons/icon/person.svg';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 
 import { MoreButtonContent } from './MoreButtonModal';
-
-import Settings from '/public/icons/icon/admin_panel_settings.svg';
-import AI from '/public/icons/icon/ai.svg';
-import Home from '/public/icons/icon/home.svg';
-import Kebab2 from '/public/icons/icon/kebeb 2.svg';
-import MyPage from '/public/icons/icon/person.svg';
 
 type PageType = 'home' | 'search' | 'mypage' | 'settings';
 

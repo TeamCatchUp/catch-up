@@ -3,10 +3,9 @@
 import { useRef, useState } from 'react';
 
 import { useIsOverflowingLines } from '@/features/chat/hooks/ui/useIsOverflowingLines';
+import DropdownDown from '@/public/icons/icon/dropdown_down.svg';
+import DropdownUp from '@/public/icons/icon/dropdown_up.svg';
 import { cn } from '@/shared/utils/cn';
-
-import DropdownDown from '/public/icons/icon/dropdown_down.svg';
-import DropdownUp from '/public/icons/icon/dropdown_up.svg';
 
 interface CollapsibleQuestionTextProps {
   content: string;

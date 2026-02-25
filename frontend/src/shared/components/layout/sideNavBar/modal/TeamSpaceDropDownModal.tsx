@@ -1,10 +1,9 @@
 'use client';
 
+import AddHome from '@/public/icons/icon/add_home.svg';
+import ArrowRight from '@/public/icons/icon/arrow_right2.svg';
 import { PopoverClose, PopoverContent } from '@/shared/components/ui/popover';
 import { cn } from '@/shared/utils/cn';
-
-import AddHome from '/public/icons/icon/add_home.svg';
-import ArrowRight from '/public/icons/icon/arrow_right2.svg';
 
 interface TeamSpaceItem {
   id: string;

@@ -7,11 +7,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
+import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
 import { ROLE_FILTER_OPTIONS, type RoleFilter } from '../../constants/permissionsConfig';
 import type { PermissionMember } from '../../types/adminPermission';
-import Pagination from '@/shared/components/ui/pagination';
 import PermissionsTable from '../shared/PermissionsTable';
 
 interface PermissionsListSectionProps {

@@ -3,8 +3,7 @@ import { cn } from '@/shared/utils/cn';
 import { CATEGORY_LABEL, RESOURCE_LABEL } from '../../constants/auditLogConfig';
 import type { AuditIntegrationLog } from '../../types/auditIntegrationLog';
 import { formatDate } from '../../utils/formatDate';
-
-import { InfoRow, ResourceIcon, SERVICE_NAMES, ServiceIcon, StatusBadgeRow, getServiceIconCls } from './helpers';
+import { getServiceIconCls,InfoRow, ResourceIcon, SERVICE_NAMES, ServiceIcon, StatusBadgeRow } from './helpers';
 
 /** 동기화/연동 상세 패널 */
 const SyncIntegrationDetail = ({ log }: { log: AuditIntegrationLog }) => {

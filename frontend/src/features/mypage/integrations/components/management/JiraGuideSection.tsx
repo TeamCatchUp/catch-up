@@ -1,9 +1,9 @@
 import Image from 'next/image';
 
-import { ATLASSIAN_PROFILE_URL, JIRA_GUIDE_IMAGES } from '../../constants/integrations';
+import IconError from '@/public/icons/icon/error-1.svg';
+import IconAT from '@/public/icons/logo/atlassian.svg';
 
-import IconError from '/public/icons/icon/error-1.svg';
-import IconAT from '/public/icons/logo/atlassian.svg';
+import { ATLASSIAN_PROFILE_URL, JIRA_GUIDE_IMAGES } from '../../constants/integrations';
 
 /** Jira (Atlassian) 연동 가이드 섹션 */
 const JiraGuideSection = () => {

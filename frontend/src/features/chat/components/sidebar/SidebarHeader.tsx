@@ -1,7 +1,6 @@
+import Help from '@/public/icons/icon/help.svg';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import { cn } from '@/shared/utils/cn';
-
-import Help from '/public/icons/icon/help.svg';
 
 interface Props {
   sourceCount: number;

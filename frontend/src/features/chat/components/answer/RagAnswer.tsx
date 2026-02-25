@@ -9,21 +9,20 @@ import RagAnswerSkeleton from '@/features/chat/components/skeleton/RagAnswerSkel
 import type { RagUIStepKey } from '@/features/chat/types';
 import type { QAPair } from '@/features/chat/utils/render/chat';
 import { formatMarkdownString } from '@/features/chat/utils/render/markdown';
+import Bookmark from '@/public/icons/icon/bookmark.svg';
+import BookmarkFilled from '@/public/icons/icon/bookmark_filled.svg';
+import Copy from '@/public/icons/icon/copy.svg';
+import Rotate from '@/public/icons/icon/rotate.svg';
+import ThumbsDown from '@/public/icons/icon/thumbs-down.svg';
+import ThumbsDownFilled from '@/public/icons/icon/thumbs-down_filled.svg';
+import ThumbsUp from '@/public/icons/icon/thumbs-up.svg';
+import ThumbsUpFilled from '@/public/icons/icon/thumbs-up_filled.svg';
 
 import AnswerActionButtons from './actions/AnswerActionButtons';
 import AnswerError from './actions/AnswerError';
 import FeedbackSection from './actions/FeedbackSection';
 import { MarkDownComponents } from './markdown/MarkDownComponents';
 import { getCitationDisplayOrderMap } from './markdown/renderWithBadges';
-
-import Bookmark from '/public/icons/icon/bookmark.svg';
-import BookmarkFilled from '/public/icons/icon/bookmark_filled.svg';
-import Copy from '/public/icons/icon/copy.svg';
-import Rotate from '/public/icons/icon/rotate.svg';
-import ThumbsDown from '/public/icons/icon/thumbs-down.svg';
-import ThumbsDownFilled from '/public/icons/icon/thumbs-down_filled.svg';
-import ThumbsUp from '/public/icons/icon/thumbs-up.svg';
-import ThumbsUpFilled from '/public/icons/icon/thumbs-up_filled.svg';
 
 const ANSWER_ICONS = [
   { name: 'Copy', icon: Copy },
