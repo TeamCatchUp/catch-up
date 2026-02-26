@@ -90,6 +90,7 @@ jobs:
             cd ~/CatchUp || { echo "Directory not found"; exit 1; }
             
             git fetch origin
+            git checkout -f develop
             git reset --hard origin/develop
 
             cat << 'EOF' > .env
