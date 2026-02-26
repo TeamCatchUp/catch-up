@@ -5,12 +5,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
-from uvicorn.logging import DefaultFormatter
 
 from catchup import __version__
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal, engine
 from catchup.db.models import Base, Company
+from catchup.observability.logging import configure_logging
+from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.state import state
 from catchup.server.auth.api import router as auth_router
 from catchup.server.admin.api import router as admin_router
@@ -35,27 +36,7 @@ from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.settings.api import router as settings_router
 
-# logging 설정
-log_level = logging.INFO
-if settings.LOG_LEVEL.upper() == "DEBUG":
-    log_level = logging.DEBUG
-
-handler = logging.StreamHandler()
-handler.setFormatter(
-    DefaultFormatter(
-        fmt="%(levelprefix)s %(asctime)s (%(name)s) %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-)
-
-root_logger = logging.getLogger()
-root_logger.handlers = [handler]
-root_logger.setLevel(log_level)
-
-logging.getLogger("catchup").setLevel(log_level)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
-
+configure_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -225,7 +206,6 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
-
 # Router 등록
 app.include_router(chat_router)
 app.include_router(chatroom_router)
@@ -272,3 +252,5 @@ async def add_process_time_header(request: Request, call_next):
     logger.info(f"{request.method} {request.url.path} ===> {process_time:.4f}s")
 
     return response
+
+app.middleware("http")(request_context_middleware)

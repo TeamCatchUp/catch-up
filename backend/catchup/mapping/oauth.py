@@ -8,8 +8,6 @@ import asyncio
 from catchup.configs.config import auth_settings
 from catchup.mapping.schemas import OAuthUserSchema
 
-# 로깅 설정: 상위 모듈에서 설정되지 않았을 경우를 대비해 기본 설정 유지
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
 class OAuthClient:

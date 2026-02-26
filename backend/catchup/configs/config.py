@@ -16,9 +16,12 @@ class Environment(StrEnum):
 
 
 class Settings(BaseSettings):
-    ENV: Environment = Environment.development
-    
+
+    SERVICE_NAME: str = "catchup"
+    APP_VERSIONS: str = "0.1.0"
     LOG_LEVEL: str
+    
+    ENV: Environment = Environment.development
 
     DB_DIALECT: str = "postgresql"
     DB_DRIVER: str = "psycopg"  # psycopg3 (langchain-postgres 호환)
