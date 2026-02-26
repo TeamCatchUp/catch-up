@@ -1,5 +1,4 @@
 import type { NextConfig } from 'next';
-import path from 'path';
 
 const nextConfig = {
   reactStrictMode: true,
@@ -8,31 +7,61 @@ const nextConfig = {
     unoptimized: true,
   },
 
-  experimental: {
-    // @ts-expect-error Next 16 turbo option
-    turbo: false,
-  },
-
   output: 'standalone',
 
+  experimental: {
+    optimizePackageImports: ['recharts', 'date-fns'],
+  },
+
+  // Turbopack SVGR 로더 설정
+  turbopack: {
+    rules: {
+      '*.svg': {
+        loaders: [
+          {
+            loader: '@svgr/webpack',
+            options: {
+              dimensions: false,
+            },
+          },
+        ],
+        as: '*.js',
+      },
+    },
+  },
+
+  async rewrites() {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!apiUrl || !apiUrl.startsWith('http')) return [];
+
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${apiUrl}/api/:path*`,
+      },
+    ];
+  },
+
+  // Webpack fallback (--webpack 모드 실행 시 동작)
   webpack(config) {
     const fileLoaderRule = config.module.rules.find(
-      (rule: any) => rule?.test instanceof RegExp && rule.test.test('.svg'),
+      (rule: { test?: RegExp }) => rule?.test instanceof RegExp && rule.test.test('.svg'),
     );
 
     config.module.rules.push({
       test: /\.svg$/i,
       issuer: fileLoaderRule.issuer,
-      use: ['@svgr/webpack'],
+      use: [
+        {
+          loader: '@svgr/webpack',
+          options: {
+            dimensions: false,
+          },
+        },
+      ],
     });
 
-    // fileLoaderRule.exclude = /\.svg$/i;
     if (fileLoaderRule) fileLoaderRule.exclude = /\.svg$/i;
-
-    config.resolve.alias = {
-      ...(config.resolve.alias || {}),
-      '@': path.resolve(__dirname, 'src'),
-    };
 
     return config;
   },

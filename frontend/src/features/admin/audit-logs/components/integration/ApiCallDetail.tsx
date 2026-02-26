@@ -1,0 +1,52 @@
+import { CATEGORY_LABEL } from '../../constants/auditLogConfig';
+import type { AuditIntegrationLog } from '../../types/auditIntegrationLog';
+import { formatDate } from '../../utils/formatDate';
+import { getServiceIconCls,InfoRow, SERVICE_NAMES, ServiceIcon } from './helpers';
+
+/** API 호출 상세 패널 */
+const ApiCallDetail = ({ log }: { log: AuditIntegrationLog }) => {
+  const iconCls = getServiceIconCls(log.service);
+
+  return (
+    <div className="flex h-full flex-col gap-4">
+      {/* 서비스 아이콘 + 이름 */}
+      <div className="flex items-center gap-3">
+        <ServiceIcon service={log.service} className={iconCls} />
+        <span className="text-heading-medium text-gray-80 truncate">{SERVICE_NAMES[log.service]}</span>
+      </div>
+
+      <div className="flex flex-col gap-9">
+        {/* 기본 정보 (상태 없음) */}
+        <div className="flex flex-col gap-2 tracking-tight">
+          <InfoRow label="일자" value={formatDate(log.executedAt)} />
+          <InfoRow label="구분" value={CATEGORY_LABEL[log.category]} />
+        </div>
+
+        {/* API 호출 사유 + 수신 데이터 */}
+        <div className="flex flex-col gap-5">
+          {/* API 호출 사유 */}
+          {log.apiCallReason && (
+            <div className="flex flex-col gap-2">
+              <h3 className="text-heading-small text-gray-70">API 호출 사유</h3>
+              <div className="bg-neutral-1 border-neutral-2 rounded-xl border px-5 py-2.5">
+                <span className="text-body-small text-gray-80">{log.apiCallReason}</span>
+              </div>
+            </div>
+          )}
+
+          {/* 수신 데이터 */}
+          {log.receivedData && (
+            <div className="flex flex-col gap-2">
+              <h3 className="text-heading-small text-gray-70">수신 데이터</h3>
+              <div className="bg-neutral-1 border-neutral-2 max-h-80 overflow-y-auto rounded-xl border px-5 py-4">
+                <pre className="text-label-small text-gray-80 break-all whitespace-pre-wrap">{log.receivedData}</pre>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ApiCallDetail;

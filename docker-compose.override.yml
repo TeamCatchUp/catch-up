@@ -1,0 +1,68 @@
+# ====================
+# DEVELOPMENT (Local)
+# ====================
+services:
+  api_server:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+      target: dev
+    volumes:
+      - ./backend/catchup:/app/catchup
+      - ./backend/pyproject.toml:/app/pyproject.toml
+      - ./backend/uv.lock:/app/uv.lock
+      - ./backend/.secrets:/app/.secrets
+      - ${HOME}/.aws:/root/.aws:ro
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=${DB_HOST}
+      - ENABLE_NEO4J=False
+    ports:
+      - "8000:8000"
+    command: uvicorn catchup.server.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - vector_db
+    
+  vector_db:
+    container_name: catchup_vectordb
+    profiles: ["backend", "full"]
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile.pg_bigm
+    image: catchup-db-pg17:local
+    environment:
+      - POSTGRES_USER=${DB_USERNAME:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_DATABASE:-catchup}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - catchup_net
+    ports:
+      - "5433:5432"
+    restart: always
+
+  web_client:
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile
+      target: dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://api_server:8000
+    ports:
+      - "3000:3000"
+    command: npm run dev
+
+  redis:
+    ports:
+      - "6379:6379"
+      
+volumes:
+  pg_data:

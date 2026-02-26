@@ -1,0 +1,51 @@
+'use client';
+
+import * as React from 'react';
+import { DayPicker, type DayPickerProps } from 'react-day-picker';
+
+import IconArrowLeft from '@/public/icons/icon/arrow_left.svg';
+import IconArrowRight from '@/public/icons/icon/arrow_right.svg';
+import { cn } from '@/shared/utils/cn';
+
+function Calendar({ className, classNames, ...props }: DayPickerProps) {
+  return (
+    <DayPicker
+      className={cn('p-5', className)}
+      classNames={{
+        months: 'relative flex gap-9',
+        month: 'flex w-[220px] flex-col',
+        month_caption: 'flex h-[34px] items-center justify-center pb-1.5',
+        caption_label: 'text-body-small text-gray-90',
+        nav: 'absolute inset-x-0 top-0 z-20 flex items-center justify-between',
+        button_previous:
+          'flex size-7 cursor-pointer items-center justify-center rounded-full text-gray-50 hover:bg-neutral-2',
+        button_next:
+          'flex size-7 cursor-pointer items-center justify-center rounded-full text-gray-50 hover:bg-neutral-2',
+        weekdays: 'flex',
+        weekday: 'flex h-6 flex-1 items-center justify-center text-label-xsmall text-gray-50',
+        week: 'flex',
+        day: 'relative flex h-6 flex-1 items-center justify-center text-label-xsmall text-gray-70',
+        day_button:
+          'relative z-10 flex size-6 cursor-pointer items-center justify-center rounded-full hover:bg-neutral-2',
+        today: '',
+        selected: '',
+        range_start:
+          "rdp-range_start [&>button]:bg-blue-50 [&>button]:text-white [&>button]:hover:bg-blue-50 before:absolute before:inset-y-0 before:right-0 before:w-1/2 before:bg-neutral-3 before:content-['']",
+        range_end:
+          "rdp-range_end [&>button]:bg-blue-50 [&>button]:text-white [&>button]:hover:bg-blue-50 before:absolute before:inset-y-0 before:left-0 before:w-1/2 before:bg-neutral-3 before:content-['']",
+        range_middle: 'bg-neutral-3',
+        outside: 'text-gray-30',
+        disabled: 'text-gray-30 opacity-50',
+        hidden: 'invisible',
+        ...classNames,
+      }}
+      components={{
+        Chevron: ({ orientation }) =>
+          orientation === 'left' ? <IconArrowLeft className="size-5" /> : <IconArrowRight className="size-5" />,
+      }}
+      {...props}
+    />
+  );
+}
+
+export { Calendar };

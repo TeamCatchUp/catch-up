@@ -1,0 +1,142 @@
+from datetime import datetime
+import uuid
+from typing import Annotated, Any, Literal, Optional, Union
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from catchup.db.models import FeedbackLiteral, SenderType, SourceType, UserRole
+from catchup.rag.schemas.sources import BaseSource, SourceResponse
+
+
+NODE_STATUS_MAP = {
+    "route": "질문의 성격을 분석하고 있습니다...",
+    "rewrite": "검색 정확도를 높이기 위해 질문을 최적화하고 있습니다...",
+    "generate_vector_queries": "최적의 검색 쿼리를 생성하고 있습니다...",
+    "search_vector_db": "지식 저장소(Vector DB)에서 문서를 검색 중입니다...",
+    "rerank": "검색된 문서들의 관련성을 분석하여 우선순위를 정하고 있습니다...",
+    "grade": "검색 결과가 충분한지 검토하고 있습니다...",
+    "expand_graph_context": "지식 그래프를 통해 연관된 정보를 확장 탐색 중입니다...",
+    "fetch_details_after_graph_context_expansion": "확장된 정보의 상세 내용을 불러오고 있습니다...",
+    "fallback_cypher_query": "추가적인 그래프 질의(Cypher)를 실행하여 정보를 보완 중입니다...",
+    "generate_final_answer": "모든 정보를 종합하여 최종 답변을 작성하고 있습니다...",
+    "chitchat": "답변을 생성하고 있습니다...",
+}
+
+
+class ChatRequest(BaseModel):
+    query: str = Field(..., description="사용자 질문")
+    role: Optional[str] = Field(default=UserRole.USER, description="사용자 역할 (admin 또는 user)")
+    session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
+    tool_filters: list[SourceType] = Field(default_factory=list, description="협업 툴 검색 필터")
+    
+    @field_validator('tool_filters', mode='before')
+    @classmethod
+    def validate_tool_filters(cls, v):
+        if v is None:
+            return []
+        return v
+
+
+class ChatResponse(BaseModel):
+    """일반 채팅 응답"""
+
+    answer: str
+    sources: list[SourceResponse] = []
+    process_time: float
+
+
+class ChatStreamingStatusResponse(BaseModel):
+    """답변 생성 단계 스트리밍"""
+
+    type: Literal["status"] = "status"
+    session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
+    node: str
+    message: str
+
+
+class ChatStreamingSourceResponse(BaseModel):
+    """출처 정보 전송 (답변 생성 전 먼저 전송)"""
+
+    type: Literal["sources"] = "sources"
+    session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
+    sources: Optional[list[SourceResponse]]
+
+
+class ChatStreamingTokenResponse(BaseModel):
+    type: Literal["token"] = "token"
+    session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
+    token: str
+
+
+StreamEvent = Annotated[
+    Union[
+        ChatStreamingStatusResponse,
+        ChatStreamingSourceResponse,
+        ChatStreamingTokenResponse,
+    ],
+    Field(discriminator="type"),
+]
+
+# --- [Human In The Loop] ---
+# class ChatStreamingResumeRequest(BaseModel):
+#     session_id: str = Field(..., description="PR 수동 선택 후 재개할 세션 ID")
+#     user_selected_pull_requests: list[PullRequestUserSelected] = Field(
+#         ..., description="사용자가 선택한 PR 번호 리스트"
+#     )
+
+# class ChatStreamingInterruptResponse(BaseModel):
+#     type: Literal["interrupt"] = "interrupt"
+#     session_id: str
+#     node: str
+#     payload: Any
+
+
+# 채팅방 목록
+class ChatRoomResponse(BaseModel):
+    session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
+    title: str = Field(..., description="채팅방 이름")
+    created_at: datetime = Field(..., description="생성 시각")
+    updated_at: datetime = Field(..., description="최근 활동 시각")
+    
+    model_config = ConfigDict(from_attributes=True)
+    
+# 채팅 메시지 히스토리
+class ChatHistoryResponse(BaseModel):
+    id: int = Field(..., description="메시지 고유 ID")
+    sender_type: SenderType = Field(..., description="sender 유형 (user/assistant)")
+    content: str = Field(..., description="메시지 내용")
+    created_at: datetime = Field(..., description="메시지 생성 시각")
+    sources: Optional[list[BaseSource]] = Field(default_factory=list, description="출처 목록 (sender_type='assistant'인 경우에만 존재)")
+    is_liked: Optional[bool] = Field(default=None, description="답변 평가 여부 (True: 긍정, False: 부정, None: 없음)")
+    is_saved: bool = Field(default=False, description="사용자의 답변 저장 여부")
+
+    model_config = ConfigDict(from_attributes=True)
+    
+# 사용자 쿼리 정보
+class UserQueryResponse(BaseModel):
+    id: int = Field(..., description="메시지 고유 ID")
+    session_id: uuid.UUID = Field(..., description="사용자 쿼리가 속한 채팅방 세션 ID")
+    content: str = Field(..., description="메시지 내용")
+    created_at: datetime = Field(..., description="메시지 생성 시각")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserQueryWithSaveStatusResponse(UserQueryResponse):    
+    is_answer_saved: bool = Field(
+        default=False, 
+        description="이 질문에 대한 AI 답변이 저장되었는지 여부"
+    )
+    answer_id: Optional[int] = Field(
+        default=None, 
+        description="토글(저장/해제) 시 타겟이 될 AI 답변의 메시지 ID"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FeedbackRequest(BaseModel):
+    is_liked: Optional[bool] = Field(default=None, description="사용자 긍정/부정 피드백")
+    reasons: Optional[list[FeedbackLiteral]] = Field(default_factory=list, description="부정 피드백 사유 목록")
+    comment: Optional[str] = Field(default=None, description="사용자가 직접 작성한 상세 피드백")
+    

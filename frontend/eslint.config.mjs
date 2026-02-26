@@ -1,8 +1,9 @@
 import { defineConfig, globalIgnores } from 'eslint/config';
 import nextVitals from 'eslint-config-next/core-web-vitals';
 import nextTs from 'eslint-config-next/typescript';
-import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import reactQuery from '@tanstack/eslint-plugin-query';
+import boundaries from 'eslint-plugin-boundaries';
+import simpleImportSort from 'eslint-plugin-simple-import-sort';
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -32,9 +33,59 @@ const eslintConfig = defineConfig([
 
       '@tanstack/query/exhaustive-deps': 'warn',
       '@tanstack/query/no-rest-destructuring': 'warn',
-      '@tanstack/query/no-useless-promise': 'warn',
 
       'prettier/prettier': 'off',
+    },
+  },
+  // shared/components/ui 래퍼 사용 강제: Radix·cmdk 직접 import 금지
+  {
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@radix-ui/*'],
+              message: '@radix-ui 직접 import 금지. @/shared/components/ui 의 래퍼 컴포넌트를 사용하세요.',
+            },
+            {
+              group: ['cmdk'],
+              message: 'cmdk 직접 import 금지. @/shared/components/ui/command 를 사용하세요.',
+            },
+            {
+              group: ['@headlessui/*'],
+              message: '@headlessui 는 제거되었습니다. shadcn 컴포넌트를 사용하세요.',
+            },
+          ],
+        },
+      ],
+    },
+    ignores: ['src/shared/components/ui/**'],
+  },
+  // 3-Layer 아키텍처 의존성 규칙: app → features → shared
+  {
+    plugins: {
+      boundaries,
+    },
+    settings: {
+      'boundaries/elements': [
+        { type: 'app', pattern: ['src/app'], mode: 'folder' },
+        { type: 'features', pattern: ['src/features/*'], mode: 'folder' },
+        { type: 'shared', pattern: ['src/shared'], mode: 'folder' },
+      ],
+    },
+    rules: {
+      'boundaries/element-types': [
+        'error',
+        {
+          default: 'disallow',
+          rules: [
+            { from: 'app', allow: ['features', 'shared'] },
+            { from: 'features', allow: ['shared'] },
+            { from: 'shared', allow: ['shared'] },
+          ],
+        },
+      ],
     },
   },
 ]);

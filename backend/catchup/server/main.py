@@ -1,0 +1,274 @@
+import logging
+import time
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect
+from uvicorn.logging import DefaultFormatter
+
+from catchup import __version__
+from catchup.configs.config import settings
+from catchup.db.engine import SessionLocal, engine
+from catchup.db.models import Base, Company
+from catchup.server.state import state
+from catchup.server.auth.api import router as auth_router
+from catchup.server.admin.api import router as admin_router
+from catchup.server.chat.api import router as chat_router
+from catchup.server.chat_room.api import router as chatroom_router
+from catchup.server.connector.github.auth_api import router as github_auth_router
+from catchup.server.connector.github.sync_api import router as github_sync_router
+from catchup.utils.redis import get_redis_client
+from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
+from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_checkpointer
+from catchup.server.connector.atlassian.auth_api import (
+    router as atlassian_auth_router,
+)
+from catchup.server.connector.jira.sync_api import router as jira_sync_router
+from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
+from catchup.server.connector.confluence.sync_api import (
+    router as confluence_sync_router,
+)
+from catchup.server.connector.slack.auth_api import router as slack_auth_router
+from catchup.server.connector.slack.sync_api import router as slack_sync_router
+from catchup.server.mapping.api import router as github_mapping_csv_router
+from catchup.server.onboarding.api import router as onboarding_router
+from catchup.server.settings.api import router as settings_router
+
+# logging 설정
+log_level = logging.INFO
+if settings.LOG_LEVEL.upper() == "DEBUG":
+    log_level = logging.DEBUG
+
+handler = logging.StreamHandler()
+handler.setFormatter(
+    DefaultFormatter(
+        fmt="%(levelprefix)s %(asctime)s (%(name)s) %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+)
+
+root_logger = logging.getLogger()
+root_logger.handlers = [handler]
+root_logger.setLevel(log_level)
+
+logging.getLogger("catchup").setLevel(log_level)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info(f"Log level: {settings.LOG_LEVEL}")
+
+    try:
+        db_init_started_at = time.perf_counter()
+        
+        # 1) 메타데이터 기준 테이블 목록 수집
+        metadata_table_names = sorted(Base.metadata.tables.keys())
+        logger.info("[APP][STARTUP][DB][INIT] Starting DB initialization")
+        logger.debug(
+            "[APP][STARTUP][DB][INIT] Metadata tables loaded: count=%s, tables=%s",
+            len(metadata_table_names),
+            metadata_table_names,
+        )
+
+        # 2) create_all 이전 DB 상태 확인
+        with engine.connect() as connection:
+            db_inspector_before = inspect(connection)
+            db_table_names_before = sorted(db_inspector_before.get_table_names())
+
+        missing_tables_before = sorted(
+            set(metadata_table_names) - set(db_table_names_before)
+        )
+        logger.debug(
+            "[APP][STARTUP][DB][INIT] DB tables before create_all: count=%s, tables=%s",
+            len(db_table_names_before),
+            db_table_names_before,
+        )
+        logger.debug(
+            "[APP][STARTUP][DB][INIT] Missing tables before create_all: count=%s, tables=%s",
+            len(missing_tables_before),
+            missing_tables_before,
+        )
+
+        # 3) SQLAlchemy create_all 실행
+        create_all_started_at = time.perf_counter()
+        Base.metadata.create_all(bind=engine)
+        create_all_elapsed_ms = (time.perf_counter() - create_all_started_at) * 1000
+        logger.debug(
+            "[APP][STARTUP][DB][INIT] create_all completed: elapsed_ms=%.2f",
+            create_all_elapsed_ms,
+        )
+
+        # 4) create_all 이후 DB 상태 확인 및 스키마 드리프트 탐지
+        with engine.connect() as connection:
+            db_inspector_after = inspect(connection)
+            db_table_names_after = sorted(db_inspector_after.get_table_names())
+
+            missing_columns_by_table: dict[str, list[str]] = {}
+            for table_name in metadata_table_names:
+                if table_name not in db_table_names_after:
+                    continue
+
+                model_columns = sorted(Base.metadata.tables[table_name].c.keys())
+                db_columns = sorted(
+                    column["name"] for column in db_inspector_after.get_columns(table_name)
+                )
+                missing_columns = sorted(set(model_columns) - set(db_columns))
+                if missing_columns:
+                    missing_columns_by_table[table_name] = missing_columns
+
+        created_tables = sorted(set(db_table_names_after) - set(db_table_names_before))
+        missing_tables_after = sorted(set(metadata_table_names) - set(db_table_names_after))
+
+        logger.debug(
+            "[APP][STARTUP][DB][INIT] DB tables after create_all: count=%s, tables=%s",
+            len(db_table_names_after),
+            db_table_names_after,
+        )
+        logger.debug(
+            "[APP][STARTUP][DB][INIT] Created tables in this startup: count=%s, tables=%s",
+            len(created_tables),
+            created_tables,
+        )
+
+        if missing_tables_after:
+            logger.warning(
+                "[APP][STARTUP][DB][INIT] Missing tables after create_all: count=%s, tables=%s",
+                len(missing_tables_after),
+                missing_tables_after,
+            )
+
+        if missing_columns_by_table:
+            for table_name, missing_columns in missing_columns_by_table.items():
+                logger.warning(
+                    "[APP][STARTUP][DB][SCHEMA_DRIFT] Missing DB columns detected: table=%s, missing_columns=%s",
+                    table_name,
+                    missing_columns,
+                )
+        else:
+            logger.debug(
+                "[APP][STARTUP][DB][SCHEMA_DRIFT] No missing DB columns detected"
+            )
+
+        db_init_elapsed_ms = (time.perf_counter() - db_init_started_at) * 1000
+        logger.info(
+            "[APP][STARTUP][DB][INIT] Completed DB initialization: elapsed_ms=%.2f, metadata_tables=%s, db_tables_before=%s, db_tables_after=%s",
+            db_init_elapsed_ms,
+            len(metadata_table_names),
+            len(db_table_names_before),
+            len(db_table_names_after),
+        )
+
+    except Exception as e:
+        logger.critical(
+            "[APP][STARTUP][DB][INIT] Failed to initialize DB tables: %s",
+            e,
+            exc_info=True,
+        )
+        raise
+    
+    # Langgraph Checkpoint INIT
+    try:
+        await init_langgraph_checkpointer()
+    
+    except Exception as e:
+        logger.critical(f"Failed to create PostgreSQL langgraph checkpointer: {e}")
+
+    #Scheduler 초기화
+    try:
+        init_scheduler()
+        logger.info("APScheduler initiated Successfully !")
+    except Exception as e:
+        logger.critical(f"Failed to initialize APScheduler : {e}")
+    
+    try:
+        db = SessionLocal()
+        company_count = db.query(Company).count()
+        if company_count > 0:
+            state.is_admin_initiated = True
+        db.close()
+    except Exception as e:
+        logger.critical(f"Failed to check whether admin is initiated: {e}")
+        
+    try:
+        await get_redis_client() 
+    except Exception as e:
+        logger.critical(f"[APP][STARTUP][REDIS][INIT] Failed to connect to Redis: {e}")
+        raise e
+    
+    yield
+
+    #Scheduler Shutdown
+    try:
+        shutdown_scheduler()
+    except Exception as e:
+        logger.error(f"Failed to Shut Down Scheduler")
+        
+        
+    try:
+        await close_langgraph_checkpointer()
+    except Exception as e:
+        logger.error(f"Failed to close langgraph checkpointer")
+
+
+# MAIN
+app = FastAPI(
+    title="CatchUp RAG Server",
+    lifespan=lifespan,
+    redirect_slashes=False,
+    version=__version__,
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
+)
+
+
+# Router 등록
+app.include_router(chat_router)
+app.include_router(chatroom_router)
+app.include_router(auth_router)
+app.include_router(admin_router)
+app.include_router(github_auth_router)
+app.include_router(github_sync_router)
+app.include_router(atlassian_auth_router)
+app.include_router(jira_sync_router)
+app.include_router(jira_webhook_router)
+app.include_router(confluence_sync_router)
+app.include_router(slack_auth_router)
+app.include_router(slack_sync_router)
+app.include_router(github_mapping_csv_router)
+app.include_router(onboarding_router)
+app.include_router(settings_router)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5500", # Go Live 포트 허용
+        "http://catchup_web:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 헬스 체크
+@app.get("/api/v1/health")
+async def health_check():
+    return {"status": "ok", "message": "Catch Up backend is running."}
+
+
+# 응답 시간 추출
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.perf_counter()
+
+    response = await call_next(request)
+
+    process_time = time.perf_counter() - start_time
+    logger.info(f"{request.method} {request.url.path} ===> {process_time:.4f}s")
+
+    return response

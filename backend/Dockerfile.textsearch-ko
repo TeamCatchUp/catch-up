@@ -1,0 +1,48 @@
+# textsearch_ko PostgreSQL 확장 포함 이미지
+FROM pgvector/pgvector:pg16
+
+USER root
+
+RUN apt-get update && apt-get install -y \
+    postgresql-server-dev-16 \
+    gcc \
+    make \
+    git \
+    curl \
+    automake \
+    autoconf \
+    libtool \
+    pkg-config \
+    mecab \
+    libmecab-dev \
+    mecab-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# mecab-ko-dic (한국어 사전) 설치
+WORKDIR /tmp
+RUN curl -LO https://bitbucket.org/eunjeon/mecab-ko-dic/downloads/mecab-ko-dic-2.1.1-20180720.tar.gz \
+    && tar -zxf mecab-ko-dic-2.1.1-20180720.tar.gz \
+    && cd mecab-ko-dic-2.1.1-20180720 \
+    && autoreconf -fvi \
+    && ./configure \
+    && make \
+    && make install \
+    && ldconfig \
+    && cd .. \
+    && rm -rf mecab-ko-dic-2.1.1-20180720*
+
+# textsearch_ko (PostgreSQL 확장) 설치
+WORKDIR /tmp
+RUN git clone https://github.com/i0seph/textsearch_ko.git \
+    && cd textsearch_ko \
+    && make USE_PGXS=1 \
+    && make USE_PGXS=1 install \
+    && cd .. \
+    && rm -rf textsearch_ko
+
+# 사전 경로 자동 설정
+RUN echo "dicdir = $(mecab-config --dicdir)/mecab-ko-dic" > /etc/mecabrc
+
+RUN echo "Mecab Dictionary Path Configured:" && cat /etc/mecabrc
+
+WORKDIR /
