@@ -55,5 +55,10 @@ COPY --from=builder /app/.venv /app/.venv
 
 COPY backend/catchup ./catchup
 COPY backend/pyproject.toml ./
+COPY backend/alembic.ini ./
+COPY backend/alembic ./alembic
 
-CMD ["uvicorn", "catchup.server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+COPY backend/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

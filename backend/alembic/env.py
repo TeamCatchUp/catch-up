@@ -65,7 +65,18 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 def include_object(object, name, type_, reflected, compare_to):
-    if type_ == "table" and name.startswith("langchain_"):
+    """
+    Base에 정의되어 있지는 않지만, DB에는 실재하며, 
+    마이그레이션 시 DROP 대상에서 제외하고 유지해야 하는 테이블을 필터링
+    """
+    prefixes = [
+        "langchain_",   # Langchain documents
+        "checkpoint_",  # AsyncPostgresSaver
+        "checkpoints",  # AsyncPostgresSaver
+    ]
+    
+    include = any(name.startswith(p) for p in prefixes)
+    if type_ == "table" and include:
         return False
         
     return True
