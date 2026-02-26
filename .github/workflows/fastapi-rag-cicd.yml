@@ -106,15 +106,13 @@ jobs:
               -f docker-compose.yml \
               -f docker-compose.prod.yml \
               -f docker-compose.public.yml \
-              -f docker-compose.build.yml \
               pull api_server web_client
 
-            # 컨테이너 재시작 (변경된 이미지만 교체)
+            # 컨테이너 재시작
             docker compose \
               -f docker-compose.yml \
               -f docker-compose.prod.yml \
               -f docker-compose.public.yml \
-              -f docker-compose.build.yml \
               --profile full \
               up -d --remove-orphans
 
