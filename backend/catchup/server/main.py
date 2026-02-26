@@ -18,8 +18,9 @@ from catchup.server.chat.api import router as chat_router
 from catchup.server.chat_room.api import router as chatroom_router
 from catchup.server.connector.github.auth_api import router as github_auth_router
 from catchup.server.connector.github.sync_api import router as github_sync_router
+from catchup.utils.redis import get_redis_client
 from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
-from catchup.utils.redis import init_langgraph_checkpointer
+from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_checkpointer
 from catchup.server.connector.atlassian.auth_api import (
     router as atlassian_auth_router,
 )
@@ -175,7 +176,7 @@ async def lifespan(app: FastAPI):
         await init_langgraph_checkpointer()
     
     except Exception as e:
-        logger.critical(f"Failed to create Redis langgraph checkpointer: {e}")
+        logger.critical(f"Failed to create PostgreSQL langgraph checkpointer: {e}")
 
     #Scheduler 초기화
     try:
@@ -192,6 +193,12 @@ async def lifespan(app: FastAPI):
         db.close()
     except Exception as e:
         logger.critical(f"Failed to check whether admin is initiated: {e}")
+        
+    try:
+        await get_redis_client() 
+    except Exception as e:
+        logger.critical(f"[APP][STARTUP][REDIS][INIT] Failed to connect to Redis: {e}")
+        raise e
     
     yield
 
@@ -200,6 +207,12 @@ async def lifespan(app: FastAPI):
         shutdown_scheduler()
     except Exception as e:
         logger.error(f"Failed to Shut Down Scheduler")
+        
+        
+    try:
+        await close_langgraph_checkpointer()
+    except Exception as e:
+        logger.error(f"Failed to close langgraph checkpointer")
 
 
 # MAIN

@@ -26,7 +26,7 @@ from catchup.chat.schemas import (
 from catchup.rag.graph import get_compiled_graph
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.sources import BaseSource
-from catchup.utils.redis import get_langgraph_checkpointer
+from catchup.rag.checkpoint import get_langgraph_checkpointer
 
 logger = logging.getLogger(__name__)
 
@@ -418,7 +418,6 @@ class ChatService:
         deleted_query = await run_in_threadpool(_soft_delete_last_turn_sync)
         
         if deleted_query:
-            from catchup.utils.redis import get_langgraph_checkpointer
             checkpointer = get_langgraph_checkpointer()
             
             await checkpointer.adelete_thread(

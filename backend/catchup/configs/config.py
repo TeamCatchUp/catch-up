@@ -29,7 +29,9 @@ class Settings(BaseSettings):
     DB_DATABASE: str
     
     OPENAI_API_KEY: str
+    
     REDIS_URL: str
+    REDIS_CLUSTER_MODE: bool
 
     LANGFUSE_SECRET_KEY: str
     LANGFUSE_PUBLIC_KEY: str
