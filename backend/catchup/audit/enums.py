@@ -19,7 +19,6 @@ class IntegrationEventAction(StrEnum):
     OAUTH_DISCONNECT = "oauth_disconnect"
     OAUTH_REFRESH = "oauth_refresh"
     WEBHOOK_REGISTER = "webhook_register"
-    CONNECTOR_HEALTH_CHECK = "connector_health_check"
 
 class SyncEventAction(StrEnum):
     FULL_SYNC = "full_sync"
