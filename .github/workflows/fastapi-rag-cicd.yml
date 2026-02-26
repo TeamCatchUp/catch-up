@@ -1,8 +1,13 @@
+# 설명
+# QA 서버는 develop 브랜치만 바라보며 지속적으로 업데이트 된다.
+# Releases용 코드는 main 브랜치와 git tag를 통해 Docker Hub에 Push 된다.
+
 name: Catch Up CI/CD - Build & Deploy
 
 on:
   push:
-    branches: [ "main", "develop", "deploy/**"]
+    branches: [ "main", "develop"]
+    tags: [ "[0-9]*.[0-9]*.[0-9]*" ]
   pull_request:
     branches: [ "main" ]
 
@@ -50,27 +55,28 @@ jobs:
         with:
           images: ${{ env.DOCKER_USERNAME }}/${{ matrix.image_name }}
           tags: |
-            type=sha,format=long   # sha-905a... (전체 SHA 사용)
-            type=raw,value=latest  # latest 태그 추가
+            type=sha,format=long,prefix=sha-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
+            type=semver,pattern={{version}}
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   # =================================
-  # 2. EC2 Deployment (Pull & Restart)
+  # QA Server(EC2) Deployment
   # =================================
   deploy:
-    name: Deploy to EC2
+    name: Deploy to QA Server (EC2)
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.ref == 'refs/heads/develop'
 
     steps:
       - name: Deploy via SSH
@@ -82,8 +88,9 @@ jobs:
           port: 22
           script: |
             cd ~/CatchUp || { echo "Directory not found"; exit 1; }
-
-            git pull origin main
+            
+            git fetch origin
+            git reset --hard origin/develop
 
             cat << 'EOF' > .env
             ${{ secrets.DOTENV_FILE }}
@@ -92,7 +99,7 @@ jobs:
             echo "IMAGE_TAG=sha-${{ github.sha }}" >> .env
             echo "DOCKER_REGISTRY_USER_NAME=${{ secrets.DOCKER_REGISTRY_USER_NAME }}" >> .env
             
-            # echo "${{ secrets.DOCKER_REGISTRY_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_REGISTRY_USER_NAME }}" --password-stdin
+            echo "${{ secrets.DOCKER_REGISTRY_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_REGISTRY_USER_NAME }}" --password-stdin
 
             # 이미지 pull
             docker compose \
