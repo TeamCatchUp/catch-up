@@ -31,7 +31,8 @@ def bind_actor_context(actor: dict[str, Any] | None) -> None:
     if actor:
         for key in DEFAULT_ACTOR:
             normalized_actor[key] = actor.get(key)
-        bind_contextvars(actor = normalized_actor)
+    
+    bind_contextvars(actor = normalized_actor)
 
 
 def get_request_context() -> dict[str, Any]:
