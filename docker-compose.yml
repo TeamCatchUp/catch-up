@@ -25,6 +25,44 @@ services:
       - catchup_net
     restart: always
     
+  valkey-1: &valkey_template
+    image: valkey/valkey-bundle:latest
+    profiles: ["cluster"]
+    command: >
+      valkey-server --cluster-enabled yes 
+      --cluster-config-file nodes.conf 
+      --cluster-node-timeout 5000 
+      --appendonly yes 
+      --requirepass ${REDIS_PASSWORD} 
+      --masterauth ${REDIS_PASSWORD}
+    networks:
+      - catchup_net
+
+  valkey-2:
+    <<: *valkey_template
+    networks:
+      - catchup_net
+
+  valkey-3:
+    <<: *valkey_template
+    networks:
+      - catchup_net
+
+  # 클러스터 초기화 전용 서비스 (한 번 실행되고 종료됨)
+  valkey-cluster-init:
+    image: valkey/valkey-bundle:latest
+    profiles: ["cluster"]
+    depends_on:
+      - valkey-1
+      - valkey-2
+      - valkey-3
+    networks:
+      - catchup_net
+    command: >
+      sh -c "sleep 5 && valkey-cli -a ${REDIS_PASSWORD} --cluster create 
+      valkey-1:6379 valkey-2:6379 valkey-3:6379 
+      --cluster-replicas 0 --cluster-yes"
+    
   web_client:
     container_name: catchup_web
     profiles: ["frontend", "full"]
@@ -54,3 +92,4 @@ networks:
 volumes:
   pg_data:
   redis_data:
+  redis_cluster_data:

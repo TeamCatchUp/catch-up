@@ -4,21 +4,19 @@ import asyncio
 from urllib.parse import urlsplit
 
 from redis.asyncio import Redis
-from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+from redis.asyncio.cluster import RedisCluster
 
 from catchup.configs.config import settings
 
 logger = logging.getLogger(__name__)
 
-_redis_client: Redis | None = None
-_checkpointer: AsyncRedisSaver | None = None
+_redis_client: RedisCluster | Redis | None = None
 
 OAUTH_STATE_PREFIX = "oauth:state:"
 OAUTH_STATE_TTL = 600  # 10분
 
 
-async def get_redis_client() -> Redis:
+async def get_redis_client() -> RedisCluster | Redis:
     global _redis_client
 
     # 이미 생성된 클라이언트가 있으면 재사용한다.
@@ -32,38 +30,57 @@ async def get_redis_client() -> Redis:
     ping_timeout = 3.0
     health_check_interval = 30
 
-    # 민감정보는 제외하고 연결 대상을 요약해 로그로 남긴다.
+    # 민감정보는 제외하고 연결 대상을 요약해 로그로 남김
     redis_url = urlsplit(settings.REDIS_URL)
     redis_host = redis_url.hostname or "unknown"
     redis_port = redis_url.port or 6379
     redis_db = redis_url.path.lstrip("/") or "0"
+    
+    is_cluster_mode = settings.REDIS_CLUSTER_MODE
+
     logger.debug(
         (
             "[REDIS][CLIENT][INIT] Creating Redis client: "
-            "host=%s, port=%s, db=%s, socket_connect_timeout=%.1fs, "
+            "host=%s, port=%s, db=%s, cluster_mode=%s, socket_connect_timeout=%.1fs, "
             "socket_timeout=%.1fs, ping_timeout=%.1fs, health_check_interval=%ss"
         ),
         redis_host,
         redis_port,
         redis_db,
+        is_cluster_mode,
         socket_connect_timeout,
         socket_timeout,
         ping_timeout,
         health_check_interval,
     )
 
-    redis_client: Redis | None = None
+    redis_client: RedisCluster | Redis | None = None
 
     try:
-        # 1) 클라이언트 구성
-        redis_client = Redis.from_url(
-            settings.REDIS_URL,
-            socket_connect_timeout=socket_connect_timeout,
-            socket_timeout=socket_timeout,
-            health_check_interval=health_check_interval,
-        )
+        # 클라이언트 구성
+        if is_cluster_mode:
+            # rediss:// (SSL) 환경 대응
+            ssl_opts = {}
+            if redis_url.scheme == "rediss":
+                ssl_opts = {"ssl": True, "ssl_cert_reqs": None}
+                
+            redis_client = RedisCluster.from_url(
+                settings.REDIS_URL,
+                socket_connect_timeout=socket_connect_timeout,
+                socket_timeout=socket_timeout,
+                health_check_interval=health_check_interval,
+                require_full_coverage=False,
+                **ssl_opts
+            )
+        else:
+            redis_client = Redis.from_url(
+                settings.REDIS_URL,
+                socket_connect_timeout=socket_connect_timeout,
+                socket_timeout=socket_timeout,
+                health_check_interval=health_check_interval,
+            )
 
-        # 2) 실제 연결 확인 (from_url은 lazy connection이므로 ping으로 검증)
+        # 실제 연결 확인 (from_url은 lazy connection이므로 ping으로 검증)
         ping_started_at = time.perf_counter()
         await asyncio.wait_for(redis_client.ping(), timeout=ping_timeout)
         ping_elapsed_ms = (time.perf_counter() - ping_started_at) * 1000
@@ -77,10 +94,11 @@ async def get_redis_client() -> Redis:
 
     except asyncio.TimeoutError:
         logger.error(
-            "[REDIS][CLIENT][INIT] Redis connection timed out: host=%s, port=%s, db=%s",
+            "[REDIS][CLIENT][INIT] Redis connection timed out: host=%s, port=%s, db=%s, cluster_mode=%s",
             redis_host,
             redis_port,
             redis_db,
+            is_cluster_mode,
             exc_info=True,
         )
         if redis_client is not None:
@@ -88,10 +106,11 @@ async def get_redis_client() -> Redis:
         raise
     except Exception:
         logger.error(
-            "[REDIS][CLIENT][INIT] Failed to initialize Redis client: host=%s, port=%s, db=%s",
+            "[REDIS][CLIENT][INIT] Failed to initialize Redis client: host=%s, port=%s, db=%s, cluster_mode=%s",
             redis_host,
             redis_port,
             redis_db,
+            is_cluster_mode,
             exc_info=True,
         )
         if redis_client is not None:
@@ -114,71 +133,13 @@ async def validate_oauth_state(state: str, provider: str) -> bool:
     return result > 0
 
 
-async def init_langgraph_checkpointer() -> None:
-    global _checkpointer
-
-    init_started_at = time.perf_counter()
-    logger.info("[REDIS][CHECKPOINTER][INIT] Starting LangGraph checkpointer initialization")
-
-    # 이미 초기화된 경우 중복 초기화를 방지한다.
-    if _checkpointer is not None:
-        logger.debug("[REDIS][CHECKPOINTER][INIT] Skip initialization: checkpointer is already initialized")
-        return
-
-    # 민감정보(password)는 로그에 남기지 않고 접속 대상을 요약한다.
-    redis_url = urlsplit(settings.REDIS_URL)
-    redis_host = redis_url.hostname or "unknown"
-    redis_port = redis_url.port or 6379
-    redis_db = redis_url.path.lstrip("/") or "0"
-    logger.debug(
-        "[REDIS][CHECKPOINTER][INIT] Redis target: host=%s, port=%s, db=%s",
-        redis_host,
-        redis_port,
-        redis_db,
-    )
-
+async def check_redis_health() -> bool:
+    """Redis 서버 상태를 확인합니다."""
     try:
-        # Redis client 준비
-        redis_client_started_at = time.perf_counter()
-        is_reused_client = _redis_client is not None
-        redis = await get_redis_client()
-        redis_client_elapsed_ms = (time.perf_counter() - redis_client_started_at) * 1000
-        logger.debug(
-            "[REDIS][CHECKPOINTER][INIT] Redis client ready: reused=%s, elapsed_ms=%.2f",
-            is_reused_client,
-            redis_client_elapsed_ms,
-        )
-
-        # LangGraph 체크포인터 생성 및 내부 인덱스 setup 실행
-        saver_started_at = time.perf_counter()
-        _checkpointer = AsyncRedisSaver(redis_client=redis)
-        logger.debug("[REDIS][CHECKPOINTER][INIT] AsyncRedisSaver instance created")
-
-        setup_started_at = time.perf_counter()
-        await _checkpointer.setup()  # 인덱스 생성 (초기 1회)
-        setup_elapsed_ms = (time.perf_counter() - setup_started_at) * 1000
-        saver_elapsed_ms = (time.perf_counter() - saver_started_at) * 1000
-        logger.debug(
-            "[REDIS][CHECKPOINTER][INIT] Checkpointer setup completed: setup_elapsed_ms=%.2f, saver_elapsed_ms=%.2f",
-            setup_elapsed_ms,
-            saver_elapsed_ms,
-        )
-
-        total_elapsed_ms = (time.perf_counter() - init_started_at) * 1000
-        logger.info(
-            "[REDIS][CHECKPOINTER][INIT] Completed initialization: elapsed_ms=%.2f",
-            total_elapsed_ms,
-        )
-    except Exception:
-        logger.error(
-            "[REDIS][CHECKPOINTER][INIT] Failed to initialize LangGraph checkpointer",
-            exc_info=True,
-        )
-        raise
-
-
-# RAG 단기 영속성
-def get_langgraph_checkpointer() -> AsyncRedisSaver:
-    if _checkpointer is None:
-        raise RuntimeError("LangGraph checkpointer is not initialized")
-    return _checkpointer
+        # get_redis_client() 내부에서 이미 ping을 수행하므로 호출만으로 검증 가능합니다.
+        client = await get_redis_client()
+        await client.ping()
+        return True
+    except Exception as e:
+        logger.error(f"[REDIS][HEALTH] Health check failed: {e}")
+        return False

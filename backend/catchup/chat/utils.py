@@ -3,7 +3,6 @@ from langchain.messages import AIMessage, HumanMessage
 from langchain_core.messages import BaseMessage
 from sqlalchemy.orm import Session
 
-from catchup.configs.config import settings
 from catchup.db.chat_room import get_recent_messages
 from catchup.db.models import SenderType
 
