@@ -16,11 +16,14 @@ export const formatMarkdownString = (text: string): string => {
   // 예: **`code`**글자 -> **`code`** 글자
   normalized = normalized.replace(/(\*\*`[^`]+`\*\*)([^\s*])/g, '$1 $2');
 
-  // 블록 문법 시작(헤딩/리스트/체크박스/코드펜스/인용/테이블) 앞에 빈 줄 보정
+  // 블록 문법 시작(헤딩/리스트/체크박스/코드펜스/인용) 앞에 빈 줄 보정
   const withSpacing = normalized.replace(
-    /([^\n])\n(?=(#{1,6}\s|(\d+)\.\s|[-*+]\s|-\s\[[xX\s]\]\s|```|>\s|\|))/g,
+    /([^\n])\n(?=(#{1,6}\s|(\d+)\.\s|[-*+]\s|-\s\[[xX\s]\]\s|```|>\s))/g,
     '$1\n\n',
   );
 
-  return withSpacing.trimEnd();
+  // 테이블 시작 전 빈 줄 추가 (이전 행이 |로 시작하지 않는 경우만)
+  const withTableSpacing = withSpacing.replace(/^([^|\n].*)\n(\|)/gm, '$1\n\n$2');
+
+  return withTableSpacing.trimEnd();
 };
