@@ -9,6 +9,15 @@ class EventType(StrEnum):
     CHAT = "CHAT"
     SYSTEM = "SYSTEM"
 
+class SystemEventAction(StrEnum):
+    STARTUP_DB_INIT = "startup_db_init"
+    STARTUP_DB_SCHEMA_DRIFT = "startup_db_schema_drift"
+    STARTUP_SCHEDULER_INIT = "startup_scheduler_init"
+    STARTUP_CHECKPOINTER_INIT = "startup_checkpointer_init"
+    STARTUP_REDIS_INIT = "startup_redis_init"
+    SHUTDOWN_SCHEDULER = "shutdown_scheduler"
+    SHUTDOWN_CHECKPOINTER = "shutdown_checkpointer"
+
 class AuthEventAction(StrEnum):
     LOGIN_ATTEMPT = "login_attempt"
     TOKEN_REFRESH = "token_refresh"

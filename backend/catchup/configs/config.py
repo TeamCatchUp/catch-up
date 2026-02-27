@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     SERVICE_NAME: str = "catchup"
     APP_VERSIONS: str = "0.1.0"
     LOG_LEVEL: str
+    LOG_JSON_FILE_PATH: str = "/var/log/catchup/app.jsonl"
+    LOG_JSON_MAX_BYTES: int = 50 * 1024 * 1024
+    LOG_JSON_BACKUP_COUNT: int = 5
+    LOG_CONSOLE_ENABLED: bool = True
+    LOG_JSON_FILE_ENABLED: bool = True
     
     ENV: Environment = Environment.development
 

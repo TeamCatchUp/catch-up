@@ -13,6 +13,7 @@ services:
       - ./backend/uv.lock:/app/uv.lock
       - ./backend/.secrets:/app/.secrets
       - ${HOME}/.aws:/root/.aws:ro
+      - ./logs:/var/log/catchup
     env_file:
       - .env
     environment:
