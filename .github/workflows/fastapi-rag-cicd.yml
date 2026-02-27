@@ -101,7 +101,7 @@ jobs:
             EOF
             
             echo "IMAGE_TAG=sha-${{ github.sha }}" >> .env
-            echo "DOCKER_REGISTRY_USER_NAME=${{ secrets.DOCKER_REGISTRY_USER_NAME }}" >> .env
+            echo "DOCKER_REGISTRY_URL=${{ secrets.DOCKER_REGISTRY_USER_NAME }}" >> .env
             
             echo "${{ secrets.DOCKER_REGISTRY_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_REGISTRY_USER_NAME }}" --password-stdin
 
