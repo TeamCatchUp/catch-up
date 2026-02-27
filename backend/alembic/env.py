@@ -25,6 +25,10 @@ if config.config_file_name is not None:
     
 
 db_url = settings.sqlalchemy_database_url
+if db_url:
+    # ConfigParser가 %를 치환 문자로 인식하지 못하도록 %%로 변경 
+    db_url = db_url.replace("%", "%%") 
+    config.set_main_option("sqlalchemy.url", db_url)
 
 config.set_main_option("sqlalchemy.url", db_url)
 
