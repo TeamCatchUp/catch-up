@@ -114,6 +114,52 @@ const mockHandlers: MockHandler[] = [
     handler: async () => [{ id: 12345678, account: { login: 'catchup-org' }, app_slug: 'catchup-bot' }],
   },
 
+  // Admin Connector Status (페이지네이션 UI 확인용 mock)
+  {
+    pattern: /^\/api\/v1\/admin\/connector\/github\/status$/,
+    method: 'get',
+    handler: async () => ({
+      tool_name: 'github',
+      connected: true,
+      oldest: '2025-06-01T00:00:00Z',
+      latest: '2026-02-27T12:00:00Z',
+      repositories: Array.from({ length: 27 }, (_, i) => `catchup-org/repo-${String(i + 1).padStart(2, '0')}`),
+    }),
+  },
+  {
+    pattern: /^\/api\/v1\/admin\/connector\/jira\/status$/,
+    method: 'get',
+    handler: async () => ({
+      tool_name: 'jira',
+      connected: true,
+      oldest: '2025-06-01T00:00:00Z',
+      latest: '2026-02-27T12:00:00Z',
+      projects: Array.from({ length: 25 }, (_, i) => `프로젝트 ${String(i + 1).padStart(2, '0')}`),
+    }),
+  },
+  {
+    pattern: /^\/api\/v1\/admin\/connector\/slack\/status$/,
+    method: 'get',
+    handler: async () => ({
+      tool_name: 'slack',
+      connected: true,
+      oldest: '2025-06-01T00:00:00Z',
+      latest: '2026-02-27T12:00:00Z',
+      channels: Array.from({ length: 13 }, (_, i) => `#channel-${String(i + 1).padStart(2, '0')}`),
+    }),
+  },
+  {
+    pattern: /^\/api\/v1\/admin\/connector\/confluence\/status$/,
+    method: 'get',
+    handler: async () => ({
+      tool_name: 'confluence',
+      connected: true,
+      oldest: '2025-06-01T00:00:00Z',
+      latest: '2026-02-27T12:00:00Z',
+      spaces: Array.from({ length: 5 }, (_, i) => `Confluence Space ${String(i + 1).padStart(2, '0')}`),
+    }),
+  },
+
   // Onboarding — 일반 유저 가입
   {
     pattern: /^\/api\/v1\/onboarding$/,

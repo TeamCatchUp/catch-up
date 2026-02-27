@@ -48,3 +48,6 @@ export const CONFLUENCE_GUIDE_IMAGES = {
   siteSelection: ImgGuideConfluenceSiteSelection,
   accept: ImgGuideConfluenceAccept,
 };
+
+/** 연동 관리 리소스 목록 페이지당 항목 수 */
+export const RESOURCES_PER_PAGE = 10;
