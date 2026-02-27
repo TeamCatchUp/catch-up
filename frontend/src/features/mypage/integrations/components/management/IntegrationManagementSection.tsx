@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 
 import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
@@ -9,8 +10,10 @@ import IconTag from '@/public/icons/icon/tag.svg';
 import IconGithubLogo from '@/public/icons/logo/GitHub.svg';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
+import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
+import { RESOURCES_PER_PAGE } from '../../constants/integrations';
 import type { ConnectorDetail, IntegrationMenuItem, IntegrationService } from '../../types/integrations';
 import ConfluenceGuideSection from './ConfluenceGuideSection';
 import GithubGuideSection from './GithubGuideSection';
@@ -57,6 +60,21 @@ const IntegrationManagementSection = ({
   onSelectService,
   detail,
 }: IntegrationManagementSectionProps) => {
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // 서비스 변경 시 페이지 리셋 — 렌더 중 조정 (useEffect 이중 렌더 방지)
+  const [prevService, setPrevService] = useState(selectedService);
+  if (prevService !== selectedService) {
+    setPrevService(selectedService);
+    setCurrentPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(detail.resources.length / RESOURCES_PER_PAGE));
+  const paginatedResources = detail.resources.slice(
+    (currentPage - 1) * RESOURCES_PER_PAGE,
+    currentPage * RESOURCES_PER_PAGE,
+  );
+
   const syncMutation = useMutation({
     mutationKey: ['admin', 'connector', 'sync', selectedService] as const,
     mutationFn: async () => {
@@ -179,22 +197,38 @@ const IntegrationManagementSection = ({
 
         <div className="flex flex-col gap-1.5">
           <h3 className="text-heading-small text-gray-70">{detail.resourceLabel}</h3>
-          <div className="border-neutral-3 bg-neutral-1 overflow-hidden rounded-xl border">
+          <div className="border-neutral-3 bg-neutral-1 flex flex-col items-center gap-3 overflow-hidden rounded-xl border pt-2 pb-3">
             {detail.resources.length > 0 ? (
-              detail.resources.map((row, index) => {
-                const ResourceIcon = RESOURCE_ICONS[selectedService];
-                return (
-                  <div
-                    key={`${row}-${index}`}
-                    className="border-neutral-3 text-body-small text-gray-70 flex h-13 items-center gap-3 border-b px-4 py-3"
-                  >
-                    <div className="border-neutral-3 flex shrink-0 items-center justify-center overflow-hidden rounded-full border bg-white/75 p-1.5">
-                      <ResourceIcon className="size-5" />
+              <>
+                <div className="flex w-full flex-col">
+                  {paginatedResources.map((row, index) => {
+                    const ResourceIcon = RESOURCE_ICONS[selectedService];
+                    return (
+                      <div
+                        key={`${row}-${index}`}
+                        className="text-body-small text-gray-70 flex h-13 items-center gap-3 px-4 py-3"
+                      >
+                        <div className="border-neutral-3 flex shrink-0 items-center justify-center overflow-hidden rounded-full border bg-white/75 p-1.5">
+                          <ResourceIcon className="size-5" />
+                        </div>
+                        <span className="truncate">{row}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {totalPages > 1 && (
+                  <>
+                    <div className="w-full px-4">
+                      <div className="border-neutral-3 border-t" />
                     </div>
-                    <span className="truncate">{row}</span>
-                  </div>
-                );
-              })
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      onPageChange={setCurrentPage}
+                    />
+                  </>
+                )}
+              </>
             ) : (
               <div className="text-body-small text-gray-40 flex h-13 items-center px-4 py-3">
                 연동된 항목이 없습니다.
