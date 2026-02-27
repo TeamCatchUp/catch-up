@@ -3,7 +3,7 @@ Thumbs.db
 
 .idea/
 .vscode/
-.claude/
+.codex/
 *.swp
 *.iml
 
