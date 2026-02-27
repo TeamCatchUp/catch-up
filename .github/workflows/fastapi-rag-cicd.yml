@@ -31,10 +31,12 @@ jobs:
             context: .
             dockerfile: backend/Dockerfile
             image_name: catchup-backend
+            target: prod
           - service: frontend
             context: .
             dockerfile: frontend/Dockerfile
             image_name: catchup-web
+            target: runner
 
     steps:
       - name: Checkout Source Code
@@ -64,6 +66,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
@@ -90,6 +93,7 @@ jobs:
             cd ~/CatchUp || { echo "Directory not found"; exit 1; }
             
             git fetch origin
+            git checkout -f develop
             git reset --hard origin/develop
 
             cat << 'EOF' > .env
