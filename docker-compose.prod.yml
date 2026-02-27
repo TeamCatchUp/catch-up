@@ -16,6 +16,8 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_DATABASE=${DB_DATABASE:-catchup}
       - LOG_LEVEL=INFO
+    volumes:
+      - ${LOG_EBS_PATH:-/mnt/ebs/catchup/logs}:/var/log/catchup
     logging:
       driver: json-file
       options:

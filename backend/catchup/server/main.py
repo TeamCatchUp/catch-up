@@ -5,70 +5,60 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
-from uvicorn.logging import DefaultFormatter
 
 from catchup import __version__
+from catchup.audit.enums import SystemEventAction
+from catchup.audit.system import system_event
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal, engine
 from catchup.db.models import Base, Company
-from catchup.server.state import state
-from catchup.server.auth.api import router as auth_router
+from catchup.observability.logging import configure_logging
 from catchup.server.admin.api import router as admin_router
+from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
 from catchup.server.chat_room.api import router as chatroom_router
-from catchup.server.connector.github.auth_api import router as github_auth_router
-from catchup.server.connector.github.sync_api import router as github_sync_router
-from catchup.utils.redis import get_redis_client
-from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
-from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_checkpointer
 from catchup.server.connector.atlassian.auth_api import (
     router as atlassian_auth_router,
 )
-from catchup.server.connector.jira.sync_api import router as jira_sync_router
-from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
 from catchup.server.connector.confluence.sync_api import (
     router as confluence_sync_router,
 )
+from catchup.server.connector.github.auth_api import router as github_auth_router
+from catchup.server.connector.github.sync_api import router as github_sync_router
+from catchup.server.connector.jira.sync_api import router as jira_sync_router
+from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.sync_api import router as slack_sync_router
 from catchup.server.mapping.api import router as github_mapping_csv_router
+from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.settings.api import router as settings_router
+from catchup.server.state import state
+from catchup.utils.redis import get_redis_client
+from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
+from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_checkpointer
 
-# logging 설정
-log_level = logging.INFO
-if settings.LOG_LEVEL.upper() == "DEBUG":
-    log_level = logging.DEBUG
-
-handler = logging.StreamHandler()
-handler.setFormatter(
-    DefaultFormatter(
-        fmt="%(levelprefix)s %(asctime)s (%(name)s) %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-)
-
-root_logger = logging.getLogger()
-root_logger.handlers = [handler]
-root_logger.setLevel(log_level)
-
-logging.getLogger("catchup").setLevel(log_level)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
-
+configure_logging()
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info(f"Log level: {settings.LOG_LEVEL}")
+    logger.info("Log level: %s", settings.LOG_LEVEL)
 
     try:
         db_init_started_at = time.perf_counter()
-        
+
         # 1) 메타데이터 기준 테이블 목록 수집
         metadata_table_names = sorted(Base.metadata.tables.keys())
-        logger.info("[APP][STARTUP][DB][INIT] Starting DB initialization")
+        system_event(
+            action=SystemEventAction.STARTUP_DB_INIT,
+            result="start",
+            metadata={
+                "message": "starting_db_initialization",
+                "metadata_table_count": len(metadata_table_names),
+            },
+        )
         logger.debug(
             "[APP][STARTUP][DB][INIT] Metadata tables loaded: count=%s, tables=%s",
             len(metadata_table_names),
@@ -136,18 +126,25 @@ async def lifespan(app: FastAPI):
         )
 
         if missing_tables_after:
-            logger.warning(
-                "[APP][STARTUP][DB][INIT] Missing tables after create_all: count=%s, tables=%s",
-                len(missing_tables_after),
-                missing_tables_after,
+            system_event(
+                action=SystemEventAction.STARTUP_DB_INIT,
+                result="partial_failure",
+                metadata={
+                    "message": "missing_tables_after_create_all",
+                    "missing_tables_count": len(missing_tables_after),
+                    "missing_tables": missing_tables_after,
+                },
             )
 
         if missing_columns_by_table:
             for table_name, missing_columns in missing_columns_by_table.items():
-                logger.warning(
-                    "[APP][STARTUP][DB][SCHEMA_DRIFT] Missing DB columns detected: table=%s, missing_columns=%s",
-                    table_name,
-                    missing_columns,
+                system_event(
+                    action=SystemEventAction.STARTUP_DB_SCHEMA_DRIFT,
+                    result="partial_failure",
+                    metadata={
+                        "table_name": table_name,
+                        "missing_columns": missing_columns,
+                    },
                 )
         else:
             logger.debug(
@@ -155,36 +152,56 @@ async def lifespan(app: FastAPI):
             )
 
         db_init_elapsed_ms = (time.perf_counter() - db_init_started_at) * 1000
-        logger.info(
-            "[APP][STARTUP][DB][INIT] Completed DB initialization: elapsed_ms=%.2f, metadata_tables=%s, db_tables_before=%s, db_tables_after=%s",
-            db_init_elapsed_ms,
-            len(metadata_table_names),
-            len(db_table_names_before),
-            len(db_table_names_after),
+        system_event(
+            action=SystemEventAction.STARTUP_DB_INIT,
+            result="success",
+            metadata={
+                "elapsed_ms": round(db_init_elapsed_ms, 2),
+                "metadata_tables": len(metadata_table_names),
+                "db_tables_before": len(db_table_names_before),
+                "db_tables_after": len(db_table_names_after),
+            },
         )
 
     except Exception as e:
-        logger.critical(
-            "[APP][STARTUP][DB][INIT] Failed to initialize DB tables: %s",
-            e,
-            exc_info=True,
+        system_event(
+            action=SystemEventAction.STARTUP_DB_INIT,
+            result="failure",
+            level="error",
+            metadata={"error": str(e)},
         )
         raise
-    
+
     # Langgraph Checkpoint INIT
     try:
         await init_langgraph_checkpointer()
-    
+        system_event(
+            action=SystemEventAction.STARTUP_CHECKPOINTER_INIT,
+            result="success",
+        )
     except Exception as e:
-        logger.critical(f"Failed to create PostgreSQL langgraph checkpointer: {e}")
+        system_event(
+            action=SystemEventAction.STARTUP_CHECKPOINTER_INIT,
+            result="failure",
+            level="error",
+            metadata={"error": str(e)},
+        )
 
-    #Scheduler 초기화
+    # Scheduler 초기화
     try:
         init_scheduler()
-        logger.info("APScheduler initiated Successfully !")
+        system_event(
+            action=SystemEventAction.STARTUP_SCHEDULER_INIT,
+            result="success",
+        )
     except Exception as e:
-        logger.critical(f"Failed to initialize APScheduler : {e}")
-    
+        system_event(
+            action=SystemEventAction.STARTUP_SCHEDULER_INIT,
+            result="failure",
+            level="error",
+            metadata={"error": str(e)},
+        )
+
     try:
         db = SessionLocal()
         company_count = db.query(Company).count()
@@ -192,27 +209,53 @@ async def lifespan(app: FastAPI):
             state.is_admin_initiated = True
         db.close()
     except Exception as e:
-        logger.critical(f"Failed to check whether admin is initiated: {e}")
-        
+        logger.critical("Failed to check whether admin is initiated: %s", e)
+
     try:
-        await get_redis_client() 
+        await get_redis_client()
+        system_event(
+            action=SystemEventAction.STARTUP_REDIS_INIT,
+            result="success",
+        )
     except Exception as e:
-        logger.critical(f"[APP][STARTUP][REDIS][INIT] Failed to connect to Redis: {e}")
+        system_event(
+            action=SystemEventAction.STARTUP_REDIS_INIT,
+            result="failure",
+            level="error",
+            metadata={"error": str(e)},
+        )
         raise e
-    
+
     yield
 
-    #Scheduler Shutdown
+    # Scheduler Shutdown
     try:
         shutdown_scheduler()
+        system_event(
+            action=SystemEventAction.SHUTDOWN_SCHEDULER,
+            result="success",
+        )
     except Exception as e:
-        logger.error(f"Failed to Shut Down Scheduler")
-        
-        
+        system_event(
+            action=SystemEventAction.SHUTDOWN_SCHEDULER,
+            result="failure",
+            level="error",
+            metadata={"error": str(e)},
+        )
+
     try:
         await close_langgraph_checkpointer()
+        system_event(
+            action=SystemEventAction.SHUTDOWN_CHECKPOINTER,
+            result="success",
+        )
     except Exception as e:
-        logger.error(f"Failed to close langgraph checkpointer")
+        system_event(
+            action=SystemEventAction.SHUTDOWN_CHECKPOINTER,
+            result="failure",
+            level="error",
+            metadata={"error": str(e)},
+        )
 
 
 # MAIN
@@ -224,7 +267,6 @@ app = FastAPI(
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
 )
-
 
 # Router 등록
 app.include_router(chat_router)
@@ -269,6 +311,8 @@ async def add_process_time_header(request: Request, call_next):
     response = await call_next(request)
 
     process_time = time.perf_counter() - start_time
-    logger.info(f"{request.method} {request.url.path} ===> {process_time:.4f}s")
+    logger.info("%s %s ===> %.4fs", request.method, request.url.path, process_time)
 
     return response
+
+app.middleware("http")(request_context_middleware)
