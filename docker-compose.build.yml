@@ -6,10 +6,12 @@ services:
     build:
       context: .
       dockerfile: ./backend/Dockerfile
+      target: prod
     image: teamcatchup/catchup-backend:latest
 
   web_client:
     build:
       context: .
       dockerfile: ./frontend/Dockerfile
+      target: prod
     image: teamcatchup/catchup-web:latest
