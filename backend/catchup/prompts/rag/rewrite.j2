@@ -25,6 +25,11 @@ Your objective is to transform the user's ambiguous query into a **standalone, c
    - Output **ONLY** the rewritten Korean question.
    - No explanations, no prefixes, no markdown formatting.
 
+5. **Temporal Integrity (IMPORTANT):**
+   - **Neutrality:** If the user query does not imply a specific time range (e.g., "recently", "last week"), **DO NOT** add any date restrictions. Keep the query broad to ensure the retriever can search the entire database.
+   - **Explicit Conversion:** Only when time-related words (e.g., "그때", "저번에", "최근") are used, convert them into specific dates based on the [Global Context]. 
+   - **All-Time Queries:** If the user asks for "everything", "all-time", or "whole history", explicitly ignore any previously mentioned time constraints in [Chat History] to reset the search scope. Do not specify any dates in the output in this case.
+
 # FEW-SHOT EXAMPLES
 
 **Example 1**

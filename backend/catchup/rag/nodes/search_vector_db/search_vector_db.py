@@ -1,12 +1,12 @@
 import asyncio
 import logging
-from typing import Optional
 
 from langchain_core.documents import Document
 
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.db.models import SourceType
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.schemas.filters import build_temporal_filters
 from catchup.rag.schemas.structures import VectorDbSearchQuery
 from catchup.rag.state import AgentState
 
@@ -44,20 +44,31 @@ async def search_vector_db_node(state: AgentState, vector_db_service: BaseVector
 async def _get_hybrid_search_results(
     vector_db_service: BaseVectorDbService,
     queries: list[VectorDbSearchQuery],
-    tool_filters: Optional[list[SourceType]],
+    tool_filters: list[SourceType] | None = None,
     k: int = 10,
     weights: list[float] = [0.5, 0.5],
 ):
-    tasks = [
-        asyncio.to_thread(
-            vector_db_service.hybrid_search,
-            q.query,
-            k,
-            weights,
-            tool_filters,
+    
+    tasks = []
+    
+    for q in queries:
+        temporal_filters = build_temporal_filters(
+            tool_filters=tool_filters,
+            start_date=q.start_date,
+            end_date=q.end_date
         )
-        for q in queries
-    ]
+        
+        tasks.append(
+            asyncio.to_thread(
+                vector_db_service.hybrid_search,
+                q.query,
+                k,
+                weights,
+                tool_filters,
+                temporal_filters
+            )
+        )
+
     results = await asyncio.gather(*tasks)
 
     return results
