@@ -135,7 +135,6 @@ class PGVectorService(BaseVectorDbService):
             embeddings=embeddings, 
             collection_name=collection_name
         )
-        # self._ensure_index()
 
     def _create_pgvector(
         self,
@@ -150,39 +149,6 @@ class PGVectorService(BaseVectorDbService):
             use_jsonb=True,
         )
 
-    # def _ensure_index(self):
-    #     """
-    #     pg_bigm을 사용하여 한글 부분 일치 검색을 위한 GIN 인덱스를 생성한다.
-    #     JSONB 타입의 cmetadata 컬럼의 'source', 'updated_at', 'created_at' 필드를 
-    #     필터링 하기 위한 B-Tree 인덱스를 생성한다.
-    #     테이블이 존재할 때만 인덱스를 생성하며, 이미 존재하면 건너뛴다.
-    #     """
-    #     index_query = text("""
-    #         CREATE EXTENSION IF NOT EXISTS pg_bigm;
-    #         CREATE EXTENSION IF NOT EXISTS vector;
-            
-    #         CREATE INDEX IF NOT EXISTS idx_fts_korean_bigm
-    #         ON langchain_pg_embedding
-    #         USING GIN (document gin_bigm_ops);
-            
-    #         CREATE INDEX IF NOT EXISTS idx_cmetadata_source 
-    #         ON langchain_pg_embedding ((cmetadata ->> 'source'));
-            
-    #         CREATE INDEX IF NOT EXISTS idx_cmetadata_updated_at
-    #         ON langchain_pg_embedding ((cmetadata ->> 'updated_at'));
-                           
-    #         CREATE INDEX IF NOT EXISTS idx_cmetadata_created_at
-    #         ON langchain_pg_embedding ((cmetadata ->> 'created_at'));
-    #     """)
-
-    #     try:
-    #         with self.session_factory() as session:
-    #             session.execute(index_query)
-    #             session.commit()
-    #             logger.info("Created postgresql indices successfully.")
-    #     except Exception as e:
-    #         logger.warning(f"Failed to create postgresql indices: {e}")
-    
     def hybrid_search(
         self,
         query: str,
