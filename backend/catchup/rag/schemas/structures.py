@@ -1,9 +1,26 @@
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 
 # Search Plan
 class BaseSearchQuery(BaseModel):
     reasoning: str = Field(default="", description="이 검색이 필요한 이유")
+    start_date: datetime | None = Field(
+        None,
+        description="""
+        Vector 검색 대상 문서의 발생(생성/수정) 기준 시작일.
+        반드시 'YYYY-MM-DDTHH:MM:SS' 형식의 ISO 8601 포맷으로 작성할 것.
+        (시간 특정 불가 시 null)
+        """
+    )
+    end_date: datetime | None = Field(
+        None,
+        description="""
+        Vector 검색 대상 문서의 발생(생성/수정) 기준 종료일.
+        반드시 'YYYY-MM-DDTHH:MM:SS' 형식의 ISO 8601 포맷으로 작성할 것.
+        (시간 특정 불가 시 null)
+        """
+    )
 
 
 class VectorDbSearchQuery(BaseSearchQuery):

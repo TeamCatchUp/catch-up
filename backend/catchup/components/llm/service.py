@@ -80,7 +80,7 @@ class AwsBedrockLlmService(BaseLlmService):
             region_name=settings.AWS_REGION,
             credentials_profile_name=settings.AWS_CREDENTIALS_PROFILE_NAME,
             temperature=0,
-            max_tokens=4096,
+            max_tokens=8192,
             streaming=True,
             config=config
         )

@@ -12,6 +12,8 @@ services:
       - ./backend/pyproject.toml:/app/pyproject.toml
       - ./backend/uv.lock:/app/uv.lock
       - ./backend/.secrets:/app/.secrets
+      - ./backend/alembic.ini:/app/alembic.ini
+      - ./backend/alembic:/app/alembic
       - ${HOME}/.aws:/root/.aws:ro
       - ./logs:/var/log/catchup
     env_file:

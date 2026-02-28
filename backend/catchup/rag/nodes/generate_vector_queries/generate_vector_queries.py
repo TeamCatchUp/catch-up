@@ -51,5 +51,12 @@ async def generate_vector_queries_node(state: AgentState, llm: BaseChatModel):
 def _print_search_plan_log(plan: VectorDbSearchPlan):
     log_msg_lines = [f"[Vector Search Plan] Generated {len(plan.queries)} queries:"]
     for i, q in enumerate(plan.queries, 1):
-        log_msg_lines.append(f'   {i}. "{q.query}"\n      - 이유: {q.reasoning}')
+        start_str = q.start_date.strftime('%Y-%m-%d %H:%M:%S') if q.start_date else "N/A"
+        end_str = q.end_date.strftime('%Y-%m-%d %H:%M:%S') if q.end_date else "N/A"
+
+        log_msg_lines.append(
+            f'   {i}. "{q.query}"\n'
+            f'      - Time range: {start_str} ~ {end_str}\n'
+            f'      - Rationale: {q.reasoning}'
+        )
     logger.info("\n".join(log_msg_lines))
