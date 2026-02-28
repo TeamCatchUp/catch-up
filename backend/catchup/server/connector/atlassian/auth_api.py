@@ -39,7 +39,7 @@ from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.models import KnowledgeSource, SourceType
 from catchup.db.user_source_mapping import upsert_oauth_users
 from catchup.db.workspaces import get_workspace_limit_one
-from catchup.mapping.oauth import OAuthClient
+from catchup.onboarding.oauth import OAuthClient
 from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
 from catchup.utils.redis import store_oauth_state
 

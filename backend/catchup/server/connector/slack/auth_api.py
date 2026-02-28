@@ -21,7 +21,7 @@ from catchup.db.models import KnowledgeSource, SourceType
 from catchup.db.slack import oauth_repository as slack_crud
 from catchup.db.user_source_mapping import upsert_oauth_users
 from catchup.db.workspaces import get_workspace_limit_one
-from catchup.mapping.oauth import OAuthClient
+from catchup.onboarding.oauth import OAuthClient
 from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
 from catchup.connectors.slack.factory import create_slack_ingestion_service

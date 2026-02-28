@@ -14,7 +14,7 @@ from catchup.connectors.github.schemas import(
 from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.user_source_mapping import upsert_oauth_users
 from catchup.db.workspaces import get_workspace_limit_one
-from catchup.mapping.oauth import OAuthClient
+from catchup.onboarding.oauth import OAuthClient
 from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
 from catchup.utils.webhook_buffer import get_webhook_buffer
 from catchup.connectors.github.factory import create_github_ingestion_service

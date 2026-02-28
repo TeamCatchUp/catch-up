@@ -1,15 +1,19 @@
 import re
+from fastapi.concurrency import run_in_threadpool
 import httpx
 import logging
 import json
 import jwt
-import asyncio
 
 from catchup.configs.config import auth_settings
+from catchup.db.engine import SessionLocal
+from catchup.db.user_source_mapping import upsert_oauth_users
 from catchup.mapping.schemas import OAuthUserSchema
 
 logger = logging.getLogger(__name__)
 
+
+# TODO: OAuthClient도 component로 빠져야 하는 게 아닐지
 class OAuthClient:
     BASE_URL = f"{auth_settings.KC_INTERNAL_URL}/admin/realms/{auth_settings.KC_REALM}/users"
     
@@ -90,3 +94,29 @@ class OAuthClient:
         if re.search(r"[ㄱ-ㅎㅏ-ㅣ가-힣]", f + l):
             return f"{l}{f}".strip()
         return f"{f} {l}".strip()
+
+
+async def sync_initial_oauth_users():
+    try:
+        oauth_client = OAuthClient()
+        parsed_users = await oauth_client.get_parsed_users()
+        
+        if not parsed_users:
+            logger.warning(f"No users found from OAuth")
+            return
+        
+        def _upsert_oauth_users_sync():
+            with SessionLocal() as db:
+                try:
+                    upsert_oauth_users(db, parsed_users)
+                    db.commit()
+                    logger.info(f"Successfully synced {len(parsed_users)} users from OAuth")
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"DB Upsert failed: {e}")
+                    raise
+                
+        await run_in_threadpool(_upsert_oauth_users_sync)  # TODO: fastapi 의존성이 여기에 위치하는 게 맞을지
+        
+    except Exception as e:
+        logger.error(f"Failed to sync OAuth users: {e}", exc_info=True)
