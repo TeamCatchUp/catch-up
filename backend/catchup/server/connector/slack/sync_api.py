@@ -44,6 +44,7 @@ from catchup.server.connector.slack.schemas import (
 from catchup.db.dependencies import get_db
 from catchup.db.models import SlackSyncState
 from catchup.db.slack.oauth_repository import get_all_slack_tokens
+from catchup.db.slack import sync_repository as slack_sync
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 from catchup.utils.webhook_buffer import get_webhook_buffer
 
@@ -634,6 +635,26 @@ async def handle_slack_webhook(
             f"[SLACK][EVENT] Received: type={event_type}, subtype={event_subtype}, team_id={team_id}"
         )
 
+        # channel_id를 가진 이벤트는 기존 채널 동기화 기록이 있을때만 처리
+        event_channel_id = _extract_channel_id(event_type, event)
+        if event_channel_id:
+            channel_sync_state = slack_sync.get_channel_sync_state(
+                db,
+                team_id,
+                event_channel_id,
+            )
+            if channel_sync_state is None:
+                logger.info(
+                    f"[SLACK][EVENT] Dropped event without channel sync state: "
+                    f"team={team_id}, channel={event_channel_id}, type={event_type}, subtype={event_subtype}"
+                )
+                return {
+                    "status": "dropped",
+                    "reason": "missing_channel_sync_state",
+                    "event_type": event_type,
+                    "channel_id": event_channel_id,
+                }
+
         # Message Event → Redis Buffer
         # bot_message subtype도 임베딩 동기화 대상으로 포함한다.
         if event_type == "message" and event_subtype in (None, "bot_message"):
@@ -677,6 +698,23 @@ async def handle_slack_webhook(
 # =============================================================================
 # Private Helper Functions
 # =============================================================================
+
+def _extract_channel_id(event_type: str | None, event: dict) -> str | None:
+    """Slack 이벤트 payload에서 채널 ID 추출"""
+    if not event_type:
+        return None
+
+    channel = event.get("channel")
+    if isinstance(channel, str):
+        return channel
+
+    if event_type in {"channel_created", "channel_rename", "group_created", "group_rename"}:
+        if isinstance(channel, dict):
+            channel_id = channel.get("id")
+            if isinstance(channel_id, str):
+                return channel_id
+    return None
+
 
 async def _handle_message_event(team_id: str, event: dict) -> dict:
     """
