@@ -99,6 +99,7 @@ export const API = {
 
   mapping: {
     upload: `${API_PREFIX}/mapping/upload`, // POST GitHub 매핑 CSV/Excel 일괄 업로드 (multipart/form-data)
+    vendorUpload: (vendor: string) => `${API_PREFIX}/mapping/${vendor}/upload`, // POST 협업툴별 사용자 매핑 CSV/Excel 일괄 업로드
   },
 
   settings: {
