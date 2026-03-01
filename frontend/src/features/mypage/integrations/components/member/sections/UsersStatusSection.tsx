@@ -20,6 +20,7 @@ import UsersTable from '../tables/UsersTable';
 const CsvUploadModal = dynamic(() => import('../modals/CsvUploadModal'));
 
 const PAGE_SIZE = 10;
+const EMPTY_ACCOUNT_OPTIONS: Partial<Record<IntegrationService, AccountOption[]>> = {};
 
 interface UsersStatusSectionProps {
   rowCount: number;
@@ -27,6 +28,12 @@ interface UsersStatusSectionProps {
 }
 
 type FilterKey = 'all' | 'linked' | 'unlinked';
+
+const FILTER_LABELS: Record<FilterKey, string> = {
+  all: '전체',
+  linked: '모두 연동된 이용자',
+  unlinked: '연동되지 않은 이용자',
+};
 
 /** 이용자 계정 연동 상태 섹션 */
 const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) => {
@@ -141,11 +148,6 @@ const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) 
         <div className="flex items-center gap-2">
           {(['all', 'linked', 'unlinked'] as const).map((key) => {
             const isSelected = filterKey === key;
-            const labels: Record<FilterKey, string> = {
-              all: '전체',
-              linked: '모두 연동된 이용자',
-              unlinked: '연동되지 않은 이용자',
-            };
 
             return (
               <button
@@ -158,7 +160,7 @@ const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) 
                     : 'border-neutral-3 text-gray-60',
                 )}
               >
-                {labels[key]}
+                {FILTER_LABELS[key]}
               </button>
             );
           })}
@@ -212,7 +214,7 @@ const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) 
         <UsersTable
           displayRows={effectivePagedRows}
           isEditMode={isEditMode}
-          accountOptionsByService={USE_MOCK ? MOCK_ACCOUNT_OPTIONS_BY_SERVICE : {}}
+          accountOptionsByService={USE_MOCK ? MOCK_ACCOUNT_OPTIONS_BY_SERVICE : EMPTY_ACCOUNT_OPTIONS}
           onAccountSelect={handleAccountSelect}
           onToggleUnused={handleToggleUnused}
         />
