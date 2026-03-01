@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -17,6 +19,34 @@ class SlackSyncResponse(BaseModel):
     message: str
     team_id: str | None = None
     results: dict[str, SyncResultDetail] | None = None
+
+
+class SlackFullSyncRequest(BaseModel):
+    """Slack Full Sync 요청"""
+
+    team_id: str = Field(..., description="Slack Team/Workspace ID")
+    channel_ids: list[str] | None = Field(
+        None,
+        description="동기화할 Slack Channel ID 목록, 미지정 시 전체 채널",
+    )
+    sync_days: int | None = Field(
+        None,
+        ge=1,
+        le=3650,
+        description="수집 범위 (일), 미지정 시 기본값 사용",
+    )
+
+
+class SlackFullSyncAcceptedResponse(BaseModel):
+    """Slack Full Sync 접수 응답"""
+
+    status: Literal["accepted"] = "accepted"
+    job_id: str
+    team_id: str
+    total_channels: int
+    queued_channels: int
+    snapshot_url: str
+    stream_url: str
 
 
 # ================================================================

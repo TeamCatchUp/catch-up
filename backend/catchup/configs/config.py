@@ -145,6 +145,34 @@ class Settings(BaseSettings):
     WEBHOOK_BUFFER_TTL: int = 3900 # 65분 : Buffer 60분
     WEBHOOK_FLUSH_INTERVAL_HOURS: int = 1  
     WEBHOOK_ENABLE_AUTO_SYNC: bool = True
+
+    # api_server 시작 시 Sync Worker 자동 기동 여부
+    SYNC_WORKER_AUTOSTART: bool = True
+    # 큐가 비었을 때 worker 루프 대기 시간(초)
+    SYNC_WORKER_IDLE_SLEEP_SECONDS: float = 0.5
+    # Redis blocking pop timeout(초)
+    SYNC_QUEUE_BLOCK_TIMEOUT_SECONDS: int = 3
+
+    # 동일 Job 내 채널 병렬 처리 수
+    SYNC_WORKER_CHANNEL_CONCURRENCY: int = 5
+
+    # 재시도 정책
+    SYNC_JOB_MAX_ATTEMPTS: int = 3
+    SYNC_JOB_RETRY_BASE_DELAY_SECONDS: float = 2.0
+    SYNC_JOB_RETRY_MAX_DELAY_SECONDS: float = 30.0
+
+    # Lock TTL
+    SYNC_LOCK_TEAM_TTL_SECONDS: int = 21600      # 6h
+    SYNC_LOCK_CHANNEL_TTL_SECONDS: int = 600     # 10m
+    SYNC_LOCK_REFRESH_INTERVAL_SECONDS: float = 60.0
+
+    # Job 상태/이벤트 보관 TTL
+    SYNC_JOB_META_TTL_SECONDS: int = 86400       # 24h
+    SYNC_JOB_EVENT_TTL_SECONDS: int = 86400      # 24h
+
+    # SSE heartbeat 주기
+    SYNC_SSE_HEARTBEAT_SECONDS: int = 15
+
     
     # AWS
     AWS_ACCESS_KEY_ID: Optional[str] = None

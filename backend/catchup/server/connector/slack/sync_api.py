@@ -1,15 +1,35 @@
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import require_admin_user
 from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.connectors.slack.schemas import SlackEventWrapper, SlackMessageEvent
+from catchup.connectors.slack.sync_runtime import events as runtime_events
+from catchup.connectors.slack.sync_runtime import job_store
+from catchup.connectors.slack.sync_runtime import locks as runtime_locks
+from catchup.connectors.slack.sync_runtime import queue as runtime_queue
 from catchup.connectors.slack import webhook_service
+from catchup.connectors.slack.sync_runtime.audit import (
+    emit_job_accepted,
+    emit_job_completed,
+    emit_job_failed,
+    emit_team_lock_conflict,
+)
+from catchup.connectors.slack.sync_runtime.constants import (
+    SyncEventType,
+    SyncFailureReason,
+    SyncJobStatus,
+)
+from catchup.connectors.slack.sync_runtime.schemas import (
+    SlackChannelSyncTask,
+    SyncJobMeta,
+)
 from catchup.configs.config import settings
 from catchup.db.models import User
 from catchup.server.connector.slack.schemas import (
@@ -17,9 +37,9 @@ from catchup.server.connector.slack.schemas import (
     ChannelAccessResponse,
     SlackFlushResponse,
     SlackFlushTeamResult,
-    SlackSyncResponse,
+    SlackFullSyncAcceptedResponse,
+    SlackFullSyncRequest,
     SlackSyncStatusResponse,
-    SyncResultDetail,
 )
 from catchup.db.dependencies import get_db
 from catchup.db.models import SlackSyncState
@@ -37,21 +57,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/slack/sync", tags=["slack-sync"])
 
 
-class SlackFullSyncRequest(BaseModel):
-    """Slack Full Sync 요청"""
-
-    team_id: str = Field(..., description="Slack Team/Workspace ID")
-    sync_days: int | None = Field(
-        None,
-        description="수집 범위 (일), 미지정 시 기본값 사용",
-    )
-
-
-
-
-@router.post("/full", response_model=SlackSyncResponse)
+@router.post(
+    "/full",
+    response_model=SlackFullSyncAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def trigger_full_sync(
-    request: SlackFullSyncRequest,
+    full_sync_request: SlackFullSyncRequest,
+    request: Request,
     db: Session = Depends(get_db),
     _admin_user: User = Depends(require_admin_user),
 ):
@@ -61,39 +74,229 @@ async def trigger_full_sync(
     지정된 채널(또는 전체)의 모든 Slack 데이터를 PGVector에 동기화.
     대량의 데이터가 있을 경우 시간이 오래 걸릴 수 있습니다.
     """
-    team_id = request.team_id
-    sync_days = request.sync_days
+    team_id = full_sync_request.team_id
+    requested_channel_ids = full_sync_request.channel_ids
+    sync_days = full_sync_request.sync_days
+
+    days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
+    sync_from = str((datetime.now(timezone.utc) - timedelta(days=days)).timestamp())
+    enqueued_at = datetime.now(timezone.utc).isoformat()
+    job_id = uuid4().hex
+
+    lock_acquired = False
+    job_created = False
+    tasks_enqueued = False
     try:
+        lock_acquired, owner_job_id = await runtime_locks.acquire_team_lock(team_id, job_id)
+        if not lock_acquired:
+            emit_team_lock_conflict(
+                team_id=team_id,
+                requested_job_id=job_id,
+                owner_job_id=owner_job_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "team_id": team_id,
+                    "owner_job_id": owner_job_id,
+                    "message": "full sync already in progress for this team",
+                },
+            )
+
         service = await create_slack_ingestion_service(db, team_id)
-        result = await service.full_sync(db, sync_days=sync_days)
-
-        messages = result.get("messages", {})
-        synced = messages.get("synced", 0)
-        skipped = messages.get("skipped", 0)
-
-        message = f"Slack Full Sync 완료 : {synced}개 저장"
-        if skipped > 0:
-            message += f" {skipped}개 채널 권한 없음"
-        
-        return SlackSyncResponse(
-            status="success",
-            message=message,
-            team_id=team_id,
-            results={
-                "messages": SyncResultDetail(
-                    synced=messages.get("synced", 0),
-                    errors=messages.get("errors", 0),
-                    skipped=messages.get("skipped", 0),
+        channels = await service.list_syncable_channels()
+        normalized_requested_channel_ids: list[str] | None = None
+        invalid_channel_ids: list[str] = []
+        if requested_channel_ids is not None:
+            deduplicated_ids = dict.fromkeys(
+                channel_id.strip()
+                for channel_id in requested_channel_ids
+                if channel_id and channel_id.strip()
+            )
+            normalized_requested_channel_ids = list(deduplicated_ids.keys())
+            if not normalized_requested_channel_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "team_id": team_id,
+                        "message": "channel_ids must include at least one non-empty channel id",
+                    },
                 )
+
+            channel_by_id: dict[str, dict[str, str]] = {}
+            for channel in channels:
+                channel_id = channel.get("id")
+                if channel_id:
+                    channel_by_id[channel_id] = channel
+
+            filtered_channels: list[dict[str, str]] = []
+            for channel_id in normalized_requested_channel_ids:
+                channel = channel_by_id.get(channel_id)
+                if channel:
+                    filtered_channels.append(channel)
+                else:
+                    invalid_channel_ids.append(channel_id)
+
+            if not filtered_channels:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "team_id": team_id,
+                        "message": "no syncable channels matched the requested channel_ids",
+                        "requested_channel_ids": normalized_requested_channel_ids,
+                    },
+                )
+            channels = filtered_channels
+
+        tasks: list[SlackChannelSyncTask] = []
+        for channel in channels:
+            channel_id = channel.get("id")
+            if not channel_id:
+                continue
+
+            channel_name = channel.get("name") or channel_id
+            tasks.append(
+                SlackChannelSyncTask(
+                    event_id=uuid4().hex,
+                    job_id=job_id,
+                    team_id=team_id,
+                    channel_id=channel_id,
+                    channel_name=channel_name,
+                    sync_from=sync_from,
+                    attempt=0,
+                    max_attempts=settings.SYNC_JOB_MAX_ATTEMPTS,
+                    enqueued_at=enqueued_at,
+                )
+            )
+
+        total_channels = len(tasks)
+        job_meta = SyncJobMeta(
+            job_id=job_id,
+            team_id=team_id,
+            created_at=enqueued_at,
+            total_channels=total_channels,
+            queued_channels=total_channels,
+        )
+        await job_store.create_job(job_meta)
+        job_created = True
+
+        await runtime_events.append_event(
+            job_id=job_id,
+            team_id=team_id,
+            event_type=SyncEventType.JOB_CREATED,
+            payload={
+                "total_channels": total_channels,
+                "queued_channels": total_channels,
+                "sync_days": days,
+                "requested_channel_count": (
+                    len(normalized_requested_channel_ids)
+                    if normalized_requested_channel_ids is not None
+                    else None
+                ),
+                "invalid_channel_count": len(invalid_channel_ids),
             },
         )
+        emit_job_accepted(
+            job_id=job_id,
+            team_id=team_id,
+            total_channels=total_channels,
+            queued_channels=total_channels,
+        )
+
+        if tasks:
+            await runtime_queue.enqueue_tasks(tasks)
+            tasks_enqueued = True
+        else:
+            await job_store.mark_job_started(job_id)
+            await runtime_events.append_event(
+                job_id=job_id,
+                team_id=team_id,
+                event_type=SyncEventType.JOB_STARTED,
+                payload={"total_channels": 0},
+            )
+            await job_store.mark_job_completed(
+                job_id=job_id,
+                failed_channels=0,
+                last_error=None,
+            )
+            await runtime_events.append_event(
+                job_id=job_id,
+                team_id=team_id,
+                event_type=SyncEventType.JOB_COMPLETED,
+                payload={
+                    "total_channels": 0,
+                    "completed_channels": 0,
+                    "failed_channels": 0,
+                    "requeued_channels": 0,
+                },
+            )
+            emit_job_completed(
+                job_id=job_id,
+                team_id=team_id,
+                total_channels=0,
+                completed_channels=0,
+                failed_channels=0,
+                requeued_channels=0,
+                total_synced_messages=0,
+                duration_ms=0,
+            )
+            await runtime_locks.release_team_lock_if_owner(team_id, job_id)
+            lock_acquired = False
+
+        base_url = str(request.base_url).rstrip("/")
+        snapshot_url = f"{base_url}/api/v1/sync/jobs/{job_id}"
+        stream_url = f"{base_url}/api/v1/sync/jobs/{job_id}/stream"
+
+        return SlackFullSyncAcceptedResponse(
+            job_id=job_id,
+            team_id=team_id,
+            total_channels=total_channels,
+            queued_channels=total_channels,
+            snapshot_url=snapshot_url,
+            stream_url=stream_url,
+        )
+
     except HTTPException:
+        if lock_acquired and not tasks_enqueued:
+            await runtime_locks.release_team_lock_if_owner(team_id, job_id)
         raise
     except Exception as e:
-        logger.error(f"[SLACK][FULL SYNC] Slack Full Sync Failed for team_id = {team_id} : {e}")
+        logger.error(
+            "[SLACK][FULL SYNC] Failed to enqueue full sync: team_id=%s, error=%s",
+            team_id,
+            e,
+            exc_info=True,
+        )
+
+        if job_created and not tasks_enqueued:
+            await job_store.update_job_fields(
+                job_id,
+                {
+                    "status": SyncJobStatus.FAILED.value,
+                    "started_at": enqueued_at,
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "last_error": str(e),
+                },
+            )
+            await runtime_events.append_event(
+                job_id=job_id,
+                team_id=team_id,
+                event_type=SyncEventType.JOB_FAILED,
+                payload={"error": str(e)},
+            )
+            emit_job_failed(
+                job_id=job_id,
+                team_id=team_id,
+                failure_reason=SyncFailureReason.UNEXPECTED_ERROR.value,
+                error_summary=str(e),
+            )
+
+        if lock_acquired and not tasks_enqueued:
+            await runtime_locks.release_team_lock_if_owner(team_id, job_id)
+
         raise HTTPException(
-            status_code = 500,
-            detail = f"동기화 과정 중 오류 발생 : {str(e)}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"동기화 요청 접수 중 오류 발생: {str(e)}",
         )
 
 
@@ -432,7 +635,8 @@ async def handle_slack_webhook(
         )
 
         # Message Event → Redis Buffer
-        if event_type == "message" and event_subtype is None:
+        # bot_message subtype도 임베딩 동기화 대상으로 포함한다.
+        if event_type == "message" and event_subtype in (None, "bot_message"):
             return await _handle_message_event(team_id, event)
 
         # Channel Created / Renamed (channel이 object)
@@ -484,11 +688,15 @@ async def _handle_message_event(team_id: str, event: dict) -> dict:
         logger.error(f"[SLACK][EVENT] Failed to Parse Message Event: {e}")
         return {"status": "error", "reason": "parse_failed"}
 
-    if not data.user:
-        logger.debug(f"[SLACK][EVENT] Ignored bot message: channel={data.channel}, ts={data.ts}")
-        return {"status": "skipped", "reason": "bot_message"}
+    # 작성자 user가 없는 경우에도 bot_message면 허용한다.
+    if not data.user and data.subtype != "bot_message":
+        logger.debug(
+            f"[SLACK][EVENT] Ignored message without user: channel={data.channel}, ts={data.ts}"
+        )
+        return {"status": "skipped", "reason": "missing_user"}
 
-    if data.subtype is not None:
+    # 시스템 subtype은 제외하고, bot_message만 예외적으로 수집한다.
+    if data.subtype is not None and data.subtype != "bot_message":
         logger.debug(f"[SLACK][EVENT] Ignored message with subtype: channel={data.channel}, ts={data.ts}")
         return {"status": "skipped", "reason": "subtype_message"}
 
@@ -502,7 +710,7 @@ async def _handle_message_event(team_id: str, event: dict) -> dict:
 
     logger.info(
         f"[SLACK][EVENT] Buffered Slack message: team={team_id}, "
-        f"channel={data.channel}, ts={data.ts}, user={data.user}"
+        f"channel={data.channel}, ts={data.ts}, user={data.user}, bot_id={data.bot_id}"
     )
     return {"status": "buffered", "event_type": "message"}
 
