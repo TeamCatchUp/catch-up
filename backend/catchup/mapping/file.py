@@ -1,75 +1,111 @@
+from typing import NamedTuple
 import pandas as pd
 import logging
 from io import BytesIO
 
-from catchup.db.engine import SessionLocal
+from sqlalchemy.orm import Session
+
 from catchup.db.models import SourceType
-from catchup.mapping.resolver import upsert_pre_mapping 
+from catchup.db.user_source_mapping import update_tool_user_email
+from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer 
 
 logger = logging.getLogger(__name__)
 
 
-def process_mapping_file_sync(filename: str, content: bytes) -> dict:
-    """
-    업로드된 github 사용자 정보 파일 바이너리를 파싱하여 DB에 매핑 데이터를 동기화한다.
-    """
+class RequiredColumns(NamedTuple):
+    id_col: str
+    email_col: str
+
+COLUMN_MAP = {
+        "slack": RequiredColumns(id_col='userid', email_col='email'),
+        "atlassian": RequiredColumns(id_col='User id', email_col='email'),
+        "github": RequiredColumns(id_col='github_id', email_col='company_email')
+    }
+
+VENDOR_SOURCE_MAP = {
+    "github": [SourceType.GITHUB],
+    "slack": [SourceType.SLACK],
+    "atlassian": [SourceType.JIRA, SourceType.CONFLUENCE]
+}
+
+
+def process_mapping_file_sync(
+    db: Session,
+    vendor_type: str,
+    filename: str,
+    content: bytes
+) -> dict:
     
+    # 인코딩 전략
     if filename.endswith('.csv'):
         try:
             df = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
         except UnicodeDecodeError:
-            logger.warning(f"[MAPPING][GITHUB] utf-8-sig failed for {filename}, trying cp949")
             df = pd.read_csv(BytesIO(content), encoding="cp949")
     else:
         df = pd.read_excel(BytesIO(content), engine='openpyxl')
-
-    required_columns = {'github_id', 'company_email'}
-    actual_columns = set(df.columns)
-    
-    if not required_columns.issubset(actual_columns):
-        missing = required_columns - actual_columns
-        logger.warning(f"[MAPPING][GITHUB] Missing columns in {filename}. Required: {required_columns}, Found: {actual_columns}")
-        raise ValueError(f"필수 컬럼이 누락되었습니다: {', '.join(missing)}")
-
-    with SessionLocal() as db:
-        stats = {"created": 0, "updated": 0, "skipped": 0}
-        index = 0
         
-        try:
-            for idx, row in df.iterrows():
-                index = idx
-                
-                if pd.isna(row.get('company_email')) or pd.isna(row.get('github_id')):
-                    stats["skipped"] += 1
-                    continue
-                    
-                github_id = str(row['github_id']).strip()
-                company_email = str(row['company_email']).strip().lower()
-                full_name = str(row.get('full_name', '')).strip() if pd.notna(row.get('full_name')) else ''
-
-                if not company_email or not github_id or github_id.lower() == 'nan':
-                    stats["skipped"] += 1
-                    continue
-                
-                is_created = upsert_pre_mapping(
-                    db=db,
-                    sub="FILE_IMPORTED",
-                    email=company_email,
-                    name=full_name,
-                    source_type=SourceType.GITHUB,
-                    external_user_id=github_id
-                )
-                
-                if is_created:
-                    stats["created"] += 1
-                else:
-                    stats["updated"] += 1
-                
-            db.commit()
-            logger.info(f"[MAPPING][GITHUB] Sync Completed. Stats: {stats}")
-            return stats
+    # vendor type 호환성 체크
+    if vendor_type not in COLUMN_MAP:
+        raise ValueError(f"지원하지 않는 협업 툴 Vendor입니다: {vendor_type}")
     
-        except Exception as e:
-            db.rollback()
-            logger.error(f"[MAPPING][GITHUB] DB Sync Error at row {index}: {e}", exc_info=True)
-            raise RuntimeError("데이터베이스 저장 중 내부 오류가 발생했습니다.")
+    required_cols = COLUMN_MAP[vendor_type]
+    required_cols_set = {required_cols.id_col, required_cols.email_col}
+    actual_cols = set(df.columns)
+    
+    if not required_cols_set.issubset(actual_cols):
+        missing = required_cols_set - actual_cols
+        raise ValueError(f"필수 컬럼이 누락되었습니다: {', '.join(missing)}")
+    
+    vendor_key = vendor_type.lower()
+    target_sources = VENDOR_SOURCE_MAP[vendor_key]
+    
+    stats = {"updated": 0, "skipped": 0, "mapped": 0}
+    try:
+        for _, row in df.iterrows():
+            external_user_id = str(row.get(required_cols.id_col, '')).strip()
+            external_email = str(row.get(required_cols.email_col, '')).strip().lower()
+            
+            if (not external_user_id or not external_email) or (external_user_id == 'nan' or external_email == 'nan'):
+                stats["skipped"] += 1
+                continue
+            
+            for source in target_sources:
+                # 협업 툴 유저의 email을 어드민이 업로드한 csv에 기입된 것으로 갱신
+                # TODO: row 수만큼 쿼리를 수행함에 따라 발생하는 성능 이슈 개선
+                update_tool_user_email(
+                    db=db, 
+                    source_type=source,
+                    external_user_id=external_user_id,
+                    external_email=external_email
+                )
+
+        db.commit()
+        
+        final_stats = {
+            "csv_rows_skipped": stats["skipped"],
+            "total_success": 0,
+            "total_failed": 0,
+            "new_mappings": 0,
+            "updated_mappings": 0
+        }
+        
+        for source in target_sources:
+            # oauth user와 협업 툴 user를 매핑해서 pre_mapping_buffer를 업데이트
+            mapping_result = sync_users_to_pre_mapping_buffer(
+                db=db,
+                source_type=source
+            )
+            
+            final_stats["total_success"] += mapping_result["success"]
+            final_stats["total_failed"] += mapping_result["failed"]
+            final_stats["new_mappings"] += mapping_result["mapping_created"]
+            final_stats["updated_mappings"] += mapping_result["mapping_updated"]
+            
+        db.commit()
+        logger.info(f"File sync completed for {vendor_key}: {final_stats}")        
+        return final_stats
+    
+    except Exception as e:
+        db.rollback()
+        raise RuntimeError(f"데이터베이스 저장 중 내부 오류가 발생했습니다: {e}")

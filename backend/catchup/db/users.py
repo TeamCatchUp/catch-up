@@ -74,6 +74,13 @@ def get_oauth_user_with_sub(
     return db.scalar(stmt)
 
 
+def get_all_oauth_users(
+    db: Session
+) -> list[OAuthUser] :
+    """어드민용: 전체 OAuth 유저 목록 조회"""
+    return db.scalars(select(OAuthUser)).all()
+
+
 def get_all_users_for_admin(
     db: Session,
     skip: int = 0,

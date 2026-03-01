@@ -183,7 +183,7 @@ class PreMappingBuffer(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     
     sub: Mapped[str] = mapped_column(String(128), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), index=True, comment="Catch Up 사용자 이메일 (예: Keycloak 이메일)")
+    email: Mapped[str] = mapped_column(String(255), index=True, comment="OAuth 사용자 이메일 (예: Keycloak 이메일)")
     name: Mapped[str] = mapped_column(String(100), comment="IDP에 등록된 임직원 실명") 
     
     source_type: Mapped[SourceType] = mapped_column(String(20), nullable=False)

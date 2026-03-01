@@ -1,10 +1,19 @@
 from typing import Optional
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from catchup.db.models import ConfluenceUser, GitHubUser, JiraUser, OAuthUser, PreMappingBuffer, SlackUser, SourceType
 from catchup.mapping.schemas import OAuthUserSchema
+
+
+#(user_model, target, filter, extra_filter, extra_filter_value)
+SOURCE_MAP = {
+    SourceType.SLACK: (SlackUser, SlackUser.user_id, SlackUser.email, SlackUser.is_bot, False),
+    SourceType.JIRA: (JiraUser, JiraUser.account_id, JiraUser.email_address, JiraUser.account_type, 'atlassian'),
+    SourceType.CONFLUENCE: (ConfluenceUser, ConfluenceUser.account_id, ConfluenceUser.email, ConfluenceUser.account_type, 'atlassian'),
+    SourceType.GITHUB: (GitHubUser, GitHubUser.login, GitHubUser.email, None, None),
+}
 
 def find_external_user_id_by_email(
     db: Session,
@@ -12,21 +21,13 @@ def find_external_user_id_by_email(
     email: str  # 사내 이메일
 ) -> Optional[str]:
     """사내 이메일을 기준으로 각 협업 도구의 사용자 식별자를 반환한다."""
-    
-    #(target, filter, extra_filter, extra_filter_value)
-    source_map = {
-        SourceType.SLACK: (SlackUser.user_id, SlackUser.email, SlackUser.is_bot, False),
-        SourceType.JIRA: (JiraUser.account_id, JiraUser.email_address, JiraUser.account_type, 'atlassian'),
-        SourceType.CONFLUENCE: (ConfluenceUser.account_id, ConfluenceUser.email, ConfluenceUser.account_type, 'atlassian'),
-        SourceType.GITHUB: (GitHubUser.login, GitHubUser.email, None, None),
-    }
 
-    target = source_map.get(source_type)
+    target = SOURCE_MAP.get(source_type)
     
     if not target:
         return None
 
-    target_col, filter_col, extra_col, extra_val = target
+    _, target_col, filter_col, extra_col, extra_val = target
     
     stmt = (
         select(target_col)
@@ -37,6 +38,27 @@ def find_external_user_id_by_email(
         stmt = stmt.where(extra_col == extra_val)
 
     return db.scalar(stmt)
+
+
+def update_tool_user_email(
+    db: Session,
+    source_type: SourceType,
+    external_user_id: str,
+    external_email: str
+):
+    target = SOURCE_MAP.get(source_type)
+    if not target:
+        return
+    
+    model, id_col, email_col, _, _ = target
+    
+    stmt = (
+        update(model)
+        .where(id_col == external_user_id)
+        .values({email_col.key: external_email})
+    )
+    
+    db.execute(stmt)
 
 
 def find_premapped_user_by_email(
