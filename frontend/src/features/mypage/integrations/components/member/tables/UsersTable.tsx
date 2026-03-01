@@ -1,3 +1,5 @@
+'use client';
+
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { cn } from '@/shared/utils/cn';
 
@@ -96,12 +98,12 @@ const UsersTable = ({
                     );
                   }
 
-                  // 미연동 (조회 모드): full-width h-[46px] bg-neutral-1 rounded-lg 박스
+                  // 미연동 (조회 모드): full-width h-11.5 bg-neutral-1 rounded-lg 박스
                   if (!isEditMode) {
                     return (
                       <div
                         key={`${renderKey}-${service}`}
-                        className="flex h-[46px] items-center justify-center rounded-lg bg-neutral-1"
+                        className="flex h-11.5 items-center justify-center rounded-lg bg-neutral-1"
                       >
                         <span className="text-body-xsmall text-gray-50">
                           {status === '미사용' ? '미사용' : '-'}
