@@ -13,6 +13,8 @@ const SERVICE_HEADER_LABELS: Record<string, string> = {
   slack: 'Slack',
 };
 
+const EMPTY_ACCOUNT_OPTIONS: Partial<Record<IntegrationService, AccountOption[]>> = {};
+
 interface UsersTableProps {
   displayRows: MemberDisplayRow[];
   isEditMode: boolean;
@@ -28,7 +30,7 @@ interface UsersTableProps {
 const UsersTable = ({
   displayRows,
   isEditMode,
-  accountOptionsByService = {},
+  accountOptionsByService = EMPTY_ACCOUNT_OPTIONS,
   onAccountSelect,
   onToggleUnused,
 }: UsersTableProps) => {
