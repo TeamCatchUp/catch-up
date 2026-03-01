@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 
+import dynamic from 'next/dynamic';
+
 import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
 import IconMegaphone from '@/public/icons/icon/megaphone.svg';
 import { Button } from '@/shared/components/ui/button';
@@ -10,9 +12,10 @@ import { cn } from '@/shared/utils/cn';
 
 import type { IntegrationService } from '../../../types/integrations';
 import type { MemberDisplayRow } from '../../../types/memberDisplay';
-import CsvUploadModal from '../modals/CsvUploadModal';
 import type { AccountOption } from '../tables/AccountSelectDropdown';
 import UsersTable from '../tables/UsersTable';
+
+const CsvUploadModal = dynamic(() => import('../modals/CsvUploadModal'));
 
 const PAGE_SIZE = 10;
 
