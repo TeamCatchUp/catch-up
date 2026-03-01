@@ -1,4 +1,5 @@
 import logging
+import asyncio
 import time
 from contextlib import asynccontextmanager
 
@@ -33,7 +34,9 @@ from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.settings.api import router as settings_router
+from catchup.server.sync.api import router as sync_runtime_router
 from catchup.server.state import state
+from catchup.workers.slack_full_sync_worker import run_forever as run_slack_full_sync_worker
 from catchup.utils.redis import get_redis_client
 from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
 from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_checkpointer
@@ -45,6 +48,8 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Log level: %s", settings.LOG_LEVEL)
+    sync_worker_stop_event: asyncio.Event | None = None
+    sync_worker_task: asyncio.Task | None = None
 
     try:
         db_init_started_at = time.perf_counter()
@@ -226,7 +231,27 @@ async def lifespan(app: FastAPI):
         )
         raise e
 
+    if settings.SYNC_WORKER_AUTOSTART:
+        sync_worker_stop_event = asyncio.Event()
+        sync_worker_task = asyncio.create_task(
+            run_slack_full_sync_worker(sync_worker_stop_event)
+        )
+        logger.info("[SLACK][FULL SYNC][WORKER] In-process worker started")
+
     yield
+
+    if sync_worker_stop_event is not None:
+        sync_worker_stop_event.set()
+
+    if sync_worker_task is not None:
+        try:
+            await sync_worker_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(
+                "[SLACK][FULL SYNC][WORKER] Worker shutdown failed: %s", e, exc_info=True
+            )
 
     # Scheduler Shutdown
     try:
@@ -284,6 +309,7 @@ app.include_router(slack_sync_router)
 app.include_router(github_mapping_csv_router)
 app.include_router(onboarding_router)
 app.include_router(settings_router)
+app.include_router(sync_runtime_router)
 
 
 app.add_middleware(
