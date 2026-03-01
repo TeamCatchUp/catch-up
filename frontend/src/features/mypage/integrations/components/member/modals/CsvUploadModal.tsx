@@ -168,21 +168,16 @@ const CsvUploadModal = ({ open, onOpenChange }: CsvUploadModalProps) => {
   const uploadMutation = useMutation({
     mutationKey: ['mapping', 'vendorUpload'] as const,
     mutationFn: async () => {
-      const results: { vendor: VendorType; data: MappingUploadResponse }[] = [];
-
-      for (const { vendor } of VENDOR_CONFIGS) {
-        const file = files[vendor];
-        if (!file) continue;
-
+      const uploads = VENDOR_CONFIGS.filter(({ vendor }) => files[vendor]).map(async ({ vendor }) => {
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', files[vendor]!);
         const res = await api.post<MappingUploadResponse>(API.mapping.vendorUpload(vendor), formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
-        results.push({ vendor, data: res.data });
-      }
+        return { vendor, data: res.data };
+      });
 
-      return results;
+      return Promise.all(uploads);
     },
     onSuccess: () => {
       toast('업로드가 완료되었습니다.', {
