@@ -1,11 +1,15 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import get_current_user, get_pending_signup_user
+from catchup.connectors.atlassian import oauth_client
 from catchup.db.dependencies import get_db
+from catchup.db.engine import SessionLocal
 from catchup.db.models import ConfluenceUser, GitHubUser, JiraUser, KnowledgeSource, PreMappingBuffer, SlackUser, SourceType, User
+from catchup.onboarding.oauth import OAuthClient, sync_initial_oauth_users
 from catchup.onboarding.admin import register_admin_from_oauth
 from catchup.onboarding.schemas import AdminSignUpRequest, AdminSignUpSchema, CandidateItem, MappingCandidates, UserSignUpRequest, SignUpResponse, UserSignUpSchema
 from catchup.onboarding.user import register_user_from_oauth
@@ -54,8 +58,9 @@ def signup_oauth_user(
     summary="루트 어드민 온보딩",
     description="루트 어드민이 회사를 등록하고 워크스페이스를 생성한다."
 )
-def signup_oauth_admin(
+async def signup_oauth_admin(
     payload: AdminSignUpRequest,
+    background_tasks: BackgroundTasks,
     pending_user: dict = Depends(get_pending_signup_user),
     db: Session = Depends(get_db)
 ):
@@ -75,8 +80,16 @@ def signup_oauth_admin(
         workspace_name=payload.workspace_name
     )
     
-    new_admin = register_admin_from_oauth(db, admin_data)
+    # Admin 등록
+    new_admin = await run_in_threadpool(
+        register_admin_from_oauth,
+        db,
+        admin_data
+    )
     
+    # OAuth 사용자 목록 저장
+    background_tasks.add_task(sync_initial_oauth_users)
+
     state.is_admin_initiated = True
     
     return new_admin
@@ -92,7 +105,11 @@ TOOL_META_MAP = {
 # TODO: 책임 분리
 @router.get(
     path="/mapping/results",
-    response_model=Optional[list[MappingCandidates]]
+    response_model=Optional[list[MappingCandidates]],
+    description="""
+    로그인한 사용자의 이메일을 기준으로 외부 계정 매핑 후보를 수집하고,
+    외부 사용자 상세 정보를 병합한 뒤, 벤더 단위로 그룹화한 결과를 반환한다.
+    """
 )
 def get_mapping_candidate_by_tools(
     current_user: User = Depends(get_current_user),

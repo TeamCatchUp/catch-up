@@ -7,7 +7,7 @@ from catchup.db.user_source_mapping import (
     find_external_user_id_by_email,
     find_premapped_user_by_email
 )
-from catchup.db.users import get_user_by_sub
+from catchup.db.users import get_all_oauth_users, get_user_by_sub
 from catchup.mapping.schemas import OAuthUserSchema
 
 
@@ -16,11 +16,15 @@ logger = logging.getLogger(__name__)
 def sync_users_to_pre_mapping_buffer(
     db: Session,
     source_type: SourceType,
-    oauth_users: list[OAuthUserSchema]
 ) -> dict:
     sync_results = {"success": 0, "failed": 0, "mapping_created": 0, "mapping_updated": 0}
     
-    for user in oauth_users:
+    # 모든 oauth user 목록 획득
+    oauth_users = get_all_oauth_users(db)
+    
+    parsed_users = [OAuthUserSchema.model_validate(user) for user in oauth_users]
+    
+    for user in parsed_users:
         email = user.email
         sub = user.sub
         display_name = user.name  # 추후 임베딩에 활용되는 이름
@@ -36,6 +40,7 @@ def sync_users_to_pre_mapping_buffer(
         )
         
         if not external_user_id:
+            sync_results["failed"] += 1
             continue
         
         created = upsert_pre_mapping(
@@ -75,19 +80,21 @@ def upsert_pre_mapping(
         source_type=source_type
     )
     
+    # 갱신
     if premapped:
         premapped.external_user_identifier = external_user_id
         if name:
             premapped.name = name
-        if sub not in ["FILE_IMPORTED"]:
-            premapped.sub = sub
+        premapped.sub = sub
         return False
     
+    # 새로 생성
     else:
+        # 이미 회원가입한 User인지 여부 확인
         existing = get_user_by_sub(db, sub)
         is_registered = False
         if existing:
-            is_registered = True
+            is_registered = True  # 이미 회원가입이 된 경우 True
                 
         new_entry = PreMappingBuffer(
             sub=sub,

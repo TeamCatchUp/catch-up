@@ -19,10 +19,7 @@ from catchup.db.dependencies import get_db
 from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.models import KnowledgeSource, SourceType
 from catchup.db.slack import oauth_repository as slack_crud
-from catchup.db.user_source_mapping import upsert_oauth_users
 from catchup.db.workspaces import get_workspace_limit_one
-from catchup.mapping.oauth import OAuthClient
-from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
 from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.db.engine import SessionLocal
@@ -113,7 +110,7 @@ async def slack_oauth_callback(
     await _register_knowledge_source(tokens.team.id)
     
     # 4. 메타데이터 동기화 (BackgroundTask)
-    background_tasks.add_task(_sync_workspace_metadata_and_map_user, tokens.team.id)
+    background_tasks.add_task(_sync_workspace_metadata, tokens.team.id)
 
     # 5. 프론트엔드로 리다이렉트
     return RedirectResponse(
@@ -232,51 +229,6 @@ async def _register_knowledge_source(team_id: str):
             add_knowledge_source(db, new_source)
             db.commit()
     await run_in_threadpool(_sync_task)
-
-
-async def _sync_workspace_metadata_and_map_user(team_id: str) -> None:
-    """Slack 메타데이터 fetching 이후 사용자 매핑까지 수행하는 Wrapper 함수 (임시)"""
-    
-    await _sync_workspace_metadata(team_id)
-    
-    logger.info(f"[OAuth][MAPPING] Starting OAuth sync and Slack mapping for team_id={team_id}")
-    
-     # OAuth Users 기반 Slack Users 매핑
-    try:
-        oauth_client = OAuthClient()
-        oauth_users = await oauth_client.get_parsed_users()
-        
-        if oauth_users:
-            def _mapping_task_sync():
-                with SessionLocal() as db:
-                    try:
-                        upsert_oauth_users(db, oauth_users)
-                        
-                        mapping_result = sync_users_to_pre_mapping_buffer(
-                            db=db,
-                            source_type=SourceType.SLACK,
-                            oauth_users=oauth_users
-                        )
-                        
-                        db.commit() 
-                        return mapping_result
-                        
-                    except Exception as e:
-                        db.rollback() 
-                        logger.error(f"Transaction failed, rolling back: {e}")
-                        raise
-                
-            mapping_result = await run_in_threadpool(_mapping_task_sync)
-            logger.info(f"[OAuth][MAPPING] Mapping completed: {mapping_result}")
-        else:
-            logger.warning("[OAuth][MAPPING] No active users found in OAuth. Skipping mapping.")
-            
-    except Exception as e:
-        logger.error(
-            f"[SLACK][AUTH] OAuth mapping failed after Slack sync: "
-            f"team_id={team_id}, error={e}",
-            exc_info=True
-        )
 
 
 async def _sync_workspace_metadata(team_id: str) -> None:
