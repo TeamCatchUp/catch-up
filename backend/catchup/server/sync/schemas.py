@@ -14,6 +14,7 @@ class SyncJobSnapshotResponse(BaseModel):
 
     job_id: str
     connector: str
+    sync_type: str = "full"
     team_id: str
 
     status: SyncJobStatus
@@ -28,6 +29,10 @@ class SyncJobSnapshotResponse(BaseModel):
     completed_channels: int = 0
     failed_channels: int = 0
     requeued_channels: int = 0
+    synced_messages: int = 0
+    flushed_events: int = 0
+    dropped_channels: int = 0
+    dropped_events: int = 0
 
     last_error: str | None = None
 

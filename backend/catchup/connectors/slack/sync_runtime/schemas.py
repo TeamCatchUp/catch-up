@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -28,6 +29,10 @@ class SlackChannelSyncTask(BaseModel):
     """
 
     connector: str = Field(default=CONNECTOR_SLACK, description="connector key")
+    sync_type: Literal["full", "incremental"] = Field(
+        default="full",
+        description="sync task type",
+    )
     event_id: str = Field(..., description="queue event id")
     job_id: str = Field(..., description="full sync job id")
     team_id: str = Field(..., description="slack workspace id")
@@ -69,6 +74,7 @@ class SyncJobMeta(BaseModel):
 
     job_id: str
     connector: str = CONNECTOR_SLACK
+    sync_type: Literal["full", "incremental"] = "full"
     team_id: str
 
     status: SyncJobStatus = SyncJobStatus.ACCEPTED
@@ -83,6 +89,9 @@ class SyncJobMeta(BaseModel):
     failed_channels: int = 0
     requeued_channels: int = 0
     synced_messages: int = 0
+    flushed_events: int = 0
+    dropped_channels: int = 0
+    dropped_events: int = 0
 
     last_error: str | None = None
 
@@ -103,6 +112,7 @@ class SyncJobMeta(BaseModel):
         return cls(
             job_id=_decode_redis_value(normalized.get("job_id", "")),
             connector=_decode_redis_value(normalized.get("connector", CONNECTOR_SLACK)),
+            sync_type=_decode_redis_value(normalized.get("sync_type", "full")),
             team_id=_decode_redis_value(normalized.get("team_id", "")),
             status=SyncJobStatus(_decode_redis_value(normalized.get("status", SyncJobStatus.ACCEPTED.value))),
             created_at=_decode_redis_value(normalized.get("created_at", "")),
@@ -123,6 +133,9 @@ class SyncJobMeta(BaseModel):
             failed_channels=_to_int(normalized.get("failed_channels", 0)),
             requeued_channels=_to_int(normalized.get("requeued_channels", 0)),
             synced_messages=_to_int(normalized.get("synced_messages", 0)),
+            flushed_events=_to_int(normalized.get("flushed_events", 0)),
+            dropped_channels=_to_int(normalized.get("dropped_channels", 0)),
+            dropped_events=_to_int(normalized.get("dropped_events", 0)),
             last_error=(
                 None
                 if _decode_redis_value(normalized.get("last_error", "")) == ""

@@ -13,12 +13,12 @@ from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.connectors.github.schemas import IncrementalSyncRequest
 from catchup.connectors.jira.dynamic_webhook_service import get_jira_dynamic_webhook_service
 from catchup.connectors.jira.factory import create_jira_ingestion_service
-from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.db.github.installation_repository import get_all_installations
 from catchup.db.jira import sync_repository as jira_sync
 from catchup.db.atlassian.oauth_repository import get_all_tokens as get_all_atlassian_tokens
 from catchup.db.models import JiraEntityType
 from catchup.db.slack.oauth_repository import get_all_slack_tokens
+from catchup.server.connector.slack.sync_api import enqueue_incremental_sync_job
 from catchup.utils.webhook_buffer import get_webhook_buffer
 from catchup.connectors.confluence.factory import create_confluence_ingestion_service
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
@@ -107,64 +107,66 @@ async def flush_github_events():
     logger.info("Github Webhook Flush Completed")
 
 async def flush_slack_events():
-    logger.info("[SLACK][FLUSH] Starting Slack Webhook Flush")
-    buffer = get_webhook_buffer()
+    logger.info("[SLACK][INCREMENTAL SYNC][SCHEDULER] Starting Slack incremental enqueue job")
 
     with SessionLocal() as db:
         tokens = get_all_slack_tokens(db)
 
         for token in tokens:
             team_id = token.team_id
+            team_name = token.team_name
 
             try:
-                # 1) Redis에 버퍼된 채널이 있는지 확인
-                channels_with_events = await buffer.get_slack_buffered_channels(team_id)
+                enqueue_result = await enqueue_incremental_sync_job(
+                    db=db,
+                    team_id=team_id,
+                    trigger="scheduler",
+                )
+                status_value = enqueue_result.get("status")
 
-                if not channels_with_events:
-                    logger.debug(f"No Buffered Events for team_id = {team_id}")
+                if status_value == "accepted":
+                    logger.info(
+                        "[SLACK][INCREMENTAL SYNC][SCHEDULER] Enqueued: team_id=%s, team_name=%s, job_id=%s, queued_channels=%s, dropped_channels=%s, dropped_events=%s",
+                        team_id,
+                        team_name,
+                        enqueue_result.get("job_id"),
+                        enqueue_result.get("queued_channels", 0),
+                        enqueue_result.get("dropped_channels", 0),
+                        enqueue_result.get("dropped_events", 0),
+                    )
                     continue
-                
-                logger.info(
-                    f"[SLACK][FLUSH] Flushing Slack Team {team_id} "
-                    f"{len(channels_with_events)} channels affected"
+
+                if status_value == "no_events":
+                    logger.info(
+                        "[SLACK][INCREMENTAL SYNC][SCHEDULER] No events: team_id=%s, team_name=%s, dropped_channels=%s, dropped_events=%s",
+                        team_id,
+                        team_name,
+                        enqueue_result.get("dropped_channels", 0),
+                        enqueue_result.get("dropped_events", 0),
+                    )
+                    continue
+
+                if status_value == "conflict":
+                    logger.info(
+                        "[SLACK][INCREMENTAL SYNC][SCHEDULER] Skipped by lock conflict: team_id=%s, team_name=%s, owner_job_id=%s",
+                        team_id,
+                        team_name,
+                        enqueue_result.get("owner_job_id"),
+                    )
+                    continue
+
+                logger.error(
+                    "[SLACK][INCREMENTAL SYNC][SCHEDULER] Enqueue failed: team_id=%s, team_name=%s, error=%s",
+                    team_id,
+                    team_name,
+                    enqueue_result.get("message", "unknown error"),
                 )
-
-                # 2) 팀별 서비스 생성
-                service = await create_slack_ingestion_service(db, team_id)
-
-                # 3) 채널 기준 증분 동기화 수행
-                sync_result = await service.flush_message(db, channels_with_events)
-
-                # 4) 동기화 성공 시 버퍼 삭제 (실패 시 재시도 보장)
-                cleared_total = 0
-                for channel_id in channels_with_events:
-                    try:
-                        event_count = await buffer.clear_slack_buffer(team_id, channel_id)
-                        cleared_total += event_count
-                        logger.info(
-                            f"[SLACK][FLUSH] Cleared {event_count} message events for channel_id = {channel_id}"
-                        )
-                    except Exception as e:
-                        logger.error(
-                            f"[SLACK][FLUSH] Failed to clear buffer for channel {channel_id}: {e}",
-                            exc_info=True,
-                        )
-                
-                message_result = sync_result.get("messages", {})
-                logger.info(
-                    f"[SLACK][FLUSH] Sync result for team {team_id}: "
-                    f"synced={message_result.get('synced', 0)}, "
-                    f"errors={message_result.get('errors', 0)}, "
-                    f"skipped={message_result.get('skipped', 0)}, "
-                    f"cleared_events={cleared_total}"
-                )
-            
             except Exception as e:
                 logger.error(
-                    f"[SLACK][FLUSH] Failed to flush events for Slack Team {team_id}: {e}",
+                    f"[SLACK][INCREMENTAL SYNC][SCHEDULER] Failed to enqueue for team {team_id}: {e}",
                     exc_info=True,
                 )
-    logger.info("[SLACK][FLUSH] Slack Webhook Flush Completed")
+    logger.info("[SLACK][INCREMENTAL SYNC][SCHEDULER] Slack incremental enqueue job completed")
 
 
 

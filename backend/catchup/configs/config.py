@@ -172,6 +172,8 @@ class Settings(BaseSettings):
 
     # SSE heartbeat 주기
     SYNC_SSE_HEARTBEAT_SECONDS: int = 15
+    # Incremental sync_from fallback (team/channel cursor 없을 때)
+    SYNC_INCREMENTAL_FALLBACK_HOURS: int = 2
 
     
     # AWS

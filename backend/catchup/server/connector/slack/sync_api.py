@@ -4,6 +4,7 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -35,15 +36,15 @@ from catchup.db.models import User
 from catchup.server.connector.slack.schemas import (
     ChannelAccessInfo,
     ChannelAccessResponse,
-    SlackFlushResponse,
-    SlackFlushTeamResult,
     SlackFullSyncAcceptedResponse,
     SlackFullSyncRequest,
+    SlackIncrementalAcceptedResponse,
+    SlackIncrementalFlushRequest,
+    SlackIncrementalNoEventsResponse,
     SlackSyncStatusResponse,
 )
 from catchup.db.dependencies import get_db
-from catchup.db.models import SlackSyncState
-from catchup.db.slack.oauth_repository import get_all_slack_tokens
+from catchup.db.models import SlackEntityType, SlackSyncState
 from catchup.db.slack import sync_repository as slack_sync
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 from catchup.utils.webhook_buffer import get_webhook_buffer
@@ -56,6 +57,210 @@ logger = logging.getLogger(__name__)
 # ================================================================
 
 router = APIRouter(prefix="/api/v1/slack/sync", tags=["slack-sync"])
+
+
+def _build_job_urls(base_url: str | None, job_id: str) -> tuple[str | None, str | None]:
+    if not base_url:
+        return None, None
+    base = base_url.rstrip("/")
+    return (
+        f"{base}/api/v1/sync/jobs/{job_id}",
+        f"{base}/api/v1/sync/jobs/{job_id}/stream",
+    )
+
+
+def _resolve_team_incremental_sync_from(db: Session, team_id: str) -> str:
+    sync_state = slack_sync.get_sync_state(db, team_id, SlackEntityType.MESSAGE)
+    if sync_state and sync_state.last_successful_sync_at:
+        return str(sync_state.last_successful_sync_at.timestamp())
+
+    fallback_hours = max(1, settings.SYNC_INCREMENTAL_FALLBACK_HOURS)
+    fallback_from = datetime.now(timezone.utc) - timedelta(hours=fallback_hours)
+    return str(fallback_from.timestamp())
+
+
+async def enqueue_incremental_sync_job(
+    *,
+    db: Session,
+    team_id: str,
+    base_url: str | None = None,
+    trigger: str = "api",
+) -> dict:
+    buffer = get_webhook_buffer()
+    job_id = uuid4().hex
+    enqueued_at = datetime.now(timezone.utc).isoformat()
+
+    lock_acquired = False
+    job_created = False
+    tasks_enqueued = False
+    dropped_channels = 0
+    dropped_events = 0
+
+    try:
+        lock_acquired, owner_job_id = await runtime_locks.acquire_team_lock(team_id, job_id)
+        if not lock_acquired:
+            emit_team_lock_conflict(
+                team_id=team_id,
+                requested_job_id=job_id,
+                owner_job_id=owner_job_id,
+                sync_type="incremental",
+            )
+            return {
+                "status": "conflict",
+                "team_id": team_id,
+                "owner_job_id": owner_job_id,
+                "message": "incremental sync already in progress for this team",
+            }
+
+        channels_with_events = await buffer.get_slack_buffered_channels(team_id)
+        if not channels_with_events:
+            await runtime_locks.release_team_lock_if_owner(team_id, job_id)
+            lock_acquired = False
+            return {
+                "status": "no_events",
+                "team_id": team_id,
+                "dropped_channels": 0,
+                "dropped_events": 0,
+                "message": "no buffered events for this team",
+            }
+
+        team_sync_from = _resolve_team_incremental_sync_from(db, team_id)
+        tasks: list[SlackChannelSyncTask] = []
+        for channel_id in channels_with_events:
+            channel_state = slack_sync.get_channel_sync_state(db, team_id, channel_id)
+            if channel_state is None:
+                dropped_channels += 1
+                try:
+                    dropped_events += await buffer.clear_slack_buffer(team_id, channel_id)
+                except Exception:
+                    logger.exception(
+                        "[SLACK][INCREMENTAL SYNC][API] Failed to clear stale buffered channel: team_id=%s, channel_id=%s",
+                        team_id,
+                        channel_id,
+                    )
+                continue
+
+            channel_sync_from = channel_state.latest_synced_ts or team_sync_from
+            channel_name = channel_state.channel_name or channel_id
+            tasks.append(
+                SlackChannelSyncTask(
+                    sync_type="incremental",
+                    event_id=uuid4().hex,
+                    job_id=job_id,
+                    team_id=team_id,
+                    channel_id=channel_id,
+                    channel_name=channel_name,
+                    sync_from=channel_sync_from,
+                    attempt=0,
+                    max_attempts=settings.SYNC_JOB_MAX_ATTEMPTS,
+                    enqueued_at=enqueued_at,
+                )
+            )
+
+        if not tasks:
+            await runtime_locks.release_team_lock_if_owner(team_id, job_id)
+            lock_acquired = False
+            return {
+                "status": "no_events",
+                "team_id": team_id,
+                "dropped_channels": dropped_channels,
+                "dropped_events": dropped_events,
+                "message": "no syncable buffered channels for this team",
+            }
+
+        total_channels = len(tasks)
+        job_meta = SyncJobMeta(
+            job_id=job_id,
+            team_id=team_id,
+            sync_type="incremental",
+            created_at=enqueued_at,
+            total_channels=total_channels,
+            queued_channels=total_channels,
+            dropped_channels=dropped_channels,
+            dropped_events=dropped_events,
+        )
+        await job_store.create_job(job_meta)
+        job_created = True
+
+        await runtime_events.append_event(
+            job_id=job_id,
+            team_id=team_id,
+            event_type=SyncEventType.JOB_CREATED,
+            payload={
+                "sync_type": "incremental",
+                "trigger": trigger,
+                "total_channels": total_channels,
+                "queued_channels": total_channels,
+                "dropped_channels": dropped_channels,
+                "dropped_events": dropped_events,
+            },
+        )
+        emit_job_accepted(
+            job_id=job_id,
+            team_id=team_id,
+            total_channels=total_channels,
+            queued_channels=total_channels,
+            sync_type="incremental",
+            dropped_channels=dropped_channels,
+            dropped_events=dropped_events,
+            trigger=trigger,
+        )
+
+        await runtime_queue.enqueue_tasks(tasks)
+        tasks_enqueued = True
+
+        snapshot_url, stream_url = _build_job_urls(base_url, job_id)
+        return {
+            "status": "accepted",
+            "job_id": job_id,
+            "team_id": team_id,
+            "total_channels": total_channels,
+            "queued_channels": total_channels,
+            "dropped_channels": dropped_channels,
+            "dropped_events": dropped_events,
+            "snapshot_url": snapshot_url,
+            "stream_url": stream_url,
+        }
+    except Exception as e:
+        logger.error(
+            "[SLACK][INCREMENTAL SYNC][API] Failed to enqueue incremental sync: team_id=%s, error=%s",
+            team_id,
+            e,
+            exc_info=True,
+        )
+
+        if job_created and not tasks_enqueued:
+            await job_store.update_job_fields(
+                job_id,
+                {
+                    "status": SyncJobStatus.FAILED.value,
+                    "started_at": enqueued_at,
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "last_error": str(e),
+                },
+            )
+            await runtime_events.append_event(
+                job_id=job_id,
+                team_id=team_id,
+                event_type=SyncEventType.JOB_FAILED,
+                payload={"error": str(e)},
+            )
+            emit_job_failed(
+                job_id=job_id,
+                team_id=team_id,
+                failure_reason=SyncFailureReason.UNEXPECTED_ERROR.value,
+                error_summary=str(e),
+                sync_type="incremental",
+            )
+
+        if lock_acquired and not tasks_enqueued:
+            await runtime_locks.release_team_lock_if_owner(team_id, job_id)
+
+        return {
+            "status": "error",
+            "team_id": team_id,
+            "message": str(e),
+        }
 
 
 @router.post(
@@ -158,6 +363,7 @@ async def trigger_full_sync(
             channel_name = channel.get("name") or channel_id
             tasks.append(
                 SlackChannelSyncTask(
+                    sync_type="full",
                     event_id=uuid4().hex,
                     job_id=job_id,
                     team_id=team_id,
@@ -174,6 +380,7 @@ async def trigger_full_sync(
         job_meta = SyncJobMeta(
             job_id=job_id,
             team_id=team_id,
+            sync_type="full",
             created_at=enqueued_at,
             total_channels=total_channels,
             queued_channels=total_channels,
@@ -188,6 +395,7 @@ async def trigger_full_sync(
             payload={
                 "total_channels": total_channels,
                 "queued_channels": total_channels,
+                "sync_type": "full",
                 "sync_days": days,
                 "requested_channel_count": (
                     len(normalized_requested_channel_ids)
@@ -202,6 +410,8 @@ async def trigger_full_sync(
             team_id=team_id,
             total_channels=total_channels,
             queued_channels=total_channels,
+            sync_type="full",
+            trigger="api",
         )
 
         if tasks:
@@ -225,10 +435,15 @@ async def trigger_full_sync(
                 team_id=team_id,
                 event_type=SyncEventType.JOB_COMPLETED,
                 payload={
+                    "sync_type": "full",
                     "total_channels": 0,
                     "completed_channels": 0,
                     "failed_channels": 0,
                     "requeued_channels": 0,
+                    "synced_messages": 0,
+                    "flushed_events": 0,
+                    "dropped_channels": 0,
+                    "dropped_events": 0,
                 },
             )
             emit_job_completed(
@@ -239,6 +454,9 @@ async def trigger_full_sync(
                 failed_channels=0,
                 requeued_channels=0,
                 total_synced_messages=0,
+                sync_type="full",
+                flushed_events=0,
+                dropped_events=0,
                 duration_ms=0,
             )
             await runtime_locks.release_team_lock_if_owner(team_id, job_id)
@@ -290,6 +508,7 @@ async def trigger_full_sync(
                 team_id=team_id,
                 failure_reason=SyncFailureReason.UNEXPECTED_ERROR.value,
                 error_summary=str(e),
+                sync_type="full",
             )
 
         if lock_acquired and not tasks_enqueued:
@@ -301,171 +520,67 @@ async def trigger_full_sync(
         )
 
 
-@router.post("/flush", response_model=SlackFlushResponse)
-async def flush_all_slack_buffers(
+@router.post(
+    "/flush",
+    response_model=SlackIncrementalAcceptedResponse | SlackIncrementalNoEventsResponse,
+)
+async def flush_slack_buffers(
+    flush_request: SlackIncrementalFlushRequest,
+    request: Request,
     db: Session = Depends(get_db),
     _admin_user: User = Depends(require_admin_user),
 ):
     """
-    모든 Slack Workspace의 Redis 버퍼를 즉시 flush하고 증분 동기화
-
-    스케줄러가 정각에 자동으로 실행하는 작업을 수동으로 트리거합니다.
-    모든 연결된 Slack Workspace를 순회하며:
-    1. Redis에서 버퍼링된 이벤트가 있는 채널 조회
-    2. 채널 목록 기준으로 flush_message 실행
-    3. 동기화 성공 후에만 버퍼 클리어
-    4. 팀별 결과 수집 및 전체 통계 반환
+    팀 단위 Slack 증분 동기화 접수
     """
-    # [SLACK][FLUSH] 수동 flush 시작 로그
-    logger.info("[SLACK][FLUSH] Starting manual Slack webhook flush for all teams")
+    team_id = flush_request.team_id
+    logger.info("[SLACK][INCREMENTAL SYNC][API] Received flush request: team_id=%s", team_id)
 
-    buffer = get_webhook_buffer()
-    results: list[SlackFlushTeamResult] = []
-    total_events = 0
-    total_synced = 0
-    flushed_teams_count = 0
+    result = await enqueue_incremental_sync_job(
+        db=db,
+        team_id=team_id,
+        base_url=str(request.base_url),
+        trigger="api",
+    )
 
-    try:
-        # 1) 연결된 Slack 토큰 조회
-        tokens = get_all_slack_tokens(db)
-
-        if not tokens:
-            logger.info("[SLACK][FLUSH] No Slack tokens found")
-            return SlackFlushResponse(
-                status="success",
-                message="연결된 Slack Workspace가 없습니다",
-                total_teams=0,
-                flushed_teams=0,
-                total_events=0,
-                total_synced=0,
-            )
-
-        logger.info(f"[SLACK][FLUSH] Found {len(tokens)} Slack workspaces to process")
-
-        # 2) 팀 단위로 순차 처리
-        for token in tokens:
-            team_id = token.team_id
-            team_name = token.team_name
-
-            try:
-                # 2-1) 해당 팀의 버퍼된 채널 조회
-                channels_with_events = await buffer.get_slack_buffered_channels(team_id)
-
-                if not channels_with_events:
-                    logger.debug(f"[SLACK][FLUSH] No buffered events for team {team_id}")
-                    results.append(SlackFlushTeamResult(
-                        team_id=team_id,
-                        team_name=team_name,
-                        flushed_channels=0,
-                        flushed_events=0,
-                        synced_messages=0,
-                        status="no_events",
-                    ))
-                    continue
-
-                logger.info(
-                    f"[SLACK][FLUSH] Flushing team {team_id}: "
-                    f"{len(channels_with_events)} channels affected"
-                )
-
-                try:
-                    # 2-2) 채널 목록 기준으로 메시지 증분 동기화 수행
-                    service = await create_slack_ingestion_service(db, team_id)
-                    sync_result = await service.flush_message(db, channels_with_events)
-
-                    message_result = sync_result.get("messages", {})
-                    team_synced = message_result.get("synced", 0)
-
-                    # 2-3) 동기화 성공 후에만 버퍼 clear (실패 시 이벤트 보존)
-                    team_events = 0
-                    for channel_id in channels_with_events:
-                        try:
-                            event_count = await buffer.clear_slack_buffer(team_id, channel_id)
-                            team_events += event_count
-                            logger.info(
-                                f"[SLACK][FLUSH] Cleared {event_count} events for channel {channel_id} "
-                                f"(team {team_id})"
-                            )
-                        except Exception as e:
-                            logger.error(
-                                f"[SLACK][FLUSH] Failed to clear buffer for channel {channel_id}: {e}",
-                                exc_info=True,
-                            )
-
-                    total_events += team_events
-                    total_synced += team_synced
-                    flushed_teams_count += 1
-
-                    results.append(SlackFlushTeamResult(
-                        team_id=team_id,
-                        team_name=team_name,
-                        flushed_channels=len(channels_with_events),
-                        flushed_events=team_events,
-                        synced_messages=team_synced,
-                        status="success",
-                    ))
-
-                    logger.info(
-                        f"[SLACK][FLUSH] Successfully flushed team {team_id}: "
-                        f"{team_events} events, {team_synced} messages synced"
-                    )
-
-                except Exception as e:
-                    # 동기화 실패 시 clear는 수행 안함 → 다음 flush에서 재처리 가능
-                    logger.error(
-                        f"[SLACK][FLUSH] Failed to sync team {team_id}: {e}",
-                        exc_info=True,
-                    )
-                    results.append(SlackFlushTeamResult(
-                        team_id=team_id,
-                        team_name=team_name,
-                        flushed_channels=len(channels_with_events),
-                        flushed_events=0,
-                        synced_messages=0,
-                        status="error",
-                        error_message=str(e),
-                    ))
-
-            except Exception as e:
-                # 팀 단위 예외는 전체 작업이 멈추지 않도록 분리
-                logger.error(
-                    f"[SLACK][FLUSH] Failed to process team {team_id}: {e}",
-                    exc_info=True,
-                )
-                results.append(SlackFlushTeamResult(
-                    team_id=team_id,
-                    team_name=team_name,
-                    flushed_channels=0,
-                    flushed_events=0,
-                    synced_messages=0,
-                    status="error",
-                    error_message=str(e),
-                ))
-
-        message = (
-            f"전체 flush 완료: {len(tokens)}개 팀 중 {flushed_teams_count}개 처리, "
-            f"{total_events}개 이벤트, {total_synced}개 메시지 동기화"
+    if result["status"] == "accepted":
+        accepted = SlackIncrementalAcceptedResponse(
+            job_id=result["job_id"],
+            team_id=result["team_id"],
+            total_channels=result["total_channels"],
+            queued_channels=result["queued_channels"],
+            dropped_channels=result["dropped_channels"],
+            dropped_events=result["dropped_events"],
+            snapshot_url=result["snapshot_url"] or "",
+            stream_url=result["stream_url"] or "",
+        )
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content=accepted.model_dump(),
         )
 
-        logger.info(f"[SLACK][FLUSH] Manual flush completed: {message}")
-
-        return SlackFlushResponse(
-            status="success",
-            message=message,
-            total_teams=len(tokens),
-            flushed_teams=flushed_teams_count,
-            total_events=total_events,
-            total_synced=total_synced,
-            results=results,
+    if result["status"] == "no_events":
+        return SlackIncrementalNoEventsResponse(
+            team_id=result["team_id"],
+            dropped_channels=result["dropped_channels"],
+            dropped_events=result["dropped_events"],
+            message=result["message"],
         )
 
-    except Exception as e:
-        # 엔드포인트 전체 실패
-        logger.error(f"[SLACK][FLUSH] Flush all error: {e}", exc_info=True)
+    if result["status"] == "conflict":
         raise HTTPException(
-            status_code=500,
-            detail=f"전체 flush 중 오류가 발생했습니다: {str(e)}",
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "team_id": result["team_id"],
+                "owner_job_id": result["owner_job_id"],
+                "message": result["message"],
+            },
         )
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"증분 동기화 요청 접수 중 오류 발생: {result.get('message', 'unknown error')}",
+    )
 
 
 @router.get("/status", response_model=list[SlackSyncStatusResponse])

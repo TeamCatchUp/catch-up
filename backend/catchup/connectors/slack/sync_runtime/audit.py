@@ -23,6 +23,48 @@ def _build_sync_details(phase: str, extra: dict[str, Any] | None = None) -> dict
         details.update(extra)
     return details
 
+def _emit_sync_lifecycle(
+    *,
+    sync_type: str,
+    result: str,
+    trigger: str | None,
+    resource_type: str,
+    counts: dict[str, int],
+    run_id: str,
+    connector_details: dict[str, Any],
+    sync_details: dict[str, Any],
+    duration_ms: int | None = None,
+    actor: dict[str, Any] | None = None,
+) -> None:
+    if sync_type == "incremental":
+        sync_audit.incremental_sync(
+            connector=CONNECTOR_SLACK,
+            result=result,
+            trigger=trigger,
+            resource_type=resource_type,
+            counts=counts,
+            duration_ms=duration_ms,
+            run_id=run_id,
+            connector_details=connector_details,
+            sync_details=sync_details,
+            actor=actor,
+        )
+        return
+
+    sync_audit.full_sync(
+        connector=CONNECTOR_SLACK,
+        result=result,
+        sync_type=sync_type,
+        trigger=trigger,
+        resource_type=resource_type,
+        counts=counts,
+        duration_ms=duration_ms,
+        run_id=run_id,
+        connector_details=connector_details,
+        sync_details=sync_details,
+        actor=actor,
+    )
+
 # 1) Full Sync 요청 -> Queue 적재 완료 시 로그
 def emit_job_accepted(
     *,
@@ -30,21 +72,29 @@ def emit_job_accepted(
     team_id: str,
     total_channels: int,
     queued_channels: int,
+    sync_type: str = "full",
+    dropped_channels: int = 0,
+    dropped_events: int = 0,
+    trigger: str = "api",
     actor: dict[str, Any] | None = None,
 ) -> None:
-    sync_audit.full_sync(
-        connector=CONNECTOR_SLACK,
+    _emit_sync_lifecycle(
+        sync_type=sync_type,
         result="accepted",
-        sync_type="full",
-        trigger="api",
+        trigger=trigger,
         resource_type=RESOURCE_TYPE_CHANNEL,
         counts={
             "total_channels": total_channels,
             "queued_channels": queued_channels,
+            "dropped_channels": dropped_channels,
+            "dropped_events": dropped_events,
         },
         run_id=job_id,
         connector_details={"team_id": team_id},
-        sync_details=_build_sync_details("api_accepted"),
+        sync_details=_build_sync_details(
+            "api_accepted",
+            {"sync_type": sync_type},
+        ),
         actor=actor,
     )
 
@@ -54,6 +104,7 @@ def emit_team_lock_conflict(
     team_id: str,
     requested_job_id: str,
     owner_job_id: str | None = None,
+    sync_type: str = "full",
     actor: dict[str, Any] | None = None,
 ) -> None:
     sync_audit.sync_failure(
@@ -68,7 +119,10 @@ def emit_team_lock_conflict(
             "team_id": team_id,
             "owner_job_id": owner_job_id,
         },
-        sync_details=_build_sync_details("api_lock_conflict"),
+        sync_details=_build_sync_details(
+            "api_lock_conflict",
+            {"sync_type": sync_type},
+        ),
         actor=actor,
     )
 
@@ -79,18 +133,21 @@ def emit_job_started(
     job_id: str,
     team_id: str,
     total_channels: int,
+    sync_type: str = "full",
     actor: dict[str, Any] | None = None,
 ) -> None:
-    sync_audit.full_sync(
-        connector=CONNECTOR_SLACK,
+    _emit_sync_lifecycle(
+        sync_type=sync_type,
         result="in_progress",
-        sync_type="full",
         trigger="worker",
         resource_type=RESOURCE_TYPE_CHANNEL,
         counts={"total_channels": total_channels},
         run_id=job_id,
         connector_details={"team_id": team_id},
-        sync_details=_build_sync_details("worker_started"),
+        sync_details=_build_sync_details(
+            "worker_started",
+            {"sync_type": sync_type},
+        ),
         actor=actor,
     )
 
@@ -102,12 +159,12 @@ def emit_channel_started(
     channel_id: str,
     channel_name: str,
     attempt: int,
+    sync_type: str = "full",
     actor: dict[str, Any] | None = None,
 ) -> None:
-    sync_audit.full_sync(
-        connector=CONNECTOR_SLACK,
+    _emit_sync_lifecycle(
+        sync_type=sync_type,
         result="in_progress",
-        sync_type="full",
         trigger="worker",
         resource_type=RESOURCE_TYPE_CHANNEL,
         counts={"started_channels": 1},
@@ -119,7 +176,7 @@ def emit_channel_started(
         },
         sync_details=_build_sync_details(
             "channel_started",
-            {"attempt": attempt},
+            {"attempt": attempt, "sync_type": sync_type},
         ),
         actor=actor,
     )
@@ -133,12 +190,12 @@ def emit_channel_requeued(
     channel_name: str,
     attempt: int,
     delay_seconds: float,
+    sync_type: str = "full",
     actor: dict[str, Any] | None = None,
 ) -> None:
-    sync_audit.full_sync(
-        connector=CONNECTOR_SLACK,
+    _emit_sync_lifecycle(
+        sync_type=sync_type,
         result="in_progress",
-        sync_type="full",
         trigger="worker",
         resource_type=RESOURCE_TYPE_CHANNEL,
         counts={"requeued_channels": 1},
@@ -153,6 +210,7 @@ def emit_channel_requeued(
             {
                 "attempt": attempt,
                 "delay_seconds": delay_seconds,
+                "sync_type": sync_type,
             },
         ),
         actor=actor,
@@ -168,27 +226,35 @@ def emit_channel_completed(
     synced_count: int,
     error_count: int,
     skipped: bool,
+    sync_type: str = "full",
+    flushed_events: int | None = None,
     actor: dict[str, Any] | None = None,
 ) -> None:
-    sync_audit.full_sync(
-        connector=CONNECTOR_SLACK,
+    counts = {
+        "completed_channels": 1,
+        "synced_messages": synced_count,
+        "channel_errors": error_count,
+        "skipped_channels": 1 if skipped else 0,
+    }
+    if flushed_events is not None:
+        counts["flushed_events"] = flushed_events
+
+    _emit_sync_lifecycle(
+        sync_type=sync_type,
         result="in_progress",
-        sync_type="full",
         trigger="worker",
         resource_type=RESOURCE_TYPE_CHANNEL,
-        counts={
-            "completed_channels": 1,
-            "synced_messages": synced_count,
-            "channel_errors": error_count,
-            "skipped_channels": 1 if skipped else 0,
-        },
+        counts=counts,
         run_id=job_id,
         connector_details={
             "team_id": team_id,
             "channel_id": channel_id,
             "channel_name": channel_name,
         },
-        sync_details=_build_sync_details("channel_completed"),
+        sync_details=_build_sync_details(
+            "channel_completed",
+            {"sync_type": sync_type},
+        ),
         actor=actor,
     )
 
@@ -203,6 +269,7 @@ def emit_channel_failed(
     error_summary: str | None = None,
     attempt: int | None = None,
     retryable: bool | None = None,
+    sync_type: str = "full",
     actor: dict[str, Any] | None = None,
 ) -> None:
     sync_audit.sync_failure(
@@ -220,7 +287,7 @@ def emit_channel_failed(
         },
         sync_details=_build_sync_details(
             "channel_failed",
-            {"attempt": attempt},
+            {"attempt": attempt, "sync_type": sync_type},
         ),
         actor=actor,
     )
@@ -235,13 +302,15 @@ def emit_job_completed(
     failed_channels: int,
     requeued_channels: int,
     total_synced_messages: int,
+    sync_type: str = "full",
+    flushed_events: int = 0,
+    dropped_events: int = 0,
     duration_ms: int | None = None,
     actor: dict[str, Any] | None = None,
 ) -> None:
-    sync_audit.full_sync(
-        connector=CONNECTOR_SLACK,
+    _emit_sync_lifecycle(
+        sync_type=sync_type,
         result="success" if failed_channels == 0 else "partial_failure",
-        sync_type="full",
         trigger="worker",
         resource_type=RESOURCE_TYPE_CHANNEL,
         counts={
@@ -250,11 +319,16 @@ def emit_job_completed(
             "failed_channels": failed_channels,
             "requeued_channels": requeued_channels,
             "synced_messages": total_synced_messages,
+            "flushed_events": flushed_events,
+            "dropped_events": dropped_events,
         },
         duration_ms=duration_ms,
         run_id=job_id,
         connector_details={"team_id": team_id},
-        sync_details=_build_sync_details("job_completed"),
+        sync_details=_build_sync_details(
+            "job_completed",
+            {"sync_type": sync_type},
+        ),
         actor=actor,
     )
 
@@ -265,6 +339,7 @@ def emit_job_failed(
     team_id: str,
     failure_reason: str,
     error_summary: str | None = None,
+    sync_type: str = "full",
     duration_ms: int | None = None,
     actor: dict[str, Any] | None = None,
 ) -> None:
@@ -277,7 +352,10 @@ def emit_job_failed(
         duration_ms=duration_ms,
         run_id=job_id,
         connector_details={"team_id": team_id},
-        sync_details=_build_sync_details("job_failed"),
+        sync_details=_build_sync_details(
+            "job_failed",
+            {"sync_type": sync_type},
+        ),
         actor=actor,
     )
 

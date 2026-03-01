@@ -29,6 +29,7 @@ async def get_job_snapshot(
     return SyncJobSnapshotResponse(
         job_id=meta.job_id,
         connector=meta.connector,
+        sync_type=meta.sync_type,
         team_id=meta.team_id,
         status=meta.status,
         created_at=meta.created_at,
@@ -40,6 +41,10 @@ async def get_job_snapshot(
         completed_channels=meta.completed_channels,
         failed_channels=meta.failed_channels,
         requeued_channels=meta.requeued_channels,
+        synced_messages=meta.synced_messages,
+        flushed_events=meta.flushed_events,
+        dropped_channels=meta.dropped_channels,
+        dropped_events=meta.dropped_events,
         last_error=meta.last_error,
     )
 

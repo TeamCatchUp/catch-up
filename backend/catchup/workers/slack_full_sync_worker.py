@@ -28,6 +28,7 @@ from catchup.connectors.slack.sync_runtime.constants import (
 )
 from catchup.connectors.slack.sync_runtime.schemas import SlackChannelSyncTask
 from catchup.db.engine import SessionLocal
+from catchup.utils.webhook_buffer import get_webhook_buffer
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,12 @@ async def _ack_safely(task: SlackChannelSyncTask) -> None:
 
 
 
-async def _ensure_job_started(job_id: str, team_id: str, total_channels: int) -> None:
+async def _ensure_job_started(
+    job_id: str,
+    team_id: str,
+    total_channels: int,
+    sync_type: str,
+) -> None:
     started = await job_store.mark_job_started_if_accepted(job_id)
     if not started:
         return
@@ -73,12 +79,16 @@ async def _ensure_job_started(job_id: str, team_id: str, total_channels: int) ->
         job_id=job_id,
         team_id=team_id,
         event_type=SyncEventType.JOB_STARTED,
-        payload={"total_channels": total_channels},
+        payload={
+            "total_channels": total_channels,
+            "sync_type": sync_type,
+        },
     )
     emit_job_started(
         job_id=job_id,
         team_id=team_id,
         total_channels=total_channels,
+        sync_type=sync_type,
     )
 
 async def _finalize_job_if_done(job_id: str, team_id: str) -> None:
@@ -111,11 +121,15 @@ async def _finalize_job_if_done(job_id: str, team_id: str) -> None:
             team_id=team_id,
             event_type=SyncEventType.JOB_COMPLETED,
             payload={
+                "sync_type": finalized.sync_type,
                 "total_channels": finalized.total_channels,
                 "completed_channels": finalized.completed_channels,
                 "failed_channels": finalized.failed_channels,
                 "requeued_channels": finalized.requeued_channels,
                 "synced_messages": finalized.synced_messages,
+                "flushed_events": finalized.flushed_events,
+                "dropped_channels": finalized.dropped_channels,
+                "dropped_events": finalized.dropped_events,
             },
         )
         emit_job_completed(
@@ -126,6 +140,9 @@ async def _finalize_job_if_done(job_id: str, team_id: str) -> None:
             failed_channels=finalized.failed_channels,
             requeued_channels=finalized.requeued_channels,
             total_synced_messages=finalized.synced_messages,
+            sync_type=finalized.sync_type,
+            flushed_events=finalized.flushed_events,
+            dropped_events=finalized.dropped_events,
             duration_ms=duration_ms,
         )
     else:
@@ -134,6 +151,7 @@ async def _finalize_job_if_done(job_id: str, team_id: str) -> None:
             team_id=team_id,
             event_type=SyncEventType.JOB_FAILED,
             payload={
+                "sync_type": finalized.sync_type,
                 "total_channels": finalized.total_channels,
                 "completed_channels": finalized.completed_channels,
                 "failed_channels": finalized.failed_channels,
@@ -145,6 +163,7 @@ async def _finalize_job_if_done(job_id: str, team_id: str) -> None:
             team_id=team_id,
             failure_reason=SyncFailureReason.UNEXPECTED_ERROR.value,
             error_summary=finalized.last_error,
+            sync_type=finalized.sync_type,
             duration_ms=duration_ms,
         )
 
@@ -167,7 +186,12 @@ async def _precheck_job(task: SlackChannelSyncTask) -> tuple[bool, str | None, i
         await _ack_safely(task)
         return False, meta.team_id, meta.total_channels
 
-    await _ensure_job_started(task.job_id, task.team_id, meta.total_channels)
+    await _ensure_job_started(
+        task.job_id,
+        task.team_id,
+        meta.total_channels,
+        meta.sync_type,
+    )
     return True, meta.team_id, meta.total_channels
 
 async def _start_processing(task: SlackChannelSyncTask, ctx: TaskContext) -> None:
@@ -195,6 +219,7 @@ async def _handle_lock_conflict(task: SlackChannelSyncTask, ctx: TaskContext) ->
             "channel_id": task.channel_id,
             "channel_name": task.channel_name,
             "attempt": task.attempt,
+            "sync_type": task.sync_type,
             "reason": SyncFailureReason.CHANNEL_LOCK_CONFLICT.value,
             "delay_seconds": delay,
         },
@@ -206,6 +231,7 @@ async def _handle_lock_conflict(task: SlackChannelSyncTask, ctx: TaskContext) ->
         channel_name=task.channel_name,
         attempt=task.attempt,
         delay_seconds=delay,
+        sync_type=task.sync_type,
     )
 
 async def _lock_refresh_loop(
@@ -282,6 +308,7 @@ async def _execute_channel_sync(task: SlackChannelSyncTask, service_cache: dict)
             "channel_id": task.channel_id,
             "channel_name": task.channel_name,
             "attempt": task.attempt,
+            "sync_type": task.sync_type,
         },
     )
     emit_channel_started(
@@ -290,6 +317,7 @@ async def _execute_channel_sync(task: SlackChannelSyncTask, service_cache: dict)
         channel_id=task.channel_id,
         channel_name=task.channel_name,
         attempt=task.attempt,
+        sync_type=task.sync_type,
     )
 
     service = await _get_or_create_service(task.team_id, service_cache)
@@ -332,21 +360,42 @@ async def _handle_sync_success(task: SlackChannelSyncTask, result: dict, ctx: Ta
     synced = int(result.get("synced", 0))
     errors = int(result.get("errors", 0))
     skipped = bool(result.get("skipped", False))
+    flushed_events = 0
 
     if synced > 0:
         await job_store.increment_field(task.job_id, "synced_messages", synced)
+
+    if task.sync_type == "incremental":
+        try:
+            flushed_events = await get_webhook_buffer().clear_slack_buffer(
+                task.team_id,
+                task.channel_id,
+            )
+            if flushed_events > 0:
+                await job_store.increment_field(task.job_id, "flushed_events", flushed_events)
+        except Exception:
+            logger.exception(
+                "[SLACK][INCREMENTAL SYNC][WORKER] Failed to clear channel buffer: team_id=%s, channel_id=%s",
+                task.team_id,
+                task.channel_id,
+            )
+
+    payload = {
+        "sync_type": task.sync_type,
+        "channel_id": task.channel_id,
+        "channel_name": task.channel_name,
+        "synced": synced,
+        "errors": errors,
+        "skipped": skipped,
+    }
+    if task.sync_type == "incremental":
+        payload["flushed_events"] = flushed_events
 
     await runtime_events.append_event(
         job_id=task.job_id,
         team_id=task.team_id,
         event_type=SyncEventType.CHANNEL_COMPLETED,
-        payload={
-            "channel_id": task.channel_id,
-            "channel_name": task.channel_name,
-            "synced": synced,
-            "errors": errors,
-            "skipped": skipped,
-        },
+        payload=payload,
     )
     emit_channel_completed(
         job_id=task.job_id,
@@ -356,6 +405,8 @@ async def _handle_sync_success(task: SlackChannelSyncTask, result: dict, ctx: Ta
         synced_count=synced,
         error_count=errors,
         skipped=skipped,
+        sync_type=task.sync_type,
+        flushed_events=flushed_events if task.sync_type == "incremental" else None,
     )
 
 
@@ -379,6 +430,7 @@ async def _handle_sync_failure(task: SlackChannelSyncTask, exc: Exception, ctx: 
                 "channel_id": task.channel_id,
                 "channel_name": task.channel_name,
                 "attempt": next_attempt,
+                "sync_type": task.sync_type,
                 "reason": SyncFailureReason.MAX_RETRIES_EXCEEDED.value,
                 "error": error_summary,
             },
@@ -392,6 +444,7 @@ async def _handle_sync_failure(task: SlackChannelSyncTask, exc: Exception, ctx: 
             error_summary=error_summary,
             attempt=next_attempt,
             retryable=False,
+            sync_type=task.sync_type,
         )
         return
 
@@ -407,6 +460,7 @@ async def _handle_sync_failure(task: SlackChannelSyncTask, exc: Exception, ctx: 
             "channel_id": task.channel_id,
             "channel_name": task.channel_name,
             "attempt": next_attempt,
+            "sync_type": task.sync_type,
             "reason": SyncFailureReason.SLACK_SYNC_EXCEPTION.value,
             "error": error_summary,
             "delay_seconds": delay,
@@ -419,6 +473,7 @@ async def _handle_sync_failure(task: SlackChannelSyncTask, exc: Exception, ctx: 
         channel_name=task.channel_name,
         attempt=next_attempt,
         delay_seconds=delay,
+        sync_type=task.sync_type,
     )
 
 
