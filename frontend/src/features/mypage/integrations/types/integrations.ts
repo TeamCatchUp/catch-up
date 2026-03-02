@@ -2,6 +2,8 @@ export type { IntegrationAccountMeta, IntegrationService } from '@/shared/types/
 
 import type { IntegrationAccountMeta, IntegrationService } from '@/shared/types/integrationService';
 
+import type { PreMappingInfo } from './api';
+
 /** 관리자 연동 화면 탭 식별자 */
 export type AdminIntegrationTab = 'my' | 'member';
 
@@ -42,11 +44,7 @@ export interface MemberIntegrationRow {
   userKey: string;
   userName: string;
   email: string;
-  phone: string;
-  department: string;
-  teamSizeLabel: string;
-  picture: string | null;
-  accountIdByService: Partial<Record<IntegrationService, string>>;
+  serviceInfoByService: Partial<Record<IntegrationService, PreMappingInfo>>;
   statusByService: Record<IntegrationService, MemberIntegrationStatus>;
 }
 
@@ -61,4 +59,6 @@ export interface MemberIntegrationCardItem extends IntegrationAccountMeta {
 export interface MemberIntegrationViewModel {
   cards: MemberIntegrationCardItem[];
   rows: MemberIntegrationRow[];
+  total: number;
+  isLoading: boolean;
 }

@@ -63,16 +63,28 @@ export interface UserSyncCount {
   premap: number;
 }
 
-export interface UserMappingItem {
-  name: string;
-  githubLogin: string | null;
-  atlassianEmail: string | null;
-  slackEmail: string | null;
+export interface PreMappingInfo {
+  name: string | null;
+  email: string | null;
+  picture: string | null;
 }
 
+export interface UserSyncItem {
+  name: string;
+  email: string;
+  atlassian: PreMappingInfo | null;
+  slack: PreMappingInfo | null;
+  github: PreMappingInfo | null;
+}
+
+export type SyncFilterType = 'all' | 'full' | 'partial';
+
 export interface UserSyncStatusResponse {
+  total: number;
+  page: number;
+  size: number;
   counts: Record<IntegrationService, UserSyncCount>;
-  mappings: UserMappingItem[];
+  items: UserSyncItem[];
 }
 
 // ─── Sync Status (임베딩 진행 상태) ───

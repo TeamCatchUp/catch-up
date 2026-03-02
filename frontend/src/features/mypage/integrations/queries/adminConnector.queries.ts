@@ -14,6 +14,7 @@ import type {
   SlackSyncStatusItem,
   SyncableEntity,
   SyncableResponse,
+  SyncFilterType,
   UserSyncStatusResponse,
 } from '../types/api';
 
@@ -66,11 +67,13 @@ export const adminConnectorQueries = {
       enabled: !!source,
     }),
 
-  userSyncStatus: () =>
+  userSyncStatus: (params: { filterType: SyncFilterType; page: number; size: number }) =>
     queryOptions({
-      queryKey: ['admin', 'users', 'syncStatus'] as const,
+      queryKey: ['admin', 'users', 'syncStatus', params] as const,
       queryFn: async (): Promise<UserSyncStatusResponse> => {
-        const res = await api.get<UserSyncStatusResponse>(API.admin.users.syncStatus);
+        const res = await api.get<UserSyncStatusResponse>(API.admin.users.syncStatus, {
+          params: { filter_type: params.filterType, page: params.page, size: params.size },
+        });
         return res.data;
       },
     }),
