@@ -45,8 +45,9 @@ const AccountEditModal = ({
   const accountOptions = useMemo<AccountOption[]>(() => {
     const deduped = new Map<string, AccountOption>();
     allRows.forEach((row) => {
-      const accountId = row.accountIdByService[service];
-      if (!accountId) return;
+      const info = row.serviceInfoByService[service];
+      if (!info?.email) return;
+      const accountId = info.email;
       const key = `${accountId}:${row.email}`;
       if (deduped.has(key)) return;
       deduped.set(key, { key, userName: row.userName, userEmail: row.email, accountId });
@@ -59,7 +60,7 @@ const AccountEditModal = ({
     [accountOptions, selectedAccountKey],
   );
 
-  const currentAccountId = selectedRow.accountIdByService[service] ?? '-';
+  const currentAccountId = selectedRow.serviceInfoByService[service]?.email ?? '-';
   const isSubmitDisabled = !selectedAccount || (selectedReason === 'custom' && customReason.trim().length === 0);
 
   const resetFormState = () => {
