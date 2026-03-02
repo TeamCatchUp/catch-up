@@ -195,7 +195,7 @@ const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) 
       )}
 
       {/* 테이블 */}
-      <div className="border-neutral-3 h-184 min-h-0 w-250 overflow-clip border-y">
+      <div className="border-neutral-3 w-250 border-y">
         <UsersTable
           displayRows={effectivePagedRows}
           isEditMode={isEditMode}
