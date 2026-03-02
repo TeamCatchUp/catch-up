@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 
 import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
@@ -8,6 +9,7 @@ import { Button } from '@/shared/components/ui/button';
 import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
+import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
 import type { SyncFilterType } from '../../../types/api';
 import type { IntegrationService } from '../../../types/integrations';
 import type { MemberDisplayRow } from '../../../types/memberDisplay';
@@ -17,7 +19,6 @@ import UsersTable from '../tables/UsersTable';
 const CsvUploadModal = dynamic(() => import('../modals/CsvUploadModal'));
 
 const PAGE_SIZE = 10;
-const EMPTY_ACCOUNT_OPTIONS: Partial<Record<IntegrationService, AccountOption[]>> = {};
 
 interface UsersStatusSectionProps {
   total: number;
@@ -45,6 +46,26 @@ const UsersStatusSection = ({
 }: UsersStatusSectionProps) => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
+
+  // ─── 툴별 사용자 목록 (수정 모드 드롭다운용) ───
+  const githubUsers = useInfiniteQuery({ ...adminConnectorQueries.vendorUsers({ vendorType: 'github' }), enabled: isEditMode });
+  const atlassianUsers = useInfiniteQuery({ ...adminConnectorQueries.vendorUsers({ vendorType: 'atlassian' }), enabled: isEditMode });
+  const slackUsers = useInfiniteQuery({ ...adminConnectorQueries.vendorUsers({ vendorType: 'slack' }), enabled: isEditMode });
+
+  const accountOptionsByService = useMemo<Partial<Record<IntegrationService, AccountOption[]>>>(() => {
+    if (!isEditMode) return {};
+
+    const toOptions = (pages: { items: { name: string; identifier: string | null; picture: string | null }[] }[] | undefined): AccountOption[] =>
+      pages?.flatMap((page) =>
+        page.items.map((item) => ({ name: item.name, identifier: item.identifier ?? '', picture: item.picture })),
+      ) ?? [];
+
+    return {
+      github: toOptions(githubUsers.data?.pages),
+      jira: toOptions(atlassianUsers.data?.pages),
+      slack: toOptions(slackUsers.data?.pages),
+    };
+  }, [isEditMode, githubUsers.data?.pages, atlassianUsers.data?.pages, slackUsers.data?.pages]);
 
   // 수정 모드에서 계정 선택 / 미사용 토글 로컬 오버라이드
   type AccountOverride = { type: 'account'; account: AccountOption } | { type: 'unused' };
@@ -168,7 +189,7 @@ const UsersStatusSection = ({
         <UsersTable
           displayRows={effectiveRows}
           isEditMode={isEditMode}
-          accountOptionsByService={EMPTY_ACCOUNT_OPTIONS}
+          accountOptionsByService={accountOptionsByService}
           onAccountSelect={handleAccountSelect}
           onToggleUnused={handleToggleUnused}
         />
