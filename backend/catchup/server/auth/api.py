@@ -11,6 +11,7 @@ from catchup.auth.dependencies import get_current_user, get_current_user_info
 from catchup.auth.google_oauth import GoogleOAuthService
 from catchup.auth.jwt import create_access_token, create_refresh_token, verify_token
 from catchup.auth.keycloak import KeycloakOAuthService
+from catchup.auth.utils import reformat_name
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
 from catchup.db.models import (
@@ -79,10 +80,12 @@ async def oauth_callback(
     def _handle_login_sync():
         oauth_user_record = oauth_service.get_or_register_user(db, oauth_user)
         
+        full_name = reformat_name(oauth_user.name)
+        
         token_data = {
             "sub": oauth_user.sub,
             "email": oauth_user.email,
-            "name": oauth_user.name
+            "name": full_name
         }
         access_token = create_access_token(data=token_data)
         
