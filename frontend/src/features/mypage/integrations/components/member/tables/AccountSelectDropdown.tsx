@@ -66,7 +66,6 @@ const AccountSelectDropdown = ({ status, options, onSelect, onToggleUnused }: Ac
                 onCheckedChange={(checked) => {
                   setLocalUnused(checked);
                   onToggleUnused(checked);
-                  setOpen(false);
                 }}
               />
             </div>
