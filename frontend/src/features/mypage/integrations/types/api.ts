@@ -1,5 +1,25 @@
 import type { IntegrationService } from '@/shared/types/integrationService';
 
+// ─── Vendor Type ───
+
+export type VendorType = 'github' | 'slack' | 'atlassian';
+
+// ─── Mapping Upload ───
+
+export interface MappingUploadStats {
+  csv_rows_skipped: number;
+  total_success: number;
+  total_failed: number;
+  new_mappings: number;
+  updated_mappings: number;
+}
+
+export interface MappingUploadResponse {
+  status: string;
+  file_type: string;
+  stats: MappingUploadStats;
+}
+
 // ─── Connector Status ───
 
 /** 커넥터 상태 공통 필드 */

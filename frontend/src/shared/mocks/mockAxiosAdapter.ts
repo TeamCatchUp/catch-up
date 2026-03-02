@@ -2,6 +2,7 @@ import { MOCK_ENTRY_REQUESTS } from './admin/adminMembersMockData';
 import { MOCK_JWT_TOKENS, MOCK_USER } from './auth/data';
 import delay from './delay';
 import { MOCK_FEEDBACK_RESPONSE } from './feedback/data';
+import { MOCK_MAPPING_UPLOAD_RESPONSE, MOCK_USER_SYNC_STATUS } from './integration';
 import { MOCK_CHATROOM_MESSAGES, MOCK_CHATROOMS, MOCK_RECENT_QUERIES, MOCK_RECENT_QUERIES_EMPTY } from './search/data';
 
 const USE_EMPTY_RECENT_QUERIES = process.env.NEXT_PUBLIC_MOCK_RECENT_QUERIES_EMPTY === 'true';
@@ -158,6 +159,20 @@ const mockHandlers: MockHandler[] = [
       latest: '2026-02-27T12:00:00Z',
       spaces: Array.from({ length: 5 }, (_, i) => `Confluence Space ${String(i + 1).padStart(2, '0')}`),
     }),
+  },
+
+  // Admin — 이용자 매핑 현황
+  {
+    pattern: /^\/api\/v1\/admin\/users\/sync-status$/,
+    method: 'get',
+    handler: async () => MOCK_USER_SYNC_STATUS,
+  },
+
+  // Mapping — CSV 업로드
+  {
+    pattern: /^\/api\/v1\/mapping\/[^/]+\/upload$/,
+    method: 'post',
+    handler: async () => MOCK_MAPPING_UPLOAD_RESPONSE,
   },
 
   // Onboarding — 일반 유저 가입

@@ -64,7 +64,8 @@ export const useMemberIntegrationViewModel = (): MemberIntegrationViewModel => {
         for (const service of ['jira', 'github', 'slack', 'confluence'] as IntegrationService[]) {
           const id = getAccountId(mapping, service);
           if (id) accountIdByService[service] = id;
-          statusByService[service] = id ? '완료' : '미등록';
+          const hasPremapping = (syncStatus.counts[service]?.premap ?? 0) > 0;
+          statusByService[service] = id ? '완료' : hasPremapping ? '미사용' : '미등록';
         }
 
         return {
