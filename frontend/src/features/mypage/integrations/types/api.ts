@@ -65,7 +65,7 @@ export interface UserSyncCount {
 
 export interface PreMappingInfo {
   name: string | null;
-  email: string | null;
+  identifier: string | null; // email 또는 github login
   picture: string | null;
 }
 

@@ -36,8 +36,8 @@ const AccountRegisterModal = ({ open, onOpenChange, allRows, service, serviceNam
     const deduped = new Map<string, AccountOption>();
     allRows.forEach((row) => {
       const info = row.serviceInfoByService[service];
-      if (!info?.email) return;
-      const accountId = info.email;
+      if (!info?.identifier) return;
+      const accountId = info.identifier;
       const key = `${accountId}:${row.email}`;
       if (deduped.has(key)) return;
       deduped.set(key, { key, userName: row.userName, userEmail: row.email, accountId });

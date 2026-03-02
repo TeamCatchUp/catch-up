@@ -105,7 +105,7 @@ const UsersTable = ({
                           )}
                           <span className="text-body-xsmall text-gray-80 truncate">{info?.name ?? '-'}</span>
                         </div>
-                        <span className="text-body-xsmall text-gray-50 truncate">{info?.email ?? '-'}</span>
+                        <span className="text-body-xsmall text-gray-50 truncate">{info?.identifier ?? '-'}</span>
                       </div>
                     );
                   }

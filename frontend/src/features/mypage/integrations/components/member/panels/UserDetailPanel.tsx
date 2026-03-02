@@ -74,7 +74,7 @@ const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
                           {info?.name ?? '-'}
                         </span>
                         <span className="rounded-md2 bg-neutral-2 text-body-xsmall shrink-0 px-1.5 py-0.5 tracking-tight text-gray-50">
-                          {info?.email ?? '-'}
+                          {info?.identifier ?? '-'}
                         </span>
                       </div>
                       <span className="text-body-xsmall shrink-0 truncate text-gray-50">{selectedRow.email}</span>

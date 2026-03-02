@@ -29,7 +29,7 @@ const buildModalRow = (accountInfo: IntegrationAccountInfo, service: Integration
   userName: accountInfo.userName || '-',
   email: accountInfo.userEmail || '-',
   serviceInfoByService: {
-    [service]: { name: accountInfo.userName, email: accountInfo.userEmail, picture: null },
+    [service]: { name: accountInfo.userName, identifier: accountInfo.userEmail, picture: null },
   },
   statusByService: {
     jira: service === 'jira' ? '완료' : '미사용',

@@ -12,7 +12,7 @@ import { cn } from '@/shared/utils/cn';
 /** 드롭다운에 표시할 계정 후보 */
 export interface AccountOption {
   name: string;
-  email: string;
+  identifier: string;
   picture?: string | null;
 }
 
@@ -76,8 +76,8 @@ const AccountSelectDropdown = ({ status, options, onSelect, onToggleUnused }: Ac
             <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
             {options.map((account) => (
               <CommandItem
-                key={`${account.name}-${account.email}`}
-                value={`${account.name} ${account.email}`}
+                key={`${account.name}-${account.identifier}`}
+                value={`${account.name} ${account.identifier}`}
                 onSelect={() => {
                   onSelect(account);
                   setOpen(false);
@@ -87,7 +87,7 @@ const AccountSelectDropdown = ({ status, options, onSelect, onToggleUnused }: Ac
                 <DefaultProfile className="border-neutral-2 text-gray-30 size-10 shrink-0 rounded-full border" />
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="text-heading-small text-gray-80 max-w-43.75 truncate">{account.name}</span>
-                  <span className="text-label-xsmall truncate text-gray-50">{account.email}</span>
+                  <span className="text-label-xsmall truncate text-gray-50">{account.identifier}</span>
                 </div>
               </CommandItem>
             ))}
