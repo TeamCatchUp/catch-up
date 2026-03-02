@@ -208,11 +208,10 @@ const CsvUploadModal = ({ open, onOpenChange }: CsvUploadModalProps) => {
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent hideClose className="max-w-110 gap-0 rounded-2xl p-0">
-        {/* Figma 모달: pt-3(12px) pb-4(16px) px-5(20px), gap-2(8px) scroll-wrapper↔footer */}
         <div className="flex flex-col gap-2 px-5 pt-3 pb-4">
           {/* ── Scroll wrapper (header + content) ── */}
           <div className="flex max-h-94.5 flex-col gap-1.5 overflow-clip">
-            {/* 헤더: h-9(36px), 제목 + 닫기 */}
+            {/* 헤더: 제목 + 닫기 */}
             <div className="flex h-9 shrink-0 items-center justify-between">
               <DialogTitle className="text-heading-medium text-gray-80">CSV 파일 업로드하기</DialogTitle>
               <button
@@ -223,15 +222,19 @@ const CsvUploadModal = ({ open, onOpenChange }: CsvUploadModalProps) => {
               </button>
             </div>
 
-            {/* 콘텐츠: border-t, pt-4(16px), gap-3(12px) guide↔vendors */}
+            {/* 콘텐츠 */}
             <div className="border-neutral-3 flex flex-col gap-3 overflow-y-auto border-t pt-4">
-              {/* CSV 가이드 버튼 — Figma: h-30(30px), gap-1(4px), px-2(8px), py-1(4px), icon 24px */}
-              <button className="border-neutral-3 text-body-xsmall text-gray-80 hover:bg-neutral-1 flex h-7.5 w-fit cursor-pointer items-center gap-1 rounded-lg border bg-white px-2 py-1">
+              {/* CSV 가이드 버튼 */}
+              <a
+                href="/docs/user_mapping_guide.pdf"
+                download="[Catch Up] 유저 맵핑 가이드.pdf"
+                className="border-neutral-3 text-body-xsmall text-gray-80 hover:bg-neutral-1 flex h-7.5 w-fit cursor-pointer items-center gap-1 rounded-lg border bg-white px-2 py-1"
+              >
                 <IconFile className="text-gray-70 size-5 shrink-0" />
                 CSV 업로드 가이드(PDF) 보기
-              </button>
+              </a>
 
-              {/* 벤더 섹션 — gap-6(24px) between sections */}
+              {/* 벤더 섹션  */}
               <div className="flex flex-col gap-6">
                 {VENDOR_CONFIGS.map(({ vendor, label, helperText }) => (
                   <VendorFileUploader
@@ -250,7 +253,7 @@ const CsvUploadModal = ({ open, onOpenChange }: CsvUploadModalProps) => {
             </div>
           </div>
 
-          {/* ── 푸터: gap-2.5(10px) ── */}
+          {/* ── 푸터 */}
           <div className="flex items-center justify-end gap-2.5">
             <Button
               variant="capsule-outline-mono"
