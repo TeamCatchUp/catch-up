@@ -10,6 +10,7 @@ import FilterList from '@/public/icons/icon/filter_list.svg';
 import Kebab2 from '@/public/icons/icon/kebeb 2.svg';
 import Settings from '@/public/icons/icon/settings.svg';
 import Share2 from '@/public/icons/icon/share_2.svg';
+import { MOCK_INBOX_ITEMS } from '@/shared/mocks/inbox/data';
 import { cn } from '@/shared/utils/cn';
 
 type FilterTab = '모두' | '공유' | '보고' | '관리' | '요청';
@@ -23,91 +24,6 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGEl
   요청: AdminPanelSettings,
   승인: CheckCircle,
 };
-
-interface InboxItem {
-  id: string;
-  category: string;
-  sender: string;
-  title: string;
-  preview: string;
-  date: string;
-  isRead: boolean;
-}
-
-const MOCK_INBOX_ITEMS: InboxItem[] = [
-  {
-    id: '1',
-    category: '관리',
-    sender: 'Jira',
-    title: '의 연동이 필요합니다.',
-    preview: '내용 text text text text text text text text text text text text text text text text',
-    date: '2025.12.15',
-    isRead: false,
-  },
-  {
-    id: '2',
-    category: '공유',
-    sender: '팀원G',
-    title: '님이 업무 자료를 공유했어요',
-    preview: '내용 text text text text text text text text text text text text text text text text',
-    date: '2025.12.15',
-    isRead: false,
-  },
-  {
-    id: '3',
-    category: '보고',
-    sender: '팀원G',
-    title: '님의 업무 매뉴얼 권한 요청',
-    preview: '내용 text text text text text text text text text text text text text text text text',
-    date: '2025.12.15',
-    isRead: true,
-  },
-  {
-    id: '4',
-    category: '요청',
-    sender: '팀원G',
-    title: '님의 상세정보 권한 요청',
-    preview: '내용 text text text text text text text text text text text text text text text text',
-    date: '2025.12.15',
-    isRead: true,
-  },
-  {
-    id: '5',
-    category: '승인',
-    sender: '팀원G',
-    title: '님이 미팅을 수락함',
-    preview: '내용 text text text text text text text text text text text text text text text text',
-    date: '2025.12.15',
-    isRead: true,
-  },
-  {
-    id: '6',
-    category: '승인',
-    sender: '팀원G',
-    title: '님이 미팅을 수락함',
-    preview: '내용 text text text text text text text text text text text text text text text text',
-    date: '2025.12.15',
-    isRead: true,
-  },
-  {
-    id: '7',
-    category: '승인',
-    sender: '팀원G',
-    title: '님이 미팅을 수락함',
-    preview: '내용 text text text text text text text text text text text text text text text text',
-    date: '2025.12.15',
-    isRead: true,
-  },
-  {
-    id: '8',
-    category: '승인',
-    sender: '팀원G',
-    title: '님이 미팅을 수락함',
-    preview: '내용 text text text text text text text text text text text text text text text text',
-    date: '2025.12.15',
-    isRead: true,
-  },
-];
 
 const InboxPanel = () => {
   const [activeTab, setActiveTab] = useState<FilterTab>('모두');
