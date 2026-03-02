@@ -77,8 +77,31 @@ def get_oauth_user_with_sub(
 def get_all_oauth_users(
     db: Session
 ) -> list[OAuthUser] :
-    """어드민용: 전체 OAuth 유저 목록 조회"""
+    """전체 OAuth 유저 목록 조회"""
     return db.scalars(select(OAuthUser)).all()
+
+
+def get_all_oauth_users_for_admin(
+    db: Session,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[OAuthUser]:
+    """어드민용: 전체 OAuth 유저 목록 조회 (페이지네이션)"""
+    total_count = db.scalar(
+        select(func.count())
+        .select_from(OAuthUser)
+    ) or 0
+    
+    stmt = (
+        select(OAuthUser)
+        .order_by(OAuthUser.name.asc())
+        .offset(skip)
+        .limit(limit)
+    )
+    
+    items = db.scalars(stmt).all()
+    
+    return list(items), total_count
 
 
 def get_all_users_for_admin(

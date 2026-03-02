@@ -1,11 +1,15 @@
 from datetime import datetime
 from typing import List, Optional
-
 from pydantic import BaseModel, ConfigDict, EmailStr
 
 from catchup.db.models import UserRole
-
 from catchup.db.models import JobLevel, UserRole, UserStatus
+
+
+class PreMappingInfo(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    picture: str | None = None
 
 
 class SourceUserCount(BaseModel):
@@ -22,9 +26,10 @@ class SyncStatusCounts(BaseModel):
 
 class UserSyncMapping(BaseModel):
     name: str
-    githubLogin: Optional[str] = None
-    atlassianEmail: Optional[EmailStr] = None
-    slackEmail: Optional[EmailStr] = None
+    email: str
+    atlassian: PreMappingInfo | None = None
+    slack: PreMappingInfo | None = None
+    github: PreMappingInfo | None = None
 
 
 class UserSyncStatusResponse(BaseModel):
@@ -132,5 +137,14 @@ class UserResponse(BaseModel):
     role: UserRole
     department: str
     created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OAuthUserResponse(BaseModel):
+    sub: str
+    name: str
+    email: str
+    picture: str | None = None
     
     model_config = ConfigDict(from_attributes=True)
