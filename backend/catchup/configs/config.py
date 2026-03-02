@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     # AWS Bedrock
     AWS_ACCESS_KEY_ID: str | None = None
     AWS_SECRET_ACCESS_KEY: str | None = None
+    AWS_CREDENTIALS_PROFILE_NAME: str | None = None
     AWS_BEARER_TOKEN_BEDROCK: str | None = None
     AWS_REGION: str
     AWS_BEDROCK_EMBEDDING_MODEL: str
