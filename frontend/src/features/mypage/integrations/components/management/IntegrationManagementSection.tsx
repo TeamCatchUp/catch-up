@@ -28,7 +28,7 @@ const RESOURCE_ICONS: Record<IntegrationService, React.ComponentType<React.SVGPr
   confluence: IconSpace,
 };
 
-const GITHUB_APP_URL = 'https://github.com/apps/catchupqa';
+const GITHUB_APP_URL = 'https://github.com/apps/catchup-connector';
 
 /** 서비스별 연동 설치 핸들러 */
 const handleInstall = (service: IntegrationService) => {
@@ -221,11 +221,7 @@ const IntegrationManagementSection = ({
                     <div className="w-full px-4">
                       <div className="border-neutral-3 border-t" />
                     </div>
-                    <Pagination
-                      currentPage={currentPage}
-                      totalPages={totalPages}
-                      onPageChange={setCurrentPage}
-                    />
+                    <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
                   </>
                 )}
               </>
