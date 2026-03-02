@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from langchain_core.documents import Document
+from openai import project
 from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
@@ -208,6 +209,22 @@ class JiraIngestionService:
                 project_keys = [p.project_key for p in projects]
             
             for project_key in project_keys:
+                jira_sync.create_or_update_sync_state(
+                    db,
+                    cloud_id=self.cloud_id,
+                    entity_type=JiraEntityType.ISSUE,
+                    project_key=project_key,
+                    status=JiraSyncStatus.IN_PROGRESS,
+                    synced_count=0,
+                )
+                jira_sync.create_or_update_sync_state(
+                    db,
+                    cloud_id=self.cloud_id,
+                    entity_type=JiraEntityType.EPIC,
+                    project_key=project_key,
+                    status=JiraSyncStatus.IN_PROGRESS,
+                    synced_count=0,
+                )
                 try:
                     project_result = await self._sync_project_issues(
                         db, project_key, since = sync_from,
@@ -763,6 +780,23 @@ class JiraIngestionService:
         )
 
         results = {"issues": 0, "epics": 0, "errors": 0}
+
+        jira_sync.create_or_update_sync_state(
+            db=db,
+            cloud_id=self.cloud_id,
+            entity_type=JiraEntityType.ISSUE,
+            project_key=project_key,
+            status=JiraSyncStatus.IN_PROGRESS,
+            synced_count=0,
+        )
+        jira_sync.create_or_update_sync_state(
+            db=db,
+            cloud_id=self.cloud_id,
+            entity_type=JiraEntityType.EPIC,
+            project_key=project_key,
+            status=JiraSyncStatus.IN_PROGRESS,
+            synced_count=0,
+        )
 
         try:
             since_str = since.strftime("%Y-%m-%d %H:%M")
