@@ -3,8 +3,6 @@
 import { useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
-import { USE_MOCK } from '@/shared/mocks/config';
-import { MOCK_RECENT_QUERIES } from '@/shared/mocks/search/data';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import type { RecentQueryWithSaveStatusResponse } from '@/shared/types/query/api';
 import type { DatePeriod, GroupedSection, SortOrder } from '@/shared/utils/dateGrouping';
@@ -54,16 +52,10 @@ export const usePageModel = (): UsePageModelReturn => {
 
   const infiniteQuery = useInfiniteQuery(chatQueries.recentQueriesWithSaveStatusInfinite());
 
-  const sourceItems = useMemo<RecentQueryWithSaveStatusResponse[]>(() => {
-    if (USE_MOCK) {
-      return MOCK_RECENT_QUERIES.items.map((item) => ({
-        ...item,
-        is_answer_saved: false,
-        answer_id: null,
-      }));
-    }
-    return infiniteQuery.data?.pages.flatMap((page) => page.items) ?? [];
-  }, [infiniteQuery.data?.pages]);
+  const sourceItems = useMemo<RecentQueryWithSaveStatusResponse[]>(
+    () => infiniteQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [infiniteQuery.data?.pages],
+  );
 
   const historyItems = useMemo<HistoryItem[]>(() => sourceItems.map(toHistoryItem), [sourceItems]);
 
@@ -97,8 +89,8 @@ export const usePageModel = (): UsePageModelReturn => {
     searchTerm,
     setSearchTerm,
     groupedSections,
-    isLoading: !USE_MOCK && infiniteQuery.isLoading,
-    isError: !USE_MOCK && infiniteQuery.isError,
+    isLoading: infiniteQuery.isLoading,
+    isError: infiniteQuery.isError,
     hasNextPage: infiniteQuery.hasNextPage,
     isFetchingNextPage: infiniteQuery.isFetchingNextPage,
     fetchNextPage: infiniteQuery.fetchNextPage,

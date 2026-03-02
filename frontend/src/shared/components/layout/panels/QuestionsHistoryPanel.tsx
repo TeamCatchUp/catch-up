@@ -8,8 +8,6 @@ import AddSmall from '@/public/icons/icon/add_small.svg';
 import Cancel from '@/public/icons/icon/cancel.svg';
 import Search from '@/public/icons/icon/search.svg';
 import { SearchHistory } from '@/shared/components/SearchHistory';
-import { USE_MOCK } from '@/shared/mocks/config';
-import { MOCK_RECENT_QUERIES } from '@/shared/mocks/search/data';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import type { SearchQuery } from '@/shared/types/query/search';
@@ -43,18 +41,6 @@ const QuestionsHistoryPanel = () => {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const recentQueries = useMemo<SearchQueryWithRawDate[]>(() => {
-    // Mock 데이터 사용 모드 (NEXT_PUBLIC_USE_MOCK=true)
-    if (USE_MOCK) {
-      return MOCK_RECENT_QUERIES.items.map((item) => ({
-        query: item.content,
-        session_id: item.session_id,
-        date: formatFullDate(item.created_at),
-        rawDate: new Date(item.created_at),
-        message_id: item.id,
-      }));
-    }
-
-    // 실제 API 데이터 사용
     const items = data?.pages.flatMap((page) => page.items) ?? [];
     if (items.length === 0) return [];
     return items.map((item) => ({
@@ -121,7 +107,7 @@ const QuestionsHistoryPanel = () => {
 
       {/* Question List - Scrollable Area */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1">
-        {!USE_MOCK && isLoading ? (
+        {isLoading ? (
           <div className="text-gray-30 flex items-center justify-center py-8">데이터를 불러오는 중입니다...</div>
         ) : (
           <SearchHistory querys={recentQueries} isModal={false} onItemClick={handleItemClick} />
