@@ -141,7 +141,7 @@ const CsvUploadModal = ({ open, onOpenChange }: CsvUploadModalProps) => {
 
   const queryClient = useQueryClient();
 
-  const hasAnyFile = Object.values(files).some((f) => f !== null);
+  const hasAllFiles = VENDOR_CONFIGS.every(({ vendor }) => files[vendor] !== null);
 
   const resetState = () => {
     setFiles({ atlassian: null, github: null, slack: null });
@@ -195,7 +195,7 @@ const CsvUploadModal = ({ open, onOpenChange }: CsvUploadModalProps) => {
   });
 
   const handleSubmit = () => {
-    if (!hasAnyFile || uploadMutation.isPending) return;
+    if (!hasAllFiles || uploadMutation.isPending) return;
     uploadMutation.mutate();
   };
 
@@ -263,7 +263,7 @@ const CsvUploadModal = ({ open, onOpenChange }: CsvUploadModalProps) => {
             <Button
               variant="capsule-solid-primary"
               size="md"
-              disabled={!hasAnyFile || uploadMutation.isPending}
+              disabled={!hasAllFiles || uploadMutation.isPending}
               onClick={handleSubmit}
             >
               {uploadMutation.isPending ? '업로드 중...' : '등록'}
