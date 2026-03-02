@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-
 import dynamic from 'next/dynamic';
 
 import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
@@ -44,34 +43,26 @@ const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) 
 
   // 수정 모드에서 계정 선택 / 미사용 토글 로컬 오버라이드
   type AccountOverride = { type: 'account'; account: AccountOption } | { type: 'unused' };
-  const [overrides, setOverrides] = useState<
-    Record<string, Partial<Record<IntegrationService, AccountOverride>>>
-  >({});
+  const [overrides, setOverrides] = useState<Record<string, Partial<Record<IntegrationService, AccountOverride>>>>({});
 
-  const handleAccountSelect = useCallback(
-    (userKey: string, service: IntegrationService, account: AccountOption) => {
-      setOverrides((prev) => ({
-        ...prev,
-        [userKey]: { ...prev[userKey], [service]: { type: 'account', account } },
-      }));
-    },
-    [],
-  );
+  const handleAccountSelect = useCallback((userKey: string, service: IntegrationService, account: AccountOption) => {
+    setOverrides((prev) => ({
+      ...prev,
+      [userKey]: { ...prev[userKey], [service]: { type: 'account', account } },
+    }));
+  }, []);
 
-  const handleToggleUnused = useCallback(
-    (userKey: string, service: IntegrationService, unused: boolean) => {
-      setOverrides((prev) => {
-        const userOverrides = { ...prev[userKey] };
-        if (unused) {
-          userOverrides[service] = { type: 'unused' };
-        } else {
-          delete userOverrides[service];
-        }
-        return { ...prev, [userKey]: userOverrides };
-      });
-    },
-    [],
-  );
+  const handleToggleUnused = useCallback((userKey: string, service: IntegrationService, unused: boolean) => {
+    setOverrides((prev) => {
+      const userOverrides = { ...prev[userKey] };
+      if (unused) {
+        userOverrides[service] = { type: 'unused' };
+      } else {
+        delete userOverrides[service];
+      }
+      return { ...prev, [userKey]: userOverrides };
+    });
+  }, []);
 
   // 모든 서비스 연동 완료 여부 (필터 칩 + dot 색상 기준)
   const isFullyLinked = (displayRow: MemberDisplayRow): boolean =>
@@ -101,10 +92,7 @@ const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) 
       const newStatus = { ...displayRow.displayStatusByService };
       const newAccountId = { ...displayRow.row.accountIdByService };
 
-      for (const [service, override] of Object.entries(userOverrides) as [
-        IntegrationService,
-        AccountOverride,
-      ][]) {
+      for (const [service, override] of Object.entries(userOverrides) as [IntegrationService, AccountOverride][]) {
         if (override.type === 'account') {
           newStatus[service] = '완료';
           newAccountId[service] = override.account.email;
@@ -155,9 +143,7 @@ const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) 
                 onClick={() => handleFilterChange(key)}
                 className={cn(
                   'text-body-small h-9 cursor-pointer rounded-full border px-3 py-1.5 transition-colors',
-                  isSelected
-                    ? 'border-transparent bg-neutral-80 text-white'
-                    : 'border-neutral-3 text-gray-60',
+                  isSelected ? 'bg-neutral-80 border-transparent text-white' : 'border-neutral-3 text-gray-60',
                 )}
               >
                 {FILTER_LABELS[key]}
@@ -197,7 +183,6 @@ const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) 
               수정하기
             </Button>
           )}
-
         </div>
       </div>
 
@@ -223,16 +208,14 @@ const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) 
       {/* 페이지네이션 + 범례 */}
       <div className="flex items-center justify-between px-4 py-2">
         <div className="flex-1" />
-        {totalPages > 1 && (
-          <Pagination currentPage={safePage} totalPages={totalPages} onPageChange={setCurrentPage} />
-        )}
+        {totalPages > 1 && <Pagination currentPage={safePage} totalPages={totalPages} onPageChange={setCurrentPage} />}
         <div className="flex flex-1 items-center justify-end gap-6">
           <div className="flex items-center gap-2">
             <div className="h-2.5 w-2.5 rounded-full bg-green-50" />
             <p className="text-body-small text-gray-50">모두 연동된 이용자</p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="h-2.5 w-2.5 rounded-full bg-red-40" />
+            <div className="bg-red-40 h-2.5 w-2.5 rounded-full" />
             <p className="text-body-small text-gray-50">연동되지 않은 이용자</p>
           </div>
         </div>
