@@ -7,7 +7,7 @@ Jira 데이터 동기화 API 엔드포인트.
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,6 +20,12 @@ from catchup.db.atlassian.oauth_repository import get_all_tokens
 from catchup.db.dependencies import get_db
 from catchup.db.models import User
 from catchup.db.models import JiraEntityType, JiraSyncState
+from catchup.server.connector.sync_status.schemas import (
+    ConnectorSyncScope,
+    ConnectorSyncStatusResponse,
+    build_empty_entity_status,
+    build_entity_status,
+)
 from catchup.utils.webhook_buffer import get_webhook_buffer
 
 logger = logging.getLogger(__name__)
@@ -58,17 +64,6 @@ class SyncResponse(BaseModel):
         None,
         description="엔티티별 동기화 결과 (issues, epics, projects, sprints)",
     )
-
-
-class SyncStatusResponse(BaseModel):
-    """동기화 상태 응답"""
-    cloud_id: str
-    project_key: str | None = None
-    entity_type: str
-    last_sync_status: str | None
-    last_successful_sync_at: str | None
-    synced_entities: int
-    last_sync_error: str | None
 
 
 class AccessibleProjectItem(BaseModel):
@@ -491,7 +486,7 @@ async def list_accessible_projects(
         )
 
 
-@router.get("/status", response_model=list[SyncStatusResponse])
+@router.get("/status", response_model=ConnectorSyncStatusResponse)
 async def get_sync_status(
     cloud_id: str = Query(..., description="Jira Cloud ID"),
     db: Session = Depends(get_db),
@@ -500,28 +495,66 @@ async def get_sync_status(
     """
     동기화 상태 조회
 
-    해당 Jira 인스턴스의 엔티티별 동기화 상태를 반환.
+    해당 Jira 인스턴스의 Project 단위 동기화 상태를 반환.
     """
-    stmt = select(JiraSyncState).where(JiraSyncState.cloud_id == cloud_id)
-    result = db.execute(stmt)
-    sync_states = result.scalars().all()
+    try:
+        stmt = select(JiraSyncState).where(JiraSyncState.cloud_id == cloud_id)
+        result = db.execute(stmt)
+        sync_states = result.scalars().all()
 
-    if not sync_states:
-        return []
+        project_name_map = {
+            project.project_key: project.project_name
+            for project in jira_entities.get_projects_by_cloud_id(db, cloud_id)
+        }
+        fixed_entity_types = ("issue", "epic")
 
-    return [
-        SyncStatusResponse(
-            cloud_id=state.cloud_id,
-            project_key=state.project_key,
-            entity_type=state.entity_type,
-            last_sync_status=state.last_sync_status,
-            last_successful_sync_at=(
-                state.last_successful_sync_at.isoformat()
-                if state.last_successful_sync_at
-                else None
-            ),
-            synced_entities=state.synced_entities or 0,
-            last_sync_error=state.last_sync_error,
+        scopes_by_project: dict[str, ConnectorSyncScope] = {}
+        for state in sync_states:
+            project_key = state.project_key
+            entity_type = str(state.entity_type)
+            if not project_key or entity_type not in fixed_entity_types:
+                continue
+
+            if project_key not in scopes_by_project:
+                scopes_by_project[project_key] = ConnectorSyncScope(
+                    scope_id=project_key,
+                    scope_name=project_name_map.get(project_key, project_key),
+                    entities={
+                        "issue": build_empty_entity_status(total_count=0),
+                        "epic": build_empty_entity_status(total_count=0),
+                    },
+                )
+
+            scopes_by_project[project_key].entities[entity_type] = build_entity_status(
+                status=state.last_sync_status,
+                synced_count=state.synced_entities or 0,
+                total_count=state.total_entities or 0,
+                last_sync_at=state.last_sync_at,
+                last_successful_sync_at=state.last_successful_sync_at,
+                error=state.last_sync_error,
+            )
+
+        scopes = list(scopes_by_project.values())
+        logger.info(
+            "[JIRA][SYNC STATUS] fetched: cloud_id=%s, scopes=%s",
+            cloud_id,
+            len(scopes),
         )
-        for state in sync_states
-    ]
+        return ConnectorSyncStatusResponse(
+            source="jira",
+            target_id=cloud_id,
+            scopes=scopes,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "[JIRA][SYNC STATUS] get_sync_status failed: cloud_id=%s, error=%s",
+            cloud_id,
+            e,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"동기화 상태 조회 중 오류가 발생했습니다: {str(e)}",
+        )

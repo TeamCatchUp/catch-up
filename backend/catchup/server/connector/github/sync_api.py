@@ -5,13 +5,12 @@ Github 데이터 동기화 API.
 
 Endpoints:
 - POST /full: 전체 동기화
-- GET /status/{installation_id}: 동기화 상태 조회
+- GET /status?installation_id=: 동기화 상태 조회
 """
 
 import logging
-from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -27,6 +26,12 @@ from catchup.db.github.domain_repository import RepositoryUpsertData
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.service import GithubIngestionService
+from catchup.server.connector.sync_status.schemas import (
+    ConnectorSyncScope,
+    ConnectorSyncStatusResponse,
+    build_empty_entity_status,
+    build_entity_status,
+)
 from catchup.utils.scheduler import flush_github_events
 
 logger = logging.getLogger(__name__)
@@ -63,12 +68,6 @@ class SyncResponse(BaseModel):
     success: bool
     message: str
     results: dict[str, SyncResult]
-
-
-class SyncStateResponse(BaseModel):
-    """동기화 상태 응답"""
-    installation_id: int
-    repositories: list[dict[str, Any]]
 
 class AccessibleRepositoryItem(BaseModel):
     """
@@ -163,9 +162,9 @@ async def full_sync(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/status/{installation_id}", response_model=SyncStateResponse)
+@router.get("/status", response_model=ConnectorSyncStatusResponse)
 async def get_sync_status(
-    installation_id: int,
+    installation_id: int = Query(..., description="Github App Installation ID"),
     db: Session = Depends(get_db),
     _admin_user: User = Depends(require_admin_user),
 ):
@@ -183,31 +182,46 @@ async def get_sync_status(
                 detail=f"GitHub Installation not found: {installation_id}"
             )
 
-        # 모든 동기화 상태 조회
         sync_states = github_sync.get_installation_sync_states(db, installation_id)
+        fixed_entity_types = ("issue", "pull_request")
 
-        # Repository 별로 그룹화
-        repos_data: dict[str, dict] = {}
+        scopes_by_repo: dict[str, ConnectorSyncScope] = {}
         for state in sync_states:
+            entity_type = str(state.entity_type)
+            if entity_type not in fixed_entity_types:
+                continue
+
             repo_name = state.repository_full_name
-            if repo_name not in repos_data:
-                repos_data[repo_name] = {
-                    "repository": repo_name,
-                    "entities": {},
-                }
+            if repo_name not in scopes_by_repo:
+                scopes_by_repo[repo_name] = ConnectorSyncScope(
+                    scope_id=repo_name,
+                    scope_name=repo_name,
+                    entities={
+                        "issue": build_empty_entity_status(total_count=0),
+                        "pull_request": build_empty_entity_status(total_count=0),
+                    },
+                )
 
-            repos_data[repo_name]["entities"][state.entity_type] = {
-                "status": state.last_sync_status,
-                "synced_count": state.synced_entities,
-                "total_count": state.total_entities,
-                "last_sync_at": state.last_sync_at.isoformat() if state.last_sync_at else None,
-                "last_successful_sync_at": state.last_successful_sync_at.isoformat() if state.last_successful_sync_at else None,
-                "error": state.last_sync_error,
-            }
+            scopes_by_repo[repo_name].entities[entity_type] = build_entity_status(
+                status=state.last_sync_status,
+                synced_count=state.synced_entities or 0,
+                total_count=state.total_entities or 0,
+                last_sync_at=state.last_sync_at,
+                last_successful_sync_at=state.last_successful_sync_at,
+                error=state.last_sync_error,
+            )
 
-        return SyncStateResponse(
-            installation_id=installation_id,
-            repositories=list(repos_data.values()),
+        scopes = list(scopes_by_repo.values())
+        logger.info(
+            "[GITHUB][SYNC STATUS] fetched: installation_id=%s, scopes=%s",
+            installation_id,
+            len(scopes),
+        )
+
+        return ConnectorSyncStatusResponse(
+            source="github",
+            target_id=str(installation_id),
+            scopes=scopes,
         )
 
     except HTTPException:
@@ -215,7 +229,8 @@ async def get_sync_status(
     except Exception as e:
         logger.error(
             "[GITHUB][SYNC STATUS] get_sync_status failed: "
-            f"installation_id={installation_id}, error={e}"
+            f"installation_id={installation_id}, error={e}",
+            exc_info=True,
         )
         raise HTTPException(status_code=500, detail=str(e))
 

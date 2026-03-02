@@ -5,7 +5,6 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import require_admin_user
@@ -41,10 +40,14 @@ from catchup.server.connector.slack.schemas import (
     SlackIncrementalAcceptedResponse,
     SlackIncrementalFlushRequest,
     SlackIncrementalNoEventsResponse,
-    SlackSyncStatusResponse,
+)
+from catchup.server.connector.sync_status.schemas import (
+    ConnectorSyncScope,
+    ConnectorSyncStatusResponse,
+    build_entity_status,
 )
 from catchup.db.dependencies import get_db
-from catchup.db.models import SlackEntityType, SlackSyncState
+from catchup.db.models import SlackEntityType
 from catchup.db.slack import sync_repository as slack_sync
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 from catchup.utils.webhook_buffer import get_webhook_buffer
@@ -583,7 +586,7 @@ async def flush_slack_buffers(
     )
 
 
-@router.get("/status", response_model=list[SlackSyncStatusResponse])
+@router.get("/status", response_model=ConnectorSyncStatusResponse)
 async def get_sync_status(
     team_id: str = Query(..., description="Slack Team/Workspace ID"),
     db: Session = Depends(get_db),
@@ -592,32 +595,55 @@ async def get_sync_status(
     """
     동기화 상태 조회
 
-    해당 Slack Workspace의 엔티티별 동기화 상태를 반환.
+    해당 Slack Workspace의 채널 단위 동기화 상태를 반환.
     """
-    stmt = select(SlackSyncState).where(SlackSyncState.team_id == team_id)
-    result = db.execute(stmt)
-    sync_states = result.scalars().all()
+    try:
+        channel_sync_states = slack_sync.get_all_channel_sync_states(db, team_id)
 
-    if not sync_states:
-        return []
+        scopes: list[ConnectorSyncScope] = []
+        for state in channel_sync_states:
+            channel_id = state.channel_id
+            channel_name = state.channel_name or channel_id
+            scopes.append(
+                ConnectorSyncScope(
+                    scope_id=channel_id,
+                    scope_name=channel_name,
+                    entities={
+                        "message": build_entity_status(
+                            status=state.last_sync_status,
+                            synced_count=state.synced_count or 0,
+                            total_count=None,  # 채널 단위 total_count 원천 데이터 없음
+                            last_sync_at=state.last_sync_at,
+                            last_successful_sync_at=state.last_successful_sync_at,
+                            error=state.last_sync_error,
+                        )
+                    },
+                )
+            )
 
-    return [
-        SlackSyncStatusResponse(
-            team_id=state.team_id,
-            entity_type=state.entity_type,
-            last_sync_status=state.last_sync_status,
-            last_successful_sync_at=(
-                state.last_successful_sync_at.isoformat()
-                if state.last_successful_sync_at
-                else None
-            ),
-            synced_entities=state.synced_entities or 0,
-            last_sync_error=state.last_sync_error,
-            oldest_ts=state.oldest_ts,
-            latest_ts=state.latest_ts,
+        logger.info(
+            "[SLACK][SYNC STATUS] fetched: team_id=%s, scopes=%s",
+            team_id,
+            len(scopes),
         )
-        for state in sync_states
-    ]
+        return ConnectorSyncStatusResponse(
+            source="slack",
+            target_id=team_id,
+            scopes=scopes,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "[SLACK][SYNC STATUS] get_sync_status failed: team_id=%s, error=%s",
+            team_id,
+            e,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"동기화 상태 조회 중 오류가 발생했습니다: {str(e)}",
+        )
 
 
 @router.get("/accessible/channels", response_model=ChannelAccessResponse)
