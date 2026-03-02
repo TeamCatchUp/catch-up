@@ -1,5 +1,7 @@
 'use client';
 
+import Image from 'next/image';
+
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { cn } from '@/shared/utils/cn';
 
@@ -22,6 +24,8 @@ interface UsersTableProps {
   isEditMode: boolean;
   /** 서비스별 선택 가능한 계정 후보 목록 */
   accountOptionsByService?: Partial<Record<IntegrationService, AccountOption[]>>;
+  /** 수정 모드에서 선택된 계정 (userKey → service → AccountOption) */
+  selectedAccounts?: Record<string, Partial<Record<IntegrationService, AccountOption>>>;
   /** 계정 선택 콜백 */
   onAccountSelect?: (userKey: string, service: IntegrationService, account: AccountOption) => void;
   /** 미사용 토글 콜백 */
@@ -33,6 +37,7 @@ const UsersTable = ({
   displayRows,
   isEditMode,
   accountOptionsByService = EMPTY_ACCOUNT_OPTIONS,
+  selectedAccounts,
   onAccountSelect,
   onToggleUnused,
 }: UsersTableProps) => {
@@ -83,17 +88,27 @@ const UsersTable = ({
                 {MEMBER_TABLE_SERVICES.map((service) => {
                   const status = displayStatusByService[service];
                   const isLinked = status === '완료';
-                  const accountId = row.accountIdByService[service];
+                  const info = row.serviceInfoByService[service];
 
                   // 연동됨: profile(25px) + name, email 2-line
                   if (isLinked) {
                     return (
                       <div key={`${renderKey}-${service}`} className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
                         <div className="flex items-center gap-2">
-                          <DefaultProfile className="border-neutral-2 text-gray-30 size-6.25 shrink-0 rounded-full border" />
-                          <span className="text-body-xsmall text-gray-80 truncate">{row.userName}</span>
+                          {info?.picture ? (
+                            <Image
+                              src={info.picture}
+                              alt=""
+                              width={25}
+                              height={25}
+                              className="size-6.25 shrink-0 rounded-full"
+                            />
+                          ) : (
+                            <DefaultProfile className="border-neutral-2 text-gray-30 size-6.25 shrink-0 rounded-full border" />
+                          )}
+                          <span className="text-body-xsmall text-gray-80 truncate">{info?.name ?? '-'}</span>
                         </div>
-                        <span className="text-body-xsmall text-gray-50 truncate">{accountId ?? '-'}</span>
+                        <span className="text-body-xsmall text-gray-50 truncate">{info?.identifier ?? '-'}</span>
                       </div>
                     );
                   }
@@ -118,6 +133,7 @@ const UsersTable = ({
                       key={`${renderKey}-${service}`}
                       status={status as '미사용' | '미등록'}
                       options={accountOptionsByService[service] ?? []}
+                      selectedAccount={selectedAccounts?.[row.userKey]?.[service]}
                       onSelect={(account) => onAccountSelect?.(row.userKey, service, account)}
                       onToggleUnused={(unused) => onToggleUnused?.(row.userKey, service, unused)}
                     />

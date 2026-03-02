@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { INTEGRATION_ACCOUNTS } from '../constants/integrations';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import type { UserMappingItem } from '../types/api';
+import type { PreMappingInfo, SyncFilterType, UserSyncItem } from '../types/api';
 import type {
   IntegrationService,
   MemberIntegrationCardItem,
@@ -11,22 +11,26 @@ import type {
   MemberIntegrationViewModel,
 } from '../types/integrations';
 
-/** 매핑 아이템에서 서비스별 계정 ID 추출 */
-const getAccountId = (mapping: UserMappingItem, service: IntegrationService): string | undefined => {
+/** 매핑 아이템에서 서비스별 PreMappingInfo 추출 */
+const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMappingInfo | null => {
   switch (service) {
-    case 'github':
-      return mapping.githubLogin ?? undefined;
     case 'jira':
     case 'confluence':
-      return mapping.atlassianEmail ?? undefined;
+      return item.atlassian;
+    case 'github':
+      return item.github;
     case 'slack':
-      return mapping.slackEmail ?? undefined;
+      return item.slack;
   }
 };
 
 /** 이용자 연동 탭에서 필요한 데이터를 userSyncStatus API 기반으로 조합 */
-export const useMemberIntegrationViewModel = (): MemberIntegrationViewModel => {
-  const { data: syncStatus } = useQuery(adminConnectorQueries.userSyncStatus());
+export const useMemberIntegrationViewModel = (params: {
+  filterType: SyncFilterType;
+  page: number;
+  size: number;
+}): MemberIntegrationViewModel => {
+  const { data: syncStatus, isLoading } = useQuery(adminConnectorQueries.userSyncStatus(params));
 
   const cards = useMemo<MemberIntegrationCardItem[]>(() => {
     if (!syncStatus) {
@@ -54,34 +58,28 @@ export const useMemberIntegrationViewModel = (): MemberIntegrationViewModel => {
   }, [syncStatus]);
 
   const rows = useMemo<MemberIntegrationRow[]>(() => {
-    if (!syncStatus?.mappings) return [];
+    if (!syncStatus?.items) return [];
 
-    return syncStatus.mappings
-      .map((mapping): MemberIntegrationRow => {
-        const accountIdByService: Partial<Record<IntegrationService, string>> = {};
-        const statusByService = {} as Record<IntegrationService, '미사용' | '완료' | '미등록'>;
+    return syncStatus.items.map((item): MemberIntegrationRow => {
+      const serviceInfoByService: Partial<Record<IntegrationService, PreMappingInfo>> = {};
+      const statusByService = {} as Record<IntegrationService, '미사용' | '완료' | '미등록'>;
 
-        for (const service of ['jira', 'github', 'slack', 'confluence'] as IntegrationService[]) {
-          const id = getAccountId(mapping, service);
-          if (id) accountIdByService[service] = id;
-          const hasPremapping = (syncStatus.counts[service]?.premap ?? 0) > 0;
-          statusByService[service] = id ? '완료' : hasPremapping ? '미사용' : '미등록';
-        }
+      for (const service of ['jira', 'github', 'slack', 'confluence'] as IntegrationService[]) {
+        const info = getServiceInfo(item, service);
+        if (info) serviceInfoByService[service] = info;
+        const hasPremapping = (syncStatus.counts[service]?.premap ?? 0) > 0;
+        statusByService[service] = info ? '완료' : hasPremapping ? '미사용' : '미등록';
+      }
 
-        return {
-          userKey: mapping.name,
-          userName: mapping.name,
-          email: mapping.atlassianEmail ?? mapping.slackEmail ?? '-',
-          phone: '-',
-          department: '-',
-          teamSizeLabel: '-',
-          picture: null,
-          accountIdByService,
-          statusByService,
-        };
-      })
-      .sort((a, b) => a.userName.localeCompare(b.userName, 'ko'));
+      return {
+        userKey: item.sub,
+        userName: item.name,
+        email: item.email,
+        serviceInfoByService,
+        statusByService,
+      };
+    });
   }, [syncStatus]);
 
-  return { cards, rows };
+  return { cards, rows, total: syncStatus?.total ?? 0, isLoading };
 };
