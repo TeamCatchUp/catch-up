@@ -87,6 +87,22 @@ export interface UserSyncStatusResponse {
   items: UserSyncItem[];
 }
 
+// ─── Vendor Users (툴별 사용자 목록 드롭다운) ───
+
+export interface ToolUserResponse {
+  id: string;
+  name: string;
+  identifier: string | null; // email 또는 github login
+  picture: string | null;
+}
+
+export interface VendorUsersResponse {
+  total: number;
+  page: number;
+  size: number;
+  items: ToolUserResponse[];
+}
+
 // ─── Sync Status (임베딩 진행 상태) ───
 
 export type SyncStatusValue = 'pending' | 'in_progress' | 'success' | 'failed';

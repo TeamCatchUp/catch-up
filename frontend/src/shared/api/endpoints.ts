@@ -95,6 +95,7 @@ export const API = {
       delete: (userId: number) => `${API_PREFIX}/admin/users/delete/${userId}`, // POST 삭제
       promote: (userId: number) => `${API_PREFIX}/admin/users/promote/${userId}`, // POST Admin 승격
     },
+    vendorUsers: (vendorType: string) => `${API_PREFIX}/admin/${vendorType}/users`, // GET 툴별 사용자 목록 (드롭다운)
   },
 
   mapping: {

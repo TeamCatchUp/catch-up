@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query';
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
@@ -16,6 +16,8 @@ import type {
   SyncableResponse,
   SyncFilterType,
   UserSyncStatusResponse,
+  VendorType,
+  VendorUsersResponse,
 } from '../types/api';
 
 export const adminConnectorQueries = {
@@ -75,6 +77,22 @@ export const adminConnectorQueries = {
           params: { filter_type: params.filterType, page: params.page, size: params.size },
         });
         return res.data;
+      },
+    }),
+
+  vendorUsers: (params: { vendorType: VendorType; size?: number }) =>
+    infiniteQueryOptions({
+      queryKey: ['admin', 'vendorUsers', params.vendorType, params.size] as const,
+      queryFn: async ({ pageParam }): Promise<VendorUsersResponse> => {
+        const res = await api.get<VendorUsersResponse>(API.admin.vendorUsers(params.vendorType), {
+          params: { page: pageParam, size: params.size ?? 50 },
+        });
+        return res.data;
+      },
+      initialPageParam: 1,
+      getNextPageParam: (lastPage, allPages) => {
+        const totalPages = Math.ceil(lastPage.total / lastPage.size);
+        return allPages.length < totalPages ? allPages.length + 1 : undefined;
       },
     }),
 
