@@ -12,6 +12,7 @@ import { cn } from '@/shared/utils/cn';
 
 /** 드롭다운에 표시할 계정 후보 */
 export interface AccountOption {
+  id: string;
   name: string;
   identifier: string;
   picture?: string | null;

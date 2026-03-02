@@ -72,7 +72,7 @@ export const useMemberIntegrationViewModel = (params: {
       }
 
       return {
-        userKey: item.name,
+        userKey: item.sub,
         userName: item.name,
         email: item.email,
         serviceInfoByService,
