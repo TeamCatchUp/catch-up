@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import IconUnfoldMore from '@/public/icons/icon/unfold_more.svg';
@@ -84,7 +85,17 @@ const AccountSelectDropdown = ({ status, options, onSelect, onToggleUnused }: Ac
                 }}
                 className="border-neutral-2 gap-3 rounded-none border-b px-3 py-2"
               >
-                <DefaultProfile className="border-neutral-2 text-gray-30 size-10 shrink-0 rounded-full border" />
+                {account.picture ? (
+                  <Image
+                    src={account.picture}
+                    alt=""
+                    width={40}
+                    height={40}
+                    className="size-10 shrink-0 rounded-full"
+                  />
+                ) : (
+                  <DefaultProfile className="border-neutral-2 text-gray-30 size-10 shrink-0 rounded-full border" />
+                )}
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="text-heading-small text-gray-80 max-w-43.75 truncate">{account.name}</span>
                   <span className="text-label-xsmall truncate text-gray-50">{account.identifier}</span>
