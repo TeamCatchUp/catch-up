@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 
-import { MEMBER_TABLE_SERVICES } from '../../../constants/memberUi';
 import { useMemberIntegrationViewModel } from '../../../hooks/useMemberIntegrationViewModel';
 import { buildMemberDisplayRows } from '../../../utils/memberDisplay';
 import StatusCardsSection from './StatusCardsSection';
@@ -10,7 +9,7 @@ import UsersStatusSection from './UsersStatusSection';
 const IntegrationsSection = () => {
   const { cards, rows } = useMemberIntegrationViewModel();
 
-  const displayRows = useMemo(() => buildMemberDisplayRows(rows, MEMBER_TABLE_SERVICES), [rows]);
+  const displayRows = useMemo(() => buildMemberDisplayRows(rows), [rows]);
 
   return (
     <section className="flex w-250 flex-col gap-10">

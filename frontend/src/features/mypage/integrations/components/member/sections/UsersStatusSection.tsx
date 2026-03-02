@@ -7,8 +7,6 @@ import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
 import IconMegaphone from '@/public/icons/icon/megaphone.svg';
 import { Button } from '@/shared/components/ui/button';
 import Pagination from '@/shared/components/ui/pagination';
-import { USE_MOCK } from '@/shared/mocks/config';
-import { MOCK_ACCOUNT_OPTIONS_BY_SERVICE } from '@/shared/mocks/integration';
 import { cn } from '@/shared/utils/cn';
 
 import type { IntegrationService } from '../../../types/integrations';
@@ -199,7 +197,7 @@ const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) 
         <UsersTable
           displayRows={effectivePagedRows}
           isEditMode={isEditMode}
-          accountOptionsByService={USE_MOCK ? MOCK_ACCOUNT_OPTIONS_BY_SERVICE : EMPTY_ACCOUNT_OPTIONS}
+          accountOptionsByService={EMPTY_ACCOUNT_OPTIONS}
           onAccountSelect={handleAccountSelect}
           onToggleUnused={handleToggleUnused}
         />

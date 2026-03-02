@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import { USE_MOCK } from '@/shared/mocks/config';
-import { MOCK_ACCOUNT_INFO_MAP, MOCK_SELECTABLE_ROWS } from '@/shared/mocks/integration';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
@@ -77,7 +75,7 @@ const ConnectedAccountsSectionBase = ({
     () =>
       INTEGRATION_ACCOUNTS.map((account) => {
         const accountInfo =
-          accountInfoMap?.[account.service] ?? (USE_MOCK ? MOCK_ACCOUNT_INFO_MAP[account.service] : EMPTY_ACCOUNT_INFO);
+          accountInfoMap?.[account.service] ?? EMPTY_ACCOUNT_INFO;
 
         return {
           account,
@@ -90,11 +88,9 @@ const ConnectedAccountsSectionBase = ({
 
   const { data: syncStatus } = useQuery({
     ...adminConnectorQueries.userSyncStatus(),
-    enabled: !USE_MOCK,
   });
 
   const allRows = useMemo<MemberIntegrationRow[]>(() => {
-    if (USE_MOCK) return MOCK_SELECTABLE_ROWS;
     if (!syncStatus?.mappings) return [];
 
     return syncStatus.mappings.map((mapping) => {
