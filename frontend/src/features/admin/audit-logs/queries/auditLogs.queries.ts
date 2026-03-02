@@ -1,8 +1,11 @@
 import { queryOptions } from '@tanstack/react-query';
 
-import { MOCK_AUDIT_INTEGRATION_LOGS } from '../mocks/auditIntegrationMockData';
-import { MOCK_AUDIT_LOGS } from '../mocks/auditLogsMockData';
-import { MOCK_AUDIT_QUESTION_LOGS } from '../mocks/auditQuestionMockData';
+import type { AuditIntegrationLog } from '../types/auditIntegrationLog';
+import type { AuditLog } from '../types/auditLog';
+import type { AuditQuestionLog } from '../types/auditQuestionLog';
+
+// TODO: 백엔드 API 준비 시 실제 API 호출로 교체
+// Mock 버전: src/shared/mocks/admin/audit-logs/auditLogs.queries.ts
 
 export const auditLogsQueries = {
   all: () => ['admin', 'auditLogs'] as const,
@@ -10,18 +13,18 @@ export const auditLogsQueries = {
   list: () =>
     queryOptions({
       queryKey: [...auditLogsQueries.all(), 'list'] as const,
-      queryFn: async () => MOCK_AUDIT_LOGS,
+      queryFn: async (): Promise<AuditLog[]> => [],
     }),
 
   questions: () =>
     queryOptions({
       queryKey: [...auditLogsQueries.all(), 'questions'] as const,
-      queryFn: async () => MOCK_AUDIT_QUESTION_LOGS,
+      queryFn: async (): Promise<AuditQuestionLog[]> => [],
     }),
 
   integrations: () =>
     queryOptions({
       queryKey: [...auditLogsQueries.all(), 'integrations'] as const,
-      queryFn: async () => MOCK_AUDIT_INTEGRATION_LOGS,
+      queryFn: async (): Promise<AuditIntegrationLog[]> => [],
     }),
 };

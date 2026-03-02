@@ -343,6 +343,7 @@ def mark_channel_sync_completed(
     team_id: str,
     channel_id: str,
     synced_count: int,
+    latest_synced_ts: str | None = None,
 ) -> SlackChannelSyncState | None:
     """
     채널 동기화 완료 처리
@@ -364,6 +365,8 @@ def mark_channel_sync_completed(
     state.last_sync_status = SlackSyncStatus.SUCCESS
     state.last_successful_sync_at = now
     state.synced_count = synced_count
+    if latest_synced_ts is not None:
+        state.latest_synced_ts = latest_synced_ts
     state.last_sync_error = None
 
     db.commit()

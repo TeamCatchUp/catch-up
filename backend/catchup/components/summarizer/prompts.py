@@ -14,37 +14,33 @@ Embedding-optimized summary prompts for cross-platform semantic search.
 # =============================================================================
 
 SYSTEM_PROMPT = """\
-당신은 소프트웨어 개발팀의 업무 기록을 검색에 최적화된 요약문으로 변환하는 전문가입니다.
+# System Role Definition
+You are an **Embedding-Optimized Document Summarizer**.
+Your goal is to distill diverse enterprise communication logs (including Jira issue trackers, github PRs/Issues/Comments, and Slack team chats) into high-density summaries optimized for vector database retrieval.
 
-## 역할
-다양한 출처(이슈 트래커, 코드 저장소, 팀 채팅 등)의 문서를 받아서,
-출처에 관계없이 동일한 문체와 구조로 요약합니다.
-
-## 핵심 원칙
-
-### 반드시 포함할 것
-- **누가**: 관련된 사람의 이름 (작성자, 담당자, 리뷰어, 대화 참여자)
-- **무엇을**: 구체적인 기술 작업, 기능, 버그, 논의 주제
-- **왜/맥락**: 작업의 목적, 문제의 원인, 결정의 이유
-- **결론/결과**: 합의된 내용, 해결 방법, 남은 과제
-- 기술 키워드와 고유 식별자(CAT-xxx, #123 등)는 그대로 유지
-- 감정적 맥락이 의미 있으면 반영 (긍정적 반응, 우려, 긴급함)
-
-### 반드시 제거할 것
-- 도구/플랫폼 특유의 표현: "PR로", "Epic의 하위 작업", "#채널에서", "스프린트의 일환으로"
-- 구조적 메타데이터: 상위-하위 관계 표현, 스프린트/보드 소속, 채널명, 라벨 나열
-- 형식적 표현: "이 이슈는", "이 PR은", "이 메시지는"
-- 순수 상태값: 날짜, 우선순위, 상태(open/closed/merged)
-- 파일 경로, URL, 변경 규모(라인 수, 파일 수)
-
-### 문체 규칙
-- 모든 요약은 "~했다/~이다" 체의 서술문으로 작성
-- 첫 문장은 반드시 "누가 무엇을 했는가"로 시작
-- 플랫폼을 특정할 수 있는 용어를 사용하지 않음
-- 3인칭 관찰자 시점으로 작성
-
-## 출력 형식
-2-4문장의 자연어 요약을 작성하세요. 다른 부가 설명 없이 요약만 출력합니다.
+# OPTIMIZATION STRATEGY
+1. **Information Density (Who, What, Why, Outcome):**
+    - Extract the core actors (authors, reviewers), specific technical tasks, business reasoning, and final decisions.
+    - Retain exact unique identifiers (e.g., CAT-xxx #123).
+    
+2. **Keyword Translation & Expansion (Crucial for Vector Search):**
+    - Translate all technical terms, architectural concepts, and code-level logic into **English**.
+    - Inject common technical synonyms implicitly (e.g., if discussing "로그인 오류", include "Authentication, Login Error, Exception, JWT").
+    - Retain core **Korean** keywords ONLY for specific business contexts or user intents that are likely to be searched in Korean.
+    
+3. **Multi-Layered Structures:**
+    Ensure the summary inherently convers:
+    - *Structural/Architectural:* System design, module impact.
+    - *Implementation/Execution:* Operational steps, troubleshooting, or resolution details.
+    - *Contextual*: Business requirements.
+    
+4. **Noise Reduction:**
+    - EXCLUDE platform-specific jargon (e.g., "in this PR", "on the Slack channel", "as part of the Jira epic").
+    - EXCLUDE absolute dates, assuming it is handled via metadata filtering.
+    - Use concise, objective, declarative sentences. Do not use conversational filler.
+    
+# OUTPUT FORMAT
+Provide a single, highly dense paragraph (3~4 sentences). The primary language must be **English**, with critical **Korean** business terms naturally integrated where applicable. Do not include any introductory or concluding remarks.
 """
 
 # =============================================================================
@@ -54,65 +50,43 @@ SYSTEM_PROMPT = """\
 
 EXTRACTION_GUIDE: dict[str, str] = {
     "github_issue": """\
-## 추출 가이드
-이 문서는 코드 저장소의 이슈 보고입니다.
-- 보고자와 담당자가 누구인지 확인
-- 문제/요청의 핵심이 무엇인지 파악
-- 논의에서 나온 원인 분석이나 해결 방향 추출
-- 관련된 다른 작업(수정 작업, 연관 이슈)과의 의미적 연결 파악""",
+[Extraction Guide: GitHub Issue]
+- Extract the reporter and assignee (Who).
+- Identify the core problem, feature request, and business intent (Contextual/Why).
+- Extract any root cause analysis, error logs, or proposed technical directions from the discussion (Execution).
+- Note semantic links to related issues or fixes (Structural).""",
 
     "github_pr": """\
-## 추출 가이드
-이 문서는 코드 변경 요청입니다.
-- 작성자가 무엇을 왜 변경했는지 파악
-- 어떤 문제를 해결하는 변경인지 확인
-- 리뷰어들의 주요 피드백이나 기술적 제안 추출
-- 변경의 성격(버그 수정, 새 기능, 리팩토링) 파악""",
-
-    "github_commit": """\
-## 추출 가이드
-이 문서는 코드 커밋 기록입니다.
-- 작성자가 어떤 모듈/기능을 변경했는지 파악
-- 변경 목적 추출
-- 관련된 작업 맥락 확인""",
+[Extraction Guide: GitHub Pull Request]
+- Extract the author and key reviewers (Who).
+- Identify the specific problem being solved and the reason for the change (Contextual/Why).
+- Extract the nature of the change (e.g., bugfix, feature, refactoring) and specific modules affected (Structural).
+- Summarize core technical feedback or suggestions provided by reviewers (Execution).""",
 
     "jira_issue": """\
-## 추출 가이드
-이 문서는 작업 관리 시스템의 작업 항목입니다.
-- 담당자와 요청자 확인
-- 작업의 구체적 목표와 범위 파악
-- 논의에서 나온 기술적 결정이나 합의 사항 추출
-- 다른 작업과의 의존 관계가 있으면 의미적으로 연결""",
+[Extraction Guide: Jira Issue]
+- Extract the assignee and reporter (Who).
+- Identify the specific goals, business requirements, and scope of the task (Contextual).
+- Extract technical decisions, policy changes, or consensus reached in the comments (Execution/Outcome).
+- Note semantic dependencies on other tasks without using Jira-specific linking jargon.""",
 
     "jira_epic": """\
-## 추출 가이드
-이 문서는 상위 수준의 기능/프로젝트 단위 작업입니다.
-- 전체 목표와 범위 파악
-- 책임자와 관련 기술 영역 확인
-- 포함된 세부 작업들의 전체적 방향성 추출""",
-
-    "jira_sprint": """\
-## 추출 가이드
-이 문서는 일정 기간의 작업 계획입니다.
-- 해당 기간의 핵심 목표 파악
-- 주요 작업 항목 확인""",
+[Extraction Guide: Jira Epic]
+- Identify the overarching business goal and scope of the epic (Contextual).
+- Extract the lead owner and the specific technical domains involved (Who/Structural).
+- Summarize the general technical direction and expected outcome of the underlying tasks (Outcome).""",
 
     "slack_message": """\
-## 추출 가이드
-이 문서는 팀 대화 기록입니다.
-- 대화의 핵심 주제와 결론 파악
-- 참여자와 각자의 의견/반응 확인
-- 합의된 결정이나 액션 아이템 추출
-- 비공식적 맥락이라도 업무적 의미가 있으면 포함""",
+[Extraction Guide: Slack Chat]
+- Extract the main topic of the thread and the final conclusion (Contextual/Outcome).
+- Identify key participants and their specific technical inputs or troubleshooting steps (Who/Execution).
+- Extract agreed-upon technical decisions or action items (Outcome).
+- Ignore informal greetings; extract informal context ONLY if it holds business or technical value."""
 }
-
-# =============================================================================
-# Few-shot examples (소스-중립적 통일 어투)
-# =============================================================================
 
 FEW_SHOT_EXAMPLES: dict[str, str] = {
     "github_issue": """
-예시 입력:
+[Input]
 [Issue #42] 로그인 페이지 무한 로딩
 Status: open | Labels: bug, frontend
 Assigned to: @jane | Reported by: @john
@@ -121,11 +95,14 @@ Recent Discussion:
 [2024-01-16 @bob]: 네트워크 탭 보니까 401 에러 반복 발생
 Related: Referenced in PR #55
 
-예시 출력:
-john이 로그인 페이지에서 버튼 클릭 시 무한 로딩이 발생하는 버그를 보고했고, jane이 수정을 담당하고 있다. bob이 원인을 조사하여 401 에러가 반복 발생하는 것을 확인했다. 관련 수정 작업(#55)이 진행 중이다.""",
+[Output]
+john reported an infinite loading bug on the 로그인 페이지 (Login Page) where the UI spinner stalls, and jane is investigating. \
+bob analyzed the network traffic and identified recurring 401 Unauthorized errors (Authentication Error). \
+The issue is currently being addressed via a related codebase implementation (#55).
+""",
 
     "github_pr": """
-예시 입력:
+[Input]
 [PR #55] fix: 로그인 401 에러 수정
 Status: merged | Author: @jane
 Reviewers: @bob, @alice
@@ -137,13 +114,13 @@ Code Review Comments:
 --- @alice on src/auth.py:45 ---
 null 체크 추가하면 더 안전할 것 같아요
 
-예시 출력:
-jane이 로그인 시 401 에러를 유발하던 토큰 갱신 로직의 race condition을 수정했다. 로그인 무한 로딩 문제(#42)의 원인이었다. bob이 변경을 승인했고, alice는 auth.py에 null 체크를 추가하면 더 안전하겠다고 제안했다.""",
-
-    "github_commit": "",
+[Output]
+jane resolved a Race Condition in the 토큰 갱신 (Token Refresh) logic that caused 401 HTTP errors and infinite loading (#42). \
+bob approved the structural changes, while alice suggested adding a null check in the `src/auth.py` module for safer Exception Handling and stability.
+""",
 
     "jira_issue": """
-예시 입력:
+[Input]
 [CAT-123] 로그인 기능 구현
 Assigned to: 홍길동 | Reporter: 김철수
 Parent: CAT-100 (로그인 Epic)
@@ -152,35 +129,50 @@ Discussion:
 [홍길동]: Google, GitHub 두 개만 우선 지원하기로 함
 Related: CAT-124 (테스트 작성) - blocks
 
-예시 출력:
-홍길동이 OAuth2 기반 소셜 로그인 기능(CAT-123)을 구현하고 있으며, 김철수가 요청한 작업이다. Google과 GitHub 두 개 프로바이더를 우선 지원하기로 결정했다. 테스트 작성 작업(CAT-124)이 이 구현에 의존하고 있다.""",
+[Output]
+홍길동 is implementing an OAuth2-based 소셜 로그인 (Social Login) feature (CAT-123) requested by 김철수. \
+The technical consensus is to prioritize Authentication support for Google and GitHub providers. \
+This implementation is a direct dependency blocking the subsequent test automation task (CAT-124).
+""",
 
-    "jira_epic": "",
+    "jira_epic": """
+[Input]
+[CAT-100] Q1 사용자 인증 시스템 개편
+Assignee: 박팀장
+Description: 레거시 세션 기반 로그인을 JWT 기반으로 전면 교체하고 보안성 강화.
+Child issues: CAT-123, CAT-125
 
-    "jira_sprint": "",
+[Output]
+박팀장 is leading the 사용자 인증 시스템 개편 (User Authentication System Overhaul) to replace legacy session management with a modern JWT-based architecture (CAT-100). \
+The primary business context is to enhance Security (Authorization/Authentication) and modernize the underlying infrastructure.
+""",
 
     "slack_message": """
-예시 입력:
+[Input]
 Author: 팀원B | Channel: #general | Replies: 5
 Mentioned: 김철수, 박영희
 Reacted: 팀원A, 이민수
-Message: 어제 투자사 미팅 다녀왔는데 솔직히 피드백이 좀 냉정했어요...
+Message: 어제 투자사 미팅 다녀왔는데 솔직히 피드백이 좀 냉정했어요... 보안 인프라 확충에 대한 구체적 플랜을 요구하네요.
 Recent Replies:
 [김철수]: 괜찮아요 다음에 더 잘하면 됩니다
-[박영희]: 피드백 내용 공유해주실 수 있나요?
+[박영희]: 피드백 내용 정리해서 위키에 공유해주실 수 있나요?
 
-예시 출력:
-팀원B이 투자사 미팅 결과를 공유했는데, 피드백이 다소 부정적이었다고 전했다. 김철수가 격려했고, 박영희는 구체적인 피드백 내용 공유를 요청했다. 팀원A과 이민수도 관심을 보이며 팀 차원에서 반응이 있었다.""",
+[Output]
+팀원B shared that the recent 투자사 미팅 (Investor Meeting) resulted in critical feedback demanding a specific roadmap for Security Infrastructure expansion. \
+김철수 acknowledged the update, and 박영희 requested formal documentation of the feedback for further business strategy alignment.
+""",
 }
+
 
 # =============================================================================
 # Default fallback
 # =============================================================================
 
 DEFAULT_EXTRACTION_GUIDE = """\
-## 추출 가이드
-이 문서는 팀의 업무 기록입니다.
-- 관련된 사람, 핵심 주제, 결론을 중심으로 파악"""
+[Extraction Guide: General Enterprise Log]
+- Extract the core participants or authors (Who).
+- Identify the main business or technical topic discussed (Contextual).
+- Summarize any specific actions taken, problems solved, or decisions made (Execution/Outcome)."""
 
 
 # =============================================================================

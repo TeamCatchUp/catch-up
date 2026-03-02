@@ -1,113 +1,296 @@
-import { useRef, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+'use client';
+
+import { useCallback, useMemo, useState } from 'react';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 
-import IconFilter from '@/public/icons/icon/filter-3.svg';
+import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 import { Button } from '@/shared/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/shared/components/ui/dropdown-menu';
+import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
-import { SORT_OPTIONS } from '../../../constants/memberUi';
-import type { MemberDisplayRow, MemberSortKey } from '../../../types/memberDisplay';
+import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
+import type { PreMappingBulkUpdateResponse, PreMappingUpdateItem, SyncFilterType, VendorType } from '../../../types/api';
+import type { IntegrationService } from '../../../types/integrations';
+import type { MemberDisplayRow } from '../../../types/memberDisplay';
+import type { AccountOption } from '../tables/AccountSelectDropdown';
 import UsersTable from '../tables/UsersTable';
 
-interface MappingUploadResponse {
-  status: string;
-  file_type: string;
-  stats: { created: number; updated: number; skipped: number };
-}
+const CsvUploadModal = dynamic(() => import('../modals/CsvUploadModal'));
+
+const PAGE_SIZE = 10;
 
 interface UsersStatusSectionProps {
-  rowCount: number;
+  total: number;
   displayRows: MemberDisplayRow[];
+  filterType: SyncFilterType;
+  onFilterChange: (type: SyncFilterType) => void;
+  currentPage: number;
+  onPageChange: (page: number) => void;
 }
 
+const FILTER_OPTIONS: { key: SyncFilterType; label: string }[] = [
+  { key: 'all', label: '전체' },
+  { key: 'full', label: '모두 연동된 이용자' },
+  { key: 'partial', label: '연동되지 않은 이용자' },
+];
+
 /** 이용자 계정 연동 상태 섹션 */
-const UsersStatusSection = ({ rowCount, displayRows }: UsersStatusSectionProps) => {
-  const [sortKey, setSortKey] = useState<MemberSortKey>('newest');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+const UsersStatusSection = ({
+  total,
+  displayRows,
+  filterType,
+  onFilterChange,
+  currentPage,
+  onPageChange,
+}: UsersStatusSectionProps) => {
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
+
+  // ─── 툴별 사용자 목록 (수정 모드 드롭다운용) ───
+  const githubUsers = useInfiniteQuery({ ...adminConnectorQueries.vendorUsers({ vendorType: 'github' }), enabled: isEditMode });
+  const atlassianUsers = useInfiniteQuery({ ...adminConnectorQueries.vendorUsers({ vendorType: 'atlassian' }), enabled: isEditMode });
+  const slackUsers = useInfiniteQuery({ ...adminConnectorQueries.vendorUsers({ vendorType: 'slack' }), enabled: isEditMode });
+
+  const accountOptionsByService = useMemo<Partial<Record<IntegrationService, AccountOption[]>>>(() => {
+    if (!isEditMode) return {};
+
+    const toOptions = (pages: { items: { id: string; name: string; identifier: string | null; picture: string | null }[] }[] | undefined): AccountOption[] =>
+      pages?.flatMap((page) =>
+        page.items.map((item) => ({ id: item.id, name: item.name, identifier: item.identifier ?? '', picture: item.picture })),
+      ) ?? [];
+
+    return {
+      github: toOptions(githubUsers.data?.pages),
+      jira: toOptions(atlassianUsers.data?.pages),
+      slack: toOptions(slackUsers.data?.pages),
+    };
+  }, [isEditMode, githubUsers.data?.pages, atlassianUsers.data?.pages, slackUsers.data?.pages]);
+
+  // 수정 모드에서 계정 선택 / 미사용 토글 로컬 오버라이드
+  type AccountOverride = { type: 'account'; account: AccountOption } | { type: 'unused' };
+  const [overrides, setOverrides] = useState<Record<string, Partial<Record<IntegrationService, AccountOverride>>>>({});
+
+  const handleAccountSelect = useCallback((userKey: string, service: IntegrationService, account: AccountOption) => {
+    setOverrides((prev) => ({
+      ...prev,
+      [userKey]: { ...prev[userKey], [service]: { type: 'account', account } },
+    }));
+  }, []);
+
+  const handleToggleUnused = useCallback((userKey: string, service: IntegrationService, unused: boolean) => {
+    setOverrides((prev) => {
+      const userOverrides = { ...prev[userKey] };
+      if (unused) {
+        userOverrides[service] = { type: 'unused' };
+      } else {
+        delete userOverrides[service];
+      }
+      return { ...prev, [userKey]: userOverrides };
+    });
+  }, []);
+
+  // ─── 저장 mutation ───
+  const SERVICE_TO_VENDOR: Record<IntegrationService, VendorType> = {
+    jira: 'atlassian',
+    confluence: 'atlassian',
+    github: 'github',
+    slack: 'slack',
+  };
+
   const queryClient = useQueryClient();
 
-  const uploadMutation = useMutation({
-    mutationKey: ['mapping', 'upload'] as const,
-    mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await api.post<MappingUploadResponse>(API.mapping.upload, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      return res.data;
+  const saveMutation = useMutation({
+    mutationKey: ['admin', 'preMappings', 'bulk'] as const,
+    mutationFn: async () => {
+      // overrides를 vendor별로 그룹핑
+      const byVendor: Partial<Record<VendorType, PreMappingUpdateItem[]>> = {};
+
+      for (const [userKey, serviceOverrides] of Object.entries(overrides)) {
+        const row = displayRows.find((r) => r.row.userKey === userKey)?.row;
+        if (!row) continue;
+
+        for (const [service, override] of Object.entries(serviceOverrides) as [IntegrationService, AccountOverride][]) {
+          const vendor = SERVICE_TO_VENDOR[service];
+          if (!byVendor[vendor]) byVendor[vendor] = [];
+
+          byVendor[vendor]!.push({
+            sub: row.userKey,
+            email: row.email,
+            name: row.userName,
+            is_ignored: override.type === 'unused',
+            external_user_identifier: override.type === 'account' ? override.account.id : null,
+          });
+        }
+      }
+
+      // vendor별 병렬 PATCH
+      const requests = Object.entries(byVendor).map(([vendor, items]) =>
+        api.patch<PreMappingBulkUpdateResponse>(API.admin.preMappingsBulk(vendor), { items }),
+      );
+
+      return Promise.all(requests);
     },
-    onSuccess: (data) => {
-      const { created, updated, skipped } = data.stats;
-      toast.success('CSV 일괄등록 완료', {
-        description: `등록 ${created}건, 수정 ${updated}건, 건너뜀 ${skipped}건`,
-      });
+    onSuccess: () => {
+      toast('저장이 완료되었습니다.', { description: '계정 연동 정보가 반영되었습니다.' });
       queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'syncStatus'] });
+      setOverrides({});
+      setIsEditMode(false);
     },
     onError: () => {
-      toast.error('CSV 업로드에 실패했습니다.');
+      toast('일시적인 오류가 발생했습니다.', { description: '잠시 후 다시 시도해주세요.' });
     },
   });
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) uploadMutation.mutate(file);
-    e.target.value = '';
+  const handleSave = () => {
+    if (saveMutation.isPending) return;
+    if (Object.keys(overrides).length === 0) {
+      setIsEditMode(false);
+      return;
+    }
+    saveMutation.mutate();
   };
+
+  // 오버라이드 적용된 행
+  const effectiveRows = useMemo(() => {
+    if (Object.keys(overrides).length === 0) return displayRows;
+
+    return displayRows.map((displayRow) => {
+      const userOverrides = overrides[displayRow.row.userKey];
+      if (!userOverrides) return displayRow;
+
+      const newStatus = { ...displayRow.displayStatusByService };
+
+      for (const [service, override] of Object.entries(userOverrides) as [IntegrationService, AccountOverride][]) {
+        if (override.type === 'unused') {
+          newStatus[service] = '미사용';
+        }
+      }
+
+      return {
+        ...displayRow,
+        displayStatusByService: newStatus,
+      };
+    });
+  }, [displayRows, overrides]);
+
+  // override에서 선택된 계정만 추출 (드롭다운 트리거 표시용)
+  const selectedAccounts = useMemo(() => {
+    const result: Record<string, Partial<Record<IntegrationService, AccountOption>>> = {};
+    for (const [userKey, serviceOverrides] of Object.entries(overrides)) {
+      for (const [service, override] of Object.entries(serviceOverrides) as [IntegrationService, AccountOverride][]) {
+        if (override.type === 'account') {
+          if (!result[userKey]) result[userKey] = {};
+          result[userKey]![service] = override.account;
+        }
+      }
+    }
+    return result;
+  }, [overrides]);
+
+  // 서버 사이드 페이지네이션
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <section className="flex w-250 flex-col gap-3">
-      <div className="flex items-end justify-between">
-        <div className="flex flex-col gap-0.5">
-          <h2 className="text-heading-large text-gray-80">
-            이용자 계정 연동 상태 <span className="text-blue-40">{rowCount}</span>
-          </h2>
-          <p className="text-body-small text-gray-50">계정 정보가 올바르게 입력되었는지 확인해주세요.</p>
+      {/* 헤더: 제목 + 설명 */}
+      <div className="flex flex-col gap-0.5">
+        <h2 className="text-heading-large text-gray-80">
+          이용자 계정 등록 상태 <span className="text-blue-40">{total}</span>
+        </h2>
+        <p className="text-body-small text-gray-50">Catch Up 사용자의 협업 툴 계정 등록 상태를 확인할 수 있어요.</p>
+      </div>
+
+      {/* 필터 칩 + 버튼 영역 */}
+      <div className="flex items-center justify-between gap-3">
+        {/* 필터 칩 */}
+        <div className="flex items-center gap-2">
+          {FILTER_OPTIONS.map(({ key, label }) => {
+            const isSelected = filterType === key;
+
+            return (
+              <button
+                key={key}
+                onClick={() => onFilterChange(key)}
+                className={cn(
+                  'text-body-small h-9 cursor-pointer rounded-full border px-3 py-1.5 transition-colors',
+                  isSelected ? 'bg-neutral-80 border-transparent text-white' : 'border-neutral-3 text-gray-60',
+                )}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" hidden onChange={handleFileChange} />
+        {/* 버튼 영역 */}
+        <div className="flex items-center gap-2">
           <Button
             variant="box-outline-gray"
             size="md"
             className="text-body-small h-9"
-            disabled={uploadMutation.isPending}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => setIsCsvModalOpen(true)}
           >
-            {uploadMutation.isPending ? '업로드 중...' : 'CSV 일괄등록'}
+            CSV 일괄등록
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="icon-outline-gray" size="md" className="size-9 p-1.5">
-                <IconFilter className="size-6" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={2} className="w-50 min-w-0">
-              {SORT_OPTIONS.map((option) => (
-                <DropdownMenuItem
-                  key={option.key}
-                  onClick={() => setSortKey(option.key)}
-                  className={cn(sortKey === option.key && 'bg-neutral-1')}
-                >
-                  {option.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+
+          {isEditMode ? (
+            <Button
+              variant="box-solid-primary"
+              size="md"
+              className="text-body-small h-9"
+              disabled={saveMutation.isPending}
+              onClick={handleSave}
+            >
+              {saveMutation.isPending ? '저장 중...' : '저장하기'}
+            </Button>
+          ) : (
+            <Button
+              variant="box-outline-gray"
+              size="md"
+              className="text-body-small flex h-9 items-center gap-1.5"
+              onClick={() => setIsEditMode(true)}
+            >
+              <IconEditPencil className="h-4 w-4" />
+              수정하기
+            </Button>
+          )}
         </div>
       </div>
 
-      <div className="border-neutral-3 h-124 min-h-0 w-250 overflow-clip border-y">
-        <UsersTable displayRows={displayRows} />
+      {/* 테이블 */}
+      <div className="border-neutral-3 w-250 border-y">
+        <UsersTable
+          displayRows={effectiveRows}
+          isEditMode={isEditMode}
+          accountOptionsByService={accountOptionsByService}
+          selectedAccounts={selectedAccounts}
+          onAccountSelect={handleAccountSelect}
+          onToggleUnused={handleToggleUnused}
+        />
       </div>
+
+      {/* 페이지네이션 + 범례 */}
+      <div className="flex items-center justify-between px-4 py-2">
+        <div className="flex-1" />
+        {totalPages > 1 && <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={onPageChange} />}
+        <div className="flex flex-1 items-center justify-end gap-6">
+          <div className="flex items-center gap-2">
+            <div className="h-2.5 w-2.5 rounded-full bg-green-50" />
+            <p className="text-body-small text-gray-50">모두 연동된 이용자</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="bg-red-40 h-2.5 w-2.5 rounded-full" />
+            <p className="text-body-small text-gray-50">연동되지 않은 이용자</p>
+          </div>
+        </div>
+      </div>
+
+      {/* CSV 업로드 모달 */}
+      <CsvUploadModal open={isCsvModalOpen} onOpenChange={setIsCsvModalOpen} />
     </section>
   );
 };

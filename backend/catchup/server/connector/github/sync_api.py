@@ -5,13 +5,12 @@ Github 데이터 동기화 API.
 
 Endpoints:
 - POST /full: 전체 동기화
-- GET /status/{installation_id}: 동기화 상태 조회
+- GET /status?installation_id=: 동기화 상태 조회
 """
 
 import logging
-from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -27,6 +26,12 @@ from catchup.db.github.domain_repository import RepositoryUpsertData
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.service import GithubIngestionService
+from catchup.server.connector.sync_status.schemas import (
+    ConnectorSyncScope,
+    ConnectorSyncStatusResponse,
+    build_empty_entity_status,
+    build_entity_status,
+)
 from catchup.utils.scheduler import flush_github_events
 
 logger = logging.getLogger(__name__)
@@ -64,12 +69,17 @@ class SyncResponse(BaseModel):
     message: str
     results: dict[str, SyncResult]
 
+class AccessibleRepositoryItem(BaseModel):
+    """
+    접근 가능한 Repository
+    """
+    repo_id: int
+    full_name: str
 
-class SyncStateResponse(BaseModel):
-    """동기화 상태 응답"""
+class AccessibleRepositoriesResponse(BaseModel):
     installation_id: int
-    repositories: list[dict[str, Any]]
-
+    total_repositories: int
+    repositories: list[AccessibleRepositoryItem]
 
 # ============================================================
 # Helper Functions
@@ -152,9 +162,9 @@ async def full_sync(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/status/{installation_id}", response_model=SyncStateResponse)
+@router.get("/status", response_model=ConnectorSyncStatusResponse)
 async def get_sync_status(
-    installation_id: int,
+    installation_id: int = Query(..., description="Github App Installation ID"),
     db: Session = Depends(get_db),
     _admin_user: User = Depends(require_admin_user),
 ):
@@ -172,31 +182,46 @@ async def get_sync_status(
                 detail=f"GitHub Installation not found: {installation_id}"
             )
 
-        # 모든 동기화 상태 조회
         sync_states = github_sync.get_installation_sync_states(db, installation_id)
+        fixed_entity_types = ("issue", "pull_request")
 
-        # Repository 별로 그룹화
-        repos_data: dict[str, dict] = {}
+        scopes_by_repo: dict[str, ConnectorSyncScope] = {}
         for state in sync_states:
+            entity_type = str(state.entity_type)
+            if entity_type not in fixed_entity_types:
+                continue
+
             repo_name = state.repository_full_name
-            if repo_name not in repos_data:
-                repos_data[repo_name] = {
-                    "repository": repo_name,
-                    "entities": {},
-                }
+            if repo_name not in scopes_by_repo:
+                scopes_by_repo[repo_name] = ConnectorSyncScope(
+                    scope_id=repo_name,
+                    scope_name=repo_name,
+                    entities={
+                        "issue": build_empty_entity_status(total_count=0),
+                        "pull_request": build_empty_entity_status(total_count=0),
+                    },
+                )
 
-            repos_data[repo_name]["entities"][state.entity_type] = {
-                "status": state.last_sync_status,
-                "synced_count": state.synced_entities,
-                "total_count": state.total_entities,
-                "last_sync_at": state.last_sync_at.isoformat() if state.last_sync_at else None,
-                "last_successful_sync_at": state.last_successful_sync_at.isoformat() if state.last_successful_sync_at else None,
-                "error": state.last_sync_error,
-            }
+            scopes_by_repo[repo_name].entities[entity_type] = build_entity_status(
+                status=state.last_sync_status,
+                synced_count=state.synced_entities or 0,
+                total_count=state.total_entities or 0,
+                last_sync_at=state.last_sync_at,
+                last_successful_sync_at=state.last_successful_sync_at,
+                error=state.last_sync_error,
+            )
 
-        return SyncStateResponse(
-            installation_id=installation_id,
-            repositories=list(repos_data.values()),
+        scopes = list(scopes_by_repo.values())
+        logger.info(
+            "[GITHUB][SYNC STATUS] fetched: installation_id=%s, scopes=%s",
+            installation_id,
+            len(scopes),
+        )
+
+        return ConnectorSyncStatusResponse(
+            source="github",
+            target_id=str(installation_id),
+            scopes=scopes,
         )
 
     except HTTPException:
@@ -204,7 +229,8 @@ async def get_sync_status(
     except Exception as e:
         logger.error(
             "[GITHUB][SYNC STATUS] get_sync_status failed: "
-            f"installation_id={installation_id}, error={e}"
+            f"installation_id={installation_id}, error={e}",
+            exc_info=True,
         )
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -363,3 +389,99 @@ async def test_flush_webhook_events(
     except Exception as e:
         logger.error(f"Manual webhook flush failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/accessible/repositories", response_model=AccessibleRepositoriesResponse)
+async def list_accessible_repositories(
+    installation_id: int = Query(..., description="Github App Installation ID"),
+    db: Session = Depends(get_db),
+    _admin_user: User = Depends(require_admin_user),
+):
+    try:
+        installation = get_installation_by_installation_id(db, installation_id)
+        if not installation:
+            raise HTTPException(
+                status_code = 404,
+                detail = f"Github Installation Not Found: {installation_id}",
+            )
+        
+        service = await _get_ingestion_service(db, installation_id)
+        raw_repos = await service.client.list_installation_repos()
+
+        repo_map: dict[int, RepositoryUpsertData] = {}
+        for repo in raw_repos:
+            repo_id = repo.get("id")
+            full_name = repo.get("full_name")
+            owner = (repo.get("owner") or {}).get("login")
+            name = repo.get("name")
+            html_url = repo.get("html_url")
+
+            if not repo_id or not full_name or not owner or not name or not html_url:
+                logger.debug(
+                    "[GITHUB][FULL SYNC][ACCESSIBLE] Skip invalid repository payload: installation_id=%s, repo_id=%s, full_name=%s",
+                    installation_id,
+                    repo_id,
+                    full_name,
+                )
+                continue
+
+            repo_map[int(repo_id)] = RepositoryUpsertData(
+                repo_id=int(repo_id),
+                owner=owner,
+                name=name,
+                full_name=full_name,
+                html_url=html_url,
+                description=repo.get("description"),
+                default_branch=repo.get("default_branch", "main"),
+                language=repo.get("language"),
+                topics=repo.get("topics", []),
+                stargazers_count=repo.get("stargazers_count", 0),
+                forks_count=repo.get("forks_count", 0),
+                open_issues_count=repo.get("open_issues_count", 0),
+                private=repo.get("private", False),
+                archived=repo.get("archived", False),
+                disabled=repo.get("disabled", False),
+                pushed_at=repo.get("pushed_at"),
+                repo_created_at=repo.get("created_at"),
+                repo_updated_at=repo.get("updated_at"),
+            )
+
+        repos_data = list(repo_map.values())
+        
+        sync_result = github_entities.sync_repositories_snapshot(
+            db = db,
+            installation_id = installation_id,
+            repos_data=repos_data,
+        )
+
+        repositories = [
+            AccessibleRepositoryItem(repo_id=repo.repo_id, full_name = repo.full_name)
+            for repo in repos_data
+        ]
+        repositories.sort(key=lambda item: item.full_name.lower())
+
+        logger.info(
+            "[GITHUB][FULL SYNC][ACCESSIBLE] Accessible repositories synced: installation_id=%s, fetched=%s, upserted=%s, deleted=%s",
+            installation_id,
+            len(repositories),
+            sync_result["upserted"],
+            sync_result["deleted"],
+        )
+
+        return AccessibleRepositoriesResponse(
+            installation_id=installation_id,
+            total_repositories=len(repositories),
+            repositories=repositories,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "[GITHUB][FULL SYNC][ACCESSIBLE] list_accessible_repositories failed: installation_id=%s, error=%s",
+            installation_id,
+            e,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="접근 가능한 Repository 조회 중 오류가 발생했습니다.",
+        )

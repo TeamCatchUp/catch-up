@@ -48,7 +48,14 @@ class AwsBedrockEmbeddingService(BaseEmbeddingService):
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
             config=config,
         )
+        
+        model_id = settings.AWS_BEDROCK_EMBEDDING_MODEL
+        provider = None
+        if model_id.startswith("arn:"):
+            provider = "cohere"
+        
         return BedrockEmbeddings(
-            model_id=settings.AWS_BEDROCK_EMBEDDING_MODEL,
+            model_id=model_id,
+            provider=provider,
             client=client
         )

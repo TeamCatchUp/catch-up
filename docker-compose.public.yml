@@ -3,6 +3,10 @@
 # ====================
 services:
   api_server:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+      target: prod
     env_file:
     - .env
     

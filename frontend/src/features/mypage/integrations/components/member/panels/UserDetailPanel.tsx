@@ -1,3 +1,5 @@
+import Image from 'next/image';
+
 import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { cn } from '@/shared/utils/cn';
@@ -32,16 +34,8 @@ const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
         <div className="flex flex-col gap-9">
           <div className="text-body-small flex flex-col gap-2 tracking-tight">
             <div className="flex w-full items-center gap-14">
-              <span className="w-19.75 shrink-0 text-gray-50">전화번호</span>
-              <span className="text-gray-70 min-w-0 flex-1 truncate">{selectedRow.phone}</span>
-            </div>
-            <div className="flex w-full items-center gap-14">
               <span className="w-19.75 shrink-0 text-gray-50">메일</span>
               <span className="text-gray-70 min-w-0 flex-1 truncate">{selectedRow.email}</span>
-            </div>
-            <div className="flex w-full items-center gap-14">
-              <span className="w-19.75 shrink-0 text-gray-50">부서 / 인원</span>
-              <span className="text-gray-70 min-w-0 flex-1 truncate">{`${selectedRow.department} / ${selectedRow.teamSizeLabel}`}</span>
             </div>
           </div>
 
@@ -53,7 +47,7 @@ const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
 
             <div className="border-neutral-2 flex h-63 w-119 flex-col overflow-clip rounded-xl border">
               {INTEGRATION_ACCOUNTS.map((account, index) => {
-                const accountId = selectedRow.accountIdByService[account.service] ?? '-';
+                const info = selectedRow.serviceInfoByService[account.service];
                 const iconClassName = account.service === 'confluence' ? 'h-5.75 w-6 shrink-0' : 'h-6 w-6 shrink-0';
 
                 return (
@@ -71,12 +65,16 @@ const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
 
                     <div className="flex shrink-0 flex-col items-start justify-center gap-0.5">
                       <div className="flex shrink-0 items-center gap-2.5">
-                        <DefaultProfile className="border-neutral-2 text-gray-30 size-6.25 shrink-0 rounded-full border" />
+                        {info?.picture ? (
+                          <Image src={info.picture} alt="" width={25} height={25} className="size-6.25 shrink-0 rounded-full" />
+                        ) : (
+                          <DefaultProfile className="border-neutral-2 text-gray-30 size-6.25 shrink-0 rounded-full border" />
+                        )}
                         <span className="text-body-xsmall text-gray-80 max-w-33.25 shrink-0 truncate">
-                          {selectedRow.userName}
+                          {info?.name ?? '-'}
                         </span>
                         <span className="rounded-md2 bg-neutral-2 text-body-xsmall shrink-0 px-1.5 py-0.5 tracking-tight text-gray-50">
-                          {accountId}
+                          {info?.identifier ?? '-'}
                         </span>
                       </div>
                       <span className="text-body-xsmall shrink-0 truncate text-gray-50">{selectedRow.email}</span>

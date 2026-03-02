@@ -5,6 +5,7 @@ GitHubRepository 테이블에 대한 CRUD 작업 수행.
 Installation에 연결된 Repository 정보를 관리.
 """
 
+from gettext import install
 import json
 from datetime import datetime, timezone
 
@@ -145,6 +146,78 @@ def upsert_repositories_bulk(
 
     return len(values_list)
 
+def sync_repositories_snapshot(
+    db: Session,
+    installation_id: int,
+    repos_data: list[RepositoryUpsertData],
+) -> dict[str, int]:
+    """
+    Installation 단위 Repository 스냅샷 동기화
+    """
+    now = datetime.now(timezone.utc)
+
+    if not repos_data:
+        delete_stmt = delete(GitHubRepositoryModel).where(
+            GitHubRepositoryModel.installation_id == installation_id
+        )
+        delete_result = db.execute(delete_stmt)
+        db.commit()
+        return {
+            "upserted": 0,
+            "deleted": delete_result.rowcount or 0,
+        }
+    
+    values_list: list[dict] = []
+    fetched_repo_ids: list[int] = []
+
+    for repo in repos_data:
+        fetched_repo_ids.append(repo.repo_id)
+        values_list.append(
+            {
+                "installation_id": installation_id,
+                "repo_id": repo.repo_id,
+                "owner": repo.owner,
+                "name": repo.name,
+                "full_name": repo.full_name,
+                "html_url": repo.html_url,
+                "description": repo.description,
+                "default_branch": repo.default_branch,
+                "language": repo.language,
+                "topics": json.dumps(repo.topics) if repo.topics else None,
+                "stargazers_count": repo.stargazers_count,
+                "forks_count": repo.forks_count,
+                "open_issues_count": repo.open_issues_count,
+                "private": repo.private,
+                "archived": repo.archived,
+                "disabled": repo.disabled,
+                "pushed_at": repo.pushed_at,
+                "repo_created_at": repo.repo_created_at,
+                "repo_updated_at": repo.repo_updated_at,
+                "synced_at": now,
+            }
+        )
+    
+    upsert_stmt = insert(GitHubRepositoryModel).values(values_list)
+    upsert_stmt = upsert_stmt.on_conflict_do_update(
+        index_elements=["repo_id"],
+        set_=_repo_upsert_set(upsert_stmt),
+    )
+    db.execute(upsert_stmt)
+
+    stale_delete_stmt = delete(GitHubRepositoryModel).where(
+        and_(
+            GitHubRepositoryModel.installation_id == installation_id,
+            ~GitHubRepositoryModel.repo_id.in_(fetched_repo_ids),
+        )
+    )
+    stale_delete_result = db.execute(stale_delete_stmt)
+
+    db.commit()
+
+    return {
+        "upserted": len(values_list),
+        "deleted": stale_delete_result.rowcount or 0,
+    }
 
 def delete_repository(
     db: Session,

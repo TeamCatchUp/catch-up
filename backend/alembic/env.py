@@ -25,6 +25,10 @@ if config.config_file_name is not None:
     
 
 db_url = settings.sqlalchemy_database_url
+if db_url:
+    # ConfigParser가 %를 치환 문자로 인식하지 못하도록 %%로 변경 
+    db_url = db_url.replace("%", "%%") 
+    config.set_main_option("sqlalchemy.url", db_url)
 
 config.set_main_option("sqlalchemy.url", db_url)
 
@@ -65,7 +69,18 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 def include_object(object, name, type_, reflected, compare_to):
-    if type_ == "table" and name.startswith("langchain_"):
+    """
+    Base에 정의되어 있지는 않지만, DB에는 실재하며, 
+    마이그레이션 시 DROP 대상에서 제외하고 유지해야 하는 테이블을 필터링
+    """
+    prefixes = [
+        "langchain_",   # Langchain documents
+        "checkpoint_",  # AsyncPostgresSaver
+        "checkpoints",  # AsyncPostgresSaver
+    ]
+    
+    include = any(name.startswith(p) for p in prefixes)
+    if type_ == "table" and include:
         return False
         
     return True

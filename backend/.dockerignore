@@ -24,3 +24,5 @@ Dockerfile
 docker-compose*
 *.md
 LICENSE
+
+*.log

@@ -95,10 +95,13 @@ export const API = {
       delete: (userId: number) => `${API_PREFIX}/admin/users/delete/${userId}`, // POST 삭제
       promote: (userId: number) => `${API_PREFIX}/admin/users/promote/${userId}`, // POST Admin 승격
     },
+    vendorUsers: (vendorType: string) => `${API_PREFIX}/admin/${vendorType}/users`, // GET 툴별 사용자 목록 (드롭다운)
+    preMappingsBulk: (vendorType: string) => `${API_PREFIX}/admin/${vendorType}/pre-mappings/bulk`, // PATCH 사용자 매핑 일괄 수정
   },
 
   mapping: {
     upload: `${API_PREFIX}/mapping/upload`, // POST GitHub 매핑 CSV/Excel 일괄 업로드 (multipart/form-data)
+    vendorUpload: (vendor: string) => `${API_PREFIX}/mapping/${vendor}/upload`, // POST 협업툴별 사용자 매핑 CSV/Excel 일괄 업로드
   },
 
   settings: {

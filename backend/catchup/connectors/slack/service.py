@@ -125,9 +125,8 @@ class SlackIngestionService:
         except Exception as e:
             logger.error(f"Failed to load context from DB: {e}", exc_info=True)
 
-    # 수집 제외 subtype 목록 (봇, 채널 참여/퇴장 등 시스템 메시지)
+    # 수집 제외 subtype 목록 (시스템 메시지)
     _SKIP_SUBTYPES = frozenset({
-        "bot_message",
         "channel_join",
         "channel_leave",
         "group_join",
@@ -136,8 +135,6 @@ class SlackIngestionService:
 
     def _should_skip_message(self, msg_data: dict) -> bool:
         """수집 대상에서 제외할 메시지인지 판별"""
-        if msg_data.get("bot_id"):
-            return True
         if msg_data.get("subtype") in self._SKIP_SUBTYPES:
             return True
         text = msg_data.get("text", "")
@@ -155,6 +152,16 @@ class SlackIngestionService:
             return None
         ts_clean = ts.replace(".", "")
         return f"https://{self.workspace_domain}.slack.com/archives/{channel_id}/p{ts_clean}"
+
+    def _pick_latest_ts(self, current: str | None, candidate: str | None) -> str | None:
+        if not candidate:
+            return current
+        if not current:
+            return candidate
+        try:
+            return candidate if float(candidate) > float(current) else current
+        except (TypeError, ValueError):
+            return current
     
     async def sync_metadata(self, db:Session) -> dict[str, int]:
         """
@@ -264,6 +271,30 @@ class SlackIngestionService:
             f"channels={len(channel_ids)}"
         )
         return {"messages": {"synced": total_synced, "errors": total_errors}}
+
+    async def list_syncable_channels(self) -> list[dict[str, str]]:
+        self._ensure_initialized()
+        return await self._get_syncable_channels()
+
+    async def sync_channel_messages(
+        self,
+        *,
+        channel_id: str,
+        channel_name: str,
+        sync_from: str | None,
+        db: Session | None = None,
+        skip_delete: bool = False,
+    ) -> dict[str, int]:
+        self._ensure_initialized()
+        if db is not None:
+            self._load_context_from_db(db)
+        return await self._sync_channel_messages(
+            channel_id=channel_id,
+            channel_name=channel_name,
+            sync_from=sync_from,
+            db=db,
+            skip_delete=skip_delete,
+        )
 
     # ================================================================
     # 내부 동기화 메서드
@@ -527,8 +558,11 @@ class SlackIngestionService:
     ) -> dict[str, int]:
         """Semaphore 제한 하에 단일 채널 동기화 실행"""
         async with semaphore:
-            return await self._sync_channel_messages(
-                channel["id"], channel["name"], sync_from, db,
+            return await self.sync_channel_messages(
+                channel_id=channel["id"],
+                channel_name=channel["name"],
+                sync_from=sync_from,
+                db=db,
                 skip_delete=skip_delete,
             )
             
@@ -563,24 +597,41 @@ class SlackIngestionService:
 
         async def _summarize_stage():
             while (batch := await fetch_q.get()) is not None:
-                batch_docs, batch_ids, batch_errors = batch
+                batch_docs, batch_ids, batch_errors, batch_latest_synced_ts = batch
                 if self.summarizer:
                     batch_docs = await self._summarize_documents(batch_docs)
-                await embed_q.put((batch_docs, batch_ids, batch_errors))
+                await embed_q.put(
+                    (batch_docs, batch_ids, batch_errors, batch_latest_synced_ts)
+                )
             await embed_q.put(None)
 
         async def _embed_stage():
             while (batch := await embed_q.get()) is not None:
-                batch_docs, batch_ids, batch_errors = batch
+                batch_docs, batch_ids, batch_errors, batch_latest_synced_ts = batch
                 embeddings = await self.repository.generate_embeddings(batch_docs)
-                await store_q.put((batch_docs, batch_ids, batch_errors, embeddings))
+                await store_q.put(
+                    (
+                        batch_docs,
+                        batch_ids,
+                        batch_errors,
+                        embeddings,
+                        batch_latest_synced_ts,
+                    )
+                )
             await store_q.put(None)
 
-        async def _store_stage() -> tuple[int, int]:
+        async def _store_stage() -> tuple[int, int, str | None]:
             synced_count = 0
             errors = 0
+            latest_synced_ts: str | None = None
             while (batch := await store_q.get()) is not None:
-                batch_docs, batch_ids, batch_errors, embeddings = batch
+                (
+                    batch_docs,
+                    batch_ids,
+                    batch_errors,
+                    embeddings,
+                    batch_latest_synced_ts,
+                ) = batch
                 errors += batch_errors
                 if not skip_delete:
                     await self.repository.delete_documents(batch_ids)
@@ -588,6 +639,10 @@ class SlackIngestionService:
                     batch_docs, embeddings, batch_ids,
                 )
                 synced_count += len(batch_docs)
+                latest_synced_ts = self._pick_latest_ts(
+                    latest_synced_ts,
+                    batch_latest_synced_ts,
+                )
                 if db:
                     slack_sync.update_sync_progress(
                         db, self.team_id, SlackEntityType.MESSAGE,
@@ -596,8 +651,9 @@ class SlackIngestionService:
                     slack_sync.update_channel_sync_progress(
                         db, self.team_id, channel_id,
                         synced_count=synced_count,
+                        latest_synced_ts=latest_synced_ts,
                     )
-            return synced_count, errors
+            return synced_count, errors, latest_synced_ts
 
         try:
             async with asyncio.TaskGroup() as tg:
@@ -606,7 +662,7 @@ class SlackIngestionService:
                 tg.create_task(_embed_stage())
                 store_task = tg.create_task(_store_stage())
             
-            synced_count, errors = store_task.result()
+            synced_count, errors, latest_synced_ts = store_task.result()
         
         except ExceptionGroup as eg:
             for exc in eg.exceptions:
@@ -631,6 +687,7 @@ class SlackIngestionService:
             slack_sync.mark_channel_sync_completed(
                 db, self.team_id, channel_id,
                 synced_count=synced_count,
+                latest_synced_ts=latest_synced_ts,
             )
 
         logger.debug(
@@ -644,7 +701,7 @@ class SlackIngestionService:
         channel_id: str,
         channel_name: str,
         sync_from: str | None,
-    ) -> AsyncGenerator[tuple[list[Document], list[str], int], None]:
+    ) -> AsyncGenerator[tuple[list[Document], list[str], int, str | None], None]:
         
         cursor = None
 
@@ -680,12 +737,14 @@ class SlackIngestionService:
             batch_documents = []
             batch_doc_ids = []
             errors = 0
+            batch_latest_synced_ts: str | None = None
 
             for msg_data in messages:
                 if self._should_skip_message(msg_data):
                     continue
 
                 try:
+                    message_ts = msg_data.get("ts")
                     replies = reply_map.get(msg_data.get("ts"), [])
                     permalink = self._build_permalink(channel_id, msg_data.get("ts"))
                     message = self.transformer.parse_message(
@@ -694,6 +753,11 @@ class SlackIngestionService:
                     doc = self.transformer.transform_message(message, self.team_id)
                     batch_documents.append(doc)
                     batch_doc_ids.append(doc.id)
+                    if message_ts:
+                        batch_latest_synced_ts = self._pick_latest_ts(
+                            batch_latest_synced_ts,
+                            message_ts,
+                        )
                 except Exception as e:
                     logger.warning(
                         f"Failed to process message {msg_data.get('ts')}: {e}"
@@ -701,7 +765,7 @@ class SlackIngestionService:
                     errors += 1
 
             if batch_documents:
-                yield batch_documents, batch_doc_ids, errors
+                yield batch_documents, batch_doc_ids, errors, batch_latest_synced_ts
 
             # 다음 페이지 확인
             if not response.get("has_more"):

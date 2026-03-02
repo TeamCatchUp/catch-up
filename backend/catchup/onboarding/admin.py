@@ -4,6 +4,7 @@ from catchup.db.models import Company, UserStatus, Workspace, User, UserRole, Us
 from catchup.db.users import get_oauth_user_with_sub
 from catchup.onboarding.schemas import AdminSignUpSchema
 
+
 def register_admin_from_oauth(db: Session, data: AdminSignUpSchema) -> User:
 
     oauth_user_record = get_oauth_user_with_sub(db, data.sub)

@@ -1,7 +1,7 @@
 from enum import StrEnum
-from typing import Optional
 
 from dotenv import load_dotenv
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -16,10 +16,30 @@ class Environment(StrEnum):
 
 
 class Settings(BaseSettings):
+    #=============================#
+    #     System Base Settings    #
+    #=============================#
+    # Server Environment
     ENV: Environment = Environment.development
     
+    # Logging
+    SERVICE_NAME: str = "catchup"
+    APP_VERSIONS: str = "0.1.0"  #TODO: app version 갱신 방법
     LOG_LEVEL: str
+    LOG_JSON_FILE_PATH: str = "/var/log/catchup/app.jsonl"
+    LOG_JSON_MAX_BYTES: int = 50 * 1024 * 1024
+    LOG_JSON_BACKUP_COUNT: int = 5
+    LOG_CONSOLE_ENABLED: bool = True
+    LOG_JSON_FILE_ENABLED: bool = True
+    
+    #========================#
+    #     InfraStructures    #
+    #========================#
+    # Redis
+    REDIS_URL: str
+    REDIS_CLUSTER_MODE: bool
 
+    # PostgreSQL
     DB_DIALECT: str = "postgresql"
     DB_DRIVER: str = "psycopg"  # psycopg3 (langchain-postgres 호환)
     DB_USERNAME: str
@@ -28,36 +48,60 @@ class Settings(BaseSettings):
     DB_PORT: int
     DB_DATABASE: str
     
-    OPENAI_API_KEY: str
-    
-    REDIS_URL: str
-    REDIS_CLUSTER_MODE: bool
+    # Neo4j (Deprecated)
+    NEO4J_USER: str | None = None
+    NEO4J_PASSWORD: str | None = None
+    NEO4J_URI: str | None = None
+    ENABLE_NEO4J: bool = False
 
-    LANGFUSE_SECRET_KEY: str
-    LANGFUSE_PUBLIC_KEY: str
-    LANGFUSE_BASE_URL: str
+    # Langfuse
     ENABLE_LANGFUSE: bool
+    LANGFUSE_SECRET_KEY: str | None = None
+    LANGFUSE_PUBLIC_KEY: str | None = None
+    LANGFUSE_BASE_URL: str | None = None
+        
+    # AWS Bedrock
+    AWS_ACCESS_KEY_ID: str | None = None
+    AWS_SECRET_ACCESS_KEY: str | None = None
+    AWS_CREDENTIALS_PROFILE_NAME: str | None = None
+    AWS_BEARER_TOKEN_BEDROCK: str | None = None
+    AWS_REGION: str
+    AWS_BEDROCK_EMBEDDING_MODEL: str
+    AWS_BEDROCK_SMALL_MODEL: str
+    AWS_BEDROCK_LARGE_MODEL: str
+    AWS_RERANK_MODEL_ARN: str
+    AWS_RERANK_MODEL_REGION: str
+    AWS_EMBEDDING_MODEL_REGION: str
 
+    # Cohere (native)
     COHERE_API_KEY: str
-    RERANK_THRESHOLD: float
-
-    COHERE_RERANK_TOP_N: int
-    OPENAI_EMBEDDING_MODEL: str
     COHERE_EMBEDDING_MODEL: str = "embed-v4.0"
+    
+    # OpenAI (native)
+    OPENAI_API_KEY: str
+    OPENAI_EMBEDDING_MODEL: str
     OPENAI_SMALL_MODEL: str
     OPENAI_LARGE_MODEL: str
-    FINAL_SOURCES_SANITY_THRESHOLD: float
+    
+    #=======================#
+    #     RAG Parameters    #
+    #=======================#
+    # Custom Rerank Parameters
     RERANK_TOP_N: int
     RERANK_TOTAL_K: int
 
+    #=======================================#
+    #     Knowledge Source Integrations     #
+    #=======================================#
+    # Github
     GITHUB_BASE_URL: str
-
     GITHUB_APP_ID: int
     GITHUB_APP_PRIVATE_KEY: str
     GITHUB_APP_WEBHOOK_SECRET: str
     GITHUB_APP_CLIENT_ID: str
     GITHUB_APP_CLIENT_SECRET: str
-
+    
+    # Atlassian
     ATLASSIAN_CLIENT_ID: str
     ATLASSIAN_CLIENT_SECRET: str
     ATLASSIAN_REDIRECT_URI: str
@@ -80,7 +124,6 @@ class Settings(BaseSettings):
     ATLASSIAN_TOKEN_URL: str = "https://auth.atlassian.com/oauth/token"
     ATLASSIAN_API_URL: str = "https://api.atlassian.com"
     ATLASSIAN_TOKEN_REFRESH_INTERVAL_MINUTES: int = 30
-
 
     # Slack OAuth
     SLACK_CLIENT_ID: str
@@ -111,12 +154,6 @@ class Settings(BaseSettings):
     # Confluence Sync Settings
     CONFLUENCE_SYNC_MAX_CONCURRENT_REQUEST: int = 5
     CONFLUENCE_SYNC_RATE_LIMIT_DELAY: float = 0.1
-    
-    # Neo4j
-    NEO4J_USER:Optional[str] 
-    NEO4J_PASSWORD: Optional[str]
-    NEO4J_URI: Optional[str]
-    ENABLE_NEO4J: bool = False
 
     # Common Sync Settings
     DEFAULT_SYNC_DAYS: int = 1095
@@ -137,23 +174,35 @@ class Settings(BaseSettings):
     WEBHOOK_BUFFER_TTL: int = 3900 # 65분 : Buffer 60분
     WEBHOOK_FLUSH_INTERVAL_HOURS: int = 1  
     WEBHOOK_ENABLE_AUTO_SYNC: bool = True
-    
-    # AWS
-    AWS_ACCESS_KEY_ID: Optional[str] = None
-    AWS_SECRET_ACCESS_KEY: Optional[str] = None
-    AWS_CREDENTIALS_PROFILE_NAME: Optional[str] = None
 
-    # AWS Bedrock
-    # Bedrock API Key
-    AWS_BEARER_TOKEN_BEDROCK: Optional[str] = None
-    AWS_REGION: str
-    AWS_BEDROCK_EMBEDDING_MODEL: str
-    AWS_BEDROCK_SMALL_MODEL: str
-    AWS_BEDROCK_LARGE_MODEL: str
-    AWS_RERANK_MODEL_ARN: str
-    AWS_RERANK_MODEL_REGION: str
-    AWS_EMBEDDING_MODEL_REGION: str
+    # api_server 시작 시 Sync Worker 자동 기동 여부
+    SYNC_WORKER_AUTOSTART: bool = True
+    # 큐가 비었을 때 worker 루프 대기 시간(초)
+    SYNC_WORKER_IDLE_SLEEP_SECONDS: float = 0.5
+    # Redis blocking pop timeout(초)
+    SYNC_QUEUE_BLOCK_TIMEOUT_SECONDS: int = 3
 
+    # 동일 Job 내 채널 병렬 처리 수
+    SYNC_WORKER_CHANNEL_CONCURRENCY: int = 5
+
+    # 재시도 정책
+    SYNC_JOB_MAX_ATTEMPTS: int = 3
+    SYNC_JOB_RETRY_BASE_DELAY_SECONDS: float = 2.0
+    SYNC_JOB_RETRY_MAX_DELAY_SECONDS: float = 30.0
+
+    # Lock TTL
+    SYNC_LOCK_TEAM_TTL_SECONDS: int = 21600      # 6h
+    SYNC_LOCK_CHANNEL_TTL_SECONDS: int = 600     # 10m
+    SYNC_LOCK_REFRESH_INTERVAL_SECONDS: float = 60.0
+
+    # Job 상태/이벤트 보관 TTL
+    SYNC_JOB_META_TTL_SECONDS: int = 86400       # 24h
+    SYNC_JOB_EVENT_TTL_SECONDS: int = 86400      # 24h
+
+    # SSE heartbeat 주기
+    SYNC_SSE_HEARTBEAT_SECONDS: int = 15
+    # Incremental sync_from fallback (team/channel cursor 없을 때)
+    SYNC_INCREMENTAL_FALLBACK_HOURS: int = 2
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -172,6 +221,15 @@ class Settings(BaseSettings):
             port=self.DB_PORT,
             database=self.DB_DATABASE
         ).render_as_string(hide_password=False)
+    
+    @model_validator(mode="after")
+    def validate_langfuse_config(self) -> "Settings":
+        if self.ENABLE_LANGFUSE:
+            if not all([self.LANGFUSE_SECRET_KEY, self.LANGFUSE_PUBLIC_KEY, self.LANGFUSE_BASE_URL]):
+                raise ValueError(
+                    "ENABLE_LANGFUSE is set to be True: all keys related to Langfuse must be set."
+                )
+        return self
 
 
 class AuthSettings(BaseSettings):
@@ -181,11 +239,6 @@ class AuthSettings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # Google
-    GOOGLE_CLIENT_ID: str
-    GOOGLE_CLIENT_SECRET: str
-    GOOGLE_REDIRECT_URI: str
-    
     # Keycloak
     KC_PUBLIC_URL: str
     KC_INTERNAL_URL: str
@@ -199,6 +252,11 @@ class AuthSettings(BaseSettings):
     HTTP_ONLY: bool
     SECURE: bool
     SAMESITE: str
+    
+    # Google (Deprecated)
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+    GOOGLE_REDIRECT_URI: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

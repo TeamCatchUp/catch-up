@@ -69,6 +69,10 @@ class AwsBedrockLlmService(BaseLlmService):
             if self.model_capacity == ModelCapacity.SMALL
             else settings.AWS_BEDROCK_LARGE_MODEL
         )
+        
+        provider = None
+        if model_id.startswith("arn:"):
+            provider="anthropic"
 
         config = Config(
             max_pool_connections = 100,
@@ -77,10 +81,11 @@ class AwsBedrockLlmService(BaseLlmService):
         
         return ChatBedrock(
             model_id=model_id,
+            provider=provider,
             region_name=settings.AWS_REGION,
             credentials_profile_name=settings.AWS_CREDENTIALS_PROFILE_NAME,
             temperature=0,
-            max_tokens=4096,
+            max_tokens=8192,
             streaming=True,
             config=config
         )

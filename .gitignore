@@ -3,11 +3,12 @@ Thumbs.db
 
 .idea/
 .vscode/
-.claude/
+.codex/
 *.swp
 *.iml
 
 *.log
+logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

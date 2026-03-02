@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -19,6 +21,64 @@ class SlackSyncResponse(BaseModel):
     results: dict[str, SyncResultDetail] | None = None
 
 
+class SlackFullSyncRequest(BaseModel):
+    """Slack Full Sync 요청"""
+
+    team_id: str = Field(..., description="Slack Team/Workspace ID")
+    channel_ids: list[str] | None = Field(
+        None,
+        description="동기화할 Slack Channel ID 목록, 미지정 시 전체 채널",
+    )
+    sync_days: int | None = Field(
+        None,
+        ge=1,
+        le=3650,
+        description="수집 범위 (일), 미지정 시 기본값 사용",
+    )
+
+
+class SlackFullSyncAcceptedResponse(BaseModel):
+    """Slack Full Sync 접수 응답"""
+
+    status: Literal["accepted"] = "accepted"
+    job_id: str
+    team_id: str
+    total_channels: int
+    queued_channels: int
+    snapshot_url: str
+    stream_url: str
+
+
+class SlackIncrementalFlushRequest(BaseModel):
+    """Slack 증분 Flush(단건) 요청"""
+
+    team_id: str = Field(..., description="Slack Team/Workspace ID")
+
+
+class SlackIncrementalAcceptedResponse(BaseModel):
+    """Slack 증분 Flush 접수 응답"""
+
+    status: Literal["accepted"] = "accepted"
+    job_id: str
+    team_id: str
+    total_channels: int
+    queued_channels: int
+    dropped_channels: int = 0
+    dropped_events: int = 0
+    snapshot_url: str
+    stream_url: str
+
+
+class SlackIncrementalNoEventsResponse(BaseModel):
+    """Slack 증분 Flush no_events 응답"""
+
+    status: Literal["no_events"] = "no_events"
+    team_id: str
+    dropped_channels: int = 0
+    dropped_events: int = 0
+    message: str
+
+
 # ================================================================
 # Sync Status
 # ================================================================
@@ -33,32 +93,6 @@ class SlackSyncStatusResponse(BaseModel):
     last_sync_error: str | None
     oldest_ts: str | None = None
     latest_ts: str | None = None
-
-
-# ================================================================
-# Flush
-# ================================================================
-
-class SlackFlushTeamResult(BaseModel):
-    """팀별 Flush 결과"""
-    team_id: str
-    team_name: str | None = None
-    flushed_channels: int
-    flushed_events: int
-    synced_messages: int
-    status: str  # "success" | "no_events" | "error"
-    error_message: str | None = None
-
-
-class SlackFlushResponse(BaseModel):
-    """전체 Flush 응답"""
-    status: str
-    message: str
-    total_teams: int = Field(description="처리 대상 팀 수")
-    flushed_teams: int = Field(description="실제로 flush된 팀 수")
-    total_events: int = Field(description="총 flush된 이벤트 수")
-    total_synced: int = Field(description="총 동기화된 메시지 수")
-    results: list[SlackFlushTeamResult] = Field(default_factory=list)
 
 
 # ================================================================

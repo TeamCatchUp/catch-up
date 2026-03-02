@@ -1,10 +1,10 @@
-from datetime import datetime, time, timedelta
+from enum import StrEnum
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, text
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
+from sqlalchemy import and_, delete, func, or_, select, text
+from sqlalchemy.orm import Session, aliased
 
 from catchup.auth.dependencies import require_admin_user
 from catchup.chat.schemas import UserQueryWithSaveStatusResponse
@@ -34,7 +34,8 @@ from catchup.db.models import (
     UserStatus,
     UserRole,
 )
-from catchup.db.users import get_all_users_for_admin
+from catchup.db.user_source_mapping import SOURCE_MAP
+from catchup.db.users import get_all_oauth_users_for_admin, get_all_users_for_admin
 from catchup.server.auth.schemas import (
     ConfluenceSyncableResponse,
     ConfluenceConnectorStatus,
@@ -48,7 +49,11 @@ from catchup.server.auth.schemas import (
     SlackConnectorStatus,
 )
 from catchup.server.admin.schemas import (
+    OAuthUserResponse,
+    PreMappingBulkUpdateRequest,
+    PreMappingInfo,
     SyncStatusCounts,
+    ToolUserResponse,
     UserResponse,
     UserSyncMapping,
     UserSyncStatusResponse,
@@ -703,68 +708,146 @@ def _get_user_sync_counts(db: Session) -> SyncStatusCounts:
     )
 
 
-def _get_user_sync_mappings(db: Session) -> list[UserSyncMapping]:
-    """
-    PreMappingBuffer를 사용자 단위로 모아 반환한다.
-    - name: PreMappingBuffer.name
-    - githubLogin: external_user_identifier (github)
-    - atlassianEmail: email (jira)
-    - slackEmail: email (slack)
-    """
-    rows = (
-        db.query(
-            PreMappingBuffer.name,
-            PreMappingBuffer.source_type,
-            PreMappingBuffer.external_user_identifier,
-            PreMappingBuffer.email,
+class PremappingStatus(StrEnum):
+    ALL = "all"  # 모든 인원
+    FULL = "full"  # 모든 협업 툴에 대해 premapping이 생성된 경우
+    PARTIAL = "partial"  # 적어도 하나의 premapping이 이루어지지 않은 협업 툴이 존재하는 경우
+
+
+def _get_user_sync_mappings(
+    db: Session, 
+    filter_type: PremappingStatus = PremappingStatus.ALL, 
+    skip: int = 0, 
+    limit: int = 50
+) -> tuple[list[UserSyncMapping], int]:
+    """협업 도구 매핑 현황 조회 (이메일 직접 조인 및 서브쿼리 최적화)"""
+
+    JMap = aliased(PreMappingBuffer)
+    SMap = aliased(PreMappingBuffer)
+    GMap = aliased(PreMappingBuffer)
+
+    SModel, _, s_email, s_xf, s_xf_val = SOURCE_MAP[SourceType.SLACK]
+    JModel, _, j_email, j_xf, j_xf_val = SOURCE_MAP[SourceType.JIRA]
+    GModel, _, g_email, _, _ = SOURCE_MAP[SourceType.GITHUB]
+
+    base_users = (
+        select(
+            PreMappingBuffer.sub.label("sub"),
+            PreMappingBuffer.email.label("email"),
+            PreMappingBuffer.name.label("name")
         )
-        .filter(
-            PreMappingBuffer.source_type.in_(
-                [SourceType.GITHUB, SourceType.JIRA, SourceType.SLACK]
-            )
-        )
-        .order_by(PreMappingBuffer.name, PreMappingBuffer.source_type)
-        .all()
+        .distinct(PreMappingBuffer.email)
+        .subquery()
     )
 
-    aggregated: dict[str, UserSyncMapping] = {}
-    for name, source_type, external_id, email in rows:
-        entry = aggregated.get(name)
-        if not entry:
-            entry = UserSyncMapping(
-                name=name,
-                githubLogin=None,
-                atlassianEmail=None,
-                slackEmail=None,
-            )
-            aggregated[name] = entry
+    base_stmt = (
+        select(
+            base_users.c.sub.label("sub"),
+            base_users.c.name.label("keycloak_name"),
+            base_users.c.email.label("keycloak_email"),
+            JModel, 
+            SModel, 
+            GModel,
+            JMap.id.label("j_map_id"),
+            SMap.id.label("s_map_id"),
+            GMap.id.label("g_map_id")
+        )
+        .select_from(base_users)
+        .outerjoin(JModel, and_(func.lower(base_users.c.email) == func.lower(j_email), j_xf == j_xf_val))
+        .outerjoin(SModel, and_(func.lower(base_users.c.email) == func.lower(s_email), s_xf == s_xf_val))
+        .outerjoin(GModel, func.lower(base_users.c.email) == func.lower(g_email))
+        .outerjoin(JMap, and_(base_users.c.email == JMap.email, JMap.source_type == SourceType.JIRA))
+        .outerjoin(SMap, and_(base_users.c.email == SMap.email, SMap.source_type == SourceType.SLACK))
+        .outerjoin(GMap, and_(base_users.c.email == GMap.email, GMap.source_type == SourceType.GITHUB))
+    )
 
-        if source_type == SourceType.GITHUB:
-            entry.githubLogin = external_id
-        elif source_type == SourceType.JIRA:
-            entry.atlassianEmail = email
-        elif source_type == SourceType.SLACK:
-            entry.slackEmail = email
+    # 필터링 적용
+    if filter_type == PremappingStatus.FULL:
+        base_stmt = base_stmt.where(and_(JMap.id.is_not(None), SMap.id.is_not(None), GMap.id.is_not(None)))
+    elif filter_type == PremappingStatus.PARTIAL:
+        base_stmt = base_stmt.where(or_(JMap.id.is_(None), SMap.id.is_(None), GMap.id.is_(None)))
 
-    return list(aggregated.values())
+    # 전체 개수 조회
+    count_stmt = select(func.count()).select_from(base_stmt.subquery())
+    total_count = db.scalar(count_stmt) or 0
+
+    # 데이터 조회
+    data_stmt = (
+        base_stmt
+        .order_by(base_users.c.email)
+        .offset(skip)
+        .limit(limit)
+    )
+    
+    rows = db.execute(data_stmt).all()    
+    
+    results = []
+    for row in rows:
+        jira_user = row.JiraUser
+        slack_user = row.SlackUser
+        github_user = row.GitHubUser
+
+        # Jira 정보 조립
+        atlassian_info = PreMappingInfo(
+            name=getattr(jira_user, "display_name", None),
+            identifier=getattr(jira_user, "email_address", None),
+            picture=getattr(jira_user, "avatar_url", None)
+        ) if jira_user else None
+
+        # Slack 정보 조립
+        slack_info = PreMappingInfo(
+            name=getattr(slack_user, "real_name", None),
+            identifier=getattr(slack_user, "email", None),
+            picture=getattr(slack_user, "avatar_url", None)
+        ) if slack_user else None
+
+        # GitHub 정보 조립
+        github_info = PreMappingInfo(
+            name=getattr(github_user, "name", None) or getattr(github_user, "login", None),
+            identifier=getattr(github_user, "email", None),
+            picture=getattr(github_user, "avatar_url", None)
+        ) if github_user else None
+
+        results.append(UserSyncMapping(
+            sub=row.sub,
+            name=row.keycloak_name, 
+            email=row.keycloak_email,
+            atlassian=atlassian_info,
+            slack=slack_info,
+            github=github_info
+        ))
+
+    return results, total_count
 
 
 @router.get(
     path="/users/sync-status",
     description="협업 도구 사용자/프리매핑 현황 및 사용자별 매핑 데이터 (admin 전용)",
-    response_model=UserSyncStatusResponse,
 )
 def get_user_sync_status(
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(require_admin_user),
+    filter_type: str = Query(description="all, full, partial"),
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=100),
+    _admin_user: User = Depends(require_admin_user)
 ):
     counts = _get_user_sync_counts(db)
-    mappings = _get_user_sync_mappings(db)
-    logger.info(
-        "[ADMIN][SYNC_STATUS] fetched counts and mappings (rows=%d)",
-        len(mappings),
+    
+    skip = calculate_skip(page, size)
+    mappings, total_count = _get_user_sync_mappings(
+        db=db, 
+        filter_type=filter_type, 
+        skip=skip, 
+        limit=size
     )
-    return UserSyncStatusResponse(counts=counts, mappings=mappings)
+        
+    return {
+        "total": total_count,
+        "page": page,
+        "size": size,
+        "items": mappings,
+        "counts": counts
+    }
 
 
 @router.post(
@@ -989,3 +1072,159 @@ def get_admin_user_list(
         "size": size,
         "items": items,
     }
+
+
+@router.get(
+    path="/oauth-users",
+    response_model=BasePagination[OAuthUserResponse],
+    description="[어드민] 전체 OAuth 유저 목록 조회"
+)
+def get_admin_user_list(
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin_user)
+):
+    skip = calculate_skip(page, size)
+    
+    items, total = get_all_oauth_users_for_admin(
+        db=db,
+        skip=skip,
+        limit=size
+    )
+    
+    return {
+        "total": total,
+        "page": page,
+        "size": size,
+        "items": items,
+    }
+
+
+@router.get(
+    path="/{vendor_type}/users",
+    response_model=BasePagination[ToolUserResponse],
+    description="""
+    어드민용: premapping 결과 확인 테이블에서 사용자 정보 수정 시
+    선택지로 제공할 협업 툴별 사용자 목록
+    """
+)
+def get_tool_users_by_vendor_type(
+    vendor_type: str = Path(..., description="협업 툴 vendor 종류 (github, slack, atlassian)"),
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _check_admin = Depends(require_admin_user)
+):
+    skip = calculate_skip(page, size)
+        
+    vendor_map = {
+        "github": SourceType.GITHUB,
+        "slack": SourceType.SLACK,
+        "atlassian": SourceType.JIRA
+    }
+    
+    source_type = vendor_map.get(vendor_type.lower())
+    if not source_type:
+        raise HTTPException(status_code=400, detail=f"Invalid vendor type: {vendor_type}")
+    
+    SModel, s_id, s_email, s_xf, s_xf_val = SOURCE_MAP[source_type]
+    
+    stmt = select(SModel)
+    if s_xf is not None:
+        stmt = stmt.where(s_xf == s_xf_val)
+    
+    # 전체 개수 쿼리 최적화
+    total_stmt = select(func.count()).select_from(stmt.subquery())
+    total_count = db.scalar(total_stmt) or 0
+    
+    # 데이터 조회
+    rows = db.execute(
+        stmt.offset(skip).limit(size)
+    ).scalars().all()
+    
+    items = []
+    for user in rows:
+        name = (getattr(user, "display_name", None) or 
+                getattr(user, "real_name", None) or 
+                getattr(user, "name", None) or 
+                getattr(user, "login", "Unknown"))
+        
+        if source_type == SourceType.GITHUB:
+            identifier = getattr(user, "login")
+        else:
+            identifier = getattr(user, "email_address", None) or getattr(user, "email", None)
+
+        picture = getattr(user, "avatar_url", None)
+
+        items.append(ToolUserResponse(
+            id=str(getattr(user, s_id.key)),
+            name=name,
+            identifier=identifier,
+            picture=picture,
+        ))
+
+    return {
+        "total": total_count,
+        "page": page,
+        "size": size,
+        "items": items
+    }
+
+
+@router.patch(
+    path="/{vendor_type}/pre-mappings/bulk",
+    description="어드민용: Pre-mapping 결과 일괄 수정 적용"
+)
+def bulk_update_pre_mappings(
+    vendor_type: str = Path(...),
+    request: PreMappingBulkUpdateRequest = Body(...),
+    db: Session = Depends(get_db),
+    _check_admin = Depends(require_admin_user)
+):
+    vendor_map = {
+        "github": SourceType.GITHUB,
+        "slack": SourceType.SLACK,
+        "atlassian": SourceType.JIRA
+    }
+    source_type = vendor_map.get(vendor_type.lower())
+    if not source_type:
+        raise HTTPException(status_code=400, detail="Invalid vendor type")
+    
+    for item in request.items:
+        if item.is_ignored:
+            # [삭제] 협업 툴 미사용 -> 테이블에서 날림
+            db.execute(
+                delete(PreMappingBuffer)
+                .where(
+                    PreMappingBuffer.sub == item.sub,
+                    PreMappingBuffer.source_type == source_type
+                )
+            )
+        else:
+            # external_user_identifier가 없는 비정상 요청 방어
+            if not item.external_user_identifier:
+                continue
+
+            # [추가 or 수정]
+            buffer = db.query(PreMappingBuffer).filter(
+                PreMappingBuffer.sub == item.sub,
+                PreMappingBuffer.source_type == source_type
+            ).first()
+
+            if buffer:
+                # 이미 데이터가 있으면 식별자만 업데이트
+                buffer.external_user_identifier = item.external_user_identifier
+            else:
+                # 데이터가 없으면 새로 생성 (새로운 매핑 추가)
+                new_buffer = PreMappingBuffer(
+                    sub=item.sub,
+                    email=item.email,
+                    name=item.name,
+                    source_type=source_type,
+                    external_user_identifier=item.external_user_identifier
+                )
+                db.add(new_buffer)
+
+    db.commit()
+    return {"message": "success", "processed_count": len(request.items)}

@@ -7,15 +7,23 @@ Confluence 데이터 동기화 API 엔드포인트.
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import require_admin_user
 from catchup.connectors.confluence.factory import create_confluence_ingestion_service
+from catchup.connectors.confluence.schemas import ConfluenceSpaceResponse
+from catchup.db.confluence import domain_repository as confluence_entities
 from catchup.db.confluence import sync_repository as confluence_sync
 from catchup.db.dependencies import get_db
 from catchup.db.models import User
+from catchup.server.connector.sync_status.schemas import (
+    ConnectorSyncScope,
+    ConnectorSyncStatusResponse,
+    build_empty_entity_status,
+    build_entity_status,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,16 +63,17 @@ class ConfluenceSyncResponse(BaseModel):
     )
 
 
-class ConfluenceSyncStatusResponse(BaseModel):
-    """동기화 상태 응답"""
-    cloud_id: str
+class AccessibleSpaceItem(BaseModel):
+    """접근 가능한 Space 요약"""
     space_key: str
-    entity_type: str
-    last_sync_status: str | None
-    last_successful_sync_at: str | None
-    synced_entities: int
-    total_entities: int
-    last_sync_error: str | None
+    space_name: str
+
+
+class AccessibleSpacesResponse(BaseModel):
+    """접근 가능한 Space 목록 응답"""
+    cloud_id: str
+    total_spaces: int
+    spaces: list[AccessibleSpaceItem]
 
 
 # ================================================================
@@ -188,10 +197,87 @@ async def trigger_incremental_sync(
             detail=f"증분 동기화 중 오류가 발생했습니다: {str(e)}",
         )
 
+@router.get("/accessible/spaces", response_model=AccessibleSpacesResponse)
+async def list_accessible_spaces(
+    cloud_id: str = Query(..., description="Atlassian Cloud ID"),
+    db: Session = Depends(get_db),
+    _admin_user: User = Depends(require_admin_user),
+):
+    """
+    Cloud 기준 접근 가능한 Space를 실시간 조회 후 DB 스냅샷 동기화
+    """
+    try:
+        service = await create_confluence_ingestion_service(db, cloud_id)
+        raw_spaces = await service.client.get_spaces(space_type=None, status="current")
+
+        deduped_by_space_id: dict[str, dict] = {}
+        for raw_space in raw_spaces:
+            try:
+                space = ConfluenceSpaceResponse.model_validate(raw_space)
+            except Exception:
+                logger.debug(
+                    "[CONFLUENCE][FULL SYNC][ACCESSIBLE] Skip invalid space payload: cloud_id=%s",
+                    cloud_id,
+                )
+                continue
+
+            description_text = ""
+            if space.description:
+                description_text = space.description.get_plain_text()
+
+            deduped_by_space_id[space.id] = {
+                "cloud_id": cloud_id,
+                "space_id": space.id,
+                "space_key": space.key,
+                "space_name": space.name,
+                "space_type": space.type,
+                "status": space.status,
+                "homepage_id": space.homepage_id,
+                "description": description_text[:2000] if description_text else None,
+            }
+
+        spaces_payload = list(deduped_by_space_id.values())
+        sync_result = confluence_entities.sync_spaces_snapshot(
+            db=db,
+            cloud_id=cloud_id,
+            spaces=spaces_payload,
+        )
+
+        spaces = [
+            AccessibleSpaceItem(space_key=item["space_key"], space_name=item["space_name"])
+            for item in spaces_payload
+        ]
+        spaces.sort(key=lambda item: item.space_key)
+
+        logger.info(
+            "[CONFLUENCE][FULL SYNC][ACCESSIBLE] Accessible spaces synced: cloud_id=%s, fetched=%s, upserted=%s, deleted=%s",
+            cloud_id,
+            len(spaces),
+            sync_result["upserted"],
+            sync_result["deleted"],
+        )
+
+        return AccessibleSpacesResponse(
+            cloud_id=cloud_id,
+            total_spaces=len(spaces),
+            spaces=spaces,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "[CONFLUENCE][FULL SYNC][ACCESSIBLE] list_accessible_spaces failed: cloud_id=%s, error=%s",
+            cloud_id,
+            e,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="접근 가능한 Space 조회 중 오류가 발생했습니다.",
+        )
 
 
-
-@router.get("/status", response_model=list[ConfluenceSyncStatusResponse])
+@router.get("/status", response_model=ConnectorSyncStatusResponse)
 async def get_sync_status(
     cloud_id: str = Query(..., description="Atlassian Cloud ID"),
     db: Session = Depends(get_db),
@@ -199,28 +285,62 @@ async def get_sync_status(
 ):
     """
     동기화 상태 조회
-
-    해당 Confluence 인스턴스의 Space별/Entity별 동기화 상태를 반환.
     """
-    sync_states = confluence_sync.get_all_sync_states(db, cloud_id)
+    try:
+        sync_states = confluence_sync.get_all_sync_states(db, cloud_id)
+        space_name_map = {
+            space.space_key: space.space_name
+            for space in confluence_entities.get_spaces_by_cloud_id(db, cloud_id)
+        }
+        fixed_entity_types = ("page", "blogpost")
 
-    if not sync_states:
-        return []
+        scopes_by_space: dict[str, ConnectorSyncScope] = {}
+        for state in sync_states:
+            entity_type = str(state.entity_type)
+            space_key = state.space_key
+            if entity_type not in fixed_entity_types:
+                continue
 
-    return [
-        ConfluenceSyncStatusResponse(
-            cloud_id=state.cloud_id,
-            space_key=state.space_key,
-            entity_type=state.entity_type,
-            last_sync_status=state.last_sync_status,
-            last_successful_sync_at=(
-                state.last_successful_sync_at.isoformat()
-                if state.last_successful_sync_at
-                else None
-            ),
-            synced_entities=state.synced_entities or 0,
-            total_entities=state.total_entities or 0,
-            last_sync_error=state.last_sync_error,
+            if space_key not in scopes_by_space:
+                scopes_by_space[space_key] = ConnectorSyncScope(
+                    scope_id=space_key,
+                    scope_name=space_name_map.get(space_key, space_key),
+                    entities={
+                        "page": build_empty_entity_status(total_count=0),
+                        "blogpost": build_empty_entity_status(total_count=0),
+                    },
+                )
+
+            scopes_by_space[space_key].entities[entity_type] = build_entity_status(
+                status=state.last_sync_status,
+                synced_count=state.synced_entities or 0,
+                total_count=state.total_entities or 0,
+                last_sync_at=state.last_sync_at,
+                last_successful_sync_at=state.last_successful_sync_at,
+                error=state.last_sync_error,
+            )
+
+        scopes = list(scopes_by_space.values())
+        logger.info(
+            "[CONFLUENCE][SYNC STATUS] fetched: cloud_id=%s, scopes=%s",
+            cloud_id,
+            len(scopes),
         )
-        for state in sync_states
-    ]
+        return ConnectorSyncStatusResponse(
+            source="confluence",
+            target_id=cloud_id,
+            scopes=scopes,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "[CONFLUENCE][SYNC STATUS] get_sync_status failed: cloud_id=%s, error=%s",
+            cloud_id,
+            e,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"동기화 상태 조회 중 오류가 발생했습니다: {str(e)}",
+        )

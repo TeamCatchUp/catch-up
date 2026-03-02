@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
@@ -22,6 +22,7 @@ export function CompleteStep({ data, isAdmin }: CompleteStepProps) {
   const adminSignUp = useAdminSignUp();
 
   const { isPending, isError } = isAdmin ? adminSignUp : userSignUp;
+  const hasSubmitted = useRef(false);
 
   const submitOnboarding = useCallback(() => {
     const onSuccess = async () => {
@@ -53,6 +54,8 @@ export function CompleteStep({ data, isAdmin }: CompleteStepProps) {
   }, [adminSignUp, userSignUp, data, isAdmin, queryClient, router]);
 
   useEffect(() => {
+    if (hasSubmitted.current) return;
+    hasSubmitted.current = true;
     submitOnboarding();
   }, [submitOnboarding]);
 

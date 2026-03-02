@@ -1,0 +1,25 @@
+node_modules
+/frontend/node_modules
+
+.next
+/frontend/.next
+out
+build
+dist
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+.DS_Store
+Thumbs.db
+
+.git
+.gitignore
+
+.env*.local
+
+# Tests and documentation
+README.md
+LICENSE

@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import { USE_MOCK } from '@/shared/mocks/config';
-import { MOCK_ACCOUNT_INFO_MAP, MOCK_SELECTABLE_ROWS } from '@/shared/mocks/integration';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
 import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
+import type { PreMappingInfo, UserSyncItem } from '../../../types/api';
 import type { IntegrationAccountInfo, MemberIntegrationRow } from '../../../types/integrations';
 import ConnectedAccountCard from '../cards/ConnectedAccountCard';
 import AccountEditModal from '../modals/AccountEditModal';
@@ -29,12 +28,8 @@ const buildModalRow = (accountInfo: IntegrationAccountInfo, service: Integration
   userKey: `${accountInfo.userEmail}:${accountInfo.userId}`,
   userName: accountInfo.userName || '-',
   email: accountInfo.userEmail || '-',
-  phone: '-',
-  department: '-',
-  teamSizeLabel: '-',
-  picture: null,
-  accountIdByService: {
-    [service]: accountInfo.userId || '-',
+  serviceInfoByService: {
+    [service]: { name: accountInfo.userName, identifier: accountInfo.userEmail, picture: null },
   },
   statusByService: {
     jira: service === 'jira' ? '완료' : '미사용',
@@ -44,19 +39,16 @@ const buildModalRow = (accountInfo: IntegrationAccountInfo, service: Integration
   },
 });
 
-/** sync-status mappings → 서비스별 accountId 포함 행 변환 */
-const getAccountId = (
-  mapping: { githubLogin: string | null; atlassianEmail: string | null; slackEmail: string | null },
-  service: IntegrationService,
-): string | undefined => {
+/** UserSyncItem에서 서비스별 PreMappingInfo 추출 */
+const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMappingInfo | null => {
   switch (service) {
-    case 'github':
-      return mapping.githubLogin ?? undefined;
     case 'jira':
     case 'confluence':
-      return mapping.atlassianEmail ?? undefined;
+      return item.atlassian;
+    case 'github':
+      return item.github;
     case 'slack':
-      return mapping.slackEmail ?? undefined;
+      return item.slack;
   }
 };
 
@@ -77,7 +69,7 @@ const ConnectedAccountsSectionBase = ({
     () =>
       INTEGRATION_ACCOUNTS.map((account) => {
         const accountInfo =
-          accountInfoMap?.[account.service] ?? (USE_MOCK ? MOCK_ACCOUNT_INFO_MAP[account.service] : EMPTY_ACCOUNT_INFO);
+          accountInfoMap?.[account.service] ?? EMPTY_ACCOUNT_INFO;
 
         return {
           account,
@@ -88,34 +80,28 @@ const ConnectedAccountsSectionBase = ({
     [accountInfoMap],
   );
 
-  const { data: syncStatus } = useQuery({
-    ...adminConnectorQueries.userSyncStatus(),
-    enabled: !USE_MOCK,
-  });
+  const { data: syncStatus } = useQuery(
+    adminConnectorQueries.userSyncStatus({ filterType: 'all', page: 1, size: 100 }),
+  );
 
   const allRows = useMemo<MemberIntegrationRow[]>(() => {
-    if (USE_MOCK) return MOCK_SELECTABLE_ROWS;
-    if (!syncStatus?.mappings) return [];
+    if (!syncStatus?.items) return [];
 
-    return syncStatus.mappings.map((mapping) => {
-      const accountIdByService: Partial<Record<IntegrationService, string>> = {};
+    return syncStatus.items.map((item) => {
+      const serviceInfoByService: Partial<Record<IntegrationService, PreMappingInfo>> = {};
       const statusByService = {} as Record<IntegrationService, '미사용' | '완료' | '미등록'>;
 
       for (const svc of ['jira', 'github', 'slack', 'confluence'] as IntegrationService[]) {
-        const id = getAccountId(mapping, svc);
-        if (id) accountIdByService[svc] = id;
-        statusByService[svc] = id ? '완료' : '미등록';
+        const info = getServiceInfo(item, svc);
+        if (info) serviceInfoByService[svc] = info;
+        statusByService[svc] = info ? '완료' : '미등록';
       }
 
       return {
-        userKey: mapping.name,
-        userName: mapping.name,
-        email: mapping.atlassianEmail ?? mapping.slackEmail ?? '-',
-        phone: '-',
-        department: '-',
-        teamSizeLabel: '-',
-        picture: null,
-        accountIdByService,
+        userKey: item.name,
+        userName: item.name,
+        email: item.email,
+        serviceInfoByService,
         statusByService,
       };
     });
