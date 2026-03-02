@@ -1,5 +1,7 @@
 'use client';
 
+import Image from 'next/image';
+
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { cn } from '@/shared/utils/cn';
 
@@ -83,17 +85,27 @@ const UsersTable = ({
                 {MEMBER_TABLE_SERVICES.map((service) => {
                   const status = displayStatusByService[service];
                   const isLinked = status === '완료';
-                  const accountId = row.accountIdByService[service];
+                  const info = row.serviceInfoByService[service];
 
                   // 연동됨: profile(25px) + name, email 2-line
                   if (isLinked) {
                     return (
                       <div key={`${renderKey}-${service}`} className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
                         <div className="flex items-center gap-2">
-                          <DefaultProfile className="border-neutral-2 text-gray-30 size-6.25 shrink-0 rounded-full border" />
-                          <span className="text-body-xsmall text-gray-80 truncate">{row.userName}</span>
+                          {info?.picture ? (
+                            <Image
+                              src={info.picture}
+                              alt=""
+                              width={25}
+                              height={25}
+                              className="size-6.25 shrink-0 rounded-full"
+                            />
+                          ) : (
+                            <DefaultProfile className="border-neutral-2 text-gray-30 size-6.25 shrink-0 rounded-full border" />
+                          )}
+                          <span className="text-body-xsmall text-gray-80 truncate">{info?.name ?? '-'}</span>
                         </div>
-                        <span className="text-body-xsmall text-gray-50 truncate">{accountId ?? '-'}</span>
+                        <span className="text-body-xsmall text-gray-50 truncate">{info?.email ?? '-'}</span>
                       </div>
                     );
                   }
