@@ -1,16 +1,19 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
+import { toast } from 'sonner';
 
 import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
+import api from '@/shared/api/client';
+import { API } from '@/shared/api/endpoints';
 import { Button } from '@/shared/components/ui/button';
 import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
-import type { SyncFilterType } from '../../../types/api';
+import type { PreMappingBulkUpdateResponse, PreMappingUpdateItem, SyncFilterType, VendorType } from '../../../types/api';
 import type { IntegrationService } from '../../../types/integrations';
 import type { MemberDisplayRow } from '../../../types/memberDisplay';
 import type { AccountOption } from '../tables/AccountSelectDropdown';
@@ -55,9 +58,9 @@ const UsersStatusSection = ({
   const accountOptionsByService = useMemo<Partial<Record<IntegrationService, AccountOption[]>>>(() => {
     if (!isEditMode) return {};
 
-    const toOptions = (pages: { items: { name: string; identifier: string | null; picture: string | null }[] }[] | undefined): AccountOption[] =>
+    const toOptions = (pages: { items: { id: string; name: string; identifier: string | null; picture: string | null }[] }[] | undefined): AccountOption[] =>
       pages?.flatMap((page) =>
-        page.items.map((item) => ({ name: item.name, identifier: item.identifier ?? '', picture: item.picture })),
+        page.items.map((item) => ({ id: item.id, name: item.name, identifier: item.identifier ?? '', picture: item.picture })),
       ) ?? [];
 
     return {
@@ -89,6 +92,67 @@ const UsersStatusSection = ({
       return { ...prev, [userKey]: userOverrides };
     });
   }, []);
+
+  // ─── 저장 mutation ───
+  const SERVICE_TO_VENDOR: Record<IntegrationService, VendorType> = {
+    jira: 'atlassian',
+    confluence: 'atlassian',
+    github: 'github',
+    slack: 'slack',
+  };
+
+  const queryClient = useQueryClient();
+
+  const saveMutation = useMutation({
+    mutationKey: ['admin', 'preMappings', 'bulk'] as const,
+    mutationFn: async () => {
+      // overrides를 vendor별로 그룹핑
+      const byVendor: Partial<Record<VendorType, PreMappingUpdateItem[]>> = {};
+
+      for (const [userKey, serviceOverrides] of Object.entries(overrides)) {
+        const row = displayRows.find((r) => r.row.userKey === userKey)?.row;
+        if (!row) continue;
+
+        for (const [service, override] of Object.entries(serviceOverrides) as [IntegrationService, AccountOverride][]) {
+          const vendor = SERVICE_TO_VENDOR[service];
+          if (!byVendor[vendor]) byVendor[vendor] = [];
+
+          byVendor[vendor]!.push({
+            sub: row.userKey,
+            email: row.email,
+            name: row.userName,
+            is_ignored: override.type === 'unused',
+            external_user_identifier: override.type === 'account' ? override.account.id : null,
+          });
+        }
+      }
+
+      // vendor별 병렬 PATCH
+      const requests = Object.entries(byVendor).map(([vendor, items]) =>
+        api.patch<PreMappingBulkUpdateResponse>(API.admin.preMappingsBulk(vendor), { items }),
+      );
+
+      return Promise.all(requests);
+    },
+    onSuccess: () => {
+      toast('저장이 완료되었습니다.', { description: '계정 연동 정보가 반영되었습니다.' });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'syncStatus'] });
+      setOverrides({});
+      setIsEditMode(false);
+    },
+    onError: () => {
+      toast('일시적인 오류가 발생했습니다.', { description: '잠시 후 다시 시도해주세요.' });
+    },
+  });
+
+  const handleSave = () => {
+    if (saveMutation.isPending) return;
+    if (Object.keys(overrides).length === 0) {
+      setIsEditMode(false);
+      return;
+    }
+    saveMutation.mutate();
+  };
 
   // 오버라이드 적용된 행
   const effectiveRows = useMemo(() => {
@@ -166,9 +230,10 @@ const UsersStatusSection = ({
               variant="box-solid-primary"
               size="md"
               className="text-body-small h-9"
-              onClick={() => setIsEditMode(false)}
+              disabled={saveMutation.isPending}
+              onClick={handleSave}
             >
-              저장하기
+              {saveMutation.isPending ? '저장 중...' : '저장하기'}
             </Button>
           ) : (
             <Button
