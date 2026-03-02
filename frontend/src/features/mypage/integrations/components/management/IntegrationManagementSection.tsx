@@ -28,7 +28,7 @@ const RESOURCE_ICONS: Record<IntegrationService, React.ComponentType<React.SVGPr
   confluence: IconSpace,
 };
 
-const GITHUB_APP_URL = 'https://github.com/apps/catchup-connector';
+const GITHUB_APP_URL = 'https://github.com/apps/catchupqa';
 
 /** 서비스별 연동 설치 핸들러 */
 const handleInstall = (service: IntegrationService) => {
