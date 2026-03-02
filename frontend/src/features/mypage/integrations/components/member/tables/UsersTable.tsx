@@ -24,6 +24,8 @@ interface UsersTableProps {
   isEditMode: boolean;
   /** 서비스별 선택 가능한 계정 후보 목록 */
   accountOptionsByService?: Partial<Record<IntegrationService, AccountOption[]>>;
+  /** 수정 모드에서 선택된 계정 (userKey → service → AccountOption) */
+  selectedAccounts?: Record<string, Partial<Record<IntegrationService, AccountOption>>>;
   /** 계정 선택 콜백 */
   onAccountSelect?: (userKey: string, service: IntegrationService, account: AccountOption) => void;
   /** 미사용 토글 콜백 */
@@ -35,6 +37,7 @@ const UsersTable = ({
   displayRows,
   isEditMode,
   accountOptionsByService = EMPTY_ACCOUNT_OPTIONS,
+  selectedAccounts,
   onAccountSelect,
   onToggleUnused,
 }: UsersTableProps) => {
@@ -130,6 +133,7 @@ const UsersTable = ({
                       key={`${renderKey}-${service}`}
                       status={status as '미사용' | '미등록'}
                       options={accountOptionsByService[service] ?? []}
+                      selectedAccount={selectedAccounts?.[row.userKey]?.[service]}
                       onSelect={(account) => onAccountSelect?.(row.userKey, service, account)}
                       onToggleUnused={(unused) => onToggleUnused?.(row.userKey, service, unused)}
                     />
