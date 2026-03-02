@@ -32,6 +32,85 @@ def upsert_spaces_bulk(db:Session, spaces: list[dict]) -> int:
 
     return len(spaces)
 
+def sync_spaces_snapshot(
+    db: Session,
+    cloud_id: str,
+    spaces: list[dict],
+) -> dict[str, int]:
+    """
+    Cloud 단위 Space 스냅샷 동기화
+    """
+    now = datetime.now(timezone.utc)
+
+    if not spaces:
+        delete_stmt = delete(ConfluenceSpace).where(ConfluenceSpace.cloud_id == cloud_id)
+        delete_result = db.execute(delete_stmt)
+        db.commit()
+        return {
+            "upserted": 0,
+            "deleted": delete_result.rowcount or 0,
+        }
+
+    normalized_spaces: list[dict] = []
+    fetched_space_ids: list[str] = []
+
+    for space in spaces:
+        space_id = space.get("space_id")
+        if not space_id:
+            continue
+
+        normalized_spaces.append(
+            {
+                "cloud_id": cloud_id,
+                "space_id": space_id,
+                "space_key": space.get("space_key", ""),
+                "space_name": space.get("space_name", ""),
+                "space_type": space.get("space_type", "global"),
+                "status": space.get("status", "current"),
+                "homepage_id": space.get("homepage_id"),
+                "description": space.get("description"),
+                "synced_at": now,
+            }
+        )
+        fetched_space_ids.append(space_id)
+
+    if not normalized_spaces:
+        delete_stmt = delete(ConfluenceSpace).where(ConfluenceSpace.cloud_id == cloud_id)
+        delete_result = db.execute(delete_stmt)
+        db.commit()
+        return {
+            "upserted": 0,
+            "deleted": delete_result.rowcount or 0,
+        }
+
+    upsert_stmt = insert(ConfluenceSpace).values(normalized_spaces)
+    upsert_stmt = upsert_stmt.on_conflict_do_update(
+        index_elements=["cloud_id", "space_id"],
+        set_={
+            "space_key": upsert_stmt.excluded.space_key,
+            "space_name": upsert_stmt.excluded.space_name,
+            "space_type": upsert_stmt.excluded.space_type,
+            "status": upsert_stmt.excluded.status,
+            "homepage_id": upsert_stmt.excluded.homepage_id,
+            "description": upsert_stmt.excluded.description,
+            "synced_at": upsert_stmt.excluded.synced_at,
+        },
+    )
+    db.execute(upsert_stmt)
+
+    stale_delete_stmt = delete(ConfluenceSpace).where(
+        ConfluenceSpace.cloud_id == cloud_id,
+        ~ConfluenceSpace.space_id.in_(fetched_space_ids),
+    )
+    stale_delete_result = db.execute(stale_delete_stmt)
+
+    db.commit()
+
+    return {
+        "upserted": len(normalized_spaces),
+        "deleted": stale_delete_result.rowcount or 0,
+    }
+
 def get_spaces_by_cloud_id(db:Session, cloud_id: str)-> list[ConfluenceSpace]:
     stmt = (
         select(ConfluenceSpace)
