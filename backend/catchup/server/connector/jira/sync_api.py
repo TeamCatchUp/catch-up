@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from catchup.auth.dependencies import require_admin_user
 from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.db.jira import sync_repository as jira_sync
+from catchup.db.jira import domain_repository as jira_entities
 from catchup.db.atlassian.oauth_repository import get_all_tokens
 from catchup.db.dependencies import get_db
 from catchup.db.models import User
@@ -68,6 +69,19 @@ class SyncStatusResponse(BaseModel):
     last_successful_sync_at: str | None
     synced_entities: int
     last_sync_error: str | None
+
+
+class AccessibleProjectItem(BaseModel):
+    """접근 가능한 Project 요약"""
+    project_key: str
+    project_name: str
+
+
+class AccessibleProjectsResponse(BaseModel):
+    """접근 가능한 Project 목록 응답"""
+    cloud_id: str
+    total_projects: int
+    projects: list[AccessibleProjectItem]
 
 
 # ================================================================
@@ -389,6 +403,91 @@ async def flush_all_jira_buffers(
         raise HTTPException(
             status_code=500,
             detail=f"전체 flush 중 오류가 발생했습니다: {str(e)}",
+        )
+
+
+@router.get("/accessible/projects", response_model=AccessibleProjectsResponse)
+async def list_accessible_projects(
+    cloud_id: str = Query(..., description="Jira Cloud ID"),
+    db: Session = Depends(get_db),
+    _admin_user: User = Depends(require_admin_user),
+):
+    """
+    Cloud 기준 접근 가능한 Project를 실시간 조회 후 DB 스냅샷 동기화
+    """
+    try:
+        service = await create_jira_ingestion_service(db, cloud_id)
+        raw_projects = await service.client.get_all_projects()
+
+        deduped_by_key: dict[str, dict] = {}
+        for raw in raw_projects:
+            project_key = raw.get("key")
+            project_id = raw.get("id")
+            project_name = raw.get("name")
+
+            if not project_key or not project_id or not project_name:
+                logger.debug(
+                    "[JIRA][FULL SYNC][ACCESSIBLE] Skip invalid project payload: cloud_id=%s, project_key=%s, project_id=%s",
+                    cloud_id,
+                    project_key,
+                    project_id,
+                )
+                continue
+
+            lead = raw.get("lead") or {}
+            deduped_by_key[project_key] = {
+                "cloud_id": cloud_id,
+                "project_key": project_key,
+                "project_id": str(project_id),
+                "project_name": project_name,
+                "description": raw.get("description"),
+                "project_type": raw.get("projectTypeKey"),
+                "lead_account_id": lead.get("accountId"),
+                "lead_display_name": lead.get("displayName"),
+                "url": f"{service.site_url}/projects/{project_key}",
+            }
+
+        projects_payload = list(deduped_by_key.values())
+        sync_result = jira_entities.sync_projects_snapshot(
+            db=db,
+            cloud_id=cloud_id,
+            projects=projects_payload,
+        )
+
+        projects = [
+            AccessibleProjectItem(
+                project_key=item["project_key"],
+                project_name=item["project_name"],
+            )
+            for item in projects_payload
+        ]
+        projects.sort(key=lambda item: item.project_key)
+
+        logger.info(
+            "[JIRA][FULL SYNC][ACCESSIBLE] Accessible projects synced: cloud_id=%s, fetched=%s, upserted=%s, deleted=%s",
+            cloud_id,
+            len(projects),
+            sync_result["upserted"],
+            sync_result["deleted"],
+        )
+
+        return AccessibleProjectsResponse(
+            cloud_id=cloud_id,
+            total_projects=len(projects),
+            projects=projects,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "[JIRA][FULL SYNC][ACCESSIBLE] list_accessible_projects failed: cloud_id=%s, error=%s",
+            cloud_id,
+            e,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="접근 가능한 Project 조회 중 오류가 발생했습니다.",
         )
 
 

@@ -11,7 +11,7 @@ Endpoints:
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -70,6 +70,17 @@ class SyncStateResponse(BaseModel):
     installation_id: int
     repositories: list[dict[str, Any]]
 
+class AccessibleRepositoryItem(BaseModel):
+    """
+    접근 가능한 Repository
+    """
+    repo_id: int
+    full_name: str
+
+class AccessibleRepositoriesResponse(BaseModel):
+    installation_id: int
+    total_repositories: int
+    repositories: list[AccessibleRepositoryItem]
 
 # ============================================================
 # Helper Functions
@@ -363,3 +374,99 @@ async def test_flush_webhook_events(
     except Exception as e:
         logger.error(f"Manual webhook flush failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/accessible/repositories", response_model=AccessibleRepositoriesResponse)
+async def list_accessible_repositories(
+    installation_id: int = Query(..., description="Github App Installation ID"),
+    db: Session = Depends(get_db),
+    _admin_user: User = Depends(require_admin_user),
+):
+    try:
+        installation = get_installation_by_installation_id(db, installation_id)
+        if not installation:
+            raise HTTPException(
+                status_code = 404,
+                detail = f"Github Installation Not Found: {installation_id}",
+            )
+        
+        service = await _get_ingestion_service(db, installation_id)
+        raw_repos = await service.client.list_installation_repos()
+
+        repo_map: dict[int, RepositoryUpsertData] = {}
+        for repo in raw_repos:
+            repo_id = repo.get("id")
+            full_name = repo.get("full_name")
+            owner = (repo.get("owner") or {}).get("login")
+            name = repo.get("name")
+            html_url = repo.get("html_url")
+
+            if not repo_id or not full_name or not owner or not name or not html_url:
+                logger.debug(
+                    "[GITHUB][FULL SYNC][ACCESSIBLE] Skip invalid repository payload: installation_id=%s, repo_id=%s, full_name=%s",
+                    installation_id,
+                    repo_id,
+                    full_name,
+                )
+                continue
+
+            repo_map[int(repo_id)] = RepositoryUpsertData(
+                repo_id=int(repo_id),
+                owner=owner,
+                name=name,
+                full_name=full_name,
+                html_url=html_url,
+                description=repo.get("description"),
+                default_branch=repo.get("default_branch", "main"),
+                language=repo.get("language"),
+                topics=repo.get("topics", []),
+                stargazers_count=repo.get("stargazers_count", 0),
+                forks_count=repo.get("forks_count", 0),
+                open_issues_count=repo.get("open_issues_count", 0),
+                private=repo.get("private", False),
+                archived=repo.get("archived", False),
+                disabled=repo.get("disabled", False),
+                pushed_at=repo.get("pushed_at"),
+                repo_created_at=repo.get("created_at"),
+                repo_updated_at=repo.get("updated_at"),
+            )
+
+        repos_data = list(repo_map.values())
+        
+        sync_result = github_entities.sync_repositories_snapshot(
+            db = db,
+            installation_id = installation_id,
+            repos_data=repos_data,
+        )
+
+        repositories = [
+            AccessibleRepositoryItem(repo_id=repo.repo_id, full_name = repo.full_name)
+            for repo in repos_data
+        ]
+        repositories.sort(key=lambda item: item.full_name.lower())
+
+        logger.info(
+            "[GITHUB][FULL SYNC][ACCESSIBLE] Accessible repositories synced: installation_id=%s, fetched=%s, upserted=%s, deleted=%s",
+            installation_id,
+            len(repositories),
+            sync_result["upserted"],
+            sync_result["deleted"],
+        )
+
+        return AccessibleRepositoriesResponse(
+            installation_id=installation_id,
+            total_repositories=len(repositories),
+            repositories=repositories,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "[GITHUB][FULL SYNC][ACCESSIBLE] list_accessible_repositories failed: installation_id=%s, error=%s",
+            installation_id,
+            e,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="접근 가능한 Repository 조회 중 오류가 발생했습니다.",
+        )
