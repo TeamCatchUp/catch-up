@@ -12,7 +12,7 @@ import {
   MOCK_QUESTION_COUNTS,
   MOCK_SUMMARY,
   MOCK_TOTAL_TREND,
-} from '../mocks/tokenUsageMockData';
+} from '@/shared/mocks/admin/token-usage/tokenUsageMockData';
 
 export const tokenUsageQueries = {
   all: () => ['admin', 'tokenUsage'] as const,
