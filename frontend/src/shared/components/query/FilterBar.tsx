@@ -2,24 +2,12 @@
 
 import { RefObject } from 'react';
 
-import IconProfile from '@/public/icons/icon/default_profile.svg';
-import IconDivider from '@/public/icons/icon/divider.svg';
-import IconPerson from '@/public/icons/icon/person.svg';
-import IconSpace from '@/public/icons/icon/space.svg';
-import IconTag from '@/public/icons/icon/tag.svg';
 import IconConfluence from '@/public/icons/logo/Confluence.svg';
 import IconGithub from '@/public/icons/logo/GitHub.svg';
 import IconJira from '@/public/icons/logo/Jira.svg';
 import IconSlack from '@/public/icons/logo/Slack.svg';
-import { FilterDropdown } from '@/shared/components/query/filter/FilterDropdown';
-import { FilterOptionList } from '@/shared/components/query/filter/FilterOptionList';
 import { SearchOptionButton } from '@/shared/components/SearchOptionButton';
 import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
-import {
-  MOCK_DEPARTMENT_FILTER_OPTIONS,
-  MOCK_PERSON_FILTER_OPTIONS,
-  MOCK_PROJECT_FILTER_OPTIONS,
-} from '@/shared/mocks/search/filterOptions';
 
 interface FilterBarProps {
   filters: UseSearchFiltersReturn;
