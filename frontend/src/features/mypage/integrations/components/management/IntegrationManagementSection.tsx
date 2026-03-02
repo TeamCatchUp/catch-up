@@ -221,11 +221,7 @@ const IntegrationManagementSection = ({
                     <div className="w-full px-4">
                       <div className="border-neutral-3 border-t" />
                     </div>
-                    <Pagination
-                      currentPage={currentPage}
-                      totalPages={totalPages}
-                      onPageChange={setCurrentPage}
-                    />
+                    <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
                   </>
                 )}
               </>
