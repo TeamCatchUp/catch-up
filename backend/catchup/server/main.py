@@ -12,7 +12,8 @@ from catchup.audit.enums import SystemEventAction
 from catchup.audit.system import system_event
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal, engine
-from catchup.db.models import Base, Company
+from catchup.db.global_state import has_admin_ever_onboarded, has_csv_file_ever_been_uploaded
+from catchup.db.models import Base
 from catchup.observability.logging import configure_logging
 from catchup.server.admin.api import router as admin_router
 from catchup.server.auth.api import router as auth_router
@@ -208,15 +209,6 @@ async def lifespan(app: FastAPI):
         )
 
     try:
-        db = SessionLocal()
-        company_count = db.query(Company).count()
-        if company_count > 0:
-            state.is_admin_initiated = True
-        db.close()
-    except Exception as e:
-        logger.critical("Failed to check whether admin is initiated: %s", e)
-
-    try:
         await get_redis_client()
         system_event(
             action=SystemEventAction.STARTUP_REDIS_INIT,
@@ -280,6 +272,20 @@ async def lifespan(app: FastAPI):
             result="failure",
             level="error",
             metadata={"error": str(e)},
+        )
+    
+    try:
+        with SessionLocal() as db:
+            # 어드민 온보딩 여부 테스트
+            state.is_admin_initiated = has_admin_ever_onboarded(db)
+            
+            # 어드민 CSV 파일 최초 업로드 여부
+            state.has_ever_uploaded_user_list_export = has_csv_file_ever_been_uploaded(db)
+            
+    except Exception as e:
+        logger.critical(
+            "Failed to check whether admin is initiated: %s",
+            e,
         )
 
 
