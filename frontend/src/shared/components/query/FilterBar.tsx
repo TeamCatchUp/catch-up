@@ -14,6 +14,7 @@ interface FilterBarProps {
   inputRef: RefObject<HTMLTextAreaElement | null>;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- inputRef는 필터 드롭다운 활성화 시 사용 예정
 export default function FilterBar({ filters, inputRef }: FilterBarProps) {
   return (
     <div className="flex items-center gap-2.5 self-stretch overflow-x-scroll py-0.5 whitespace-nowrap">
@@ -43,81 +44,20 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
           onClick={() => filters.toggleSource('slack')}
         />
       </div>
-      {/* <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
+      {/* TODO: 백엔드 API 준비 시 담당자/부서/프로젝트 필터 드롭다운 활성화
+      <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
       <div className="flex items-center gap-2.5">
-        <FilterDropdown
-          open={filters.openPopover === 'person'}
-          onOpenChange={(o) => {
-            filters.setOpenPopover(o ? 'person' : null);
-            if (!o) inputRef.current?.focus();
-          }}
-          trigger={
-            <SearchOptionButton
-              Icon={IconPerson}
-              label={filters.labels.person}
-              selected={filters.selectedPeople.length > 0}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => filters.setOpenPopover('person')}
-            />
-          }
-        >
-          <FilterOptionList
-            title="담당자 선택"
-            options={MOCK_PERSON_FILTER_OPTIONS}
-            selected={filters.selectedPeople}
-            onToggle={filters.togglePerson}
-            Icon={IconProfile}
-          />
+        <FilterDropdown ...>
+          <FilterOptionList title="담당자 선택" options={personOptions} ... />
         </FilterDropdown>
-        <FilterDropdown
-          open={filters.openPopover === 'department'}
-          onOpenChange={(o) => {
-            filters.setOpenPopover(o ? 'department' : null);
-            if (!o) inputRef.current?.focus();
-          }}
-          trigger={
-            <SearchOptionButton
-              Icon={IconTag}
-              label={filters.labels.dept}
-              selected={filters.selectedDepts.length > 0}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => filters.setOpenPopover('department')}
-            />
-          }
-        >
-          <FilterOptionList
-            title="부서 선택"
-            options={MOCK_DEPARTMENT_FILTER_OPTIONS}
-            selected={filters.selectedDepts}
-            onToggle={filters.toggleDept}
-            Icon={IconTag}
-          />
+        <FilterDropdown ...>
+          <FilterOptionList title="부서 선택" options={deptOptions} ... />
         </FilterDropdown>
-        <FilterDropdown
-          open={filters.openPopover === 'project'}
-          onOpenChange={(o) => {
-            filters.setOpenPopover(o ? 'project' : null);
-            if (!o) inputRef.current?.focus();
-          }}
-          trigger={
-            <SearchOptionButton
-              Icon={IconSpace}
-              label={filters.labels.project}
-              selected={filters.selectedProjects.length > 0}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => filters.setOpenPopover('project')}
-            />
-          }
-        >
-          <FilterOptionList
-            title="프로젝트 선택"
-            options={MOCK_PROJECT_FILTER_OPTIONS}
-            selected={filters.selectedProjects}
-            onToggle={filters.toggleProject}
-            Icon={IconSpace}
-          />
+        <FilterDropdown ...>
+          <FilterOptionList title="프로젝트 선택" options={projectOptions} ... />
         </FilterDropdown>
-      </div> */}
+      </div>
+      */}
     </div>
   );
 }
