@@ -34,7 +34,7 @@ from catchup.db.models import (
     UserStatus,
     UserRole,
 )
-from catchup.db.users import get_all_users_for_admin
+from catchup.db.users import get_all_oauth_users_for_admin, get_all_users_for_admin
 from catchup.server.auth.schemas import (
     ConfluenceSyncableResponse,
     ConfluenceConnectorStatus,
@@ -48,6 +48,7 @@ from catchup.server.auth.schemas import (
     SlackConnectorStatus,
 )
 from catchup.server.admin.schemas import (
+    OAuthUserResponse,
     SyncStatusCounts,
     UserResponse,
     UserSyncMapping,
@@ -978,6 +979,33 @@ def get_admin_user_list(
     skip = calculate_skip(page, size)
     
     items, total = get_all_users_for_admin(
+        db=db,
+        skip=skip,
+        limit=size
+    )
+    
+    return {
+        "total": total,
+        "page": page,
+        "size": size,
+        "items": items,
+    }
+
+
+@router.get(
+    path="/oauth-users",
+    response_model=BasePagination[OAuthUserResponse],
+    description="[어드민] 전체 OAuth 유저 목록 조회"
+)
+def get_admin_user_list(
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin_user)
+):
+    skip = calculate_skip(page, size)
+    
+    items, total = get_all_oauth_users_for_admin(
         db=db,
         skip=skip,
         limit=size

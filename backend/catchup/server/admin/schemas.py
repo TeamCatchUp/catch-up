@@ -134,3 +134,12 @@ class UserResponse(BaseModel):
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+
+
+class OAuthUserResponse(BaseModel):
+    sub: str
+    name: str
+    email: str
+    picture: str | None = None
+    
+    model_config = ConfigDict(from_attributes=True)
