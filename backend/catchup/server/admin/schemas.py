@@ -25,6 +25,7 @@ class SyncStatusCounts(BaseModel):
 
 
 class UserSyncMapping(BaseModel):
+    sub: str  # OAuth 사용자 식별자
     name: str
     email: str
     atlassian: PreMappingInfo | None = None
@@ -43,6 +44,17 @@ class ToolUserResponse(BaseModel):
     identifier: str | None = None  # email 또는 github login
     picture: str | None = None
 
+
+# 1. 프론트엔드에서 받을 Request Schema (변수명 통일 및 필수값 추가)
+class PreMappingUpdateItem(BaseModel):
+    sub: str  # 내부 시스템 사용자 고유 ID
+    email: str  # DB Insert 시 필수
+    name: str  # DB Insert 시 필수
+    is_ignored: bool  # True: 미사용 (삭제) / False: 사용 (추가 또는 수정)
+    external_user_identifier: Optional[str] = None  # 협업툴 사용자 식별자
+
+class PreMappingBulkUpdateRequest(BaseModel):
+    items: List[PreMappingUpdateItem]
 
 # =====================
 # Admin user management

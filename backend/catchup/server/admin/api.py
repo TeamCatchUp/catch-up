@@ -2,8 +2,8 @@ from enum import StrEnum
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from sqlalchemy import and_, func, or_, select, text
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
+from sqlalchemy import and_, delete, func, or_, select, text
 from sqlalchemy.orm import Session, aliased
 
 from catchup.auth.dependencies import require_admin_user
@@ -36,7 +36,6 @@ from catchup.db.models import (
 )
 from catchup.db.user_source_mapping import SOURCE_MAP
 from catchup.db.users import get_all_oauth_users_for_admin, get_all_users_for_admin
-from catchup.mapping.file import VENDOR_SOURCE_MAP
 from catchup.server.auth.schemas import (
     ConfluenceSyncableResponse,
     ConfluenceConnectorStatus,
@@ -51,6 +50,7 @@ from catchup.server.auth.schemas import (
 )
 from catchup.server.admin.schemas import (
     OAuthUserResponse,
+    PreMappingBulkUpdateRequest,
     PreMappingInfo,
     SyncStatusCounts,
     ToolUserResponse,
@@ -732,6 +732,7 @@ def _get_user_sync_mappings(
 
     base_users = (
         select(
+            PreMappingBuffer.sub.label("sub"),
             PreMappingBuffer.email.label("email"),
             PreMappingBuffer.name.label("name")
         )
@@ -741,6 +742,7 @@ def _get_user_sync_mappings(
 
     base_stmt = (
         select(
+            base_users.c.sub.label("sub"),
             base_users.c.name.label("keycloak_name"),
             base_users.c.email.label("keycloak_email"),
             JModel, 
@@ -777,21 +779,13 @@ def _get_user_sync_mappings(
         .limit(limit)
     )
     
-    rows = db.execute(data_stmt).all()
-    
-    print(rows[0][2].display_name)
-    
+    rows = db.execute(data_stmt).all()    
     
     results = []
     for row in rows:
-        # row[0]: keycloak_name
-        # row[1]: keycloak_email
-        # row[2]: JModel (JiraUser)
-        # row[3]: SModel (SlackUser)
-        # row[4]: GModel (GitHubUser)
-        jira_user = row[2]
-        slack_user = row[3]
-        github_user = row[4]
+        jira_user = row.JiraUser
+        slack_user = row.SlackUser
+        github_user = row.GitHubUser
 
         # Jira 정보 조립
         atlassian_info = PreMappingInfo(
@@ -815,8 +809,9 @@ def _get_user_sync_mappings(
         ) if github_user else None
 
         results.append(UserSyncMapping(
-            name=row[0], 
-            email=row[1],
+            sub=row.sub,
+            name=row.keycloak_name, 
+            email=row.keycloak_email,
             atlassian=atlassian_info,
             slack=slack_info,
             github=github_info
@@ -1175,3 +1170,61 @@ def get_tool_users_by_vendor_type(
         "size": size,
         "items": items
     }
+
+
+@router.patch(
+    path="/{vendor_type}/pre-mappings/bulk",
+    description="어드민용: Pre-mapping 결과 일괄 수정 적용"
+)
+def bulk_update_pre_mappings(
+    vendor_type: str = Path(...),
+    request: PreMappingBulkUpdateRequest = Body(...),
+    db: Session = Depends(get_db),
+    _check_admin = Depends(require_admin_user)
+):
+    vendor_map = {
+        "github": SourceType.GITHUB,
+        "slack": SourceType.SLACK,
+        "atlassian": SourceType.JIRA
+    }
+    source_type = vendor_map.get(vendor_type.lower())
+    if not source_type:
+        raise HTTPException(status_code=400, detail="Invalid vendor type")
+    
+    for item in request.items:
+        if item.is_ignored:
+            # [삭제] 협업 툴 미사용 -> 테이블에서 날림
+            db.execute(
+                delete(PreMappingBuffer)
+                .where(
+                    PreMappingBuffer.sub == item.sub,
+                    PreMappingBuffer.source_type == source_type
+                )
+            )
+        else:
+            # external_user_identifier가 없는 비정상 요청 방어
+            if not item.external_user_identifier:
+                continue
+
+            # [추가 or 수정]
+            buffer = db.query(PreMappingBuffer).filter(
+                PreMappingBuffer.sub == item.sub,
+                PreMappingBuffer.source_type == source_type
+            ).first()
+
+            if buffer:
+                # 이미 데이터가 있으면 식별자만 업데이트
+                buffer.external_user_identifier = item.external_user_identifier
+            else:
+                # 데이터가 없으면 새로 생성 (새로운 매핑 추가)
+                new_buffer = PreMappingBuffer(
+                    sub=item.sub,
+                    email=item.email,
+                    name=item.name,
+                    source_type=source_type,
+                    external_user_identifier=item.external_user_identifier
+                )
+                db.add(new_buffer)
+
+    db.commit()
+    return {"message": "success", "processed_count": len(request.items)}
