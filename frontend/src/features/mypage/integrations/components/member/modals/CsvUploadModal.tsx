@@ -82,7 +82,7 @@ const VendorFileUploader = ({
       {/* 라벨 + 필수 표시 — Figma: gap-4(4px), 필수 dot 5px */}
       <div className="flex items-center gap-1">
         <span className="text-body-small text-gray-80 font-medium">{label}</span>
-        <span className="bg-red-40 size-[5px] rounded-full" />
+        <span className="bg-red-40 size-1.25 rounded-full" />
       </div>
 
       <input ref={inputRef} type="file" accept={ACCEPTED_EXTENSIONS} hidden onChange={handleChange} />

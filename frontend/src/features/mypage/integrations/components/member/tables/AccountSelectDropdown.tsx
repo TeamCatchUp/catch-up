@@ -73,7 +73,7 @@ const AccountSelectDropdown = ({ status, options, onSelect, onToggleUnused }: Ac
           </div>
 
           {/* 계정 목록 */}
-          <CommandList className="max-h-[280px] px-0 py-0">
+          <CommandList className="max-h-70 px-0 py-0">
             <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
             {options.map((account) => (
               <CommandItem
@@ -87,7 +87,7 @@ const AccountSelectDropdown = ({ status, options, onSelect, onToggleUnused }: Ac
               >
                 <DefaultProfile className="border-neutral-2 text-gray-30 size-10 shrink-0 rounded-full border" />
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-heading-small text-gray-80 max-w-[175px] truncate">{account.name}</span>
+                  <span className="text-heading-small text-gray-80 max-w-43.75 truncate">{account.name}</span>
                   <span className="text-label-xsmall truncate text-gray-50">{account.email}</span>
                 </div>
               </CommandItem>

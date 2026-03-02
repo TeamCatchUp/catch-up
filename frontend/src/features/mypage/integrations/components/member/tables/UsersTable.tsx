@@ -90,7 +90,7 @@ const UsersTable = ({
                     return (
                       <div key={`${renderKey}-${service}`} className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
                         <div className="flex items-center gap-2">
-                          <DefaultProfile className="border-neutral-2 text-gray-30 size-[25px] shrink-0 rounded-full border" />
+                          <DefaultProfile className="border-neutral-2 text-gray-30 size-6.25 shrink-0 rounded-full border" />
                           <span className="text-body-xsmall text-gray-80 truncate">{row.userName}</span>
                         </div>
                         <span className="text-body-xsmall text-gray-50 truncate">{accountId ?? '-'}</span>
