@@ -165,9 +165,7 @@ const UsersStatusSection = ({
       const newStatus = { ...displayRow.displayStatusByService };
 
       for (const [service, override] of Object.entries(userOverrides) as [IntegrationService, AccountOverride][]) {
-        if (override.type === 'account') {
-          newStatus[service] = '완료';
-        } else {
+        if (override.type === 'unused') {
           newStatus[service] = '미사용';
         }
       }
@@ -178,6 +176,20 @@ const UsersStatusSection = ({
       };
     });
   }, [displayRows, overrides]);
+
+  // override에서 선택된 계정만 추출 (드롭다운 트리거 표시용)
+  const selectedAccounts = useMemo(() => {
+    const result: Record<string, Partial<Record<IntegrationService, AccountOption>>> = {};
+    for (const [userKey, serviceOverrides] of Object.entries(overrides)) {
+      for (const [service, override] of Object.entries(serviceOverrides) as [IntegrationService, AccountOverride][]) {
+        if (override.type === 'account') {
+          if (!result[userKey]) result[userKey] = {};
+          result[userKey]![service] = override.account;
+        }
+      }
+    }
+    return result;
+  }, [overrides]);
 
   // 서버 사이드 페이지네이션
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -255,6 +267,7 @@ const UsersStatusSection = ({
           displayRows={effectiveRows}
           isEditMode={isEditMode}
           accountOptionsByService={accountOptionsByService}
+          selectedAccounts={selectedAccounts}
           onAccountSelect={handleAccountSelect}
           onToggleUnused={handleToggleUnused}
         />
