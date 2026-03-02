@@ -8,7 +8,7 @@ from catchup.db.models import JobLevel, UserRole, UserStatus
 
 class PreMappingInfo(BaseModel):
     name: str | None = None
-    email: str | None = None
+    identifier: str | None = None  # email 또는 github login
     picture: str | None = None
 
 
@@ -35,6 +35,13 @@ class UserSyncMapping(BaseModel):
 class UserSyncStatusResponse(BaseModel):
     counts: SyncStatusCounts
     mappings: List[UserSyncMapping]
+    
+
+class ToolUserResponse(BaseModel):
+    id: str
+    name: str
+    identifier: str | None = None  # email 또는 github login
+    picture: str | None = None
 
 
 # =====================

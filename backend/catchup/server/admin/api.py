@@ -1,9 +1,8 @@
-from datetime import datetime, time, timedelta
 from enum import StrEnum
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session, aliased
 
@@ -25,7 +24,6 @@ from catchup.db.models import (
     JiraProject,
     JiraSyncState,
     JiraUser,
-    OAuthUser,
     PreMappingBuffer,
     SlackOAuthToken,
     SlackSyncState,
@@ -38,6 +36,7 @@ from catchup.db.models import (
 )
 from catchup.db.user_source_mapping import SOURCE_MAP
 from catchup.db.users import get_all_oauth_users_for_admin, get_all_users_for_admin
+from catchup.mapping.file import VENDOR_SOURCE_MAP
 from catchup.server.auth.schemas import (
     ConfluenceSyncableResponse,
     ConfluenceConnectorStatus,
@@ -54,6 +53,7 @@ from catchup.server.admin.schemas import (
     OAuthUserResponse,
     PreMappingInfo,
     SyncStatusCounts,
+    ToolUserResponse,
     UserResponse,
     UserSyncMapping,
     UserSyncStatusResponse,
@@ -796,21 +796,21 @@ def _get_user_sync_mappings(
         # Jira 정보 조립
         atlassian_info = PreMappingInfo(
             name=getattr(jira_user, "display_name", None),
-            email=getattr(jira_user, "email_address", None),
+            identifier=getattr(jira_user, "email_address", None),
             picture=getattr(jira_user, "avatar_url", None)
         ) if jira_user else None
 
         # Slack 정보 조립
         slack_info = PreMappingInfo(
             name=getattr(slack_user, "real_name", None),
-            email=getattr(slack_user, "email", None),
+            identifier=getattr(slack_user, "email", None),
             picture=getattr(slack_user, "avatar_url", None)
         ) if slack_user else None
 
         # GitHub 정보 조립
         github_info = PreMappingInfo(
             name=getattr(github_user, "name", None) or getattr(github_user, "login", None),
-            email=getattr(github_user, "email", None),
+            identifier=getattr(github_user, "email", None),
             picture=getattr(github_user, "avatar_url", None)
         ) if github_user else None
 
@@ -1103,4 +1103,75 @@ def get_admin_user_list(
         "page": page,
         "size": size,
         "items": items,
+    }
+
+
+@router.get(
+    path="/{vendor_type}/users",
+    response_model=BasePagination[ToolUserResponse],
+    description="""
+    어드민용: premapping 결과 확인 테이블에서 사용자 정보 수정 시
+    선택지로 제공할 협업 툴별 사용자 목록
+    """
+)
+def get_tool_users_by_vendor_type(
+    vendor_type: str = Path(..., description="협업 툴 vendor 종류 (github, slack, atlassian)"),
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _check_admin = Depends(require_admin_user)
+):
+    skip = calculate_skip(page, size)
+        
+    vendor_map = {
+        "github": SourceType.GITHUB,
+        "slack": SourceType.SLACK,
+        "atlassian": SourceType.JIRA
+    }
+    
+    source_type = vendor_map.get(vendor_type.lower())
+    if not source_type:
+        raise HTTPException(status_code=400, detail=f"Invalid vendor type: {vendor_type}")
+    
+    SModel, s_id, s_email, s_xf, s_xf_val = SOURCE_MAP[source_type]
+    
+    stmt = select(SModel)
+    if s_xf is not None:
+        stmt = stmt.where(s_xf == s_xf_val)
+    
+    # 전체 개수 쿼리 최적화
+    total_stmt = select(func.count()).select_from(stmt.subquery())
+    total_count = db.scalar(total_stmt) or 0
+    
+    # 데이터 조회
+    rows = db.execute(
+        stmt.offset(skip).limit(size)
+    ).scalars().all()
+    
+    items = []
+    for user in rows:
+        name = (getattr(user, "display_name", None) or 
+                getattr(user, "real_name", None) or 
+                getattr(user, "name", None) or 
+                getattr(user, "login", "Unknown"))
+        
+        if source_type == SourceType.GITHUB:
+            identifier = getattr(user, "login")
+        else:
+            identifier = getattr(user, "email_address", None) or getattr(user, "email", None)
+
+        picture = getattr(user, "avatar_url", None)
+
+        items.append(ToolUserResponse(
+            id=str(getattr(user, s_id.key)),
+            name=name,
+            identifier=identifier,
+            picture=picture,
+        ))
+
+    return {
+        "total": total_count,
+        "page": page,
+        "size": size,
+        "items": items
     }
