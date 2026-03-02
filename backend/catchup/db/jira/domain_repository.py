@@ -7,6 +7,7 @@ JiraProject, JiraSprint, JiraUser 테이블에 대한 CRUD 작업 수행.
 
 from datetime import datetime, timezone
 
+from regex import P
 from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
@@ -101,6 +102,85 @@ def upsert_projects_bulk(db: Session, projects: list[dict]) -> int:
     db.commit()
 
     return len(projects)
+
+def sync_projects_snapshot(
+    db: Session,
+    cloud_id: str,
+    projects: list[dict],
+) -> dict[str, int]:
+    now = datetime.now(timezone.utc)
+
+    if not projects:
+        delete_stmt = delete(JiraProject).where(JiraProject.cloud_id == cloud_id)
+        delete_result = db.execute(delete_stmt)
+        db.commit()
+        return {
+            "upserted": 0,
+            "deleted": delete_result.rowcount or 0,
+        }
+    
+    normalized_projects: list[dict] = []
+    fetched_project_keys: list[str] = []
+
+    for project in projects:
+        project_key = project.get("project_key")
+        if not project_key:
+            continue
+
+        normalized_projects.append(
+            {
+                "cloud_id": cloud_id,
+                "project_key": project_key,
+                "project_id": project.get("project_id", ""),
+                "project_name": project.get("project_name", ""),
+                "description": project.get("description"),
+                "project_type": project.get("project_type"),
+                "lead_account_id": project.get("lead_account_id"),
+                "lead_display_name": project.get("lead_display_name"),
+                "url": project.get("url"),
+                "synced_at": now, 
+            }
+        )
+        fetched_project_keys.append(project_key)
+
+    if not normalized_projects:
+        delete_stmt = delete(JiraProject).where(JiraProject.cloud_id==cloud_id)
+        delete_result = db.execute(delete_stmt)
+        db.commit()
+        return {
+            "upserted": 0,
+            "deleted": delete_result.rowcount or 0,
+        }
+    
+    upsert_stmt = insert(JiraProject).values(normalized_projects)
+    upsert_stmt = upsert_stmt.on_conflict_do_update(
+        index_elements=["cloud_id", "project_key"],
+        set_={
+            "project_id": upsert_stmt.excluded.project_id,
+            "project_name": upsert_stmt.excluded.project_name,
+            "description": upsert_stmt.excluded.description,
+            "project_type": upsert_stmt.excluded.project_type,
+            "lead_account_id": upsert_stmt.excluded.lead_account_id,
+            "lead_display_name": upsert_stmt.excluded.lead_display_name,
+            "url": upsert_stmt.excluded.url,
+            "synced_at": upsert_stmt.excluded.synced_at,
+        },
+    )
+    db.execute(upsert_stmt)
+
+    stale_delete_stmt = delete(JiraProject).where(
+        JiraProject.cloud_id == cloud_id,
+        ~JiraProject.project_key.in_(fetched_project_keys),
+    )
+    stale_delete_result = db.execute(stale_delete_stmt)
+
+    db.commit()
+
+    return {
+        "upserted": len(normalized_projects),
+        "deleted": stale_delete_result.rowcount or 0,
+    }
+
 
 
 def get_project(db: Session, cloud_id: str, project_key: str) -> JiraProject | None:
