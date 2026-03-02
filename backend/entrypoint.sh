@@ -1,30 +1,34 @@
 #!/bin/bash
 set -e
 
-# DB 서버가 응답할 때까지 대기
-echo "Checking database connection..."
-for i in {1..30}; do
-  if python -c "import socket; s = socket.socket(); s.connect(('${DB_HOST}', ${DB_PORT}))" 2>/dev/null; then
-    echo "Database is up!"
-    break
-  fi
-  echo "Waiting for database... ($i/30)"
+# DB 서버 응답 대기
+echo "Checking database connection (${DB_HOST}:${DB_PORT})..."
+until python -c "import socket; s = socket.socket(); s.connect(('${DB_HOST}', ${DB_PORT}))" 2>/dev/null; do
+  echo "Waiting for database..."
   sleep 1
 done
+echo "Database is up!"
 
 echo "----------------------------------------"
-echo "Current Revision:"
-alembic current || echo "No migrations found yet."
+echo "Migration Status Check"
+# 현재 DB에 찍힌 리비전 확인
+CURRENT_REV=$(alembic current 2>/dev/null | grep -oE '^[0-9a-f]+' || echo "")
+echo "Current DB Revision: ${CURRENT_REV:-None}"
 echo "----------------------------------------"
 
+# 마이그레이션 실행
 echo "Running migrations (alembic upgrade head)..."
-alembic upgrade head
+
+if ! alembic upgrade head; then
+    echo "Migration failed: check for conflicting revisions or existing tables."
+    exit 1
+fi
 
 echo "----------------------------------------"
-echo "Updated Revision:"
+echo "Final Revision:"
 alembic current
 echo "----------------------------------------"
 
+# 애플리케이션 실행
 echo "Starting application with Uvicorn..."
-# exec를 사용해야 컨테이너의 PID 1을 uvicorn이 가져가서 종료 신호(SIGTERM)를 잘 받습니다.
 exec uvicorn catchup.server.main:app --host 0.0.0.0 --port 8000
