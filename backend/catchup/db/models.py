@@ -2,10 +2,11 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Optional
-from sqlalchemy import ForeignKey, Index, UniqueConstraint, func, text
+from pytz import timezone
+from sqlalchemy import CheckConstraint, ForeignKey, Index, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.associationproxy import association_proxy
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, MappedCollection, mapped_column, relationship
 from sqlalchemy.types import String, Boolean, Integer, BigInteger, DateTime, Text
 
 
@@ -1201,6 +1202,168 @@ class GithubRepository(Base):
     synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+# ===========
+# Common Full Sync Job/Event
+# ===========
+class SyncConnector(StrEnum):
+    SLACK = "slack"
+    GITHUB = "github"
+    JIRA = "jira"
+    CONFLUENCE = "confluence"
+
+
+class SyncType(StrEnum):
+    FULL = "full"
+    INCREMENTAL = "incremental"
+
+
+class SyncStatus(StrEnum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    SUCCESS = "success"
+    FAILED = "failed"
+    RETRYING = "retrying"
+
+
+class SyncJobStatus(StrEnum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+class SyncEventStatus(StrEnum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    SUCCESS = "success"
+    FAILED = "failed"
+    RETRYING = "retrying"
+
+class SyncJob(Base):
+    __tablename__ = "sync_jobs"
+
+    job_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    connector: Mapped[SyncConnector] = mapped_column(String(32), nullable=False)
+    sync_type: Mapped[SyncType] = mapped_column(String(16), nullable=False)
+    scope_id: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    status: Mapped[SyncJobStatus] = mapped_column(
+        String(20),
+        nullable=False,
+        default=SyncJobStatus.PENDING,
+        server_default=text("'pending'"),
+    )
+
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    succeeded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    embedding_tokens_used: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default=text("0")
+    )
+    summary_tokens_used: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default=text("0")
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+    
+    events: Mapped[list["SyncEvent"]] = relationship(
+        back_populates="job",
+        cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'in_progress', 'success', 'failed')",
+            name="ck_sync_jobs_status",
+        ),
+        Index(
+            "idx_sync_jobs_connector_status_requested_at",
+            "connector",
+            "status",
+            "requested_at",
+        ),
+        Index(
+            "idx_sync_jobs_scope_id_requested_at",
+            "scope_id",
+            "requested_at",
+        ),
+    )
+
+    
+class SyncEvent(Base):
+    __tablename__ = "sync_events"
+
+    event_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    job_id: Mapped[str] = mapped_column(
+        ForeignKey("sync_jobs.job_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    connector: Mapped[SyncConnector] = mapped_column(String(32), nullable=False)
+
+    resource_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    resource_metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
+
+    status: Mapped[SyncEventStatus] = mapped_column(
+        String(20),
+        nullable=False,
+        default=SyncEventStatus.PENDING,
+        server_default=text("'pending'"),
+    )
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3, server_default=text("3"))
+
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    succeeded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    embedding_tokens_used: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default=text("0")
+    )
+    summary_tokens_used: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default=text("0")
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    job: Mapped["SyncJob"] = relationship(back_populates="events")
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'in_progress', 'success', 'failed', 'retrying')",
+            name="ck_sync_events_status",
+        ),
+        CheckConstraint("attempt >= 0", name="ck_sync_events_attempt_non_negative"),
+        CheckConstraint("max_attempts >= 1", name="ck_sync_events_max_attempts_positive"),
+        CheckConstraint("attempt <= max_attempts", name="ck_sync_events_attempt_lte_max"),
+        Index("idx_sync_events_job_id_status", "job_id", "status"),
+        Index(
+            "idx_sync_events_connector_status_requested_at",
+            "connector",
+            "status",
+            "requested_at",
+        ),
+        Index("idx_sync_events_job_id_requested_at", "job_id", "requested_at"),
+    )
+
+
     
 # ===========
 # RAG Chat
