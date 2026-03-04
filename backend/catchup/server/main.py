@@ -30,14 +30,14 @@ from catchup.server.connector.github.sync_api import router as github_sync_route
 from catchup.server.connector.jira.sync_api import router as jira_sync_router
 from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
-from catchup.server.connector.slack.sync_api import router as slack_sync_router
+from catchup.server.connector.slack.webhook_api import router as slack_webhook_router
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.settings.api import router as settings_router
 from catchup.server.sync.api import router as sync_runtime_router
 from catchup.server.state import state
-from catchup.workers.slack_full_sync_worker import run_forever as run_slack_full_sync_worker
+from catchup.worker.runtime import run_forever as run_sync_worker
 from catchup.utils.redis import get_redis_client
 from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
 from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_checkpointer
@@ -226,9 +226,9 @@ async def lifespan(app: FastAPI):
     if settings.SYNC_WORKER_AUTOSTART:
         sync_worker_stop_event = asyncio.Event()
         sync_worker_task = asyncio.create_task(
-            run_slack_full_sync_worker(sync_worker_stop_event)
+            run_sync_worker(sync_worker_stop_event)
         )
-        logger.info("[SLACK][FULL SYNC][WORKER] In-process worker started")
+        logger.info("[SYNC][WORKER] In-process worker started")
 
     yield
 
@@ -242,7 +242,7 @@ async def lifespan(app: FastAPI):
             pass
         except Exception as e:
             logger.error(
-                "[SLACK][FULL SYNC][WORKER] Worker shutdown failed: %s", e, exc_info=True
+                "[SYNC][WORKER] Worker shutdown failed: %s", e, exc_info=True
             )
 
     # Scheduler Shutdown
@@ -311,7 +311,7 @@ app.include_router(jira_sync_router)
 app.include_router(jira_webhook_router)
 app.include_router(confluence_sync_router)
 app.include_router(slack_auth_router)
-app.include_router(slack_sync_router)
+app.include_router(slack_webhook_router)
 app.include_router(github_mapping_csv_router)
 app.include_router(onboarding_router)
 app.include_router(settings_router)
