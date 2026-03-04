@@ -18,7 +18,7 @@ import { useSessionLifecycle } from '@/features/chat/hooks/useRagChat.parts/sess
 import { useStreamProcessing } from '@/features/chat/hooks/useRagChat.parts/streamProcessing';
 import type { UseRagChatOptions, UseRagChatReturn } from '@/features/chat/hooks/useRagChat.parts/types';
 import { useRagStream } from '@/features/chat/hooks/useRagStream';
-import type { ChatData, RagUIStepKey } from '@/features/chat/types';
+import type { ChatData, RagUIStepKey, StreamEvent } from '@/features/chat/types';
 import { isValidSessionId } from '@/shared/utils/sessionId';
 
 /**
@@ -40,13 +40,24 @@ export const useRagChat = ({
   repo,
   initialQuery,
   scrollToMessageId,
+  toolFilters,
 }: UseRagChatOptions): UseRagChatReturn => {
   // ---------------------------------------------------------------------------
   // External hooks/services
   // ---------------------------------------------------------------------------
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { streamChat, abortStream, markStopped, resetStopped, isStopped } = useRagStream();
+  const { streamChat: rawStreamChat, abortStream, markStopped, resetStopped, isStopped } = useRagStream();
+
+  // toolFilters를 ref에 보관하여 wrapper의 useCallback deps를 안정적으로 유지
+  const toolFiltersRef = useRef(toolFilters);
+  toolFiltersRef.current = toolFilters;
+
+  const streamChat = useCallback(
+    (query: string, sid: string | undefined, onEvent: (event: StreamEvent) => void) =>
+      rawStreamChat(query, sid, onEvent, toolFiltersRef.current),
+    [rawStreamChat],
+  );
 
   // ---------------------------------------------------------------------------
   // Derived inputs from route/query

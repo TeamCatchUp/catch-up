@@ -35,7 +35,7 @@ export default function Home() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const filters = useSearchFilters();
-  const input = useSearchInput({ inputRef });
+  const input = useSearchInput({ inputRef, selectedSources: filters.selectedSources });
   const { shouldShowNoHistoryBox } = useQuestionHistoryGate();
   const [isNoHistoryExpanded, setIsNoHistoryExpanded] = useState(true);
 
