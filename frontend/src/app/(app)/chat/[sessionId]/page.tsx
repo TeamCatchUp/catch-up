@@ -14,6 +14,7 @@ import useRagFilters from '@/features/chat/hooks/filter/useRagFilters';
 import useRagScroll from '@/features/chat/hooks/scroll/useRagScroll';
 // Hooks
 import useRagChat from '@/features/chat/hooks/useRagChat';
+import type { SourceType } from '@/shared/hooks/query/useSearchFilters';
 
 export default function RagAnswerPage() {
   const params = useParams();
@@ -23,13 +24,17 @@ export default function RagAnswerPage() {
   const repo = searchParams.get('repo');
   const initialQuery = searchParams.get('q');
   const scrollToMessageId = searchParams.get('scrollTo');
+  const initialSources = searchParams.get('sources')?.split(',').filter(Boolean) as SourceType[] | undefined;
 
-  // Core hooks
+  // Core hooks — useRagFilters를 먼저 호출하여 selectedSources를 useRagChat에 전달
+  const filters = useRagFilters({ initialSources });
+
   const chat = useRagChat({
     sessionId,
     repo: repo ?? null,
     initialQuery: initialQuery ?? null,
     scrollToMessageId,
+    toolFilters: filters.selectedSources,
   });
 
   // 스크롤 완료 후 URL에서 scrollTo 파라미터 제거 (React 리렌더링 없이 URL만 변경)
@@ -45,8 +50,6 @@ export default function RagAnswerPage() {
       scrollToMessageId,
       onScrollToComplete: handleScrollToComplete,
     });
-
-  const filters = useRagFilters();
 
   // ---------------------------------------------------------------------------
   // 역방향 무한 스크롤: 위로 스크롤 시 이전 메시지 로드
