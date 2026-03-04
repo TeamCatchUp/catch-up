@@ -244,9 +244,10 @@ export const useSessionLifecycle = ({
 
     const nextUrl = (() => {
       if (typeof window === 'undefined') return `/chat/${provisionalSessionId}`;
-      // q는 1회 부트스트랩 값이라 최종 URL에서는 제거
+      // q, sources는 1회 부트스트랩 값이라 최종 URL에서는 제거
       const params = new URLSearchParams(window.location.search);
       params.delete('q');
+      params.delete('sources');
       const queryString = params.toString();
       return queryString ? `/chat/${provisionalSessionId}?${queryString}` : `/chat/${provisionalSessionId}`;
     })();
@@ -268,7 +269,7 @@ export const useSessionLifecycle = ({
   // URL query cleanup helper
   // ---------------------------------------------------------------------------
   /**
-   * 첫 질문 부트스트랩이 끝난 뒤 URL에서 `?q`를 제거한다.
+   * 첫 질문 부트스트랩이 끝난 뒤 URL에서 `?q`와 `?sources`를 제거한다.
    * - 같은 질문으로 자동 스트림이 재실행되는 것을 방지
    */
   const clearInitialQueryParam = useCallback(() => {
@@ -279,6 +280,7 @@ export const useSessionLifecycle = ({
     if (!params.has('q')) return;
 
     params.delete('q');
+    params.delete('sources');
     const queryString = params.toString();
     const nextUrl = queryString ? `/chat/${sessionId}?${queryString}` : `/chat/${sessionId}`;
     router.replace(nextUrl);
