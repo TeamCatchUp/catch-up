@@ -1217,14 +1217,6 @@ class SyncType(StrEnum):
     INCREMENTAL = "incremental"
 
 
-class SyncStatus(StrEnum):
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    SUCCESS = "success"
-    FAILED = "failed"
-    RETRYING = "retrying"
-
-
 class SyncJobStatus(StrEnum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"

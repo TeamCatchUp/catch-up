@@ -1,0 +1,484 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+from dataclasses import dataclass
+from uuid import uuid4
+
+from catchup.configs.config import settings
+from catchup.db.engine import SessionLocal
+from catchup.db.models import SyncEventStatus, SyncJobStatus
+from catchup.db.sync import (
+    claim_event_for_processing,
+    complete_job_failed,
+    complete_job_success,
+    get_event,
+    get_job,
+    list_events_by_job,
+    mark_event_failed,
+    mark_event_retrying,
+    mark_event_success,
+    requeue_retrying_event,
+    start_job,
+)
+from catchup.sync.common.protocols import IngestionHandlerProtocol, WorkerProtocol
+from catchup.sync.common.schemas import SyncEventContext, SyncStreamMessage, SyncStreamTask
+from catchup.sync.stream_runtime.stream_constants import (
+    STREAM_CLAIM_START_ID,
+    SyncStreamFailureReason,
+)
+from catchup.sync.stream_runtime.stream_queue import publish_deadletter
+from catchup.sync.stream_runtime.sync_runtime import (
+    ack_consumed_messages,
+    initialize_stream_runtime,
+    publish_job_events,
+    read_ready_messages,
+)
+from catchup.worker.handlers import get_ingestion_handler
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class ClaimResult:
+    state: str
+    context: SyncEventContext | None = None
+    job_started: bool = False
+    total_targets: int = 0
+
+
+def _consumer_name() -> str:
+    return f"sync-worker-{uuid4().hex[:8]}"
+
+
+def _task_fields(task: SyncStreamTask) -> dict[str, str]:
+    return task.to_stream_fields()
+
+
+def _select_handler(context: SyncEventContext) -> IngestionHandlerProtocol | None:
+    return get_ingestion_handler(
+        connector=context.connector,
+        sync_type=context.sync_type,
+    )
+
+
+async def _deadletter(
+    *,
+    message: SyncStreamMessage,
+    reason: SyncStreamFailureReason,
+    error_message: str | None,
+) -> None:
+    await publish_deadletter(
+        reason=reason,
+        message_id=message.message_id,
+        fields=_task_fields(message.task),
+        error_message=error_message,
+    )
+
+
+def _claim_event(task: SyncStreamTask) -> ClaimResult:
+    with SessionLocal() as db:
+        event = get_event(db, task.event_id)
+        if event is None:
+            return ClaimResult(state="event_not_found")
+
+        if event.job_id != task.job_id:
+            return ClaimResult(state="event_job_mismatch")
+
+        if event.status in {SyncEventStatus.SUCCESS, SyncEventStatus.FAILED}:
+            return ClaimResult(state="event_already_terminal")
+
+        if event.status == SyncEventStatus.RETRYING:
+            if not requeue_retrying_event(db, task.event_id):
+                return ClaimResult(state="event_cas_conflict")
+
+        if not claim_event_for_processing(db, task.event_id):
+            return ClaimResult(state="event_cas_conflict")
+
+        claimed = get_event(db, task.event_id)
+        if claimed is None:
+            return ClaimResult(state="event_not_found")
+
+        job = get_job(db, task.job_id)
+        if job is None:
+            return ClaimResult(state="job_not_found")
+
+        metadata = (
+            claimed.resource_metadata
+            if isinstance(claimed.resource_metadata, dict)
+            else {}
+        )
+        scope_id = str(metadata.get("scope_id") or metadata.get("team_id") or job.scope_id)
+        target_id = str(claimed.resource_id)
+        context = SyncEventContext(
+            event_id=claimed.event_id,
+            job_id=claimed.job_id,
+            connector=str(claimed.connector),
+            sync_type=str(metadata.get("sync_type") or job.sync_type),
+            scope_id=scope_id,
+            target_type=str(claimed.resource_type),
+            target_id=target_id,
+            target_name=str(
+                metadata.get("target_name")
+                or metadata.get("channel_name")
+                or target_id
+            ),
+            attempt=int(claimed.attempt),
+            max_attempts=int(claimed.max_attempts),
+            metadata=metadata,
+        )
+
+        job_started = start_job(db, task.job_id)
+        total_targets = 0
+        if job_started:
+            total_targets = len(list_events_by_job(db, job_id=task.job_id, limit=100000))
+
+    return ClaimResult(
+        state="claimed",
+        context=context,
+        job_started=job_started,
+        total_targets=total_targets,
+    )
+
+
+async def _mark_event_success(context: SyncEventContext) -> None:
+    with SessionLocal() as db:
+        mark_event_success(db, event_id=context.event_id)
+
+
+async def _handle_event_failure(
+    *,
+    context: SyncEventContext,
+    message: SyncStreamMessage,
+    exc: Exception,
+    handler: IngestionHandlerProtocol,
+) -> None:
+    error_summary = str(exc)
+    next_attempt = context.attempt + 1
+
+    if next_attempt >= context.max_attempts:
+        with SessionLocal() as db:
+            mark_event_failed(db, context.event_id)
+
+        await _deadletter(
+            message=message,
+            reason=SyncStreamFailureReason.PROCESSING_EXCEPTION,
+            error_message=error_summary,
+        )
+        await handler.on_target_failed(
+            context=context,
+            next_attempt=next_attempt,
+            error_summary=error_summary,
+            retryable=False,
+        )
+        logger.error(
+            "[%s][%s][WORKER] Event failed: job_id=%s, event_id=%s, attempt=%s, max_attempts=%s, error=%s",
+            context.connector.upper(),
+            context.sync_type.upper(),
+            context.job_id,
+            context.event_id,
+            next_attempt,
+            context.max_attempts,
+            error_summary,
+        )
+        return
+
+    with SessionLocal() as db:
+        if not mark_event_retrying(db, context.event_id):
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.EVENT_CAS_CONFLICT,
+                error_message="failed to transition IN_PROGRESS -> RETRYING",
+            )
+            return
+
+        if not requeue_retrying_event(db, context.event_id):
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.EVENT_CAS_CONFLICT,
+                error_message="failed to transition RETRYING -> PENDING",
+            )
+            return
+
+    await publish_job_events(
+        job_id=context.job_id,
+        event_ids=[context.event_id],
+        connector=context.connector,
+        sync_type=context.sync_type,
+        scope_id=context.scope_id,
+        target_type=context.target_type,
+        target_ids=[context.target_id],
+        max_attempts=context.max_attempts,
+    )
+    await handler.on_target_requeued(
+        context=context,
+        next_attempt=next_attempt,
+        error_summary=error_summary,
+    )
+    logger.warning(
+        "[%s][%s][WORKER] Event requeued: job_id=%s, event_id=%s, attempt=%s, error=%s",
+        context.connector.upper(),
+        context.sync_type.upper(),
+        context.job_id,
+        context.event_id,
+        next_attempt,
+        error_summary,
+    )
+
+
+async def _finalize_job_if_done(
+    context: SyncEventContext,
+    handler: IngestionHandlerProtocol,
+) -> None:
+    job_id = context.job_id
+    with SessionLocal() as db:
+        job = get_job(db, job_id)
+        if job is None:
+            return
+
+        if job.status in {SyncJobStatus.SUCCESS, SyncJobStatus.FAILED}:
+            return
+
+        events = list_events_by_job(db, job_id=job_id, limit=100000)
+        if not events:
+            return
+
+        if any(
+            event.status
+            in {
+                SyncEventStatus.PENDING,
+                SyncEventStatus.IN_PROGRESS,
+                SyncEventStatus.RETRYING,
+            }
+            for event in events
+        ):
+            return
+
+        total_targets = len(events)
+        completed_targets = sum(
+            1 for event in events if event.status == SyncEventStatus.SUCCESS
+        )
+        failed_targets = sum(
+            1 for event in events if event.status == SyncEventStatus.FAILED
+        )
+        requeued_targets = sum(int(event.attempt) for event in events)
+
+        if failed_targets == 0:
+            if not complete_job_success(db, job_id):
+                return
+            await handler.on_job_completed(
+                context=context,
+                total_targets=total_targets,
+                completed_targets=completed_targets,
+                failed_targets=failed_targets,
+                requeued_targets=requeued_targets,
+            )
+            return
+
+        if not complete_job_failed(db, job_id):
+            return
+        await handler.on_job_failed(
+            context=context,
+            total_targets=total_targets,
+            failed_targets=failed_targets,
+        )
+
+
+async def _process_message(
+    message: SyncStreamMessage,
+    service_cache: dict[str, object],
+) -> None:
+    task = message.task
+    context: SyncEventContext | None = None
+    handler: IngestionHandlerProtocol | None = None
+
+    try:
+        claim = _claim_event(task)
+
+        if claim.state == "event_not_found":
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.EVENT_NOT_FOUND,
+                error_message="sync event not found",
+            )
+            return
+
+        if claim.state == "job_not_found":
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.EVENT_NOT_FOUND,
+                error_message="sync job not found",
+            )
+            return
+
+        if claim.state == "event_job_mismatch":
+            logger.error(
+                "[SYNC][WORKER] Event/Job mismatch: event_id=%s, stream_job_id=%s",
+                task.event_id,
+                task.job_id,
+            )
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.EVENT_CAS_CONFLICT,
+                error_message="event_id and job_id mismatch",
+            )
+            return
+
+        if claim.state == "event_already_terminal":
+            logger.warning(
+                "[SYNC][WORKER] Duplicate event skipped: job_id=%s, event_id=%s",
+                task.job_id,
+                task.event_id,
+            )
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.EVENT_ALREADY_TERMINAL,
+                error_message="event already terminal",
+            )
+            return
+
+        if claim.state == "event_cas_conflict":
+            logger.warning(
+                "[SYNC][WORKER] Event CAS conflict: job_id=%s, event_id=%s",
+                task.job_id,
+                task.event_id,
+            )
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.EVENT_CAS_CONFLICT,
+                error_message="event status transition CAS conflict",
+            )
+            return
+
+        context = claim.context
+        if context is None:
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.PROCESSING_EXCEPTION,
+                error_message="unexpected empty claim context",
+            )
+            return
+
+        handler = _select_handler(context)
+        if handler is None:
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.UNSUPPORTED_HANDLER,
+                error_message=(
+                    f"unsupported handler: connector={context.connector}, "
+                    f"sync_type={context.sync_type}"
+                ),
+            )
+            return
+
+        if claim.job_started:
+            await handler.on_job_started(
+                context=context,
+                total_targets=claim.total_targets,
+            )
+
+        await handler.on_target_started(context=context)
+        result = await handler.handle(
+            context=context,
+            service_cache=service_cache,
+        )
+        await _mark_event_success(context)
+        await handler.on_target_completed(context=context, result=result)
+    except Exception as exc:
+        if context is None:
+            logger.exception(
+                "[SYNC][WORKER] Message processing failed before claim: job_id=%s, event_id=%s",
+                task.job_id,
+                task.event_id,
+            )
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.PROCESSING_EXCEPTION,
+                error_message=str(exc),
+            )
+            return
+
+        if handler is None:
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.UNSUPPORTED_HANDLER,
+                error_message=(
+                    f"unsupported handler: connector={context.connector}, "
+                    f"sync_type={context.sync_type}"
+                ),
+            )
+            return
+
+        await _handle_event_failure(
+            context=context,
+            message=message,
+            exc=exc,
+            handler=handler,
+        )
+
+    finally:
+        try:
+            await ack_consumed_messages([message])
+        except Exception:
+            logger.exception(
+                "[SYNC][WORKER] Message ack failed: job_id=%s, event_id=%s, message_id=%s",
+                task.job_id,
+                task.event_id,
+                message.message_id,
+            )
+
+        if context is not None and handler is not None:
+            await _finalize_job_if_done(context, handler)
+
+
+class SyncWorker(WorkerProtocol):
+    def __init__(self) -> None:
+        self._service_cache: dict[str, object] = {}
+
+    async def process(self, message: SyncStreamMessage) -> None:
+        await _process_message(message, self._service_cache)
+
+    async def run_forever(self, stop_event: asyncio.Event) -> None:
+        consumer = _consumer_name()
+        reclaim_start_id = STREAM_CLAIM_START_ID
+        self._service_cache = {}
+
+        await initialize_stream_runtime()
+        logger.info("[SYNC][WORKER] Worker started: consumer=%s", consumer)
+
+        while not stop_event.is_set():
+            try:
+                messages, reclaim_start_id = await read_ready_messages(
+                    consumer_name=consumer,
+                    reclaim_min_idle_ms=max(
+                        1, int(settings.SYNC_LOCK_CHANNEL_TTL_SECONDS * 1000)
+                    ),
+                    reclaim_start_id=reclaim_start_id,
+                    reclaim_count=max(
+                        1, settings.SYNC_WORKER_CHANNEL_CONCURRENCY * 10
+                    ),
+                    read_count=max(1, settings.SYNC_WORKER_CHANNEL_CONCURRENCY),
+                    block_ms=max(0, settings.SYNC_QUEUE_BLOCK_TIMEOUT_SECONDS * 1000),
+                )
+
+                if not messages:
+                    await asyncio.sleep(settings.SYNC_WORKER_IDLE_SLEEP_SECONDS)
+                    continue
+
+                for message in messages:
+                    if stop_event.is_set():
+                        break
+                    await self.process(message)
+
+            except Exception:
+                logger.exception("[SYNC][WORKER] Worker loop error")
+                await asyncio.sleep(settings.SYNC_WORKER_IDLE_SLEEP_SECONDS)
+
+        logger.info("[SYNC][WORKER] Worker stopped: consumer=%s", consumer)
+
+
+_sync_worker = SyncWorker()
+
+
+async def run_forever(stop_event: asyncio.Event) -> None:
+    await _sync_worker.run_forever(stop_event)

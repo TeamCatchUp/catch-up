@@ -16,9 +16,10 @@ from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.db.github.installation_repository import get_all_installations
 from catchup.db.jira import sync_repository as jira_sync
 from catchup.db.atlassian.oauth_repository import get_all_tokens as get_all_atlassian_tokens
-from catchup.db.models import JiraEntityType
+from catchup.db.models import JiraEntityType, SyncConnector
 from catchup.db.slack.oauth_repository import get_all_slack_tokens
-from catchup.server.connector.slack.sync_api import enqueue_incremental_sync_job
+from catchup.sync.contracts import IncrementalSyncDispatchCommand
+from catchup.sync.dispatch_service import get_sync_dispatch_service
 from catchup.utils.webhook_buffer import get_webhook_buffer
 from catchup.connectors.confluence.factory import create_confluence_ingestion_service
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
@@ -111,47 +112,53 @@ async def flush_slack_events():
 
     with SessionLocal() as db:
         tokens = get_all_slack_tokens(db)
+        dispatch_service = get_sync_dispatch_service()
 
         for token in tokens:
             team_id = token.team_id
             team_name = token.team_name
 
             try:
-                enqueue_result = await enqueue_incremental_sync_job(
+                dispatch_result = await dispatch_service.dispatch_incremental_sync(
                     db=db,
-                    team_id=team_id,
-                    trigger="scheduler",
+                    connector=SyncConnector.SLACK,
+                    command=IncrementalSyncDispatchCommand(
+                        scope_id=team_id,
+                        target_ids=None,
+                        trigger="scheduler",
+                    ),
+                    base_url=None,
                 )
-                status_value = enqueue_result.get("status")
+                status_value = dispatch_result.status
 
                 if status_value == "accepted":
                     logger.info(
-                        "[SLACK][INCREMENTAL SYNC][SCHEDULER] Enqueued: team_id=%s, team_name=%s, job_id=%s, queued_channels=%s, dropped_channels=%s, dropped_events=%s",
+                        "[SLACK][INCREMENTAL SYNC][SCHEDULER] Enqueued: team_id=%s, team_name=%s, job_id=%s, queued_targets=%s, dropped_targets=%s, dropped_events=%s",
                         team_id,
                         team_name,
-                        enqueue_result.get("job_id"),
-                        enqueue_result.get("queued_channels", 0),
-                        enqueue_result.get("dropped_channels", 0),
-                        enqueue_result.get("dropped_events", 0),
+                        dispatch_result.job_id,
+                        dispatch_result.queued_targets,
+                        dispatch_result.dropped_targets,
+                        dispatch_result.dropped_events,
                     )
                     continue
 
                 if status_value == "no_events":
                     logger.info(
-                        "[SLACK][INCREMENTAL SYNC][SCHEDULER] No events: team_id=%s, team_name=%s, dropped_channels=%s, dropped_events=%s",
+                        "[SLACK][INCREMENTAL SYNC][SCHEDULER] No events: team_id=%s, team_name=%s, dropped_targets=%s, dropped_events=%s",
                         team_id,
                         team_name,
-                        enqueue_result.get("dropped_channels", 0),
-                        enqueue_result.get("dropped_events", 0),
+                        dispatch_result.dropped_targets,
+                        dispatch_result.dropped_events,
                     )
                     continue
 
                 if status_value == "conflict":
                     logger.info(
-                        "[SLACK][INCREMENTAL SYNC][SCHEDULER] Skipped by lock conflict: team_id=%s, team_name=%s, owner_job_id=%s",
+                        "[SLACK][INCREMENTAL SYNC][SCHEDULER] Skipped by conflict: team_id=%s, team_name=%s, message=%s",
                         team_id,
                         team_name,
-                        enqueue_result.get("owner_job_id"),
+                        dispatch_result.message,
                     )
                     continue
 
@@ -159,7 +166,7 @@ async def flush_slack_events():
                     "[SLACK][INCREMENTAL SYNC][SCHEDULER] Enqueue failed: team_id=%s, team_name=%s, error=%s",
                     team_id,
                     team_name,
-                    enqueue_result.get("message", "unknown error"),
+                    dispatch_result.message or "unknown error",
                 )
             except Exception as e:
                 logger.error(

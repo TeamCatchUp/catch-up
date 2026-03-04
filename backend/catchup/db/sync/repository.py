@@ -52,7 +52,6 @@ _ALLOWED_EVENT_TRANSITIONS: dict[SyncEventStatus, set[SyncEventStatus]] = {
     },
     SyncEventStatus.RETRYING: {
         SyncEventStatus.PENDING,
-        SyncEventStatus.IN_PROGRESS,
         SyncEventStatus.FAILED,
     },
 }
@@ -307,11 +306,12 @@ def update_event_status_cas(
 
 
 def claim_event_for_processing(db: Session, event_id: str) -> bool:
-    # Worker가 처리권을 획득할 때 사용하는 CAS
+    # Worker 처리권 획득: PENDING에서만 IN_PROGRESS로 전이한다.
+    # RETRYING 이벤트는 requeue_retrying_event()로 PENDING 전이 후 claim해야 한다.
     return update_event_status_cas(
         db,
         event_id=event_id,
-        from_statuses=[SyncEventStatus.PENDING, SyncEventStatus.RETRYING],
+        from_statuses=[SyncEventStatus.PENDING],
         to_status=SyncEventStatus.IN_PROGRESS,
     )
 
