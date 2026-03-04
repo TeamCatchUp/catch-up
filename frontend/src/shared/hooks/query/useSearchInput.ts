@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 
 interface UseSearchInputOptions {
   inputRef: RefObject<HTMLTextAreaElement | null>;
+  selectedSources?: string[];
 }
 
 export interface UseSearchInputReturn {
@@ -22,7 +23,7 @@ export interface UseSearchInputReturn {
   handleSubmit: () => void;
 }
 
-export const useSearchInput = ({ inputRef }: UseSearchInputOptions): UseSearchInputReturn => {
+export const useSearchInput = ({ inputRef, selectedSources }: UseSearchInputOptions): UseSearchInputReturn => {
   const router = useRouter();
   const [value, setValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -34,8 +35,12 @@ export const useSearchInput = ({ inputRef }: UseSearchInputOptions): UseSearchIn
     const trimmed = value.trim();
     if (!trimmed) return;
     const sessionId = crypto.randomUUID();
-    router.push(`/chat/${sessionId}?q=${encodeURIComponent(trimmed)}`);
-  }, [value, router]);
+    let url = `/chat/${sessionId}?q=${encodeURIComponent(trimmed)}`;
+    if (selectedSources?.length) {
+      url += `&sources=${selectedSources.join(',')}`;
+    }
+    router.push(url);
+  }, [value, router, selectedSources]);
 
   // Textarea 자동 높이 조절
   useEffect(() => {
