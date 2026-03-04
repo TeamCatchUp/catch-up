@@ -11,6 +11,7 @@ class GlobalUserContext(BaseModel):
     id: int = Field(..., description="DB 조회를 위한 고유 ID")
     name: str = Field(..., description="사용자 표시 이름")
     email: str = Field(..., description="이메일 (작성자 식별용)")
+    department: str = Field(..., description="사용자 부서")
     custom_prompt: Optional[str] = Field(default=None, description="사용자 맞춤형 프롬프트")
 
     model_config = ConfigDict(from_attributes=True)
