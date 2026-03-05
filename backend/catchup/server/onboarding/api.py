@@ -9,7 +9,7 @@ from catchup.connectors.atlassian import oauth_client
 from catchup.db.dependencies import get_db
 from catchup.db.engine import SessionLocal
 from catchup.db.models import ConfluenceUser, GitHubUser, JiraUser, KnowledgeSource, PreMappingBuffer, SlackUser, SourceType, User
-from catchup.onboarding.oauth import OAuthClient, sync_initial_oauth_users
+from catchup.onboarding.oauth import sync_initial_keycloak_users
 from catchup.onboarding.admin import register_admin_from_oauth
 from catchup.onboarding.schemas import AdminSignUpRequest, AdminSignUpSchema, CandidateItem, MappingCandidates, UserSignUpRequest, SignUpResponse, UserSignUpSchema
 from catchup.onboarding.user import register_user_from_oauth
@@ -88,7 +88,7 @@ async def signup_oauth_admin(
     )
     
     # OAuth 사용자 목록 저장
-    background_tasks.add_task(sync_initial_oauth_users)
+    background_tasks.add_task(sync_initial_keycloak_users)
 
     state.is_admin_initiated = True
     
