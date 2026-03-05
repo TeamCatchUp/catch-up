@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { NODE_TO_UI_STEP } from '@/features/chat/constants/config';
 import {
   appendStreamingToken,
+  deriveCitedFromAnswerContent,
   updateStreamingSources,
 } from '@/features/chat/hooks/useRagChat.parts/streamMessageUpdater';
 import type { SourceResponse, StreamEvent } from '@/features/chat/types';
@@ -275,6 +276,15 @@ export const useStreamProcessing = ({
 
     const targetSessionId = resolvedSessionIdRef.current;
 
+    // 스트리밍 중에는 is_cited가 false로 남아 사이드바 "출처 0" 표시됨
+    // 답변 본문의 [N] 인용 패턴으로 is_cited를 유도해서 즉시 반영
+    setChatData((prev) => {
+      if (!prev) return prev;
+      const updated = deriveCitedFromAnswerContent(prev.messages);
+      if (updated === prev.messages) return prev;
+      return { ...prev, messages: updated };
+    });
+
     if (hasResultEventRef.current) {
       // 로딩 해제를 먼저 수행 → 소스 즉시 표시
       streamingMessageIdRef.current = null;
@@ -312,6 +322,7 @@ export const useStreamProcessing = ({
     isStopped,
     refreshRecentChatsNow,
     resolvedSessionIdRef,
+    setChatData,
     setCurrentStep,
     setIsError,
     setIsLoading,
