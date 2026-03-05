@@ -1,17 +1,21 @@
 import logging
-from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from catchup.auth.service import OAuthService
 from catchup.auth.cookies import delete_auth_cookies, set_auth_cookies
-from catchup.auth.dependencies import get_current_user, get_current_user_info
-from catchup.auth.google_oauth import GoogleOAuthService
-from catchup.auth.jwt import create_access_token, create_refresh_token, verify_token
-from catchup.auth.keycloak import KeycloakOAuthService
-from catchup.auth.utils import reformat_name
+from catchup.auth.dependencies import (
+    get_current_user,
+    get_current_user_info,
+    get_oauth_provider,
+    get_oauth_service_from_state
+)
+from catchup.auth.jwt import create_access_token, verify_token
+from catchup.components.auth.provider import OAuthIdentityProvider
+from catchup.components.auth.constants import OAuthIdentityProviderType
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
 from catchup.db.models import (
@@ -37,32 +41,24 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
+
 GOOGLE_LOGIN_BASE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 GOOGLE_USER_INFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
 
-# ==========
-# Oauth (공통) -> 현재는 Keycloak만 지원
-# ==========
+
+# ===========
+# Oauth 로그인
+# ===========
 @router.get(
     path="/oauth/login",
     description="OAuth2 로그인 (현재는 Keycloak만 지원)"
 )
-async def oauth2_login():
-    realm = auth_settings.KC_REALM
-    base_url = f"{auth_settings.KC_PUBLIC_URL}/realms/{realm}/protocol/openid-connect/auth"
-    
-    params = {
-        "client_id": auth_settings.KC_CLIENT_ID,
-        "redirect_uri": auth_settings.KC_REDIRECT_URI,
-        "response_type": "code",
-        "scope": "openid email profile offline_access",
-        "state": "random_state_string_check_needed",
-    }
-    
-    url = f"{base_url}?{urlencode(params)}"
-    
-    return RedirectResponse(url)
+def oauth2_login(
+    provider_type: OAuthIdentityProviderType = Query(default=OAuthIdentityProviderType.KEYCLOAK),  # TODO: Path()로 변경. 수정 범위를 최소화하기 위한 PoC 한정 임시방편
+    provider: OAuthIdentityProvider = Depends(get_oauth_provider)
+):
+    return RedirectResponse(provider.get_authentication_url())
 
 
 @router.get(
@@ -72,90 +68,15 @@ async def oauth2_login():
 async def oauth_callback(
     code: str,
     state: str,
-    db: Session = Depends(get_db),
-    oauth_service: KeycloakOAuthService = Depends(),
+    auth_service: OAuthService = Depends(get_oauth_service_from_state)
 ):
-    oauth_user = await oauth_service.get_user(code)
-    
-    def _handle_login_sync():
-        oauth_user_record = oauth_service.get_or_register_user(db, oauth_user)
-        
-        full_name = reformat_name(oauth_user.name)
-        
-        token_data = {
-            "sub": oauth_user.sub,
-            "email": oauth_user.email,
-            "name": full_name
-        }
-        access_token = create_access_token(data=token_data)
-        
-        if oauth_user_record.user_id is not None:
-            # 기존 유저: 리프레시 토큰 정상 발급
-            refresh_token = create_refresh_token(data=token_data)
-            update_user_refresh_token(db, oauth_user_record.user_id, refresh_token)
-        else:
-            # 아직 온보딩 전인 신규 유저: 임시로 엑세스 토큰만 발급
-            refresh_token = None
-        db.commit()
-        
-        return access_token, refresh_token
-    
-    access_token, refresh_token = await run_in_threadpool(_handle_login_sync)
-    
+    access_token, refresh_token = await auth_service.handle_callback(code)
     response = RedirectResponse(url=auth_settings.FRONTEND_REDIRECT_URI)
-    set_auth_cookies(response, access_token, refresh_token)
-    
-    return response
-
-# ==========
-# Google
-# ==========
-@router.get(
-    path="/google/login",
-    description="Google Oauth2 로그인"
-)
-async def google_oauth2_login():
-    params = {
-        "client_id": auth_settings.GOOGLE_CLIENT_ID,
-        "redirect_uri": auth_settings.GOOGLE_REDIRECT_URI,
-        "response_type": "code",
-        "scope": "openid email profile",
-        "prompt": "select_account",
-    }
-
-    url = f"{GOOGLE_LOGIN_BASE_URL}?{urlencode(params)}"
-
-    return RedirectResponse(url)
-
-
-@router.get(
-    path="/google/callback",
-    description="Google OAuth2 리다이렉트 URI"
-)
-async def google_callback(
-    code: str,
-    db: Session = Depends(get_db),
-    oauth_service: GoogleOAuthService = Depends(),
-):
-    google_user = await oauth_service.get_google_user(code)
-
-    def _handle_login_sync():
-        user = oauth_service.get_or_register_google_user(db, google_user)
-
-        access_token = create_access_token(data={"sub": user.email})
-        refresh_token = create_refresh_token(data={"sub": user.email})
-
-        update_user_refresh_token(db, user.id, refresh_token)
-        db.commit()
-        
-        return access_token, refresh_token
-
-    access_token, refresh_token = await run_in_threadpool(_handle_login_sync)
-
-    response = RedirectResponse(url=auth_settings.FRONTEND_REDIRECT_URI)
-
-    set_auth_cookies(response, access_token, refresh_token)
-
+    set_auth_cookies(
+        response=response,
+        access_token=access_token,
+        refresh_token=refresh_token
+    )
     return response
 
 
