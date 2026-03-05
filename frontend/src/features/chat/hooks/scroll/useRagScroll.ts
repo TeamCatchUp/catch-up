@@ -52,6 +52,10 @@ export const useRagScroll = ({
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const clampedActivePairIndex = qaPairs.length === 0 ? 0 : Math.min(activePairIndex, qaPairs.length - 1);
 
+  // sync merge 후 message ID가 변경되면 DOM 요소가 교체되므로
+  // IntersectionObserver가 새 요소를 다시 observe
+  const qaPairKey = useMemo(() => qaPairs.map((p) => p.question.id).join(','), [qaPairs]);
+
   useEffect(() => {
     activePairIndexRef.current = clampedActivePairIndex;
   }, [clampedActivePairIndex]);
@@ -152,7 +156,7 @@ export const useRagScroll = ({
       observer.disconnect();
       observedEntries.clear();
     };
-  }, [observerSeed, qaPairs.length]);
+  }, [observerSeed, qaPairKey]);
 
   // scrollToMessageId가 지정된 경우 해당 Q&A pair로 스크롤
   const scrollToHandledRef = useRef(false);
