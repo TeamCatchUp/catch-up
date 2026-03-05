@@ -276,8 +276,8 @@ export const useStreamProcessing = ({
 
     const targetSessionId = resolvedSessionIdRef.current;
 
-    // 스트리밍 중에는 is_cited가 false로 남아 사이드바 "출처 0" 표시됨
-    // 답변 본문의 [N] 인용 패턴으로 is_cited를 유도해서 즉시 반영
+    // source_candidates는 답변 생성 전에 전송되므로 is_cited가 미확정 상태
+    // 답변 완성 후 본문의 [N] 패턴으로 is_cited를 확정
     setChatData((prev) => {
       if (!prev) return prev;
       const updated = deriveCitedFromAnswerContent(prev.messages);

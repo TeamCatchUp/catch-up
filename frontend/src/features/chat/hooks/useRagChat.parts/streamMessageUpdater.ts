@@ -4,8 +4,12 @@ const CITATION_PATTERN = /\[(\d+)\]/g;
 
 /**
  * assistant 답변 본문의 인용 패턴 [N]을 기반으로 is_cited를 유도
- * - 이미 is_cited: true인 source가 하나라도 있으면(서버가 설정한 경우) 해당 메시지는 건너뜀
- * - 백엔드가 source_candidates 이벤트에서 is_cited를 보내지 않아 false로 남는 문제를 해결
+ *
+ * source_candidates SSE 이벤트는 LLM 답변 생성 전에 후보 sources를 전송하므로
+ * is_cited를 판단할 수 없다. 답변 완성 후 본문의 [N] 패턴과 source_index를
+ * 매칭하여 프론트에서 is_cited를 확정한다.
+ *
+ * - 히스토리 API 등에서 이미 is_cited: true가 설정된 경우 해당 메시지는 건너뜀
  */
 export const deriveCitedFromAnswerContent = (messages: Message[]): Message[] => {
   let changed = false;
