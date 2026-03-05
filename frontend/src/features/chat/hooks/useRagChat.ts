@@ -18,7 +18,7 @@ import { useSessionLifecycle } from '@/features/chat/hooks/useRagChat.parts/sess
 import { useStreamProcessing } from '@/features/chat/hooks/useRagChat.parts/streamProcessing';
 import type { UseRagChatOptions, UseRagChatReturn } from '@/features/chat/hooks/useRagChat.parts/types';
 import { useRagStream } from '@/features/chat/hooks/useRagStream';
-import type { ChatData, RagUIStepKey, StreamEvent } from '@/features/chat/types';
+import type { ChatData, Message, RagUIStepKey, StreamEvent } from '@/features/chat/types';
 import { isValidSessionId } from '@/shared/utils/sessionId';
 
 /**
@@ -181,14 +181,16 @@ export const useRagChat = ({
           const mergedMessages = nextData.messages.map((serverMsg, idx) => {
             if (serverMsg.role !== 'assistant' || serverMsg.sources?.length) return serverMsg;
 
+            const mergeWithPrev = (prevMsg: Message) => ({
+              ...serverMsg,
+              sources: prevMsg.sources,
+              detailed_tasks: prevMsg.detailed_tasks?.length ? prevMsg.detailed_tasks : serverMsg.detailed_tasks,
+            });
+
             // 같은 위치의 prev 메시지에서 sources 보존
             const prevByPos = prev.messages[idx];
             if (prevByPos?.role === 'assistant' && prevByPos.sources?.length) {
-              return {
-                ...serverMsg,
-                sources: prevByPos.sources,
-                detailed_tasks: prevByPos.detailed_tasks?.length ? prevByPos.detailed_tasks : serverMsg.detailed_tasks,
-              };
+              return mergeWithPrev(prevByPos);
             }
 
             // content 기반 매칭 (trim 적용으로 공백 차이 허용)
@@ -197,13 +199,7 @@ export const useRagChat = ({
               (m) => m.role === 'assistant' && m.content.trim() === trimmedContent && m.sources?.length,
             );
             if (prevByContent) {
-              return {
-                ...serverMsg,
-                sources: prevByContent.sources,
-                detailed_tasks: prevByContent.detailed_tasks?.length
-                  ? prevByContent.detailed_tasks
-                  : serverMsg.detailed_tasks,
-              };
+              return mergeWithPrev(prevByContent);
             }
 
             return serverMsg;
