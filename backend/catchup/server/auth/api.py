@@ -1,12 +1,12 @@
 import logging
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from catchup.auth.service import OAuthService
-from catchup.auth.cookies import delete_auth_cookies, set_auth_cookies
+from catchup.auth.cookies import delete_auth_cookies, delete_oauth_state_cookie, set_auth_cookies, set_oauth_state_cookie
 from catchup.auth.dependencies import (
     get_current_user,
     get_current_user_info,
@@ -36,16 +36,11 @@ from catchup.server.auth.schemas import (
     IntegrationProfileResponse,
     TokenRefreshResponse,
 )
+from catchup.utils.redis import store_oauth_state, validate_oauth_state
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
-
-
-GOOGLE_LOGIN_BASE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-GOOGLE_USER_INFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
-
 
 # ===========
 # Oauth 로그인
@@ -54,11 +49,27 @@ GOOGLE_USER_INFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
     path="/oauth/login",
     description="OAuth2 로그인 (현재는 Keycloak만 지원)"
 )
-def oauth2_login(
-    provider_type: OAuthIdentityProviderType = Query(default=OAuthIdentityProviderType.KEYCLOAK),  # TODO: Path()로 변경. 수정 범위를 최소화하기 위한 PoC 한정 임시방편
+async def oauth2_login(
+    # TODO: Path()로 변경. 수정 범위를 최소화하기 위한 PoC 한정 임시방편
+    provider_type: OAuthIdentityProviderType = Query(default=OAuthIdentityProviderType.KEYCLOAK),
     provider: OAuthIdentityProvider = Depends(get_oauth_provider)
 ):
-    return RedirectResponse(provider.get_authentication_url())
+    # OAuth state를 Redis에 저장
+    await store_oauth_state(
+        state=provider.state,
+        provider=provider_type.value
+    )
+    
+    authentication_url = provider.get_authentication_url()
+    response = RedirectResponse(authentication_url)
+    
+    # OAuth state를 브라우저 쿠키에도 저장
+    set_oauth_state_cookie(
+        response=response,
+        state=provider.state
+    )
+
+    return response
 
 
 @router.get(
@@ -66,17 +77,42 @@ def oauth2_login(
     description="OAuth2 리다이렉트 URI"
 )
 async def oauth_callback(
+    request: Request,
     code: str,
     state: str,
     auth_service: OAuthService = Depends(get_oauth_service_from_state)
 ):
+    cookie_state = request.cookies.get("oauth_state")
+    if not cookie_state or cookie_state != state:
+        raise HTTPException(
+            status_code=400,
+            detail="유효하지 않은 인증 접근입니다."
+        )
+    
+    
+    # OAuth state 유효성 검사
+    is_valid = await validate_oauth_state(
+        state=state,
+        provider=auth_service.provider_type.value
+    )
+    
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="유효하지 않거나 만료된 인증입니다."
+        )
+    
     access_token, refresh_token = await auth_service.handle_callback(code)
+    
     response = RedirectResponse(url=auth_settings.FRONTEND_REDIRECT_URI)
+    
+    delete_oauth_state_cookie(response)
     set_auth_cookies(
         response=response,
         access_token=access_token,
         refresh_token=refresh_token
     )
+    
     return response
 
 
