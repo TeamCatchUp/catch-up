@@ -11,7 +11,7 @@ SyncDispatchStatus = Literal["accepted", "no_events", "conflict", "failed"]
 
 
 @dataclass(slots=True, frozen=True)
-class FullSyncDispatchCommand:
+class FullSyncDispatchRequest:
     """커넥터 공통 Full Sync 요청."""
 
     scope_id: str
@@ -21,7 +21,7 @@ class FullSyncDispatchCommand:
 
 
 @dataclass(slots=True, frozen=True)
-class IncrementalSyncDispatchCommand:
+class IncrementalSyncDispatchRequest:
     """커넥터 공통 Incremental Sync 요청."""
 
     scope_id: str

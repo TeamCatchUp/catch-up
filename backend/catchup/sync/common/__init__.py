@@ -5,8 +5,8 @@ from catchup.sync.common.protocols import (
     WorkerProtocol,
 )
 from catchup.sync.common.schemas import (
-    FullSyncDispatchCommand,
-    IncrementalSyncDispatchCommand,
+    FullSyncDispatchRequest,
+    IncrementalSyncDispatchRequest,
     SyncClaimBatch,
     SyncDispatchResult,
     SyncDispatchStatus,
@@ -17,8 +17,8 @@ from catchup.sync.common.schemas import (
 
 __all__ = [
     "SyncDispatchStatus",
-    "FullSyncDispatchCommand",
-    "IncrementalSyncDispatchCommand",
+    "FullSyncDispatchRequest",
+    "IncrementalSyncDispatchRequest",
     "SyncDispatchResult",
     "SyncStreamTask",
     "SyncStreamMessage",

@@ -20,8 +20,8 @@ from catchup.server.sync.schemas import (
     SyncTargetsResponse,
 )
 from catchup.sync.contracts import (
-    FullSyncDispatchCommand,
-    IncrementalSyncDispatchCommand,
+    FullSyncDispatchRequest,
+    IncrementalSyncDispatchRequest,
     SyncDispatchResult,
 )
 from catchup.sync.dispatch_service import get_sync_dispatch_service
@@ -56,7 +56,7 @@ async def dispatch_full_sync(
         result = await dispatch_service.dispatch_full_sync(
             db=db,
             connector=sync_request.connector,
-            command=FullSyncDispatchCommand(
+            command=FullSyncDispatchRequest(
                 scope_id=sync_request.scope_id,
                 target_ids=sync_request.target_ids,
                 sync_days=sync_request.sync_days,
@@ -130,7 +130,7 @@ async def dispatch_incremental_sync(
         result = await dispatch_service.dispatch_incremental_sync(
             db=db,
             connector=sync_request.connector,
-            command=IncrementalSyncDispatchCommand(
+            command=IncrementalSyncDispatchRequest(
                 scope_id=sync_request.scope_id,
                 target_ids=sync_request.target_ids,
                 trigger="api",

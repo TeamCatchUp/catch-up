@@ -4,8 +4,8 @@ import asyncio
 from typing import Protocol
 
 from catchup.sync.common.schemas import (
-    IncrementalSyncDispatchCommand,
-    FullSyncDispatchCommand,
+    IncrementalSyncDispatchRequest,
+    FullSyncDispatchRequest,
     SyncDispatchResult,
     SyncEventContext,
     SyncStreamMessage,
@@ -107,7 +107,7 @@ class ConnectorSyncServiceProtocol(Protocol):
         self,
         *,
         db,
-        command: FullSyncDispatchCommand,
+        command: FullSyncDispatchRequest,
         base_url: str | None,
     ) -> SyncDispatchResult:
         ...
@@ -116,7 +116,7 @@ class ConnectorSyncServiceProtocol(Protocol):
         self,
         *,
         db,
-        command: IncrementalSyncDispatchCommand,
+        command: IncrementalSyncDispatchRequest,
         base_url: str | None,
     ) -> SyncDispatchResult:
         ...

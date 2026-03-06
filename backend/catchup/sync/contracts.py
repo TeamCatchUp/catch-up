@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from catchup.sync.common.protocols import ConnectorSyncServiceProtocol
 from catchup.sync.common.schemas import (
-    FullSyncDispatchCommand,
-    IncrementalSyncDispatchCommand,
+    FullSyncDispatchRequest,
+    IncrementalSyncDispatchRequest,
     SyncDispatchResult,
     SyncDispatchStatus,
 )
