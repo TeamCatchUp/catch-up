@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from catchup.auth.service import OAuthService
-from catchup.auth.cookies import delete_auth_cookies, set_auth_cookies
+from catchup.auth.cookies import delete_auth_cookies, delete_oauth_state_cookie, set_auth_cookies, set_oauth_state_cookie
 from catchup.auth.dependencies import (
     get_current_user,
     get_current_user_info,
@@ -59,8 +59,17 @@ async def oauth2_login(
         state=provider.state,
         provider=provider_type.value
     )
+    
+    authentication_url = provider.get_authentication_url()
+    response = RedirectResponse(authentication_url)
+    
+    # OAuth state를 브라우저 쿠키에도 저장
+    set_oauth_state_cookie(
+        response=response,
+        state=provider.state
+    )
 
-    return RedirectResponse(provider.get_authentication_url())
+    return response
 
 
 @router.get(
@@ -68,10 +77,19 @@ async def oauth2_login(
     description="OAuth2 리다이렉트 URI"
 )
 async def oauth_callback(
+    request: Request,
     code: str,
     state: str,
     auth_service: OAuthService = Depends(get_oauth_service_from_state)
-):    
+):
+    cookie_state = request.cookies.get("oauth_state")
+    if not cookie_state or cookie_state != state:
+        raise HTTPException(
+            status_code=400,
+            detail="유효하지 않은 인증 접근입니다."
+        )
+    
+    
     # OAuth state 유효성 검사
     is_valid = await validate_oauth_state(
         state=state,
@@ -81,16 +99,20 @@ async def oauth_callback(
     if not is_valid:
         raise HTTPException(
             status_code=400,
-            detail="유효하지 않거나 만료된 state입니다."
+            detail="유효하지 않거나 만료된 인증입니다."
         )
     
     access_token, refresh_token = await auth_service.handle_callback(code)
+    
     response = RedirectResponse(url=auth_settings.FRONTEND_REDIRECT_URI)
+    
+    delete_oauth_state_cookie(response)
     set_auth_cookies(
         response=response,
         access_token=access_token,
         refresh_token=refresh_token
     )
+    
     return response
 
 
