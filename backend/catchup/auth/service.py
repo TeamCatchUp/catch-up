@@ -1,20 +1,24 @@
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from catchup.auth.schemas import BaseOAuthUserInfoResponse
+from catchup.components.auth.constants import OAuthIdentityProviderType
 from catchup.components.auth.provider import OAuthIdentityProvider
 from catchup.db.models import OAuthUser, UserStatus
 from catchup.auth.utils import reformat_name
 from catchup.auth.jwt import create_access_token, create_refresh_token
 from catchup.db.users import get_oauth_user_with_sub, update_user_refresh_token
 
+
 class OAuthService:
     def __init__(
         self, 
         db: Session,
-        provider: OAuthIdentityProvider
+        provider: OAuthIdentityProvider,
+        provider_type: OAuthIdentityProviderType = OAuthIdentityProviderType.KEYCLOAK
     ):
         self.db = db
         self.provider = provider
+        self.provider_type = provider_type
 
     def _get_or_register_user(
         self,

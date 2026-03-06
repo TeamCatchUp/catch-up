@@ -5,6 +5,7 @@ from httpx import AsyncClient
 from catchup.auth.endpoints import BaseOAuthEndpoint
 from catchup.auth.exceptions import OAuthError
 from catchup.auth.schemas import BaseOAuthUserInfoResponse
+from catchup.components.auth.constants import OAuthIdentityProviderType
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ class OAuthIdentityProvider:
         *,
         client: AsyncClient,
         endpoint: BaseOAuthEndpoint,
+        provider_type: OAuthIdentityProviderType,
         client_id: str,
         client_secret: str,
         redirect_uri: str,
@@ -24,6 +26,7 @@ class OAuthIdentityProvider:
     ):
         self.client = client
         self.endpoint = endpoint
+        self.provider_type = provider_type
         self.client_id = client_id
         self.client_secret = client_secret
         self.redirect_uri = redirect_uri

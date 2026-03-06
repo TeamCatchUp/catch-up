@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from httpx import AsyncClient
 
@@ -10,10 +11,9 @@ from catchup.configs.config import auth_settings
 def get_oauth_identity_provider(
     *,
     provider_type: OAuthIdentityProviderType,
-    client: AsyncClient
+    client: AsyncClient,
+    state: str
 ) -> OAuthIdentityProvider:
-
-    dynamic_state = f"{provider_type.value}:{uuid.uuid4().hex}"
     
     if provider_type == OAuthIdentityProviderType.KEYCLOAK:
         endpoint = KeycloakOAuthEndpoint.from_settings(
@@ -43,6 +43,7 @@ def get_oauth_identity_provider(
 
     return OAuthIdentityProvider(
         client=client,
-        state=dynamic_state,
+        state=state,
+        provider_type=provider_type,
         **provider_params
     )

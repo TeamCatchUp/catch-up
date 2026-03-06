@@ -1,4 +1,5 @@
 import logging
+import secrets
 from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyCookie
 from httpx import AsyncClient
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_oauth_provider(
+    # Client 요청으로 들어온 OAuth IDP 종류
     provider_type: OAuthIdentityProviderType = OAuthIdentityProviderType.KEYCLOAK,
     client: AsyncClient = Depends(get_global_async_client)
 ) -> OAuthIdentityProvider:
@@ -29,16 +31,24 @@ def get_oauth_provider(
     로그인 진입점에서 사용.
     요청받은 IDP 타입으로 OAuth 인증 클라이언트를 생성한다.
     """
+    
+    state = f"{provider_type.value}:{secrets.token_urlsafe(32)}"
+    
     return get_oauth_identity_provider(
         provider_type=provider_type,
-        client=client
+        client=client,
+        state=state
     )
 
 
-def get_oauth_provider_from_state(
+def _get_oauth_provider_from_state(
     state: str,
     client: AsyncClient = Depends(get_global_async_client)
 ) -> OAuthIdentityProvider:
+    """
+    oauth service 객체를 주입하기 위해 필요한 내부 의존성
+    """
+    
     try:
         provider_name = state.split(":")[0]
         provider_type = OAuthIdentityProviderType(provider_name)
@@ -49,18 +59,21 @@ def get_oauth_provider_from_state(
         )
     return get_oauth_identity_provider(
         provider_type=provider_type,
-        client=client
+        client=client,
+        state=state
     )
 
 
 def get_oauth_service_from_state(
     db: Session = Depends(get_db),
-    provider: OAuthIdentityProvider = Depends(get_oauth_provider_from_state)
+    provider: OAuthIdentityProvider = Depends(_get_oauth_provider_from_state)
 ) -> OAuthService:
     return OAuthService(
         db=db,
-        provider=provider
+        provider=provider,
+        provider_type=provider.provider_type
     )
+
 
 # 현재 로그인한 사용자 정보
 def get_current_user(
