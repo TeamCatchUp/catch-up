@@ -57,7 +57,14 @@ const RagAnswer = ({
     () => formatMarkdownString(currentQA?.answer?.content ?? ''),
     [currentQA?.answer?.content],
   );
-  const citationOrderMap = useMemo(() => getCitationDisplayOrderMap(formattedAnswerContent), [formattedAnswerContent]);
+  const validIndices = useMemo(
+    () => new Set(currentQA?.answer?.sources?.map((s) => s.source_index)),
+    [currentQA?.answer?.sources],
+  );
+  const citationOrderMap = useMemo(
+    () => getCitationDisplayOrderMap(formattedAnswerContent, validIndices),
+    [formattedAnswerContent, validIndices],
+  );
 
   // 답변이 있는 경우
   if (currentQA?.answer) {
