@@ -23,7 +23,7 @@ from catchup.connectors.atlassian.constants import (
     REQUIRED_CONFLUENCE_SCOPES,
     REQUIRED_JIRA_SCOPES,
 )
-from catchup.connectors.atlassian.oauth_client import AtlassianOAuthService
+from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.configs.config import settings
 from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.utils.redis import validate_oauth_state
@@ -141,8 +141,8 @@ def _check_audience(token_payload: dict | None) -> None:
 class AtlassianCallbackService:
     """콜백 비즈니스 로직 담당 서비스 (FastAPI 비의존)."""
 
-    def __init__(self, oauth_service: AtlassianOAuthService):
-        self.oauth_service = oauth_service
+    def __init__(self, oauth_client: AtlassianOAuthClient):
+        self.oauth_client = oauth_client
 
     async def handle_callback(
         self,
@@ -157,14 +157,14 @@ class AtlassianCallbackService:
             raise StateInvalid()
 
         # 2) code -> token 교환
-        tokens = await self.oauth_service.exchange_code_for_tokens(code)
+        tokens = await self.oauth_client.exchange_code_for_tokens(code)
         token_payload = _decode_jwt_payload(tokens.access_token)
         _check_audience(token_payload)
 
         # 3) 사용자 / 리소스 조회
         try:
-            user_info = await self.oauth_service.get_user_info(tokens.access_token)
-            resources = await self.oauth_service.get_accessible_resources(tokens.access_token)
+            user_info = await self.oauth_client.get_user_info(tokens.access_token)
+            resources = await self.oauth_client.get_accessible_resources(tokens.access_token)
         except Exception as e:
             raise ResourceFetchFailed(str(e)) from e
 

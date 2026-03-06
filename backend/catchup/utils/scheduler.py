@@ -18,7 +18,7 @@ from catchup.db.jira import sync_repository as jira_sync
 from catchup.db.atlassian.oauth_repository import get_all_tokens as get_all_atlassian_tokens
 from catchup.db.models import JiraEntityType, SyncConnector
 from catchup.db.slack.oauth_repository import get_all_slack_tokens
-from catchup.sync.contracts import IncrementalSyncDispatchRequest
+from catchup.sync.common.schemas import IncrementalSyncDispatchRequest
 from catchup.sync.dispatch_service import get_sync_dispatch_service
 from catchup.utils.webhook_buffer import get_webhook_buffer
 from catchup.connectors.confluence.factory import create_confluence_ingestion_service
@@ -122,7 +122,7 @@ async def flush_slack_events():
                 dispatch_result = await dispatch_service.dispatch_incremental_sync(
                     db=db,
                     connector=SyncConnector.SLACK,
-                    command=IncrementalSyncDispatchRequest(
+                    request=IncrementalSyncDispatchRequest(
                         scope_id=team_id,
                         target_ids=None,
                         trigger="scheduler",

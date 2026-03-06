@@ -6,11 +6,11 @@ from sqlalchemy.orm import Session
 
 from catchup.db.atlassian.oauth_repository import get_token_by_cloud_id
 from catchup.db.confluence import domain_repository as confluence_entities
-from catchup.sync.common.schemas import FullSyncDispatchRequest
-from catchup.sync.services.full_sync_orchestrator import (
+from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
+from catchup.sync.common.schemas import (
     FullSyncResolvedTargets,
+    FullSyncDispatchRequest,
     FullSyncTarget,
-    FullSyncTargetResolverProtocol,
 )
 
 logger = logging.getLogger(__name__)

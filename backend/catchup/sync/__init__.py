@@ -1,5 +1,4 @@
-from catchup.sync.contracts import (
-    ConnectorSyncService,
+from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
     IncrementalSyncDispatchRequest,
     SyncDispatchResult,
@@ -11,5 +10,4 @@ __all__ = [
     "FullSyncDispatchRequest",
     "IncrementalSyncDispatchRequest",
     "SyncDispatchResult",
-    "ConnectorSyncService",
 ]

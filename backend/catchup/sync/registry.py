@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from catchup.db.models import SyncConnector
+from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.services import (
     get_confluence_full_sync_target_resolver,
     get_github_full_sync_target_resolver,
     get_jira_full_sync_target_resolver,
     get_slack_full_sync_target_resolver,
 )
-from catchup.sync.services.full_sync_orchestrator import FullSyncTargetResolverProtocol
 
 _FULL_SYNC_TARGET_RESOLVERS: dict[SyncConnector, FullSyncTargetResolverProtocol] = {
     SyncConnector.SLACK: get_slack_full_sync_target_resolver(),

@@ -5,7 +5,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from catchup.db.models import SyncConnector
-from catchup.sync.contracts import (
+from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
     IncrementalSyncDispatchRequest,
     SyncDispatchResult,
@@ -21,7 +21,6 @@ _INCREMENTAL_NOT_IMPLEMENTED_MESSAGE = (
 )
 
 class SyncDispatchService:
-    
     def __init__(self, orchestrator: FullSyncDispatchOrchestrator):
         self._full_sync_orchestrator = orchestrator
 
@@ -33,7 +32,6 @@ class SyncDispatchService:
         request: FullSyncDispatchRequest,
         base_url: str | None,
     ) -> SyncDispatchResult:
-        
         logger.info(
             "[SYNC][FULL SYNC][DISPATCH] Dispatching request: connector=%s, scope_id=%s, target_count=%s, sync_days=%s, trigger=%s",
             connector,
@@ -52,12 +50,12 @@ class SyncDispatchService:
             base_url=base_url,
             resolver=resolver,
         )
-    
+
     async def dispatch_incremental_sync(
         self,
         *,
-        db:Session,
-        connector:SyncConnector,
+        db: Session,
+        connector: SyncConnector,
         request: IncrementalSyncDispatchRequest,
         base_url: str | None,
     ) -> SyncDispatchResult:
@@ -80,7 +78,8 @@ class SyncDispatchService:
             dropped_events=0,
             message=_INCREMENTAL_NOT_IMPLEMENTED_MESSAGE,
         )
-    
+
+
 _sync_dispatch_service = SyncDispatchService(
     orchestrator=FullSyncDispatchOrchestrator(event_publisher=get_event_publisher())
 )

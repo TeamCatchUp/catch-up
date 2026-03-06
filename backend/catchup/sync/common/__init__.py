@@ -1,12 +1,16 @@
 from catchup.sync.common.protocols import (
     ConnectorSyncServiceProtocol,
     EventPublisherProtocol,
+    FullSyncTargetResolverProtocol,
     IngestionHandlerProtocol,
     WorkerProtocol,
 )
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
+    FullSyncResolvedTargets,
+    FullSyncTarget,
     IncrementalSyncDispatchRequest,
+    SyncEventSeed,
     SyncClaimBatch,
     SyncDispatchResult,
     SyncDispatchStatus,
@@ -18,8 +22,11 @@ from catchup.sync.common.schemas import (
 __all__ = [
     "SyncDispatchStatus",
     "FullSyncDispatchRequest",
+    "FullSyncTarget",
+    "FullSyncResolvedTargets",
     "IncrementalSyncDispatchRequest",
     "SyncDispatchResult",
+    "SyncEventSeed",
     "SyncStreamTask",
     "SyncStreamMessage",
     "SyncClaimBatch",
@@ -27,5 +34,6 @@ __all__ = [
     "EventPublisherProtocol",
     "WorkerProtocol",
     "IngestionHandlerProtocol",
+    "FullSyncTargetResolverProtocol",
     "ConnectorSyncServiceProtocol",
 ]

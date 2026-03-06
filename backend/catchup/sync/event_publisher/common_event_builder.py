@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import uuid4
 
@@ -14,17 +13,7 @@ from catchup.db.sync import (
     create_events as create_db_sync_events,
     create_job as create_db_sync_job,
 )
-from catchup.sync.common.schemas import SyncStreamTask
-
-
-@dataclass(slots=True, frozen=True)
-class SyncEventSeed:
-    event_id: str
-    target_type: str
-    target_id: str
-    target_name: str
-    metadata: dict[str, object] = field(default_factory=dict)
-    max_attempts: int = 3
+from catchup.sync.common.schemas import SyncEventSeed, SyncStreamTask
 
 def build_seeds_from_targets(
     *,

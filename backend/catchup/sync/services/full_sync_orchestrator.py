@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Protocol
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -14,42 +12,22 @@ from catchup.db.sync import (
     complete_job_success as complete_db_sync_job_success,
     start_job as start_db_sync_job,
 )
-from catchup.sync.common.protocols import EventPublisherProtocol
-from catchup.sync.common.schemas import FullSyncDispatchRequest, SyncDispatchResult
-from catchup.sync.event_publisher.common_event_builder import (
+from catchup.sync.common.protocols import (
+    EventPublisherProtocol,
+    FullSyncTargetResolverProtocol,
+)
+from catchup.sync.common.schemas import (
+    FullSyncDispatchRequest,
+    SyncDispatchResult,
     SyncEventSeed,
+)
+from catchup.sync.event_publisher.common_event_builder import (
     build_stream_tasks_from_event_ids,
     persist_sync_job_and_events,
 )
 from catchup.sync.sync_audit import emit_sync_dispatch_accepted
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(slots=True, frozen=True)
-class FullSyncTarget:
-    target_type: str
-    target_id: str
-    target_name: str
-    metadata: dict[str, object] = field(default_factory=dict)
-
-
-@dataclass(slots=True, frozen=True)
-class FullSyncResolvedTargets:
-    targets: list[FullSyncTarget] = field(default_factory=list)
-    invalid_target_ids: list[str] = field(default_factory=list)
-    scope_metadata: dict[str, object] = field(default_factory=dict)
-
-
-class FullSyncTargetResolverProtocol(Protocol):
-    async def resolve_full_sync_targets(
-        self,
-        *,
-        db: Session,
-        request: FullSyncDispatchRequest,
-        sync_from: str,
-    ) -> FullSyncResolvedTargets:
-        ...
 
 
 def _build_job_urls(base_url: str | None, job_id: str) -> tuple[str | None, str | None]:
@@ -123,6 +101,15 @@ class FullSyncDispatchOrchestrator:
             event_seeds=event_seeds,
             scope_metadata=resolved.scope_metadata,
         )
+        if len(db_event_ids) != total_targets:
+            logger.warning(
+                "[%s][FULL SYNC][ORCHESTRATOR] Persisted event count mismatch: scope_id=%s, job_id=%s, target_count=%s, persisted_event_count=%s",
+                connector.value.upper(),
+                scope_id,
+                job_id,
+                total_targets,
+                len(db_event_ids),
+            )
 
         tasks = build_stream_tasks_from_event_ids(
             event_ids=db_event_ids,
@@ -132,7 +119,26 @@ class FullSyncDispatchOrchestrator:
             scope_id=scope_id,
             event_seeds=event_seeds,
         )
+        if len(tasks) != len(db_event_ids):
+            logger.warning(
+                "[%s][FULL SYNC][ORCHESTRATOR] Stream task build mismatch: scope_id=%s, job_id=%s, persisted_event_count=%s, built_task_count=%s",
+                connector.value.upper(),
+                scope_id,
+                job_id,
+                len(db_event_ids),
+                len(tasks),
+            )
+
         message_ids = await self._event_publisher.publish(tasks=tasks)
+        if len(message_ids) != len(tasks):
+            logger.warning(
+                "[%s][FULL SYNC][ORCHESTRATOR] Publish result mismatch: scope_id=%s, job_id=%s, task_count=%s, published_message_count=%s",
+                connector.value.upper(),
+                scope_id,
+                job_id,
+                len(tasks),
+                len(message_ids),
+            )
 
         if total_targets == 0:
             started = start_db_sync_job(db, job_id)

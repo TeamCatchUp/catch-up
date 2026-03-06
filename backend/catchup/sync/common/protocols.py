@@ -3,9 +3,12 @@ from __future__ import annotations
 import asyncio
 from typing import Protocol
 
+from sqlalchemy.orm import Session
+
 from catchup.sync.common.schemas import (
     IncrementalSyncDispatchRequest,
     FullSyncDispatchRequest,
+    FullSyncResolvedTargets,
     SyncDispatchResult,
     SyncEventContext,
     SyncStreamMessage,
@@ -107,16 +110,27 @@ class ConnectorSyncServiceProtocol(Protocol):
         self,
         *,
         db,
-        command: FullSyncDispatchRequest,
+        request: FullSyncDispatchRequest,
         base_url: str | None,
     ) -> SyncDispatchResult:
+        ...
+
+
+class FullSyncTargetResolverProtocol(Protocol):
+    async def resolve_full_sync_targets(
+        self,
+        *,
+        db: Session,
+        request: FullSyncDispatchRequest,
+        sync_from: str,
+    ) -> FullSyncResolvedTargets:
         ...
 
     async def dispatch_incremental_sync(
         self,
         *,
         db,
-        command: IncrementalSyncDispatchRequest,
+        request: IncrementalSyncDispatchRequest,
         base_url: str | None,
     ) -> SyncDispatchResult:
         ...

@@ -6,11 +6,11 @@ from sqlalchemy.orm import Session
 
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.installation_repository import get_installation_by_installation_id
-from catchup.sync.common.schemas import FullSyncDispatchRequest
-from catchup.sync.services.full_sync_orchestrator import (
+from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
+from catchup.sync.common.schemas import (
     FullSyncResolvedTargets,
+    FullSyncDispatchRequest,
     FullSyncTarget,
-    FullSyncTargetResolverProtocol,
 )
 
 logger = logging.getLogger(__name__)

@@ -47,6 +47,31 @@ class SyncDispatchResult:
     stream_url: str | None = None
 
 
+@dataclass(slots=True, frozen=True)
+class FullSyncTarget:
+    target_type: str
+    target_id: str
+    target_name: str
+    metadata: dict[str, object] = field(default_factory=dict)
+
+
+@dataclass(slots=True, frozen=True)
+class FullSyncResolvedTargets:
+    targets: list[FullSyncTarget] = field(default_factory=list)
+    invalid_target_ids: list[str] = field(default_factory=list)
+    scope_metadata: dict[str, object] = field(default_factory=dict)
+
+
+@dataclass(slots=True, frozen=True)
+class SyncEventSeed:
+    event_id: str
+    target_type: str
+    target_id: str
+    target_name: str
+    metadata: dict[str, object] = field(default_factory=dict)
+    max_attempts: int = 3
+
+
 class SyncStreamTask(BaseModel):
     """Redis Stream에 저장되는 이벤트 단위 작업."""
 

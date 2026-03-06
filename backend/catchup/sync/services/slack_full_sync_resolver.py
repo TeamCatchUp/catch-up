@@ -5,11 +5,11 @@ import logging
 from sqlalchemy.orm import Session
 
 from catchup.connectors.slack.factory import create_slack_ingestion_service
-from catchup.sync.common.schemas import FullSyncDispatchRequest
-from catchup.sync.services.full_sync_orchestrator import (
+from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
+from catchup.sync.common.schemas import (
     FullSyncResolvedTargets,
+    FullSyncDispatchRequest,
     FullSyncTarget,
-    FullSyncTargetResolverProtocol,
 )
 
 logger = logging.getLogger(__name__)

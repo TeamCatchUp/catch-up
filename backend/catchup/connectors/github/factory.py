@@ -4,26 +4,14 @@ Github Connector Factory
 GithubIngestionService 인스턴스 생성을 위한 팩토리 함수.
 """
 
-from functools import lru_cache
-
 from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.pgvector import PGVectorRepository
-from catchup.connectors.github.service import GithubService, GithubIngestionService
+from catchup.connectors.github.service import GithubIngestionService
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
-
-
-@lru_cache(maxsize=1)
-def get_github_service() -> GithubService:
-    """
-    Legacy GithubService 인스턴스 반환 (PR 컨텍스트 조회용)
-
-    Note: 새로운 코드에서는 create_github_ingestion_service 사용 권장
-    """
-    return GithubService()
 
 
 async def create_github_ingestion_service(
