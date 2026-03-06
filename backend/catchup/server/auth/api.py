@@ -13,7 +13,7 @@ from catchup.auth.dependencies import (
     get_oauth_provider,
     get_oauth_service_from_state
 )
-from catchup.auth.jwt import create_access_token, verify_token
+from catchup.auth.jwt import create_access_token, create_refresh_token, verify_token
 from catchup.components.auth.provider import OAuthIdentityProvider
 from catchup.components.auth.constants import OAuthIdentityProviderType
 from catchup.configs.config import auth_settings
@@ -27,14 +27,13 @@ from catchup.db.models import (
     SourceType,
     User,
 )
-from catchup.db.users import get_user_by_email, update_user_refresh_token
+from catchup.db.users import get_user_by_sub, update_user_refresh_token
 from sqlalchemy import select
 from catchup.server.auth.schemas import (
     CurrentUserInfo,
     CurrentUserProfile,
     IntegrationProfileItem,
-    IntegrationProfileResponse,
-    TokenRefreshResponse,
+    IntegrationProfileResponse
 )
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
 
@@ -85,10 +84,9 @@ async def oauth_callback(
     cookie_state = request.cookies.get("oauth_state")
     if not cookie_state or cookie_state != state:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="유효하지 않은 인증 접근입니다."
         )
-    
     
     # OAuth state 유효성 검사
     is_valid = await validate_oauth_state(
@@ -98,7 +96,7 @@ async def oauth_callback(
     
     if not is_valid:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="유효하지 않거나 만료된 인증입니다."
         )
     
@@ -119,43 +117,67 @@ async def oauth_callback(
 @router.post(
     path="/refresh",
     description="Refresh 토큰 발급",
-    response_model=TokenRefreshResponse)
-async def refresh_token(
+)
+def refresh_token(
     request: Request,
     response: Response,
     db: Session = Depends(get_db)
 ):
     refresh_token = request.cookies.get("refresh_token")
-    
     if not refresh_token:
-        refresh_token = request.headers.get("refresh_token")
-
-    payload = verify_token(refresh_token, "refresh")
-
-    email = payload.get("sub")
-
-    user = await run_in_threadpool(
-        get_user_by_email,
-        db,
-        email
-    )
-
-    if not user or user.refresh_token != refresh_token:
-        delete_auth_cookies(response)
-
-        response.status_code = status.HTTP_401_UNAUTHORIZED
-
-        return TokenRefreshResponse(
-            status="error", detail="Refresh Token이 유효하지 않습니다."
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh Token이 없습니다."
         )
 
-    new_access_token = create_access_token(data={"sub": user.email})
-
-    set_auth_cookies(response, new_access_token)
-
-    return TokenRefreshResponse(
-        status="success", detail="Access Token을 성공적으로 갱신했습니다."
+    # refresh token 유효성 검사
+    payload = verify_token(
+        token=refresh_token,
+        type="refresh"
     )
+    
+    # sub 기반 User 조회
+    sub = payload.get("sub")
+    user = get_user_by_sub(
+        db=db,
+        sub=sub
+    )
+
+    # 존재하지 않는 사용자이거나 refresh token이 일치하지 않는 경우
+    if not user or user.refresh_token != refresh_token:
+        delete_auth_cookies(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh Token이 유효하지 않습니다."
+        )
+    
+    # token 재발급
+    token_data = {
+        "sub": user.oauth_user.sub,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role
+    }
+    new_access_token = create_access_token(data=token_data)
+    new_refresh_token = create_refresh_token(data=token_data)  # Rotation
+    
+    # refresh token 갱신
+    update_user_refresh_token(
+        db=db,
+        user_id=user.id,
+        refresh_token=new_refresh_token
+    )
+
+    set_auth_cookies(
+        response=response,
+        access_token=new_access_token,
+        refresh_token=new_refresh_token
+    )
+
+    return {
+        "status": "success",
+        "detail": "Access Token을 성공적으로 갱신했습니다."
+    }
 
 
 @router.post(

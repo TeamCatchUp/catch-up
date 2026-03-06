@@ -34,11 +34,6 @@ class IntegrationProfileResponse(BaseModel):
     slack: IntegrationProfileItem | None = None
 
 
-class TokenRefreshResponse(BaseModel):
-    status: str
-    detail: str
-
-
 class GithubConnectorStatus(BaseModel):
     tool_name: str = "github"
     connected: bool
