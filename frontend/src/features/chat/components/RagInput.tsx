@@ -216,7 +216,7 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
               disabled={isLoading || !newInput.trim()}
               className={cn(
                 'cursor-pointer rounded-full p-2 transition-colors',
-                newInput.trim() ? 'bg-blue-50' : 'bg-fill-strong border-edge-assistive border',
+                newInput.trim() ? 'bg-fill-primary' : 'bg-fill-strong border-edge-assistive border',
               )}
             >
               <ArrowSend
