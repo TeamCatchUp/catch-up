@@ -63,12 +63,12 @@ export default function HistoryPage() {
               className={cn(
                 'flex h-9 max-w-[145px] min-w-9 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1.5',
                 savedOnly
-                  ? 'border-blue-30 bg-fill-primary-assistive'
+                  ? 'border-edge-primary bg-fill-primary-assistive'
                   : 'border-edge-neutral hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed bg-fill-normal',
               )}
             >
-              <BookmarkIcon className={cn('size-5 shrink-0', savedOnly ? 'text-blue-55' : 'text-content-neutral')} />
-              <span className={cn('text-body-small whitespace-nowrap', savedOnly ? 'text-blue-55' : 'text-content-normal')}>
+              <BookmarkIcon className={cn('size-5 shrink-0', savedOnly ? 'text-icon-primary' : 'text-content-neutral')} />
+              <span className={cn('text-body-small whitespace-nowrap', savedOnly ? 'text-icon-primary' : 'text-content-normal')}>
                 저장한 답변
               </span>
             </button>

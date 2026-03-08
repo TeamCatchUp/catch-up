@@ -199,7 +199,7 @@ const UsersStatusSection = ({
       {/* 헤더: 제목 + 설명 */}
       <div className="flex flex-col gap-0.5">
         <h2 className="text-heading-large text-content-normal">
-          이용자 계정 등록 상태 <span className="text-blue-40">{total}</span>
+          이용자 계정 등록 상태 <span className="text-content-primary-assistive">{total}</span>
         </h2>
         <p className="text-body-small text-content-alternative">Catch Up 사용자의 협업 툴 계정 등록 상태를 확인할 수 있어요.</p>
       </div>

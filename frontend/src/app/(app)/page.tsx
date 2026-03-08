@@ -81,7 +81,7 @@ export default function Home() {
             <h1 className="text-display-xlarge text-normal-normal">
               사내 AI 탐색으로
               <br />
-              <span className="text-blue-50">필요한 업무 자료를 </span>
+              <span className="text-content-primary">필요한 업무 자료를 </span>
               바로 찾아보세요
             </h1>
           </div>

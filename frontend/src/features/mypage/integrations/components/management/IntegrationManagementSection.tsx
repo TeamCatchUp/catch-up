@@ -111,7 +111,7 @@ const IntegrationManagementSection = ({
               onClick={() => onSelectService(service)}
               className={cn(
                 'flex h-16 w-81.25 cursor-pointer items-center justify-between rounded-xl border p-4 shadow-[0_0_4px_0_#f7fbff]',
-                isSelected ? 'border-blue-30 bg-fill-normal' : 'border-edge-neutral bg-fill-normal',
+                isSelected ? 'border-edge-primary bg-fill-normal' : 'border-edge-neutral bg-fill-normal',
               )}
             >
               <div className="flex items-center gap-3">
@@ -121,8 +121,8 @@ const IntegrationManagementSection = ({
               <div className="flex items-center gap-1">
                 {connected ? (
                   <>
-                    <IconCloudCheckFilled className="h-5 w-5 text-blue-50" />
-                    <span className="text-body-xsmall text-blue-50">연동됨</span>
+                    <IconCloudCheckFilled className="h-5 w-5 text-icon-primary" />
+                    <span className="text-body-xsmall text-icon-primary">연동됨</span>
                   </>
                 ) : (
                   <>
@@ -157,7 +157,7 @@ const IntegrationManagementSection = ({
               <span className="text-body-small text-content-neutral">연동 상태</span>
               <div className="flex items-center gap-1">
                 {detail.connected ? (
-                  <span className="text-body-xsmall text-blue-50">연동됨</span>
+                  <span className="text-body-xsmall text-icon-primary">연동됨</span>
                 ) : (
                   <>
                     <div className="flex items-center gap-1 px-1.5 py-1">
@@ -167,7 +167,7 @@ const IntegrationManagementSection = ({
                     <button
                       type="button"
                       onClick={() => handleInstall(selectedService)}
-                      className="text-body-xsmall cursor-pointer rounded-full px-1.5 py-1 text-blue-50"
+                      className="text-body-xsmall cursor-pointer rounded-full px-1.5 py-1 text-icon-primary"
                     >
                       연동하기
                     </button>

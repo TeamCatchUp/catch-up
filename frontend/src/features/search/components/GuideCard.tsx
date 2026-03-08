@@ -24,7 +24,7 @@ export function JiraGuideCard({ onClose }: GuideCardProps) {
         </div>
         <div className="flex flex-col items-start gap-1.5 self-stretch">
           <div className="text-heading-medium text-content-strong">
-            캐치스턴트 AI에게 <span className="text-blue-55">참고할 범위</span>를 알려주세요
+            캐치스턴트 AI에게 <span className="text-content-primary">참고할 범위</span>를 알려주세요
           </div>
           <div className="text-body-small text-content-neutral self-stretch">
             Project나 Ticket을 지정하면 의사결정 흐름과 변경 이력을 기준 더 정확한 답변을 받을 수 있어요. <br />
@@ -52,7 +52,7 @@ export function GithubGuideCard({ onClose }: GuideCardProps) {
         </div>
         <div className="flex flex-col items-start gap-1.5 self-stretch">
           <div className="text-heading-medium text-content-strong">
-            캐치스턴트 AI에게 <span className="text-blue-55">참고할 범위</span>를 알려주세요
+            캐치스턴트 AI에게 <span className="text-content-primary">참고할 범위</span>를 알려주세요
           </div>
           <div className="text-body-small text-content-neutral self-stretch">
             관련된 레포와 폴더를 지정하면 더 빠르고 정확한 답변을 받을 수 있어요.

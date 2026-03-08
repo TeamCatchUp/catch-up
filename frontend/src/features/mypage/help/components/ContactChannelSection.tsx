@@ -12,7 +12,7 @@ const ContactChannelSection = () => {
           <p className="text-body-small text-content-alternative">운영팀과 Slack으로 바로 연결됩니다.</p>
         </div>
 
-        <Button type="button" variant="text-primary-blue" size="md" className="text-blue-55 gap-1">
+        <Button type="button" variant="text-primary-blue" size="md" className="text-content-primary gap-1">
           Slack 으로 문의하기
           <ArrowForward className="h-5 w-5" />
         </Button>

@@ -73,7 +73,7 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-heading-medium text-content-neutral">{completionRate}%</span>
-                    <span className="rounded-md2 text-body-xsmall bg-blue-5 px-1.5 py-0.5 leading-none tracking-tight text-blue-50">
+                    <span className="rounded-md2 text-body-xsmall bg-blue-5 px-1.5 py-0.5 leading-none tracking-tight text-content-primary">
                       {`${completedCount}/${totalCount}`}
                     </span>
                   </div>

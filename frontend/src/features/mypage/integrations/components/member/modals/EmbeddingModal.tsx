@@ -260,7 +260,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
                             {item.name}
                           </span>
                           {checked ? (
-                            <CheckboxChecked className="size-6 shrink-0 text-blue-50" />
+                            <CheckboxChecked className="size-6 shrink-0 text-icon-primary" />
                           ) : (
                             <CheckboxUnchecked className="text-content-assistive size-6 shrink-0" />
                           )}
