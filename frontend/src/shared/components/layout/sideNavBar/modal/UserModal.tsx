@@ -52,22 +52,22 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
       <DropdownMenuLabel className="flex h-12 items-center gap-4 px-1 py-0">
         <DefaultProfile className="h-10 w-10 shrink-0" />
         <div className="relative top-px flex min-w-0 flex-col">
-          <span className="text-heading-small text-gray-80 truncate">{userName ?? '이름없음'}</span>
-          <span className="text-body-small truncate text-gray-50">{userEmail ?? ''}</span>
+          <span className="text-heading-small text-content-normal truncate">{userName ?? '이름없음'}</span>
+          <span className="text-body-small truncate text-content-alternative">{userEmail ?? ''}</span>
         </div>
       </DropdownMenuLabel>
 
       {/* 메뉴 */}
       <DropdownMenuItem onSelect={() => router.push('/mypage/preferences')}>
-        <Person className="text-gray-70 h-6 w-6" />
+        <Person className="text-icon-normal h-6 w-6" />
         <span>개인 맞춤 설정</span>
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-        <AdminPanelSettings className="text-gray-70 h-6 w-6" />
+        <AdminPanelSettings className="text-icon-normal h-6 w-6" />
         <span>권한 관리</span>
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-        <Settings className="text-gray-70 h-6 w-6" />
+        <Settings className="text-icon-normal h-6 w-6" />
         <span>설정</span>
       </DropdownMenuItem>
 
@@ -89,7 +89,7 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
 
       {/* 로그아웃 */}
       <DropdownMenuItem onSelect={() => logoutMutation.mutate()}>
-        <Logout className="text-gray-70 h-6 w-6" />
+        <Logout className="text-icon-normal h-6 w-6" />
         <span>로그아웃</span>
       </DropdownMenuItem>
     </DropdownMenuContent>

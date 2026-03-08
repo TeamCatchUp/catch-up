@@ -48,13 +48,13 @@ const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
   return (
     <div
       ref={modalRef}
-      className="shadow-modal border-neutral-4 flex max-h-135 w-190 flex-col gap-4 rounded-3xl border bg-white px-3 py-4"
+      className="shadow-modal border-edge-normal flex max-h-135 w-190 flex-col gap-4 rounded-3xl border bg-fill-normal px-3 py-4"
     >
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div className="flex gap-2 px-1.5">
-          <AI className="text-gray-70 h-7 w-7" />
-          <span className="text-heading-large text-gray-70">캐치스턴트 히스토리</span>
+          <AI className="text-icon-normal h-7 w-7" />
+          <span className="text-heading-large text-content-neutral">캐치스턴트 히스토리</span>
         </div>
         <div className="flex gap-1.5">
           <button
@@ -74,11 +74,11 @@ const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
       </div>
 
       {/* divider */}
-      <div className="bg-neutral-3 relative right-3 h-px w-189.25" />
+      <div className="bg-edge-neutral relative right-3 h-px w-189.25" />
 
       {/* 질문 목록 */}
       {isLoading ? (
-        <div className="text-gray-40 p-5">데이터를 불러오는 중입니다...</div>
+        <div className="text-content-assistive p-5">데이터를 불러오는 중입니다...</div>
       ) : (
         <div className="overflow-y-scroll">
           <SearchHistory querys={recentQueries} isModal={true} onItemClick={onClose} />

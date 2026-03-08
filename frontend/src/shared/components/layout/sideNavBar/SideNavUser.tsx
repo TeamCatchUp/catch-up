@@ -22,7 +22,7 @@ export default function SideNavUser({ isOpen }: SideNavUserProps) {
 
   return (
     <div className="mt-auto flex flex-col gap-1.5">
-      {isOpen && <div className="bg-neutral-3 relative right-2 h-px w-60" />}
+      {isOpen && <div className="bg-edge-neutral relative right-2 h-px w-60" />}
       <Tooltip>
         <DropdownMenu>
           <TooltipTrigger asChild>
@@ -31,16 +31,16 @@ export default function SideNavUser({ isOpen }: SideNavUserProps) {
                 className={cn(
                   'flex h-13.5 cursor-pointer items-center rounded-lg',
                   isOpen
-                    ? 'hover:bg-neutral-2 data-[state=open]:bg-neutral-2 w-56.25 justify-between px-1.5 py-1'
+                    ? 'hover:bg-fill-interaction-hover data-[state=open]:bg-fill-interaction-hover w-56.25 justify-between px-1.5 py-1'
                     : 'justify-center',
                 )}
               >
                 <div className={cn('flex gap-4', isOpen ? 'mt-auto' : '')}>
-                  <Profile className="border-neutral-2 h-10 w-10 rounded-xl border-[0.5px]" />
+                  <Profile className="border-edge-assistive h-10 w-10 rounded-xl border-[0.5px]" />
                   {isOpen && (
                     <div className="relative top-px max-w-31 text-left">
-                      <div className="text-heading-small text-gray-80 truncate">{user?.name ?? '이름없음'}</div>
-                      <div className="text-body-small truncate text-gray-50">{user?.email ?? ''}</div>
+                      <div className="text-heading-small text-content-normal truncate">{user?.name ?? '이름없음'}</div>
+                      <div className="text-body-small truncate text-content-alternative">{user?.email ?? ''}</div>
                     </div>
                   )}
                 </div>
