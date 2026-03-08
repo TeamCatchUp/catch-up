@@ -35,14 +35,14 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'shadow-modal data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl bg-white p-6 duration-200',
+        'shadow-modal data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl bg-fill-normal p-6 duration-200',
         className,
       )}
       {...props}
     >
       {children}
       {!hideClose && (
-        <DialogPrimitive.Close className="absolute top-4 right-4 cursor-pointer rounded-sm text-gray-50 opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none">
+        <DialogPrimitive.Close className="absolute top-4 right-4 cursor-pointer rounded-sm text-icon-neutral opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none">
           <CloseIcon className="size-5" />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>
@@ -66,7 +66,7 @@ const DialogTitle = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Title ref={ref} className={cn('text-heading-large text-gray-90', className)} {...props} />
+  <DialogPrimitive.Title ref={ref} className={cn('text-heading-large text-content-strong', className)} {...props} />
 ));
 DialogTitle.displayName = DialogPrimitive.Title.displayName;
 
@@ -74,7 +74,7 @@ const DialogDescription = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Description ref={ref} className={cn('text-body-small text-gray-50', className)} {...props} />
+  <DialogPrimitive.Description ref={ref} className={cn('text-body-small text-content-alternative', className)} {...props} />
 ));
 DialogDescription.displayName = DialogPrimitive.Description.displayName;
 

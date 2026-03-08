@@ -15,9 +15,9 @@ function Input({ className, type, inputSize = 'lg', error = false, ...props }: I
     <input
       type={type}
       className={cn(
-        'text-body-small text-gray-80 placeholder:text-gray-30 flex w-full rounded-lg bg-white transition-colors focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
-        inputSize === 'lg' && 'border-neutral-3 focus:border-blue-30 gap-3 border p-3',
-        inputSize === 'sm' && 'border-neutral-5 focus:border-blue-30 gap-1 border px-2.5 py-1.5',
+        'text-body-small text-content-normal placeholder:text-content-assistive flex w-full rounded-lg bg-fill-normal transition-colors focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+        inputSize === 'lg' && 'border-edge-neutral focus:border-blue-30 gap-3 border p-3',
+        inputSize === 'sm' && 'border-edge-strong focus:border-blue-30 gap-1 border px-2.5 py-1.5',
         error && 'border-red-50 focus:border-red-50',
         className,
       )}
