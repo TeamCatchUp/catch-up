@@ -17,7 +17,7 @@ const Avatar = ({ src, size = 'sm' }: { src?: string | null; size?: 'sm' | 'xs' 
     return <img src={src} alt="" className={`${cls} shrink-0 rounded-full object-cover`} />;
   }
   return (
-    <DefaultProfile className={`border-edge-assistive text-content-assistive ${cls} shrink-0 rounded-full border`} />
+    <DefaultProfile className={`text-content-assistive ${cls} shrink-0 rounded-full`} />
   );
 };
 

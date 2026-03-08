@@ -10,10 +10,10 @@ interface SelectedUserProfileProps {
 const SelectedUserProfile = ({ user }: SelectedUserProfileProps) => {
   return (
     <div className="flex items-start gap-4">
-      <DefaultProfile className="border-edge-assistive text-content-assistive size-14 shrink-0 rounded-full border-4 border-white" />
+      <DefaultProfile className="text-content-assistive size-14 shrink-0 rounded-full" />
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
         <h2 className="text-heading-large text-content-neutral">{user.name}</h2>
-        <p className="text-body-small tracking-tight text-content-alternative">
+        <p className="text-body-small text-content-alternative tracking-tight">
           {user.department} · {user.rank}
         </p>
       </div>

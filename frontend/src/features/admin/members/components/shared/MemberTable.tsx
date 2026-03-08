@@ -92,7 +92,7 @@ const MemberTable = ({
                 <div className="grid flex-1 grid-cols-4 items-center">
                   {/* 이름 */}
                   <div className="flex items-center gap-4">
-                    <DefaultProfile className="border-edge-assistive text-content-assistive size-7.5 shrink-0 rounded-full border" />
+                    <DefaultProfile className="text-content-assistive size-7.5 shrink-0 rounded-full" />
                     <span className="text-body-small text-content-normal truncate">{row.name}</span>
                   </div>
 

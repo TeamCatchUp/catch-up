@@ -127,7 +127,7 @@ const IntegrationLogSection = () => {
 
                     {/* 이용자 */}
                     <div className="flex w-32 min-w-32 items-center justify-center gap-1.5">
-                      <DefaultProfile className="border-edge-assistive text-content-assistive size-6.25 shrink-0 rounded-full border" />
+                      <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
                       <span className="text-body-xsmall text-content-normal truncate">{log.userName}</span>
                     </div>
 

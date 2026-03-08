@@ -103,7 +103,7 @@ const QuestionLogSection = () => {
                   <div className="grid flex-1 grid-cols-3 items-center gap-1">
                     {/* 이름 */}
                     <div className="flex items-center gap-4">
-                      <DefaultProfile className="border-edge-assistive text-content-assistive size-7 shrink-0 rounded-full border" />
+                      <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
                       <span className="text-body-small text-content-normal truncate">{log.name}</span>
                     </div>
 
