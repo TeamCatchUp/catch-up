@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -27,6 +28,7 @@ from catchup.sync.common.schemas import (
     IncrementalSyncDispatchRequest,
     SyncDispatchResult,
 )
+from catchup.sync.common.exceptions import SyncAPIError
 from catchup.sync.dispatch_service import get_sync_dispatch_service
 from catchup.sync.query_service import (
     SyncJobSnapshotResult,
@@ -38,6 +40,7 @@ from catchup.sync.query_service import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/sync", tags=["sync-runtime"])
+
 
 @router.post(
     "/full",
@@ -56,8 +59,10 @@ async def dispatch_full_sync(
 ):
     dispatch_service = get_sync_dispatch_service()
 
-    try:
-        result = await dispatch_service.dispatch_full_sync(
+    return await _execute_sync_dispatch(
+        connector=sync_request.connector,
+        scope_id=sync_request.scope_id,
+        dispatch_call=dispatch_service.dispatch_full_sync(
             db=db,
             connector=sync_request.connector,
             request=FullSyncDispatchRequest(
@@ -67,50 +72,10 @@ async def dispatch_full_sync(
                 trigger="api",
             ),
             base_url=str(request.base_url),
-        )
-        return _to_sync_accepted_response(result)
-
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_build_error_detail(
-                code="invalid_request",
-                message=str(exc),
-                connector=sync_request.connector,
-                scope_id=sync_request.scope_id,
-            ),
-        )
-
-    except Exception as exc:
-        detail = getattr(exc, "detail", None)
-        if isinstance(detail, dict):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=_build_error_detail(
-                    code="invalid_request",
-                    message="connector validation failed",
-                    connector=sync_request.connector,
-                    scope_id=sync_request.scope_id,
-                    metadata=detail,
-                ),
-            )
-
-        logger.error(
-            "[SYNC][FULL SYNC][API] Dispatch failed: connector=%s, scope_id=%s, error=%s",
-            sync_request.connector,
-            sync_request.scope_id,
-            exc,
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_build_error_detail(
-                code="internal_error",
-                message="sync full request failed",
-                connector=sync_request.connector,
-                scope_id=sync_request.scope_id,
-            ),
-        )
+        ),
+        log_label="FULL SYNC",
+        failure_message="sync full request failed",
+    )
 
 
 @router.post(
@@ -130,8 +95,10 @@ async def dispatch_incremental_sync(
 ):
     dispatch_service = get_sync_dispatch_service()
 
-    try:
-        result = await dispatch_service.dispatch_incremental_sync(
+    return await _execute_sync_dispatch(
+        connector=sync_request.connector,
+        scope_id=sync_request.scope_id,
+        dispatch_call=dispatch_service.dispatch_incremental_sync(
             db=db,
             connector=sync_request.connector,
             request=IncrementalSyncDispatchRequest(
@@ -140,50 +107,10 @@ async def dispatch_incremental_sync(
                 trigger="api",
             ),
             base_url=str(request.base_url),
-        )
-        return _to_sync_accepted_response(result)
-
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_build_error_detail(
-                code="invalid_request",
-                message=str(exc),
-                connector=sync_request.connector,
-                scope_id=sync_request.scope_id,
-            ),
-        )
-
-    except Exception as exc:
-        detail = getattr(exc, "detail", None)
-        if isinstance(detail, dict):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=_build_error_detail(
-                    code="invalid_request",
-                    message="connector validation failed",
-                    connector=sync_request.connector,
-                    scope_id=sync_request.scope_id,
-                    metadata=detail,
-                ),
-            )
-
-        logger.error(
-            "[SYNC][INCREMENTAL SYNC][API] Dispatch failed: connector=%s, scope_id=%s, error=%s",
-            sync_request.connector,
-            sync_request.scope_id,
-            exc,
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_build_error_detail(
-                code="internal_error",
-                message="sync incremental request failed",
-                connector=sync_request.connector,
-                scope_id=sync_request.scope_id,
-            ),
-        )
+        ),
+        log_label="INCREMENTAL SYNC",
+        failure_message="sync incremental request failed",
+    )
 
 
 @router.post(
@@ -249,7 +176,14 @@ async def list_sync_targets(
             scope_id=scope_id,
         )
         return _to_target_response(result)
-
+    except SyncAPIError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.to_detail(
+                connector=connector,
+                scope_id=scope_id,
+            ),
+        ) from exc
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -463,3 +397,52 @@ def _build_error_detail(
         detail["metadata"] = metadata
 
     return detail
+
+
+async def _execute_sync_dispatch(
+    *,
+    connector: SyncConnector,
+    scope_id: str,
+    dispatch_call: Awaitable[SyncDispatchResult],
+    log_label: str,
+    failure_message: str,
+) -> SyncAcceptedResponse:
+    try:
+        result = await dispatch_call
+        return _to_sync_accepted_response(result)
+    except SyncAPIError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.to_detail(
+                connector=connector,
+                scope_id=scope_id,
+            ),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_build_error_detail(
+                code="invalid_request",
+                message=str(exc),
+                connector=connector,
+                scope_id=scope_id,
+            ),
+        ) from exc
+    except Exception as exc:
+        logger.error(
+            "[SYNC][%s][API] Dispatch failed: connector=%s, scope_id=%s, error=%s",
+            log_label,
+            connector,
+            scope_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_build_error_detail(
+                code="internal_error",
+                message=failure_message,
+                connector=connector,
+                scope_id=scope_id,
+            ),
+        ) from exc

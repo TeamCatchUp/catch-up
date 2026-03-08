@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from catchup.db.atlassian.oauth_repository import get_token_by_cloud_id
 from catchup.db.confluence import domain_repository as confluence_entities
+from catchup.sync.common.exceptions import SyncRequestError
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import (
     FullSyncResolvedTargets,
@@ -31,14 +32,6 @@ def _normalize_requested_space_keys(target_ids: list[str] | None) -> list[str]:
     return normalized
 
 
-class ConfluenceFullSyncResolverValidationError(Exception):
-    """Confluence full sync resolver validation error."""
-
-    def __init__(self, detail: dict[str, object]):
-        super().__init__(str(detail))
-        self.detail = detail
-
-
 class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
     async def resolve_full_sync_targets(
         self,
@@ -49,33 +42,24 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
     ) -> FullSyncResolvedTargets:
         cloud_id = request.scope_id.strip()
         if not cloud_id:
-            raise ConfluenceFullSyncResolverValidationError(
-                detail={
-                    "scope_id": request.scope_id,
-                    "message": "scope_id is required",
-                }
-            )
+            raise SyncRequestError("scope_id is required")
 
         token = get_token_by_cloud_id(db, cloud_id)
         if token is None:
-            raise ConfluenceFullSyncResolverValidationError(
-                detail={
-                    "scope_id": request.scope_id,
-                    "cloud_id": cloud_id,
-                    "message": "confluence cloud is not connected",
-                }
+            raise SyncRequestError(
+                "confluence cloud is not connected",
+                metadata={"cloud_id": cloud_id},
             )
 
         spaces = confluence_entities.get_spaces_by_cloud_id(db, cloud_id)
         requested_space_keys = _normalize_requested_space_keys(request.target_ids)
         if request.target_ids is not None and not requested_space_keys:
-            raise ConfluenceFullSyncResolverValidationError(
-                detail={
-                    "scope_id": request.scope_id,
+            raise SyncRequestError(
+                "target_ids is empty after normalization",
+                metadata={
                     "cloud_id": cloud_id,
-                    "message": "target_ids is empty after normalization",
                     "requested_target_ids": request.target_ids,
-                }
+                },
             )
 
         if requested_space_keys:
@@ -97,13 +81,12 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             invalid_target_ids = []
 
         if not resolved_spaces:
-            raise ConfluenceFullSyncResolverValidationError(
-                detail={
-                    "scope_id": request.scope_id,
+            raise SyncRequestError(
+                "no syncable spaces found",
+                metadata={
                     "cloud_id": cloud_id,
-                    "message": "no syncable spaces found",
                     "requested_target_ids": requested_space_keys,
-                }
+                },
             )
 
         targets = [

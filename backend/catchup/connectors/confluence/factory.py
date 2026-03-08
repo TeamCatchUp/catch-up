@@ -7,7 +7,6 @@ AtlassianTokenManager로 OAuth Token을 조회하여 서비스 인스턴스를 �
 
 import logging
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
@@ -21,6 +20,7 @@ from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
 from catchup.connectors.confluence.service import ConfluenceIngestionService
 from catchup.db.atlassian import oauth_repository
+from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
 
 logger = logging.getLogger(__name__)
 
@@ -29,19 +29,6 @@ async def create_confluence_ingestion_service(
     db: Session,
     cloud_id: str,
 ) -> ConfluenceIngestionService:
-    """
-    ConfluenceIngestionService 인스턴스 생성
-
-    Args:
-        db: SQLAlchemy Session
-        cloud_id: Atlassian Cloud ID
-
-    Returns:
-        초기화된 ConfluenceIngestionService
-
-    Raises:
-        HTTPException: Token을 찾을 수 없거나 유효하지 않은 경우
-    """
     token_manager = AtlassianTokenManager(
         oauth_client=AtlassianOAuthClient(),
         oauth_repository=oauth_repository,
@@ -49,36 +36,52 @@ async def create_confluence_ingestion_service(
 
     try:
         access_token = await token_manager.resolve_access_token_by_cloud_id(db, cloud_id)
-    except AtlassianTokenNotFoundError:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Confluence 연결을 찾을 수 없습니다: {cloud_id}",
+    except AtlassianTokenNotFoundError as exc:
+        raise SyncConnectorError(
+            f"Confluence 연결을 찾을 수 없습니다: {cloud_id}",
+            metadata={"cloud_id": cloud_id},
+        ) from exc
+    except AtlassianTokenExpiredError as exc:
+        raise SyncConnectorError(
+            f"Confluence 인증이 만료되었습니다. 재연결이 필요합니다: {cloud_id}",
+            metadata={"cloud_id": cloud_id},
+        ) from exc
+    except Exception as exc:
+        logger.error(
+            "[CONFLUENCE][FACTORY] Failed to resolve access token: cloud_id=%s, error=%s",
+            cloud_id,
+            exc,
+            exc_info=True,
         )
-    except AtlassianTokenExpiredError:
-        raise HTTPException(
-            status_code=401,
-            detail=f"Confluence 인증이 만료되었습니다. 재연결이 필요합니다: {cloud_id}",
-        )
-    except Exception as e:
-        logger.error(f"[CONFLUENCE][FACTORY] Failed to get access token: cloud_id={cloud_id}, error={e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Token 획득 중 오류가 발생했습니다: {str(e)}",
-        )
+        raise SyncInternalError(
+            "Confluence access token 획득 중 오류가 발생했습니다",
+            metadata={"cloud_id": cloud_id},
+        ) from exc
 
-    token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
-    site_url = token_record.site_url if token_record else ""
-    
-    repository = PGVectorRepository(
-        embeddings=get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
-    )
-
-    service = ConfluenceIngestionService(
-        cloud_id=cloud_id,
-        access_token=access_token,
-        site_url=site_url or "",
-        repository=repository
-    )
-    
-    await service.initialize()
-    return service
+    try:
+        token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
+        site_url = token_record.site_url if token_record else ""
+        repository = PGVectorRepository(
+            embeddings=get_embedding_service(
+                EmbeddingProvider.AWS_BEDROCK
+            ).get_embedder()
+        )
+        service = ConfluenceIngestionService(
+            cloud_id=cloud_id,
+            access_token=access_token,
+            site_url=site_url or "",
+            repository=repository,
+        )
+        await service.initialize()
+        return service
+    except Exception as exc:
+        logger.error(
+            "[CONFLUENCE][FACTORY] Failed to initialize ingestion service: cloud_id=%s, error=%s",
+            cloud_id,
+            exc,
+            exc_info=True,
+        )
+        raise SyncInternalError(
+            "Confluence ingestion service 초기화에 실패했습니다",
+            metadata={"cloud_id": cloud_id},
+        ) from exc

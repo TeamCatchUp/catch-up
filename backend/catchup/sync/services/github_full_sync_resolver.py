@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.installation_repository import get_installation_by_installation_id
+from catchup.sync.common.exceptions import SyncRequestError
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import (
     FullSyncResolvedTargets,
@@ -31,14 +32,6 @@ def _normalize_requested_repo_ids(target_ids: list[str] | None) -> list[str]:
     return normalized
 
 
-class GithubFullSyncResolverValidationError(Exception):
-    """GitHub full sync resolver validation error."""
-
-    def __init__(self, detail: dict[str, object]):
-        super().__init__(str(detail))
-        self.detail = detail
-
-
 class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
 
     async def resolve_full_sync_targets(
@@ -50,43 +43,32 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
     ) -> FullSyncResolvedTargets:
         scope_id = request.scope_id.strip()
         if not scope_id:
-            raise GithubFullSyncResolverValidationError(
-                detail={
-                    "scope_id": request.scope_id,
-                    "message": "scope_id is required",
-                }
-            )
+            raise SyncRequestError("scope_id is required")
 
         try:
             installation_id = int(scope_id)
         except ValueError as exc:
-            raise GithubFullSyncResolverValidationError(
-                detail={
-                    "scope_id": request.scope_id,
-                    "message": "scope_id must be a github installation_id",
-                }
+            raise SyncRequestError(
+                "scope_id must be a github installation_id",
+                metadata={"scope_id": request.scope_id},
             ) from exc
     
         installation = get_installation_by_installation_id(db, installation_id)
         if installation is None:
-            raise GithubFullSyncResolverValidationError(
-                detail={
-                    "scope_id": request.scope_id,
-                    "installation_id": installation_id,
-                    "message": "github installation not found",
-                }
+            raise SyncRequestError(
+                "github installation not found",
+                metadata={"installation_id": installation_id},
             )
 
         repositories = github_entities.get_repositories_by_installation(db, installation_id)
         requested_repo_ids = _normalize_requested_repo_ids(request.target_ids)
         if request.target_ids is not None and not requested_repo_ids:
-            raise GithubFullSyncResolverValidationError(
-                detail={
-                    "scope_id": request.scope_id,
+            raise SyncRequestError(
+                "target_ids is empty after normalization",
+                metadata={
                     "installation_id": installation_id,
-                    "message": "target_ids is empty after normalization",
                     "requested_target_ids": request.target_ids,
-                }
+                },
             )
 
         if requested_repo_ids:
@@ -106,13 +88,12 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             invalid_target_ids = []
 
         if not resolved_repositories:
-            raise GithubFullSyncResolverValidationError(
-                detail={
-                    "scope_id": request.scope_id,
+            raise SyncRequestError(
+                "no syncable repositories found",
+                metadata={
                     "installation_id": installation_id,
-                    "message": "no syncable repositories found",
                     "requested_target_ids": requested_repo_ids,
-                }
+                },
             )
 
         targets = [

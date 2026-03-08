@@ -5,6 +5,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from catchup.connectors.slack.factory import create_slack_ingestion_service
+from catchup.sync.common.exceptions import SyncRequestError
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
@@ -30,14 +31,6 @@ def _normalize_requested_channel_ids(target_ids: list[str] | None) -> list[str]:
     return normalized
 
 
-class SlackFullSyncResolverValidationError(Exception):
-    """Slack full sync resolver validation error."""
-
-    def __init__(self, detail: dict[str, object]):
-        super().__init__(str(detail))
-        self.detail = detail
-
-
 class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
     async def resolve_full_sync_targets(
         self,
@@ -48,12 +41,7 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
     ) -> FullSyncResolvedTargets:
         team_id = request.scope_id.strip()
         if not team_id:
-            raise SlackFullSyncResolverValidationError(
-                detail={
-                    "scope_id": request.scope_id,
-                    "message": "scope_id is required",
-                }
-            )
+            raise SyncRequestError("scope_id is required")
 
         service = await create_slack_ingestion_service(db, team_id)
         channels = await service.list_syncable_channels()
@@ -65,13 +53,12 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         else:
             requested_ids = requested_target_ids
             if not requested_ids:
-                raise SlackFullSyncResolverValidationError(
-                    detail={
-                        "scope_id": request.scope_id,
+                raise SyncRequestError(
+                    "target_ids is empty after normalization",
+                    metadata={
                         "team_id": team_id,
-                        "message": "target_ids is empty after normalization",
                         "requested_target_ids": request.target_ids,
-                    }
+                    },
                 )
             requested_id_set = set(requested_ids)
 
@@ -88,12 +75,12 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             ]
 
             if not resolved_channels:
-                raise SlackFullSyncResolverValidationError(
-                    detail={
+                raise SyncRequestError(
+                    "no syncable channels matched the requested target_ids",
+                    metadata={
                         "team_id": team_id,
-                        "message": "no syncable channels matched the requested target_ids",
                         "requested_target_ids": requested_ids,
-                    }
+                    },
                 )
 
         targets = [
