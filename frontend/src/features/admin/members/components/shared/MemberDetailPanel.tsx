@@ -9,12 +9,25 @@ import { cn } from '@/shared/utils/cn';
 
 import type { UserIntegrations } from '../../types/adminMember';
 
+/** 프로필 아바타 (avatarUrl이 있으면 img, 없으면 DefaultProfile SVG) */
+const Avatar = ({ src, size = 'sm' }: { src?: string | null; size?: 'sm' | 'xs' }) => {
+  const cls = size === 'sm' ? 'size-7' : 'size-6.25';
+  if (src) {
+    /* eslint-disable-next-line @next/next/no-img-element */
+    return <img src={src} alt="" className={`${cls} shrink-0 rounded-full object-cover`} />;
+  }
+  return (
+    <DefaultProfile className={`border-edge-assistive text-content-assistive ${cls} shrink-0 rounded-full border`} />
+  );
+};
+
 interface MemberDetailPanelProps {
   member: {
     name: string;
     email: string;
     department: string;
     rank: string;
+    picture?: string | null;
     /** 상세 API 기반 연동 정보 (UserListSection) */
     integrations?: UserIntegrations;
     /** 레거시: 입장 신청 기반 계정 ID (EntryRequestSection) */
@@ -67,7 +80,7 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
         {/* 프로필 + 이름 + 액션 버튼 */}
         <div className="flex items-center justify-between pr-5">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <DefaultProfile className="border-edge-assistive text-content-assistive size-7 shrink-0 rounded-full border" />
+            <Avatar src={member.picture} />
             <span className="text-heading-medium text-content-normal truncate">{member.name}</span>
           </div>
           <div className="flex shrink-0 items-center gap-2.5">{actionButtons}</div>
@@ -130,12 +143,9 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
                       {isLinked ? (
                         <div className="flex shrink-0 flex-col items-start justify-center gap-0.5">
                           <div className="flex shrink-0 items-center gap-2.5">
-                            <DefaultProfile className="border-edge-assistive text-content-assistive size-6.25 shrink-0 rounded-full border" />
+                            <Avatar src={(integrationAccount as { avatarUrl?: string })?.avatarUrl} size="xs" />
                             <span className="text-body-xsmall text-content-normal max-w-33.25 shrink-0 truncate">
                               {accountName ?? member.name}
-                            </span>
-                            <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall shrink-0 px-1.5 py-0.5 tracking-tight text-content-alternative">
-                              {accountId}
                             </span>
                           </div>
                           <span className="text-body-xsmall shrink-0 truncate text-content-alternative">

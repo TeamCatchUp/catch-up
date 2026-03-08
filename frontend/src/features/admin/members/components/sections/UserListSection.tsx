@@ -118,6 +118,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
                   email: userDetail.email,
                   department: userDetail.department,
                   rank: JOB_LEVEL_LABEL[userDetail.jobLevel] ?? userDetail.jobLevel,
+                  picture: userDetail.picture ?? null,
                   integrations: userDetail.integrations,
                 }
               : null
