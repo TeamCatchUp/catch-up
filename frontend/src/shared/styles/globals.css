@@ -52,6 +52,7 @@
     --fill-interaction-inactive: #f7f7f8;
     --fill-interaction-disable: #eaebec;
     --fill-primary-interaction-hover: #005eeb;
+    --fill-primary-interaction-pressed: #0054d1;
     --fill-primary-interaction-inactive: #c9defe;
     --fill-primary-interaction-disable: #e1e2e4;
     --fill-primary-interaction-hover-assistive: #eaf2fe;
@@ -166,6 +167,7 @@
     --fill-interaction-inactive: #1b1c1e;
     --fill-interaction-disable: #37383c;
     --fill-primary-interaction-hover: #0066ff;
+    --fill-primary-interaction-pressed: #005eeb;
     --fill-primary-interaction-inactive: #46474c;
     --fill-primary-interaction-disable: #dbdcdf;
     --fill-primary-interaction-hover-assistive: rgba(0, 41, 102, 0.5);

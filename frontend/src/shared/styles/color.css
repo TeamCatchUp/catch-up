@@ -196,6 +196,7 @@
   --color-fill-interaction-inactive: var(--fill-interaction-inactive);
   --color-fill-interaction-disable: var(--fill-interaction-disable);
   --color-fill-primary-interaction-hover: var(--fill-primary-interaction-hover);
+  --color-fill-primary-interaction-pressed: var(--fill-primary-interaction-pressed);
   --color-fill-primary-interaction-inactive: var(--fill-primary-interaction-inactive);
   --color-fill-primary-interaction-disable: var(--fill-primary-interaction-disable);
   --color-fill-primary-interaction-hover-assistive: var(--fill-primary-interaction-hover-assistive);
