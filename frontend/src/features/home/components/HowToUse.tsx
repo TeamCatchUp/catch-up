@@ -29,7 +29,7 @@ const HowToUse = () => {
   return (
     <section className="flex w-268 flex-col gap-4">
       <header className="flex items-center gap-3">
-        <div className="border-edge-neutral bg-blue-1 flex h-8 w-8 items-center justify-center rounded-lg border-[0.5px]">
+        <div className="border-edge-neutral bg-fill-primary-assistive flex h-8 w-8 items-center justify-center rounded-lg border-[0.5px]">
           <Explore className="h-6 w-6 text-blue-50" />
         </div>
         <h2 className="text-heading-large text-content-normal">Catch Up을 활용하는 방법</h2>

@@ -118,7 +118,7 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
             className={cn(
               'flex h-9 max-w-[145px] min-w-9 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1.5',
               savedOnly
-                ? 'border-blue-30 bg-blue-1'
+                ? 'border-blue-30 bg-fill-primary-assistive'
                 : 'border-edge-neutral hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed bg-fill-normal',
             )}
           >

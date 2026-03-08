@@ -17,7 +17,7 @@ export function SearchHistory({ querys, isModal = false, onItemClick }: Recently
   if (!querys || querys.length === 0) {
     return (
       <div className="flex w-full items-center justify-center rounded-xl py-4">
-        <span className="text-body-xsmall text-gray-30">최근 검색기록이 없습니다.</span>
+        <span className="text-body-xsmall text-content-assistive">최근 검색기록이 없습니다.</span>
       </div>
     );
   }
@@ -64,9 +64,9 @@ export function SearchHistory({ querys, isModal = false, onItemClick }: Recently
   return (
     <div className={`flex w-full flex-col gap-2 ${isModal ? '' : ''}`}>
       {visibleSections.map((section) => (
-        <div key={section.key} className="flex flex-col gap-1 rounded-lg bg-white px-1.5 py-2.5">
+        <div key={section.key} className="flex flex-col gap-1 rounded-lg bg-fill-normal px-1.5 py-2.5">
           <div className="px-2">
-            <span className="text-body-xsmall font-medium text-gray-50">{section.key}</span>
+            <span className="text-body-xsmall font-medium text-content-alternative">{section.key}</span>
           </div>
 
           <div className="flex flex-col gap-2">
@@ -75,11 +75,11 @@ export function SearchHistory({ querys, isModal = false, onItemClick }: Recently
                 href={`/chat/${item.session_id}${item.message_id != null ? `?scrollTo=${item.message_id}` : ''}`}
                 onClick={() => onItemClick?.()}
                 key={`${item.session_id}-${index}`}
-                className="hover:bg-neutral-2 group flex h-10 w-full items-center gap-2 rounded-lg bg-white px-2 py-1 transition-colors"
+                className="hover:bg-fill-interaction-hover group flex h-10 w-full items-center gap-2 rounded-lg bg-fill-normal px-2 py-1 transition-colors"
               >
-                <div className="text-gray-80 text-body-small flex-1 truncate text-left">{item.query}</div>
+                <div className="text-content-normal text-body-small flex-1 truncate text-left">{item.query}</div>
                 {section.key !== '오늘' && (
-                  <div className="text-body-xsmall text-gray-30 shrink-0 text-right">
+                  <div className="text-body-xsmall text-content-assistive shrink-0 text-right">
                     {section.key === '최근 7일' ? formatRelativeDate(item.rawDate.toISOString()) : item.date}
                   </div>
                 )}

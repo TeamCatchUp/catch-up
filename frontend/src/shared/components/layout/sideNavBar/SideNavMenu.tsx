@@ -35,7 +35,7 @@ const navItems = [
 
 // 메뉴 상태별 스타일
 const defaultClass = 'bg-fill-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed active:ring-1 active:ring-edge-neutral';
-const selectedClass = 'ring-1 ring-edge-assistive bg-blue-1 hover:bg-blue-5';
+const selectedClass = 'ring-1 ring-edge-assistive bg-fill-primary-assistive hover:bg-fill-primary-interaction-hover-assistive';
 
 interface SideNavMenuProps {
   isOpen: boolean;

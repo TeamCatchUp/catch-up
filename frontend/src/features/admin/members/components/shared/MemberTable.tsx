@@ -79,7 +79,7 @@ const MemberTable = ({
                 className={cn(
                   'border-edge-neutral flex h-12.5 shrink-0 cursor-pointer items-center border-b px-5 text-left',
                   isSelecting && 'gap-3',
-                  isActive || isChecked ? 'bg-blue-1' : 'hover:bg-fill-strong bg-fill-normal',
+                  isActive || isChecked ? 'bg-fill-primary-assistive' : 'hover:bg-fill-strong bg-fill-normal',
                 )}
               >
                 {isSelecting && (

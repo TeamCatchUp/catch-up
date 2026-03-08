@@ -18,14 +18,14 @@ const buttonVariants = cva(
         'icon-only-gray':
           'hover:text-icon-normal hover:bg-fill-interaction-hover active:text-icon-normal active:bg-fill-interaction-pressed disabled:text-content-assistive rounded-lg text-icon-neutral',
         'icon-only-blue':
-          'hover:bg-blue-5 active:bg-blue-10 active:text-blue-60 disabled:text-content-assistive rounded-full text-blue-50',
+          'hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive active:text-blue-60 disabled:text-content-assistive rounded-full text-blue-50',
 
         /* ── Box Buttons ── */
         'box-solid-primary': 'hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 rounded-lg bg-blue-50 text-white',
         'box-outline-gray':
           'border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:bg-fill-interaction-inactive disabled:text-content-assistive text-icon-normal rounded-lg border bg-fill-normal',
         'box-outline-blue':
-          'border-blue-40 hover:bg-blue-5 active:bg-blue-10 disabled:bg-fill-interaction-inactive disabled:text-content-assistive disabled:border-edge-assistive bg-blue-1 rounded-lg border text-blue-50',
+          'border-blue-40 hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive disabled:bg-fill-interaction-inactive disabled:text-content-assistive disabled:border-edge-assistive bg-fill-primary-assistive rounded-lg border text-blue-50',
 
         /* ── Capsule Buttons ── */
         'capsule-solid-primary':
@@ -38,7 +38,7 @@ const buttonVariants = cva(
         'capsule-solid-light-blue': 'bg-accent-light-blue-lighten rounded-full',
 
         /* ── Text Buttons ── */
-        'text-primary-blue': 'hover:bg-blue-5 active:bg-blue-5 rounded-full text-blue-50',
+        'text-primary-blue': 'hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive rounded-full text-blue-50',
         'text-secondary-mono':
           'hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed disabled:text-content-assistive text-icon-normal rounded-full',
 

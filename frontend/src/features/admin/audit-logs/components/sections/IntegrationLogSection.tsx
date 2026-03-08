@@ -105,7 +105,7 @@ const IntegrationLogSection = () => {
                     onClick={() => setActiveKey(log.logId)}
                     className={cn(
                       'border-edge-neutral flex h-12.5 shrink-0 cursor-pointer items-center gap-1 border-b px-5 text-left',
-                      isActive ? 'bg-blue-1' : 'hover:bg-fill-strong bg-fill-normal',
+                      isActive ? 'bg-fill-primary-assistive' : 'hover:bg-fill-strong bg-fill-normal',
                     )}
                   >
                     {/* 커넥터 */}

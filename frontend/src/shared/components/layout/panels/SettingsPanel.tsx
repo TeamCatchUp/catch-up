@@ -107,7 +107,7 @@ const SettingsPanel = () => {
                   className={cn(
                     'flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 transition-colors',
                     isActive
-                      ? 'border-edge-assistive bg-blue-1 border text-blue-50'
+                      ? 'border-edge-assistive bg-fill-primary-assistive border text-blue-50'
                       : 'text-content-normal hover:bg-fill-interaction-hover border border-transparent bg-fill-normal',
                   )}
                 >

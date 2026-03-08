@@ -166,7 +166,7 @@ const LimitReleaseSection = () => {
                     onClick={() => setActiveKey(row.key)}
                     className={cn(
                       'border-edge-neutral flex h-12.5 shrink-0 cursor-pointer items-center border-b px-5 text-left',
-                      isActive ? 'bg-blue-1' : 'hover:bg-fill-strong bg-fill-normal',
+                      isActive ? 'bg-fill-primary-assistive' : 'hover:bg-fill-strong bg-fill-normal',
                     )}
                   >
                     <div className="grid flex-1 grid-cols-3 items-center gap-1">

@@ -38,7 +38,7 @@ export default function AdminQuestionLogsPage() {
       <h1 className="text-heading-xlarge text-content-normal">이용자 질문 기록</h1>
 
       <div className="flex flex-col gap-8">
-        <div className="bg-blue-1 flex flex-col rounded-xl p-4">
+        <div className="bg-fill-primary-assistive flex flex-col rounded-xl p-4">
           <UserSelectSection users={userOptions} selectedUserId={selectedUserId} onUserChange={setSelectedUserId} />
         </div>
 

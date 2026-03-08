@@ -32,7 +32,7 @@ export default function PendingPage() {
             <CatchUpLogo className="h-[55px] w-[181px]" />
 
             <div className="flex items-start gap-3">
-              <div className="border-edge-assistive bg-blue-1 shrink-0 rounded-full border p-2">
+              <div className="border-edge-assistive bg-fill-primary-assistive shrink-0 rounded-full border p-2">
                 <ErrorIcon className="size-5.5" />
               </div>
               <h1 className="text-display-large text-content-strong tracking-tight whitespace-nowrap">
