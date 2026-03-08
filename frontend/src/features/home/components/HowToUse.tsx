@@ -9,19 +9,19 @@ const cardData = [
     tutorialId: 1,
     title: '검색 한 번으로 찾는 업무 정보',
     description: '정보를 찾는 시간,\n이제 일하는 시간으로 사용하세요.',
-    image: '/image/home-search-work-info.jpg',
+    image: '/image/home/light/search-work-info.jpg',
   },
   {
     tutorialId: 2,
     title: '원하는 답을 한 번에 얻는 비결',
     description: '질문이 구체적일수록 AI가 더 정확하게 대답해요.\n어떻게 질문을 작성하면 좋은지 알려드려요.',
-    image: '/image/home-accurate-answers.jpg',
+    image: '/image/home/light/accurate-answers.jpg',
   },
   {
     tutorialId: 3,
     title: '정확도를 올리는 출처 확인 방법',
     description: '답변 뒤에 붙은 작은 번호를 누르면,\nAI가 참고한 자료의 출처로 바로 이동해요.',
-    image: '/image/home-verify-sources.jpg',
+    image: '/image/home/light/verify-sources.jpg',
   },
 ];
 
@@ -38,8 +38,14 @@ const HowToUse = () => {
       <ul className="flex gap-6">
         {cardData.map((card, idx) => (
           <li key={idx} className="border-edge-neutral flex flex-1 flex-col overflow-hidden rounded-2xl border bg-fill-normal">
-            <div className="border-edge-neutral relative h-[144px] w-full border-b">
-              <Image src={card.image} alt={card.title} fill className="object-cover" />
+            <div className="border-edge-neutral relative h-36 w-full border-b">
+              <Image src={card.image} alt={card.title} fill className="object-cover dark:hidden" />
+              <Image
+                src={card.image.replace('/light/', '/dark/')}
+                alt={card.title}
+                fill
+                className="hidden object-cover dark:block"
+              />
             </div>
 
             <div className="flex flex-col gap-3 p-4">
