@@ -106,6 +106,7 @@
     --accent-light-blue-lighten: #e5f6fe;
     --accent-pink: #f04588;
     --accent-pink-lighten: #fff4f8;
+    --accent-red-lighten: #fffafa;
     --accent-information: #0b78cb;
     --accent-information-lighten: #e7f4fe;
     --accent-black: #171719;
@@ -130,6 +131,9 @@
 
     /* Material */
     --material-scrim: rgba(255, 255, 255, 0.5);
+
+    /* Shadow */
+    --rag-bar-shadow: 1px 1px 30px 0 rgba(181, 199, 228, 0.4);
   }
 
   .dark {
@@ -221,6 +225,7 @@
     --accent-light-blue-lighten: #004261;
     --accent-pink: #ff6b9e;
     --accent-pink-lighten: #3b1222;
+    --accent-red-lighten: #3b0101;
     --accent-information: #205691;
     --accent-information-lighten: #7abfff;
     --accent-black: #ffffff;
@@ -245,6 +250,9 @@
 
     /* Material */
     --material-scrim: rgba(23, 23, 25, 0.5);
+
+    /* Shadow */
+    --rag-bar-shadow: 1px 1px 30px 0 rgba(0, 0, 0, 0.5);
   }
 
   ::-webkit-scrollbar {
