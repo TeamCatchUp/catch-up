@@ -72,7 +72,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
   const { data: userDetail } = useQuery(adminMembersQueries.detail(activeUserId ?? 0));
 
   return (
-    <section className="flex w-250 flex-col gap-3">
+    <section className="flex w-full flex-col gap-3">
       <SectionHeader
         title="이용자 목록"
         count={filtered.length}
@@ -101,7 +101,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
         }
       />
 
-      <div className="border-edge-neutral grid h-124 min-h-0 w-250 grid-cols-[500px_500px] overflow-clip border-y">
+      <div className="border-edge-neutral grid h-124 min-h-0 grid-cols-2 overflow-clip border-y">
         <MemberTable
           rows={tableRows}
           activeKey={activeUserId?.toString() ?? null}

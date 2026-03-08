@@ -45,7 +45,7 @@ const PermissionsListSection = ({
   onChangeRoleClick,
 }: PermissionsListSectionProps) => {
   return (
-    <section className="flex w-250 flex-col gap-3">
+    <section className="flex w-full flex-col gap-3">
       <div className="flex items-end justify-between">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-heading-large text-content-normal">권한 목록</h2>
