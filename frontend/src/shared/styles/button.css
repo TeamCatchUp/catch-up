@@ -5,11 +5,11 @@
 @layer utilities {
   /* icon-buttons */
   .icon-button-outline-gray {
-    @apply disabled:text-gray-20 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 disabled:border-neutral-2 text-gray-70 border-neutral-3 rounded-lg border bg-white;
+    @apply disabled:text-content-assistive hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:border-edge-assistive text-icon-normal border-edge-neutral rounded-lg border bg-fill-normal;
   }
 
   .icon-button-only-gray {
-    @apply active:text-gray-70 disabled:text-gray-20 hover:text-gray-70 hover:bg-neutral-2 active:bg-neutral-3 disabled:bg-neutral-2 rounded-lg text-gray-50;
+    @apply active:text-icon-normal disabled:text-content-assistive hover:text-icon-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed disabled:bg-fill-interaction-disable rounded-lg text-icon-neutral;
   }
 
   /* box-buttons */
@@ -18,7 +18,7 @@
   }
 
   .box-button-outline-gray {
-    @apply border-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 disabled:bg-neutral-1 border-neutral-3 rounded-lg border bg-white;
+    @apply border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:bg-fill-interaction-inactive border-edge-neutral rounded-lg border bg-fill-normal;
   }
 
   /* capsule-button */
@@ -27,27 +27,27 @@
   }
 
   .capsule-button-outline-mono {
-    @apply border-neutral-4 hover:bg-neutral-2 active:border-neutral-3 active:bg-neutral-3 disabled:border-neutral-4 disabled:bg-neutral-1 rounded-full border bg-white;
+    @apply border-edge-normal hover:bg-fill-interaction-hover active:border-edge-neutral active:bg-fill-interaction-pressed disabled:border-edge-normal disabled:bg-fill-interaction-inactive rounded-full border bg-fill-normal;
   }
 
   .capsule-button-outline-blue {
-    @apply border-blue-30 bg-blue-1 hover:bg-blue-5 active:bg-blue-5 active:border-blue-45 disabled:text-gray-30 disabled:bg-neutral-1 disabled:border-neutral-2 rounded-full border;
+    @apply border-edge-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive active:border-blue-45 disabled:text-content-assistive disabled:bg-fill-interaction-inactive disabled:border-edge-assistive rounded-full border bg-fill-primary-assistive;
   }
 
   .capsule-button-solid-purple {
-    @apply bg-violet-5 rounded-full;
+    @apply bg-accent-violet-lighten rounded-full;
   }
 
   .capsule-button-solid-light-blue {
-    @apply bg-light-blue-5 rounded-full;
+    @apply bg-accent-light-blue-lighten rounded-full;
   }
 
   /* text-button */
   .text-button-primary-blue {
-    @apply hover:bg-blue-5 active:bg-blue-5 rounded-full bg-white;
+    @apply hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive rounded-full bg-fill-normal;
   }
 
   .text-button-secondary-mono {
-    @apply hover:bg-neutral-2 active:bg-neutral-3 rounded-full bg-white;
+    @apply hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed rounded-full bg-fill-normal;
   }
 }
