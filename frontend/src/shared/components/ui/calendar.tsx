@@ -1,6 +1,5 @@
 'use client';
 
-import * as React from 'react';
 import { DayPicker, type DayPickerProps } from 'react-day-picker';
 
 import IconArrowLeft from '@/public/icons/icon/arrow_left.svg';
@@ -30,9 +29,9 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         today: '',
         selected: '',
         range_start:
-          "rdp-range_start [&>button]:bg-fill-primary [&>button]:text-white [&>button]:hover:bg-fill-primary before:absolute before:inset-y-0 before:right-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
+          "rdp-range_start [&>button]:bg-fill-primary [&>button]:text-white [&>button]:hover:bg-fill-primary-interaction-hover before:absolute before:inset-y-0 before:right-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
         range_end:
-          "rdp-range_end [&>button]:bg-fill-primary [&>button]:text-white [&>button]:hover:bg-fill-primary before:absolute before:inset-y-0 before:left-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
+          "rdp-range_end [&>button]:bg-fill-primary [&>button]:text-white [&>button]:hover:bg-fill-primary-interaction-hover before:absolute before:inset-y-0 before:left-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
         range_middle: 'bg-fill-interaction-pressed',
         outside: 'text-content-assistive',
         disabled: 'text-content-assistive opacity-50',
