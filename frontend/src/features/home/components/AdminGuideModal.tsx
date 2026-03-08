@@ -130,8 +130,14 @@ function GuideContent({
         </div>
 
         {/* 일러스트 이미지 */}
-        <div className="relative h-[160px] w-full overflow-hidden rounded-lg">
-          <Image src={currentStep.image} alt={currentStep.title.join(' ')} fill className="object-cover" />
+        <div className="relative h-40 w-full overflow-hidden rounded-lg">
+          <Image src={currentStep.image} alt={currentStep.title.join(' ')} fill className="object-cover dark:hidden" />
+          <Image
+            src={currentStep.image.replace('/light/', '/dark/')}
+            alt={currentStep.title.join(' ')}
+            fill
+            className="hidden object-cover dark:block"
+          />
         </div>
 
         {/* 본문 텍스트 */}
