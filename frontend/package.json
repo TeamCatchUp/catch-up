@@ -63,6 +63,7 @@
     "null-loader": "^4.0.1",
     "prettier": "^3.6.2",
     "prettier-plugin-tailwindcss": "^0.7.1",
+    "react-grab": "^0.1.26",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
