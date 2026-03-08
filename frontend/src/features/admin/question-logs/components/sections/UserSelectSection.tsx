@@ -68,7 +68,7 @@ const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSe
           className="border-edge-strong flex h-[380px] w-[var(--radix-popover-trigger-width)] flex-col gap-3 rounded-xl p-2.5"
         >
           {/* 검색 */}
-          <label className="bg-fill-interaction-hover border-blue-30 flex h-10 items-center gap-1.5 rounded-lg border px-3">
+          <label className="bg-fill-interaction-hover border-edge-primary flex h-10 items-center gap-1.5 rounded-lg border px-3">
             <IconSearch className="text-content-assistive size-5 shrink-0" />
             <input
               type="text"

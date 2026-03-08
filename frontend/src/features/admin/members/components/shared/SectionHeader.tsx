@@ -13,7 +13,7 @@ const SectionHeader = ({ title, count, description, actions }: SectionHeaderProp
     <div className="flex items-end justify-between">
       <div className="flex flex-col gap-0.5">
         <h2 className="text-heading-large text-content-normal">
-          {title} <span className="text-blue-40">{count}</span>
+          {title} <span className="text-content-primary-assistive">{count}</span>
         </h2>
         <p className="text-body-small text-content-alternative">{description}</p>
       </div>

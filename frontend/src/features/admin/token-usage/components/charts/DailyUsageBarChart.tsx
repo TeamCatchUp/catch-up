@@ -48,7 +48,7 @@ export default function DailyUsageBarChart({
           <span className="text-heading-large text-content-normal">{totalCost.toFixed(2)} $</span>
         </div>
         {modelName && (
-          <span className="text-body-xsmall rounded-md2 bg-blue-5 text-blue-55 px-1.5 py-0.5">{modelName}</span>
+          <span className="text-body-xsmall rounded-md2 bg-blue-5 text-content-primary px-1.5 py-0.5">{modelName}</span>
         )}
       </div>
 

@@ -88,7 +88,7 @@ const LimitReleaseSection = () => {
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2.5">
             <span className="text-heading-large text-content-normal">토큰 추가 요청 신청 목록</span>
-            <span className="text-heading-large text-blue-55">{pendingRequests.length}</span>
+            <span className="text-heading-large text-content-primary">{pendingRequests.length}</span>
           </div>
           <span className="text-body-small text-content-alternative">
             토큰 사용량을 초과한 임직원의 토큰 추가 신청을 확인하고 승인 여부를 결정해주세요.
