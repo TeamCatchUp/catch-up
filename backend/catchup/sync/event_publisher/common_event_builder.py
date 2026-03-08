@@ -66,6 +66,7 @@ def persist_sync_job_and_events(
     event_seeds: list[SyncEventSeed],
     scope_metadata: dict[str, object] | None = None,
 ) -> list[str]:
+    # Sync Job 생성
     create_db_sync_job(
         db,
         DbSyncJobCreateInput(
@@ -80,6 +81,7 @@ def persist_sync_job_and_events(
     normalized_scope_metadata = dict(scope_metadata or {})
     payloads: list[DbSyncEventCreateInput] = []
 
+    # 각 Event Seed에 대해서 하나의 레코드 생성
     for seed in event_seeds:
         resource_metadata: dict[str, object] = {
             "scope_id": scope_id,

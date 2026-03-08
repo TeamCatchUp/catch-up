@@ -11,11 +11,14 @@ from catchup.configs.config import settings
 from catchup.db.dependencies import get_db
 from catchup.db.models import SyncConnector, User
 from catchup.server.sync.schemas import (
+    FullSyncRequest,
+    IncrementalSyncRequest,
     SyncAcceptedResponse,
     SyncErrorResponse,
-    SyncFullRequest,
-    SyncIncrementalRequest,
+    SyncFlushRequest,
+    SyncFlushResponse,
     SyncJobSnapshotResponse,
+    SyncStatusResponse,
     SyncTargetItem,
     SyncTargetsResponse,
 )
@@ -27,6 +30,7 @@ from catchup.sync.common.schemas import (
 from catchup.sync.dispatch_service import get_sync_dispatch_service
 from catchup.sync.query_service import (
     SyncJobSnapshotResult,
+    SyncScopeStatusResult,
     SyncTargetsResult,
     get_sync_query_service,
 )
@@ -45,7 +49,7 @@ router = APIRouter(prefix="/api/v1/sync", tags=["sync-runtime"])
     },
 )
 async def dispatch_full_sync(
-    sync_request: SyncFullRequest,
+    sync_request: FullSyncRequest,
     request: Request,
     db: Session = Depends(get_db),
     _admin_user: User = Depends(require_admin_user),
@@ -119,7 +123,7 @@ async def dispatch_full_sync(
     },
 )
 async def dispatch_incremental_sync(
-    sync_request: SyncIncrementalRequest,
+    sync_request: IncrementalSyncRequest,
     request: Request,
     db: Session = Depends(get_db),
     _admin_user: User = Depends(require_admin_user),
@@ -182,11 +186,53 @@ async def dispatch_incremental_sync(
         )
 
 
+@router.post(
+    "/flush",
+    response_model=SyncFlushResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": SyncErrorResponse}},
+)
+async def dispatch_flush(
+    sync_request: SyncFlushRequest,
+    _admin_user: User = Depends(require_admin_user),
+):
+    normalized_scope_ids: list[str] = []
+    seen_scope_ids: set[str] = set()
+
+    for scope_id in sync_request.scope_ids or []:
+        normalized_scope_id = (scope_id or "").strip()
+        if not normalized_scope_id or normalized_scope_id in seen_scope_ids:
+            continue
+        normalized_scope_ids.append(normalized_scope_id)
+        seen_scope_ids.add(normalized_scope_id)
+
+    if normalized_scope_ids:
+        status_value = "not_implemented"
+        message = "flush endpoint is canonicalized, but flush pipeline is not implemented yet"
+    else:
+        status_value = "no_events"
+        message = "flush scope_ids are empty"
+
+    logger.info(
+        "[SYNC][FLUSH][API] Flush requested: connector=%s, scope_count=%s, status=%s",
+        sync_request.connector,
+        len(normalized_scope_ids),
+        status_value,
+    )
+
+    return SyncFlushResponse(
+        status=status_value,
+        connector=sync_request.connector,
+        scope_ids=normalized_scope_ids,
+        message=message,
+    )
+
+
 @router.get(
     "/targets",
     response_model=SyncTargetsResponse,
     responses={
-        status.HTTP_501_NOT_IMPLEMENTED: {"model": SyncErrorResponse},
+        status.HTTP_400_BAD_REQUEST: {"model": SyncErrorResponse},
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": SyncErrorResponse},
     },
 )
@@ -206,9 +252,9 @@ async def list_sync_targets(
 
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=_build_error_detail(
-                code="not_implemented",
+                code="invalid_request",
                 message=str(exc),
                 connector=connector,
                 scope_id=scope_id,
@@ -232,6 +278,36 @@ async def list_sync_targets(
                 scope_id=scope_id,
             ),
         )
+
+
+@router.get(
+    "/status",
+    response_model=SyncStatusResponse,
+    responses={status.HTTP_404_NOT_FOUND: {"model": SyncErrorResponse}},
+)
+async def get_scope_sync_status(
+    connector: SyncConnector = Query(..., description="sync connector"),
+    scope_id: str = Query(..., description="connector scope id"),
+    _admin_user: User = Depends(require_admin_user),
+):
+    query_service = get_sync_query_service()
+    status_result = query_service.get_scope_latest_full_status(
+        connector=connector,
+        scope_id=scope_id,
+    )
+
+    if status_result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_build_error_detail(
+                code="not_found",
+                message=f"sync status not found: connector={connector}, scope_id={scope_id}",
+                connector=connector,
+                scope_id=scope_id,
+            ),
+        )
+
+    return _to_scope_status_response(status_result)
 
 
 @router.get(
@@ -342,6 +418,27 @@ def _to_target_response(result: SyncTargetsResult) -> SyncTargetsResponse:
             )
             for item in result.targets
         ],
+    )
+
+
+def _to_scope_status_response(result: SyncScopeStatusResult) -> SyncStatusResponse:
+    return SyncStatusResponse(
+        connector=result.connector,
+        scope_id=result.scope_id,
+        sync_type=result.sync_type,
+        job_id=result.job_id,
+        status=result.status,
+        requested_at=result.requested_at,
+        started_at=result.started_at,
+        completed_at=result.completed_at,
+        total_targets=result.total_targets,
+        queued_targets=result.queued_targets,
+        processing_targets=result.processing_targets,
+        completed_targets=result.completed_targets,
+        failed_targets=result.failed_targets,
+        requeued_targets=result.requeued_targets,
+        metrics=result.metrics,
+        last_error=result.last_error,
     )
 
 

@@ -14,9 +14,8 @@ from catchup.connectors.github.schemas import IncrementalSyncRequest
 from catchup.connectors.jira.dynamic_webhook_service import get_jira_dynamic_webhook_service
 from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.db.github.installation_repository import get_all_installations
-from catchup.db.jira import sync_repository as jira_sync
 from catchup.db.atlassian.oauth_repository import get_all_tokens as get_all_atlassian_tokens
-from catchup.db.models import JiraEntityType, SyncConnector
+from catchup.db.models import SyncConnector
 from catchup.db.slack.oauth_repository import get_all_slack_tokens
 from catchup.sync.common.schemas import IncrementalSyncDispatchRequest
 from catchup.sync.dispatch_service import get_sync_dispatch_service
@@ -242,14 +241,9 @@ async def flush_jira_events():
                             if value["type"] == "jira:issue_deleted"
                         )
 
-                        # 프로젝트별 sync state 기준 시각 조회
-                        issue_sync_state = jira_sync.get_sync_state(
-                            db, cloud_id, JiraEntityType.ISSUE, project_key=project_key,
-                        )
-                        base_since = (
-                            issue_sync_state.last_successful_sync_at
-                            if issue_sync_state and issue_sync_state.last_successful_sync_at
-                            else None
+                        # 동기화 기준 시각은 기본 조회 윈도우를 사용한다.
+                        base_since = datetime.now(timezone.utc) - timedelta(
+                            days=settings.DEFAULT_SYNC_DAYS
                         )
 
                         sync_result = await service.incremental_sync(

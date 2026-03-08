@@ -48,7 +48,7 @@ class SyncStreamEventResponse(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
-class SyncFullRequest(BaseModel):
+class FullSyncRequest(BaseModel):
     """
     공통 Full Sync 요청
     """
@@ -66,7 +66,7 @@ class SyncFullRequest(BaseModel):
     )
 
 
-class SyncIncrementalRequest(BaseModel):
+class IncrementalSyncRequest(BaseModel):
     """
     공통 Incremental Sync 요청
     """
@@ -99,6 +99,55 @@ class SyncAcceptedResponse(BaseModel):
     message: str | None = None
     snapshot_url: str | None = None
     stream_url: str | None = None
+
+
+class SyncStatusResponse(BaseModel):
+    """
+    scope 기준 최신 Full Sync 상태 응답
+    """
+
+    connector: SyncConnector
+    scope_id: str
+    sync_type: str = "full"
+    job_id: str
+    status: SyncJobStatus
+
+    requested_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+
+    total_targets: int = 0
+    queued_targets: int = 0
+    processing_targets: int = 0
+    completed_targets: int = 0
+    failed_targets: int = 0
+    requeued_targets: int = 0
+
+    last_error: str | None = None
+    metrics: dict[str, int] = Field(default_factory=dict)
+
+
+class SyncFlushRequest(BaseModel):
+    """
+    공통 Flush 요청
+    """
+
+    connector: SyncConnector = Field(..., description="flush target connector")
+    scope_ids: list[str] | None = Field(
+        default=None,
+        description="connector scope ids to flush (optional)",
+    )
+
+
+class SyncFlushResponse(BaseModel):
+    """
+    공통 Flush 응답
+    """
+
+    status: str = Field(..., description="no_events | not_implemented")
+    connector: SyncConnector
+    scope_ids: list[str] = Field(default_factory=list)
+    message: str | None = None
 
 
 class SyncErrorResponse(BaseModel):

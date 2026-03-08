@@ -54,17 +54,24 @@ class FullSyncDispatchOrchestrator:
         base_url: str | None,
         resolver: FullSyncTargetResolverProtocol,
     ) -> SyncDispatchResult:
-        scope_id = request.scope_id
-        sync_days = request.sync_days or settings.DEFAULT_SYNC_DAYS
+        scope_id = request.scope_id.strip()
+        if not scope_id:
+            raise ValueError("scope_id is required")
+
+        sync_days = max(1, int(request.sync_days or settings.DEFAULT_SYNC_DAYS))
         requested_at = datetime.now(timezone.utc)
         sync_from = str((requested_at - timedelta(days=sync_days)).timestamp())
+        
+        # 현재 요청에 대한 Job Id 생성
         job_id = uuid4().hex
 
+        # Tool별 Resolver가 Target을 결정
         resolved = await resolver.resolve_full_sync_targets(
             db=db,
             request=request,
             sync_from=sync_from,
         )
+
 
         event_seeds: list[SyncEventSeed] = []
         for target in resolved.targets:
@@ -78,6 +85,7 @@ class FullSyncDispatchOrchestrator:
             metadata = dict(target.metadata)
             metadata.setdefault("sync_from", sync_from)
 
+            # Target -> EventSeed
             event_seeds.append(
                 SyncEventSeed(
                     event_id=uuid4().hex,
@@ -91,6 +99,7 @@ class FullSyncDispatchOrchestrator:
 
         total_targets = len(event_seeds)
 
+        # DB에 동기화 계획 저장
         db_event_ids = persist_sync_job_and_events(
             db,
             job_id=job_id,
@@ -111,6 +120,7 @@ class FullSyncDispatchOrchestrator:
                 len(db_event_ids),
             )
 
+        # Redis Stream에 발행할 Task 생성
         tasks = build_stream_tasks_from_event_ids(
             event_ids=db_event_ids,
             job_id=job_id,
@@ -129,6 +139,7 @@ class FullSyncDispatchOrchestrator:
                 len(tasks),
             )
 
+        # Redis Stream에 발행
         message_ids = await self._event_publisher.publish(tasks=tasks)
         if len(message_ids) != len(tasks):
             logger.warning(

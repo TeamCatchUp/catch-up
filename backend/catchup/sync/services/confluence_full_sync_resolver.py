@@ -16,6 +16,21 @@ from catchup.sync.common.schemas import (
 logger = logging.getLogger(__name__)
 
 
+def _normalize_requested_space_keys(target_ids: list[str] | None) -> list[str]:
+    if target_ids is None:
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in target_ids:
+        candidate = (item or "").strip()
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        normalized.append(candidate)
+    return normalized
+
+
 class ConfluenceFullSyncResolverValidationError(Exception):
     """Confluence full sync resolver validation error."""
 
@@ -52,8 +67,18 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             )
 
         spaces = confluence_entities.get_spaces_by_cloud_id(db, cloud_id)
-        if request.target_ids:
-            requested_space_keys = [item.strip() for item in request.target_ids if item and item.strip()]
+        requested_space_keys = _normalize_requested_space_keys(request.target_ids)
+        if request.target_ids is not None and not requested_space_keys:
+            raise ConfluenceFullSyncResolverValidationError(
+                detail={
+                    "scope_id": request.scope_id,
+                    "cloud_id": cloud_id,
+                    "message": "target_ids is empty after normalization",
+                    "requested_target_ids": request.target_ids,
+                }
+            )
+
+        if requested_space_keys:
             requested_space_key_set = set(requested_space_keys)
 
             resolved_spaces = [
@@ -77,7 +102,7 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                     "scope_id": request.scope_id,
                     "cloud_id": cloud_id,
                     "message": "no syncable spaces found",
-                    "requested_target_ids": request.target_ids or [],
+                    "requested_target_ids": requested_space_keys,
                 }
             )
 

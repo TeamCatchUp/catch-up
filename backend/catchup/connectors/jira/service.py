@@ -22,7 +22,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from langchain_core.documents import Document
-from openai import project
 from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
@@ -36,9 +35,7 @@ from catchup.connectors.jira.transformers import JiraTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
-from catchup.db.models import JiraEntityType, JiraSyncStatus
 from catchup.db.jira import domain_repository as jira_entities
-from catchup.db.jira import sync_repository as jira_sync
 
 logger = logging.getLogger(__name__)
 
@@ -194,13 +191,6 @@ class JiraIngestionService:
             if await self.client.is_agile_available():
                 sprint_results = await self._sync_all_sprints(db)
                 results["sprints"] = sprint_results
-                jira_sync.create_or_update_sync_state(
-                    db,
-                    cloud_id=self.cloud_id,
-                    entity_type = JiraEntityType.SPRINT,
-                    status = JiraSyncStatus.SUCCESS,
-                    synced_count=results["sprints"]["synced"],
-                )
             else:
                 logger.info("[JIRA][FULL SYNC] Sprint Sync Skipped : Agile API Not Available")
 
@@ -209,22 +199,6 @@ class JiraIngestionService:
                 project_keys = [p.project_key for p in projects]
             
             for project_key in project_keys:
-                jira_sync.create_or_update_sync_state(
-                    db,
-                    cloud_id=self.cloud_id,
-                    entity_type=JiraEntityType.ISSUE,
-                    project_key=project_key,
-                    status=JiraSyncStatus.IN_PROGRESS,
-                    synced_count=0,
-                )
-                jira_sync.create_or_update_sync_state(
-                    db,
-                    cloud_id=self.cloud_id,
-                    entity_type=JiraEntityType.EPIC,
-                    project_key=project_key,
-                    status=JiraSyncStatus.IN_PROGRESS,
-                    synced_count=0,
-                )
                 try:
                     project_result = await self._sync_project_issues(
                         db, project_key, since = sync_from,
@@ -232,46 +206,13 @@ class JiraIngestionService:
                     results["issues"]["synced"] += project_result["issues"]
                     results["epics"]["synced"] += project_result["epics"]
                     results["issues"]["errors"] += project_result["errors"]
-
-                    jira_sync.create_or_update_sync_state(
-                        db,
-                        cloud_id=self.cloud_id,
-                        entity_type=JiraEntityType.ISSUE,
-                        project_key=project_key,
-                        status=JiraSyncStatus.SUCCESS,
-                        synced_count=project_result["issues"],
-                    )
-                    jira_sync.create_or_update_sync_state(
-                        db,
-                        cloud_id=self.cloud_id,
-                        entity_type=JiraEntityType.EPIC,
-                        project_key=project_key,
-                        status=JiraSyncStatus.SUCCESS,
-                        synced_count=project_result["epics"],
-                    )
                 except Exception as e:
                     logger.error(
                         f"[JIRA][FULL SYNC] Project sync failed: "
                         f"cloud_id={self.cloud_id}, project_key={project_key}, error={e}"
                     )
-                    jira_sync.create_or_update_sync_state(
-                        db,
-                        cloud_id=self.cloud_id,
-                        entity_type=JiraEntityType.ISSUE,
-                        project_key=project_key,
-                        status=JiraSyncStatus.FAILED,
-                        synced_count=0,
-                        error=str(e)[:1000],
-                    )
-                    jira_sync.create_or_update_sync_state(
-                        db,
-                        cloud_id=self.cloud_id,
-                        entity_type=JiraEntityType.EPIC,
-                        project_key=project_key,
-                        status=JiraSyncStatus.FAILED,
-                        synced_count=0,
-                        error=str(e)[:1000],
-                    )
+                    results["issues"]["errors"] += 1
+                    results["epics"]["errors"] += 1
             logger.info(f"[JIRA][FULL SYNC] Completed : {results}")
             return results
 
@@ -754,24 +695,7 @@ class JiraIngestionService:
         normalized_event_types = {event for event in (event_types or set()) if event}
 
         if since is None:
-            sync_state = jira_sync.get_sync_state(
-                db, self.cloud_id, JiraEntityType.ISSUE, project_key=project_key,
-            )
-            if sync_state and sync_state.last_successful_sync_at:
-                since = sync_state.last_successful_sync_at
-            else:
-                # 동기화 이력 없음 -> Full Sync
-                logger.info(
-                    f"[JIRA][INCREMENTAL SYNC] No previous sync state. "
-                    f"Running full sync: cloud_id={self.cloud_id}, project_key={project_key or 'all'}"
-                )
-                project_keys_param = [project_key] if project_key else None
-                full_result = await self.full_sync(db, project_keys=project_keys_param)
-                return {
-                    "issues": full_result["issues"]["synced"],
-                    "epics": full_result["epics"]["synced"],
-                    "errors": full_result["issues"]["errors"] + full_result["epics"]["errors"],
-                }
+            since = datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
 
         logger.info(
             f"[JIRA][INCREMENTAL SYNC] Started: "
@@ -780,23 +704,6 @@ class JiraIngestionService:
         )
 
         results = {"issues": 0, "epics": 0, "errors": 0}
-
-        jira_sync.create_or_update_sync_state(
-            db=db,
-            cloud_id=self.cloud_id,
-            entity_type=JiraEntityType.ISSUE,
-            project_key=project_key,
-            status=JiraSyncStatus.IN_PROGRESS,
-            synced_count=0,
-        )
-        jira_sync.create_or_update_sync_state(
-            db=db,
-            cloud_id=self.cloud_id,
-            entity_type=JiraEntityType.EPIC,
-            project_key=project_key,
-            status=JiraSyncStatus.IN_PROGRESS,
-            synced_count=0,
-        )
 
         try:
             since_str = since.strftime("%Y-%m-%d %H:%M")
@@ -868,23 +775,6 @@ class JiraIngestionService:
 
                 await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
 
-            jira_sync.create_or_update_sync_state(
-                db=db,
-                cloud_id=self.cloud_id,
-                entity_type=JiraEntityType.ISSUE,
-                project_key=project_key,
-                status=JiraSyncStatus.SUCCESS,
-                synced_count=results["issues"],
-            )
-            jira_sync.create_or_update_sync_state(
-                db=db,
-                cloud_id=self.cloud_id,
-                entity_type=JiraEntityType.EPIC,
-                project_key=project_key,
-                status=JiraSyncStatus.SUCCESS,
-                synced_count=results["epics"],
-            )
-
             logger.info(
                 f"[JIRA][INCREMENTAL SYNC] Completed: "
                 f"cloud_id={self.cloud_id}, project_key={project_key or 'all'}, results={results}"
@@ -895,23 +785,5 @@ class JiraIngestionService:
             logger.error(
                 f"[JIRA][INCREMENTAL SYNC] Failed: "
                 f"cloud_id={self.cloud_id}, project_key={project_key or 'all'}, error={e}"
-            )
-            jira_sync.create_or_update_sync_state(
-                db=db,
-                cloud_id=self.cloud_id,
-                entity_type=JiraEntityType.ISSUE,
-                project_key=project_key,
-                status=JiraSyncStatus.FAILED,
-                synced_count=0,
-                error=str(e)[:1000],
-            )
-            jira_sync.create_or_update_sync_state(
-                db=db,
-                cloud_id=self.cloud_id,
-                entity_type=JiraEntityType.EPIC,
-                project_key=project_key,
-                status=JiraSyncStatus.FAILED,
-                synced_count=0,
-                error=str(e)[:1000],
             )
             raise

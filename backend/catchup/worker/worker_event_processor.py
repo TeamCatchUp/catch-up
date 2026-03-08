@@ -34,6 +34,15 @@ from catchup.sync.stream_runtime.sync_runtime import (
     publish_job_events,
     read_ready_messages,
 )
+from catchup.sync.sync_audit import (
+    emit_worker_job_completed,
+    emit_worker_job_failed,
+    emit_worker_job_started,
+    emit_worker_target_completed,
+    emit_worker_target_failed,
+    emit_worker_target_requeued,
+    emit_worker_target_started,
+)
 from catchup.worker.handlers import get_ingestion_handler
 
 logger = logging.getLogger(__name__)
@@ -60,6 +69,47 @@ def _select_handler(context: SyncEventContext) -> IngestionHandlerProtocol | Non
         connector=context.connector,
         sync_type=context.sync_type,
     )
+
+
+def _build_connector_details(context: SyncEventContext) -> dict[str, object]:
+    metadata = context.metadata if isinstance(context.metadata, dict) else {}
+    details: dict[str, object] = {}
+
+    # Connector-specific scope 정보를 audit metadata에 유지한다.
+    for key in (
+        "team_id",
+        "installation_id",
+        "cloud_id",
+        "project_key",
+        "space_key",
+        "repository_id",
+        "repository_full_name",
+        "channel_name",
+    ):
+        value = metadata.get(key)
+        if value is not None and value != "":
+            details[key] = value
+
+    return details
+
+
+def _extract_result_counts(result: dict[str, int | bool]) -> tuple[int, int, bool]:
+    synced_raw = result.get("synced", 0)
+    errors_raw = result.get("errors", 0)
+    skipped_raw = result.get("skipped", False)
+
+    try:
+        synced_count = int(synced_raw)
+    except (TypeError, ValueError):
+        synced_count = 0
+
+    try:
+        error_count = int(errors_raw)
+    except (TypeError, ValueError):
+        error_count = 0
+
+    skipped = bool(skipped_raw)
+    return synced_count, error_count, skipped
 
 
 async def _deadletter(
@@ -155,6 +205,7 @@ async def _handle_event_failure(
 ) -> None:
     error_summary = str(exc)
     next_attempt = context.attempt + 1
+    connector_details = _build_connector_details(context)
 
     if next_attempt >= context.max_attempts:
         with SessionLocal() as db:
@@ -170,6 +221,20 @@ async def _handle_event_failure(
             next_attempt=next_attempt,
             error_summary=error_summary,
             retryable=False,
+        )
+        emit_worker_target_failed(
+            connector=context.connector,
+            sync_type=context.sync_type,
+            run_id=context.job_id,
+            scope_id=context.scope_id,
+            target_type=context.target_type,
+            target_id=context.target_id,
+            target_name=context.target_name,
+            failure_reason="max_retries_exceeded",
+            error_summary=error_summary,
+            attempt=next_attempt,
+            retryable=False,
+            connector_details=connector_details,
         )
         logger.error(
             "[%s][%s][WORKER] Event failed: job_id=%s, event_id=%s, attempt=%s, max_attempts=%s, error=%s",
@@ -215,6 +280,18 @@ async def _handle_event_failure(
         next_attempt=next_attempt,
         error_summary=error_summary,
     )
+    emit_worker_target_requeued(
+        connector=context.connector,
+        sync_type=context.sync_type,
+        run_id=context.job_id,
+        scope_id=context.scope_id,
+        target_type=context.target_type,
+        target_id=context.target_id,
+        target_name=context.target_name,
+        next_attempt=next_attempt,
+        error_summary=error_summary,
+        connector_details=connector_details,
+    )
     logger.warning(
         "[%s][%s][WORKER] Event requeued: job_id=%s, event_id=%s, attempt=%s, error=%s",
         context.connector.upper(),
@@ -231,6 +308,8 @@ async def _finalize_job_if_done(
     handler: IngestionHandlerProtocol,
 ) -> None:
     job_id = context.job_id
+    connector_details = _build_connector_details(context)
+
     with SessionLocal() as db:
         job = get_job(db, job_id)
         if job is None:
@@ -273,6 +352,18 @@ async def _finalize_job_if_done(
                 failed_targets=failed_targets,
                 requeued_targets=requeued_targets,
             )
+            emit_worker_job_completed(
+                connector=context.connector,
+                sync_type=context.sync_type,
+                run_id=context.job_id,
+                scope_id=context.scope_id,
+                total_targets=total_targets,
+                completed_targets=completed_targets,
+                failed_targets=failed_targets,
+                requeued_targets=requeued_targets,
+                synced_records=0,
+                connector_details=connector_details,
+            )
             return
 
         if not complete_job_failed(db, job_id):
@@ -281,6 +372,15 @@ async def _finalize_job_if_done(
             context=context,
             total_targets=total_targets,
             failed_targets=failed_targets,
+        )
+        emit_worker_job_failed(
+            connector=context.connector,
+            sync_type=context.sync_type,
+            run_id=context.job_id,
+            scope_id=context.scope_id,
+            failure_reason="event_failures_remaining",
+            error_summary=f"failed_events={failed_targets}, total_events={total_targets}",
+            connector_details=connector_details,
         )
 
 
@@ -371,19 +471,56 @@ async def _process_message(
             )
             return
 
+        connector_details = _build_connector_details(context)
+
         if claim.job_started:
             await handler.on_job_started(
                 context=context,
                 total_targets=claim.total_targets,
             )
+            emit_worker_job_started(
+                connector=context.connector,
+                sync_type=context.sync_type,
+                run_id=context.job_id,
+                scope_id=context.scope_id,
+                total_targets=claim.total_targets,
+                connector_details=connector_details,
+            )
 
         await handler.on_target_started(context=context)
+        emit_worker_target_started(
+            connector=context.connector,
+            sync_type=context.sync_type,
+            run_id=context.job_id,
+            scope_id=context.scope_id,
+            target_type=context.target_type,
+            target_id=context.target_id,
+            target_name=context.target_name,
+            attempt=context.attempt,
+            connector_details=connector_details,
+        )
+
         result = await handler.handle(
             context=context,
             service_cache=service_cache,
         )
         await _mark_event_success(context)
         await handler.on_target_completed(context=context, result=result)
+
+        synced_count, error_count, skipped = _extract_result_counts(result)
+        emit_worker_target_completed(
+            connector=context.connector,
+            sync_type=context.sync_type,
+            run_id=context.job_id,
+            scope_id=context.scope_id,
+            target_type=context.target_type,
+            target_id=context.target_id,
+            target_name=context.target_name,
+            synced_count=synced_count,
+            error_count=error_count,
+            skipped=skipped,
+            connector_details=connector_details,
+        )
     except Exception as exc:
         if context is None:
             logger.exception(

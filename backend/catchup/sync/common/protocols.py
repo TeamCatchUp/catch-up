@@ -6,9 +6,9 @@ from typing import Protocol
 from sqlalchemy.orm import Session
 
 from catchup.sync.common.schemas import (
-    IncrementalSyncDispatchRequest,
     FullSyncDispatchRequest,
     FullSyncResolvedTargets,
+    IncrementalSyncDispatchRequest,
     SyncDispatchResult,
     SyncEventContext,
     SyncStreamMessage,
@@ -115,6 +115,15 @@ class ConnectorSyncServiceProtocol(Protocol):
     ) -> SyncDispatchResult:
         ...
 
+    async def dispatch_incremental_sync(
+        self,
+        *,
+        db,
+        request: IncrementalSyncDispatchRequest,
+        base_url: str | None,
+    ) -> SyncDispatchResult:
+        ...
+
 
 class FullSyncTargetResolverProtocol(Protocol):
     async def resolve_full_sync_targets(
@@ -124,13 +133,4 @@ class FullSyncTargetResolverProtocol(Protocol):
         request: FullSyncDispatchRequest,
         sync_from: str,
     ) -> FullSyncResolvedTargets:
-        ...
-
-    async def dispatch_incremental_sync(
-        self,
-        *,
-        db,
-        request: IncrementalSyncDispatchRequest,
-        base_url: str | None,
-    ) -> SyncDispatchResult:
         ...

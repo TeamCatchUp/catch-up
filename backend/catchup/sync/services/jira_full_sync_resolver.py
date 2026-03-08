@@ -16,6 +16,21 @@ from catchup.sync.common.schemas import (
 logger = logging.getLogger(__name__)
 
 
+def _normalize_requested_project_keys(target_ids: list[str] | None) -> list[str]:
+    if target_ids is None:
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in target_ids:
+        candidate = (item or "").strip()
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        normalized.append(candidate)
+    return normalized
+
+
 class JiraFullSyncResolverValidationError(Exception):
     """Jira full sync resolver validation error."""
 
@@ -52,8 +67,18 @@ class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             )
 
         projects = jira_entities.get_projects_by_cloud_id(db, cloud_id)
-        if request.target_ids:
-            requested_project_keys = [item.strip() for item in request.target_ids if item and item.strip()]
+        requested_project_keys = _normalize_requested_project_keys(request.target_ids)
+        if request.target_ids is not None and not requested_project_keys:
+            raise JiraFullSyncResolverValidationError(
+                detail={
+                    "scope_id": request.scope_id,
+                    "cloud_id": cloud_id,
+                    "message": "target_ids is empty after normalization",
+                    "requested_target_ids": request.target_ids,
+                }
+            )
+
+        if requested_project_keys:
             requested_project_key_set = set(requested_project_keys)
 
             resolved_projects = [
@@ -77,7 +102,7 @@ class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                     "scope_id": request.scope_id,
                     "cloud_id": cloud_id,
                     "message": "no syncable projects found",
-                    "requested_target_ids": request.target_ids or [],
+                    "requested_target_ids": requested_project_keys,
                 }
             )
 

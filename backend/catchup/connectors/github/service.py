@@ -44,11 +44,10 @@ from catchup.connectors.github.transformers import GithubTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
-from catchup.db.github import sync_repository as github_sync
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.domain_repository import RepositoryUpsertData, UserUpsertData
 from catchup.db.github import installation_repository as github_installation
-from catchup.db.models import GithubEntityType, GithubSyncStatus, GithubInstallationType, SourceType
+from catchup.db.models import GithubEntityType, GithubInstallationType, SourceType
 from catchup.db.user_source_mapping import find_premapped_name_by_external_user_identifier, find_premapped_names_by_source_type
 
 logger = logging.getLogger(__name__)
@@ -166,11 +165,8 @@ class GithubIngestionService:
         entity_type: GithubEntityType,
         operation: str,
     ) -> None:
-        """동기화 시작 - Sync Status IN_PROGRESS 설정"""
-        github_sync.create_or_update_sync_state(
-            db, self.installation_id, repo_full_name,
-            entity_type, GithubSyncStatus.IN_PROGRESS
-        )
+        """동기화 시작 로그 기록."""
+        _ = db
         logger.info(f"[GITHUB][{operation}] Started: {entity_type.value} sync for {repo_full_name}")
 
     def _complete_sync(
@@ -181,11 +177,8 @@ class GithubIngestionService:
         synced_count: int,
         operation: str,
     ) -> None:
-        """동기화 완료 - Sync Status SUCCESS 설정"""
-        github_sync.mark_sync_completed(
-            db, self.installation_id, repo_full_name,
-            entity_type, synced_count
-        )
+        """동기화 완료 로그 기록."""
+        _ = db
         logger.info(
             f"[GITHUB][{operation}] Completed: {entity_type.value} sync for {repo_full_name} "
             f"({synced_count} synced)"
@@ -199,12 +192,9 @@ class GithubIngestionService:
         error: str | Exception,
         operation: str,
     ) -> None:
-        """동기화 실패 - Sync Status FAILED 설정"""
+        """동기화 실패 로그 기록."""
+        _ = db
         error_msg = str(error)[:1000]
-        github_sync.mark_sync_failed(
-            db, self.installation_id, repo_full_name,
-            entity_type, error_msg
-        )
         logger.error(
             f"[GITHUB][{operation}] Failed: {entity_type.value} sync for {repo_full_name} - {error_msg}"
         )
@@ -217,12 +207,8 @@ class GithubIngestionService:
         error: GitHubRateLimitError,
         operation: str,
     ) -> None:
-        """Rate Limit 에러 처리"""
-        error_msg = f"Rate limit: retry after {error.retry_after}s"
-        github_sync.mark_sync_failed(
-            db, self.installation_id, repo_full_name,
-            entity_type, error_msg
-        )
+        """Rate limit 로그 기록."""
+        _ = db
         logger.warning(
             f"[GITHUB][{operation}] Rate limit hit: {entity_type.value} sync for {repo_full_name} "
             f"(retry after {error.retry_after}s)"
@@ -333,6 +319,15 @@ class GithubIngestionService:
                 if repo_ids is None
                 else self._get_repo_names_by_ids(db, repo_ids)
             )
+            if repo_ids is not None and not repos_to_sync:
+                results["repositories"]["errors"] = max(1, len(repo_ids))
+                logger.error(
+                    "[GITHUB][%s] No repositories resolved from repo_ids: installation_id=%s, repo_ids=%s",
+                    SyncOperation.FULL_SYNC,
+                    self.installation_id,
+                    repo_ids,
+                )
+
             results["repositories"]["synced"] = len(repos_to_sync)
             days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
             sync_from = datetime.now(timezone.utc) - timedelta(days=days)
@@ -845,11 +840,7 @@ class GithubIngestionService:
         Returns:
             {"synced": N, "errors": N}
         """
-        issue_state = github_sync.get_sync_state(
-            db, self.installation_id, repo_full_name,
-            GithubEntityType.ISSUE
-        )
-        since = issue_state.last_successful_sync_at if issue_state else None
+        since = datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
 
         logger.info(
             f"[GITHUB][FLUSH] Syncing Issues for {repo_full_name} "
@@ -883,11 +874,7 @@ class GithubIngestionService:
         Returns:
             {"synced": N, "errors": N}
         """
-        pr_state = github_sync.get_sync_state(
-            db, self.installation_id, repo_full_name,
-            GithubEntityType.PULL_REQUEST
-        )
-        since = pr_state.last_successful_sync_at if pr_state else None
+        since = datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
 
         logger.info(
             f"[GITHUB][FLUSH] Syncing PRs for {repo_full_name} "
@@ -936,4 +923,3 @@ class GithubIngestionService:
 
         logger.debug(f"Summarized {len(documents)} documents for embedding")
         return documents
-

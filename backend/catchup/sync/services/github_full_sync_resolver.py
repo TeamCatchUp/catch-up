@@ -16,6 +16,21 @@ from catchup.sync.common.schemas import (
 logger = logging.getLogger(__name__)
 
 
+def _normalize_requested_repo_ids(target_ids: list[str] | None) -> list[str]:
+    if target_ids is None:
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in target_ids:
+        candidate = (item or "").strip()
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        normalized.append(candidate)
+    return normalized
+
+
 class GithubFullSyncResolverValidationError(Exception):
     """GitHub full sync resolver validation error."""
 
@@ -63,9 +78,18 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             )
 
         repositories = github_entities.get_repositories_by_installation(db, installation_id)
+        requested_repo_ids = _normalize_requested_repo_ids(request.target_ids)
+        if request.target_ids is not None and not requested_repo_ids:
+            raise GithubFullSyncResolverValidationError(
+                detail={
+                    "scope_id": request.scope_id,
+                    "installation_id": installation_id,
+                    "message": "target_ids is empty after normalization",
+                    "requested_target_ids": request.target_ids,
+                }
+            )
 
-        if request.target_ids:
-            requested_repo_ids = [item.strip() for item in request.target_ids if item and item.strip()]
+        if requested_repo_ids:
             requested_repo_id_set = set(requested_repo_ids)
 
             resolved_repositories = [
@@ -87,7 +111,7 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                     "scope_id": request.scope_id,
                     "installation_id": installation_id,
                     "message": "no syncable repositories found",
-                    "requested_target_ids": request.target_ids or [],
+                    "requested_target_ids": requested_repo_ids,
                 }
             )
 
