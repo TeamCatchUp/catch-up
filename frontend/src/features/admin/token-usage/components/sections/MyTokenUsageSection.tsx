@@ -50,9 +50,9 @@ export default function MyTokenUsageSection() {
       {/* 요약 행 */}
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1.5">
-          <span className="text-heading-small text-gray-50">전체 사용 토큰량</span>
+          <span className="text-heading-small text-content-alternative">전체 사용 토큰량</span>
           <div className="flex items-center gap-3">
-            <span className="text-heading-xlarge text-gray-80">{filteredTotalCost.toFixed(2)} $</span>
+            <span className="text-heading-xlarge text-content-normal">{filteredTotalCost.toFixed(2)} $</span>
             <Badge variant={statusConfig.variant} size="sm" className="rounded-md2 gap-1 py-0.5">
               <IconCheckCircle className="size-4" aria-hidden="true" />
               {statusConfig.label}

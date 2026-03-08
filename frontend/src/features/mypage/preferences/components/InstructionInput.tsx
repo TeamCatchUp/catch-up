@@ -75,9 +75,9 @@ const InstructionInput = ({
     <div
       ref={containerRef}
       className={cn(
-        'w-full rounded-xl border bg-white',
+        'w-full rounded-xl border bg-fill-normal',
         !isActive && 'h-[46px]',
-        isActive ? (isAtLimit ? 'border-red-50' : 'border-blue-40') : 'border-neutral-3',
+        isActive ? (isAtLimit ? 'border-red-50' : 'border-blue-40') : 'border-edge-neutral',
       )}
     >
       <div className={cn(isActive ? 'px-[18px] py-2.5' : 'p-3')}>
@@ -91,13 +91,13 @@ const InstructionInput = ({
           rows={1}
           className={cn(
             'text-body-small w-full resize-none bg-transparent outline-none',
-            'placeholder:text-gray-30',
+            'placeholder:text-content-assistive',
             isActive ? 'max-h-[114px] overflow-y-auto' : 'h-[22px] overflow-hidden',
           )}
         />
         {isActive && (
           <div className="mt-2.5 flex items-center justify-between">
-            <span className={cn('text-label-xsmall', isAtLimit ? 'text-gray-30' : 'invisible')}>
+            <span className={cn('text-label-xsmall', isAtLimit ? 'text-content-assistive' : 'invisible')}>
               최대 1500자까지 입력할 수 있습니다.
             </span>
             <div className="flex items-center gap-2.5">

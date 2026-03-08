@@ -19,16 +19,16 @@ interface InstructionCardProps {
 
 const InstructionCard = ({ content, onEdit, onDelete }: InstructionCardProps) => {
   return (
-    <div className="border-neutral-3 flex max-h-[160px] min-h-[46px] items-start gap-6 overflow-y-auto rounded-xl border bg-white px-4 py-3">
-      <p className="text-body-small text-gray-70 w-full wrap-break-word whitespace-pre-wrap">{content}</p>
+    <div className="border-edge-neutral flex max-h-[160px] min-h-[46px] items-start gap-6 overflow-y-auto rounded-xl border bg-fill-normal px-4 py-3">
+      <p className="text-body-small text-icon-normal w-full wrap-break-word whitespace-pre-wrap">{content}</p>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="active:bg-neutral-3 hover:bg-neutral-2 sticky top-0 flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lg p-1.5"
+            className="active:bg-fill-interaction-pressed hover:bg-fill-interaction-hover sticky top-0 flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lg p-1.5"
           >
-            <IconKebab className="text-gray-70 size-6" />
+            <IconKebab className="text-icon-normal size-6" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" sideOffset={4} className="w-[250px] min-w-0">

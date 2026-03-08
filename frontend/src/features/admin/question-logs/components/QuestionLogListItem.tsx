@@ -20,14 +20,14 @@ const QuestionLogListItem = ({ item, group, userId }: QuestionLogListItemProps) 
   return (
     <Link
       href={`/admin/question-logs/${item.messageId}?userId=${userId}`}
-      className="hover:bg-neutral-2 flex h-10 w-full items-center gap-2 rounded-xl px-2 py-1 transition-colors"
+      className="hover:bg-fill-interaction-hover flex h-10 w-full items-center gap-2 rounded-xl px-2 py-1 transition-colors"
     >
-      <div className="border-neutral-3 bg-neutral-1 rounded-rounded flex shrink-0 items-center justify-center border p-1.5">
-        <ChatIcon className="size-5 text-gray-50" />
+      <div className="border-edge-neutral bg-fill-strong rounded-rounded flex shrink-0 items-center justify-center border p-1.5">
+        <ChatIcon className="size-5 text-content-alternative" />
       </div>
-      <div className="text-body-small text-gray-80 min-w-0 flex-1 truncate text-left">{item.query}</div>
+      <div className="text-body-small text-content-normal min-w-0 flex-1 truncate text-left">{item.query}</div>
       {(showSavedLabel || showDate) && (
-        <div className="text-body-xsmall text-gray-30 flex shrink-0 items-center gap-2 whitespace-nowrap">
+        <div className="text-body-xsmall text-content-assistive flex shrink-0 items-center gap-2 whitespace-nowrap">
           {showSavedLabel && <span>저장한 답변</span>}
           {showDate && <span>{dateText}</span>}
         </div>

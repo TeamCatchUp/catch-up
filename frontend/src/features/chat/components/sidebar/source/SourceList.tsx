@@ -135,7 +135,7 @@ const SourceList = ({
                 'text-body-small flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-full border px-3 py-1.5 leading-none whitespace-nowrap transition',
                 isActive
                   ? 'border-neutral-80 bg-neutral-80 text-white'
-                  : 'border-neutral-3 text-gray-70 hover:bg-neutral-2 bg-white',
+                  : 'border-edge-neutral text-content-neutral hover:bg-fill-interaction-hover bg-fill-normal',
               )}
             >
               {category.category}
@@ -169,11 +169,11 @@ const SourceList = ({
 
             {recommendedSources.length > 0 && (
               <>
-                <div className="bg-neutral-3 mt-1 h-px w-full" />
+                <div className="bg-edge-neutral mt-1 h-px w-full" />
                 <div className="flex flex-col gap-2.5 px-4 pb-6">
                   <div className="flex items-center gap-1.5 px-1.5">
-                    <AddCircle className="text-gray-70 h-5 w-5" />
-                    <span className="text-body-small text-gray-70">참고하면 좋은 문서</span>
+                    <AddCircle className="text-icon-normal h-5 w-5" />
+                    <span className="text-body-small text-content-neutral">참고하면 좋은 문서</span>
                   </div>
                   <div className="flex flex-col gap-2.5">
                     {recommendedSources.map((source, index) => (

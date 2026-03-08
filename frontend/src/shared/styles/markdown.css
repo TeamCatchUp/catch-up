@@ -13,7 +13,7 @@
       'Open Sans',
       'Helvetica Neue',
       sans-serif;
-    color: #1e2124;
+    color: var(--text-strong);
   }
 
   /* 코드도 pretendard 적용 */
@@ -80,14 +80,14 @@
   /* 인라인 코드 (code) */
   .markdown-body :not(pre) > code {
     padding: 2px 6px;
-    background: #f1f3f5;
+    background: var(--fill-strong);
     border-radius: 4px;
 
     font-size: 14px;
     font-weight: 400;
     line-height: 160%;
 
-    color: #1e2124;
+    color: var(--text-strong);
   }
   /* **`인라인코드`** 적용 */
   .markdown-body strong > code {
@@ -96,7 +96,7 @@
 
   /* 코드블럭 (pre > code) */
   .markdown-body pre {
-    background: #f7f7f8;
+    background: var(--fill-strong);
     padding: 20px;
     margin: 24px 0;
     border-radius: 16px;
@@ -110,7 +110,7 @@
     font-size: 16px;
     font-weight: 500;
     line-height: 150%;
-    color: #464c53;
+    color: var(--text-neutral);
 
     white-space: pre; /* 코드블럭은 줄바꿈 보존*/
   }
@@ -122,7 +122,7 @@
   }
 
   .markdown-body pre::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1);
+    background: var(--dim-black-10);
     border-radius: 4px;
   }
 
@@ -212,15 +212,15 @@
   .markdown-body blockquote {
     margin: 24px 0;
     padding: 8px 16px;
-    border-left: 4px solid #dbdcdf;
-    color: #33363d;
+    border-left: 4px solid var(--line-strong);
+    color: var(--text-normal);
     background: transparent;
   }
 
   /* ------------- 링크 ------------- */
   /* a */
   .markdown-body a {
-    color: #005eeb;
+    color: var(--text-primary-normal);
     text-decoration: none;
   }
 
@@ -229,7 +229,7 @@
   }
 
   .markdown-body a:visited {
-    color: #005eeb;
+    color: var(--text-primary-normal);
     text-decoration: none;
     opacity: 0.75;
   }
@@ -257,22 +257,22 @@
     text-align: left;
     font-weight: 500;
     font-size: 14px;
-    color: #1e2124;
+    color: var(--text-strong);
   }
 
   .markdown-body td {
     padding: 12px;
     font-weight: 400;
     font-size: 16px;
-    color: #1e2124;
+    color: var(--text-strong);
   }
 
   .markdown-body thead tr {
-    border-bottom: 1px solid #dbdcdf;
+    border-bottom: 1px solid var(--line-strong);
   }
 
   .markdown-body tbody tr {
-    border-bottom: 1px solid #e6e8eb;
+    border-bottom: 1px solid var(--line-neutral);
   }
 
   .markdown-body tbody tr:last-child {

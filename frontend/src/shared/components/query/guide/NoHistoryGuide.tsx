@@ -49,12 +49,12 @@ export const NoHistoryGuide = ({ onExampleClick }: NoHistoryGuideProps) => {
   return (
     <div className="no-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
       <div className="flex items-center gap-5">
-        <div className="bg-blue-1 flex size-11.25 shrink-0 items-center justify-center rounded-xl p-1">
+        <div className="bg-fill-primary-assistive flex size-11.25 shrink-0 items-center justify-center rounded-xl p-1">
           <IconLightbulb className="size-6 text-orange-50" />
         </div>
         <div className="flex flex-col gap-1">
-          <p className="text-heading-small text-gray-80">이렇게 질문해보세요!</p>
-          <p className="text-body-xsmall text-gray-50">
+          <p className="text-heading-small text-content-normal">이렇게 질문해보세요!</p>
+          <p className="text-body-xsmall text-content-alternative">
             업무를 기준으로 질문하면 관련된 모든 정보를 한 번에 찾을 수 있어요.
           </p>
         </div>
@@ -62,31 +62,31 @@ export const NoHistoryGuide = ({ onExampleClick }: NoHistoryGuideProps) => {
 
       <div className="grid grid-cols-3 gap-4">
         {NO_HISTORY_STEPS.map((step) => (
-          <div key={step.title} className="bg-blue-1 flex flex-col gap-2 rounded-xl p-2.5">
-            <span className="text-body-xsmall bg-information-5 w-fit rounded-full px-1.5 py-0.5 text-gray-50">
+          <div key={step.title} className="bg-fill-primary-assistive flex flex-col gap-2 rounded-xl p-2.5">
+            <span className="text-body-xsmall bg-information-5 w-fit rounded-full px-1.5 py-0.5 text-content-alternative">
               {step.title}
             </span>
-            <p className="text-body-xsmall text-gray-90 leading-5">
+            <p className="text-body-xsmall text-content-strong leading-5">
               {step.prefix ?? ''}
               <span className="text-red-orange-50">{step.highlight}</span>
               {step.suffix}
             </p>
-            <p className="text-body-xsmall leading-5 text-gray-50">{step.body}</p>
+            <p className="text-body-xsmall leading-5 text-content-alternative">{step.body}</p>
           </div>
         ))}
       </div>
 
       <div className="flex flex-col gap-2.5">
-        <span className="text-body-xsmall px-1 text-gray-50">질문 예시</span>
+        <span className="text-body-xsmall px-1 text-content-alternative">질문 예시</span>
         <div className="flex flex-col gap-1">
           {NO_HISTORY_EXAMPLES.slice(0, 3).map((example) => (
             <button
               key={example}
               onClick={() => onExampleClick?.(example)}
-              className="group hover:bg-neutral-2 text-body-small text-gray-80 flex h-10 cursor-pointer items-center rounded-xl px-2 text-left transition-colors"
+              className="group hover:bg-fill-interaction-hover text-body-small text-content-normal flex h-10 cursor-pointer items-center rounded-xl px-2 text-left transition-colors"
             >
               <span className="flex-1">{example}</span>
-              <IconArrowForward className="ml-2 h-5 w-5 text-gray-50 opacity-0 transition-opacity group-hover:opacity-100" />
+              <IconArrowForward className="ml-2 h-5 w-5 text-icon-neutral opacity-0 transition-opacity group-hover:opacity-100" />
             </button>
           ))}
         </div>

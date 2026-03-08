@@ -44,27 +44,27 @@ export default function PreferencesPage() {
 
   return (
     <section className="flex min-w-[600px] flex-col gap-6 px-16 pt-9 pb-[120px]">
-      <h1 className="text-heading-xlarge text-gray-80">개인 맞춤 설정</h1>
+      <h1 className="text-heading-xlarge text-content-normal">개인 맞춤 설정</h1>
 
       {/* 개인 지침 섹션 */}
       <div className="flex flex-col gap-1">
-        <div className="bg-neutral-1 rounded-md px-5 py-1.5">
-          <span className="text-heading-small text-gray-70">프롬프트 지침</span>
+        <div className="bg-fill-strong rounded-md px-5 py-1.5">
+          <span className="text-heading-small text-content-neutral">프롬프트 지침</span>
         </div>
 
         <div className="flex flex-col px-4">
           <div className="flex flex-col gap-3 py-3">
             <div className="flex flex-col gap-1.5">
-              <span className="text-heading-small text-gray-80">지침 작성</span>
-              <span className="text-label-small text-gray-50">
+              <span className="text-heading-small text-content-normal">지침 작성</span>
+              <span className="text-label-small text-content-alternative">
                 컨텍스트를 설정하고 프로젝트 내에서 Catch Up이 응답하는 방식을 맞춤 설정하세요.
               </span>
             </div>
 
             {/* 로딩 상태 */}
             {isLoading && (
-              <div className="border-neutral-3 flex h-[46px] items-center justify-center rounded-xl border bg-white">
-                <span className="text-body-small text-gray-30">불러오는 중...</span>
+              <div className="border-edge-neutral flex h-[46px] items-center justify-center rounded-xl border bg-fill-normal">
+                <span className="text-body-small text-content-assistive">불러오는 중...</span>
               </div>
             )}
 

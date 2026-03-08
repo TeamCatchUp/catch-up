@@ -52,17 +52,17 @@ export default function QueryInput({ input, inputRef, highlightBracketPlaceholde
   return (
     <div className="flex w-full items-center justify-between">
       <div className="text-button-secondary-mono mr-2 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center self-end p-1.5">
-        <IconAdd className="text-gray-70 h-7 w-7" />
+        <IconAdd className="text-icon-normal h-7 w-7" />
       </div>
       <div className="relative flex flex-1">
         {shouldHighlight && (
           <div
             ref={overlayRef}
             aria-hidden
-            className="text-body-medium text-gray-70 pointer-events-none absolute inset-0 overflow-hidden wrap-break-word whitespace-pre-wrap"
+            className="text-body-medium text-content-neutral pointer-events-none absolute inset-0 overflow-hidden wrap-break-word whitespace-pre-wrap"
           >
             {highlightedSegments.map((segment, index) => (
-              <span key={`${segment.text}-${index}`} className={segment.isPlaceholder ? 'text-blue-50' : ''}>
+              <span key={`${segment.text}-${index}`} className={segment.isPlaceholder ? 'text-content-primary' : ''}>
                 {segment.text}
               </span>
             ))}
@@ -90,10 +90,10 @@ export default function QueryInput({ input, inputRef, highlightBracketPlaceholde
       <button
         onClick={input.handleSubmit}
         className={`rounded-rounded ml-2 flex shrink-0 items-center self-end border border-solid p-2 ${
-          input.hasText ? 'cursor-pointer border-blue-50 bg-blue-50' : 'bg-neutral-1 border-neutral-2'
+          input.hasText ? 'cursor-pointer border-fill-primary bg-fill-primary' : 'bg-fill-strong border-edge-assistive'
         }`}
       >
-        <IconArrowSend className={`${input.hasText ? 'brightness-0 invert' : 'text-gray-30'} h-6 w-6`} />
+        <IconArrowSend className={`${input.hasText ? 'brightness-0 invert' : 'text-content-assistive'} h-6 w-6`} />
       </button>
     </div>
   );

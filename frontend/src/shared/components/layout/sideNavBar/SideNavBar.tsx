@@ -31,7 +31,7 @@ const SideNavBar = () => {
     <>
       <nav
         className={cn(
-          'border-neutral-3 flex h-screen flex-col gap-5 border-r bg-white',
+          'border-edge-neutral flex h-screen flex-col gap-5 border-r bg-fill-normal',
           'transition-[width,padding] duration-300 ease-out will-change-[width,padding]',
           isOpen ? 'w-60.25 px-2 py-2.5' : 'w-18 items-center px-3 py-5',
         )}
@@ -45,7 +45,7 @@ const SideNavBar = () => {
             <div
               className={cn(
                 'group relative flex h-10 w-10 items-center px-1.25 py-1.5',
-                isOpen ? '' : 'border-neutral-3 rounded-xl border-[0.5px]',
+                isOpen ? '' : 'border-edge-neutral rounded-xl border-[0.5px]',
               )}
             >
               <CatchupLogo className="relative left-px h-7.5 w-7" />
@@ -59,7 +59,7 @@ const SideNavBar = () => {
                         e.stopPropagation();
                         setSidebarOpen(true);
                       }}
-                      className="bg-neutral-2 active:bg-neutral-3 border-neutral-5 absolute inset-0 cursor-pointer rounded-xl border-[0.5px] p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
+                      className="bg-fill-interaction-hover active:bg-fill-interaction-pressed border-edge-strong absolute inset-0 cursor-pointer rounded-xl border-[0.5px] p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
                     >
                       <Open className="h-6 w-6" />
                     </button>
@@ -88,7 +88,7 @@ const SideNavBar = () => {
                   onClick={() => setSidebarOpen(false)}
                   className="icon-button-only-gray flex cursor-pointer items-center justify-center rounded-full! p-0.5"
                 >
-                  <Close className="h-6 w-6 text-gray-50" />
+                  <Close className="h-6 w-6 text-icon-neutral" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>사이드바 닫기</TooltipContent>

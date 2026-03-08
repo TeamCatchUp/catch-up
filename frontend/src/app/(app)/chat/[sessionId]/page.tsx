@@ -101,7 +101,7 @@ export default function RagAnswerPage() {
         <RagContentHeader title={chat.chatData?.title ?? ''} sessionId={sessionId} />
 
         {/* 스크롤 가능한 콘텐츠 영역 */}
-        <div className="border-neutral-3 relative flex flex-1 flex-col overflow-hidden border-r-0">
+        <div className="border-edge-neutral relative flex flex-1 flex-col overflow-hidden border-r-0">
           <div
             ref={combinedScrollContainerRef}
             className="flex flex-1 flex-col items-center overflow-y-auto scroll-smooth px-6 pt-3 pb-9 lg:px-24"
@@ -109,7 +109,7 @@ export default function RagAnswerPage() {
             {/* 역방향 무한 스크롤 sentinel (위쪽) */}
             <div ref={topSentinelRef} className="h-1 w-full" />
             {chat.isLoadingOlderMessages && (
-              <div className="text-body-small text-gray-30 w-full py-4 text-center">이전 메시지를 불러오는 중...</div>
+              <div className="text-body-small text-content-assistive w-full py-4 text-center">이전 메시지를 불러오는 중...</div>
             )}
 
             {/* 날짜 구분선 */}

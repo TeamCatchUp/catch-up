@@ -133,17 +133,17 @@ const AnswerActionButtons = ({
             className={cn(
               'cursor-pointer rounded-lg p-1.5',
               isFeedbackDisabled ? '' : 'icon-button-only-gray',
-              isThumbsDownPanelOpen && 'bg-neutral-3 border-neutral-5',
+              isThumbsDownPanelOpen && 'bg-fill-interaction-pressed border-edge-strong',
             )}
           >
             <Icon
               className={cn(
                 'h-6 w-6',
                 isFeedbackDisabled && !isLikedActive && !isDislikedActive
-                  ? 'text-gray-20'
+                  ? 'text-content-assistive'
                   : isThumbsDownPanelOpen || bookmarked || isLikedActive || isDislikedActive
-                    ? 'text-gray-70'
-                    : 'active:text-gray-70 text-gray-50',
+                    ? 'text-content-neutral'
+                    : 'active:text-content-neutral text-content-alternative',
               )}
             />
           </button>

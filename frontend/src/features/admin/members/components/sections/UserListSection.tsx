@@ -90,7 +90,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
                   <DropdownMenuItem
                     key={option.key}
                     onClick={() => setSortKey(option.key)}
-                    className={cn(sortKey === option.key && 'bg-neutral-1')}
+                    className={cn(sortKey === option.key && 'bg-fill-strong')}
                   >
                     {option.label}
                   </DropdownMenuItem>
@@ -101,7 +101,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
         }
       />
 
-      <div className="border-neutral-3 grid h-124 min-h-0 w-250 grid-cols-[500px_500px] overflow-clip border-y">
+      <div className="border-edge-neutral grid h-124 min-h-0 w-250 grid-cols-[500px_500px] overflow-clip border-y">
         <MemberTable
           rows={tableRows}
           activeKey={activeUserId?.toString() ?? null}

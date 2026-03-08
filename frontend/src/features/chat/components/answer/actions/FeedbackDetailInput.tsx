@@ -42,7 +42,7 @@ const FeedbackDetailInput = ({
   return (
     <div
       className={cn(
-        'border-blue-30 flex w-full flex-col gap-2.5 rounded-2xl border bg-white px-4.5 py-2.5',
+        'border-edge-primary flex w-full flex-col gap-2.5 rounded-2xl border bg-fill-normal px-4.5 py-2.5',
         'transition-all duration-200 ease-out will-change-[transform,opacity]',
         entered ? 'translate-y-0 scale-100 opacity-100' : '-translate-y-1 scale-[0.99] opacity-0',
       )}
@@ -61,7 +61,7 @@ const FeedbackDetailInput = ({
             onSubmit();
           }
         }}
-        className="text-body-medium text-gray-80 placeholder:text-gray-30 w-full resize-none overflow-y-hidden outline-none"
+        className="text-body-medium text-content-normal placeholder:text-content-assistive w-full resize-none overflow-y-hidden outline-none"
         style={{ maxHeight: `${TEXTAREA_MAX_HEIGHT}px` }}
         rows={1}
       />
@@ -70,7 +70,7 @@ const FeedbackDetailInput = ({
           onClick={onCancel}
           className="capsule-button-outline-mono flex shrink-0 cursor-pointer items-center justify-center px-3 py-1.5"
         >
-          <span className="text-body-small text-gray-80">취소</span>
+          <span className="text-body-small text-content-normal">취소</span>
         </button>
         <button
           disabled={!detailText.trim() || isSubmitting}

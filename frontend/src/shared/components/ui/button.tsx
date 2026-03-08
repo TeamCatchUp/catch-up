@@ -12,39 +12,43 @@ const buttonVariants = cva(
     variants: {
       variant: {
         /* ── Icon Buttons ── */
-        'icon-solid-blue': 'hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 rounded-lg bg-blue-50 text-white',
+        'icon-solid-blue':
+          'hover:bg-fill-primary-interaction-hover active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive rounded-lg bg-fill-primary text-white',
         'icon-outline-gray':
-          'border-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 disabled:border-neutral-2 disabled:text-gray-20 text-gray-70 rounded-lg border bg-white',
+          'border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:border-edge-assistive disabled:text-content-assistive text-icon-normal rounded-lg border bg-fill-normal',
         'icon-only-gray':
-          'hover:text-gray-70 hover:bg-neutral-2 active:text-gray-70 active:bg-neutral-3 disabled:text-gray-20 rounded-lg text-gray-50',
+          'hover:text-icon-normal hover:bg-fill-interaction-hover active:text-icon-normal active:bg-fill-interaction-pressed disabled:text-content-assistive rounded-lg text-icon-neutral',
         'icon-only-blue':
-          'hover:bg-blue-5 active:bg-blue-10 active:text-blue-60 disabled:text-gray-20 rounded-full text-blue-50',
+          'hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive active:text-icon-primary-strong disabled:text-content-assistive rounded-full text-icon-primary',
 
         /* ── Box Buttons ── */
-        'box-solid-primary': 'hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 rounded-lg bg-blue-50 text-white',
+        'box-solid-primary':
+          'hover:bg-fill-primary-interaction-hover active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive rounded-lg bg-fill-primary text-white',
         'box-outline-gray':
-          'border-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 disabled:bg-neutral-1 disabled:text-gray-30 text-gray-70 rounded-lg border bg-white',
+          'border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:bg-fill-interaction-inactive disabled:text-content-assistive text-icon-normal rounded-lg border bg-fill-normal',
         'box-outline-blue':
-          'border-blue-40 hover:bg-blue-5 active:bg-blue-10 disabled:bg-neutral-1 disabled:text-gray-30 disabled:border-neutral-2 bg-blue-1 rounded-lg border text-blue-50',
+          'border-edge-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive disabled:bg-fill-interaction-inactive disabled:text-content-assistive disabled:border-edge-assistive bg-fill-primary-assistive rounded-lg border text-content-primary',
 
         /* ── Capsule Buttons ── */
         'capsule-solid-primary':
-          'hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 rounded-full bg-blue-50 text-white',
+          'hover:bg-fill-primary-interaction-hover active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive rounded-full bg-fill-primary text-white',
         'capsule-outline-mono':
-          'border-neutral-4 hover:bg-neutral-2 active:border-neutral-3 active:bg-neutral-3 disabled:border-neutral-4 disabled:bg-neutral-1 disabled:text-gray-30 rounded-full border bg-white',
+          'border-edge-normal hover:bg-fill-interaction-hover active:border-edge-neutral active:bg-fill-interaction-pressed disabled:border-edge-normal disabled:bg-fill-interaction-inactive disabled:text-content-assistive rounded-full border bg-fill-normal',
         'capsule-outline-blue':
-          'border-blue-30 bg-blue-1 text-blue-55 hover:bg-blue-5 active:bg-blue-5 active:border-blue-45 disabled:text-gray-30 disabled:bg-neutral-1 disabled:border-neutral-2 rounded-full border',
-        'capsule-solid-purple': 'bg-violet-5 rounded-full',
-        'capsule-solid-light-blue': 'bg-light-blue-5 rounded-full',
+          'border-edge-primary bg-fill-primary-assistive text-content-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive active:border-edge-primary-strong disabled:text-content-assistive disabled:bg-fill-interaction-inactive disabled:border-edge-assistive rounded-full border',
+        'capsule-solid-purple': 'bg-accent-violet-lighten rounded-full',
+        'capsule-solid-light-blue': 'bg-accent-light-blue-lighten rounded-full',
 
         /* ── Text Buttons ── */
-        'text-primary-blue': 'hover:bg-blue-5 active:bg-blue-5 rounded-full text-blue-50',
-        'text-secondary-mono': 'hover:bg-neutral-2 active:bg-neutral-3 disabled:text-gray-20 text-gray-70 rounded-full',
+        'text-primary-blue':
+          'hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive rounded-full text-content-primary',
+        'text-secondary-mono':
+          'hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed disabled:text-content-assistive text-icon-normal rounded-full',
 
         /* ── FAB ── */
         'fab-primary': 'bg-neutral-80 shadow-button rounded-full text-white',
         'fab-secondary':
-          'hover:bg-neutral-2 active:bg-neutral-3 text-gray-70 shadow-button border-neutral-3 rounded-full border bg-white',
+          'hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed text-icon-normal shadow-button border-edge-neutral rounded-full border bg-fill-normal',
       },
       size: {
         lg: '',

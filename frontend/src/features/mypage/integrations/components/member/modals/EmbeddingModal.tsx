@@ -195,23 +195,23 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         hideClose
-        className="border-neutral-3 shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-white px-5 pt-3 pb-4"
+        className="border-edge-neutral shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-fill-normal px-5 pt-3 pb-4"
       >
         <div className="flex h-9 items-center justify-between">
-          <DialogTitle className="text-heading-medium text-gray-80">
+          <DialogTitle className="text-heading-medium text-content-normal">
             {isSlack ? `${serviceName} 임베딩` : `임베딩 할 ${serviceName} ${itemLabel} 선택하기`}
           </DialogTitle>
           <button type="button" onClick={handleClose} className="cursor-pointer" aria-label="닫기">
-            <Cancel className="size-5 text-gray-50" />
+            <Cancel className="size-5 text-content-alternative" />
           </button>
         </div>
 
-        <div className="border-neutral-3 w-full border-t pt-4">
+        <div className="border-edge-neutral w-full border-t pt-4">
           <div className="flex flex-col gap-4">
             {/* 기간 선택 */}
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center gap-1">
-                <span className="text-body-small text-gray-90">등록 기간을 선택해주세요.</span>
+                <span className="text-body-small text-content-strong">등록 기간을 선택해주세요.</span>
                 <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
               </div>
               <div className="flex gap-2">
@@ -221,7 +221,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
                     type="button"
                     onClick={() => setSelectedPeriod(period)}
                     className={`text-body-small h-9 cursor-pointer rounded-full px-3 ${
-                      selectedPeriod === period ? 'bg-gray-80 text-white' : 'border-neutral-3 text-gray-60 border'
+                      selectedPeriod === period ? 'bg-gray-80 text-white' : 'border-edge-neutral text-content-alternative border'
                     }`}
                   >
                     {period}
@@ -234,16 +234,16 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
             {!isSlack && (
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-1">
-                  <span className="text-body-small text-gray-90">{itemLabel}를 선택해주세요.</span>
+                  <span className="text-body-small text-content-strong">{itemLabel}를 선택해주세요.</span>
                   <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
                 </div>
-                <div className="thin-scrollbar border-neutral-2 bg-neutral-1 flex h-[200px] flex-col gap-2.5 overflow-y-auto rounded-xl border p-3">
+                <div className="thin-scrollbar border-edge-assistive bg-fill-strong flex h-[200px] flex-col gap-2.5 overflow-y-auto rounded-xl border p-3">
                   {isLoading ? (
-                    <div className="text-body-small text-gray-40 flex h-full items-center justify-center">
+                    <div className="text-body-small text-content-assistive flex h-full items-center justify-center">
                       목록을 불러오는 중...
                     </div>
                   ) : items.length === 0 ? (
-                    <div className="text-body-small text-gray-40 flex h-full items-center justify-center">
+                    <div className="text-body-small text-content-assistive flex h-full items-center justify-center">
                       항목이 없습니다.
                     </div>
                   ) : (
@@ -256,13 +256,13 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
                           onClick={() => toggleItem(item.id)}
                           className="flex w-full cursor-pointer items-center gap-3"
                         >
-                          <span className="text-body-small text-gray-60 min-w-0 flex-1 truncate text-left">
+                          <span className="text-body-small text-content-alternative min-w-0 flex-1 truncate text-left">
                             {item.name}
                           </span>
                           {checked ? (
-                            <CheckboxChecked className="size-6 shrink-0 text-blue-50" />
+                            <CheckboxChecked className="size-6 shrink-0 text-icon-primary" />
                           ) : (
-                            <CheckboxUnchecked className="text-gray-30 size-6 shrink-0" />
+                            <CheckboxUnchecked className="text-content-assistive size-6 shrink-0" />
                           )}
                         </button>
                       );

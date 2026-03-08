@@ -20,7 +20,7 @@ export function FilterDropdown({ trigger, open, onOpenChange, children }: Filter
         side="bottom"
         align="start"
         sideOffset={8}
-        className="border-neutral-5 flex h-95 w-75 flex-col items-center gap-3 rounded-2xl border bg-white p-0 py-2.5 shadow-[0px_2px_15px_rgba(0,0,0,0.15)]"
+        className="border-edge-strong flex h-95 w-75 flex-col items-center gap-3 rounded-2xl border bg-fill-normal p-0 py-2.5 shadow-[0px_2px_15px_rgba(0,0,0,0.15)]"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         {children}

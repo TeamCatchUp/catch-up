@@ -31,13 +31,13 @@ const FilterDropdown = <T extends string>({ options, value, onChange }: FilterDr
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="border-neutral-3 hover:bg-neutral-2 active:bg-neutral-3 flex h-9 max-w-[150px] min-w-9 cursor-pointer items-center gap-1 rounded-lg border bg-white px-2.5 py-2"
+          className="border-edge-neutral hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex h-9 max-w-[150px] min-w-9 cursor-pointer items-center gap-1 rounded-lg border bg-fill-normal px-2.5 py-2"
         >
-          <span className="text-body-small text-gray-70 whitespace-nowrap">{selectedLabel}</span>
+          <span className="text-body-small text-content-neutral whitespace-nowrap">{selectedLabel}</span>
           {open ? (
-            <DropdownUp className="text-gray-70 size-[18px] shrink-0" />
+            <DropdownUp className="text-icon-neutral size-[18px] shrink-0" />
           ) : (
-            <DropdownDown className="text-gray-70 size-[18px] shrink-0" />
+            <DropdownDown className="text-icon-neutral size-[18px] shrink-0" />
           )}
         </button>
       </DropdownMenuTrigger>
@@ -46,7 +46,7 @@ const FilterDropdown = <T extends string>({ options, value, onChange }: FilterDr
           <DropdownMenuItem
             key={option.value}
             onClick={() => onChange(option.value)}
-            className={cn(option.value === value && 'bg-neutral-1')}
+            className={cn(option.value === value && 'bg-fill-strong')}
           >
             {option.label}
           </DropdownMenuItem>

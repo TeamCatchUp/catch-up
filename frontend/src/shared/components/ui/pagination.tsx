@@ -38,7 +38,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) 
         aria-label="이전 페이지"
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage <= 1}
-        className="disabled:text-gray-20 rounded-md2 inline-flex size-7.5 cursor-pointer items-center justify-center text-gray-50 disabled:cursor-not-allowed"
+        className="disabled:text-content-assistive rounded-md2 inline-flex size-7.5 cursor-pointer items-center justify-center text-icon-neutral disabled:cursor-not-allowed"
       >
         <ArrowLeft className="size-6" />
       </button>
@@ -53,7 +53,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) 
               onClick={() => onPageChange(page)}
               className={cn(
                 'text-body-small rounded-md2 flex size-7.5 cursor-pointer items-center justify-center tracking-tight',
-                isActive ? 'bg-black/10 text-gray-80' : 'hover:bg-black/10 text-gray-50',
+                isActive ? 'bg-dim-black-10 text-content-normal' : 'hover:bg-dim-black-10 text-content-alternative',
               )}
             >
               {page}
@@ -67,7 +67,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) 
         aria-label="다음 페이지"
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage >= totalPages}
-        className="disabled:text-gray-20 rounded-md2 inline-flex size-7.5 cursor-pointer items-center justify-center text-gray-50 disabled:cursor-not-allowed"
+        className="disabled:text-content-assistive rounded-md2 inline-flex size-7.5 cursor-pointer items-center justify-center text-icon-neutral disabled:cursor-not-allowed"
       >
         <ArrowRight className="size-6" />
       </button>

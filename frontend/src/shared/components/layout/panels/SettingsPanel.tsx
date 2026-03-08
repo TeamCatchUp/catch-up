@@ -90,11 +90,11 @@ const SettingsPanel = () => {
   };
 
   return (
-    <div className="border-neutral-3 flex h-screen w-60 shrink-0 flex-col gap-5 border-r bg-white px-2 py-5">
+    <div className="border-edge-neutral flex h-screen w-60 shrink-0 flex-col gap-5 border-r bg-fill-normal px-2 py-5">
       {SETTINGS_SECTIONS_BY_ROLE[role].map((section) => (
         <div key={section.label} className="flex flex-col gap-1.5">
           <div className="px-1">
-            <span className="text-body-xsmall text-gray-60 font-medium">{section.label}</span>
+            <span className="text-body-xsmall text-content-alternative font-medium">{section.label}</span>
           </div>
           <div className="flex flex-col gap-1">
             {section.items.map((item) => {
@@ -107,11 +107,11 @@ const SettingsPanel = () => {
                   className={cn(
                     'flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 transition-colors',
                     isActive
-                      ? 'border-neutral-2 bg-blue-1 border text-blue-50'
-                      : 'text-gray-80 hover:bg-neutral-2 border border-transparent bg-white',
+                      ? 'border-edge-assistive bg-fill-primary-assistive border text-content-primary'
+                      : 'text-content-normal hover:bg-fill-interaction-hover border border-transparent bg-fill-normal',
                   )}
                 >
-                  <item.Icon className={cn('h-6 w-6 shrink-0', isActive ? 'text-blue-50' : 'text-gray-70')} />
+                  <item.Icon className={cn('h-6 w-6 shrink-0', isActive ? 'text-icon-primary' : 'text-icon-normal')} />
                   <span className="text-body-small">{item.name}</span>
                 </button>
               );
