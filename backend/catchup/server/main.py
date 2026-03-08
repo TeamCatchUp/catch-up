@@ -35,6 +35,7 @@ from catchup.server.state import state
 from catchup.worker.worker_event_processor import run_forever as run_sync_worker
 from catchup.utils.redis import get_redis_client
 from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
+from catchup.utils.client import _shared_client
 from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_checkpointer
 
 configure_logging()
@@ -224,7 +225,23 @@ async def lifespan(app: FastAPI):
             run_sync_worker(sync_worker_stop_event)
         )
         logger.info("[SYNC][WORKER] In-process worker started")
-
+        
+    try:
+        with SessionLocal() as db:
+            # 어드민 온보딩 여부 테스트
+            state.is_admin_initiated = has_admin_ever_onboarded(db)
+            logger.info(f"Admin onboarding completed: {state.is_admin_initiated}")       
+            # 어드민 CSV 파일 최초 업로드 여부
+            state.has_ever_uploaded_user_list_export = has_csv_file_ever_been_uploaded(db)
+            logger.info(f"User list CSV uploaded before: {state.has_ever_uploaded_user_list_export}")
+            
+            
+    except Exception as e:
+        logger.critical(
+            "Failed to check whether admin is initiated: %s",
+            e,
+        )
+        
     yield
 
     if sync_worker_stop_event is not None:
@@ -268,21 +285,15 @@ async def lifespan(app: FastAPI):
             level="error",
             metadata={"error": str(e)},
         )
-    
+        
     try:
-        with SessionLocal() as db:
-            # 어드민 온보딩 여부 테스트
-            state.is_admin_initiated = has_admin_ever_onboarded(db)
-            
-            # 어드민 CSV 파일 최초 업로드 여부
-            state.has_ever_uploaded_user_list_export = has_csv_file_ever_been_uploaded(db)
-            
+        await _shared_client.aclose()
     except Exception as e:
-        logger.critical(
-            "Failed to check whether admin is initiated: %s",
+        logger.error(
+            "Global shared async client shutdown failed: %s", 
             e,
+            exc_info=True
         )
-
 
 # MAIN
 app = FastAPI(

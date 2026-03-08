@@ -18,7 +18,7 @@ import { useSessionLifecycle } from '@/features/chat/hooks/useRagChat.parts/sess
 import { useStreamProcessing } from '@/features/chat/hooks/useRagChat.parts/streamProcessing';
 import type { UseRagChatOptions, UseRagChatReturn } from '@/features/chat/hooks/useRagChat.parts/types';
 import { useRagStream } from '@/features/chat/hooks/useRagStream';
-import type { ChatData, RagUIStepKey, StreamEvent } from '@/features/chat/types';
+import type { ChatData, Message, RagUIStepKey, StreamEvent } from '@/features/chat/types';
 import { isValidSessionId } from '@/shared/utils/sessionId';
 
 /**
@@ -173,7 +173,45 @@ export const useRagChat = ({
           repo,
           initialQuery: effectiveInitialQuery,
         });
-        setChatData(nextData);
+        setChatData((prev) => {
+          if (!prev) return nextData;
+
+          // 서버 데이터의 assistant 메시지 중 sources가 비어있는 경우,
+          // 스트리밍(prev)에서 수신한 sources를 보존한다. (서버 커밋 지연 대응)
+          const mergedMessages = nextData.messages.map((serverMsg, idx) => {
+            if (serverMsg.role !== 'assistant' || serverMsg.sources?.length) return serverMsg;
+
+            const mergeWithPrev = (prevMsg: Message) => ({
+              ...serverMsg,
+              sources: prevMsg.sources,
+              detailed_tasks: prevMsg.detailed_tasks?.length ? prevMsg.detailed_tasks : serverMsg.detailed_tasks,
+            });
+
+            // 같은 위치의 prev 메시지에서 sources 보존
+            const prevByPos = prev.messages[idx];
+            if (prevByPos?.role === 'assistant' && prevByPos.sources?.length) {
+              return mergeWithPrev(prevByPos);
+            }
+
+            // content 기반 매칭 (trim 적용으로 공백 차이 허용)
+            const trimmedContent = serverMsg.content.trim();
+            const prevByContent = prev.messages.find(
+              (m) => m.role === 'assistant' && m.content.trim() === trimmedContent && m.sources?.length,
+            );
+            if (prevByContent) {
+              return mergeWithPrev(prevByContent);
+            }
+
+            return serverMsg;
+          });
+
+          // 서버 커밋 지연으로 아직 포함되지 않은 메시지 보존
+          if (nextData.messages.length < prev.messages.length) {
+            mergedMessages.push(...prev.messages.slice(nextData.messages.length));
+          }
+
+          return { ...nextData, messages: mergedMessages };
+        });
         setOldestLoadedPage(1);
         setHasOlderMessages(false);
       } catch (err) {

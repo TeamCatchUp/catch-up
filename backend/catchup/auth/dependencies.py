@@ -1,19 +1,81 @@
 import logging
+import secrets
 from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyCookie
+from httpx import AsyncClient
 from sqlalchemy.orm import Session
 
 from catchup.auth.jwt import verify_token
+from catchup.auth.service import OAuthService
+from catchup.components.auth.provider import OAuthIdentityProvider
+from catchup.components.auth.constants import OAuthIdentityProviderType
+from catchup.components.auth.factory import get_oauth_identity_provider
 from catchup.db.dependencies import get_db
 from catchup.db.models import User, UserRole, UserStatus
 from catchup.db.users import get_user_by_sub
 from catchup.server.state import state
+from catchup.utils.client import get_global_async_client
 
 
 cookie_scheme = APIKeyCookie(name="access_token", auto_error=False)
 
 logger = logging.getLogger(__name__)
 
+
+def get_oauth_provider(
+    # Client 요청으로 들어온 OAuth IDP 종류
+    provider_type: OAuthIdentityProviderType = OAuthIdentityProviderType.KEYCLOAK,
+    client: AsyncClient = Depends(get_global_async_client)
+) -> OAuthIdentityProvider:
+    """
+    로그인 진입점에서 사용.
+    요청받은 IDP 타입으로 OAuth 인증 클라이언트를 생성한다.
+    """
+    
+    state = f"{provider_type.value}:{secrets.token_urlsafe(32)}"
+    
+    return get_oauth_identity_provider(
+        provider_type=provider_type,
+        client=client,
+        state=state
+    )
+
+
+def _get_oauth_provider_from_state(
+    state: str,
+    client: AsyncClient = Depends(get_global_async_client)
+) -> OAuthIdentityProvider:
+    """
+    oauth service 객체를 주입하기 위해 필요한 내부 의존성
+    """
+    
+    try:
+        provider_name = state.split(":")[0]
+        provider_type = OAuthIdentityProviderType(provider_name)
+    except (IndexError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail="유효하지 않은 state 값입니다."
+        )
+    return get_oauth_identity_provider(
+        provider_type=provider_type,
+        client=client,
+        state=state
+    )
+
+
+def get_oauth_service_from_state(
+    db: Session = Depends(get_db),
+    provider: OAuthIdentityProvider = Depends(_get_oauth_provider_from_state)
+) -> OAuthService:
+    return OAuthService(
+        db=db,
+        provider=provider,
+        provider_type=provider.provider_type
+    )
+
+
+# 현재 로그인한 사용자 정보
 def get_current_user(
     access_token: str = Depends(cookie_scheme),
     db: Session = Depends(get_db)
@@ -123,8 +185,9 @@ def get_current_user_info(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="토큰이 만료되었거나 유효하지 않습니다.",
         )
-
-    user = get_user_by_sub(db, sub)    
+    
+    # 온보딩을 완료한 사용자인지 확인
+    user = get_user_by_sub(db, sub)
     
     if user:
         return {

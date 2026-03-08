@@ -1,17 +1,21 @@
 import logging
-from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from catchup.auth.cookies import delete_auth_cookies, set_auth_cookies
-from catchup.auth.dependencies import get_current_user, get_current_user_info
-from catchup.auth.google_oauth import GoogleOAuthService
+from catchup.auth.service import OAuthService
+from catchup.auth.cookies import delete_auth_cookies, delete_oauth_state_cookie, set_auth_cookies, set_oauth_state_cookie
+from catchup.auth.dependencies import (
+    get_current_user,
+    get_current_user_info,
+    get_oauth_provider,
+    get_oauth_service_from_state
+)
 from catchup.auth.jwt import create_access_token, create_refresh_token, verify_token
-from catchup.auth.keycloak import KeycloakOAuthService
-from catchup.auth.utils import reformat_name
+from catchup.components.auth.provider import OAuthIdentityProvider
+from catchup.components.auth.constants import OAuthIdentityProviderType
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
 from catchup.db.models import (
@@ -23,46 +27,48 @@ from catchup.db.models import (
     SourceType,
     User,
 )
-from catchup.db.users import get_user_by_email, update_user_refresh_token
+from catchup.db.users import get_user_by_sub, update_user_refresh_token
 from sqlalchemy import select
 from catchup.server.auth.schemas import (
     CurrentUserInfo,
     CurrentUserProfile,
     IntegrationProfileItem,
-    IntegrationProfileResponse,
-    TokenRefreshResponse,
+    IntegrationProfileResponse
 )
+from catchup.utils.redis import store_oauth_state, validate_oauth_state
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
-GOOGLE_LOGIN_BASE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-GOOGLE_USER_INFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
-
-# ==========
-# Oauth (공통) -> 현재는 Keycloak만 지원
-# ==========
+# ===========
+# Oauth 로그인
+# ===========
 @router.get(
     path="/oauth/login",
     description="OAuth2 로그인 (현재는 Keycloak만 지원)"
 )
-async def oauth2_login():
-    realm = auth_settings.KC_REALM
-    base_url = f"{auth_settings.KC_PUBLIC_URL}/realms/{realm}/protocol/openid-connect/auth"
+async def oauth2_login(
+    # TODO: Path()로 변경. 수정 범위를 최소화하기 위한 PoC 한정 임시방편
+    provider_type: OAuthIdentityProviderType = Query(default=OAuthIdentityProviderType.KEYCLOAK),
+    provider: OAuthIdentityProvider = Depends(get_oauth_provider)
+):
+    # OAuth state를 Redis에 저장
+    await store_oauth_state(
+        state=provider.state,
+        provider=provider_type.value
+    )
     
-    params = {
-        "client_id": auth_settings.KC_CLIENT_ID,
-        "redirect_uri": auth_settings.KC_REDIRECT_URI,
-        "response_type": "code",
-        "scope": "openid email profile offline_access",
-        "state": "random_state_string_check_needed",
-    }
+    authentication_url = provider.get_authentication_url()
+    response = RedirectResponse(authentication_url)
     
-    url = f"{base_url}?{urlencode(params)}"
-    
-    return RedirectResponse(url)
+    # OAuth state를 브라우저 쿠키에도 저장
+    set_oauth_state_cookie(
+        response=response,
+        state=provider.state
+    )
+
+    return response
 
 
 @router.get(
@@ -70,135 +76,108 @@ async def oauth2_login():
     description="OAuth2 리다이렉트 URI"
 )
 async def oauth_callback(
+    request: Request,
     code: str,
     state: str,
-    db: Session = Depends(get_db),
-    oauth_service: KeycloakOAuthService = Depends(),
+    auth_service: OAuthService = Depends(get_oauth_service_from_state)
 ):
-    oauth_user = await oauth_service.get_user(code)
+    cookie_state = request.cookies.get("oauth_state")
+    if not cookie_state or cookie_state != state:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="유효하지 않은 인증 접근입니다."
+        )
     
-    def _handle_login_sync():
-        oauth_user_record = oauth_service.get_or_register_user(db, oauth_user)
-        
-        full_name = reformat_name(oauth_user.name)
-        
-        token_data = {
-            "sub": oauth_user.sub,
-            "email": oauth_user.email,
-            "name": full_name
-        }
-        access_token = create_access_token(data=token_data)
-        
-        if oauth_user_record.user_id is not None:
-            # 기존 유저: 리프레시 토큰 정상 발급
-            refresh_token = create_refresh_token(data=token_data)
-            update_user_refresh_token(db, oauth_user_record.user_id, refresh_token)
-        else:
-            # 아직 온보딩 전인 신규 유저: 임시로 엑세스 토큰만 발급
-            refresh_token = None
-        db.commit()
-        
-        return access_token, refresh_token
+    # OAuth state 유효성 검사
+    is_valid = await validate_oauth_state(
+        state=state,
+        provider=auth_service.provider_type.value
+    )
     
-    access_token, refresh_token = await run_in_threadpool(_handle_login_sync)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="유효하지 않거나 만료된 인증입니다."
+        )
+    
+    access_token, refresh_token = await auth_service.handle_callback(code)
     
     response = RedirectResponse(url=auth_settings.FRONTEND_REDIRECT_URI)
-    set_auth_cookies(response, access_token, refresh_token)
     
-    return response
-
-# ==========
-# Google
-# ==========
-@router.get(
-    path="/google/login",
-    description="Google Oauth2 로그인"
-)
-async def google_oauth2_login():
-    params = {
-        "client_id": auth_settings.GOOGLE_CLIENT_ID,
-        "redirect_uri": auth_settings.GOOGLE_REDIRECT_URI,
-        "response_type": "code",
-        "scope": "openid email profile",
-        "prompt": "select_account",
-    }
-
-    url = f"{GOOGLE_LOGIN_BASE_URL}?{urlencode(params)}"
-
-    return RedirectResponse(url)
-
-
-@router.get(
-    path="/google/callback",
-    description="Google OAuth2 리다이렉트 URI"
-)
-async def google_callback(
-    code: str,
-    db: Session = Depends(get_db),
-    oauth_service: GoogleOAuthService = Depends(),
-):
-    google_user = await oauth_service.get_google_user(code)
-
-    def _handle_login_sync():
-        user = oauth_service.get_or_register_google_user(db, google_user)
-
-        access_token = create_access_token(data={"sub": user.email})
-        refresh_token = create_refresh_token(data={"sub": user.email})
-
-        update_user_refresh_token(db, user.id, refresh_token)
-        db.commit()
-        
-        return access_token, refresh_token
-
-    access_token, refresh_token = await run_in_threadpool(_handle_login_sync)
-
-    response = RedirectResponse(url=auth_settings.FRONTEND_REDIRECT_URI)
-
-    set_auth_cookies(response, access_token, refresh_token)
-
+    delete_oauth_state_cookie(response)
+    set_auth_cookies(
+        response=response,
+        access_token=access_token,
+        refresh_token=refresh_token
+    )
+    
     return response
 
 
 @router.post(
     path="/refresh",
     description="Refresh 토큰 발급",
-    response_model=TokenRefreshResponse)
-async def refresh_token(
+)
+def refresh_token(
     request: Request,
     response: Response,
     db: Session = Depends(get_db)
 ):
     refresh_token = request.cookies.get("refresh_token")
-    
     if not refresh_token:
-        refresh_token = request.headers.get("refresh_token")
-
-    payload = verify_token(refresh_token, "refresh")
-
-    email = payload.get("sub")
-
-    user = await run_in_threadpool(
-        get_user_by_email,
-        db,
-        email
-    )
-
-    if not user or user.refresh_token != refresh_token:
-        delete_auth_cookies(response)
-
-        response.status_code = status.HTTP_401_UNAUTHORIZED
-
-        return TokenRefreshResponse(
-            status="error", detail="Refresh Token이 유효하지 않습니다."
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh Token이 없습니다."
         )
 
-    new_access_token = create_access_token(data={"sub": user.email})
-
-    set_auth_cookies(response, new_access_token)
-
-    return TokenRefreshResponse(
-        status="success", detail="Access Token을 성공적으로 갱신했습니다."
+    # refresh token 유효성 검사
+    payload = verify_token(
+        token=refresh_token,
+        type="refresh"
     )
+    
+    # sub 기반 User 조회
+    sub = payload.get("sub")
+    user = get_user_by_sub(
+        db=db,
+        sub=sub
+    )
+
+    # 존재하지 않는 사용자이거나 refresh token이 일치하지 않는 경우
+    if not user or user.refresh_token != refresh_token:
+        delete_auth_cookies(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh Token이 유효하지 않습니다."
+        )
+    
+    # token 재발급
+    token_data = {
+        "sub": user.oauth_user.sub,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role
+    }
+    new_access_token = create_access_token(data=token_data)
+    new_refresh_token = create_refresh_token(data=token_data)  # Rotation
+    
+    # refresh token 갱신
+    update_user_refresh_token(
+        db=db,
+        user_id=user.id,
+        refresh_token=new_refresh_token
+    )
+
+    set_auth_cookies(
+        response=response,
+        access_token=new_access_token,
+        refresh_token=new_refresh_token
+    )
+
+    return {
+        "status": "success",
+        "detail": "Access Token을 성공적으로 갱신했습니다."
+    }
 
 
 @router.post(

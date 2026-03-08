@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/renderWithBadges';
 import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
 import type { ChatSource } from '@/features/chat/types';
 import AddCircle from '@/public/icons/icon/add_circle.svg';
@@ -29,23 +30,8 @@ const filterCategory = [
 
 type FilterType = (typeof filterCategory)[number]['type'];
 
-const CITATION_PATTERN = /\[(\d+)\]/g;
 const STAGGER_STEP_MS = 24;
 const STAGGER_MAX_DELAY_MS = 120;
-
-const getCitationOrderMap = (answerContent?: string) => {
-  const map = new Map<number, number>();
-  if (!answerContent) return map;
-
-  const matches = answerContent.matchAll(CITATION_PATTERN);
-  for (const match of matches) {
-    const index = Number(match[1]);
-    if (!Number.isFinite(index) || map.has(index)) continue;
-    map.set(index, map.size + 1);
-  }
-
-  return map;
-};
 
 const SourceList = ({
   sources,
@@ -75,7 +61,11 @@ const SourceList = ({
     };
   }, [prefersReducedMotion, transitionKey]);
 
-  const citationOrderMap = useMemo(() => getCitationOrderMap(answerContent), [answerContent]);
+  const validIndices = useMemo(() => new Set(sources.map((s) => s.source_index)), [sources]);
+  const citationOrderMap = useMemo(
+    () => getCitationDisplayOrderMap(answerContent ?? '', validIndices),
+    [answerContent, validIndices],
+  );
 
   const getSourceCategory = (type: ChatSource['source_type']): Exclude<FilterType, 'all'> => {
     switch (type) {

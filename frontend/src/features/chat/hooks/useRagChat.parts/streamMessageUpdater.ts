@@ -1,5 +1,40 @@
 import type { ChatData, ChatSource, Message } from '@/features/chat/types';
 
+const CITATION_PATTERN = /\[(\d+)\]/g;
+
+/**
+ * assistant 답변 본문의 인용 패턴 [N]을 기반으로 is_cited를 유도
+ *
+ * source_candidates SSE 이벤트는 LLM 답변 생성 전에 후보 sources를 전송하므로
+ * is_cited를 판단할 수 없다. 답변 완성 후 본문의 [N] 패턴과 source_index를
+ * 매칭하여 프론트에서 is_cited를 확정한다.
+ *
+ * - 히스토리 API 등에서 이미 is_cited: true가 설정된 경우 해당 메시지는 건너뜀
+ */
+export const deriveCitedFromAnswerContent = (messages: Message[]): Message[] => {
+  let changed = false;
+  const result = messages.map((msg) => {
+    if (msg.role !== 'assistant' || !msg.sources?.length) return msg;
+    if (msg.sources.some((s) => s.is_cited)) return msg;
+
+    const citedIndices = new Set<number>();
+    for (const match of msg.content.matchAll(CITATION_PATTERN)) {
+      citedIndices.add(Number(match[1]));
+    }
+    if (citedIndices.size === 0) return msg;
+
+    changed = true;
+    return {
+      ...msg,
+      sources: msg.sources.map((s) => ({
+        ...s,
+        is_cited: citedIndices.has(s.source_index),
+      })),
+    };
+  });
+  return changed ? result : messages;
+};
+
 interface AppendStreamingTokenParams {
   // 기존 chatData 스냅샷
   prev: ChatData;

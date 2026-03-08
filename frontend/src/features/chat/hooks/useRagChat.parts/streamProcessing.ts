@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { NODE_TO_UI_STEP } from '@/features/chat/constants/config';
 import {
   appendStreamingToken,
+  deriveCitedFromAnswerContent,
   updateStreamingSources,
 } from '@/features/chat/hooks/useRagChat.parts/streamMessageUpdater';
 import type { SourceResponse, StreamEvent } from '@/features/chat/types';
@@ -275,6 +276,15 @@ export const useStreamProcessing = ({
 
     const targetSessionId = resolvedSessionIdRef.current;
 
+    // source_candidates는 답변 생성 전에 전송되므로 is_cited가 미확정 상태
+    // 답변 완성 후 본문의 [N] 패턴으로 is_cited를 확정
+    setChatData((prev) => {
+      if (!prev) return prev;
+      const updated = deriveCitedFromAnswerContent(prev.messages);
+      if (updated === prev.messages) return prev;
+      return { ...prev, messages: updated };
+    });
+
     if (hasResultEventRef.current) {
       // 로딩 해제를 먼저 수행 → 소스 즉시 표시
       streamingMessageIdRef.current = null;
@@ -312,6 +322,7 @@ export const useStreamProcessing = ({
     isStopped,
     refreshRecentChatsNow,
     resolvedSessionIdRef,
+    setChatData,
     setCurrentStep,
     setIsError,
     setIsLoading,

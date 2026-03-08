@@ -2,7 +2,6 @@ from typing import Optional
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
-from catchup.auth.schemas import UserCreate
 from catchup.db.models import OAuthUser, User, UserWorkspace, Workspace
 
 
@@ -25,15 +24,6 @@ def get_user_by_sub(
         .join(OAuthUser)
         .where(OAuthUser.sub == sub)
     )
-
-
-def create_new_user(
-    db: Session, 
-    user_create: UserCreate
-) -> User:
-    new_user = User(**user_create.model_dump())
-    db.add(new_user)
-    return new_user
 
 
 def update_user_refresh_token(
