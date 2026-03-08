@@ -14,7 +14,7 @@
 
   /* box-buttons */
   .box-button-solid-primary {
-    @apply hover:bg-blue-55 active:bg-blue-60 disabled:bg-blue-10 rounded-lg bg-blue-50;
+    @apply hover:bg-fill-primary-interaction-hover active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive rounded-lg bg-fill-primary;
   }
 
   .box-button-outline-gray {
@@ -23,7 +23,7 @@
 
   /* capsule-button */
   .capsule-button-solid-primary {
-    @apply active:bg-blue-60 disabled:bg-blue-10 hover:bg-blue-55 rounded-full bg-blue-50 text-white;
+    @apply active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive hover:bg-fill-primary-interaction-hover rounded-full bg-fill-primary text-white;
   }
 
   .capsule-button-outline-mono {
@@ -31,7 +31,7 @@
   }
 
   .capsule-button-outline-blue {
-    @apply border-edge-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive active:border-blue-45 disabled:text-content-assistive disabled:bg-fill-interaction-inactive disabled:border-edge-assistive rounded-full border bg-fill-primary-assistive;
+    @apply border-edge-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive active:border-edge-primary-strong disabled:text-content-assistive disabled:bg-fill-interaction-inactive disabled:border-edge-assistive rounded-full border bg-fill-primary-assistive;
   }
 
   .capsule-button-solid-purple {
