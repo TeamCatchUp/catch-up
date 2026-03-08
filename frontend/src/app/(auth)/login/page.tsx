@@ -4,7 +4,7 @@ import Image from 'next/image';
 
 import IconOpen from '@/public/icons/icon/open_in_new.svg';
 import CatchUpLogo from '@/public/icons/logo/catchUp.svg';
-import DashboardImage from '@/public/image/catchup-login.jpg';
+import DashboardImage from '@/public/image/catchup-login.png';
 import { Button } from '@/shared/components/ui/button';
 
 export default function Login() {
@@ -43,7 +43,7 @@ export default function Login() {
           </div>
         </div>
 
-        <Image src={DashboardImage} alt="catchup" className="h-174.5 flex-[1_0_0] object-cover" />
+        <Image src={DashboardImage} alt="catchup" className="h-174.5 flex-[1_0_0] rounded-xl object-cover" />
       </div>
     </div>
   );
