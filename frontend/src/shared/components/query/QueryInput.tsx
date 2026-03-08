@@ -62,7 +62,7 @@ export default function QueryInput({ input, inputRef, highlightBracketPlaceholde
             className="text-body-medium text-content-neutral pointer-events-none absolute inset-0 overflow-hidden wrap-break-word whitespace-pre-wrap"
           >
             {highlightedSegments.map((segment, index) => (
-              <span key={`${segment.text}-${index}`} className={segment.isPlaceholder ? 'text-blue-50' : ''}>
+              <span key={`${segment.text}-${index}`} className={segment.isPlaceholder ? 'text-content-primary' : ''}>
                 {segment.text}
               </span>
             ))}
@@ -90,7 +90,7 @@ export default function QueryInput({ input, inputRef, highlightBracketPlaceholde
       <button
         onClick={input.handleSubmit}
         className={`rounded-rounded ml-2 flex shrink-0 items-center self-end border border-solid p-2 ${
-          input.hasText ? 'cursor-pointer border-blue-50 bg-blue-50' : 'bg-fill-strong border-edge-assistive'
+          input.hasText ? 'cursor-pointer border-fill-primary bg-fill-primary' : 'bg-fill-strong border-edge-assistive'
         }`}
       >
         <IconArrowSend className={`${input.hasText ? 'brightness-0 invert' : 'text-content-assistive'} h-6 w-6`} />

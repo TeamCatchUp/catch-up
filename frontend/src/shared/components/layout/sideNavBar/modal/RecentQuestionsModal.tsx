@@ -61,8 +61,8 @@ const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
             onClick={handleNewQuestion}
             className="capsule-button-outline-blue flex cursor-pointer items-center gap-1.5 px-3 py-1.5"
           >
-            <Add className="h-5 w-5 text-blue-50" />
-            <span className="text-body-small text-blue-55 relative top-px">새 업무 질문</span>
+            <Add className="h-5 w-5 text-icon-primary" />
+            <span className="text-body-small text-content-primary relative top-px">새 업무 질문</span>
           </button>
           <button className="icon-button-only-gray cursor-pointer p-1.5">
             <Search className="h-6 w-6" />

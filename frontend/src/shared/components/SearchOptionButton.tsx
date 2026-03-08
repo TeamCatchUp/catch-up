@@ -22,13 +22,13 @@ export const SearchOptionButton = forwardRef<HTMLButtonElement, SearchOptionButt
         {...props}
         className={cn(
           'flex h-9 max-w-40 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-lg border border-solid px-2 py-1.5 transition-colors',
-          selected ? 'border-blue-30 bg-fill-primary-assistive' : 'border-edge-neutral bg-fill-normal',
+          selected ? 'border-edge-primary bg-fill-primary-assistive' : 'border-edge-neutral bg-fill-normal',
           !selected && 'hover:border-edge-neutral hover:bg-fill-interaction-hover active:border-edge-neutral active:bg-fill-interaction-pressed',
           className,
         )}
       >
-        <Icon className={cn('h-5 w-5 shrink-0', selected ? 'text-blue-55' : 'text-icon-normal')} />
-        <div className={cn('text-body-small truncate whitespace-nowrap', selected ? 'text-blue-55' : 'text-content-normal')}>
+        <Icon className={cn('h-5 w-5 shrink-0', selected ? 'text-icon-primary' : 'text-icon-normal')} />
+        <div className={cn('text-body-small truncate whitespace-nowrap', selected ? 'text-content-primary' : 'text-content-normal')}>
           {label}
         </div>
       </button>

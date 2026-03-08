@@ -107,11 +107,11 @@ const SettingsPanel = () => {
                   className={cn(
                     'flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 transition-colors',
                     isActive
-                      ? 'border-edge-assistive bg-fill-primary-assistive border text-blue-50'
+                      ? 'border-edge-assistive bg-fill-primary-assistive border text-content-primary'
                       : 'text-content-normal hover:bg-fill-interaction-hover border border-transparent bg-fill-normal',
                   )}
                 >
-                  <item.Icon className={cn('h-6 w-6 shrink-0', isActive ? 'text-blue-50' : 'text-icon-normal')} />
+                  <item.Icon className={cn('h-6 w-6 shrink-0', isActive ? 'text-icon-primary' : 'text-icon-normal')} />
                   <span className="text-body-small">{item.name}</span>
                 </button>
               );

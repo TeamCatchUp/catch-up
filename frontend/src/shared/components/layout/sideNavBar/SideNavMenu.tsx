@@ -77,14 +77,14 @@ export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
                   <item.Icon
                     className={cn(
                       isOpen ? 'h-6 w-6' : 'h-7 w-7',
-                      isActive ? 'text-blue-50 group-hover:text-blue-50' : 'text-icon-normal',
+                      isActive ? 'text-icon-primary group-hover:text-icon-primary' : 'text-icon-normal',
                     )}
                   />
                   {isOpen && (
                     <span
                       className={cn(
                         'text-body-small relative flex-1 text-left',
-                        isActive ? 'text-blue-55 group-hover:text-blue-55' : 'text-content-normal',
+                        isActive ? 'text-content-primary group-hover:text-content-primary' : 'text-content-normal',
                       )}
                     >
                       {item.name}
