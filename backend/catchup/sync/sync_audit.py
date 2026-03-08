@@ -116,12 +116,11 @@ def emit_sync_dispatch_accepted(
     run_id: str,
     scope_id: str,
     counts: dict[str, int],
-    scope_metadata: dict[str, Any] | None = None,
     actor: dict[str, Any] | None = None,
 ) -> None:
     connector_key = connector.value
     sync_type_value = sync_type.value
-    connector_details = {"scope_id": scope_id, **dict(scope_metadata or {})}
+    connector_details = {"scope_id": scope_id}
     sync_details = {
         "phase": "api_accepted",
         "sync_type": sync_type_value,

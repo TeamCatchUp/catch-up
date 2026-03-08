@@ -102,11 +102,7 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 target_type="repository",
                 target_id=str(repo.repo_id),
                 target_name=repo.full_name,
-                metadata={
-                    "repository_id": str(repo.repo_id),
-                    "repository_full_name": repo.full_name,
-                    "sync_from": sync_from,
-                },
+                metadata={},
             )
             for repo in resolved_repositories
         ]
@@ -121,7 +117,6 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         return FullSyncResolvedTargets(
             targets=targets,
             invalid_target_ids=[],
-            scope_metadata={"installation_id": str(installation_id)},
         )
 
 

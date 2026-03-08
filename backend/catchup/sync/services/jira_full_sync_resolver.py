@@ -90,12 +90,7 @@ class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 target_type="project",
                 target_id=(project.project_key or "").strip(),
                 target_name=(project.project_name or project.project_key or "").strip(),
-                metadata={
-                    "project_id": str(project.project_id),
-                    "project_key": (project.project_key or "").strip(),
-                    "project_name": (project.project_name or project.project_key or "").strip(),
-                    "sync_from": sync_from,
-                },
+                metadata={},
             )
             for project in resolved_projects
             if (project.project_key or "").strip()
@@ -111,7 +106,6 @@ class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         return FullSyncResolvedTargets(
             targets=targets,
             invalid_target_ids=[],
-            scope_metadata={"cloud_id": cloud_id},
         )
 
 

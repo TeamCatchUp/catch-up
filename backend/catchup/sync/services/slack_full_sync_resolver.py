@@ -90,10 +90,7 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 target_type="channel",
                 target_id=(channel.id or "").strip(),
                 target_name=((channel.name or channel.id or "").strip()),
-                metadata={
-                    "channel_name": ((channel.name or channel.id or "").strip()),
-                    "sync_from": sync_from,
-                },
+                metadata={},
             )
             for channel in resolved_channels
             if (channel.id or "").strip()
@@ -109,7 +106,6 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         return FullSyncResolvedTargets(
             targets=targets,
             invalid_target_ids=[],
-            scope_metadata={"team_id": team_id},
         )
 
 

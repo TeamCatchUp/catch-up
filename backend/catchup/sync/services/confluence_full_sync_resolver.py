@@ -90,12 +90,7 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 target_type="space",
                 target_id=(space.space_key or "").strip(),
                 target_name=(space.space_name or space.space_key or "").strip(),
-                metadata={
-                    "space_id": str(space.space_id),
-                    "space_key": (space.space_key or "").strip(),
-                    "space_name": (space.space_name or space.space_key or "").strip(),
-                    "sync_from": sync_from,
-                },
+                metadata={},
             )
             for space in resolved_spaces
             if (space.space_key or "").strip()
@@ -111,7 +106,6 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         return FullSyncResolvedTargets(
             targets=targets,
             invalid_target_ids=[],
-            scope_metadata={"cloud_id": cloud_id},
         )
 
 

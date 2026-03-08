@@ -31,7 +31,7 @@ class BaseFullSyncHandler(IngestionHandlerProtocol):
 
     def _resolve_sync_days(self, context: SyncEventContext) -> int:
         default_days = max(1, int(settings.DEFAULT_SYNC_DAYS))
-        raw_sync_from = context.metadata.get("sync_from")
+        raw_sync_from = context.sync_from
         if raw_sync_from is None:
             return default_days
 

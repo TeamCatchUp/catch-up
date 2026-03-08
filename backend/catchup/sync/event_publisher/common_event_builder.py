@@ -15,6 +15,22 @@ from catchup.db.sync import (
 )
 from catchup.sync.common.schemas import SyncEventSeed, SyncStreamTask
 
+
+def _build_resource_metadata(
+    *,
+    scope_id: str,
+    sync_type: SyncType,
+    seed: SyncEventSeed,
+) -> dict[str, object]:
+    resource_metadata = dict(seed.metadata)
+    resource_metadata["scope_id"] = scope_id
+    resource_metadata["target_name"] = seed.target_name
+    resource_metadata["sync_type"] = sync_type.value
+    if seed.sync_from is not None:
+        resource_metadata["sync_from"] = seed.sync_from
+    return resource_metadata
+
+
 def build_seeds_from_targets(
     *,
     target_type: str,
@@ -64,7 +80,6 @@ def persist_sync_job_and_events(
     scope_id: str,
     requested_at: datetime,
     event_seeds: list[SyncEventSeed],
-    scope_metadata: dict[str, object] | None = None,
 ) -> list[str]:
     # Sync Job 생성
     create_db_sync_job(
@@ -78,19 +93,10 @@ def persist_sync_job_and_events(
         ),
     )
 
-    normalized_scope_metadata = dict(scope_metadata or {})
     payloads: list[DbSyncEventCreateInput] = []
 
     # 각 Event Seed에 대해서 하나의 레코드 생성
     for seed in event_seeds:
-        resource_metadata: dict[str, object] = {
-            "scope_id": scope_id,
-            "target_name": seed.target_name,
-            "sync_type": sync_type.value,
-        }
-        resource_metadata.update(normalized_scope_metadata)
-        resource_metadata.update(seed.metadata)
-
         payloads.append(
             DbSyncEventCreateInput(
                 event_id=seed.event_id,
@@ -99,7 +105,11 @@ def persist_sync_job_and_events(
                 resource_type=seed.target_type,
                 resource_id=seed.target_id,
                 requested_at=requested_at,
-                resource_metadata=resource_metadata,
+                resource_metadata=_build_resource_metadata(
+                    scope_id=scope_id,
+                    sync_type=sync_type,
+                    seed=seed,
+                ),
                 max_attempts=seed.max_attempts,
             )
         )

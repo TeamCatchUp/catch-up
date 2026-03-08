@@ -41,11 +41,7 @@ class SlackFullSyncHandler(BaseFullSyncHandler):
             result = await service.sync_channel_messages(
                 channel_id=context.target_id,
                 channel_name=context.target_name,
-                sync_from=(
-                    str(context.metadata.get("sync_from"))
-                    if context.metadata.get("sync_from") is not None
-                    else None
-                ),
+                sync_from=context.sync_from,
                 db=db,
                 skip_delete=True,
             )

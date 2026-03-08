@@ -83,7 +83,6 @@ class FullSyncDispatchOrchestrator:
             normalized_target_name = target.target_name.strip() or normalized_target_id
 
             metadata = dict(target.metadata)
-            metadata.setdefault("sync_from", sync_from)
 
             # Target -> EventSeed
             event_seeds.append(
@@ -92,6 +91,7 @@ class FullSyncDispatchOrchestrator:
                     target_type=normalized_target_type,
                     target_id=normalized_target_id,
                     target_name=normalized_target_name,
+                    sync_from=sync_from,
                     metadata=metadata,
                     max_attempts=settings.SYNC_JOB_MAX_ATTEMPTS,
                 )
@@ -108,7 +108,6 @@ class FullSyncDispatchOrchestrator:
             scope_id=scope_id,
             requested_at=requested_at,
             event_seeds=event_seeds,
-            scope_metadata=resolved.scope_metadata,
         )
         if len(db_event_ids) != total_targets:
             logger.warning(
@@ -177,7 +176,6 @@ class FullSyncDispatchOrchestrator:
                 "total_targets": total_targets,
                 "queued_targets": len(message_ids),
             },
-            scope_metadata=resolved.scope_metadata,
         )
 
         return SyncDispatchResult(

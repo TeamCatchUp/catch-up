@@ -57,7 +57,6 @@ class FullSyncTarget:
 class FullSyncResolvedTargets:
     targets: list[FullSyncTarget] = field(default_factory=list)
     invalid_target_ids: list[str] = field(default_factory=list)
-    scope_metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(slots=True, frozen=True)
@@ -66,6 +65,7 @@ class SyncEventSeed:
     target_type: str
     target_id: str
     target_name: str
+    sync_from: str | None = None
     metadata: dict[str, object] = field(default_factory=dict)
     max_attempts: int = 3
 
@@ -151,6 +151,7 @@ class SyncEventContext:
     target_type: str
     target_id: str
     target_name: str
+    sync_from: str | None
     attempt: int
     max_attempts: int
     metadata: dict[str, Any] = field(default_factory=dict)

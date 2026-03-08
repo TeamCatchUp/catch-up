@@ -71,28 +71,6 @@ def _select_handler(context: SyncEventContext) -> IngestionHandlerProtocol | Non
     )
 
 
-def _build_connector_details(context: SyncEventContext) -> dict[str, object]:
-    metadata = context.metadata if isinstance(context.metadata, dict) else {}
-    details: dict[str, object] = {}
-
-    # Connector-specific scope 정보를 audit metadata에 유지한다.
-    for key in (
-        "team_id",
-        "installation_id",
-        "cloud_id",
-        "project_key",
-        "space_key",
-        "repository_id",
-        "repository_full_name",
-        "channel_name",
-    ):
-        value = metadata.get(key)
-        if value is not None and value != "":
-            details[key] = value
-
-    return details
-
-
 def _extract_result_counts(result: dict[str, int | bool]) -> tuple[int, int, bool]:
     synced_raw = result.get("synced", 0)
     errors_raw = result.get("errors", 0)
@@ -158,7 +136,7 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
             if isinstance(claimed.resource_metadata, dict)
             else {}
         )
-        scope_id = str(metadata.get("scope_id") or metadata.get("team_id") or job.scope_id)
+        scope_id = str(metadata.get("scope_id") or job.scope_id)
         target_id = str(claimed.resource_id)
         context = SyncEventContext(
             event_id=claimed.event_id,
@@ -168,10 +146,11 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
             scope_id=scope_id,
             target_type=str(claimed.resource_type),
             target_id=target_id,
-            target_name=str(
-                metadata.get("target_name")
-                or metadata.get("channel_name")
-                or target_id
+            target_name=str(metadata.get("target_name") or target_id),
+            sync_from=(
+                str(metadata.get("sync_from"))
+                if metadata.get("sync_from") is not None
+                else None
             ),
             attempt=int(claimed.attempt),
             max_attempts=int(claimed.max_attempts),
@@ -205,7 +184,6 @@ async def _handle_event_failure(
 ) -> None:
     error_summary = str(exc)
     next_attempt = context.attempt + 1
-    connector_details = _build_connector_details(context)
 
     if next_attempt >= context.max_attempts:
         with SessionLocal() as db:
@@ -234,7 +212,6 @@ async def _handle_event_failure(
             error_summary=error_summary,
             attempt=next_attempt,
             retryable=False,
-            connector_details=connector_details,
         )
         logger.error(
             "[%s][%s][WORKER] Event failed: job_id=%s, event_id=%s, attempt=%s, max_attempts=%s, error=%s",
@@ -290,7 +267,6 @@ async def _handle_event_failure(
         target_name=context.target_name,
         next_attempt=next_attempt,
         error_summary=error_summary,
-        connector_details=connector_details,
     )
     logger.warning(
         "[%s][%s][WORKER] Event requeued: job_id=%s, event_id=%s, attempt=%s, error=%s",
@@ -308,7 +284,6 @@ async def _finalize_job_if_done(
     handler: IngestionHandlerProtocol,
 ) -> None:
     job_id = context.job_id
-    connector_details = _build_connector_details(context)
 
     with SessionLocal() as db:
         job = get_job(db, job_id)
@@ -362,7 +337,6 @@ async def _finalize_job_if_done(
                 failed_targets=failed_targets,
                 requeued_targets=requeued_targets,
                 synced_records=0,
-                connector_details=connector_details,
             )
             return
 
@@ -380,7 +354,6 @@ async def _finalize_job_if_done(
             scope_id=context.scope_id,
             failure_reason="event_failures_remaining",
             error_summary=f"failed_events={failed_targets}, total_events={total_targets}",
-            connector_details=connector_details,
         )
 
 
@@ -471,8 +444,6 @@ async def _process_message(
             )
             return
 
-        connector_details = _build_connector_details(context)
-
         if claim.job_started:
             await handler.on_job_started(
                 context=context,
@@ -484,7 +455,6 @@ async def _process_message(
                 run_id=context.job_id,
                 scope_id=context.scope_id,
                 total_targets=claim.total_targets,
-                connector_details=connector_details,
             )
 
         await handler.on_target_started(context=context)
@@ -497,7 +467,6 @@ async def _process_message(
             target_id=context.target_id,
             target_name=context.target_name,
             attempt=context.attempt,
-            connector_details=connector_details,
         )
 
         result = await handler.handle(
@@ -519,7 +488,6 @@ async def _process_message(
             synced_count=synced_count,
             error_count=error_count,
             skipped=skipped,
-            connector_details=connector_details,
         )
     except Exception as exc:
         if context is None:
