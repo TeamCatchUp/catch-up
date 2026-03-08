@@ -128,10 +128,10 @@ export default function UserManagementSection() {
           <IconSearch className="text-content-assistive pointer-events-none absolute top-1/2 left-2.5 size-5 -translate-y-1/2" />
           <Input
             inputSize="sm"
-            placeholder="임직원의 이름을 검색해보세요.."
+            placeholder="임직원의 이름을 검색해보세요."
             value={searchTerm}
             onChange={(e) => handleSearch(e.target.value)}
-            className="pl-9"
+            className="border-edge-assistive bg-fill-strong pl-9"
           />
         </div>
       </div>

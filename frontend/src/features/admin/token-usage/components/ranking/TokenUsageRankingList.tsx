@@ -41,7 +41,7 @@ export default function TokenUsageRankingList({ data }: TokenUsageRankingListPro
                 className="size-7.5 shrink-0 rounded-full object-cover"
               />
             ) : (
-              <DefaultProfile className="border-edge-assistive text-content-assistive size-7.5 shrink-0 rounded-full border" />
+              <DefaultProfile className="text-content-assistive size-7.5 shrink-0 rounded-full" />
             )}
 
             {/* 이름 */}

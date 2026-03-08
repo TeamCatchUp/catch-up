@@ -91,7 +91,7 @@ const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSe
                   user.id === selectedUserId ? 'bg-fill-interaction-hover' : 'hover:bg-fill-strong',
                 )}
               >
-                <DefaultProfile className="border-edge-assistive text-content-assistive size-7 shrink-0 rounded-full border" />
+                <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
                 <span className="text-body-small text-content-neutral min-w-0 flex-1 truncate text-left tracking-tight">
                   {user.name}
                 </span>

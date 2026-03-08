@@ -46,7 +46,7 @@ export default function MemberProfileCard({ members, selectedMemberId, onSelectM
                 className="size-17.5 shrink-0 rounded-full object-cover"
               />
             ) : (
-              <DefaultProfile className="border-edge-assistive text-content-assistive size-17.5 shrink-0 rounded-full border" />
+              <DefaultProfile className="text-content-assistive size-17.5 shrink-0 rounded-full" />
             )}
 
             {/* 이름 + 상태 태그 + 팀/직책 */}

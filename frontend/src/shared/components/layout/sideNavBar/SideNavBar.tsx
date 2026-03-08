@@ -33,7 +33,7 @@ const SideNavBar = () => {
         className={cn(
           'border-edge-neutral flex h-screen flex-col gap-5 border-r bg-fill-normal',
           'transition-[width,padding] duration-300 ease-out will-change-[width,padding]',
-          isOpen ? 'w-60.25 px-2 py-2.5' : 'w-18 items-center px-3 py-5',
+          isOpen ? 'w-60.25 px-2 py-2.5' : 'w-18 items-center px-3 pt-2.5 pb-5',
         )}
       >
         {/* 로고/열림 버튼 */}

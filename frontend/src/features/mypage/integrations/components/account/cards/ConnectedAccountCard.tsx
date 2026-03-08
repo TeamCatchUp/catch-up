@@ -22,7 +22,7 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
   const details = isConnected ? (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
-        <DefaultProfile className="border-edge-assistive text-content-assistive size-6.25 shrink-0 rounded-full border" />
+        <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
         <span className="text-heading-small text-content-neutral truncate">{accountInfo.userName}</span>
       </div>
       <div className="bg-fill-interaction-hover text-body-xsmall inline-flex w-fit rounded-md px-1.5 py-0.5 text-content-alternative">

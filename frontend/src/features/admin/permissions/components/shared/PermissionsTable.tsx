@@ -44,7 +44,7 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
               <div key={member.id} className="border-edge-neutral flex h-12.5 shrink-0 items-center border-b px-6 lg:px-9">
                 <div className="grid flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-6 lg:gap-9">
                   <div className="flex items-center gap-4">
-                    <DefaultProfile className="border-edge-assistive text-content-assistive size-7.5 shrink-0 rounded-full border" />
+                    <DefaultProfile className="text-content-assistive size-7.5 shrink-0 rounded-full" />
                     <span className="text-body-small text-content-normal truncate">{member.name}</span>
                   </div>
 

@@ -97,7 +97,7 @@ const AccountEditModal = ({
               <span className="text-body-small text-content-normal">현재 연결된 계정</span>
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
-                  <DefaultProfile className="border-edge-assistive text-content-assistive size-6.25 shrink-0 rounded-full border" />
+                  <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
                   <span className="text-body-small text-content-normal truncate">{selectedRow.userName}</span>
                   <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall shrink-0 px-1.5 py-0.5 text-content-alternative">
                     {currentAccountId}

@@ -56,7 +56,7 @@ export default function Home() {
   });
 
   return (
-    <div className={`bg-home-gradient flex flex-col ${input.isFocused ? 'h-full overflow-hidden' : ''}`}>
+    <div className={`bg-home-gradient flex min-h-full flex-col ${input.isFocused ? 'h-full overflow-hidden' : ''}`}>
       <TopNavbar pageType="home" />
 
       {/* Query Section */}
