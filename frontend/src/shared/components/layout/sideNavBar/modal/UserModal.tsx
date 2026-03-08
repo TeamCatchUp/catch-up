@@ -5,18 +5,30 @@ import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 
 import AdminPanelSettings from '@/public/icons/icon/admin_panel_settings.svg';
+import ArrowDown from '@/public/icons/icon/arrow_down.svg';
+import Contrast from '@/public/icons/icon/contrast.svg';
+import DarkMode from '@/public/icons/icon/dark_mode.svg';
+import LightMode from '@/public/icons/icon/light_mode.svg';
 import Logout from '@/public/icons/icon/logout.svg';
 import Person from '@/public/icons/icon/person.svg';
 import DefaultProfile from '@/public/icons/icon/profile.svg';
-import Settings from '@/public/icons/icon/settings.svg';
+import Screen from '@/public/icons/icon/screen.svg';
 import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from '@/shared/components/ui/dropdown-menu';
-import { Tabs, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import { authMutations } from '@/shared/queries/auth.mutations';
+
+const THEME_LABELS: Record<string, string> = {
+  system: '시스템 (자동)',
+  light: '라이트',
+  dark: '다크',
+};
 
 interface UserMenuContentProps {
   userName?: string;
@@ -59,37 +71,43 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
 
       {/* 메뉴 */}
       <DropdownMenuItem onSelect={() => router.push('/mypage/preferences')}>
-        <Person className="text-icon-normal h-6 w-6" />
+        <Person className="text-icon-normal size-6" />
         <span>개인 맞춤 설정</span>
       </DropdownMenuItem>
       <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-        <AdminPanelSettings className="text-icon-normal h-6 w-6" />
+        <AdminPanelSettings className="text-icon-normal size-6" />
         <span>권한 관리</span>
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-        <Settings className="text-icon-normal h-6 w-6" />
-        <span>설정</span>
-      </DropdownMenuItem>
 
-      {/* 라이트/다크 모드 토글 */}
-      <div className="px-1 py-0.5">
-        <Tabs value={theme} onValueChange={setTheme}>
-          <TabsList className="w-full">
-            <TabsTrigger value="light" className="flex-1">
-              라이트 모드
-            </TabsTrigger>
-            <TabsTrigger value="dark" className="flex-1">
-              다크 모드
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
+      {/* 화면 모드 서브메뉴 */}
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          <Contrast className="text-icon-normal size-6" />
+          <span className="flex-1">화면 모드</span>
+          <span className="text-body-xsmall text-content-alternative">{THEME_LABELS[theme ?? 'system']}</span>
+          <ArrowDown className="text-icon-normal size-6" />
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          <DropdownMenuItem onSelect={() => setTheme('system')}>
+            <Screen className="text-icon-normal size-6" />
+            <span>시스템 모드</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setTheme('light')}>
+            <LightMode className="text-icon-normal size-6" />
+            <span>라이트 모드</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setTheme('dark')}>
+            <DarkMode className="text-icon-normal size-6" />
+            <span>다크 모드</span>
+          </DropdownMenuItem>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
 
       <DropdownMenuSeparator />
 
       {/* 로그아웃 */}
       <DropdownMenuItem onSelect={() => logoutMutation.mutate()}>
-        <Logout className="text-icon-normal h-6 w-6" />
+        <Logout className="text-icon-normal size-6" />
         <span>로그아웃</span>
       </DropdownMenuItem>
     </DropdownMenuContent>
