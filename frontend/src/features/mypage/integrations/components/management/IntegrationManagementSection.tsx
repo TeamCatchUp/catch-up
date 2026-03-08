@@ -110,7 +110,7 @@ const IntegrationManagementSection = ({
               type="button"
               onClick={() => onSelectService(service)}
               className={cn(
-                'flex h-16 w-81.25 cursor-pointer items-center justify-between rounded-xl border p-4 shadow-[0_0_4px_0_#f7fbff]',
+                'flex h-16 w-81.25 cursor-pointer items-center justify-between rounded-xl border p-4 shadow-card',
                 isSelected ? 'border-edge-primary bg-fill-normal' : 'border-edge-neutral bg-fill-normal',
               )}
             >
