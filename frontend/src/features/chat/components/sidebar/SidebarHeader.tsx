@@ -11,7 +11,7 @@ const SidebarHeader = ({ sourceCount, className }: Props) => {
   return (
     <div
       className={cn(
-        'border-b-neutral-3 flex h-13 items-center justify-between border-b bg-fill-normal px-4 py-1.5',
+        'border-b-edge-neutral flex h-13 items-center justify-between border-b bg-fill-normal px-4 py-1.5',
         className,
       )}
     >

@@ -45,7 +45,7 @@ const RagHeader = ({ title, sessionId }: RagHeaderProps) => {
 
   return (
     <>
-      <div className="border-r-neutral-3 border-b-neutral-3 border-r-0.5 sticky top-0 z-10 flex h-13 justify-between border-b bg-fill-normal px-6 py-2 lg:px-16">
+      <div className="border-r-edge-neutral border-b-edge-neutral border-r-0.5 sticky top-0 z-10 flex h-13 justify-between border-b bg-fill-normal px-6 py-2 lg:px-16">
         {/* 좌측 메뉴 */}
         <div className="relative flex min-w-0 items-center">
           <button
