@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 
 import AdminPanelSettings from '@/public/icons/icon/admin_panel_settings.svg';
 import Logout from '@/public/icons/icon/logout.svg';
@@ -30,7 +30,7 @@ interface UserMenuContentProps {
 export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [theme, setTheme] = useState('light');
+  const { theme, setTheme } = useTheme();
 
   const logoutMutation = useMutation({
     ...authMutations.logout(),
