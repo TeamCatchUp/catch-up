@@ -9,7 +9,7 @@ const badgeVariants = cva('inline-flex items-center rounded-full tracking-tight 
   variants: {
     variant: {
       default: 'bg-blue-5 text-blue-50',
-      secondary: 'bg-neutral-2 text-gray-70',
+      secondary: 'bg-fill-strong text-content-neutral',
       success: 'bg-green-5 text-green-60',
       violet: 'bg-violet-5 text-violet-60',
       orange: 'bg-orange-5 text-orange-60',

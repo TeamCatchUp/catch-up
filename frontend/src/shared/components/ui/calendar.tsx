@@ -15,27 +15,27 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         months: 'relative flex gap-9',
         month: 'flex w-[220px] flex-col',
         month_caption: 'flex h-[34px] items-center justify-center pb-1.5',
-        caption_label: 'text-body-small text-gray-90',
+        caption_label: 'text-body-small text-content-strong',
         nav: 'absolute inset-x-0 top-0 z-20 flex items-center justify-between',
         button_previous:
-          'flex size-7 cursor-pointer items-center justify-center rounded-full text-gray-50 hover:bg-neutral-2',
+          'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-neutral hover:bg-fill-interaction-hover',
         button_next:
-          'flex size-7 cursor-pointer items-center justify-center rounded-full text-gray-50 hover:bg-neutral-2',
+          'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-neutral hover:bg-fill-interaction-hover',
         weekdays: 'flex',
-        weekday: 'flex h-6 flex-1 items-center justify-center text-label-xsmall text-gray-50',
+        weekday: 'flex h-6 flex-1 items-center justify-center text-label-xsmall text-content-alternative',
         week: 'flex',
-        day: 'relative flex h-6 flex-1 items-center justify-center text-label-xsmall text-gray-70',
+        day: 'relative flex h-6 flex-1 items-center justify-center text-label-xsmall text-content-neutral',
         day_button:
-          'relative z-10 flex size-6 cursor-pointer items-center justify-center rounded-full hover:bg-neutral-2',
+          'relative z-10 flex size-6 cursor-pointer items-center justify-center rounded-full hover:bg-fill-interaction-hover',
         today: '',
         selected: '',
         range_start:
-          "rdp-range_start [&>button]:bg-blue-50 [&>button]:text-white [&>button]:hover:bg-blue-50 before:absolute before:inset-y-0 before:right-0 before:w-1/2 before:bg-neutral-3 before:content-['']",
+          "rdp-range_start [&>button]:bg-blue-50 [&>button]:text-white [&>button]:hover:bg-blue-50 before:absolute before:inset-y-0 before:right-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
         range_end:
-          "rdp-range_end [&>button]:bg-blue-50 [&>button]:text-white [&>button]:hover:bg-blue-50 before:absolute before:inset-y-0 before:left-0 before:w-1/2 before:bg-neutral-3 before:content-['']",
-        range_middle: 'bg-neutral-3',
-        outside: 'text-gray-30',
-        disabled: 'text-gray-30 opacity-50',
+          "rdp-range_end [&>button]:bg-blue-50 [&>button]:text-white [&>button]:hover:bg-blue-50 before:absolute before:inset-y-0 before:left-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
+        range_middle: 'bg-fill-interaction-pressed',
+        outside: 'text-content-assistive',
+        disabled: 'text-content-assistive opacity-50',
         hidden: 'invisible',
         ...classNames,
       }}
