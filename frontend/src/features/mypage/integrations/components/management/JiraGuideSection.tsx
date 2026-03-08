@@ -93,10 +93,10 @@ const JiraGuideSection = () => {
           <span className="font-semibold">반드시 &apos;전사 공개 데이터&apos;만 선택</span>하여 추가해야 합니다.
         </p>
         {/* 보안 주의 경고 박스 */}
-        <div className="bg-red-1 flex flex-col gap-1.5 rounded-xl border border-red-50 px-4 py-3">
+        <div className="bg-accent-red-lighten flex flex-col gap-1.5 rounded-xl border border-status-destructive px-4 py-3">
           <div className="flex items-center gap-2">
             <IconError className="size-4" />
-            <span className="text-body-xsmall text-red-50">보안 주의</span>
+            <span className="text-body-xsmall text-status-destructive">보안 주의</span>
           </div>
           <p className="text-label-small text-content-normal">
             특정 부서 전용 공간, 기밀문서, 개인정보 등 접근이 제한된 비공개 스페이스는 보안을 위해 임베딩 대상에서
@@ -115,7 +115,7 @@ const JiraGuideSection = () => {
       </div>
 
       {/* 클로징 */}
-      <p className="text-label-small text-black">팀이 커져도, 기획의 맥락은 그대로 남습니다.</p>
+      <p className="text-label-small text-content-strong">팀이 커져도, 기획의 맥락은 그대로 남습니다.</p>
     </div>
   );
 };
