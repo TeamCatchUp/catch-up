@@ -38,7 +38,7 @@ const CommandInput = React.forwardRef<
 
   return (
     <div
-      className="bg-fill-strong focus-within:border-blue-30 flex min-h-[40px] items-center gap-1.5 rounded-lg border border-transparent px-3 py-2"
+      className="bg-fill-strong focus-within:border-edge-primary flex min-h-[40px] items-center gap-1.5 rounded-lg border border-transparent px-3 py-2"
       cmdk-input-wrapper=""
     >
       <CommandPrimitive.Input

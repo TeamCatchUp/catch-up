@@ -30,9 +30,9 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         today: '',
         selected: '',
         range_start:
-          "rdp-range_start [&>button]:bg-blue-50 [&>button]:text-white [&>button]:hover:bg-blue-50 before:absolute before:inset-y-0 before:right-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
+          "rdp-range_start [&>button]:bg-fill-primary [&>button]:text-white [&>button]:hover:bg-fill-primary before:absolute before:inset-y-0 before:right-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
         range_end:
-          "rdp-range_end [&>button]:bg-blue-50 [&>button]:text-white [&>button]:hover:bg-blue-50 before:absolute before:inset-y-0 before:left-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
+          "rdp-range_end [&>button]:bg-fill-primary [&>button]:text-white [&>button]:hover:bg-fill-primary before:absolute before:inset-y-0 before:left-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
         range_middle: 'bg-fill-interaction-pressed',
         outside: 'text-content-assistive',
         disabled: 'text-content-assistive opacity-50',
