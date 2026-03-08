@@ -200,6 +200,7 @@
   --color-fill-primary-interaction-inactive: var(--fill-primary-interaction-inactive);
   --color-fill-primary-interaction-disable: var(--fill-primary-interaction-disable);
   --color-fill-primary-interaction-hover-assistive: var(--fill-primary-interaction-hover-assistive);
+  --color-fill-primary-normal-neutral: var(--fill-primary-normal-neutral);
 
   /* Text → content (text-text-* 회피) */
   --color-content-strong: var(--text-strong);

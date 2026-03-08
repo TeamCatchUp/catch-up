@@ -56,6 +56,7 @@
     --fill-primary-interaction-inactive: #c9defe;
     --fill-primary-interaction-disable: #e1e2e4;
     --fill-primary-interaction-hover-assistive: #eaf2fe;
+    --fill-primary-normal-neutral: #eaf2fe;
 
     /* Text */
     --text-strong: #1e2124;
@@ -175,6 +176,7 @@
     --fill-primary-interaction-inactive: #46474c;
     --fill-primary-interaction-disable: #dbdcdf;
     --fill-primary-interaction-hover-assistive: rgba(0, 41, 102, 0.5);
+    --fill-primary-normal-neutral: #002966;
 
     /* Text */
     --text-strong: #ffffff;
