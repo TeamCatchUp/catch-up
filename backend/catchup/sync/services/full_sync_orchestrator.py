@@ -21,9 +21,11 @@ from catchup.sync.common.schemas import (
     SyncDispatchResult,
     SyncEventSeed,
 )
-from catchup.sync.event_publisher.common_event_builder import (
-    build_stream_tasks_from_event_ids,
+from catchup.sync.event_publisher.event_record_persistence import (
     persist_sync_job_and_events,
+)
+from catchup.sync.event_publisher.stream_task_builder import (
+    build_stream_tasks_from_event_ids,
 )
 from catchup.sync.sync_audit import emit_sync_dispatch_accepted
 
