@@ -62,7 +62,7 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
   };
 
   return (
-    <div className="bg-gradient-to-b from-transparent to-white px-6 py-8 backdrop-blur-[10px] lg:px-24">
+    <div className="bg-gradient-to-b from-transparent to-fill-normal px-6 py-8 backdrop-blur-[10px] lg:px-24">
       <div className="shadow-rag-bar border-edge-normal mx-auto flex w-full max-w-[776px] flex-none flex-col rounded-3xl border bg-fill-normal px-3 py-4">
         {/* Filter Bar (카드 내부 상단) */}
         <div
@@ -104,7 +104,7 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
                 onClick={() => filters.toggleSource('slack')}
               />
             </div>
-            <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
+            <IconDivider className="text-edge-assistive h-6 w-6 shrink-0" />
             <div className="flex items-center gap-2.5">
               <FilterDropdown
                 open={filters.openPopover === 'person'}
