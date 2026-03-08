@@ -44,8 +44,8 @@ export default function Search() {
       <div className="flex flex-col items-center gap-4 self-stretch pt-18 pb-18">
         {/* Hero */}
         <div className="flex h-24 flex-col items-center justify-center gap-3 text-content-alternative">
-          <h1 className="text-display-xlarge text-normal-normal">찾지 말고, 물어보세요.</h1>
-          <p className="text-heading-large text-normal-alternative">
+          <h1 className="text-display-xlarge text-content-normal">찾지 말고, 물어보세요.</h1>
+          <p className="text-heading-large text-content-alternative">
             Jira, GitHub, Wiki... 흩어진 정보를 모아 한 번에 알려드려요.
           </p>
         </div>
