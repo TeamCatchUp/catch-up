@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from catchup.auth.dependencies import require_admin_user
 from catchup.configs.config import settings
 from catchup.db.dependencies import get_db
-from catchup.db.models import SyncConnector, User
+from catchup.db.models import SyncConnector
 from catchup.server.sync.schemas import (
     FullSyncRequest,
     IncrementalSyncRequest,
@@ -39,7 +39,11 @@ from catchup.sync.query_service import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/sync", tags=["sync-runtime"])
+router = APIRouter(
+    prefix="/api/v1/sync",
+    tags=["sync-runtime"],
+    dependencies=[Depends(require_admin_user)],
+)
 
 
 @router.post(
@@ -55,7 +59,6 @@ async def dispatch_full_sync(
     sync_request: FullSyncRequest,
     request: Request,
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(require_admin_user),
 ):
     dispatch_service = get_sync_dispatch_service()
 
@@ -91,7 +94,6 @@ async def dispatch_incremental_sync(
     sync_request: IncrementalSyncRequest,
     request: Request,
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(require_admin_user),
 ):
     dispatch_service = get_sync_dispatch_service()
 
@@ -121,7 +123,6 @@ async def dispatch_incremental_sync(
 )
 async def dispatch_flush(
     sync_request: SyncFlushRequest,
-    _admin_user: User = Depends(require_admin_user),
 ):
     normalized_scope_ids: list[str] = []
     seen_scope_ids: set[str] = set()
@@ -166,7 +167,6 @@ async def dispatch_flush(
 async def list_sync_targets(
     connector: SyncConnector = Query(..., description="sync connector"),
     scope_id: str = Query(..., description="connector scope id"),
-    _admin_user: User = Depends(require_admin_user),
 ):
     query_service = get_sync_query_service()
 
@@ -222,7 +222,6 @@ async def list_sync_targets(
 async def get_scope_sync_status(
     connector: SyncConnector = Query(..., description="sync connector"),
     scope_id: str = Query(..., description="connector scope id"),
-    _admin_user: User = Depends(require_admin_user),
 ):
     query_service = get_sync_query_service()
     status_result = query_service.get_scope_latest_full_status(
@@ -251,7 +250,6 @@ async def get_scope_sync_status(
 )
 async def get_job_snapshot(
     job_id: str,
-    _admin_user: User = Depends(require_admin_user),
 ):
     query_service = get_sync_query_service()
     snapshot = query_service.get_job_snapshot(job_id)
@@ -275,7 +273,6 @@ async def get_job_snapshot(
 async def stream_job_events(
     job_id: str,
     from_sequence: int = Query(1, ge=1),
-    _admin_user: User = Depends(require_admin_user),
 ):
     query_service = get_sync_query_service()
     first_snapshot = query_service.get_job_snapshot(job_id)
