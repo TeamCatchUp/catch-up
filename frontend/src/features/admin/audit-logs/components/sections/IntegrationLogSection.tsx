@@ -76,7 +76,7 @@ const IntegrationLogSection = () => {
         {/* 좌측: 테이블 */}
         <div className="border-edge-neutral flex min-w-0 flex-1 flex-col overflow-clip border-r bg-fill-normal">
           {/* 헤더 */}
-          <div className="border-edge-neutral bg-fill-strong text-body-xsmall flex h-9 shrink-0 items-center gap-1 px-5 text-content-alternative">
+          <div className="border-edge-neutral bg-fill-strong text-body-xsmall flex h-9 shrink-0 items-center gap-1 border-b px-5 text-content-alternative">
             <span className="w-13.75 shrink-0">커넥터</span>
             <span className="min-w-25 flex-1 text-center">실행 일자</span>
             <span className="flex-1 text-center">구분</span>
