@@ -29,31 +29,31 @@ const HowToUse = () => {
   return (
     <section className="flex w-268 flex-col gap-4">
       <header className="flex items-center gap-3">
-        <div className="border-neutral-3 bg-blue-1 flex h-8 w-8 items-center justify-center rounded-lg border-[0.5px]">
+        <div className="border-edge-neutral bg-blue-1 flex h-8 w-8 items-center justify-center rounded-lg border-[0.5px]">
           <Explore className="h-6 w-6 text-blue-50" />
         </div>
-        <h2 className="text-heading-large text-gray-80">Catch Up을 활용하는 방법</h2>
+        <h2 className="text-heading-large text-content-normal">Catch Up을 활용하는 방법</h2>
       </header>
 
       <ul className="flex gap-6">
         {cardData.map((card, idx) => (
-          <li key={idx} className="border-neutral-3 flex flex-1 flex-col overflow-hidden rounded-2xl border bg-white">
-            <div className="border-neutral-3 relative h-[144px] w-full border-b">
+          <li key={idx} className="border-edge-neutral flex flex-1 flex-col overflow-hidden rounded-2xl border bg-fill-normal">
+            <div className="border-edge-neutral relative h-[144px] w-full border-b">
               <Image src={card.image} alt={card.title} fill className="object-cover" />
             </div>
 
             <div className="flex flex-col gap-3 p-4">
               <div className="flex flex-col gap-1">
-                <h3 className="text-heading-medium text-gray-80">{card.title}</h3>
-                <p className="text-body-small whitespace-pre-line text-gray-50">{card.description}</p>
+                <h3 className="text-heading-medium text-content-normal">{card.title}</h3>
+                <p className="text-body-small whitespace-pre-line text-content-alternative">{card.description}</p>
               </div>
 
               <Link
                 href={`/mypage/help/tutorial/${card.tutorialId}`}
-                className="border-neutral-3 active:border-neutral-5 active:bg-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 ml-auto flex h-[30px] cursor-pointer items-center gap-1 rounded-lg border bg-white px-2 py-1"
+                className="border-edge-neutral active:border-edge-strong active:bg-fill-interaction-pressed hover:border-edge-normal hover:bg-fill-interaction-hover ml-auto flex h-[30px] cursor-pointer items-center gap-1 rounded-lg border bg-fill-normal px-2 py-1"
               >
-                <span className="text-body-xsmall text-gray-80 whitespace-nowrap">더 알아보기</span>
-                <ArrowRight className="text-gray-70 h-6 w-6" />
+                <span className="text-body-xsmall text-content-normal whitespace-nowrap">더 알아보기</span>
+                <ArrowRight className="text-icon-normal h-6 w-6" />
               </Link>
             </div>
           </li>

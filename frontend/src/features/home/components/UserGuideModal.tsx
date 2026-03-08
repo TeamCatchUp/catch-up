@@ -55,14 +55,14 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
       <DialogPortal>
         <DialogOverlay />
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="shadow-modal border-neutral-5 flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border bg-white p-6">
+          <div className="shadow-modal border-edge-strong flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border bg-fill-normal p-6">
             {/* 콘텐츠 영역 */}
             <div
               className={`flex min-h-0 flex-1 flex-col gap-5 overflow-hidden transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}
             >
               {/* Header: 제목 + X 닫기 */}
               <div className="flex items-start justify-between">
-                <h2 className="text-heading-large text-gray-90">
+                <h2 className="text-heading-large text-content-strong">
                   {currentStep.title.map((line, i) => (
                     <span key={i}>
                       {i > 0 && <br />}
@@ -73,7 +73,7 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
                 <button
                   type="button"
                   onClick={onDismiss}
-                  className="hover:bg-neutral-2 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-gray-50"
+                  className="hover:bg-fill-interaction-hover flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-content-alternative"
                 >
                   <CloseIcon className="size-5" />
                 </button>
@@ -85,17 +85,17 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
               </div>
 
               {/* 본문 텍스트 */}
-              <div className="text-body-small text-gray-50">
+              <div className="text-body-small text-content-alternative">
                 <p className="whitespace-pre-line">{currentStep.body}</p>
               </div>
             </div>
 
             {/* Footer: 페이지네이션 + 버튼 */}
-            <div className="border-neutral-4 flex shrink-0 items-center justify-between border-t pt-5">
+            <div className="border-edge-normal flex shrink-0 items-center justify-between border-t pt-5">
               {/* Pagination Dots */}
               <div className="flex gap-2.5 self-center px-2">
                 {Array.from({ length: USER_GUIDE_TOTAL_STEPS }).map((_, i) => (
-                  <div key={i} className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-gray-20'}`} />
+                  <div key={i} className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-fill-interaction-hover'}`} />
                 ))}
               </div>
 

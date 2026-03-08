@@ -21,29 +21,29 @@ export default function InactivePage() {
   if (isLoading) {
     return (
       <div className="flex size-full items-center justify-center">
-        <p className="text-heading-large text-gray-60">로딩 중...</p>
+        <p className="text-heading-large text-content-alternative">로딩 중...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex h-226.5 w-360 items-center justify-center bg-white p-6">
-      <div className="border-neutral-4 flex flex-[1_0_0] items-center gap-5 self-stretch overflow-clip rounded-2xl border p-6">
+    <div className="flex h-226.5 w-360 items-center justify-center bg-fill-normal p-6">
+      <div className="border-edge-normal flex flex-[1_0_0] items-center gap-5 self-stretch overflow-clip rounded-2xl border p-6">
         <div className="flex min-w-80 flex-[1_0_0] flex-col items-center justify-center gap-24 self-stretch overflow-clip px-28 py-30">
           <div className="flex w-full min-w-80 flex-col gap-8">
             <CatchUpLogo className="h-[55px] w-[181px]" />
 
             <div className="flex items-start gap-3">
-              <div className="border-neutral-2 bg-blue-1 shrink-0 rounded-full border p-2">
+              <div className="border-edge-assistive bg-blue-1 shrink-0 rounded-full border p-2">
                 <ErrorIcon className="size-6" />
               </div>
-              <h1 className="text-display-large text-gray-90 tracking-tight whitespace-nowrap">
+              <h1 className="text-display-large text-content-strong tracking-tight whitespace-nowrap">
                 비활성화 된 계정이에요.
               </h1>
             </div>
 
             <div className="flex min-w-80 flex-col gap-2.5">
-              <p className="text-body-medium text-gray-60 tracking-tight">
+              <p className="text-body-medium text-content-alternative tracking-tight">
                 팀에 다시 합류하려면 관리자의 확인이 필요해요.
               </p>
               <Button variant="box-solid-primary" size="lg" className="h-[46px] w-full" onClick={handleRequestApproval}>
@@ -62,12 +62,12 @@ export default function InactivePage() {
 
           <div className="flex shrink-0 items-start gap-5">
             <a href="#" className="flex shrink-0 items-center gap-0.5 px-1.5 py-1 whitespace-nowrap">
-              <span className="text-body-xsmall text-gray-50 underline">서비스 이용약관</span>
-              <IconOpen className="size-6 shrink-0 text-gray-50" />
+              <span className="text-body-xsmall text-content-alternative underline">서비스 이용약관</span>
+              <IconOpen className="size-6 shrink-0 text-content-alternative" />
             </a>
             <a href="#" className="flex shrink-0 items-center gap-0.5 px-1.5 py-1 whitespace-nowrap">
-              <span className="text-body-xsmall text-gray-50 underline">개인정보처리방침</span>
-              <IconOpen className="size-6 shrink-0 text-gray-50" />
+              <span className="text-body-xsmall text-content-alternative underline">개인정보처리방침</span>
+              <IconOpen className="size-6 shrink-0 text-content-alternative" />
             </a>
           </div>
         </div>

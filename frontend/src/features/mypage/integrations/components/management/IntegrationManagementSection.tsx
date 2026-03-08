@@ -111,12 +111,12 @@ const IntegrationManagementSection = ({
               onClick={() => onSelectService(service)}
               className={cn(
                 'flex h-16 w-81.25 cursor-pointer items-center justify-between rounded-xl border p-4 shadow-[0_0_4px_0_#f7fbff]',
-                isSelected ? 'border-blue-30 bg-white' : 'border-neutral-3 bg-white',
+                isSelected ? 'border-blue-30 bg-fill-normal' : 'border-edge-neutral bg-fill-normal',
               )}
             >
               <div className="flex items-center gap-3">
                 <Icon className={service === 'confluence' ? 'h-5.75 w-6 shrink-0' : 'h-6 w-6 shrink-0'} />
-                <span className="text-heading-small text-gray-80">{actionText}</span>
+                <span className="text-heading-small text-content-normal">{actionText}</span>
               </div>
               <div className="flex items-center gap-1">
                 {connected ? (
@@ -126,8 +126,8 @@ const IntegrationManagementSection = ({
                   </>
                 ) : (
                   <>
-                    <IconCloudOff className="text-gray-30 h-5 w-5" />
-                    <span className="text-body-xsmall text-gray-50">연동 안됨</span>
+                    <IconCloudOff className="text-content-assistive h-5 w-5" />
+                    <span className="text-body-xsmall text-content-alternative">연동 안됨</span>
                   </>
                 )}
               </div>
@@ -139,30 +139,30 @@ const IntegrationManagementSection = ({
       <div className="flex w-160.75 flex-none flex-col gap-6">
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-5">
-            <h3 className="text-heading-small text-gray-80 flex-1">연동 상태 관리</h3>
+            <h3 className="text-heading-small text-content-normal flex-1">연동 상태 관리</h3>
             <div className="flex shrink-0 items-center gap-3">
               <button
                 type="button"
                 onClick={() => syncMutation.mutate()}
                 disabled={syncMutation.isPending}
-                className="border-neutral-3 text-body-xsmall text-gray-70 flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-white px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+                className="border-edge-neutral text-body-xsmall text-content-neutral flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-fill-normal px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <IconRotate className="text-gray-70 h-6 w-6" />
+                <IconRotate className="text-icon-normal h-6 w-6" />
                 {syncMutation.isPending ? '동기화 중...' : '동기화'}
               </button>
             </div>
           </div>
-          <div className="border-neutral-3 bg-neutral-1 overflow-hidden rounded-xl border">
-            <div className="border-neutral-3 flex h-13 items-center justify-between border-b px-4 py-3">
-              <span className="text-body-small text-gray-70">연동 상태</span>
+          <div className="border-edge-neutral bg-fill-strong overflow-hidden rounded-xl border">
+            <div className="border-edge-neutral flex h-13 items-center justify-between border-b px-4 py-3">
+              <span className="text-body-small text-content-neutral">연동 상태</span>
               <div className="flex items-center gap-1">
                 {detail.connected ? (
                   <span className="text-body-xsmall text-blue-50">연동됨</span>
                 ) : (
                   <>
                     <div className="flex items-center gap-1 px-1.5 py-1">
-                      <IconCloudOff className="text-gray-20 size-5" />
-                      <span className="text-body-xsmall text-gray-50">연동 안됨</span>
+                      <IconCloudOff className="text-content-assistive size-5" />
+                      <span className="text-body-xsmall text-content-alternative">연동 안됨</span>
                     </div>
                     <button
                       type="button"
@@ -175,11 +175,11 @@ const IntegrationManagementSection = ({
                 )}
               </div>
             </div>
-            <div className="border-neutral-3 flex h-13 items-center justify-between border-b px-4 py-3">
-              <span className="text-body-small text-gray-70">보안 관련 설명</span>
+            <div className="border-edge-neutral flex h-13 items-center justify-between border-b px-4 py-3">
+              <span className="text-body-small text-content-neutral">보안 관련 설명</span>
               <button
                 type="button"
-                className="text-body-xsmall text-gray-70 flex h-7 cursor-pointer items-center gap-1 rounded-full px-1.5 py-1"
+                className="text-body-xsmall text-content-neutral flex h-7 cursor-pointer items-center gap-1 rounded-full px-1.5 py-1"
               >
                 원문 보기
                 <IconOpenInNew className="h-4.5 w-4.5" />
@@ -189,15 +189,15 @@ const IntegrationManagementSection = ({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-small text-gray-70">연동된 데이터 범위</h3>
-          <div className="border-neutral-3 bg-neutral-1 text-body-small text-gray-70 flex h-10.75 items-center justify-center rounded-xl border px-5">
+          <h3 className="text-heading-small text-content-neutral">연동된 데이터 범위</h3>
+          <div className="border-edge-neutral bg-fill-strong text-body-small text-content-neutral flex h-10.75 items-center justify-center rounded-xl border px-5">
             {detail.dataRange}
           </div>
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-small text-gray-70">{detail.resourceLabel}</h3>
-          <div className="border-neutral-3 bg-neutral-1 flex flex-col items-center gap-3 overflow-hidden rounded-xl border pt-2 pb-3">
+          <h3 className="text-heading-small text-content-neutral">{detail.resourceLabel}</h3>
+          <div className="border-edge-neutral bg-fill-strong flex flex-col items-center gap-3 overflow-hidden rounded-xl border pt-2 pb-3">
             {detail.resources.length > 0 ? (
               <>
                 <div className="flex w-full flex-col">
@@ -206,9 +206,9 @@ const IntegrationManagementSection = ({
                     return (
                       <div
                         key={`${row}-${index}`}
-                        className="text-body-small text-gray-70 flex h-13 items-center gap-3 px-4 py-3"
+                        className="text-body-small text-content-neutral flex h-13 items-center gap-3 px-4 py-3"
                       >
-                        <div className="border-neutral-3 flex shrink-0 items-center justify-center overflow-hidden rounded-full border bg-white/75 p-1.5">
+                        <div className="border-edge-neutral flex shrink-0 items-center justify-center overflow-hidden rounded-full border bg-fill-normal/75 p-1.5">
                           <ResourceIcon className="size-5" />
                         </div>
                         <span className="truncate">{row}</span>
@@ -219,14 +219,14 @@ const IntegrationManagementSection = ({
                 {totalPages > 1 && (
                   <>
                     <div className="w-full px-4">
-                      <div className="border-neutral-3 border-t" />
+                      <div className="border-edge-neutral border-t" />
                     </div>
                     <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
                   </>
                 )}
               </>
             ) : (
-              <div className="text-body-small text-gray-40 flex h-13 items-center px-4 py-3">
+              <div className="text-body-small text-content-assistive flex h-13 items-center px-4 py-3">
                 연동된 항목이 없습니다.
               </div>
             )}

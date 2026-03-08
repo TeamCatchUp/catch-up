@@ -81,7 +81,7 @@ const VendorFileUploader = ({
     <div className="flex flex-col gap-1">
       {/* 라벨 + 필수 표시 — Figma: gap-4(4px), 필수 dot 5px */}
       <div className="flex items-center gap-1">
-        <span className="text-body-small text-gray-80 font-medium">{label}</span>
+        <span className="text-body-small text-content-normal font-medium">{label}</span>
         <span className="bg-red-40 size-1.25 rounded-full" />
       </div>
 
@@ -89,10 +89,10 @@ const VendorFileUploader = ({
 
       {file ? (
         /* 파일 선택됨: 링크 아이콘 + 파일명 + X */
-        <div className="border-neutral-3 flex items-center gap-2 rounded-lg border px-3 py-2">
-          <IconLink className="size-4 shrink-0 text-gray-50" />
-          <span className="text-body-xsmall text-gray-70 flex-1 truncate">{file.name}</span>
-          <button onClick={onFileRemove} className="text-gray-40 hover:text-gray-60 shrink-0 cursor-pointer">
+        <div className="border-edge-neutral flex items-center gap-2 rounded-lg border px-3 py-2">
+          <IconLink className="size-4 shrink-0 text-content-alternative" />
+          <span className="text-body-xsmall text-content-neutral flex-1 truncate">{file.name}</span>
+          <button onClick={onFileRemove} className="text-content-assistive hover:text-content-alternative shrink-0 cursor-pointer">
             <IconCancelSmall className="size-5" />
           </button>
         </div>
@@ -101,9 +101,9 @@ const VendorFileUploader = ({
         <>
           <button
             onClick={() => inputRef.current?.click()}
-            className="border-neutral-3 bg-neutral-1 hover:bg-neutral-2 flex size-30 cursor-pointer items-center justify-center rounded-xl border transition-colors"
+            className="border-edge-neutral bg-fill-strong hover:bg-fill-interaction-hover flex size-30 cursor-pointer items-center justify-center rounded-xl border transition-colors"
           >
-            <IconAdd className="text-gray-40 size-6" />
+            <IconAdd className="text-content-assistive size-6" />
           </button>
 
           {error ? (
@@ -112,7 +112,7 @@ const VendorFileUploader = ({
               <span className="text-label-xsmall text-red-40">{error}</span>
             </div>
           ) : (
-            <p className="text-label-xsmall text-gray-50">{helperText}</p>
+            <p className="text-label-xsmall text-content-alternative">{helperText}</p>
           )}
         </>
       )}
@@ -213,24 +213,24 @@ const CsvUploadModal = ({ open, onOpenChange }: CsvUploadModalProps) => {
           <div className="flex max-h-94.5 flex-col gap-1.5 overflow-clip">
             {/* 헤더: 제목 + 닫기 */}
             <div className="flex h-9 shrink-0 items-center justify-between">
-              <DialogTitle className="text-heading-medium text-gray-80">CSV 파일 업로드하기</DialogTitle>
+              <DialogTitle className="text-heading-medium text-content-normal">CSV 파일 업로드하기</DialogTitle>
               <button
                 onClick={() => handleClose(false)}
-                className="hover:text-gray-70 flex size-7 cursor-pointer items-center justify-center rounded-full text-gray-50"
+                className="hover:text-content-neutral flex size-7 cursor-pointer items-center justify-center rounded-full text-content-alternative"
               >
                 <IconCancelSmall className="size-6" />
               </button>
             </div>
 
             {/* 콘텐츠 */}
-            <div className="border-neutral-3 flex flex-col gap-3 overflow-y-auto border-t pt-4">
+            <div className="border-edge-neutral flex flex-col gap-3 overflow-y-auto border-t pt-4">
               {/* CSV 가이드 버튼 */}
               <a
                 href="/docs/user_mapping_guide.pdf"
                 download="[Catch Up] 유저 맵핑 가이드.pdf"
-                className="border-neutral-3 text-body-xsmall text-gray-80 hover:bg-neutral-1 flex h-7.5 w-fit cursor-pointer items-center gap-1 rounded-lg border bg-white px-2 py-1"
+                className="border-edge-neutral text-body-xsmall text-content-normal hover:bg-fill-strong flex h-7.5 w-fit cursor-pointer items-center gap-1 rounded-lg border bg-fill-normal px-2 py-1"
               >
-                <IconFile className="text-gray-70 size-5 shrink-0" />
+                <IconFile className="text-icon-normal size-5 shrink-0" />
                 CSV 업로드 가이드(PDF) 보기
               </a>
 

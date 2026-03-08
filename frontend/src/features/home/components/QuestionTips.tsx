@@ -58,10 +58,10 @@ const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
   return (
     <section className="flex w-268 flex-col gap-4">
       <header className="flex items-center gap-3">
-        <div className="border-neutral-3 bg-blue-1 flex h-8 w-8 items-center justify-center rounded-lg border-[0.5px]">
+        <div className="border-edge-neutral bg-blue-1 flex h-8 w-8 items-center justify-center rounded-lg border-[0.5px]">
           <Book className="h-6 w-6 text-blue-50" />
         </div>
-        <h2 className="text-heading-large text-gray-80">질문 작성을 도와드릴게요!</h2>
+        <h2 className="text-heading-large text-content-normal">질문 작성을 도와드릴게요!</h2>
       </header>
 
       <div className="flex flex-col gap-3">
@@ -72,11 +72,11 @@ const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
                 key={idx}
                 type="button"
                 onClick={() => onTipClick(tip.query)}
-                className="border-neutral-3 flex flex-1 cursor-pointer items-center overflow-hidden rounded-xl border bg-white text-left"
+                className="border-edge-neutral flex flex-1 cursor-pointer items-center overflow-hidden rounded-xl border bg-fill-normal text-left"
               >
                 <div className="flex flex-[1_0_0] flex-col gap-1.5 p-5">
-                  <h3 className="text-heading-medium text-gray-70">{tip.title}</h3>
-                  <p className="text-body-small whitespace-pre-line text-gray-50">{tip.description}</p>
+                  <h3 className="text-heading-medium text-content-neutral">{tip.title}</h3>
+                  <p className="text-body-small whitespace-pre-line text-content-alternative">{tip.description}</p>
                 </div>
                 <div className="relative aspect-260/118 flex-[1_0_0] overflow-hidden">
                   <Image src={tip.image} alt={tip.title} fill className="object-cover" />

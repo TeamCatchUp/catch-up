@@ -14,18 +14,18 @@ export function WelcomeStep({ onStart }: WelcomeStepProps) {
       <div className="flex w-[440px] flex-col items-start gap-10 pb-[120px]">
         {/* 텍스트 섹션 */}
         <div className="flex w-full flex-col items-start gap-9">
-          <h1 className="text-display-large text-gray-80 tracking-tight">반갑습니다!</h1>
+          <h1 className="text-display-large text-content-normal tracking-tight">반갑습니다!</h1>
 
           <div className="flex flex-col items-start gap-1.5">
-            <p className="text-display-large text-gray-80 tracking-tight">이제 팀의 기억이 사라지지 않도록 </p>
+            <p className="text-display-large text-content-normal tracking-tight">이제 팀의 기억이 사라지지 않도록 </p>
             <div className="flex items-center gap-1.5">
               <div className="flex items-center gap-2">
-                <div className="border-neutral-3 flex size-[55px] shrink-0 flex-col items-center justify-center overflow-clip rounded-2xl border bg-white p-2">
+                <div className="border-edge-neutral flex size-[55px] shrink-0 flex-col items-center justify-center overflow-clip rounded-2xl border bg-fill-normal p-2">
                   <CatchUpIcon className="w-full shrink-0" />
                 </div>
                 <CatchUpLetter className="h-[31px] w-[133px]" />
               </div>
-              <span className="text-display-large text-gray-80 tracking-tight">이 도와드릴게요.</span>
+              <span className="text-display-large text-content-normal tracking-tight">이 도와드릴게요.</span>
             </div>
           </div>
         </div>
