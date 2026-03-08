@@ -18,7 +18,7 @@ const TutorialHeader = ({ prevLabel, prevHref, currentLabel }: TutorialHeaderPro
   const router = useRouter();
 
   return (
-    <div className="border-b-neutral-3 sticky top-0 z-10 flex h-13 shrink-0 items-center justify-between border-b bg-fill-normal px-16 py-2">
+    <div className="border-b-edge-neutral sticky top-0 z-10 flex h-13 shrink-0 items-center justify-between border-b bg-fill-normal px-16 py-2">
       {/* 좌측: 브레드크럼 */}
       <div className="flex items-center justify-center">
         <Link href={prevHref} className="hover:bg-fill-interaction-hover flex items-center gap-1.5 rounded-xl px-2 py-1">
