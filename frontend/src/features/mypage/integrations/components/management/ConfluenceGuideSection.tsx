@@ -89,7 +89,7 @@ const ConfluenceGuideSection = () => {
       </div>
 
       {/* 클로징 */}
-      <p className="text-label-small text-black">팀이 커져도, 기획의 맥락은 그대로 남습니다.</p>
+      <p className="text-label-small text-content-strong">팀이 커져도, 기획의 맥락은 그대로 남습니다.</p>
     </div>
   );
 };

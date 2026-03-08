@@ -91,7 +91,7 @@ const GithubGuideSection = () => {
       </div>
 
       {/* 클로징 */}
-      <p className="text-label-small text-black">찾느라 쓰던 시간, 이제 개발에 집중하세요</p>
+      <p className="text-label-small text-content-strong">찾느라 쓰던 시간, 이제 개발에 집중하세요</p>
     </div>
   );
 };

@@ -73,7 +73,7 @@ const SlackGuideSection = () => {
       </div>
 
       {/* 클로징 */}
-      <p className="text-label-small text-black">대화는 흘러가도, 팀이 합의한 지식은 남겨둡니다.</p>
+      <p className="text-label-small text-content-strong">대화는 흘러가도, 팀이 합의한 지식은 남겨둡니다.</p>
     </div>
   );
 };
