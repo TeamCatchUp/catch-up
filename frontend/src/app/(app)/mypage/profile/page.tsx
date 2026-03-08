@@ -50,10 +50,10 @@ const ProfilePage = () => {
             <img
               src={profile.picture}
               alt={profile.name}
-              className="h-27.5 w-27.5 rounded-2xl object-cover ring-4 ring-white"
+              className="h-27.5 w-27.5 rounded-2xl object-cover"
             />
           ) : (
-            <Profile className="h-27.5 w-27.5 rounded-2xl ring-4 ring-white" />
+            <Profile className="h-27.5 w-27.5 rounded-2xl" />
           )}
           <div className="flex flex-col gap-1">
             <span className="text-heading-xlarge text-content-normal">{profile?.name ?? user?.name ?? ''}</span>
