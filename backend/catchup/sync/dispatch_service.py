@@ -74,8 +74,6 @@ class SyncDispatchService:
             status="no_events",
             connector=connector,
             scope_id=request.scope_id,
-            dropped_targets=0,
-            dropped_events=0,
             message=_INCREMENTAL_NOT_IMPLEMENTED_MESSAGE,
         )
 

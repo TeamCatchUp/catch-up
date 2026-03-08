@@ -362,7 +362,12 @@ class GithubIngestionService:
             logger.error(f"[GITHUB][{SyncOperation.FULL_SYNC}] Full sync failed: {e}")
             raise
 
-    async def _sync_users(self, db: Session) -> dict[str, int]:
+    async def _sync_users(
+        self,
+        db: Session,
+        *,
+        auto_commit: bool = True,
+    ) -> dict[str, int]:
         """
         Organization 멤버 동기화 (RDBMS 저장)
 
@@ -448,7 +453,11 @@ class GithubIngestionService:
 
             # RDBMS에 벌크 저장
             if users_data:
-                github_entities.upsert_users_bulk(db, users_data)
+                github_entities.upsert_users_bulk(
+                    db,
+                    users_data,
+                    auto_commit=auto_commit,
+                )
 
             # 동기화 완료
             self._complete_sync(db, repo_full_name, GithubEntityType.USER, len(users_data), SyncOperation.USER_SYNC)
@@ -463,7 +472,13 @@ class GithubIngestionService:
             self._fail_sync(db, repo_full_name, GithubEntityType.USER, str(e), SyncOperation.USER_SYNC)
             return {"synced": 0, "errors": 1}
         
-    async def sync_installation_metadata(self, db : Session) -> dict[str, Any]:
+    async def sync_installation_metadata(
+        self,
+        db: Session,
+        *,
+        auto_commit: bool = True,
+        raise_on_error: bool = False,
+    ) -> dict[str, Any]:
         """
         Installtion 메타데이터 동기화 (Users + Repository)
         """
@@ -472,8 +487,16 @@ class GithubIngestionService:
             f"for installation {self.installation_id}"
         )
 
-        users_result = await self._sync_users(db)
-        repo_names = await self._sync_repositories(db)
+        users_result = await self._sync_users(db, auto_commit=auto_commit)
+        if raise_on_error and users_result["errors"] > 0:
+            raise RuntimeError(
+                f"github user metadata refresh failed: installation_id={self.installation_id}"
+            )
+
+        repo_names = await self._sync_repositories(
+            db,
+            auto_commit=auto_commit,
+        )
 
         logger.info(
             f"[GITHUB][INSTALLATION] Completed User + Repository Sync "
@@ -483,7 +506,12 @@ class GithubIngestionService:
         return {"users": users_result, "repositories": repo_names}
 
 
-    async def _sync_repositories(self, db: Session) -> list[str]:
+    async def _sync_repositories(
+        self,
+        db: Session,
+        *,
+        auto_commit: bool = True,
+    ) -> list[str]:
         """
         Installation에서 접근 가능한 Repository 목록 조회 및 RDBMS 저장
 
@@ -502,14 +530,30 @@ class GithubIngestionService:
             # dict → DTO 변환
             repos_data = _convert_repos_to_dto(raw_repos)
 
-            # RDBMS에 벌크 저장
-            github_entities.upsert_repositories_bulk(
-                db, self.installation_id, repos_data
+            sync_result = github_entities.sync_repositories_snapshot(
+                db,
+                self.installation_id,
+                repos_data,
+                auto_commit=auto_commit,
             )
 
-            # 동기화 완료
-            self._complete_sync(db, repo_full_name, GithubEntityType.REPOSITORY, len(repos_data), SyncOperation.REPO_SYNC)
+            logger.info(
+                "[GITHUB][%s] Repository snapshot synced: installation_id=%s, upserted=%s, deleted=%s",
+                SyncOperation.REPO_SYNC,
+                self.installation_id,
+                sync_result["upserted"],
+                sync_result["deleted"],
+            )
+
+            self._complete_sync(
+                db,
+                repo_full_name,
+                GithubEntityType.REPOSITORY,
+                len(repos_data),
+                SyncOperation.REPO_SYNC,
+            )
             return [repo.full_name for repo in repos_data]
+
 
         except GitHubRateLimitError as e:
             self._handle_rate_limit(db, repo_full_name, GithubEntityType.REPOSITORY, e, SyncOperation.REPO_SYNC)
@@ -518,12 +562,12 @@ class GithubIngestionService:
         except GitHubApiError as e:
             logger.error(f"[GITHUB][{SyncOperation.REPO_SYNC}] API error: {e}")
             self._fail_sync(db, repo_full_name, GithubEntityType.REPOSITORY, str(e), SyncOperation.REPO_SYNC)
-            return []
+            raise
 
         except Exception as e:
             logger.error(f"[GITHUB][{SyncOperation.REPO_SYNC}] Unexpected error: {e}", exc_info=True)
             self._fail_sync(db, repo_full_name, GithubEntityType.REPOSITORY, str(e), SyncOperation.REPO_SYNC)
-            return []
+            raise
 
     def _get_repo_names_by_ids(self, db: Session, repo_ids: list[int]) -> list[str]:
         """

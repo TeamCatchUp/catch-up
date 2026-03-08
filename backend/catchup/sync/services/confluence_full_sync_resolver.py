@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def _normalize_requested_space_keys(target_ids: list[str] | None) -> list[str]:
     if target_ids is None:
-        return []
+        raise SyncRequestError("target_ids is required")
 
     normalized: list[str] = []
     seen: set[str] = set()
@@ -29,6 +29,13 @@ def _normalize_requested_space_keys(target_ids: list[str] | None) -> list[str]:
             continue
         seen.add(candidate)
         normalized.append(candidate)
+
+    if not normalized:
+        raise SyncRequestError(
+            "target_ids is empty after normalization",
+            metadata={"requested_target_ids": target_ids},
+        )
+
     return normalized
 
 
@@ -53,41 +60,30 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
 
         spaces = confluence_entities.get_spaces_by_cloud_id(db, cloud_id)
         requested_space_keys = _normalize_requested_space_keys(request.target_ids)
-        if request.target_ids is not None and not requested_space_keys:
+        space_map = {
+            (space.space_key or "").strip(): space
+            for space in spaces
+            if (space.space_key or "").strip()
+        }
+        invalid_target_ids = [
+            space_key
+            for space_key in requested_space_keys
+            if space_key not in space_map
+        ]
+        if invalid_target_ids:
             raise SyncRequestError(
-                "target_ids is empty after normalization",
-                metadata={
-                    "cloud_id": cloud_id,
-                    "requested_target_ids": request.target_ids,
-                },
-            )
-
-        if requested_space_keys:
-            requested_space_key_set = set(requested_space_keys)
-
-            resolved_spaces = [
-                space
-                for space in spaces
-                if (space.space_key or "").strip() in requested_space_key_set
-            ]
-            resolved_space_key_set = {(space.space_key or "").strip() for space in resolved_spaces}
-            invalid_target_ids = [
-                space_key
-                for space_key in requested_space_keys
-                if space_key not in resolved_space_key_set
-            ]
-        else:
-            resolved_spaces = spaces
-            invalid_target_ids = []
-
-        if not resolved_spaces:
-            raise SyncRequestError(
-                "no syncable spaces found",
+                "requested target_ids contain unknown spaces",
                 metadata={
                     "cloud_id": cloud_id,
                     "requested_target_ids": requested_space_keys,
+                    "invalid_target_ids": invalid_target_ids,
                 },
             )
+
+        resolved_spaces = [
+            space_map[space_key]
+            for space_key in requested_space_keys
+        ]
 
         targets = [
             FullSyncTarget(
@@ -106,15 +102,15 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         ]
 
         logger.info(
-            "[CONFLUENCE][FULL SYNC][RESOLVER] Targets resolved: cloud_id=%s, resolved=%s, invalid=%s",
+            "[CONFLUENCE][FULL SYNC][RESOLVER] Targets resolved: cloud_id=%s, requested=%s, resolved=%s",
             cloud_id,
+            len(requested_space_keys),
             len(targets),
-            len(invalid_target_ids),
         )
 
         return FullSyncResolvedTargets(
             targets=targets,
-            invalid_target_ids=invalid_target_ids,
+            invalid_target_ids=[],
             scope_metadata={"cloud_id": cloud_id},
         )
 

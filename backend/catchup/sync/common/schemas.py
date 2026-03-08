@@ -40,8 +40,6 @@ class SyncDispatchResult:
     event_ids: list[str] = field(default_factory=list)
     total_targets: int = 0
     queued_targets: int = 0
-    dropped_targets: int = 0
-    dropped_events: int = 0
     message: str | None = None
     snapshot_url: str | None = None
     stream_url: str | None = None

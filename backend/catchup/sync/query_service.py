@@ -1,16 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncGenerator
 import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from collections.abc import AsyncGenerator
 from typing import Any
 
 from sqlalchemy import select
 
-from catchup.connectors.slack.factory import create_slack_ingestion_service
+from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
+from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
+from catchup.connectors.github.factory import create_github_ingestion_service
+from catchup.connectors.jira.factory import create_jira_ingestion_service
+from catchup.connectors.slack.factory import create_slack_metadata_service
+from catchup.db.atlassian import oauth_repository as atlassian_oauth_repository
 from catchup.db.engine import SessionLocal
 from catchup.db.models import (
     AtlassianOAuthToken,
@@ -18,6 +24,7 @@ from catchup.db.models import (
     GithubInstallation,
     GithubRepository,
     JiraProject,
+    SlackChannel,
     SyncConnector,
     SyncEventStatus,
     SyncJob,
@@ -25,6 +32,8 @@ from catchup.db.models import (
     SyncType,
 )
 from catchup.db.sync import get_job, list_events_by_job
+from catchup.sync.common.exceptions import SyncInternalError
+
 
 logger = logging.getLogger(__name__)
 
@@ -342,183 +351,282 @@ class SyncQueryService:
             yield f"data: {self._serialize_heartbeat(snapshot)}\n\n"
             await asyncio.sleep(wait_seconds)
 
+    def _build_targets_result(
+        self,
+        *,
+        connector: SyncConnector,
+        scope_id: str,
+        targets: list[SyncTargetResult],
+    ) -> SyncTargetsResult:
+        logger.info(
+            "[SYNC][TARGETS][QUERY] Loaded targets: connector=%s, scope_id=%s, total_targets=%s",
+            connector,
+            scope_id,
+            len(targets),
+        )
+        return SyncTargetsResult(
+            connector=connector,
+            scope_id=scope_id,
+            total_targets=len(targets),
+            targets=targets,
+        )
+
+    def _ensure_refresh_succeeded(
+        self,
+        *,
+        connector: SyncConnector,
+        scope_id: str,
+        result: dict[str, dict[str, int]],
+        sections: tuple[str, ...],
+    ) -> None:
+        failed_sections = [
+            section
+            for section in sections
+            if int(result.get(section, {}).get("errors", 0)) > 0
+        ]
+        if failed_sections:
+            raise SyncInternalError(
+                f"{connector.value} target refresh failed",
+                metadata={
+                    "scope_id": scope_id,
+                    "failed_sections": failed_sections,
+                },
+            )
+
+    async def _list_github_targets(
+        self,
+        *,
+        db,
+        scope_id: str,
+    ) -> SyncTargetsResult:
+        try:
+            installation_id = int(scope_id)
+        except ValueError as exc:
+            raise ValueError(f"github installation not found: {scope_id}") from exc
+
+        installation = (
+            db.query(GithubInstallation)
+            .filter(GithubInstallation.installation_id == installation_id)
+            .first()
+        )
+        if installation is None:
+            raise ValueError(f"github installation not found: {scope_id}")
+
+        service = await create_github_ingestion_service(db, installation_id)
+        await service.sync_installation_metadata(
+            db,
+            auto_commit=False,
+            raise_on_error=True,
+        )
+
+        repositories = (
+            db.query(GithubRepository)
+            .filter(GithubRepository.installation_id == installation_id)
+            .order_by(GithubRepository.full_name.asc())
+            .all()
+        )
+
+        targets = [
+            SyncTargetResult(
+                target_id=str(repo.repo_id),
+                display_name=repo.full_name,
+                target_type="repository",
+                is_accessible=True,
+                metadata={
+                    "repository_full_name": repo.full_name,
+                    "installation_id": str(installation_id),
+                },
+            )
+            for repo in repositories
+        ]
+        return self._build_targets_result(
+            connector=SyncConnector.GITHUB,
+            scope_id=scope_id,
+            targets=targets,
+        )
+
+    async def _list_jira_targets(
+        self,
+        *,
+        db,
+        scope_id: str,
+    ) -> SyncTargetsResult:
+        token = (
+            db.query(AtlassianOAuthToken)
+            .filter(AtlassianOAuthToken.cloud_id == scope_id)
+            .first()
+        )
+        if token is None:
+            raise ValueError(f"jira cloud is not connected: {scope_id}")
+
+        service = await create_jira_ingestion_service(db, scope_id)
+        refresh_result = await service.sync_metadata(
+            db,
+            auto_commit=False,
+            rollback_on_error=False,
+            raise_on_error=True,
+        )
+        self._ensure_refresh_succeeded(
+            connector=SyncConnector.JIRA,
+            scope_id=scope_id,
+            result=refresh_result,
+            sections=("projects",),
+        )
+
+        projects = (
+            db.query(JiraProject)
+            .filter(JiraProject.cloud_id == scope_id)
+            .order_by(JiraProject.project_key.asc())
+            .all()
+        )
+
+        targets = [
+            SyncTargetResult(
+                target_id=project.project_key,
+                display_name=project.project_name or project.project_key,
+                target_type="project",
+                is_accessible=True,
+                metadata={
+                    "project_key": project.project_key,
+                    "project_id": str(project.project_id),
+                },
+            )
+            for project in projects
+            if project.project_key
+        ]
+        return self._build_targets_result(
+            connector=SyncConnector.JIRA,
+            scope_id=scope_id,
+            targets=targets,
+        )
+
+    async def _list_confluence_targets(
+        self,
+        *,
+        db,
+        scope_id: str,
+    ) -> SyncTargetsResult:
+        token = (
+            db.query(AtlassianOAuthToken)
+            .filter(AtlassianOAuthToken.cloud_id == scope_id)
+            .first()
+        )
+        if token is None:
+            raise ValueError(f"confluence cloud is not connected: {scope_id}")
+
+        token_manager = AtlassianTokenManager(
+            oauth_client=AtlassianOAuthClient(),
+            oauth_repository=atlassian_oauth_repository,
+        )
+        metadata_service = ConfluenceMetadataService(token_manager)
+        await metadata_service.sync_all(
+            db,
+            scope_id,
+            auto_commit=False,
+        )
+
+        spaces = (
+            db.query(ConfluenceSpace)
+            .filter(ConfluenceSpace.cloud_id == scope_id)
+            .order_by(ConfluenceSpace.space_key.asc())
+            .all()
+        )
+
+        targets = [
+            SyncTargetResult(
+                target_id=space.space_key,
+                display_name=space.space_name or space.space_key,
+                target_type="space",
+                is_accessible=True,
+                metadata={
+                    "space_key": space.space_key,
+                    "space_id": str(space.space_id),
+                },
+            )
+            for space in spaces
+            if space.space_key
+        ]
+        return self._build_targets_result(
+            connector=SyncConnector.CONFLUENCE,
+            scope_id=scope_id,
+            targets=targets,
+        )
+
+    async def _list_slack_targets(
+        self,
+        *,
+        db,
+        scope_id: str,
+    ) -> SyncTargetsResult:
+        metadata_service = await create_slack_metadata_service(db, scope_id)
+        refresh_result = await metadata_service.sync_metadata(
+            db,
+            auto_commit=False,
+            rollback_on_error=False,
+            raise_on_error=True,
+        )
+        self._ensure_refresh_succeeded(
+            connector=SyncConnector.SLACK,
+            scope_id=scope_id,
+            result=refresh_result,
+            sections=("workspace", "users", "channels"),
+        )
+
+        channels = (
+            db.query(SlackChannel)
+            .filter(SlackChannel.team_id == scope_id)
+            .order_by(SlackChannel.name.asc())
+            .all()
+        )
+
+        targets = [
+            SyncTargetResult(
+                target_id=channel.id,
+                display_name=channel.name or channel.id,
+                target_type="channel",
+                is_accessible=not bool(channel.is_archived),
+                metadata={
+                    "channel_kind": str(channel.channel_type),
+                    "is_private": bool(channel.is_private),
+                    "member_count": int(channel.member_count),
+                },
+            )
+            for channel in channels
+        ]
+        return self._build_targets_result(
+            connector=SyncConnector.SLACK,
+            scope_id=scope_id,
+            targets=targets,
+        )
+
     async def list_targets(
         self,
         *,
         connector: SyncConnector,
         scope_id: str,
     ) -> SyncTargetsResult:
-        # Slack은 API로 실시간 조회한다.
-        if connector == SyncConnector.SLACK:
-            with SessionLocal() as db:
-                slack_service = await create_slack_ingestion_service(db, scope_id)
-
-                targets: list[SyncTargetResult] = []
-                cursor: str | None = None
-
-                while True:
-                    response = await slack_service.client.list_conversations(
-                        types="public_channel,private_channel,mpim,im",
-                        cursor=cursor,
-                    )
-
-                    for channel in response.get("channels", []):
-                        channel_id = channel.get("id")
-                        if not channel_id:
-                            continue
-
-                        if channel.get("is_im"):
-                            channel_kind = "dm"
-                        elif channel.get("is_mpim"):
-                            channel_kind = "mpim"
-                        elif channel.get("is_private"):
-                            channel_kind = "private"
-                        else:
-                            channel_kind = "public"
-
-                        targets.append(
-                            SyncTargetResult(
-                                target_id=channel_id,
-                                display_name=channel.get("name", channel_id),
-                                target_type="channel",
-                                is_accessible=bool(channel.get("is_member", False)),
-                                metadata={
-                                    "channel_kind": channel_kind,
-                                    "is_private": bool(channel.get("is_private", False)),
-                                    "member_count": channel.get("num_members"),
-                                },
-                            )
-                        )
-
-                    cursor = response.get("response_metadata", {}).get("next_cursor")
-                    if not cursor:
-                        break
-
-                logger.info(
-                    "[SYNC][TARGETS][QUERY] Loaded targets: connector=%s, scope_id=%s, total_targets=%s",
-                    connector,
-                    scope_id,
-                    len(targets),
-                )
-
-                return SyncTargetsResult(
-                    connector=connector,
-                    scope_id=scope_id,
-                    total_targets=len(targets),
-                    targets=targets,
-                )
-
-        # GitHub/Jira/Confluence는 사전 적재된 metadata 테이블에서 조회한다.
         with SessionLocal() as db:
-            if connector == SyncConnector.GITHUB:
-                try:
-                    installation_id = int(scope_id)
-                except ValueError as exc:
-                    raise ValueError(
-                        f"invalid github scope_id (installation_id expected): {scope_id}"
-                    ) from exc
-
-                installation = (
-                    db.query(GithubInstallation)
-                    .filter(GithubInstallation.installation_id == installation_id)
-                    .first()
-                )
-                if installation is None:
-                    raise ValueError(f"github installation not found: {scope_id}")
-
-                repositories = (
-                    db.query(GithubRepository)
-                    .filter(GithubRepository.installation_id == installation_id)
-                    .order_by(GithubRepository.full_name.asc())
-                    .all()
-                )
-                targets = [
-                    SyncTargetResult(
-                        target_id=str(repo.repo_id),
-                        display_name=repo.full_name,
-                        target_type="repository",
-                        is_accessible=True,
-                        metadata={
-                            "repository_full_name": repo.full_name,
-                            "installation_id": str(installation_id),
-                        },
+            try:
+                result: SyncTargetsResult
+                if connector == SyncConnector.GITHUB:
+                    result = await self._list_github_targets(db=db, scope_id=scope_id)
+                elif connector == SyncConnector.JIRA:
+                    result = await self._list_jira_targets(db=db, scope_id=scope_id)
+                elif connector == SyncConnector.CONFLUENCE:
+                    result = await self._list_confluence_targets(
+                        db=db,
+                        scope_id=scope_id,
                     )
-                    for repo in repositories
-                ]
-            elif connector == SyncConnector.JIRA:
-                token = (
-                    db.query(AtlassianOAuthToken)
-                    .filter(AtlassianOAuthToken.cloud_id == scope_id)
-                    .first()
-                )
-                if token is None:
-                    raise ValueError(f"jira cloud is not connected: {scope_id}")
+                elif connector == SyncConnector.SLACK:
+                    result = await self._list_slack_targets(db=db, scope_id=scope_id)
+                else:
+                    raise ValueError(f"unsupported connector for target listing: {connector}")
 
-                projects = (
-                    db.query(JiraProject)
-                    .filter(JiraProject.cloud_id == scope_id)
-                    .order_by(JiraProject.project_key.asc())
-                    .all()
-                )
-                targets = [
-                    SyncTargetResult(
-                        target_id=project.project_key,
-                        display_name=project.project_name or project.project_key,
-                        target_type="project",
-                        is_accessible=True,
-                        metadata={
-                            "project_key": project.project_key,
-                            "project_id": str(project.project_id),
-                        },
-                    )
-                    for project in projects
-                    if project.project_key
-                ]
-            elif connector == SyncConnector.CONFLUENCE:
-                token = (
-                    db.query(AtlassianOAuthToken)
-                    .filter(AtlassianOAuthToken.cloud_id == scope_id)
-                    .first()
-                )
-                if token is None:
-                    raise ValueError(f"confluence cloud is not connected: {scope_id}")
-
-                spaces = (
-                    db.query(ConfluenceSpace)
-                    .filter(ConfluenceSpace.cloud_id == scope_id)
-                    .order_by(ConfluenceSpace.space_key.asc())
-                    .all()
-                )
-                targets = [
-                    SyncTargetResult(
-                        target_id=space.space_key,
-                        display_name=space.space_name or space.space_key,
-                        target_type="space",
-                        is_accessible=True,
-                        metadata={
-                            "space_key": space.space_key,
-                            "space_id": str(space.space_id),
-                        },
-                    )
-                    for space in spaces
-                    if space.space_key
-                ]
-            else:
-                raise ValueError(f"unsupported connector for target listing: {connector}")
-
-            logger.info(
-                "[SYNC][TARGETS][QUERY] Loaded targets: connector=%s, scope_id=%s, total_targets=%s",
-                connector,
-                scope_id,
-                len(targets),
-            )
-
-            return SyncTargetsResult(
-                connector=connector,
-                scope_id=scope_id,
-                total_targets=len(targets),
-                targets=targets,
-            )
+                db.commit()
+                return result
+            except Exception:
+                db.rollback()
+                raise
 
 
 _sync_query_service = SyncQueryService()

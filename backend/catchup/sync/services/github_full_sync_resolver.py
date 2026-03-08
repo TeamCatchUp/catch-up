@@ -19,17 +19,28 @@ logger = logging.getLogger(__name__)
 
 def _normalize_requested_repo_ids(target_ids: list[str] | None) -> list[str]:
     if target_ids is None:
-        return []
+        raise SyncRequestError("target_ids is required")
 
     normalized: list[str] = []
     seen: set[str] = set()
+    
     for item in target_ids:
         candidate = (item or "").strip()
-        if not candidate or candidate in seen:
+        if not candidate:
+            continue
+        if candidate in seen:
             continue
         seen.add(candidate)
         normalized.append(candidate)
+    
+    if not normalized:
+        raise SyncRequestError(
+            "target_ids is empty after normalization",
+            metadata={"requested_target_ids": target_ids},
+        )
+
     return normalized
+    
 
 
 class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
@@ -60,41 +71,31 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 metadata={"installation_id": installation_id},
             )
 
-        repositories = github_entities.get_repositories_by_installation(db, installation_id)
+        repositories = github_entities.get_repositories_by_installation(
+            db,
+            installation_id,
+        )
         requested_repo_ids = _normalize_requested_repo_ids(request.target_ids)
-        if request.target_ids is not None and not requested_repo_ids:
+        repository_map = {str(repo.repo_id): repo for repo in repositories}
+        invalid_target_ids = [
+            repo_id
+            for repo_id in requested_repo_ids
+            if repo_id not in repository_map
+        ]
+        if invalid_target_ids:
             raise SyncRequestError(
-                "target_ids is empty after normalization",
-                metadata={
-                    "installation_id": installation_id,
-                    "requested_target_ids": request.target_ids,
-                },
-            )
-
-        if requested_repo_ids:
-            requested_repo_id_set = set(requested_repo_ids)
-
-            resolved_repositories = [
-                repo
-                for repo in repositories
-                if str(repo.repo_id) in requested_repo_id_set
-            ]
-            resolved_repo_id_set = {str(repo.repo_id) for repo in resolved_repositories}
-            invalid_target_ids = [
-                repo_id for repo_id in requested_repo_ids if repo_id not in resolved_repo_id_set
-            ]
-        else:
-            resolved_repositories = repositories
-            invalid_target_ids = []
-
-        if not resolved_repositories:
-            raise SyncRequestError(
-                "no syncable repositories found",
+                "requested target_ids contain unknown repositories",
                 metadata={
                     "installation_id": installation_id,
                     "requested_target_ids": requested_repo_ids,
+                    "invalid_target_ids": invalid_target_ids,
                 },
             )
+
+        resolved_repositories = [
+            repository_map[repo_id]
+            for repo_id in requested_repo_ids
+        ]
 
         targets = [
             FullSyncTarget(
@@ -111,15 +112,15 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         ]
 
         logger.info(
-            "[GITHUB][FULL SYNC][RESOLVER] Targets resolved: installation_id=%s, resolved=%s, invalid=%s",
+            "[GITHUB][FULL SYNC][RESOLVER] Targets resolved: installation_id=%s, requested=%s, resolved=%s",
             installation_id,
+            len(requested_repo_ids),
             len(targets),
-            len(invalid_target_ids),
         )
 
         return FullSyncResolvedTargets(
             targets=targets,
-            invalid_target_ids=invalid_target_ids,
+            invalid_target_ids=[],
             scope_metadata={"installation_id": str(installation_id)},
         )
 

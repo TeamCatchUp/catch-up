@@ -132,23 +132,19 @@ async def flush_slack_events():
 
                 if status_value == "accepted":
                     logger.info(
-                        "[SLACK][INCREMENTAL SYNC][SCHEDULER] Enqueued: team_id=%s, team_name=%s, job_id=%s, queued_targets=%s, dropped_targets=%s, dropped_events=%s",
+                        "[SLACK][INCREMENTAL SYNC][SCHEDULER] Enqueued: team_id=%s, team_name=%s, job_id=%s, queued_targets=%s",
                         team_id,
                         team_name,
                         dispatch_result.job_id,
                         dispatch_result.queued_targets,
-                        dispatch_result.dropped_targets,
-                        dispatch_result.dropped_events,
                     )
                     continue
 
                 if status_value == "no_events":
                     logger.info(
-                        "[SLACK][INCREMENTAL SYNC][SCHEDULER] No events: team_id=%s, team_name=%s, dropped_targets=%s, dropped_events=%s",
+                        "[SLACK][INCREMENTAL SYNC][SCHEDULER] No events: team_id=%s, team_name=%s",
                         team_id,
                         team_name,
-                        dispatch_result.dropped_targets,
-                        dispatch_result.dropped_events,
                     )
                     continue
 

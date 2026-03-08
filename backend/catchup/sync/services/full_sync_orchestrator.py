@@ -159,13 +159,12 @@ class FullSyncDispatchOrchestrator:
         snapshot_url, stream_url = _build_job_urls(base_url, job_id)
 
         logger.info(
-            "[%s][FULL SYNC][ORCHESTRATOR] Dispatch accepted: scope_id=%s, job_id=%s, total_targets=%s, queued_targets=%s, invalid_target_count=%s, sync_days=%s",
+            "[%s][FULL SYNC][ORCHESTRATOR] Dispatch accepted: scope_id=%s, job_id=%s, total_targets=%s, queued_targets=%s, sync_days=%s",
             connector.value.upper(),
             scope_id,
             job_id,
             total_targets,
             len(message_ids),
-            len(resolved.invalid_target_ids),
             sync_days,
         )
         emit_sync_dispatch_accepted(
@@ -177,8 +176,6 @@ class FullSyncDispatchOrchestrator:
             counts={
                 "total_targets": total_targets,
                 "queued_targets": len(message_ids),
-                "dropped_targets": len(resolved.invalid_target_ids),
-                "dropped_events": max(0, total_targets - len(message_ids)),
             },
             scope_metadata=resolved.scope_metadata,
         )
@@ -191,8 +188,6 @@ class FullSyncDispatchOrchestrator:
             event_ids=db_event_ids,
             total_targets=total_targets,
             queued_targets=len(message_ids),
-            dropped_targets=len(resolved.invalid_target_ids),
-            dropped_events=max(0, total_targets - len(message_ids)),
             snapshot_url=snapshot_url,
             stream_url=stream_url,
         )

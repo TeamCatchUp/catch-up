@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from catchup.db.models import SyncConnector, SyncJobStatus
 
@@ -54,16 +54,40 @@ class FullSyncRequest(BaseModel):
     """
 
     connector: SyncConnector = Field(..., description="sync connector type")
-    scope_id: str = Field(..., description="connector scope id (team_id / installation_id / cloud_id)")
-    target_ids: list[str] | None = Field(
-        default=None,
-        description="sync targets (channel/repository/space/project ids)",
+    scope_id: str = Field(
+        ...,
+        description="connector scope id (team_id / installation_id / cloud_id)",
+    )
+    target_ids: list[str] = Field(
+        ...,
+        min_length=1,
+        description="required target ids returned by GET /api/v1/sync/targets",
     )
     sync_days: int | None = Field(
         default=None,
         ge=1,
         description="collection period in days; if omitted connector default is used",
     )
+    
+    @field_validator("target_ids")
+    @classmethod
+    def _validate_target_ids(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+
+        for item in value:
+            candidate = (item or "").strip()
+            if not candidate:
+                raise ValueError("target_ids must not contain empty values")
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+
+        if not normalized:
+            raise ValueError("target_ids must not be empty")
+
+        return normalized
 
 
 class IncrementalSyncRequest(BaseModel):
@@ -93,8 +117,6 @@ class SyncAcceptedResponse(BaseModel):
 
     total_targets: int = 0
     queued_targets: int = 0
-    dropped_targets: int = 0
-    dropped_events: int = 0
 
     message: str | None = None
     snapshot_url: str | None = None

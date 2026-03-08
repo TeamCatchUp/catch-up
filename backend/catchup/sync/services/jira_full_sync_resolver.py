@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def _normalize_requested_project_keys(target_ids: list[str] | None) -> list[str]:
     if target_ids is None:
-        return []
+        raise SyncRequestError("target_ids is required")
 
     normalized: list[str] = []
     seen: set[str] = set()
@@ -29,6 +29,13 @@ def _normalize_requested_project_keys(target_ids: list[str] | None) -> list[str]
             continue
         seen.add(candidate)
         normalized.append(candidate)
+
+    if not normalized:
+        raise SyncRequestError(
+            "target_ids is empty after normalization",
+            metadata={"requested_target_ids": target_ids},
+        )
+
     return normalized
 
 
@@ -53,41 +60,30 @@ class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
 
         projects = jira_entities.get_projects_by_cloud_id(db, cloud_id)
         requested_project_keys = _normalize_requested_project_keys(request.target_ids)
-        if request.target_ids is not None and not requested_project_keys:
+        project_map = {
+            (project.project_key or "").strip(): project
+            for project in projects
+            if (project.project_key or "").strip()
+        }
+        invalid_target_ids = [
+            project_key
+            for project_key in requested_project_keys
+            if project_key not in project_map
+        ]
+        if invalid_target_ids:
             raise SyncRequestError(
-                "target_ids is empty after normalization",
-                metadata={
-                    "cloud_id": cloud_id,
-                    "requested_target_ids": request.target_ids,
-                },
-            )
-
-        if requested_project_keys:
-            requested_project_key_set = set(requested_project_keys)
-
-            resolved_projects = [
-                project
-                for project in projects
-                if (project.project_key or "").strip() in requested_project_key_set
-            ]
-            resolved_project_key_set = {(project.project_key or "").strip() for project in resolved_projects}
-            invalid_target_ids = [
-                project_key
-                for project_key in requested_project_keys
-                if project_key not in resolved_project_key_set
-            ]
-        else:
-            resolved_projects = projects
-            invalid_target_ids = []
-
-        if not resolved_projects:
-            raise SyncRequestError(
-                "no syncable projects found",
+                "requested target_ids contain unknown projects",
                 metadata={
                     "cloud_id": cloud_id,
                     "requested_target_ids": requested_project_keys,
+                    "invalid_target_ids": invalid_target_ids,
                 },
             )
+
+        resolved_projects = [
+            project_map[project_key]
+            for project_key in requested_project_keys
+        ]
 
         targets = [
             FullSyncTarget(
@@ -106,15 +102,15 @@ class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         ]
 
         logger.info(
-            "[JIRA][FULL SYNC][RESOLVER] Targets resolved: cloud_id=%s, resolved=%s, invalid=%s",
+            "[JIRA][FULL SYNC][RESOLVER] Targets resolved: cloud_id=%s, requested=%s, resolved=%s",
             cloud_id,
+            len(requested_project_keys),
             len(targets),
-            len(invalid_target_ids),
         )
 
         return FullSyncResolvedTargets(
             targets=targets,
-            invalid_target_ids=invalid_target_ids,
+            invalid_target_ids=[],
             scope_metadata={"cloud_id": cloud_id},
         )
 

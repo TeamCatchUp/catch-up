@@ -308,8 +308,6 @@ def _to_sync_accepted_response(result: SyncDispatchResult) -> SyncAcceptedRespon
         event_ids=result.event_ids,
         total_targets=result.total_targets,
         queued_targets=result.queued_targets,
-        dropped_targets=result.dropped_targets,
-        dropped_events=result.dropped_events,
         message=result.message,
         snapshot_url=result.snapshot_url,
         stream_url=result.stream_url,

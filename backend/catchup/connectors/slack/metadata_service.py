@@ -41,7 +41,14 @@ class SlackMetadataService:
                 "Call await service.initialize() first."
             )
 
-    async def sync_metadata(self, db: Session) -> dict[str, dict[str, int]]:
+    async def sync_metadata(
+        self,
+        db: Session,
+        *,
+        auto_commit: bool = True,
+        rollback_on_error: bool = True,
+        raise_on_error: bool = False,
+    ) -> dict[str, dict[str, int]]:
         """
         설치 직후 Slack 메타데이터를 일괄 동기화한다.
         """
@@ -56,9 +63,35 @@ class SlackMetadataService:
         }
 
         try:
-            results["workspace"] = await self._sync_workspace(db)
-            results["users"] = await self._sync_all_users(db)
-            results["channels"] = await self._sync_all_channels(db)
+            results["workspace"] = await self._sync_workspace(
+                db,
+                auto_commit=auto_commit,
+                rollback_on_error=rollback_on_error,
+            )
+            if raise_on_error and results["workspace"]["errors"] > 0:
+                raise RuntimeError(
+                    f"slack workspace metadata refresh failed: team_id={self.team_id}"
+                )
+
+            results["users"] = await self._sync_all_users(
+                db,
+                auto_commit=auto_commit,
+                rollback_on_error=rollback_on_error,
+            )
+            if raise_on_error and results["users"]["errors"] > 0:
+                raise RuntimeError(
+                    f"slack user metadata refresh failed: team_id={self.team_id}"
+                )
+
+            results["channels"] = await self._sync_all_channels(
+                db,
+                auto_commit=auto_commit,
+                rollback_on_error=rollback_on_error,
+            )
+            if raise_on_error and results["channels"]["errors"] > 0:
+                raise RuntimeError(
+                    f"slack channel metadata refresh failed: team_id={self.team_id}"
+                )
 
             logger.info(
                 "[SLACK][INSTALLATION][METADATA] Sync completed: team_id=%s, workspace_synced=%s, users_synced=%s, channels_synced=%s",
@@ -77,11 +110,21 @@ class SlackMetadataService:
             )
             raise
 
-    async def _sync_workspace(self, db: Session) -> dict[str, int]:
+    async def _sync_workspace(
+        self,
+        db: Session,
+        *,
+        auto_commit: bool = True,
+        rollback_on_error: bool = True,
+    ) -> dict[str, int]:
         try:
             response = await self.client.get_team_info()
             workspace = self.transformer.parse_workspace(response)
-            domain_repository.upsert_workspace(db, workspace)
+            domain_repository.upsert_workspace(
+                db,
+                workspace,
+                auto_commit=auto_commit,
+            )
             return {"synced": 1, "errors": 0}
         except Exception as exc:
             logger.error(
@@ -90,10 +133,17 @@ class SlackMetadataService:
                 exc,
                 exc_info=True,
             )
-            db.rollback()
+            if rollback_on_error:
+                db.rollback()
             return {"synced": 0, "errors": 1}
 
-    async def _sync_all_users(self, db: Session) -> dict[str, int]:
+    async def _sync_all_users(
+        self,
+        db: Session,
+        *,
+        auto_commit: bool = True,
+        rollback_on_error: bool = True,
+    ) -> dict[str, int]:
         try:
             users = []
             cursor = None
@@ -110,7 +160,12 @@ class SlackMetadataService:
                     break
 
             if users:
-                domain_repository.upsert_users_bulk(db, self.team_id, users)
+                domain_repository.upsert_users_bulk(
+                    db,
+                    self.team_id,
+                    users,
+                    auto_commit=auto_commit,
+                )
 
             # Transformer가 참조하는 캐시를 설치 시점에도 최신화한다.
             self.user_cache.clear()
@@ -135,10 +190,17 @@ class SlackMetadataService:
                 exc,
                 exc_info=True,
             )
-            db.rollback()
+            if rollback_on_error:
+                db.rollback()
             return {"synced": 0, "errors": 1}
 
-    async def _sync_all_channels(self, db: Session) -> dict[str, int]:
+    async def _sync_all_channels(
+        self,
+        db: Session,
+        *,
+        auto_commit: bool = True,
+        rollback_on_error: bool = True,
+    ) -> dict[str, int]:
         try:
             channels = []
             cursor = None
@@ -155,11 +217,32 @@ class SlackMetadataService:
                 if not cursor:
                     break
 
-            if channels:
-                domain_repository.upsert_channels_bulk(db, self.team_id, channels)
+            sync_result = domain_repository.sync_channels_snapshot(
+                db,
+                self.team_id,
+                channels,
+                auto_commit=auto_commit,
+            )
+            logger.info(
+                "[SLACK][INSTALLATION][METADATA] Channel snapshot synced: team_id=%s, upserted=%s, deleted=%s, deleted_members=%s",
+                self.team_id,
+                sync_result["upserted"],
+                sync_result["deleted"],
+                sync_result["deleted_members"],
+            )
+
+            domain_repository.delete_channel_members_by_team(
+                db,
+                self.team_id,
+                auto_commit=auto_commit,
+            )
 
             for channel in channels:
-                await self._sync_channel_members(db, channel.id)
+                await self._sync_channel_members(
+                    db,
+                    channel.id,
+                    auto_commit=auto_commit,
+                )
 
             return {"synced": len(channels), "errors": 0}
         except Exception as exc:
@@ -169,10 +252,17 @@ class SlackMetadataService:
                 exc,
                 exc_info=True,
             )
-            db.rollback()
+            if rollback_on_error:
+                db.rollback()
             return {"synced": 0, "errors": 1}
 
-    async def _sync_channel_members(self, db: Session, channel_id: str) -> None:
+    async def _sync_channel_members(
+        self,
+        db: Session,
+        channel_id: str,
+        *,
+        auto_commit: bool = True,
+    ) -> None:
         try:
             member_ids: list[str] = []
             cursor = None
@@ -186,7 +276,13 @@ class SlackMetadataService:
                 if not cursor:
                     break
 
-            domain_repository.replace_channel_members(db, self.team_id, channel_id, member_ids)
+            domain_repository.replace_channel_members(
+                db,
+                self.team_id,
+                channel_id,
+                member_ids,
+                auto_commit=auto_commit,
+            )
         except Exception as exc:
             logger.warning(
                 "[SLACK][INSTALLATION][METADATA] Member sync skipped: team_id=%s, channel_id=%s, error=%s",

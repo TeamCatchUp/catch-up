@@ -4,7 +4,8 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from catchup.connectors.slack.factory import create_slack_ingestion_service
+from catchup.db.slack import domain_repository as slack_entities
+from catchup.db.slack import oauth_repository as slack_oauth_repository
 from catchup.sync.common.exceptions import SyncRequestError
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import (
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def _normalize_requested_channel_ids(target_ids: list[str] | None) -> list[str]:
     if target_ids is None:
-        return []
+        raise SyncRequestError("target_ids is required")
 
     normalized: list[str] = []
     seen: set[str] = set()
@@ -28,6 +29,13 @@ def _normalize_requested_channel_ids(target_ids: list[str] | None) -> list[str]:
             continue
         seen.add(candidate)
         normalized.append(candidate)
+
+    if not normalized:
+        raise SyncRequestError(
+            "target_ids is empty after normalization",
+            metadata={"requested_target_ids": target_ids},
+        )
+
     return normalized
 
 
@@ -43,72 +51,64 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         if not team_id:
             raise SyncRequestError("scope_id is required")
 
-        service = await create_slack_ingestion_service(db, team_id)
-        channels = await service.list_syncable_channels()
+        token = slack_oauth_repository.get_slack_token_by_team_id(db, team_id)
+        if token is None:
+            raise SyncRequestError(
+                "slack team is not connected",
+                metadata={"team_id": team_id},
+            )
+
+        channels = slack_entities.get_channels_by_team(db, team_id)
         requested_target_ids = _normalize_requested_channel_ids(request.target_ids)
+        channel_map = {
+            (channel.id or "").strip(): channel
+            for channel in channels
+            if (channel.id or "").strip()
+        }
+        invalid_target_ids = [
+            channel_id
+            for channel_id in requested_target_ids
+            if channel_id not in channel_map
+        ]
+        if invalid_target_ids:
+            raise SyncRequestError(
+                "requested target_ids contain unknown channels",
+                metadata={
+                    "team_id": team_id,
+                    "requested_target_ids": requested_target_ids,
+                    "invalid_target_ids": invalid_target_ids,
+                },
+            )
 
-        if request.target_ids is None:
-            resolved_channels = channels
-            invalid_target_ids: list[str] = []
-        else:
-            requested_ids = requested_target_ids
-            if not requested_ids:
-                raise SyncRequestError(
-                    "target_ids is empty after normalization",
-                    metadata={
-                        "team_id": team_id,
-                        "requested_target_ids": request.target_ids,
-                    },
-                )
-            requested_id_set = set(requested_ids)
-
-            resolved_channels = [
-                channel
-                for channel in channels
-                if (channel.get("id") or "").strip() in requested_id_set
-            ]
-            resolved_id_set = {
-                (channel.get("id") or "").strip() for channel in resolved_channels
-            }
-            invalid_target_ids = [
-                target_id for target_id in requested_ids if target_id not in resolved_id_set
-            ]
-
-            if not resolved_channels:
-                raise SyncRequestError(
-                    "no syncable channels matched the requested target_ids",
-                    metadata={
-                        "team_id": team_id,
-                        "requested_target_ids": requested_ids,
-                    },
-                )
+        resolved_channels = [
+            channel_map[channel_id]
+            for channel_id in requested_target_ids
+        ]
 
         targets = [
             FullSyncTarget(
                 target_type="channel",
-                target_id=(channel.get("id") or "").strip(),
-                target_name=((channel.get("name") or channel.get("id") or "").strip()),
+                target_id=(channel.id or "").strip(),
+                target_name=((channel.name or channel.id or "").strip()),
                 metadata={
-                    "channel_name": (
-                        (channel.get("name") or channel.get("id") or "").strip()
-                    ),
+                    "channel_name": ((channel.name or channel.id or "").strip()),
                     "sync_from": sync_from,
                 },
             )
             for channel in resolved_channels
-            if (channel.get("id") or "").strip()
+            if (channel.id or "").strip()
         ]
 
         logger.info(
-            "[SLACK][FULL SYNC][RESOLVER] Targets resolved: team_id=%s, resolved=%s, invalid=%s",
+            "[SLACK][FULL SYNC][RESOLVER] Targets resolved: team_id=%s, requested=%s, resolved=%s",
             team_id,
+            len(requested_target_ids),
             len(targets),
-            len(invalid_target_ids),
         )
 
         return FullSyncResolvedTargets(
             targets=targets,
-            invalid_target_ids=invalid_target_ids,
+            invalid_target_ids=[],
             scope_metadata={"team_id": team_id},
         )
 
