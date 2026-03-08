@@ -80,7 +80,7 @@ const UsersTable = ({
                       isAllLinked ? 'bg-green-50' : 'bg-red-40',
                     )}
                   />
-                  <DefaultProfile className="border-edge-assistive text-content-assistive size-7 shrink-0 rounded-full border" />
+                  <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
                   <span className="text-body-small text-content-normal truncate">{row.userName}</span>
                 </div>
 
@@ -104,7 +104,7 @@ const UsersTable = ({
                               className="size-6.25 shrink-0 rounded-full"
                             />
                           ) : (
-                            <DefaultProfile className="border-edge-assistive text-content-assistive size-6.25 shrink-0 rounded-full border" />
+                            <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
                           )}
                           <span className="text-body-xsmall text-content-normal truncate">{info?.name ?? '-'}</span>
                         </div>

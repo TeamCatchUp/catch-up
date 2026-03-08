@@ -27,7 +27,7 @@ const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
     <section className="overflow-clip bg-fill-normal pt-5 pb-5 pl-6">
       <div className="flex h-full flex-col gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <DefaultProfile className="border-edge-assistive text-content-assistive size-7 shrink-0 rounded-full border" />
+          <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
           <span className="text-heading-medium text-content-normal truncate">{selectedRow.userName}</span>
         </div>
 
@@ -68,7 +68,7 @@ const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
                         {info?.picture ? (
                           <Image src={info.picture} alt="" width={25} height={25} className="size-6.25 shrink-0 rounded-full" />
                         ) : (
-                          <DefaultProfile className="border-edge-assistive text-content-assistive size-6.25 shrink-0 rounded-full border" />
+                          <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
                         )}
                         <span className="text-body-xsmall text-content-normal max-w-33.25 shrink-0 truncate">
                           {info?.name ?? '-'}
