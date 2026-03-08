@@ -19,7 +19,7 @@ export const JOB_LEVEL_LABEL: Record<JobLevel, string> = {
 export const RANK_BADGE_CLASS: Record<string, string> = {
   경영진: 'bg-accent-red-orange-neutral text-accent-red-orange',
   팀장: 'bg-accent-violet-lighten text-accent-violet',
-  팀원: 'bg-blue-5 text-content-primary',
+  팀원: 'bg-fill-primary-normal-neutral text-content-primary',
 };
 
 /** 권한 → 한글 라벨 */
@@ -30,7 +30,7 @@ export const ROLE_LABEL: Record<string, string> = {
 
 /** 권한 Badge 스타일 */
 export const ROLE_BADGE_CLASS: Record<string, string> = {
-  관리자: 'bg-blue-5 text-content-primary',
+  관리자: 'bg-fill-primary-normal-neutral text-content-primary',
   Member: 'bg-fill-interaction-hover text-content-alternative',
 };
 
