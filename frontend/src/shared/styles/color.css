@@ -182,4 +182,98 @@
   /* normal */
   --color-normal-alternative: #6d7882;
   --color-normal-normal: #33363d;
+
+  /* === 시맨틱 컬러 (dark 자동 전환) === */
+
+  /* Fill */
+  --color-fill-normal: var(--fill-normal);
+  --color-fill-strong: var(--fill-strong);
+  --color-fill-primary: var(--fill-primary);
+  --color-fill-primary-assistive: var(--fill-primary-assistive);
+  --color-fill-interaction-hover: var(--fill-interaction-hover);
+  --color-fill-interaction-pressed: var(--fill-interaction-pressed);
+  --color-fill-interaction-pressed-hover: var(--fill-interaction-pressed-hover);
+  --color-fill-interaction-inactive: var(--fill-interaction-inactive);
+  --color-fill-interaction-disable: var(--fill-interaction-disable);
+  --color-fill-primary-interaction-hover: var(--fill-primary-interaction-hover);
+  --color-fill-primary-interaction-pressed: var(--fill-primary-interaction-pressed);
+  --color-fill-primary-interaction-inactive: var(--fill-primary-interaction-inactive);
+  --color-fill-primary-interaction-disable: var(--fill-primary-interaction-disable);
+  --color-fill-primary-interaction-hover-assistive: var(--fill-primary-interaction-hover-assistive);
+  --color-fill-primary-normal-neutral: var(--fill-primary-normal-neutral);
+
+  /* Text → content (text-text-* 회피) */
+  --color-content-strong: var(--text-strong);
+  --color-content-normal: var(--text-normal);
+  --color-content-neutral: var(--text-neutral);
+  --color-content-alternative: var(--text-alternative);
+  --color-content-assistive: var(--text-assistive);
+  --color-content-inverse: var(--text-inverse);
+  --color-content-primary-strong: var(--text-primary-strong);
+  --color-content-primary: var(--text-primary-normal);
+  --color-content-primary-assistive: var(--text-primary-assistive);
+
+  /* Icon */
+  --color-icon-strong: var(--icon-strong);
+  --color-icon-normal: var(--icon-normal);
+  --color-icon-neutral: var(--icon-neutral);
+  --color-icon-alternative: var(--icon-alternative);
+  --color-icon-assistive: var(--icon-assistive);
+  --color-icon-inverse: var(--icon-inverse);
+  --color-icon-primary-strong: var(--icon-primary-strong);
+  --color-icon-primary: var(--icon-primary-normal);
+  --color-icon-primary-assistive: var(--icon-primary-assistive);
+
+  /* Line → edge (border-line-* 회피) */
+  --color-edge-strong: var(--line-strong);
+  --color-edge-normal: var(--line-normal);
+  --color-edge-neutral: var(--line-neutral);
+  --color-edge-assistive: var(--line-assistive);
+  --color-edge-inverse: var(--line-inverse);
+  --color-edge-primary-strong: var(--line-primary-strong);
+  --color-edge-primary: var(--line-primary-normal);
+
+  /* Background → surface */
+  --color-surface-normal: var(--bg-normal);
+  --color-surface-alternative: var(--bg-alternative);
+
+  /* Accent */
+  --color-accent-green: var(--accent-green);
+  --color-accent-green-neutral: var(--accent-green-neutral);
+  --color-accent-green-lighten: var(--accent-green-lighten);
+  --color-accent-red-orange: var(--accent-red-orange);
+  --color-accent-red-orange-neutral: var(--accent-red-orange-neutral);
+  --color-accent-red-orange-lighten: var(--accent-red-orange-lighten);
+  --color-accent-violet: var(--accent-violet);
+  --color-accent-violet-lighten: var(--accent-violet-lighten);
+  --color-accent-violet-lighter: var(--accent-violet-lighter);
+  --color-accent-light-blue: var(--accent-light-blue);
+  --color-accent-light-blue-lighten: var(--accent-light-blue-lighten);
+  --color-accent-pink: var(--accent-pink);
+  --color-accent-pink-lighten: var(--accent-pink-lighten);
+  --color-accent-red-lighten: var(--accent-red-lighten);
+  --color-accent-information: var(--accent-information);
+  --color-accent-information-lighten: var(--accent-information-lighten);
+  --color-accent-black: var(--accent-black);
+  --color-accent-black-lighten: var(--accent-black-lighten);
+
+  /* Status */
+  --color-status-positive: var(--status-positive);
+  --color-status-cautionary: var(--status-cautionary);
+  --color-status-destructive: var(--status-destructive);
+
+  /* Dim/Alpha */
+  --color-dim-black-75: var(--dim-black-75);
+  --color-dim-black-50: var(--dim-black-50);
+  --color-dim-black-25: var(--dim-black-25);
+  --color-dim-black-10: var(--dim-black-10);
+  --color-dim-black-0: var(--dim-black-0);
+  --color-dim-white-75: var(--dim-white-75);
+  --color-dim-white-50: var(--dim-white-50);
+  --color-dim-white-25: var(--dim-white-25);
+  --color-dim-white-10: var(--dim-white-10);
+  --color-dim-white-0: var(--dim-white-0);
+
+  /* Material */
+  --color-material-scrim: var(--material-scrim);
 }

@@ -69,28 +69,34 @@ const TutorialFeatureCards = () => {
         {TUTORIAL_1_FEATURE_CARDS.map((card) => (
           <li
             key={card.title}
-            className="border-neutral-3 shadow-card flex w-80 shrink-0 flex-col gap-4 rounded-2xl border bg-white p-4"
+            className="border-edge-neutral shadow-card flex w-80 shrink-0 flex-col gap-4 rounded-2xl border bg-fill-normal p-4"
           >
-            <div className="border-neutral-3 relative aspect-1416/600 w-full overflow-hidden rounded-xl border-b">
-              <Image src={card.image} alt={card.title} fill className="object-cover" />
+            <div className="border-edge-neutral relative aspect-1416/600 w-full overflow-hidden rounded-xl border-b">
+              <Image src={card.image} alt={card.title} fill className="object-cover dark:hidden" />
+              <Image
+                src={card.image.replace('/light/', '/dark/')}
+                alt={card.title}
+                fill
+                className="hidden object-cover dark:block"
+              />
             </div>
-            <h3 className="text-heading-medium text-gray-80">{card.title}</h3>
-            <p className="text-label-small text-gray-60 whitespace-pre-line">{card.description}</p>
+            <h3 className="text-heading-medium text-content-normal">{card.title}</h3>
+            <p className="text-label-small text-content-alternative whitespace-pre-line">{card.description}</p>
           </li>
         ))}
       </ul>
 
       {/* 우측 그라데이션 페이드 */}
-      <div className="pointer-events-none absolute top-0 right-0 h-full w-15.5 bg-linear-to-r from-transparent to-white" />
+      <div className="pointer-events-none absolute top-0 right-0 h-full w-15.5 bg-linear-to-r from-transparent to-fill-normal" />
 
       {/* FAB: 오른쪽 스크롤 버튼 */}
       <button
         onClick={handleScrollRight}
-        className={`border-neutral-3 absolute top-1/2 right-0 flex size-10 translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border bg-white shadow-md transition-opacity ${
+        className={`border-edge-neutral absolute top-1/2 right-0 flex size-10 translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border bg-fill-normal shadow-md transition-opacity ${
           isHovered && canScrollRight ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
       >
-        <ArrowForward className="text-gray-70 h-5 w-5" />
+        <ArrowForward className="text-icon-normal h-5 w-5" />
       </button>
     </div>
   );

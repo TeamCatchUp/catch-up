@@ -2,9 +2,9 @@ import TutorialFeatureCards from '@/features/mypage/help/components/tutorial/Tut
 
 const DotDivider = () => (
   <div className="flex items-center justify-center gap-1.5 py-4">
-    <span className="bg-gray-30 size-1 rounded-full" />
-    <span className="bg-gray-30 size-1 rounded-full" />
-    <span className="bg-gray-30 size-1 rounded-full" />
+    <span className="bg-content-assistive size-1 rounded-full" />
+    <span className="bg-content-assistive size-1 rounded-full" />
+    <span className="bg-content-assistive size-1 rounded-full" />
   </div>
 );
 
@@ -12,7 +12,7 @@ const Tutorial1Content = () => {
   return (
     <div className="flex w-full flex-col gap-16">
       {/* 도입부 */}
-      <div className="text-label-medium text-gray-80">
+      <div className="text-label-medium text-content-normal">
         <p>
           필요한 정보는 사실 회사 안에 다 있어요.
           <br />
@@ -43,8 +43,8 @@ const Tutorial1Content = () => {
       {/* 섹션 1: 정보를 찾는 시간이 줄면 */}
       <section className="flex flex-col gap-8">
         <div className="flex flex-col gap-4">
-          <h2 className="text-heading-xlarge text-gray-90">정보를 찾는 시간이 줄면, 일하는 시간이 늘어납니다.</h2>
-          <div className="text-label-medium text-gray-80">
+          <h2 className="text-heading-xlarge text-content-strong">정보를 찾는 시간이 줄면, 일하는 시간이 늘어납니다.</h2>
+          <div className="text-label-medium text-content-normal">
             <p>그냥 몇 분 아끼는 얘기가 아니에요.</p>
             <p>
               <strong>찾는 과정이 짧아질수록, 집중은 오래 가고 실행은 빨라져요.</strong>
@@ -65,8 +65,8 @@ const Tutorial1Content = () => {
 
       {/* 섹션 2: 출처를 같이 보여주는 이유 */}
       <section className="flex flex-col gap-4">
-        <h2 className="text-heading-xlarge text-gray-90">출처를 같이 보여주는 이유</h2>
-        <div className="text-label-medium text-gray-80">
+        <h2 className="text-heading-xlarge text-content-strong">출처를 같이 보여주는 이유</h2>
+        <div className="text-label-medium text-content-normal">
           <p>
             <strong>그럴듯한 답이 제일 위험해요</strong>
             <br />
@@ -101,8 +101,8 @@ const Tutorial1Content = () => {
 
       {/* 섹션 3: 팀이 커질수록 효과가 커지는 이유 */}
       <section className="flex flex-col gap-4">
-        <h2 className="text-heading-xlarge text-gray-90">팀이 커질수록 효과가 커지는 이유</h2>
-        <div className="text-label-medium text-gray-80">
+        <h2 className="text-heading-xlarge text-content-strong">팀이 커질수록 효과가 커지는 이유</h2>
+        <div className="text-label-medium text-content-normal">
           <p>
             팀이 작을 때는 기억으로도 꽤 잘 굴러가요.
             <br />
@@ -131,8 +131,8 @@ const Tutorial1Content = () => {
 
       {/* 섹션 4: 마무리 */}
       <section className="flex flex-col gap-4">
-        <h2 className="text-heading-xlarge text-gray-90">마무리</h2>
-        <div className="text-label-medium text-gray-80">
+        <h2 className="text-heading-xlarge text-content-strong">마무리</h2>
+        <div className="text-label-medium text-content-normal">
           <p>
             업무 정보는 원래 계속 쌓이고 있었어요.
             <br />

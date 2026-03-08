@@ -46,19 +46,19 @@ const PermissionChangeModal = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideClose
-        className="border-neutral-3 shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-white px-5 pt-3 pb-4"
+        className="border-edge-neutral shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-fill-normal px-5 pt-3 pb-4"
       >
         <div className="flex h-9 items-center justify-between">
-          <DialogTitle className="text-heading-medium text-gray-80">Admin 권한 부여</DialogTitle>
+          <DialogTitle className="text-heading-medium text-content-normal">Admin 권한 부여</DialogTitle>
           <button type="button" onClick={() => onOpenChange(false)} className="cursor-pointer" aria-label="닫기">
-            <Cancel className="size-5 text-gray-50" />
+            <Cancel className="size-5 text-content-alternative" />
           </button>
         </div>
 
-        <div className="border-neutral-3 flex w-[360px] flex-col gap-4 border-t pt-4">
+        <div className="border-edge-neutral flex w-[360px] flex-col gap-4 border-t pt-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1">
-              <span className="text-body-small text-gray-80">부여할 멤버</span>
+              <span className="text-body-small text-content-normal">부여할 멤버</span>
               <span className="size-1.25 rounded-full bg-red-50" />
             </div>
 
@@ -78,11 +78,11 @@ const PermissionChangeModal = ({
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-1">
-              <span className="text-body-small text-gray-80">권한 부여 사유를 선택해주세요.</span>
+              <span className="text-body-small text-content-normal">권한 부여 사유를 선택해주세요.</span>
               <span className="size-1.25 rounded-full bg-red-50" />
             </div>
 
-            <div className="border-neutral-2 flex flex-col gap-4 rounded-xl border px-4 py-4">
+            <div className="border-edge-assistive flex flex-col gap-4 rounded-xl border px-4 py-4">
               {PERMISSION_CHANGE_REASONS.map((reason) => {
                 const isSelected = selectedReason === reason;
                 const isCustom = reason === '직접 입력';
@@ -101,10 +101,10 @@ const PermissionChangeModal = ({
                             <div className="bg-blue-40 absolute size-2.5 rounded-full" />
                           </>
                         ) : (
-                          <div className="border-neutral-5 size-[18px] rounded-full border-[1.5px]" />
+                          <div className="border-edge-strong size-[18px] rounded-full border-[1.5px]" />
                         )}
                       </div>
-                      <span className="text-body-small text-gray-60">{reason}</span>
+                      <span className="text-body-small text-content-alternative">{reason}</span>
                     </button>
 
                     {isCustom && isSelected && (

@@ -31,7 +31,7 @@ const AdminIntegrationsView = () => {
 
   return (
     <section className="flex flex-col gap-6 px-16 pt-9 pb-30">
-      <h1 className="text-heading-xlarge text-gray-80">협업툴 연동</h1>
+      <h1 className="text-heading-xlarge text-content-normal">협업툴 연동</h1>
 
       <div className="flex flex-col gap-8">
         <div className="flex items-center gap-6">
@@ -40,7 +40,7 @@ const AdminIntegrationsView = () => {
             onClick={() => setActiveTab('my')}
             className={cn(
               'text-heading-large cursor-pointer border-b-2 pb-1 transition-colors',
-              activeTab === 'my' ? 'border-gray-80 text-gray-80' : 'text-gray-40 border-transparent',
+              activeTab === 'my' ? 'border-content-normal text-content-normal' : 'text-content-assistive border-transparent',
             )}
           >
             내 연동
@@ -50,7 +50,7 @@ const AdminIntegrationsView = () => {
             onClick={() => setActiveTab('member')}
             className={cn(
               'text-heading-large cursor-pointer border-b-2 pb-1 transition-colors',
-              activeTab === 'member' ? 'border-gray-80 text-gray-80' : 'text-gray-40 border-transparent',
+              activeTab === 'member' ? 'border-content-normal text-content-normal' : 'text-content-assistive border-transparent',
             )}
           >
             이용자 연동
@@ -61,7 +61,7 @@ const AdminIntegrationsView = () => {
           <section className="flex flex-col gap-10">
             <ConnectedAccountsAdminSection />
             <section className="flex flex-col gap-2.5">
-              <h2 className="text-heading-large text-gray-80">협업툴 연동 관리</h2>
+              <h2 className="text-heading-large text-content-normal">협업툴 연동 관리</h2>
               <IntegrationManagementSection
                 integrationMenu={integrationMenu}
                 selectedService={selectedService}

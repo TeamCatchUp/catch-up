@@ -39,9 +39,9 @@ const DateDivider = ({ date = new Date(), formatDate = defaultFormatDate, classN
 
   return (
     <div className={cn('flex items-center justify-center gap-4', className)}>
-      <div className="border-neutral-4 flex-1 border-t" />
-      <span className="text-body-xsmall px-1.5 py-1 text-gray-50">{formattedDate}</span>
-      <div className="border-neutral-4 flex-1 border-t" />
+      <div className="border-edge-normal flex-1 border-t" />
+      <span className="text-body-xsmall px-1.5 py-1 text-content-alternative">{formattedDate}</span>
+      <div className="border-edge-normal flex-1 border-t" />
     </div>
   );
 };

@@ -52,13 +52,13 @@ export const USER_MGMT_SORT_OPTIONS: { key: UserMgmtSortKey; label: string }[] =
 
 /** 직급 Badge 색상 (members RANK_BADGE_CLASS 동일) */
 export const POSITION_BADGE_CLASS: Record<string, string> = {
-  경영진: 'bg-orange-5 text-orange-60',
-  팀장: 'bg-violet-5 text-violet-60',
-  팀원: 'bg-blue-5 text-blue-50',
+  경영진: 'bg-accent-red-orange-neutral text-accent-red-orange',
+  팀장: 'bg-accent-violet-lighten text-accent-violet',
+  팀원: 'bg-fill-primary-normal-neutral text-content-primary',
 };
 
 /** 부서 Badge 색상 */
-export const TEAM_BADGE_CLASS = 'bg-green-5 text-green-60';
+export const TEAM_BADGE_CLASS = 'bg-accent-green-neutral text-accent-green';
 
 /** 페이지당 행 수 */
 export const USERS_PER_PAGE = 10;

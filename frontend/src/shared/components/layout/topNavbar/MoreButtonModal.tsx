@@ -19,7 +19,7 @@ export function MoreButtonContent() {
       onCloseAutoFocus={(e) => e.preventDefault()}
     >
       <DropdownMenuItem onSelect={() => router.push('/mypage/help')}>
-        <Error className="h-6 w-6 shrink-0 text-gray-50" />
+        <Error className="h-6 w-6 shrink-0 text-icon-neutral" />
         <span>도움말</span>
       </DropdownMenuItem>
     </DropdownMenuContent>

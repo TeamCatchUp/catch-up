@@ -33,7 +33,7 @@ export default function AdminAuditLogsPage() {
     <section className="flex flex-col gap-5 px-16 pt-9 pb-25">
       {/* 헤더 */}
       <div className="flex flex-col gap-3">
-        <h1 className="text-heading-xlarge text-gray-80">감사 로그</h1>
+        <h1 className="text-heading-xlarge text-content-normal">감사 로그</h1>
 
         {/* 밑줄 탭 */}
         <div className="flex items-center gap-6">
@@ -46,7 +46,7 @@ export default function AdminAuditLogsPage() {
                 onClick={() => setActiveTab(tab)}
                 className={cn(
                   'text-heading-large cursor-pointer pb-1.5',
-                  isActive ? 'border-gray-80 text-gray-80 border-b-2' : 'text-gray-30',
+                  isActive ? 'border-content-normal text-content-normal border-b-2' : 'text-content-assistive',
                 )}
               >
                 {tab}

@@ -42,19 +42,19 @@ function DateRangePicker({
         <button
           type="button"
           className={cn(
-            'border-neutral-3 flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border bg-white px-2.5 py-2',
+            'border-edge-neutral flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border bg-fill-normal px-2.5 py-2',
             className,
           )}
         >
-          <IconCalendar className="size-6 text-gray-50" />
+          <IconCalendar className="size-6 text-icon-neutral" />
           {displayFrom ? (
             <>
-              <span className="text-body-small text-gray-70">{displayFrom}</span>
-              <span className="text-body-small text-gray-70">-</span>
-              <span className="text-body-small text-gray-70">{displayTo ?? displayFrom}</span>
+              <span className="text-body-small text-content-neutral">{displayFrom}</span>
+              <span className="text-body-small text-content-neutral">-</span>
+              <span className="text-body-small text-content-neutral">{displayTo ?? displayFrom}</span>
             </>
           ) : (
-            <span className="text-body-small text-gray-30">{placeholder}</span>
+            <span className="text-body-small text-content-assistive">{placeholder}</span>
           )}
         </button>
       </PopoverTrigger>

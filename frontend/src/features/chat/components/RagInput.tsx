@@ -62,8 +62,8 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
   };
 
   return (
-    <div className="bg-gradient-to-b from-transparent to-white px-6 py-8 backdrop-blur-[10px] lg:px-24">
-      <div className="shadow-rag-bar border-neutral-4 mx-auto flex w-full max-w-[776px] flex-none flex-col rounded-3xl border bg-white px-3 py-4">
+    <div className="bg-gradient-to-b from-transparent to-fill-normal px-6 py-8 backdrop-blur-[10px] lg:px-24">
+      <div className="shadow-rag-bar border-edge-normal mx-auto flex w-full max-w-[776px] flex-none flex-col rounded-3xl border bg-fill-normal px-3 py-4">
         {/* Filter Bar (카드 내부 상단) */}
         <div
           className={cn(
@@ -74,7 +74,7 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
           <div className="flex items-center gap-1.5">
             <button
               onClick={filters.toggleFilter}
-              className="text-button-secondary-mono text-body-xsmall text-gray-70 shrink-0 cursor-pointer px-1.5 py-1"
+              className="text-button-secondary-mono text-body-xsmall text-content-neutral shrink-0 cursor-pointer px-1.5 py-1"
             >
               접기
             </button>
@@ -104,7 +104,7 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
                 onClick={() => filters.toggleSource('slack')}
               />
             </div>
-            <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
+            <IconDivider className="text-edge-assistive h-6 w-6 shrink-0" />
             <div className="flex items-center gap-2.5">
               <FilterDropdown
                 open={filters.openPopover === 'person'}
@@ -182,7 +182,7 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             rows={1}
-            className="text-body-medium text-gray-80 placeholder:text-gray-30 w-full resize-none overflow-y-auto outline-none"
+            className="text-body-medium text-content-normal placeholder:text-content-assistive w-full resize-none overflow-y-auto outline-none"
             style={{ height: '26px', maxHeight: '230px' }}
           />
         </div>
@@ -194,21 +194,21 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
             onClick={filters.toggleFilter}
             className={cn(
               'flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1',
-              filters.isFilterOpen && 'bg-neutral-3',
+              filters.isFilterOpen && 'bg-fill-interaction-pressed',
             )}
           >
-            <span className="text-body-small text-gray-70">상세 검색</span>
+            <span className="text-body-small text-content-neutral">상세 검색</span>
             {filters.isFilterOpen ? (
-              <DropdownUp className="text-gray-70 h-4.5 w-4.5" />
+              <DropdownUp className="text-icon-normal h-4.5 w-4.5" />
             ) : (
-              <DropdownDown className="text-gray-70 h-4.5 w-4.5" />
+              <DropdownDown className="text-icon-normal h-4.5 w-4.5" />
             )}
           </button>
 
           {/* 전송 / 중지 버튼 */}
           {isLoading ? (
-            <button onClick={onStop} className="bg-neutral-3 flex h-10 w-10 items-center justify-center rounded-full">
-              <Stop className="text-gray-70 relative left-px h-6 w-6 cursor-pointer" />
+            <button onClick={onStop} className="bg-fill-interaction-pressed flex h-10 w-10 items-center justify-center rounded-full">
+              <Stop className="text-content-neutral relative left-px h-6 w-6 cursor-pointer" />
             </button>
           ) : (
             <button
@@ -216,11 +216,11 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
               disabled={isLoading || !newInput.trim()}
               className={cn(
                 'cursor-pointer rounded-full p-2 transition-colors',
-                newInput.trim() ? 'bg-blue-50' : 'bg-neutral-1 border-neutral-2 border',
+                newInput.trim() ? 'bg-fill-primary' : 'bg-fill-strong border-edge-assistive border',
               )}
             >
               <ArrowSend
-                className={cn('h-6 w-6 cursor-pointer', newInput.trim() ? 'brightness-0 invert' : 'text-gray-30')}
+                className={cn('h-6 w-6 cursor-pointer', newInput.trim() ? 'brightness-0 invert' : 'text-content-assistive')}
               />
             </button>
           )}

@@ -14,7 +14,7 @@ const SyncIntegrationDetail = ({ log }: { log: AuditIntegrationLog }) => {
       {/* 서비스 아이콘 + 이름 */}
       <div className="flex items-center gap-3">
         <ServiceIcon service={log.service} className={iconCls} />
-        <span className="text-heading-medium text-gray-80 truncate">{SERVICE_NAMES[log.service]}</span>
+        <span className="text-heading-medium text-content-normal truncate">{SERVICE_NAMES[log.service]}</span>
       </div>
 
       <div className="flex flex-col gap-9">
@@ -30,9 +30,9 @@ const SyncIntegrationDetail = ({ log }: { log: AuditIntegrationLog }) => {
           {/* 연동된 데이터 범위 */}
           {log.dataRange && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-heading-small text-gray-70">연동된 데이터 범위</h3>
-              <div className="bg-neutral-1 border-neutral-2 rounded-xl border px-5 py-2.5">
-                <span className="text-body-small text-gray-80">{log.dataRange}</span>
+              <h3 className="text-heading-small text-content-neutral">연동된 데이터 범위</h3>
+              <div className="bg-fill-strong border-edge-assistive rounded-xl border px-5 py-2.5">
+                <span className="text-body-small text-content-normal">{log.dataRange}</span>
               </div>
             </div>
           )}
@@ -40,20 +40,20 @@ const SyncIntegrationDetail = ({ log }: { log: AuditIntegrationLog }) => {
           {/* 연동된 리소스 목록 */}
           {log.resources && log.resources.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-heading-small text-gray-70">{RESOURCE_LABEL[log.service]}</h3>
-              <div className="bg-neutral-1 border-neutral-2 flex max-h-80 flex-col overflow-y-auto rounded-xl border">
+              <h3 className="text-heading-small text-content-neutral">{RESOURCE_LABEL[log.service]}</h3>
+              <div className="bg-fill-strong border-edge-assistive flex max-h-80 flex-col overflow-y-auto rounded-xl border">
                 {log.resources.map((name, idx) => (
                   <div
                     key={name}
                     className={cn(
-                      'border-neutral-2 flex h-13 shrink-0 items-center gap-3 px-4',
+                      'border-edge-assistive flex h-13 shrink-0 items-center gap-3 px-4',
                       idx !== log.resources!.length - 1 && 'border-b',
                     )}
                   >
-                    <div className="border-neutral-3 flex items-center justify-center overflow-clip rounded-full border bg-white/50 p-1.5">
+                    <div className="border-edge-neutral flex items-center justify-center overflow-clip rounded-full border bg-fill-normal/50 p-1.5">
                       <ResourceIcon service={log.service} />
                     </div>
-                    <span className="text-body-small text-gray-80 min-w-0 flex-1 truncate">{name}</span>
+                    <span className="text-body-small text-content-normal min-w-0 flex-1 truncate">{name}</span>
                   </div>
                 ))}
               </div>
