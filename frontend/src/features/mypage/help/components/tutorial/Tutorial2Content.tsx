@@ -44,10 +44,16 @@ const Tutorial2Content = () => {
         <div className="px-16">
           <div className="relative aspect-[1416/600] w-full">
             <Image
-              src="/image/tutorial-2-section-1.jpg"
+              src="/image/tutorial/light/tutorial-2-section-1.jpg"
               alt="정확도를 올리는 질문 습관"
               fill
-              className="object-cover"
+              className="object-cover dark:hidden"
+            />
+            <Image
+              src="/image/tutorial/dark/tutorial-2-section-1.jpg"
+              alt="정확도를 올리는 질문 습관"
+              fill
+              className="hidden object-cover dark:block"
             />
           </div>
         </div>
@@ -127,7 +133,18 @@ const Tutorial2Content = () => {
 
         <div className="px-16">
           <div className="relative aspect-[1416/600] w-full">
-            <Image src="/image/tutorial-2-section-2.jpg" alt="상황별 질문 템플릿" fill className="object-cover" />
+            <Image
+              src="/image/tutorial/light/tutorial-2-section-2.jpg"
+              alt="상황별 질문 템플릿"
+              fill
+              className="object-cover dark:hidden"
+            />
+            <Image
+              src="/image/tutorial/dark/tutorial-2-section-2.jpg"
+              alt="상황별 질문 템플릿"
+              fill
+              className="hidden object-cover dark:block"
+            />
           </div>
         </div>
 

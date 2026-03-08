@@ -4,7 +4,7 @@ import Image from 'next/image';
 
 import IconOpen from '@/public/icons/icon/open_in_new.svg';
 import CatchUpLogo from '@/public/icons/logo/catchUp.svg';
-import DashboardImage from '@/public/image/catchup-login.png';
+import DashboardImage from '@/public/image/auth/catchup-login.png';
 import { Button } from '@/shared/components/ui/button';
 
 export default function Login() {

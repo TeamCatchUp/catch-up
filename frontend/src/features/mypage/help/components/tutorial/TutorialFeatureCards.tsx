@@ -72,7 +72,13 @@ const TutorialFeatureCards = () => {
             className="border-edge-neutral shadow-card flex w-80 shrink-0 flex-col gap-4 rounded-2xl border bg-fill-normal p-4"
           >
             <div className="border-edge-neutral relative aspect-1416/600 w-full overflow-hidden rounded-xl border-b">
-              <Image src={card.image} alt={card.title} fill className="object-cover" />
+              <Image src={card.image} alt={card.title} fill className="object-cover dark:hidden" />
+              <Image
+                src={card.image.replace('/light/', '/dark/')}
+                alt={card.title}
+                fill
+                className="hidden object-cover dark:block"
+              />
             </div>
             <h3 className="text-heading-medium text-content-normal">{card.title}</h3>
             <p className="text-label-small text-content-alternative whitespace-pre-line">{card.description}</p>
@@ -81,7 +87,7 @@ const TutorialFeatureCards = () => {
       </ul>
 
       {/* 우측 그라데이션 페이드 */}
-      <div className="pointer-events-none absolute top-0 right-0 h-full w-15.5 bg-linear-to-r from-transparent to-white" />
+      <div className="pointer-events-none absolute top-0 right-0 h-full w-15.5 bg-linear-to-r from-transparent to-fill-normal" />
 
       {/* FAB: 오른쪽 스크롤 버튼 */}
       <button

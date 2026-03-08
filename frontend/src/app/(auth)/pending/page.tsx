@@ -5,7 +5,7 @@ import Image from 'next/image';
 import ErrorIcon from '@/public/icons/icon/error_blue.svg';
 import IconOpen from '@/public/icons/icon/open_in_new.svg';
 import CatchUpLogo from '@/public/icons/logo/catchUp.svg';
-import DashboardImage from '@/public/image/catchup-login.jpg';
+import DashboardImage from '@/public/image/auth/catchup-login.png';
 import { Button } from '@/shared/components/ui/button';
 import { useCurrentUser } from '@/shared/hooks/useCurrentUser';
 

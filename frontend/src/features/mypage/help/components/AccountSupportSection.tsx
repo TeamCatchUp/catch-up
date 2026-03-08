@@ -18,7 +18,13 @@ const AccountSupportSection = () => {
             className="border-edge-neutral flex w-58.75 shrink-0 flex-col overflow-hidden rounded-xl border bg-fill-normal"
           >
             <div className="border-edge-neutral relative aspect-292/128 w-full border-b opacity-80">
-              <Image src={card.image} alt={card.title} fill className="object-cover" />
+              <Image src={card.image} alt={card.title} fill className="object-cover dark:hidden" />
+              <Image
+                src={card.image.replace('/light/', '/dark/')}
+                alt={card.title}
+                fill
+                className="hidden object-cover dark:block"
+              />
             </div>
             <div className="flex flex-col gap-2 px-5 py-4">
               <div className="flex items-center gap-2">

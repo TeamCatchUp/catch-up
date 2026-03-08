@@ -58,10 +58,16 @@ const Tutorial3Content = () => {
         <div className="px-16">
           <div className="relative aspect-[1416/600] w-full">
             <Image
-              src="/image/tutorial-3-section-1.jpg"
+              src="/image/tutorial/light/tutorial-3-section-1.jpg"
               alt="답변에 표시가 이미 되어 있어요"
               fill
-              className="object-cover"
+              className="object-cover dark:hidden"
+            />
+            <Image
+              src="/image/tutorial/dark/tutorial-3-section-1.jpg"
+              alt="답변에 표시가 이미 되어 있어요"
+              fill
+              className="hidden object-cover dark:block"
             />
           </div>
         </div>
@@ -76,10 +82,16 @@ const Tutorial3Content = () => {
           <div className="px-16">
             <div className="relative aspect-[1416/600] w-full">
               <Image
-                src="/image/tutorial-3-section-2.png"
+                src="/image/tutorial/light/tutorial-3-section-2.png"
                 alt="답변 생성에 사용한 이유"
                 fill
-                className="object-cover"
+                className="object-cover dark:hidden"
+              />
+              <Image
+                src="/image/tutorial/dark/tutorial-3-section-2.png"
+                alt="답변 생성에 사용한 이유"
+                fill
+                className="hidden object-cover dark:block"
               />
             </div>
           </div>
