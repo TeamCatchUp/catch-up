@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import QueryProvider from '@/shared/providers/QueryProvider';
+import { ThemeProvider } from '@/shared/providers/ThemeProvider';
 
 import '@/shared/styles/globals.css';
 
@@ -18,9 +19,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
       <body className="h-screen">
-        <QueryProvider>{children}</QueryProvider>
+        <ThemeProvider>
+          <QueryProvider>{children}</QueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
