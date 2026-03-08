@@ -141,6 +141,16 @@ class SyncClaimBatch(BaseModel):
     )
 
 
+class PublishTasksResult(BaseModel):
+    requested_count: int = Field(default=0, ge=0)
+    published_count: int = Field(default=0, ge=0)
+    message_ids: list[str] = Field(default_factory=list)
+    partial_success: bool = Field(default=False)
+    error_message: str | None = None
+    failed_at_index: int | None = Field(default=None, ge=0)
+    failed_event_id: str | None = None
+
+
 @dataclass(slots=True)
 class SyncEventContext:
     event_id: str

@@ -87,3 +87,33 @@ class SyncInternalError(SyncAPIError):
             message=message,
             metadata=metadata,
         )
+
+
+class RedisStreamInitializationError(SyncInternalError):
+    def __init__(
+        self,
+        message: str = "redis stream initialization failed",
+        *,
+        metadata: dict[str, Any] | None = None,
+        code: str = "stream_runtime_init_failed",
+    ) -> None:
+        super().__init__(
+            message=message,
+            metadata=metadata,
+            code=code,
+        )
+
+
+class RedisStreamPublishError(SyncInternalError):
+    def __init__(
+        self,
+        message: str = "redis stream publish failed",
+        *,
+        metadata: dict[str, Any] | None = None,
+        code: str = "stream_publish_failed",
+    ) -> None:
+        super().__init__(
+            message=message,
+            metadata=metadata,
+            code=code,
+        )

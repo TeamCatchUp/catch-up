@@ -141,16 +141,7 @@ class FullSyncDispatchOrchestrator:
             )
 
         # Redis Stream에 발행
-        message_ids = await self._event_publisher.publish(tasks=tasks)
-        if len(message_ids) != len(tasks):
-            logger.warning(
-                "[%s][FULL SYNC][ORCHESTRATOR] Publish result mismatch: scope_id=%s, job_id=%s, task_count=%s, published_message_count=%s",
-                connector.value.upper(),
-                scope_id,
-                job_id,
-                len(tasks),
-                len(message_ids),
-            )
+        publish_result = await self._event_publisher.publish(tasks=tasks)
 
         if total_targets == 0:
             started = start_db_sync_job(db, job_id)
@@ -165,7 +156,7 @@ class FullSyncDispatchOrchestrator:
             scope_id,
             job_id,
             total_targets,
-            len(message_ids),
+            publish_result.published_count,
             sync_days,
         )
         emit_sync_dispatch_accepted(
@@ -176,7 +167,7 @@ class FullSyncDispatchOrchestrator:
             scope_id=scope_id,
             counts={
                 "total_targets": total_targets,
-                "queued_targets": len(message_ids),
+                "queued_targets": publish_result.published_count,
             },
         )
 
@@ -187,7 +178,7 @@ class FullSyncDispatchOrchestrator:
             job_id=job_id,
             event_ids=db_event_ids,
             total_targets=total_targets,
-            queued_targets=len(message_ids),
+            queued_targets=publish_result.published_count,
             snapshot_url=snapshot_url,
             stream_url=stream_url,
         )

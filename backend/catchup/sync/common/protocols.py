@@ -9,6 +9,7 @@ from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
     FullSyncResolvedTargets,
     IncrementalSyncDispatchRequest,
+    PublishTasksResult,
     SyncDispatchResult,
     SyncEventContext,
     SyncStreamMessage,
@@ -17,8 +18,8 @@ from catchup.sync.common.schemas import (
 
 
 class EventPublisherProtocol(Protocol):
-    async def publish(self, *, tasks: list[SyncStreamTask]) -> list[str]:
-        """이벤트 목록을 Stream에 publish 하고 message_id 목록을 반환."""
+    async def publish(self, *, tasks: list[SyncStreamTask]) -> PublishTasksResult:
+        """이벤트 목록을 Stream에 publish 하고 publish 결과를 반환."""
         ...
 
 
