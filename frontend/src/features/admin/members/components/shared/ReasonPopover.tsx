@@ -47,30 +47,30 @@ const ReasonPopover = ({ trigger, title, reasonLabel, reasons, requestReason, on
         <div className="flex flex-col gap-1.5">
           {/* 헤더 */}
           <div className="flex h-9 items-center justify-between">
-            <h3 className="text-heading-medium text-gray-80">{title}</h3>
+            <h3 className="text-heading-medium text-content-normal">{title}</h3>
             <button type="button" onClick={handleClose} className="cursor-pointer p-0.5">
-              <Cancel className="size-6 text-gray-50" />
+              <Cancel className="size-6 text-content-alternative" />
             </button>
           </div>
 
           {/* 구분선 + 내용 */}
-          <div className="border-neutral-3 flex flex-col gap-4 border-t pt-4">
+          <div className="border-edge-neutral flex flex-col gap-4 border-t pt-4">
             {/* 신청 사유 (반려 전용) */}
             {requestReason && (
-              <div className="bg-neutral-1 border-neutral-2 text-body-small flex gap-3 rounded-lg border px-3 py-2">
-                <span className="shrink-0 text-gray-50">신청 사유</span>
-                <span className="text-gray-60 truncate">{requestReason}</span>
+              <div className="bg-fill-strong border-edge-assistive text-body-small flex gap-3 rounded-lg border px-3 py-2">
+                <span className="shrink-0 text-content-alternative">신청 사유</span>
+                <span className="text-content-alternative truncate">{requestReason}</span>
               </div>
             )}
 
             {/* 사유 선택 */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1">
-                <span className="text-body-small text-gray-80">{reasonLabel}</span>
+                <span className="text-body-small text-content-normal">{reasonLabel}</span>
                 <span className="size-1.25 rounded-full bg-red-50" />
               </div>
 
-              <div className="border-neutral-2 flex flex-col gap-4 overflow-clip rounded-xl border px-4 py-4">
+              <div className="border-edge-assistive flex flex-col gap-4 overflow-clip rounded-xl border px-4 py-4">
                 {reasons.map((reason) => {
                   const isSelected = selectedReason === reason;
                   return (
@@ -87,10 +87,10 @@ const ReasonPopover = ({ trigger, title, reasonLabel, reasons, requestReason, on
                               <div className="bg-blue-40 absolute size-2.5 rounded-full" />
                             </>
                           ) : (
-                            <div className="border-neutral-5 size-[18px] rounded-full border-[1.5px]" />
+                            <div className="border-edge-strong size-[18px] rounded-full border-[1.5px]" />
                           )}
                         </div>
-                        <span className="text-body-small text-gray-60">{reason}</span>
+                        <span className="text-body-small text-content-alternative">{reason}</span>
                       </button>
                       {reason === CUSTOM_REASON_KEY && isCustom && (
                         <input
@@ -99,7 +99,7 @@ const ReasonPopover = ({ trigger, title, reasonLabel, reasons, requestReason, on
                           value={customReason}
                           onChange={(e) => setCustomReason(e.target.value)}
                           placeholder="사유를 입력해주세요."
-                          className="text-body-small border-neutral-3 text-gray-80 placeholder:text-gray-30 focus:border-blue-40 ml-9 rounded-lg border px-3 py-2 outline-none"
+                          className="text-body-small border-edge-neutral text-content-normal placeholder:text-content-assistive focus:border-blue-40 ml-9 rounded-lg border px-3 py-2 outline-none"
                         />
                       )}
                     </div>

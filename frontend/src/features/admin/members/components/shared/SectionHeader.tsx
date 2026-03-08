@@ -12,10 +12,10 @@ const SectionHeader = ({ title, count, description, actions }: SectionHeaderProp
   return (
     <div className="flex items-end justify-between">
       <div className="flex flex-col gap-0.5">
-        <h2 className="text-heading-large text-gray-80">
+        <h2 className="text-heading-large text-content-normal">
           {title} <span className="text-blue-40">{count}</span>
         </h2>
-        <p className="text-body-small text-gray-50">{description}</p>
+        <p className="text-body-small text-content-alternative">{description}</p>
       </div>
       <div className="flex items-center gap-2.5">{actions}</div>
     </div>

@@ -41,19 +41,19 @@ const AdminGrantModal = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideClose
-        className="border-neutral-3 shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-white px-5 pt-3 pb-4"
+        className="border-edge-neutral shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-fill-normal px-5 pt-3 pb-4"
       >
         <div className="flex h-9 items-center justify-between">
-          <DialogTitle className="text-heading-medium text-gray-80">Admin 권한 부여</DialogTitle>
+          <DialogTitle className="text-heading-medium text-content-normal">Admin 권한 부여</DialogTitle>
           <button type="button" onClick={() => onOpenChange(false)} className="cursor-pointer" aria-label="닫기">
-            <Cancel className="size-5 text-gray-50" />
+            <Cancel className="size-5 text-content-alternative" />
           </button>
         </div>
 
-        <div className="border-neutral-3 flex w-[360px] flex-col gap-4 border-t pt-4">
+        <div className="border-edge-neutral flex w-[360px] flex-col gap-4 border-t pt-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1">
-              <span className="text-body-small text-gray-80">부여할 멤버</span>
+              <span className="text-body-small text-content-normal">부여할 멤버</span>
               <span className="size-1.25 rounded-full bg-red-50" />
             </div>
             <Select value={memberId != null ? String(memberId) : ''} onValueChange={(v) => setMemberId(Number(v))}>
@@ -72,7 +72,7 @@ const AdminGrantModal = ({
 
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1">
-              <span className="text-body-small text-gray-80">부여 사유를 입력해주세요.</span>
+              <span className="text-body-small text-content-normal">부여 사유를 입력해주세요.</span>
               <span className="size-1.25 rounded-full bg-red-50" />
             </div>
             <Input
@@ -83,7 +83,7 @@ const AdminGrantModal = ({
             />
           </div>
 
-          <p className="text-label-xsmall text-gray-40">
+          <p className="text-label-xsmall text-content-assistive">
             해당 사용자는 워크스페이스 설정, 멤버 권한 제어 등 시스템 관리 기능을 사용할 수 있게 됩니다.
           </p>
 

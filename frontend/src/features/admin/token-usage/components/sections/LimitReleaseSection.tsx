@@ -87,10 +87,10 @@ const LimitReleaseSection = () => {
         {/* 제목 + 설명 */}
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2.5">
-            <span className="text-heading-large text-gray-80">토큰 추가 요청 신청 목록</span>
+            <span className="text-heading-large text-content-normal">토큰 추가 요청 신청 목록</span>
             <span className="text-heading-large text-blue-55">{pendingRequests.length}</span>
           </div>
-          <span className="text-body-small text-gray-50">
+          <span className="text-body-small text-content-alternative">
             토큰 사용량을 초과한 임직원의 토큰 추가 신청을 확인하고 승인 여부를 결정해주세요.
           </span>
         </div>
@@ -98,7 +98,7 @@ const LimitReleaseSection = () => {
         {/* 도구모음 */}
         <div className="flex items-center gap-2.5">
           {/* 전체 반려/승인 버튼 그룹 */}
-          <div className="border-neutral-3 flex h-9 items-center gap-0.5 rounded-lg border bg-white px-2 py-0.5">
+          <div className="border-edge-neutral flex h-9 items-center gap-0.5 rounded-lg border bg-fill-normal px-2 py-0.5">
             <Button
               variant="text-secondary-mono"
               size="md"
@@ -131,18 +131,18 @@ const LimitReleaseSection = () => {
       </div>
 
       {/* 테이블 + 디테일 패널 */}
-      <div className="border-neutral-3 flex min-h-0 overflow-clip border-y" style={{ height: 558 }}>
+      <div className="border-edge-neutral flex min-h-0 overflow-clip border-y" style={{ height: 558 }}>
         {/* 좌측: 테이블 */}
-        <div className="border-neutral-3 flex min-w-0 flex-1 flex-col overflow-clip border-r bg-white">
+        <div className="border-edge-neutral flex min-w-0 flex-1 flex-col overflow-clip border-r bg-fill-normal">
           {/* 테이블 헤더 */}
-          <div className="border-neutral-3 bg-neutral-1 flex h-9 shrink-0 items-center border-b px-5">
+          <div className="border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-b px-5">
             <div className="grid flex-1 grid-cols-3 items-center gap-1">
-              <span className="text-body-xsmall pl-7.5 text-left text-gray-50">이름</span>
-              <div className="text-body-xsmall flex items-center gap-1 text-center text-gray-50">
+              <span className="text-body-xsmall pl-7.5 text-left text-content-alternative">이름</span>
+              <div className="text-body-xsmall flex items-center gap-1 text-center text-content-alternative">
                 <span className="flex-1">사용량</span>
                 <span className="flex-1">추가 신청량</span>
               </div>
-              <div className="text-body-xsmall flex items-center gap-1 text-center text-gray-50">
+              <div className="text-body-xsmall flex items-center gap-1 text-center text-content-alternative">
                 <span className="flex-1">직급</span>
                 <span className="flex-1">부서</span>
               </div>
@@ -151,7 +151,7 @@ const LimitReleaseSection = () => {
 
           {/* 테이블 행 */}
           {tableRows.length === 0 ? (
-            <div className="text-body-small flex h-full min-h-25 items-center justify-center text-gray-50">
+            <div className="text-body-small flex h-full min-h-25 items-center justify-center text-content-alternative">
               제한 해제 요청이 없습니다.
             </div>
           ) : (
@@ -165,21 +165,21 @@ const LimitReleaseSection = () => {
                     type="button"
                     onClick={() => setActiveKey(row.key)}
                     className={cn(
-                      'border-neutral-3 flex h-12.5 shrink-0 cursor-pointer items-center border-b px-5 text-left',
-                      isActive ? 'bg-blue-1' : 'hover:bg-neutral-1 bg-white',
+                      'border-edge-neutral flex h-12.5 shrink-0 cursor-pointer items-center border-b px-5 text-left',
+                      isActive ? 'bg-blue-1' : 'hover:bg-fill-strong bg-fill-normal',
                     )}
                   >
                     <div className="grid flex-1 grid-cols-3 items-center gap-1">
                       {/* 이름 */}
                       <div className="flex items-center gap-4">
-                        <DefaultProfile className="border-neutral-2 text-gray-30 size-7 shrink-0 rounded-full border" />
-                        <span className="text-body-small text-gray-80 truncate">{row.name}</span>
+                        <DefaultProfile className="border-edge-assistive text-content-assistive size-7 shrink-0 rounded-full border" />
+                        <span className="text-body-small text-content-normal truncate">{row.name}</span>
                       </div>
 
                       {/* 사용량 + 추가 신청량 */}
                       <div className="flex items-center gap-1">
-                        <span className="text-body-small text-gray-70 flex-1 text-center">{row.cost} $</span>
-                        <span className="text-body-small text-gray-70 flex-1 text-center">{row.requestedAmount} $</span>
+                        <span className="text-body-small text-content-neutral flex-1 text-center">{row.cost} $</span>
+                        <span className="text-body-small text-content-neutral flex-1 text-center">{row.requestedAmount} $</span>
                       </div>
 
                       {/* 직급 + 부서 */}
@@ -188,7 +188,7 @@ const LimitReleaseSection = () => {
                           <span
                             className={cn(
                               'rounded-md2 text-body-xsmall truncate px-1.5 py-0.5',
-                              POSITION_BADGE_CLASS[row.position] ?? 'bg-neutral-2 text-gray-50',
+                              POSITION_BADGE_CLASS[row.position] ?? 'bg-fill-interaction-hover text-content-alternative',
                             )}
                           >
                             {row.position}
@@ -209,9 +209,9 @@ const LimitReleaseSection = () => {
         </div>
 
         {/* 우측: 디테일 패널 */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-clip bg-white py-5 pl-6">
+        <div className="flex min-w-0 flex-1 flex-col overflow-clip bg-fill-normal py-5 pl-6">
           {!selectedRequest ? (
-            <div className="text-body-small flex h-full items-center justify-center text-gray-50">
+            <div className="text-body-small flex h-full items-center justify-center text-content-alternative">
               선택된 요청 정보가 없습니다.
             </div>
           ) : (

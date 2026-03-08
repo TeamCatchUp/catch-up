@@ -23,11 +23,11 @@ const DetailHeader = ({ userId, userName, userDepartment, from }: DetailHeaderPr
     <div className="flex flex-col gap-6">
       {/* 타이틀 + 유저 정보 */}
       <div className="flex items-center gap-2.5">
-        <h1 className="text-heading-xlarge text-gray-90 shrink-0">이용자 질문 기록</h1>
+        <h1 className="text-heading-xlarge text-content-strong shrink-0">이용자 질문 기록</h1>
         <Separator orientation="vertical" className="h-6" />
         <div className="flex min-w-0 items-center gap-3">
-          <DefaultProfile className="border-neutral-2 text-gray-30 size-7 shrink-0 rounded-full border" />
-          <span className="text-body-small text-gray-70 truncate tracking-tight">
+          <DefaultProfile className="border-edge-assistive text-content-assistive size-7 shrink-0 rounded-full border" />
+          <span className="text-body-small text-content-neutral truncate tracking-tight">
             {userName} ({userDepartment})
           </span>
         </div>

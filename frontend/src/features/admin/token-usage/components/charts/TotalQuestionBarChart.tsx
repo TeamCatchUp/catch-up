@@ -26,11 +26,11 @@ export default function TotalQuestionBarChart({ data }: TotalQuestionBarChartPro
   const totalCount = useMemo(() => data.reduce((sum, d) => sum + d.count, 0), [data]);
 
   return (
-    <div className="border-neutral-3 flex h-full flex-col overflow-hidden rounded-xl border bg-white px-6 py-5">
+    <div className="border-edge-neutral flex h-full flex-col overflow-hidden rounded-xl border bg-fill-normal px-6 py-5">
       {/* 헤더 */}
       <div className="flex flex-col gap-1">
-        <span className="text-heading-small text-gray-50">전체 질문 횟수</span>
-        <span className="text-heading-large text-gray-80">{totalCount.toLocaleString()}</span>
+        <span className="text-heading-small text-content-alternative">전체 질문 횟수</span>
+        <span className="text-heading-large text-content-normal">{totalCount.toLocaleString()}</span>
       </div>
 
       {/* 차트 */}

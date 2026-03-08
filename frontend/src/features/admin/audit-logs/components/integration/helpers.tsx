@@ -32,28 +32,28 @@ export const getServiceIconCls = (service: IntegrationService) =>
 
 /** 리소스 아이콘: Jira/Confluence → space, Slack → tag, Github → 서비스 아이콘 */
 export const ResourceIcon = ({ service }: { service: IntegrationService }) => {
-  if (service === 'slack') return <IconTag className="size-6 text-gray-50" />;
+  if (service === 'slack') return <IconTag className="size-6 text-content-alternative" />;
   if (service === 'github') return <ServiceIcon service="github" className="size-6" />;
-  return <IconSpace className="size-6 text-gray-50" />;
+  return <IconSpace className="size-6 text-content-alternative" />;
 };
 
 /** 정보 행 */
 export const InfoRow = ({ label, value }: { label: string; value: string }) => (
   <div className="text-body-small flex w-full items-center gap-14">
-    <span className="w-19.75 shrink-0 text-gray-50">{label}</span>
-    <span className="text-gray-70 min-w-0 flex-1 truncate">{value}</span>
+    <span className="w-19.75 shrink-0 text-content-alternative">{label}</span>
+    <span className="text-content-neutral min-w-0 flex-1 truncate">{value}</span>
   </div>
 );
 
 /** 상태 배지 InfoRow */
 export const StatusBadgeRow = ({ status }: { status: 'success' | 'failure' }) => {
   const statusLabel = STATUS_LABEL[status];
-  const badgeCls = STATUS_BADGE_CLASS[statusLabel] ?? 'bg-neutral-2 text-gray-50';
+  const badgeCls = STATUS_BADGE_CLASS[statusLabel] ?? 'bg-fill-interaction-hover text-content-alternative';
   const isSuccess = status === 'success';
 
   return (
     <div className="text-body-small flex w-full items-center gap-14">
-      <span className="w-19.75 shrink-0 text-gray-50">상태</span>
+      <span className="w-19.75 shrink-0 text-content-alternative">상태</span>
       <span
         className={cn('rounded-md2 text-body-xsmall inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5', badgeCls)}
       >

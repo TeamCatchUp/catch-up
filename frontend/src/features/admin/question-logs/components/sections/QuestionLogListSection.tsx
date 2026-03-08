@@ -119,34 +119,34 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
               'flex h-9 max-w-[145px] min-w-9 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1.5',
               savedOnly
                 ? 'border-blue-30 bg-blue-1'
-                : 'border-neutral-3 hover:bg-neutral-2 active:bg-neutral-3 bg-white',
+                : 'border-edge-neutral hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed bg-fill-normal',
             )}
           >
-            <BookmarkIcon className={cn('size-5 shrink-0', savedOnly ? 'text-blue-55' : 'text-gray-70')} />
-            <span className={cn('text-body-small whitespace-nowrap', savedOnly ? 'text-blue-55' : 'text-gray-80')}>
+            <BookmarkIcon className={cn('size-5 shrink-0', savedOnly ? 'text-blue-55' : 'text-content-neutral')} />
+            <span className={cn('text-body-small whitespace-nowrap', savedOnly ? 'text-blue-55' : 'text-content-normal')}>
               저장한 답변
             </span>
           </button>
         </div>
 
-        <label className="border-neutral-2 bg-neutral-1 focus-within:border-neutral-3 flex h-10 w-[280px] items-center gap-1.5 rounded-lg border px-3 py-2">
-          <SearchIcon className="text-gray-30 size-5 shrink-0" />
+        <label className="border-edge-assistive bg-fill-strong focus-within:border-edge-neutral flex h-10 w-[280px] items-center gap-1.5 rounded-lg border px-3 py-2">
+          <SearchIcon className="text-content-assistive size-5 shrink-0" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="질문, 키워드로 검색하세요."
-            className="text-body-small text-gray-70 placeholder:text-gray-30 w-full bg-transparent outline-none"
+            className="text-body-small text-content-neutral placeholder:text-content-assistive w-full bg-transparent outline-none"
           />
         </label>
       </div>
 
       {/* 로딩 */}
-      {isLoading && <div className="text-body-small text-gray-40 px-1 py-4">불러오는 중...</div>}
+      {isLoading && <div className="text-body-small text-content-assistive px-1 py-4">불러오는 중...</div>}
 
       {/* 빈 결과 */}
       {!isLoading && groupedSections.length === 0 && (
-        <div className="text-body-small text-gray-40 px-1 py-4">조건에 맞는 질문 기록이 없습니다.</div>
+        <div className="text-body-small text-content-assistive px-1 py-4">조건에 맞는 질문 기록이 없습니다.</div>
       )}
 
       {/* 그룹별 리스트 */}
@@ -156,7 +156,7 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
             <Fragment key={section.key}>
               <section className="flex flex-col gap-3">
                 <div className="px-2">
-                  <span className="text-body-xsmall text-gray-50">{section.title}</span>
+                  <span className="text-body-xsmall text-content-alternative">{section.title}</span>
                 </div>
                 <div className="flex flex-col gap-2">
                   {section.items.map((item) => (
@@ -172,7 +172,7 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
 
       {/* 무한 스크롤 sentinel + 로딩 표시 */}
       <div ref={sentinelRef} className="h-1" />
-      {isFetchingNextPage && <div className="text-body-small text-gray-40 py-2 text-center">불러오는 중...</div>}
+      {isFetchingNextPage && <div className="text-body-small text-content-assistive py-2 text-center">불러오는 중...</div>}
     </div>
   );
 };
