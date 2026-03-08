@@ -47,7 +47,7 @@ const UsersTable = ({
       <div
         className={cn(
           'border-edge-neutral grid h-9 shrink-0 grid-cols-4 items-center gap-9 border-b px-5 transition-colors',
-          isEditMode ? 'bg-blue-5' : 'bg-fill-strong',
+          isEditMode ? 'bg-fill-primary-normal-neutral' : 'bg-fill-strong',
         )}
       >
         <span className="text-body-xsmall pl-8 text-content-alternative">Keycloack 사용자</span>
