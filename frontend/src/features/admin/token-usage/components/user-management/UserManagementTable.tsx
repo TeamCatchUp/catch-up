@@ -30,9 +30,9 @@ interface UserManagementTableProps {
 
 export default function UserManagementTable({ data, onToggleToken }: UserManagementTableProps) {
   return (
-    <div className="border-edge-neutral overflow-hidden rounded-xl border bg-fill-normal">
+    <div className="overflow-hidden">
       {/* 헤더 */}
-      <div className="text-heading-small bg-fill-strong text-content-neutral grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center px-5 py-1.5">
+      <div className="text-body-xsmall border-edge-neutral bg-fill-strong text-content-alternative grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center border-b px-5 py-1.5">
         <span>이름</span>
         <span>사용량</span>
         <span>직급</span>
