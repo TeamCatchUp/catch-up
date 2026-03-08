@@ -82,7 +82,7 @@ const RagAnswer = ({
               </ReactMarkdown>
             </div>
 
-            <div className="text-body-small text-gray-30">
+            <div className="text-body-small text-content-assistive">
               질문과 연관된 {currentQA.answer.sources?.length || 0}개의 핵심 자료를 선별했어요.
             </div>
 

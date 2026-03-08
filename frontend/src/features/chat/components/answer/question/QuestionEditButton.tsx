@@ -11,13 +11,13 @@ const QuestionEditButton = ({ onClick }: QuestionEditButtonProps) => {
       type="button"
       onClick={onClick}
       className={cn(
-        'border-neutral-3 box-button-outline-gray',
+        'border-edge-neutral box-button-outline-gray',
         'hidden shrink-0 group-hover:inline-flex',
         'cursor-pointer justify-center gap-1 rounded-lg border px-2 py-1',
       )}
     >
-      <EditPencil className="text-gray-70 h-5 w-5" />
-      <span className="text-body-xsmall text-gray-80 whitespace-nowrap">수정하기</span>
+      <EditPencil className="text-icon-normal h-5 w-5" />
+      <span className="text-body-xsmall text-content-normal whitespace-nowrap">수정하기</span>
     </button>
   );
 };

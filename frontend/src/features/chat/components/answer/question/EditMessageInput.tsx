@@ -42,8 +42,8 @@ const EditMessageInput = ({ initialContent, onCancel, onSubmit }: EditMessageInp
   return (
     <div
       className={cn(
-        'flex flex-col gap-2.5 rounded-2xl border bg-white px-4.5 py-2.5',
-        isFocused ? 'border-blue-30' : 'border-neutral-3',
+        'flex flex-col gap-2.5 rounded-2xl border bg-fill-normal px-4.5 py-2.5',
+        isFocused ? 'border-blue-30' : 'border-edge-neutral',
       )}
     >
       <textarea
@@ -61,14 +61,14 @@ const EditMessageInput = ({ initialContent, onCancel, onSubmit }: EditMessageInp
             onCancel();
           }
         }}
-        className="text-body-medium text-gray-80 box-border h-6.5 w-full resize-none overflow-y-auto px-1 outline-none"
+        className="text-body-medium text-content-normal box-border h-6.5 w-full resize-none overflow-y-auto px-1 outline-none"
       />
       <div className="flex items-center justify-end gap-2">
         <button
           onClick={onCancel}
           className="capsule-button-outline-mono flex shrink-0 cursor-pointer items-center justify-center px-3 py-1.5"
         >
-          <span className="text-body-small text-gray-80">취소</span>
+          <span className="text-body-small text-content-normal">취소</span>
         </button>
         <button
           onClick={handleSubmit}
