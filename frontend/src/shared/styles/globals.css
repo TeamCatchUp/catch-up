@@ -275,7 +275,7 @@
 
   input,
   textarea {
-    caret-color: #0054d1;
+    caret-color: var(--icon-primary-strong);
   }
 }
 

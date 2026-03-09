@@ -26,7 +26,7 @@ const DetailHeader = ({ userId, userName, userDepartment, from }: DetailHeaderPr
         <h1 className="text-heading-xlarge text-content-strong shrink-0">이용자 질문 기록</h1>
         <Separator orientation="vertical" className="h-6" />
         <div className="flex min-w-0 items-center gap-3">
-          <DefaultProfile className="border-edge-assistive text-content-assistive size-7 shrink-0 rounded-full border" />
+          <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
           <span className="text-body-small text-content-neutral truncate tracking-tight">
             {userName} ({userDepartment})
           </span>

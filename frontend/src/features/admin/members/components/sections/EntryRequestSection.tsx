@@ -84,7 +84,7 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
   };
 
   return (
-    <section className="flex w-250 flex-col gap-3">
+    <section className="flex w-full flex-col gap-3">
       <SectionHeader
         title="입장 신청 목록"
         count={filtered.length}
@@ -149,7 +149,7 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
         }
       />
 
-      <div className="border-edge-neutral grid h-124 min-h-0 w-250 grid-cols-[500px_500px] overflow-clip border-y">
+      <div className="border-edge-neutral grid h-124 min-h-0 grid-cols-2 overflow-clip border-y">
         <MemberTable
           rows={tableRows}
           activeKey={activeKey}

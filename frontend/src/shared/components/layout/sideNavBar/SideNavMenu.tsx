@@ -76,7 +76,7 @@ export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
                 >
                   <item.Icon
                     className={cn(
-                      isOpen ? 'h-6 w-6' : 'h-7 w-7',
+                      'size-5',
                       isActive ? 'text-icon-primary group-hover:text-icon-primary' : 'text-icon-normal',
                     )}
                   />

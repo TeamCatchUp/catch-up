@@ -54,7 +54,7 @@ const IntegrationAccountsSection = ({
             {isLinked ? (
               <div className="flex shrink-0 flex-col items-start justify-center gap-0.5">
                 <div className="flex shrink-0 items-center gap-2.5">
-                  <DefaultProfile className="border-edge-assistive text-content-assistive size-6.25 shrink-0 rounded-full border" />
+                  <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
                   <span className="text-body-xsmall text-content-normal max-w-33.25 shrink-0 truncate">{name}</span>
                   <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall shrink-0 px-1.5 py-0.5 tracking-tight text-content-alternative">
                     {accountId}
@@ -82,7 +82,7 @@ const AccountDetailPanel = ({ log }: { log: AuditLog }) => (
   <div className="flex h-full flex-col gap-4">
     {/* 프로필 + 이름 */}
     <div className="flex items-center gap-3">
-      <DefaultProfile className="border-edge-assistive text-content-assistive size-7 shrink-0 rounded-full border" />
+      <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
       <span className="text-heading-medium text-content-normal truncate">{log.name}</span>
     </div>
 

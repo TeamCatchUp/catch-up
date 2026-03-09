@@ -48,7 +48,7 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-5">
           <div className="flex flex-1 items-center gap-3">
-            <DefaultProfile className="border-edge-assistive text-content-assistive size-7 shrink-0 rounded-full border" />
+            <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
             <span className="text-heading-medium text-content-normal truncate">{request.name}</span>
           </div>
           <div className="flex shrink-0 items-center gap-2.5">

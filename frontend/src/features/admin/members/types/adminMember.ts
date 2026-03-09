@@ -56,6 +56,7 @@ export interface AdminUserDetailResponse {
   id: number;
   name: string;
   email: string;
+  picture: string | null;
   department: string;
   jobLevel: JobLevel;
   status: UserStatus;

@@ -42,7 +42,7 @@ const AccountSelectorPopover = ({
       >
         {selectedAccount ? (
           <>
-            <DefaultProfile className="border-edge-assistive text-content-assistive size-10 shrink-0 rounded-full border" />
+            <DefaultProfile className="text-content-assistive size-10 shrink-0 rounded-full" />
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <div className="flex items-center gap-2.5">
                 <span className="text-heading-small text-content-normal max-w-[133px] truncate">
@@ -88,7 +88,7 @@ const AccountSelectorPopover = ({
               onSelect={() => onSelect(option.key)}
               className="border-edge-assistive data-[selected=true]:bg-fill-strong gap-3 rounded-none border-b px-3 py-2"
             >
-              <DefaultProfile className="border-edge-assistive text-content-assistive size-10 shrink-0 rounded-full border" />
+              <DefaultProfile className="text-content-assistive size-10 shrink-0 rounded-full" />
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <div className="flex items-center gap-2.5">
                   <span className="text-heading-small text-content-normal max-w-[160px] truncate">{option.userName}</span>

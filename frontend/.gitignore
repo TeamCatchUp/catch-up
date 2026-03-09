@@ -48,3 +48,6 @@ next-env.d.ts
 
 # Mock data (로컬에만 저장)
 /src/shared/mocks/
+
+# local chat streaming
+/src/app/api/v1/chat/stream

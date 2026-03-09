@@ -56,7 +56,7 @@ const AccountSelectDropdown = ({ status, options, selectedAccount, onSelect, onT
                   className="size-5 shrink-0 rounded-full"
                 />
               ) : (
-                <DefaultProfile className="border-edge-assistive text-content-assistive size-5 shrink-0 rounded-full border" />
+                <DefaultProfile className="text-content-assistive size-5 shrink-0 rounded-full" />
               )}
               <span className="text-body-small text-content-strong truncate">{selectedAccount.name}</span>
             </div>
@@ -116,7 +116,7 @@ const AccountSelectDropdown = ({ status, options, selectedAccount, onSelect, onT
                     className="size-10 shrink-0 rounded-full"
                   />
                 ) : (
-                  <DefaultProfile className="border-edge-assistive text-content-assistive size-10 shrink-0 rounded-full border" />
+                  <DefaultProfile className="text-content-assistive size-10 shrink-0 rounded-full" />
                 )}
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="text-heading-small text-content-normal max-w-43.75 truncate">{account.name}</span>
