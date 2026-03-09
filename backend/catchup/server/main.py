@@ -42,6 +42,8 @@ from catchup.utils.redis import get_redis_client
 from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
 from catchup.utils.client import _shared_client
 from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_checkpointer
+from catchup.events.bus import bus
+from catchup.audit.handler import audit_event_handler
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -339,6 +341,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 감사 로그 이벤트 리스너 등록
+bus.subscribe("audit", audit_event_handler)
+
 
 # 헬스 체크
 @app.get("/api/v1/health")
