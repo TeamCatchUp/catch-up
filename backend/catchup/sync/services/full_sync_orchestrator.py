@@ -29,6 +29,13 @@ from catchup.sync.event_publisher.stream_task_builder import (
 )
 from catchup.sync.sync_audit import emit_sync_dispatch_accepted
 
+from catchup.sync.status_stream.pubsub import publish_job_status_event
+from catchup.sync.status_stream.schemas import (
+    SyncStatusEventType,
+    SyncStatusStreamEvent,
+    utc_now_iso,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,6 +49,30 @@ def _build_job_urls(base_url: str | None, job_id: str) -> tuple[str | None, str 
         f"{base}/api/v1/sync/jobs/{job_id}/stream",
     )
 
+
+def _build_job_queued_event(
+    *,
+    connector: SyncConnector,
+    job_id: str,
+    scope_id: str,
+    total_targets: int,
+    queued_targets: int,
+    sync_from: str,
+) -> SyncStatusStreamEvent:
+    return SyncStatusStreamEvent(
+        connector=connector,
+        job_id=job_id,
+        scope_id=scope_id,
+        event_type=SyncStatusEventType.JOB_QUEUED,
+        timestamp=utc_now_iso(),
+        payload={
+            "status": "pending",
+            "sync_type": SyncType.FULL.value,
+            "sync_from": sync_from,
+            "total_targets": total_targets,
+            "queued_targets": queued_targets,
+        },
+    )
 
 class FullSyncDispatchOrchestrator:
     def __init__(self, event_publisher: EventPublisherProtocol):
@@ -73,7 +104,6 @@ class FullSyncDispatchOrchestrator:
             request=request,
             sync_from=sync_from,
         )
-
 
         event_seeds: list[SyncEventSeed] = []
         for target in resolved.targets:
@@ -142,6 +172,28 @@ class FullSyncDispatchOrchestrator:
 
         # Redis Stream에 발행
         publish_result = await self._event_publisher.publish(tasks=tasks)
+
+        if total_targets > 0:
+            try:
+                await publish_job_status_event(
+                    _build_job_queued_event(
+                        connector=connector,
+                        job_id=job_id,
+                        scope_id=scope_id,
+                        total_targets=total_targets,
+                        queued_targets=publish_result.published_count,
+                        sync_from=sync_from,
+                    )
+                )
+            except Exception as exc:
+                logger.warning(
+                    "[%s][FULL SYNC][ORCHESTRATOR] Failed to publish job queued status: scope_id=%s, job_id=%s, error=%s",
+                    connector.value.upper(),
+                    scope_id,
+                    job_id,
+                    exc,
+                    exc_info=True,
+                )
 
         if total_targets == 0:
             started = start_db_sync_job(db, job_id)

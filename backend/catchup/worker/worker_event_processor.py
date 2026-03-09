@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
-from catchup.db.models import SyncEventStatus, SyncJobStatus
+from catchup.db.models import SyncConnector, SyncEventStatus, SyncJobStatus
 from catchup.db.sync import (
     claim_event_for_processing,
     complete_job_failed,
@@ -33,6 +33,12 @@ from catchup.sync.stream_runtime.sync_runtime import (
     initialize_stream_runtime,
     publish_job_events,
     read_ready_messages,
+)
+from catchup.sync.status_stream.pubsub import publish_job_status_event
+from catchup.sync.status_stream.schemas import (
+    SyncStatusEventType,
+    SyncStatusStreamEvent,
+    utc_now_iso,
 )
 from catchup.sync.sync_audit import (
     emit_worker_job_completed,
@@ -88,6 +94,84 @@ def _extract_result_counts(result: dict[str, int | bool]) -> tuple[int, int, boo
 
     skipped = bool(skipped_raw)
     return synced_count, error_count, skipped
+
+
+def _build_target_status_event(
+    *,
+    context: SyncEventContext,
+    event_type: SyncStatusEventType,
+    status: str,
+    attempt: int | None = None,
+    extra_payload: dict[str, object] | None = None,
+) -> SyncStatusStreamEvent:
+    payload: dict[str, object] = {
+        "sync_type": context.sync_type,
+        "event_id": context.event_id,
+        "target_type": context.target_type,
+        "target_id": context.target_id,
+        "target_name": context.target_name,
+        "status": status,
+        "attempt": context.attempt if attempt is None else attempt,
+        "max_attempts": context.max_attempts,
+    }
+    if extra_payload:
+        payload.update(extra_payload)
+
+    return SyncStatusStreamEvent(
+        connector=SyncConnector(context.connector),
+        job_id=context.job_id,
+        scope_id=context.scope_id,
+        event_type=event_type,
+        timestamp=utc_now_iso(),
+        payload=payload,
+    )
+
+
+def _build_job_status_event(
+    *,
+    context: SyncEventContext,
+    event_type: SyncStatusEventType,
+    status: str,
+    total_targets: int,
+    completed_targets: int | None = None,
+    failed_targets: int | None = None,
+    requeued_targets: int | None = None,
+) -> SyncStatusStreamEvent:
+    # Job 집계 상태는 terminal/started 이벤트에서만 별도 payload로 발행
+    payload: dict[str, object] = {
+        "sync_type": context.sync_type,
+        "status": status,
+        "total_targets": total_targets,
+    }
+    if completed_targets is not None:
+        payload["completed_targets"] = completed_targets
+    if failed_targets is not None:
+        payload["failed_targets"] = failed_targets
+    if requeued_targets is not None:
+        payload["requeued_targets"] = requeued_targets
+
+    return SyncStatusStreamEvent(
+        connector=SyncConnector(context.connector),
+        job_id=context.job_id,
+        scope_id=context.scope_id,
+        event_type=event_type,
+        timestamp=utc_now_iso(),
+        payload=payload,
+    )
+
+
+async def _publish_status_event(event: SyncStatusStreamEvent) -> None:
+    # Status stream publish 실패 : 스트리밍을 끊지 않고 로깅만 남김
+    try:
+        await publish_job_status_event(event)
+    except Exception as exc:
+        logger.warning(
+            "[SYNC][STATUS][WORKER] Failed to publish status event: job_id=%s, event_type=%s, error=%s",
+            event.job_id,
+            event.event_type.value,
+            exc,
+            exc_info=True,
+        )
 
 
 async def _deadletter(
@@ -170,9 +254,9 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
     )
 
 
-async def _mark_event_success(context: SyncEventContext) -> None:
+async def _mark_event_success(context: SyncEventContext) -> bool:
     with SessionLocal() as db:
-        mark_event_success(db, event_id=context.event_id)
+        return mark_event_success(db, event_id=context.event_id)
 
 
 async def _handle_event_failure(
@@ -187,7 +271,22 @@ async def _handle_event_failure(
 
     if next_attempt >= context.max_attempts:
         with SessionLocal() as db:
-            mark_event_failed(db, context.event_id)
+            if not mark_event_failed(db, context.event_id):
+                await _deadletter(
+                    message=message,
+                    reason=SyncStreamFailureReason.EVENT_CAS_CONFLICT,
+                    error_message="failed to transition event to FAILED",
+                )
+                return
+
+        await _publish_status_event(
+            _build_target_status_event(
+                context=context,
+                event_type=SyncStatusEventType.TARGET_FAILED,
+                status=SyncEventStatus.FAILED.value,
+                attempt=next_attempt,
+            )
+        )
 
         await _deadletter(
             message=message,
@@ -251,6 +350,15 @@ async def _handle_event_failure(
         target_type=context.target_type,
         target_ids=[context.target_id],
         max_attempts=context.max_attempts,
+    )
+    await _publish_status_event(
+        _build_target_status_event(
+            context=context,
+            event_type=SyncStatusEventType.TARGET_REQUEUED,
+            status=SyncEventStatus.PENDING.value,
+            attempt=next_attempt,
+            extra_payload={"error_summary": error_summary},
+        )
     )
     await handler.on_target_requeued(
         context=context,
@@ -320,6 +428,18 @@ async def _finalize_job_if_done(
         if failed_targets == 0:
             if not complete_job_success(db, job_id):
                 return
+            # 모든 target 처리 이후에 최종 집계를 포함한 job 완료 이벤트를 발행
+            await _publish_status_event(
+                _build_job_status_event(
+                    context=context,
+                    event_type=SyncStatusEventType.JOB_COMPLETED,
+                    status=SyncJobStatus.SUCCESS.value,
+                    total_targets=total_targets,
+                    completed_targets=completed_targets,
+                    failed_targets=failed_targets,
+                    requeued_targets=requeued_targets,
+                )
+            )
             await handler.on_job_completed(
                 context=context,
                 total_targets=total_targets,
@@ -342,6 +462,18 @@ async def _finalize_job_if_done(
 
         if not complete_job_failed(db, job_id):
             return
+        # 실패가 남은 채 완료된 경우 Job 실패 이벤트를 발행한다
+        await _publish_status_event(
+            _build_job_status_event(
+                context=context,
+                event_type=SyncStatusEventType.JOB_FAILED,
+                status=SyncJobStatus.FAILED.value,
+                total_targets=total_targets,
+                completed_targets=completed_targets,
+                failed_targets=failed_targets,
+                requeued_targets=requeued_targets,
+            )
+        )
         await handler.on_job_failed(
             context=context,
             total_targets=total_targets,
@@ -445,6 +577,15 @@ async def _process_message(
             return
 
         if claim.job_started:
+            # 첫 target claim으로 job이 시작된 경우에만 1회 발행
+            await _publish_status_event(
+                _build_job_status_event(
+                    context=context,
+                    event_type=SyncStatusEventType.JOB_STARTED,
+                    status=SyncJobStatus.IN_PROGRESS.value,
+                    total_targets=claim.total_targets,
+                )
+            )
             await handler.on_job_started(
                 context=context,
                 total_targets=claim.total_targets,
@@ -457,6 +598,14 @@ async def _process_message(
                 total_targets=claim.total_targets,
             )
 
+        # target claim 성공 이후, 실제 처리 시점에 스트리밍
+        await _publish_status_event(
+            _build_target_status_event(
+                context=context,
+                event_type=SyncStatusEventType.TARGET_STARTED,
+                status=SyncEventStatus.IN_PROGRESS.value,
+            )
+        )
         await handler.on_target_started(context=context)
         emit_worker_target_started(
             connector=context.connector,
@@ -473,7 +622,21 @@ async def _process_message(
             context=context,
             service_cache=service_cache,
         )
-        await _mark_event_success(context)
+        if not await _mark_event_success(context):
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.EVENT_CAS_CONFLICT,
+                error_message="failed to transition event to SUCCESS",
+            )
+            return
+
+        await _publish_status_event(
+            _build_target_status_event(
+                context=context,
+                event_type=SyncStatusEventType.TARGET_COMPLETED,
+                status=SyncEventStatus.SUCCESS.value,
+            )
+        )
         await handler.on_target_completed(context=context, result=result)
 
         synced_count, error_count, skipped = _extract_result_counts(result)

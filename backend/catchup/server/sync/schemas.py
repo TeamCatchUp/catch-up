@@ -36,14 +36,13 @@ class SyncJobSnapshotResponse(BaseModel):
 
 class SyncStreamEventResponse(BaseModel):
     """
-    SSE data payload 포맷
+    Sync 상태 스트림 SSE payload 포맷
     """
 
     connector: SyncConnector
     job_id: str
     scope_id: str
     event_type: str
-    sequence: int
     timestamp: str
     payload: dict[str, Any] = Field(default_factory=dict)
 

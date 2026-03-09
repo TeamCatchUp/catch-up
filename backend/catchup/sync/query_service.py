@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-from collections.abc import AsyncGenerator
-import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -26,9 +23,7 @@ from catchup.db.models import (
     JiraProject,
     SlackChannel,
     SyncConnector,
-    SyncEventStatus,
     SyncJob,
-    SyncJobStatus,
     SyncType,
 )
 from catchup.db.sync import get_job, list_events_by_job
@@ -56,17 +51,6 @@ class SyncJobSnapshotResult:
     requeued_targets: int
     metrics: dict[str, int] = field(default_factory=dict)
     last_error: str | None = None
-
-
-@dataclass(slots=True, frozen=True)
-class SyncStreamEventResult:
-    connector: SyncConnector
-    job_id: str
-    scope_id: str
-    event_type: str
-    sequence: int
-    timestamp: str
-    payload: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True, frozen=True)
@@ -114,17 +98,6 @@ class SyncQueryService:
             return value.replace(tzinfo=timezone.utc).isoformat()
         return value.astimezone(timezone.utc).isoformat()
 
-    def _event_status_to_stream_type(self, status: SyncEventStatus) -> str:
-        if status == SyncEventStatus.PENDING:
-            return "target_queued"
-        if status == SyncEventStatus.IN_PROGRESS:
-            return "target_started"
-        if status == SyncEventStatus.RETRYING:
-            return "target_requeued"
-        if status == SyncEventStatus.SUCCESS:
-            return "target_completed"
-        return "target_failed"
-
     def _summarize_events(self, events) -> dict[str, int]:
         queued_targets = sum(
             1
@@ -149,33 +122,6 @@ class SyncQueryService:
             "failed_targets": failed_targets,
             "requeued_targets": sum(int(event.attempt) for event in events),
         }
-
-    def _is_terminal_job_status(self, status_value: SyncJobStatus | None) -> bool:
-        return status_value in {SyncJobStatus.SUCCESS, SyncJobStatus.FAILED}
-
-    def _serialize_stream_event(self, result: SyncStreamEventResult) -> str:
-        payload = {
-            "connector": result.connector.value,
-            "job_id": result.job_id,
-            "scope_id": result.scope_id,
-            "event_type": result.event_type,
-            "sequence": result.sequence,
-            "timestamp": result.timestamp,
-            "payload": result.payload,
-        }
-        return json.dumps(payload, ensure_ascii=False)
-
-    def _serialize_heartbeat(self, snapshot: SyncJobSnapshotResult) -> str:
-        payload = {
-            "connector": snapshot.connector.value,
-            "job_id": snapshot.job_id,
-            "scope_id": snapshot.scope_id,
-            "event_type": "heartbeat",
-            "sequence": 0,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "payload": {"status": str(snapshot.status)},
-        }
-        return json.dumps(payload, ensure_ascii=False)
 
     def get_job_snapshot(self, job_id: str) -> SyncJobSnapshotResult | None:
         # DB에서 job + events를 읽어 snapshot으로 변환
@@ -258,98 +204,6 @@ class SyncQueryService:
                 },
                 last_error=None,
             )
-
-    def list_job_stream_events(
-        self,
-        job_id: str,
-    ) -> tuple[SyncJobStatus | None, list[SyncStreamEventResult]]:
-        # SSE 구성용 이벤트 목록을 sequence 순서로 생성
-        with SessionLocal() as db:
-            job = get_job(db, job_id)
-            if job is None:
-                return None, []
-
-            events = list_events_by_job(db, job_id=job_id, limit=100000)
-            stream_events: list[SyncStreamEventResult] = []
-            sequence = 1
-
-            for event in events:
-                stream_events.append(
-                    SyncStreamEventResult(
-                        connector=job.connector,
-                        job_id=job.job_id,
-                        scope_id=str(job.scope_id),
-                        event_type=self._event_status_to_stream_type(event.status),
-                        sequence=sequence,
-                        timestamp=self._to_iso(event.updated_at)
-                        or datetime.now(timezone.utc).isoformat(),
-                        payload={
-                            "event_id": event.event_id,
-                            "status": str(event.status),
-                            "resource_type": event.resource_type,
-                            "resource_id": event.resource_id,
-                            "attempt": int(event.attempt),
-                            "max_attempts": int(event.max_attempts),
-                        },
-                    )
-                )
-                sequence += 1
-
-            if job.status in {SyncJobStatus.SUCCESS, SyncJobStatus.FAILED}:
-                stream_events.append(
-                    SyncStreamEventResult(
-                        connector=job.connector,
-                        job_id=job.job_id,
-                        scope_id=str(job.scope_id),
-                        event_type=(
-                            "job_completed"
-                            if job.status == SyncJobStatus.SUCCESS
-                            else "job_failed"
-                        ),
-                        sequence=sequence,
-                        timestamp=self._to_iso(job.succeeded_at or job.failed_at)
-                        or datetime.now(timezone.utc).isoformat(),
-                        payload={"status": str(job.status)},
-                    )
-                )
-
-            return job.status, stream_events
-
-    async def stream_job_events_sse(
-        self,
-        *,
-        job_id: str,
-        from_sequence: int,
-        heartbeat_seconds: int,
-    ) -> AsyncGenerator[str, None]:
-        """
-        SSE 조립을 QueryService에서 수행하여 Router를 thin 계층으로 유지한다.
-        """
-        next_seq = max(1, from_sequence)
-        wait_seconds = max(0, heartbeat_seconds)
-
-        while True:
-            snapshot = self.get_job_snapshot(job_id)
-            if snapshot is None:
-                break
-
-            job_status, stream_events = self.list_job_stream_events(job_id)
-            new_items = [item for item in stream_events if item.sequence >= next_seq]
-            if new_items:
-                for item in new_items:
-                    payload = self._serialize_stream_event(item)
-                    yield f"data: {payload}\n\n"
-                    next_seq = item.sequence + 1
-
-                if self._is_terminal_job_status(job_status):
-                    break
-                continue
-
-            if self._is_terminal_job_status(job_status):
-                break
-
-            yield f"data: {self._serialize_heartbeat(snapshot)}\n\n"
-            await asyncio.sleep(wait_seconds)
 
     def _build_targets_result(
         self,

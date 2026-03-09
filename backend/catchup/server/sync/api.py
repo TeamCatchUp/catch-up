@@ -36,6 +36,7 @@ from catchup.sync.query_service import (
     SyncTargetsResult,
     get_sync_query_service,
 )
+from catchup.sync.status_stream.service import get_sync_status_stream_service
 
 logger = logging.getLogger(__name__)
 
@@ -272,9 +273,9 @@ async def get_job_snapshot(
 )
 async def stream_job_events(
     job_id: str,
-    from_sequence: int = Query(1, ge=1),
 ):
     query_service = get_sync_query_service()
+    stream_service = get_sync_status_stream_service()
     first_snapshot = query_service.get_job_snapshot(job_id)
 
     if first_snapshot is None:
@@ -287,12 +288,15 @@ async def stream_job_events(
         )
 
     return StreamingResponse(
-        query_service.stream_job_events_sse(
-            job_id=job_id,
-            from_sequence=from_sequence,
+        stream_service.stream_job_events_sse(
+            snapshot=_to_job_snapshot_response(first_snapshot).model_dump(mode="json"),
             heartbeat_seconds=settings.SYNC_SSE_HEARTBEAT_SECONDS,
         ),
         media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
