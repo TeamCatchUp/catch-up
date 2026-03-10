@@ -127,7 +127,7 @@ class ChatService:
 
         finally:
             elapsed_time = time.perf_counter() - start
-            logger.info(f"({session_id})Streaming 종료: total {elapsed_time:.4f}s")
+            logger.info(f"({session_id}) Streaming 종료: total {elapsed_time:.4f}s")
             
     def _resolve_input_messages(
         self,

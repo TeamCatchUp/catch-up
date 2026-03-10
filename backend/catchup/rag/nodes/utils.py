@@ -1,7 +1,7 @@
 # llm 호출 Rate Limit 방어
 import asyncio
 import functools
-import logging
+import structlog
 import time
 from typing import Callable, Awaitable, Annotated
 
@@ -45,7 +45,7 @@ def extract_anchor_ids(documents: list[Document]) -> list[str]:
 
 
 # node 로깅 데코레이터
-logger = logging.getLogger("catchup.graph")
+logger = structlog.get_logger("catchup.graph")
 
 
 def log_node(func: Callable[..., Awaitable[dict]]):
@@ -59,18 +59,18 @@ def log_node(func: Callable[..., Awaitable[dict]]):
         node_name = func.__name__
         start_time = time.time()
 
-        logger.info(f"[START] Node: {node_name} started.")
+        logger.debug("node_started", node_name=node_name)
 
         try:
             result = await func(*args, **kwargs)
 
             elapsed = time.time() - start_time
-            logger.info(f"[END] Node: {node_name} completed. ({elapsed:.2f}s)")
+            logger.info("node_completed", node_name=node_name, duration=round(elapsed, 4))
 
             return result
 
         except Exception as e:
-            logger.error(f"Node: {node_name} failed: {e}", exc_info=True)
+            logger.error("node_failed", node_name=node_name, error=str(e), exc_info=True)
             raise e
 
     return wrapper
