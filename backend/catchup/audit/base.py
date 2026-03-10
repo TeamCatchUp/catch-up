@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from enum import StrEnum
 from typing import Any, Literal
-
 
 from catchup.audit.enums import EventType
 from catchup.observability.logging import get_logger
 
+
 AuditLevel = Literal["debug", "info", "warning", "error", "critical"]
+
 DEFAULT_FAILURE_VALUES = {
     "failure",
     "failed",
@@ -17,15 +17,6 @@ DEFAULT_FAILURE_VALUES = {
     "timeout",
 }
 
-audit_logger = get_logger("catchup.audit")
-
-_LEVEL_TO_LOGGER_METHOD: dict[AuditLevel, Callable[..., Any]] = {
-    "debug": audit_logger.debug,
-    "info": audit_logger.info,
-    "warning": audit_logger.warning,
-    "error": audit_logger.error,
-    "critical": audit_logger.critical,
-}
 
 def build_actor(
     *,
@@ -48,6 +39,7 @@ def build_actor(
         "department": department,
     }
 
+
 def resolve_audit_level(
     result: str,
     level: AuditLevel | None,
@@ -60,6 +52,7 @@ def resolve_audit_level(
         return level
     return failure_level if result.lower() in failure_values else success_level
 
+
 def emit_audit_event(
     *,
     event_type: EventType,
@@ -67,15 +60,23 @@ def emit_audit_event(
     actor: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
     level: AuditLevel = "info",
+    remote_addr: str | None = None,
 ) -> None:
+
     payload: dict[str, Any] = {
         "event_type": str(event_type),
         "event_action": str(event_action),
-        "metadata": metadata or {},
     }
-
-    if actor is not None:
-        payload["actor"] = actor
     
-    log_method = _LEVEL_TO_LOGGER_METHOD[level]
+    if remote_addr:
+        payload["remote_addr"] = remote_addr
+
+    if metadata:
+        payload["metadata"] = metadata
+
+    if actor:
+        payload["actor"] = actor
+
+    audit_logger = get_logger("catchup.audit")
+    log_method = getattr(audit_logger, level)
     log_method(str(event_action), **payload)
