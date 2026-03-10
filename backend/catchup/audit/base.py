@@ -43,6 +43,7 @@ def resolve_audit_level(
     return failure_level if result.lower() in failure_values else success_level
 
 
+# TODO: 삭제
 def emit_audit_event(
     *,
     event_type: EventType,

@@ -1,4 +1,4 @@
-# Deprecated: Use bus.emit()
+# Deprecated: Use emit_audit_event()
 
 from __future__ import annotations
 
