@@ -342,26 +342,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # 감사 로그 이벤트 리스너 등록
 bus.subscribe("audit", audit_event_handler)
+
+
+# 미들웨어 등록
+app.middleware("http")(request_context_middleware)
 
 
 # 헬스 체크
 @app.get("/api/v1/health")
 async def health_check():
     return {"status": "ok", "message": "Catch Up backend is running."}
-
-
-# 응답 시간 추출
-@app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
-    start_time = time.perf_counter()
-
-    response = await call_next(request)
-
-    process_time = time.perf_counter() - start_time
-    logger.info("%s %s ===> %.4fs", request.method, request.url.path, process_time)
-
-    return response
-
-app.middleware("http")(request_context_middleware)
