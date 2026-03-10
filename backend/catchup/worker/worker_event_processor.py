@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
-from catchup.db.incremental import get_record_state, update_record_status_cas
+from catchup.db.incremental import get_record_state, transition_record_status
 from catchup.db.models import (
     IncrementalRecordStatus,
     SyncConnector,
@@ -277,7 +277,7 @@ def _claim_incremental_task(task: SyncStreamTask) -> ClaimResult:
         if record.status != IncrementalRecordStatus.QUEUED:
             return ClaimResult(state="stale_task")
 
-        if not update_record_status_cas(
+        if not transition_record_status(
             db,
             record_key=record_key,
             from_statuses=[IncrementalRecordStatus.QUEUED],
@@ -334,7 +334,7 @@ async def _mark_incremental_success(context: SyncEventContext) -> bool:
         return False
 
     with SessionLocal() as db:
-        return update_record_status_cas(
+        return transition_record_status(
             db,
             record_key=context.record_key,
             from_statuses=[IncrementalRecordStatus.PROCESSING],
@@ -365,7 +365,7 @@ async def _handle_incremental_failure(
 
     if next_attempt >= context.max_attempts:
         with SessionLocal() as db:
-            update_record_status_cas(
+            transition_record_status(
                 db,
                 record_key=context.record_key,
                 from_statuses=[IncrementalRecordStatus.PROCESSING],
@@ -397,7 +397,7 @@ async def _handle_incremental_failure(
 
     next_retry_at = datetime.now(timezone.utc) + _incremental_retry_delay(next_attempt)
     with SessionLocal() as db:
-        update_record_status_cas(
+        transition_record_status(
             db,
             record_key=context.record_key,
             from_statuses=[IncrementalRecordStatus.PROCESSING],

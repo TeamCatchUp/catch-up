@@ -7,7 +7,7 @@ from catchup.db.engine import SessionLocal
 from catchup.db.incremental import (
     get_record_state,
     list_pending_outbox_entries,
-    update_outbox_status_cas,
+    transition_outbox_status,
 )
 from catchup.db.models import IncrementalOutboxStatus, IncrementalRecordStatus, SyncConnector
 from catchup.sync.common.schemas import SyncStreamTask
@@ -58,7 +58,7 @@ async def publish_incremental_outbox(
                     continue
 
                 if record.generation != entry.generation or record.status != IncrementalRecordStatus.QUEUED:
-                    if update_outbox_status_cas(
+                    if transition_outbox_status(
                         db,
                         outbox_id=entry.id,
                         from_statuses=[IncrementalOutboxStatus.PENDING, IncrementalOutboxStatus.FAILED],
@@ -97,7 +97,7 @@ async def publish_incremental_outbox(
             message_id = await publish_task(task)
 
             with SessionLocal() as db:
-                if update_outbox_status_cas(
+                if transition_outbox_status(
                     db,
                     outbox_id=entry.id,
                     from_statuses=[IncrementalOutboxStatus.PENDING, IncrementalOutboxStatus.FAILED],
@@ -117,7 +117,7 @@ async def publish_incremental_outbox(
                 entry.generation,
             )
             with SessionLocal() as db:
-                update_outbox_status_cas(
+                transition_outbox_status(
                     db,
                     outbox_id=entry.id,
                     from_statuses=[IncrementalOutboxStatus.PENDING, IncrementalOutboxStatus.FAILED],

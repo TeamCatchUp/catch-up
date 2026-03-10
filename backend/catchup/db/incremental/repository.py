@@ -232,7 +232,7 @@ def list_retry_ready_records(
     return list(db.execute(stmt).scalars().all())
 
 
-def update_record_status_cas(
+def _update_record_status(
     db: Session,
     *,
     record_key: str,
@@ -247,7 +247,7 @@ def update_record_status_cas(
     last_error: str | None = None,
     lease_owner: str | None = None,
     lease_until: datetime | None = None,
-) -> bool:
+) -> int:
     _validate_record_transition(from_statuses, to_status)
 
     now = _utc_now()
@@ -282,8 +282,46 @@ def update_record_status_cas(
         stmt = stmt.where(IncrementalRecordState.generation == expected_generation)
 
     result = db.execute(stmt.values(**values))
-    db.commit()
-    return result.rowcount == 1
+    return result.rowcount or 0
+
+
+def transition_record_status(
+    db: Session,
+    *,
+    record_key: str,
+    from_statuses: Sequence[IncrementalRecordStatus],
+    to_status: IncrementalRecordStatus,
+    expected_generation: int | None = None,
+    attempt: int | None = None,
+    next_retry_at: datetime | None = None,
+    queued_generation: int | None = None,
+    processing_generation: int | None = None,
+    last_synced_at: datetime | None = None,
+    last_error: str | None = None,
+    lease_owner: str | None = None,
+    lease_until: datetime | None = None,
+) -> bool:
+    try:
+        updated = _update_record_status(
+            db,
+            record_key=record_key,
+            from_statuses=from_statuses,
+            to_status=to_status,
+            expected_generation=expected_generation,
+            attempt=attempt,
+            next_retry_at=next_retry_at,
+            queued_generation=queued_generation,
+            processing_generation=processing_generation,
+            last_synced_at=last_synced_at,
+            last_error=last_error,
+            lease_owner=lease_owner,
+            lease_until=lease_until,
+        )
+        db.commit()
+        return updated == 1
+    except Exception:
+        db.rollback()
+        raise
 
 
 def get_outbox_entry(db: Session, outbox_id: int) -> IncrementalStreamOutbox | None:
@@ -291,10 +329,23 @@ def get_outbox_entry(db: Session, outbox_id: int) -> IncrementalStreamOutbox | N
     return db.execute(stmt).scalar_one_or_none()
 
 
-def create_outbox_entry(
+def _find_outbox(
+    db: Session,
+    *,
+    record_key: str,
+    generation: int,
+) -> IncrementalStreamOutbox | None:
+    stmt = select(IncrementalStreamOutbox).where(
+        IncrementalStreamOutbox.record_key == _normalize_text(record_key, "record_key"),
+        IncrementalStreamOutbox.generation == generation,
+    )
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def _upsert_outbox(
     db: Session,
     payload: IncrementalOutboxCreateInput,
-) -> IncrementalStreamOutbox:
+) -> int | None:
     now = _utc_now()
     stmt = insert(IncrementalStreamOutbox).values(
         record_key=_normalize_text(payload.record_key, "record_key"),
@@ -325,23 +376,88 @@ def create_outbox_entry(
         },
     )
     result = db.execute(stmt.returning(IncrementalStreamOutbox.id))
-    outbox_id = result.scalar_one_or_none()
-    db.commit()
+    return result.scalar_one_or_none()
 
-    if outbox_id is None:
-        stmt = select(IncrementalStreamOutbox).where(
-            IncrementalStreamOutbox.record_key == payload.record_key,
-            IncrementalStreamOutbox.generation == payload.generation,
+
+def upsert_outbox_entry(
+    db: Session,
+    payload: IncrementalOutboxCreateInput,
+) -> IncrementalStreamOutbox:
+    try:
+        outbox_id = _upsert_outbox(db, payload)
+
+        if outbox_id is None:
+            entry = _find_outbox(
+                db,
+                record_key=payload.record_key,
+                generation=payload.generation,
+            )
+            if entry is None:
+                raise RuntimeError("failed to create incremental outbox entry")
+            db.commit()
+            return entry
+
+        entry = get_outbox_entry(db, outbox_id)
+        if entry is None:
+            raise RuntimeError("failed to load incremental outbox entry")
+
+        db.commit()
+        return entry
+    except Exception:
+        db.rollback()
+        raise
+
+
+def promote_record(
+    db: Session,
+    *,
+    record: IncrementalRecordState,
+) -> bool:
+    from_status = (
+        IncrementalRecordStatus.RETRY_WAIT
+        if record.status == IncrementalRecordStatus.RETRY_WAIT
+        else IncrementalRecordStatus.DEBOUNCING
+    )
+
+    try:
+        updated = _update_record_status(
+            db,
+            record_key=record.record_key,
+            from_statuses=[from_status],
+            to_status=IncrementalRecordStatus.QUEUED,
+            expected_generation=record.generation,
+            queued_generation=record.generation,
         )
-        existing = db.execute(stmt).scalar_one_or_none()
-        if existing is None:
-            raise RuntimeError("failed to create incremental outbox entry")
-        return existing
+        if updated != 1:
+            db.rollback()
+            return False
 
-    entry = get_outbox_entry(db, outbox_id)
-    if entry is None:
-        raise RuntimeError("failed to load incremental outbox entry")
-    return entry
+        outbox_id = _upsert_outbox(
+            db,
+            IncrementalOutboxCreateInput(
+                record_key=record.record_key,
+                generation=record.generation,
+                connector=record.connector,
+                scope_id=record.scope_id,
+                parent_type=record.parent_type,
+                parent_id=record.parent_id,
+                event_kind=record.event_kind,
+            ),
+        )
+        if outbox_id is None:
+            entry = _find_outbox(
+                db,
+                record_key=record.record_key,
+                generation=record.generation,
+            )
+            if entry is None:
+                raise RuntimeError("failed to create incremental outbox entry")
+
+        db.commit()
+        return True
+    except Exception:
+        db.rollback()
+        raise
 
 
 def list_pending_outbox_entries(
@@ -365,7 +481,7 @@ def list_pending_outbox_entries(
     return list(db.execute(stmt).scalars().all())
 
 
-def update_outbox_status_cas(
+def transition_outbox_status(
     db: Session,
     *,
     outbox_id: int,
