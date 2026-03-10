@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from fastapi import Request, Response
+from fastapi import BackgroundTasks, Request, Response
 from fastapi.concurrency import run_in_threadpool
 
 from catchup.auth.jwt import verify_token
@@ -15,6 +15,8 @@ from catchup.observability.logging.context import (
     bind_base_context,
     clear_request_context,
 )
+from catchup.events.context import current_bg_tasks
+
 
 REQUEST_ID_HEADER = "X-Request-Id"
 AMZN_TRACE_HEADER = "X-Amzn-Trace-Id"
@@ -33,6 +35,7 @@ def _extract_amzn_root_trace(raw_header: str) -> str:
     
     return parts.get("Root", raw_header)
 
+
 # X-Request-ID -> X-Amzn-Trace-Id -> 자체 UUID 순으로 시도
 def _resolve_trace_id(request: Request) -> str:
     request_id = request.headers.get(REQUEST_ID_HEADER)
@@ -45,6 +48,7 @@ def _resolve_trace_id(request: Request) -> str:
     
     return str(uuid.uuid4())
 
+
 def _extract_access_token(request: Request) -> str | None:
     cookie_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
     if cookie_token:
@@ -55,6 +59,7 @@ def _extract_access_token(request: Request) -> str | None:
         return auth_header[7:].strip()
     
     return None
+
 
 def _resolve_actor_from_access_token(access_token: str | None) -> dict[str, Any] | None:
     if not access_token:
@@ -83,7 +88,7 @@ def _resolve_actor_from_access_token(access_token: str | None) -> dict[str, Any]
             user = get_user_by_email(db, email)
         if user:
             return {
-                "user_id": user.id,
+                "user_id": sub,
                 "email": user.email, 
                 "role": str(user.role) if user.role else None,
                 "department": user.department,
@@ -98,22 +103,50 @@ def _resolve_actor_from_access_token(access_token: str | None) -> dict[str, Any]
         "department": None,
     }
 
-async def request_context_middleware(request: Request, call_next: CallNext) -> Response:
+
+async def request_context_middleware(
+    request: Request,
+    call_next: CallNext
+) -> Response:
+
     trace_id = _resolve_trace_id(request)
-
+    remote_addr = request.client.host
+    
+    # 로깅 컨텍스트 바인딩
     clear_request_context()
-    bind_base_context(trace_id)
+    bind_base_context(trace_id, remote_addr)
 
+    # Actor 추출 후 바인딩
     access_token = _extract_access_token(request)
-    actor = await run_in_threadpool(_resolve_actor_from_access_token, access_token)
+    actor = await run_in_threadpool(
+        _resolve_actor_from_access_token,
+        access_token
+    )
     bind_actor_context(actor)
 
     request.state.trace_id = trace_id
     request.state.actor = actor
-
+    
+    print(f"trace_id: {request.state.trace_id}")
+    print(f"actor: {request.state.actor}")
+    
+    
+    # BackgroundTasks를 ContextVars로 설정
+    bg_tasks = BackgroundTasks()
+    token = current_bg_tasks.set(bg_tasks)
+    
     try:
-        response = await call_next(request)
+        # 비즈니스 로직 수행
+        response: Response = await call_next(request)
+        
         response.headers[REQUEST_ID_HEADER] = trace_id
+        
+        if response.background is None:
+            response.background = bg_tasks
+        else:
+            response.background.tasks.extend(bg_tasks.tasks)
+        
         return response
     finally:
+        current_bg_tasks.reset(token)
         clear_request_context()

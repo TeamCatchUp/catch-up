@@ -17,12 +17,16 @@ DEFAULT_ACTOR = {
 def clear_request_context() -> None:
     clear_contextvars()
 
-def bind_base_context(trace_id: str) -> None:
+def bind_base_context(
+    trace_id: str,
+    remote_addr: str,        
+) -> None:
     bind_contextvars(
-        trace_id = trace_id,
+        trace_id=trace_id,
         service=settings.SERVICE_NAME,
         version=settings.APP_VERSIONS,
         environment=str(settings.ENV),
+        remote_addr=remote_addr
     )
 
 # actor 초기화 후 주입
@@ -32,7 +36,7 @@ def bind_actor_context(actor: dict[str, Any] | None) -> None:
         for key in DEFAULT_ACTOR:
             normalized_actor[key] = actor.get(key)
     
-    bind_contextvars(actor = normalized_actor)
+    bind_contextvars(actor=normalized_actor)
 
 
 def get_request_context() -> dict[str, Any]:
