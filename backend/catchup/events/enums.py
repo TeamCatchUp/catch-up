@@ -13,6 +13,40 @@ class EventType(StrEnum):
     SYSTEM = "SYSTEM"
 
 
+class AuthEventAction(StrEnum):
+    # 로그인 시도
+    LOGIN_ATTEMPT = "login_attempt"
+    
+    # 로그인 성공
+    LOGIN_SUCCESS = "login_success"
+    
+    # 로그인 실패
+    LOGIN_FAILURE = "login_failure"
+    
+    # 토큰 재발급
+    TOKEN_REFRESH = "token_refresh"
+    
+    # 로그아웃
+    LOGOUT = "logout"
+
+
+class ChatEventAction(StrEnum):
+    # 사용자 질문 생성
+    MESSAGE_RECEIVED = "message_received"
+    
+    # 지식 베이스 검색 완료
+    RETRIEVAL_COMPLETED = "retrieval_completed"
+    
+    # 답변 생성 완료
+    RESPONSE_GENERATED = "response_generated"
+    
+    # 답변 생성 실패
+    RESPONSE_FAILED = "response_failed"
+    
+    # 출처 목록 노출
+    SOURCES_PROVIDED = "sources_provided"
+
+
 # class SystemEventAction(StrEnum):
 #     STARTUP_DB_INIT = "startup_db_init"
 #     STARTUP_DB_SCHEMA_DRIFT = "startup_db_schema_drift"
@@ -21,14 +55,6 @@ class EventType(StrEnum):
 #     STARTUP_REDIS_INIT = "startup_redis_init"
 #     SHUTDOWN_SCHEDULER = "shutdown_scheduler"
 #     SHUTDOWN_CHECKPOINTER = "shutdown_checkpointer"
-
-
-class AuthEventAction(StrEnum):
-    LOGIN_ATTEMPT = "login_attempt"
-    LOGIN_SUCCESS = "login_success"
-    LOGIN_FAILURE = "login_failure"
-    TOKEN_REFRESH = "token_refresh"
-    LOGOUT = "logout"
 
 
 # class IntegrationEventAction(StrEnum):
@@ -44,8 +70,3 @@ class AuthEventAction(StrEnum):
 #     SYNC_FAILURE = "sync_failure"
 #     SCHEMA_DRIFT_DETECTED = "schema_drift_detected"
 #     EMBEDDING_BATCH = "embedding_batch"
-
-
-# class ChatEventAction(StrEnum):
-#     MESSAGE_SENT = "message_sent"
-#     MESSAGE_FAILED = "message_failed"
