@@ -5,6 +5,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from catchup.events.enums import AuthEventAction
 from catchup.auth.service import OAuthService
 from catchup.auth.cookies import delete_auth_cookies, delete_oauth_state_cookie, set_auth_cookies, set_oauth_state_cookie
 from catchup.auth.dependencies import (
@@ -29,6 +30,7 @@ from catchup.db.models import (
 )
 from catchup.db.users import get_user_by_sub, update_user_refresh_token
 from sqlalchemy import select
+from catchup.events.enums import EventType
 from catchup.server.auth.schemas import (
     CurrentUserInfo,
     CurrentUserProfile,
@@ -36,6 +38,7 @@ from catchup.server.auth.schemas import (
     IntegrationProfileResponse
 )
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
+from catchup.events.bus import bus
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +52,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
     description="OAuth2 로그인 (현재는 Keycloak만 지원)"
 )
 async def oauth2_login(
+    request: Request,
     # TODO: Path()로 변경. 수정 범위를 최소화하기 위한 PoC 한정 임시방편
     provider_type: OAuthIdentityProviderType = Query(default=OAuthIdentityProviderType.KEYCLOAK),
     provider: OAuthIdentityProvider = Depends(get_oauth_provider)
@@ -67,6 +71,14 @@ async def oauth2_login(
         response=response,
         state=provider.state
     )
+    
+    bus.emit(
+        event_name="audit",
+        event_type=EventType.AUTH,
+        event_action=AuthEventAction.LOGIN_ATTEMPT,
+        remote_addr=request.client.host,
+        level="info"
+    )
 
     return response
 
@@ -83,6 +95,13 @@ async def oauth_callback(
 ):
     cookie_state = request.cookies.get("oauth_state")
     if not cookie_state or cookie_state != state:
+        bus.emit(
+            event_name="audit",
+            event_type=EventType.AUTH,
+            event_action=AuthEventAction.LOGIN_FAILURE,
+            metadata={"reason": "invalid_refresh_token"},
+            level="warning"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="유효하지 않은 인증 접근입니다."
@@ -95,6 +114,13 @@ async def oauth_callback(
     )
     
     if not is_valid:
+        bus.emit(
+            event_name="audit",
+            event_type=EventType.AUTH,
+            event_action=AuthEventAction.LOGIN_FAILURE,
+            metadata={"reason": "expired_state"},
+            level="warning"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="유효하지 않거나 만료된 인증입니다."
@@ -145,6 +171,15 @@ def refresh_token(
 
     # 존재하지 않는 사용자이거나 refresh token이 일치하지 않는 경우
     if not user or user.refresh_token != refresh_token:
+        bus.emit(
+            event_name="audit",
+            event_type=EventType.AUTH,
+            event_action=AuthEventAction.LOGIN_FAILURE,
+            actor=user.to_snapshot() if user else None,
+            remote_addr=request.client.host,
+            metadata={"reason": "invalid_refresh_token"},
+            level="warning"
+        )
         delete_auth_cookies(response)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -173,6 +208,14 @@ def refresh_token(
         access_token=new_access_token,
         refresh_token=new_refresh_token
     )
+    
+    bus.emit(
+        event_name="audit",
+        event_type=EventType.AUTH,
+        event_action=AuthEventAction.TOKEN_REFRESH,
+        actor=user.to_snapshot() if user else None,
+        level="info"
+    )
 
     return {
         "status": "success",
@@ -200,6 +243,14 @@ async def logout(
     await run_in_threadpool(_update_user_refresh_token_sync)
 
     delete_auth_cookies(response)
+    
+    bus.emit(
+        event_name="audit",
+        event_type=EventType.AUTH,
+        event_action=AuthEventAction.LOGOUT,
+        actor=current_user.to_snapshot() if current_user else None,
+        level="info"
+    )
 
     return {"status": "success", "detail": "Logged out successfully"}
 

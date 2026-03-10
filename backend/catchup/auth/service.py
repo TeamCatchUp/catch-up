@@ -6,7 +6,9 @@ from catchup.components.auth.provider import OAuthIdentityProvider
 from catchup.db.models import OAuthUser, UserStatus
 from catchup.auth.utils import reformat_name
 from catchup.auth.jwt import create_access_token, create_refresh_token
-from catchup.db.users import get_oauth_user_with_sub, update_user_refresh_token
+from catchup.db.users import get_oauth_user_with_sub, get_user_by_sub, update_user_refresh_token
+from catchup.events.bus import bus
+from catchup.events.enums import AuthEventAction, EventType
 
 
 class OAuthService:
@@ -55,31 +57,60 @@ class OAuthService:
         OAuth 로그인 후 호출되는 Callback 루틴.
         OAuth IDP로부터 사용자 정보를 획득한 후 access token과 refresh 토큰을 발급한다.
         """
+    
+        try:
 
-        oauth_user = await self.provider.get_oauth_user_info(code)
-        
-        def _process_callback_sync():
-            oauth_user_record = self._get_or_register_user(oauth_user)
+            oauth_user = await self.provider.get_oauth_user_info(code)
             
-            full_name = reformat_name(oauth_user.name)
-            
-            token_data = {
-                "sub": oauth_user.sub,
-                "email": oauth_user.email,
-                "name": full_name
-            }
-            access_token = create_access_token(token_data)
-            refresh_token = None
-            
-            if oauth_user_record.user_id is not None:
-                refresh_token = create_refresh_token(token_data)
-                update_user_refresh_token(
-                    db=self.db,
-                    user_id=oauth_user_record.user_id,
-                    refresh_token=refresh_token
+            def _process_callback_sync():
+                oauth_user_record = self._get_or_register_user(oauth_user)
+                
+                full_name = reformat_name(oauth_user.name)
+                
+                token_data = {
+                    "sub": oauth_user.sub,
+                    "email": oauth_user.email,
+                    "name": full_name
+                }
+                access_token = create_access_token(token_data)
+                refresh_token = None
+                
+                if oauth_user_record.user_id is not None:
+                    refresh_token = create_refresh_token(token_data)
+                    update_user_refresh_token(
+                        db=self.db,
+                        user_id=oauth_user_record.user_id,
+                        refresh_token=refresh_token
+                    )
+
+                self.db.commit()
+                
+                registered_user = get_user_by_sub(self.db, oauth_user.sub)
+                snapshot = None
+                if registered_user:
+                    snapshot = registered_user.to_snapshot()
+                    snapshot["sub"] = oauth_user.sub
+     
+                bus.emit(
+                    event_name="audit",
+                    event_type=EventType.AUTH,
+                    event_action=AuthEventAction.LOGIN_SUCCESS,
+                    actor=snapshot,
+                    level="info"
                 )
-
-            self.db.commit()
-            return access_token, refresh_token
+                
+                return access_token, refresh_token
+            
+            return await run_in_threadpool(_process_callback_sync)
         
-        return await run_in_threadpool(_process_callback_sync)
+        except Exception as e:
+            bus.emit(
+                event_name="audit",
+                event_type=EventType.AUTH,
+                event_action=AuthEventAction.LOGIN_FAILURE,
+                metadata={
+                    "reason": "idp_token_exchange_failed",
+                    "error": str(e)
+                },
+                level="error"
+            )
