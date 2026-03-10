@@ -1243,6 +1243,7 @@ class IncrementalRecordStatus(StrEnum):
 
 class IncrementalOutboxStatus(StrEnum):
     PENDING = "pending"
+    PUBLISHING = "publishing"
     PUBLISHED = "published"
     FAILED = "failed"
 
@@ -1513,7 +1514,7 @@ class IncrementalStreamOutbox(Base):
             name="uq_incremental_stream_outbox_record_generation",
         ),
         CheckConstraint(
-            "status IN ('pending', 'published', 'failed')",
+            "status IN ('pending', 'publishing', 'published', 'failed')",
             name="ck_incremental_stream_outbox_status",
         ),
         CheckConstraint("generation >= 1", name="ck_incremental_stream_outbox_generation_positive"),

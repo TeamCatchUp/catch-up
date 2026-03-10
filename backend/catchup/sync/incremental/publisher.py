@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import logging
-
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 from catchup.db.incremental import (
+    claim_outbox_for_publish,
+    complete_outbox_publish,
+    fail_outbox_publish,
     get_record_state,
     list_pending_outbox_entries,
-    transition_outbox_status,
+    recover_stale_outbox_claims,
 )
 from catchup.db.models import IncrementalOutboxStatus, IncrementalRecordStatus, SyncConnector
 from catchup.sync.common.schemas import SyncStreamTask
@@ -36,8 +38,16 @@ async def publish_incremental_outbox(
     limit: int | None = None,
 ) -> dict[str, int]:
     batch_limit = max(1, limit or int(settings.INCREMENTAL_OUTBOX_BATCH_SIZE))
+    recovered = 0
 
     with SessionLocal() as db:
+        # PUBLISHING STALE SECONDS 보다 오래 publishing 상태에서 머문 이벤트를 failed 처리
+        recovered = recover_stale_outbox_claims(
+            db,
+            stale_seconds=max(1, int(settings.INCREMENTAL_OUTBOX_PUBLISHING_STALE_SECONDS)),
+            connector=connector,
+            limit=batch_limit,
+        )
         outbox_entries = list_pending_outbox_entries(
             db,
             connector=connector,
@@ -52,17 +62,26 @@ async def publish_incremental_outbox(
     for entry in outbox_entries:
         try:
             with SessionLocal() as db:
+                #  publishing으로 상태 전이
+                if not claim_outbox_for_publish(db, outbox_id=entry.id):
+                    skipped += 1
+                    continue
+                
                 record = get_record_state(db, entry.record_key)
                 if record is None:
-                    skipped += 1
+                    if complete_outbox_publish(
+                        db,
+                        outbox_id=entry.id,
+                        stream_message_id="stale-skipped",
+                        last_error="record_not_found",
+                    ):
+                        skipped += 1
                     continue
 
                 if record.generation != entry.generation or record.status != IncrementalRecordStatus.QUEUED:
-                    if transition_outbox_status(
+                    if complete_outbox_publish(
                         db,
                         outbox_id=entry.id,
-                        from_statuses=[IncrementalOutboxStatus.PENDING, IncrementalOutboxStatus.FAILED],
-                        to_status=IncrementalOutboxStatus.PUBLISHED,
                         stream_message_id="stale-skipped",
                         last_error="stale_outbox",
                     ):
@@ -90,18 +109,16 @@ async def publish_incremental_outbox(
                     parent_id=record.parent_id,
                     event_kind=record.event_kind,
                     last_event_at=record.last_event_at.isoformat(),
-                    attempt=record.attempt,
+                    attempt=max(1, int(entry.attempt)),
                     max_attempts=max(1, int(settings.INCREMENTAL_MAX_ATTEMPTS)),
                 )
 
             message_id = await publish_task(task)
 
             with SessionLocal() as db:
-                if transition_outbox_status(
+                if complete_outbox_publish(
                     db,
                     outbox_id=entry.id,
-                    from_statuses=[IncrementalOutboxStatus.PENDING, IncrementalOutboxStatus.FAILED],
-                    to_status=IncrementalOutboxStatus.PUBLISHED,
                     stream_message_id=message_id,
                     last_error=None,
                 ):
@@ -117,13 +134,10 @@ async def publish_incremental_outbox(
                 entry.generation,
             )
             with SessionLocal() as db:
-                transition_outbox_status(
+                fail_outbox_publish(
                     db,
                     outbox_id=entry.id,
-                    from_statuses=[IncrementalOutboxStatus.PENDING, IncrementalOutboxStatus.FAILED],
-                    to_status=IncrementalOutboxStatus.FAILED,
                     last_error=str(exc),
-                    increment_attempt=True,
                 )
             errors += 1
 
@@ -131,4 +145,5 @@ async def publish_incremental_outbox(
         "published": published,
         "skipped": skipped,
         "errors": errors,
+        "recovered": recovered,
     }

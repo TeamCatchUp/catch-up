@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Sequence
 
 from sqlalchemy import Select, select, update
@@ -71,12 +71,16 @@ _ALLOWED_RECORD_TRANSITIONS: dict[IncrementalRecordStatus, set[IncrementalRecord
 
 _ALLOWED_OUTBOX_TRANSITIONS: dict[IncrementalOutboxStatus, set[IncrementalOutboxStatus]] = {
     IncrementalOutboxStatus.PENDING: {
-        IncrementalOutboxStatus.PUBLISHED,
+        IncrementalOutboxStatus.PUBLISHING,
         IncrementalOutboxStatus.FAILED,
     },
     IncrementalOutboxStatus.FAILED: {
         IncrementalOutboxStatus.PENDING,
+        IncrementalOutboxStatus.PUBLISHING,
+    },
+    IncrementalOutboxStatus.PUBLISHING: {
         IncrementalOutboxStatus.PUBLISHED,
+        IncrementalOutboxStatus.FAILED,
     },
 }
 
@@ -481,7 +485,7 @@ def list_pending_outbox_entries(
     return list(db.execute(stmt).scalars().all())
 
 
-def transition_outbox_status(
+def _transition_outbox_status(
     db: Session,
     *,
     outbox_id: int,
@@ -490,7 +494,7 @@ def transition_outbox_status(
     stream_message_id: str | None = None,
     last_error: str | None = None,
     increment_attempt: bool = False,
-) -> bool:
+) -> int:
     _validate_outbox_transition(from_statuses, to_status)
 
     now = _utc_now()
@@ -502,6 +506,8 @@ def transition_outbox_status(
     }
     if to_status == IncrementalOutboxStatus.PUBLISHED:
         values["published_at"] = now
+    if to_status != IncrementalOutboxStatus.PUBLISHED:
+        values["published_at"] = None
     if increment_attempt:
         values["attempt"] = IncrementalStreamOutbox.attempt + 1
 
@@ -514,5 +520,119 @@ def transition_outbox_status(
         .values(**values)
     )
     result = db.execute(stmt)
-    db.commit()
-    return result.rowcount == 1
+    return result.rowcount or 0
+
+
+def transition_outbox_status(
+    db: Session,
+    *,
+    outbox_id: int,
+    from_statuses: Sequence[IncrementalOutboxStatus],
+    to_status: IncrementalOutboxStatus,
+    stream_message_id: str | None = None,
+    last_error: str | None = None,
+    increment_attempt: bool = False,
+) -> bool:
+    try:
+        updated = _transition_outbox_status(
+            db,
+            outbox_id=outbox_id,
+            from_statuses=from_statuses,
+            to_status=to_status,
+            stream_message_id=stream_message_id,
+            last_error=last_error,
+            increment_attempt=increment_attempt,
+        )
+        db.commit()
+        return updated == 1
+    except Exception:
+        db.rollback()
+        raise
+
+
+def claim_outbox_for_publish(db: Session, *, outbox_id: int) -> bool:
+    return transition_outbox_status(
+        db,
+        outbox_id=outbox_id,
+        from_statuses=[IncrementalOutboxStatus.PENDING, IncrementalOutboxStatus.FAILED],
+        to_status=IncrementalOutboxStatus.PUBLISHING,
+        stream_message_id=None,
+        last_error=None,
+        increment_attempt=True,
+    )
+
+
+def complete_outbox_publish(
+    db: Session,
+    *,
+    outbox_id: int,
+    stream_message_id: str,
+    last_error: str | None = None,
+) -> bool:
+    return transition_outbox_status(
+        db,
+        outbox_id=outbox_id,
+        from_statuses=[IncrementalOutboxStatus.PUBLISHING],
+        to_status=IncrementalOutboxStatus.PUBLISHED,
+        stream_message_id=stream_message_id,
+        last_error=last_error,
+    )
+
+
+def fail_outbox_publish(
+    db: Session,
+    *,
+    outbox_id: int,
+    last_error: str | None,
+) -> bool:
+    return transition_outbox_status(
+        db,
+        outbox_id=outbox_id,
+        from_statuses=[IncrementalOutboxStatus.PUBLISHING],
+        to_status=IncrementalOutboxStatus.FAILED,
+        stream_message_id=None,
+        last_error=last_error,
+    )
+
+
+def recover_stale_outbox_claims(
+    db: Session,
+    *,
+    stale_seconds: int,
+    connector: SyncConnector | None = None,
+    limit: int = 100,
+) -> int:
+    stale_before = _utc_now() - timedelta(seconds=max(1, stale_seconds))
+    ids_stmt = select(IncrementalStreamOutbox.id).where(
+        IncrementalStreamOutbox.status == IncrementalOutboxStatus.PUBLISHING,
+        IncrementalStreamOutbox.updated_at <= stale_before,
+    )
+    if connector is not None:
+        ids_stmt = ids_stmt.where(IncrementalStreamOutbox.connector == connector)
+
+    ids_stmt = ids_stmt.order_by(
+        IncrementalStreamOutbox.updated_at.asc(),
+        IncrementalStreamOutbox.id.asc(),
+    ).limit(limit)
+    outbox_ids = list(db.execute(ids_stmt).scalars().all())
+    if not outbox_ids:
+        return 0
+
+    stmt = (
+        update(IncrementalStreamOutbox)
+        .where(IncrementalStreamOutbox.id.in_(outbox_ids))
+        .values(
+            status=IncrementalOutboxStatus.FAILED,
+            stream_message_id=None,
+            last_error="stale_publishing_timeout",
+            updated_at=_utc_now(),
+            published_at=None,
+        )
+    )
+    try:
+        result = db.execute(stmt)
+        db.commit()
+        return result.rowcount or 0
+    except Exception:
+        db.rollback()
+        raise
