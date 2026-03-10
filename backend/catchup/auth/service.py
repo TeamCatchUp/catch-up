@@ -8,8 +8,8 @@ from catchup.db.models import OAuthUser, UserStatus
 from catchup.auth.utils import reformat_name
 from catchup.auth.jwt import create_access_token, create_refresh_token
 from catchup.db.users import get_oauth_user_with_sub, get_user_by_sub, update_user_refresh_token
-from catchup.events.bus import bus
 from catchup.events.enums import AuthEventAction, EventTopic, EventType
+from catchup.audit.service import emit_audit_event
 
 
 class OAuthService:
@@ -91,9 +91,8 @@ class OAuthService:
                 if registered_user:
                     snapshot = registered_user.to_snapshot()
                     snapshot["sub"] = oauth_user.sub
-     
-                bus.emit(
-                    topic=EventTopic.AUDIT,
+
+                emit_audit_event(
                     event_type=EventType.AUTH,
                     event_action=AuthEventAction.LOGIN_SUCCESS,
                     actor=snapshot,
@@ -105,8 +104,7 @@ class OAuthService:
             return await run_in_threadpool(_process_callback_sync)
         
         except Exception as e:
-            bus.emit(
-                topic=EventTopic.AUDIT,
+            emit_audit_event(
                 event_type=EventType.AUTH,
                 event_action=AuthEventAction.LOGIN_FAILURE,
                 metadata={
