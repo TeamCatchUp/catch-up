@@ -14,21 +14,21 @@ class EventBus:
         
     def subscribe(
         self,
-        event_name: str,
+        topic: str,
         func: Callable
     ):
         """
-        event name 해당하는 핸들러를 리스너로 등록한다.
+        특정 topic에 리스너를 등록한다.
         """
-        self._listeners[event_name].append(func)
+        self._listeners[topic].append(func)
         
     def emit(
         self,
-        event_name: str,
+        topic: str,
         **payload
     ):
         """
-        event name에 해당하는 핸들러를 백그라운드 작업으로 등록한다.
+        특정 topic으로 이벤트를 발행한다.
         """
         bg_tasks = current_bg_tasks.get()
         
@@ -39,7 +39,7 @@ class EventBus:
         if "trace-id" in context and "trace_id" not in payload:
             payload["trace_id"] = context["trace_id"]
 
-        for func in self._listeners[event_name]:
+        for func in self._listeners[topic]:
             if bg_tasks:
                 bg_tasks.add_task(func, **payload)
             else:

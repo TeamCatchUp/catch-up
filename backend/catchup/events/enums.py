@@ -1,6 +1,10 @@
 from enum import StrEnum
 
 
+class EventTopic(StrEnum):
+    AUDIT = "audit"
+
+
 class EventType(StrEnum):
     AUTH = "AUTH"
     INTEGRATION = "INTEGRATION"

@@ -14,6 +14,7 @@ from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal, engine
 from catchup.db.global_state import has_admin_ever_onboarded, has_csv_file_ever_been_uploaded
 from catchup.db.models import Base
+from catchup.events.enums import EventTopic
 from catchup.observability.logging import configure_logging
 from catchup.server.admin.api import router as admin_router
 from catchup.server.auth.api import router as auth_router
@@ -344,7 +345,7 @@ app.add_middleware(
 
 
 # 감사 로그 이벤트 리스너 등록
-bus.subscribe("audit", audit_event_handler)
+bus.subscribe(EventTopic.AUDIT, audit_event_handler)
 
 
 # 미들웨어 등록
