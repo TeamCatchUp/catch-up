@@ -2,7 +2,6 @@ from collections import defaultdict
 from typing import Callable
 
 from catchup.events.context import current_bg_tasks
-from catchup.observability.logging.context import get_request_context
 
 
 class EventBus:
@@ -31,14 +30,6 @@ class EventBus:
         특정 topic으로 이벤트를 발행한다.
         """
         bg_tasks = current_bg_tasks.get()
-        
-        context = get_request_context()        
-        if "actor" in context and "actor" not in payload:
-            payload["actor"] = context["actor"]
-        
-        if "trace-id" in context and "trace_id" not in payload:
-            payload["trace_id"] = context["trace_id"]
-
         for func in self._listeners[topic]:
             if bg_tasks:
                 bg_tasks.add_task(func, **payload)
