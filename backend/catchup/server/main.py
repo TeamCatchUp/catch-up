@@ -44,7 +44,7 @@ from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
 from catchup.utils.client import _shared_client
 from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_checkpointer
 from catchup.events.bus import bus
-from catchup.audit.handler import audit_event_handler
+from catchup.audit.handlers import audit_event_handler
 
 configure_logging()
 logger = logging.getLogger(__name__)

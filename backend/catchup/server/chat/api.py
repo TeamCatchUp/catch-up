@@ -46,7 +46,7 @@ async def chat_response_stream(
     db: Session = Depends(get_db),
     service: ChatService = Depends(get_chat_service),
     global_context: GlobalContext = Depends(get_rag_global_context)
-):    
+):
     async def event_generator():
         async for chunk in service.chat_stream(
             db=db,
