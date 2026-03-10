@@ -720,127 +720,33 @@ class JiraIngestionService:
             f"cloud_id={self.cloud_id}, issue_count={len(unique_issue_keys)}, doc_count={len(doc_ids)}"
         )
         return len(doc_ids)
-            
-
-    # ================================================================
-    # 증분 동기화 (Incremental Sync)
-    # ================================================================
 
     async def incremental_sync(
         self,
         db: Session,
-        since: datetime | None = None,
-        project_key: str | None = None,
-        event_types: set[str] | None = None,
-    ) -> dict[str, Any]:
-        """
-        증분 동기화
+        *,
+        project_key: str,
+        record_id: str,
+        event_kind: str,
+        since: datetime | None,
+    ) -> dict[str, int | bool]:
+        normalized_event_kind = event_kind.strip().lower()
+        if normalized_event_kind == "deleted":
+            deleted = await self.delete_issue_documents([record_id])
+            return {
+                "synced": deleted,
+                "errors": 0,
+                "skipped": False,
+            }
 
-        마지막 동기화 이후 업데이트된 엔티티만 동기화.
-
-        Args:
-            db: SQLAlchemy Session
-            since: 기준 시간 (None이면 마지막 성공 동기화 시간 사용)
-            project_key: 동기화 대상 프로젝트 키 (None이면 전체)
-            event_types: flush에서 관측된 이벤트 타입 집합 (로깅/추적용)
-
-        Returns:
-            동기화 결과 통계
-        """
-        self._ensure_initialized()
-
-        normalized_event_types = {event for event in (event_types or set()) if event}
-
-        if since is None:
-            since = datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
-
-        logger.info(
-            f"[JIRA][INCREMENTAL SYNC] Started: "
-            f"cloud_id={self.cloud_id}, since={since}, project_key={project_key or 'all'}, "
-            f"event_types={sorted(normalized_event_types) if normalized_event_types else ['all']}"
+        result = await self._sync_project_issues(
+            db,
+            project_key=project_key,
+            since=since,
         )
-
-        results = {"issues": 0, "epics": 0, "errors": 0}
-
-        try:
-            since_str = since.strftime("%Y-%m-%d %H:%M")
-
-            # 프로젝트 범위 + 시점 기반 JQL 구성
-            jql_parts = [f'updated >= "{since_str}"']
-            if project_key:
-                jql_parts.append(f'project = "{project_key}"')
-            jql = " AND ".join(jql_parts) + " ORDER BY updated DESC"
-
-            next_page_token: str | None = None
-            batch_size = settings.JIRA_SYNC_BATCH_SIZE
-            processed_count = 0
-
-            while True:
-                response = await self.client.search_issues(
-                    jql=jql,
-                    fields=None,
-                    max_results=batch_size,
-                    next_page_token=next_page_token,
-                )
-
-                issues = response.get("issues", [])
-                is_last = response.get("isLast", True)
-
-                if not issues:
-                    break
-
-                processed_count += len(issues)
-                logger.info(
-                    f"[JIRA][INCREMENTAL SYNC] Processing batch: "
-                    f"cloud_id={self.cloud_id}, project_key={project_key or 'all'}, "
-                    f"batch={len(issues)}, total={processed_count}"
-                )
-
-                documents: list[Document] = []
-                doc_ids: list[str] = []
-
-                for issue_data in issues:
-                    try:
-                        doc = self.transformer.transform_issue(
-                            issue_data,
-                            self.site_url,
-                        )
-                        documents.append(doc)
-                        doc_ids.append(doc.id)
-
-                        if doc.metadata.get("entity_type") == "epic":
-                            results["epics"] += 1
-                        else:
-                            results["issues"] += 1
-
-                    except Exception as e:
-                        logger.error(
-                            f"[JIRA][INCREMENTAL SYNC] Transform failed: "
-                            f"cloud_id={self.cloud_id}, issue_key={issue_data.get('key')}, error={e}"
-                        )
-                        results["errors"] += 1
-
-                if documents:
-                    await self.repository.upsert_documents(documents, doc_ids)
-
-                if is_last:
-                    break
-
-                next_page_token = response.get("nextPageToken")
-                if not next_page_token:
-                    break
-
-                await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
-
-            logger.info(
-                f"[JIRA][INCREMENTAL SYNC] Completed: "
-                f"cloud_id={self.cloud_id}, project_key={project_key or 'all'}, results={results}"
-            )
-            return results
-
-        except Exception as e:
-            logger.error(
-                f"[JIRA][INCREMENTAL SYNC] Failed: "
-                f"cloud_id={self.cloud_id}, project_key={project_key or 'all'}, error={e}"
-            )
-            raise
+        return {
+            "synced": int(result.get("issues", 0)) + int(result.get("epics", 0)),
+            "errors": int(result.get("errors", 0)),
+            "skipped": False,
+        }
+            

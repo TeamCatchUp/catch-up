@@ -13,11 +13,8 @@ from catchup.db.dependencies import get_db
 from catchup.db.models import SyncConnector
 from catchup.server.sync.schemas import (
     FullSyncRequest,
-    IncrementalSyncRequest,
     SyncAcceptedResponse,
     SyncErrorResponse,
-    SyncFlushRequest,
-    SyncFlushResponse,
     SyncJobSnapshotResponse,
     SyncStatusResponse,
     SyncTargetItem,
@@ -25,7 +22,6 @@ from catchup.server.sync.schemas import (
 )
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
-    IncrementalSyncDispatchRequest,
     SyncDispatchResult,
 )
 from catchup.sync.common.exceptions import SyncAPIError
@@ -79,81 +75,6 @@ async def dispatch_full_sync(
         ),
         log_label="FULL SYNC",
         failure_message="sync full request failed",
-    )
-
-
-@router.post(
-    "/incremental",
-    response_model=SyncAcceptedResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    responses={
-        status.HTTP_400_BAD_REQUEST: {"model": SyncErrorResponse},
-        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": SyncErrorResponse},
-    },
-)
-async def dispatch_incremental_sync(
-    sync_request: IncrementalSyncRequest,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    dispatch_service = get_sync_dispatch_service()
-
-    return await _execute_sync_dispatch(
-        connector=sync_request.connector,
-        scope_id=sync_request.scope_id,
-        dispatch_call=dispatch_service.dispatch_incremental_sync(
-            db=db,
-            connector=sync_request.connector,
-            request=IncrementalSyncDispatchRequest(
-                scope_id=sync_request.scope_id,
-                target_ids=sync_request.target_ids,
-                trigger="api",
-            ),
-            base_url=str(request.base_url),
-        ),
-        log_label="INCREMENTAL SYNC",
-        failure_message="sync incremental request failed",
-    )
-
-
-@router.post(
-    "/flush",
-    response_model=SyncFlushResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    responses={status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": SyncErrorResponse}},
-)
-async def dispatch_flush(
-    sync_request: SyncFlushRequest,
-):
-    normalized_scope_ids: list[str] = []
-    seen_scope_ids: set[str] = set()
-
-    for scope_id in sync_request.scope_ids or []:
-        normalized_scope_id = (scope_id or "").strip()
-        if not normalized_scope_id or normalized_scope_id in seen_scope_ids:
-            continue
-        normalized_scope_ids.append(normalized_scope_id)
-        seen_scope_ids.add(normalized_scope_id)
-
-    if normalized_scope_ids:
-        status_value = "not_implemented"
-        message = "flush endpoint is canonicalized, but flush pipeline is not implemented yet"
-    else:
-        status_value = "no_events"
-        message = "flush scope_ids are empty"
-
-    logger.info(
-        "[SYNC][FLUSH][API] Flush requested: connector=%s, scope_count=%s, status=%s",
-        sync_request.connector,
-        len(normalized_scope_ids),
-        status_value,
-    )
-
-    return SyncFlushResponse(
-        status=status_value,
-        connector=sync_request.connector,
-        scope_ids=normalized_scope_ids,
-        message=message,
     )
 
 

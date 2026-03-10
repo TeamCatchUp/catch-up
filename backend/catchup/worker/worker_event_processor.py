@@ -3,11 +3,18 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
-from catchup.db.models import SyncConnector, SyncEventStatus, SyncJobStatus
+from catchup.db.incremental import get_record_state, update_record_status_cas
+from catchup.db.models import (
+    IncrementalRecordStatus,
+    SyncConnector,
+    SyncEventStatus,
+    SyncJobStatus,
+)
 from catchup.db.sync import (
     claim_event_for_processing,
     complete_job_failed,
@@ -254,9 +261,166 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
     )
 
 
+def _claim_incremental_task(task: SyncStreamTask) -> ClaimResult:
+    record_key = (task.record_key or "").strip()
+    if not record_key or task.generation is None:
+        return ClaimResult(state="invalid_incremental_task")
+
+    with SessionLocal() as db:
+        record = get_record_state(db, record_key)
+        if record is None:
+            return ClaimResult(state="record_not_found")
+
+        if record.generation != task.generation:
+            return ClaimResult(state="stale_task")
+
+        if record.status != IncrementalRecordStatus.QUEUED:
+            return ClaimResult(state="stale_task")
+
+        if not update_record_status_cas(
+            db,
+            record_key=record_key,
+            from_statuses=[IncrementalRecordStatus.QUEUED],
+            to_status=IncrementalRecordStatus.PROCESSING,
+            expected_generation=task.generation,
+            processing_generation=task.generation,
+        ):
+            return ClaimResult(state="record_cas_conflict")
+
+        claimed = get_record_state(db, record_key)
+        if claimed is None:
+            return ClaimResult(state="record_not_found")
+
+        context = SyncEventContext(
+            event_id=task.event_id,
+            job_id=task.job_id,
+            connector=task.connector,
+            sync_type="incremental",
+            scope_id=claimed.scope_id,
+            target_type=claimed.parent_type,
+            target_id=claimed.parent_id,
+            target_name=claimed.parent_id,
+            sync_from=claimed.last_event_at.isoformat(),
+            attempt=int(claimed.attempt),
+            max_attempts=max(1, int(settings.INCREMENTAL_MAX_ATTEMPTS)),
+            record_key=claimed.record_key,
+            generation=claimed.generation,
+            record_type=claimed.record_type,
+            record_id=claimed.record_id,
+            parent_type=claimed.parent_type,
+            parent_id=claimed.parent_id,
+            event_kind=claimed.event_kind,
+            last_event_at=claimed.last_event_at.isoformat(),
+            metadata={},
+        )
+
+    return ClaimResult(state="claimed", context=context)
+
+
 async def _mark_event_success(context: SyncEventContext) -> bool:
     with SessionLocal() as db:
         return mark_event_success(db, event_id=context.event_id)
+
+
+def _incremental_retry_delay(attempt: int) -> timedelta:
+    base = max(1.0, float(settings.INCREMENTAL_RETRY_BASE_DELAY_SECONDS))
+    max_delay = max(base, float(settings.INCREMENTAL_RETRY_MAX_DELAY_SECONDS))
+    seconds = min(max_delay, base * (2 ** max(0, attempt - 1)))
+    return timedelta(seconds=seconds)
+
+
+async def _mark_incremental_success(context: SyncEventContext) -> bool:
+    if context.record_key is None or context.generation is None:
+        return False
+
+    with SessionLocal() as db:
+        return update_record_status_cas(
+            db,
+            record_key=context.record_key,
+            from_statuses=[IncrementalRecordStatus.PROCESSING],
+            to_status=IncrementalRecordStatus.SYNCED,
+            expected_generation=context.generation,
+            attempt=0,
+            last_synced_at=datetime.now(timezone.utc),
+        )
+
+
+async def _handle_incremental_failure(
+    *,
+    context: SyncEventContext,
+    message: SyncStreamMessage,
+    exc: Exception,
+    handler: IngestionHandlerProtocol,
+) -> None:
+    if context.record_key is None or context.generation is None:
+        await _deadletter(
+            message=message,
+            reason=SyncStreamFailureReason.PROCESSING_EXCEPTION,
+            error_message="incremental context is missing record identity",
+        )
+        return
+
+    error_summary = str(exc)
+    next_attempt = context.attempt + 1
+
+    if next_attempt >= context.max_attempts:
+        with SessionLocal() as db:
+            update_record_status_cas(
+                db,
+                record_key=context.record_key,
+                from_statuses=[IncrementalRecordStatus.PROCESSING],
+                to_status=IncrementalRecordStatus.DEAD,
+                expected_generation=context.generation,
+                attempt=next_attempt,
+                last_error=error_summary,
+            )
+
+        await _deadletter(
+            message=message,
+            reason=SyncStreamFailureReason.PROCESSING_EXCEPTION,
+            error_message=error_summary,
+        )
+        await handler.on_target_failed(
+            context=context,
+            next_attempt=next_attempt,
+            error_summary=error_summary,
+            retryable=False,
+        )
+        logger.error(
+            "[%s][INCREMENTAL][WORKER] Record dead: record_key=%s, attempt=%s, error=%s",
+            context.connector.upper(),
+            context.record_key,
+            next_attempt,
+            error_summary,
+        )
+        return
+
+    next_retry_at = datetime.now(timezone.utc) + _incremental_retry_delay(next_attempt)
+    with SessionLocal() as db:
+        update_record_status_cas(
+            db,
+            record_key=context.record_key,
+            from_statuses=[IncrementalRecordStatus.PROCESSING],
+            to_status=IncrementalRecordStatus.RETRY_WAIT,
+            expected_generation=context.generation,
+            attempt=next_attempt,
+            next_retry_at=next_retry_at,
+            last_error=error_summary,
+        )
+
+    await handler.on_target_requeued(
+        context=context,
+        next_attempt=next_attempt,
+        error_summary=error_summary,
+    )
+    logger.warning(
+        "[%s][INCREMENTAL][WORKER] Record retry scheduled: record_key=%s, next_attempt=%s, retry_at=%s, error=%s",
+        context.connector.upper(),
+        context.record_key,
+        next_attempt,
+        next_retry_at.isoformat(),
+        error_summary,
+    )
 
 
 async def _handle_event_failure(
@@ -391,6 +555,9 @@ async def _finalize_job_if_done(
     context: SyncEventContext,
     handler: IngestionHandlerProtocol,
 ) -> None:
+    if context.sync_type != "full":
+        return
+
     job_id = context.job_id
 
     with SessionLocal() as db:
@@ -489,11 +656,148 @@ async def _finalize_job_if_done(
         )
 
 
+async def _process_incremental_message(
+    message: SyncStreamMessage,
+    service_cache: dict[str, object],
+) -> None:
+    task = message.task
+    context: SyncEventContext | None = None
+    handler: IngestionHandlerProtocol | None = None
+
+    try:
+        claim = _claim_incremental_task(task)
+        if claim.state == "invalid_incremental_task":
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.INVALID_STREAM_PAYLOAD,
+                error_message="incremental stream payload is missing record metadata",
+            )
+            return
+
+        if claim.state == "record_not_found":
+            logger.warning(
+                "[INCREMENTAL][WORKER] Record not found: record_key=%s, generation=%s",
+                task.record_key,
+                task.generation,
+            )
+            return
+
+        if claim.state in {"stale_task", "record_cas_conflict"}:
+            logger.info(
+                "[INCREMENTAL][WORKER] Stale task skipped: record_key=%s, generation=%s, state=%s",
+                task.record_key,
+                task.generation,
+                claim.state,
+            )
+            return
+
+        context = claim.context
+        if context is None:
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.PROCESSING_EXCEPTION,
+                error_message="unexpected empty incremental claim context",
+            )
+            return
+
+        handler = _select_handler(context)
+        if handler is None:
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.UNSUPPORTED_HANDLER,
+                error_message=(
+                    f"unsupported incremental handler: connector={context.connector}, "
+                    f"sync_type={context.sync_type}"
+                ),
+            )
+            return
+
+        result = await handler.handle(
+            context=context,
+            service_cache=service_cache,
+        )
+        if not await _mark_incremental_success(context):
+            logger.warning(
+                "[INCREMENTAL][WORKER] Success transition skipped: record_key=%s, generation=%s",
+                context.record_key,
+                context.generation,
+            )
+            return
+
+        synced_count, error_count, skipped = _extract_result_counts(result)
+        emit_worker_target_completed(
+            connector=context.connector,
+            sync_type=context.sync_type,
+            run_id=context.job_id,
+            scope_id=context.scope_id,
+            target_type=context.target_type,
+            target_id=context.target_id,
+            target_name=context.target_name,
+            synced_count=synced_count,
+            error_count=error_count,
+            skipped=skipped,
+        )
+        await handler.on_target_completed(context=context, result=result)
+        logger.info(
+            "[%s][INCREMENTAL][WORKER] Record synced: record_key=%s, generation=%s, synced=%s, errors=%s",
+            context.connector.upper(),
+            context.record_key,
+            context.generation,
+            synced_count,
+            error_count,
+        )
+    except Exception as exc:
+        if context is None:
+            logger.exception(
+                "[INCREMENTAL][WORKER] Message processing failed before claim: record_key=%s, generation=%s",
+                task.record_key,
+                task.generation,
+            )
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.PROCESSING_EXCEPTION,
+                error_message=str(exc),
+            )
+            return
+
+        if handler is None:
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.UNSUPPORTED_HANDLER,
+                error_message=(
+                    f"unsupported incremental handler: connector={context.connector}, "
+                    f"sync_type={context.sync_type}"
+                ),
+            )
+            return
+
+        await _handle_incremental_failure(
+            context=context,
+            message=message,
+            exc=exc,
+            handler=handler,
+        )
+    finally:
+        try:
+            await ack_consumed_messages([message])
+        except Exception:
+            logger.exception(
+                "[INCREMENTAL][WORKER] Message ack failed: record_key=%s, generation=%s, message_id=%s",
+                task.record_key,
+                task.generation,
+                message.message_id,
+            )
+
+
 async def _process_message(
     message: SyncStreamMessage,
     service_cache: dict[str, object],
 ) -> None:
     task = message.task
+    if task.sync_type == "incremental":
+        await _process_incremental_message(message, service_cache)
+        return
+
     context: SyncEventContext | None = None
     handler: IngestionHandlerProtocol | None = None
 

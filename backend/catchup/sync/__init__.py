@@ -1,13 +1,13 @@
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
-    IncrementalSyncDispatchRequest,
     SyncDispatchResult,
     SyncDispatchStatus,
+    SyncTrigger,
 )
 
 __all__ = [
     "SyncDispatchStatus",
+    "SyncTrigger",
     "FullSyncDispatchRequest",
-    "IncrementalSyncDispatchRequest",
     "SyncDispatchResult",
 ]

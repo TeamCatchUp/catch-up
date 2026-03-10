@@ -8,12 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from catchup.connectors.github.schemas import(
-     InstallationRepositoriesWebhookPayload, InstallationWebhookPayload,
-     IssueWebhookPayload, PullRequestWebhookPayload
+     InstallationRepositoriesWebhookPayload, InstallationWebhookPayload
 )
 from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.workspaces import get_workspace_limit_one
-from catchup.utils.webhook_buffer import get_webhook_buffer
 from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.configs.config import auth_settings, settings
 from catchup.db.dependencies import get_db
@@ -23,6 +21,7 @@ from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.domain_repository import RepositoryUpsertData
 from catchup.db.models import GithubInstallationType, GithubRepositorySelection, KnowledgeSource, SourceType
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
+from catchup.sync.incremental import ingest_record_changes, normalize_github_event
 
 logger = logging.getLogger(__name__)
 
@@ -75,11 +74,20 @@ async def handle_github_webhook(
     if x_github_event == "installation_repositories":
         return await _handle_installation_repositories_event(payload, db)
     
-    if x_github_event == "issues":
-        return await _handle_issue_event(payload)
-    
-    if x_github_event == "pull_request":
-        return await _handle_pull_request_event(payload)
+    if x_github_event in {"issues", "pull_request"}:
+        changes = normalize_github_event(
+            event_name=x_github_event,
+            payload=payload,
+        )
+        if not changes:
+            return {"status": "ignored", "event": x_github_event, "reason": "unsupported_payload"}
+        record_keys = ingest_record_changes(db, changes)
+        logger.info(
+            "Accepted GitHub incremental webhook: event=%s, record_keys=%s",
+            x_github_event,
+            record_keys,
+        )
+        return {"status": "accepted", "event": x_github_event, "record_keys": record_keys}
 
     logger.warning(f"Unhandled webhook event: {x_github_event}")
     return {"status": "ignored", "event": x_github_event}
@@ -370,73 +378,3 @@ async def _handle_installation_repositories_event(
         "added": len(data.repositories_added),
         "removed": len(data.repositories_removed),
     }
-
-async def _handle_issue_event(payload: dict) -> dict:
-    """
-    수신된 Github Issue 웹훅 이벤트를 Redis에 버퍼링
-
-    Args:
-        payload : Github Issue Webhook Payload
-
-    Returns:
-        처리 결과 Dict
-    """
-
-    data = IssueWebhookPayload(**payload)
-
-    # opened, edited, closed, reopened, deleted 만 처리
-    if data.action not in ["opened", "edited", "closed", "reopened", "deleted"]:
-        return {"status": "ignored", "action": data.action}
-    
-    buffer = get_webhook_buffer()
-    await buffer.buffer_github_event(
-        installation_id = data.installation["id"],
-        repo_id = data.repository["id"],
-        entity_type = "issue",
-        entity_id = data.issue["number"],
-        action= data.action,
-    )
-
-    logger.info(
-        f"Buffered Github Issue Event: "
-        f"installation={data.installation['id']}, "
-        f"repo={data.repository['id']}, "
-        f"issue={data.issue['number']}, "
-        f"action={data.action}"
-    )
-
-    return {"status": "buffered", "event_type": "issue"}
-
-async def _handle_pull_request_event(payload: dict) -> dict:
-    """
-    수신된 Github Pull Request 웹훅 이벤트를 Redis에 버퍼링
-
-    Args:
-        payload : Github Issue Webhook Payload
-
-    Returns:
-        처리 결과 Dict
-    """
-    data = PullRequestWebhookPayload(**payload)
-
-    if data.action not in ["opened", "edited", "closed", "reopened", "synchronize"]:
-        return {"status": "ignored", "action": data.action}
-    
-    buffer = get_webhook_buffer()
-    await buffer.buffer_github_event(
-        installation_id=data.installation["id"],
-        repo_id=data.repository["id"],
-        entity_type="pull_request",
-        entity_id=data.pull_request["number"],
-        action=data.action,
-    )
-
-    logger.info(
-        f"Buffered GitHub PR event: "
-        f"installation={data.installation['id']}, "
-        f"repo={data.repository['id']}, "
-        f"pr={data.pull_request['number']}, "
-        f"action={data.action}"
-    )
-
-    return {"status": "buffered", "event_type": "pull_request"}

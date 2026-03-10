@@ -9,6 +9,7 @@ from catchup.connectors.slack import webhook_service
 from catchup.connectors.slack.schemas import SlackEventWrapper
 from catchup.db.dependencies import get_db
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
+from catchup.sync.incremental import ingest_record_changes, normalize_slack_event
 
 logger = logging.getLogger(__name__)
 
@@ -78,9 +79,6 @@ async def handle_slack_webhook(
         event_subtype,
     )
 
-    if event_type == "message" and event_subtype in (None, "bot_message"):
-        return await _handle_message_event(team_id, event)
-
     if event_type in ["channel_created", "channel_rename", "group_created", "group_rename"]:
         return _handle_channel_upsert_event(team_id, event, db)
 
@@ -96,6 +94,13 @@ async def handle_slack_webhook(
     if event_type in ["team_join", "user_change"]:
         return _handle_user_event(team_id, event, db)
 
+    if event_type == "message":
+        changes = normalize_slack_event(team_id=team_id, event=event)
+        if not changes:
+            return {"status": "ignored", "event_type": event_type, "reason": "unsupported_message_payload"}
+        record_keys = ingest_record_changes(db, changes)
+        return {"status": "accepted", "event_type": event_type, "record_keys": record_keys}
+
     logger.debug(
         "[SLACK][WEBHOOK] Ignored unsupported event: team_id=%s, type=%s, subtype=%s",
         team_id,
@@ -103,18 +108,6 @@ async def handle_slack_webhook(
         event_subtype,
     )
     return {"status": "ignored", "event_type": event_type}
-
-async def _handle_message_event(team_id: str, event: dict) -> dict:
-    """
-    Redis 기반 버퍼 경로 폐기 후 메시지 이벤트를 무시
-    """
-    logger.warning(
-        "[SLACK][INCREMENTAL SYNC][WEBHOOK] Message buffering disabled: team_id=%s, channel_id=%s, ts=%s",
-        team_id,
-        event.get("channel"),
-        event.get("ts"),
-    )
-    return {"status": "ignored", "reason": "incremental_pipeline_disabled"}
 
 
 def _handle_channel_upsert_event(team_id: str, event: dict, db: Session) -> dict:

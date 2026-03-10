@@ -170,11 +170,6 @@ class Settings(BaseSettings):
     GITHUB_SYNC_BATCH_SIZE: int = 100  # 한 번에 가져올 엔티티 수 (per_page)
     GITHUB_API_RATE_LIMIT_DELAY: float = 0.1  # 요청 간 딜레이 (초)
     GITHUB_SYNC_COMMENTS_LIMIT: int = 10  # Issue/PR에 포함할 최근 코멘트 수
-    # Wehbhook Event Buffering & Scheduler Settings
-    WEBHOOK_BUFFER_TTL: int = 3900 # 65분 : Buffer 60분
-    WEBHOOK_FLUSH_INTERVAL_HOURS: int = 1  
-    WEBHOOK_ENABLE_AUTO_SYNC: bool = True
-
     # api_server 시작 시 Sync Worker 자동 기동 여부
     SYNC_WORKER_AUTOSTART: bool = True
     # 큐가 비었을 때 worker 루프 대기 시간(초)
@@ -203,6 +198,15 @@ class Settings(BaseSettings):
     SYNC_SSE_HEARTBEAT_SECONDS: int = 15
     # Incremental sync_from fallback (team/channel cursor 없을 때)
     SYNC_INCREMENTAL_FALLBACK_HOURS: int = 2
+    INCREMENTAL_DEBOUNCE_SECONDS: int = 300
+    INCREMENTAL_MAX_ATTEMPTS: int = 5
+    INCREMENTAL_RETRY_BASE_DELAY_SECONDS: float = 30.0
+    INCREMENTAL_RETRY_MAX_DELAY_SECONDS: float = 900.0
+    INCREMENTAL_PROMOTER_BATCH_SIZE: int = 100
+    INCREMENTAL_OUTBOX_BATCH_SIZE: int = 100
+    INCREMENTAL_RUNTIME_INTERVAL_MINUTES: int = 1
+    CONFLUENCE_INCREMENTAL_POLL_INTERVAL_MINUTES: int = 15
+    CONFLUENCE_INCREMENTAL_POLL_LOOKBACK_MINUTES: int = 20
 
     model_config = SettingsConfigDict(
         env_file=".env",

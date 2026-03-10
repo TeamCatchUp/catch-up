@@ -9,7 +9,6 @@ from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
     FullSyncResolvedTargets,
     FullSyncTarget,
-    IncrementalSyncDispatchRequest,
     SyncEventSeed,
     SyncClaimBatch,
     SyncDispatchResult,
@@ -17,14 +16,15 @@ from catchup.sync.common.schemas import (
     SyncEventContext,
     SyncStreamMessage,
     SyncStreamTask,
+    SyncTrigger,
 )
 
 __all__ = [
     "SyncDispatchStatus",
+    "SyncTrigger",
     "FullSyncDispatchRequest",
     "FullSyncTarget",
     "FullSyncResolvedTargets",
-    "IncrementalSyncDispatchRequest",
     "SyncDispatchResult",
     "SyncEventSeed",
     "SyncStreamTask",

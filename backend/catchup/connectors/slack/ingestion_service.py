@@ -293,6 +293,35 @@ class SlackIngestionService:
         )
         return {"synced": synced_count, "errors": errors, "skipped": False}
 
+    async def incremental_sync(
+        self,
+        *,
+        db: Session,
+        channel_id: str,
+        record_id: str,
+        event_kind: str,
+        sync_from: str | None,
+    ) -> dict[str, int | bool]:
+        normalized_event_kind = event_kind.strip().lower()
+        if normalized_event_kind == "deleted":
+            doc_id = f"slack:message:{self.team_id}:{channel_id}:{record_id}"
+            await self.repository.delete_documents([doc_id])
+            return {
+                "synced": 1,
+                "errors": 0,
+                "skipped": False,
+            }
+
+        channel = domain_repository.get_channel(db, channel_id)
+        channel_name = channel.name if channel is not None else channel_id
+        return await self.sync_channel_messages(
+            channel_id=channel_id,
+            channel_name=channel_name,
+            sync_from=sync_from,
+            db=db,
+            skip_delete=False,
+        )
+
     async def _fetch_channel_pages(
         self,
         *,

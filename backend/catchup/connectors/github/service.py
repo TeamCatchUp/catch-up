@@ -38,7 +38,6 @@ from catchup.connectors.github.schemas import (
     GithubIssue,
     GithubPullRequest,
     GithubCommit,
-    IncrementalSyncRequest,
 )
 from catchup.connectors.github.transformers import GithubTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
@@ -584,6 +583,73 @@ class GithubIngestionService:
         repo_id_set = set(repo_ids)
         return [repo.full_name for repo in repos if repo.repo_id in repo_id_set]
 
+    async def incremental_sync(
+        self,
+        db: Session,
+        *,
+        repo_id: int,
+        record_type: str,
+        record_id: str,
+        event_kind: str,
+        since: datetime | None,
+    ) -> dict[str, int | bool]:
+        repo_names = self._get_repo_names_by_ids(db, [repo_id])
+        if not repo_names:
+            raise ValueError(f"github repository not found: repo_id={repo_id}")
+
+        owner, repo = repo_names[0].split("/", 1)
+        normalized_record_type = record_type.strip().lower()
+        normalized_event_kind = event_kind.strip().lower()
+
+        if normalized_event_kind == "deleted":
+            return await self._delete_incremental_record(
+                owner=owner,
+                repo=repo,
+                record_type=normalized_record_type,
+                record_id=record_id,
+            )
+
+        if normalized_record_type == "issue":
+            result = await self._sync_issues(db, owner, repo, since=since)
+        elif normalized_record_type == "pull_request":
+            result = await self._sync_pull_requests(db, owner, repo, since=since)
+        else:
+            raise ValueError(f"unsupported github record_type: {record_type}")
+
+        return {
+            "synced": int(result.get("synced", 0)),
+            "errors": int(result.get("errors", 0)),
+            "skipped": False,
+        }
+
+    async def _delete_incremental_record(
+        self,
+        *,
+        owner: str,
+        repo: str,
+        record_type: str,
+        record_id: str,
+    ) -> dict[str, int | bool]:
+        if record_type == "issue":
+            doc_id = f"github:issue:{owner}/{repo}:{record_id}"
+        elif record_type == "pull_request":
+            doc_id = f"github:pr:{owner}/{repo}:{record_id}"
+        else:
+            raise ValueError(f"unsupported github delete record_type: {record_type}")
+
+        await self.repository.delete_documents([doc_id])
+        logger.info(
+            "[GITHUB][INCREMENTAL] Deleted document: installation_id=%s, record_type=%s, doc_id=%s",
+            self.installation_id,
+            record_type,
+            doc_id,
+        )
+        return {
+            "synced": 1,
+            "errors": 0,
+            "skipped": False,
+        }
+
     # ============================================================
     # Issue Sync
     # ============================================================
@@ -747,189 +813,6 @@ class GithubIngestionService:
             logger.error(f"[GITHUB][{SyncOperation.PR_SYNC}] Sync failed for {full_name}: {e}", exc_info=True)
             self._fail_sync(db, full_name, GithubEntityType.PULL_REQUEST, str(e), SyncOperation.PR_SYNC)
             return {"synced": total_synced, "errors": errors + 1}
-
-    # ============================================================
-    # Incremental Sync
-    # ============================================================
-
-    async def incremental_sync(
-        self,
-        db: Session,
-        request: IncrementalSyncRequest,
-    ) -> dict[str, Any]:
-        """
-        Time-Triggered Flush / Manual Flush의 경우 사용하는 메서드
-
-        Redis Buffer에 존재하는 Repository, Entity Type에 한해
-        Sync Status에 기록된 마지막 동기화 시점 이후 변경된 사항을 조회한다.
-
-        Args:
-            db: SQLAlchemy Session
-            request: 증분 동기화 요청 (repo_ids, entity_types, update_repos)
-
-        Returns:
-            동기화 결과 딕셔너리
-        """
-        self._github_name_cache = {}
-        results = {
-            "repositories": {"synced": 0, "errors": 0},
-            "issues": {"synced": 0, "errors": 0},
-            "pull_requests": {"synced": 0, "errors": 0},
-        }
-
-        try:
-            # 0. Repository 동기화
-            if request.update_repos:
-                try:
-                    raw_repos = await self.client.list_installation_repos()
-                    repos_data = _convert_repos_to_dto(raw_repos)
-                    github_entities.upsert_repositories_bulk(
-                        db, self.installation_id, repos_data
-                    )
-                    results["repositories"]["synced"] = len(repos_data)
-                    logger.info(f"[GITHUB][FLUSH] Repository Info Updated: {len(repos_data)} repos")
-                except Exception as e:
-                    logger.error(f"[GITHUB][FLUSH] Failed to Update Repository Info: {e}")
-                    results["repositories"]["errors"] += 1
-
-            # Entity Type 검증
-            entity_types = request.entity_types
-            if not entity_types:
-                logger.warning(
-                    f"[GITHUB][FLUSH] No Entity Type Specified. "
-                    f"installation={self.installation_id}"
-                )
-                return results
-
-            # repo_ids 검증 및 full_name 조회
-            if not request.repo_ids:
-                logger.warning(
-                    f"[GITHUB][FLUSH] No Repository IDs Specified for Incremental Sync Request. "
-                    f"installation={self.installation_id}"
-                )
-                return results
-
-            repos_to_sync = self._get_repo_names_by_ids(db, request.repo_ids)
-
-            # Repository 검증
-            if not repos_to_sync:
-                logger.warning(
-                    f"[GITHUB][FLUSH] No Repositories found for given IDs. "
-                    f"installation={self.installation_id}, "
-                    f"requested_repo_ids={request.repo_ids}"
-                )
-                return results
-
-            logger.info(
-                f"[GITHUB][FLUSH] Incremental Sync Started: "
-                f"installation={self.installation_id}, "
-                f"repos={len(repos_to_sync)}, "
-                f"entities={entity_types}"
-            )
-
-            # Repository 단위 Incremental Sync
-            for repo_full_name in repos_to_sync:
-                try:
-                    owner, repo = repo_full_name.split("/", 1)
-
-                    # 1. Issue 증분 동기화
-                    if "issue" in entity_types:
-                        issue_result = await self._incremental_sync_issues(
-                            db, owner, repo, repo_full_name
-                        )
-                        results["issues"]["synced"] += issue_result["synced"]
-                        results["issues"]["errors"] += issue_result["errors"]
-
-                    # 2. Pull Request 증분 동기화
-                    if "pull_request" in entity_types:
-                        pr_result = await self._incremental_sync_pull_requests(
-                            db, owner, repo, repo_full_name
-                        )
-                        results["pull_requests"]["synced"] += pr_result["synced"]
-                        results["pull_requests"]["errors"] += pr_result["errors"]
-
-                except Exception as e:
-                    logger.error(
-                        f"[GITHUB][FLUSH] Incremental Sync Failed for repository {repo_full_name}: {e}"
-                    )
-                    results["repositories"]["errors"] += 1
-                    # Repository 단위 실패는 전체 동기화를 중단하지 않음
-                    continue
-
-            logger.info(f"[GITHUB][FLUSH] Incremental sync completed: {results}")
-            return results
-
-        except Exception as e:
-            logger.error(f"[GITHUB][FLUSH] Incremental sync failed: {e}")
-            raise
-
-    async def _incremental_sync_issues(
-        self,
-        db: Session,
-        owner: str,
-        repo: str,
-        repo_full_name: str,
-    ) -> dict[str, int]:
-        """
-        Issue 증분 동기화
-
-        마지막 성공한 동기화 시점 이후 업데이트된 Issue를 동기화합니다.
-
-        Args:
-            db: SQLAlchemy Session
-            owner: Repository owner
-            repo: Repository name
-            repo_full_name: Repository full name (owner/repo)
-
-        Returns:
-            {"synced": N, "errors": N}
-        """
-        since = datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
-
-        logger.info(
-            f"[GITHUB][FLUSH] Syncing Issues for {repo_full_name} "
-            f"(since: {since.isoformat() if since else 'all time'})"
-        )
-
-        issue_result = await self._sync_issues(db, owner, repo, since=since)
-        return {
-            "synced": issue_result.get("synced", 0),
-            "errors": issue_result.get("errors", 0),
-        }
-
-    async def _incremental_sync_pull_requests(
-        self,
-        db: Session,
-        owner: str,
-        repo: str,
-        repo_full_name: str,
-    ) -> dict[str, int]:
-        """
-        Pull Request 증분 동기화
-
-        마지막 성공한 동기화 시점 이후 업데이트된 PR을 동기화합니다.
-
-        Args:
-            db: SQLAlchemy Session
-            owner: Repository owner
-            repo: Repository name
-            repo_full_name: Repository full name (owner/repo)
-
-        Returns:
-            {"synced": N, "errors": N}
-        """
-        since = datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
-
-        logger.info(
-            f"[GITHUB][FLUSH] Syncing PRs for {repo_full_name} "
-            f"(since: {since.isoformat() if since else 'all time'})"
-        )
-
-        pr_result = await self._sync_pull_requests(db, owner, repo, since=since)
-        return {
-            "synced": pr_result.get("synced", 0),
-            "errors": pr_result.get("errors", 0),
-        }
 
     async def _summarize_documents(
         self,

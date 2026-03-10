@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
     FullSyncResolvedTargets,
-    IncrementalSyncDispatchRequest,
     PublishTasksResult,
     SyncDispatchResult,
     SyncEventContext,
@@ -112,15 +111,6 @@ class ConnectorSyncServiceProtocol(Protocol):
         *,
         db,
         request: FullSyncDispatchRequest,
-        base_url: str | None,
-    ) -> SyncDispatchResult:
-        ...
-
-    async def dispatch_incremental_sync(
-        self,
-        *,
-        db,
-        request: IncrementalSyncDispatchRequest,
         base_url: str | None,
     ) -> SyncDispatchResult:
         ...

@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
@@ -13,31 +13,11 @@ from catchup.connectors.jira import webhook_service
 from catchup.db.dependencies import get_db
 from catchup.db.jira import webhook_repository as jira_webhook
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
-from catchup.utils.webhook_buffer import get_webhook_buffer
+from catchup.sync.incremental import ingest_record_changes, normalize_jira_event
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/jira", tags=["jira-webhook"])
-
-SUPPORTED_ISSUE_EVENTS = {
-    "jira:issue_created",
-    "jira:issue_updated",
-    "jira:issue_deleted",
-    "comment_created",
-    "comment_updated",
-    "comment_deleted",
-}
-
-def _extract_issue_project(payload: dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
-    """Payload에서 Issue Key + Project Key 추출"""
-    issue = payload.get("issue") or {}
-    issue_key = issue.get("key")
-
-    fields = issue.get("fields") or {}
-    project = fields.get("project") or payload.get("project") or {}
-    project_key = project.get("key")
-
-    return issue_key, project_key
 
 @router.post("/webhooks/{cloud_id}", status_code=status.HTTP_200_OK)
 async def handle_jira_webhook(
@@ -49,7 +29,6 @@ async def handle_jira_webhook(
     """
     Jira Webhook 수신
     - JWT 발신자 검증
-    - Issue/Comment 이벤트는 버퍼링 후 flush 시 증분 반영
     - Project/Sprint/User 이벤트는 즉시 DB 반영
     """
     verify_result = WebhookVerifierProvider.verify_jira(
@@ -76,30 +55,6 @@ async def handle_jira_webhook(
         )
     
     event_type = payload.get("webhookEvent", "")
-
-    if event_type in SUPPORTED_ISSUE_EVENTS:
-        issue_key, project_key = _extract_issue_project(payload)
-
-        if not issue_key or not project_key:
-            logger.info(
-                f"[JIRA][WEBHOOK] Ignored issue event: "
-                f"cloud_id={cloud_id}, event_type={event_type}, reason=missing_issue_or_project"
-            )
-            return {"status": "ignored", "event_type": event_type}
-        
-        buffer = get_webhook_buffer()
-        await buffer.buffer_jira_event(
-            cloud_id=cloud_id,
-            project_key=project_key,
-            issue_key=issue_key,
-            event_type=event_type,
-        )
-
-        logger.info(
-            f"[JIRA][WEBHOOK] Buffered issue event: "
-            f"cloud_id={cloud_id}, project_key={project_key}, issue_key={issue_key}, event_type={event_type}"
-        )
-        return {"status": "buffered", "event_type": event_type}
     
     if event_type in webhook_service.SUPPORTED_METADATA_EVENTS:
         try:
@@ -120,10 +75,22 @@ async def handle_jira_webhook(
                 detail="Failed to process Jira metadata webhook event",
             )
     
-    logger.info(
-        f"[JIRA][WEBHOOK] Ignored unsupported event: cloud_id={cloud_id}, event_type={event_type}"
+    changes = normalize_jira_event(
+        cloud_id=cloud_id,
+        payload=payload,
     )
-    return {"status": "ignored", "event_type": event_type}
+    if not changes:
+        logger.info(
+            f"[JIRA][WEBHOOK] Ignored unsupported webhook payload: cloud_id={cloud_id}, event_type={event_type}"
+        )
+        return {"status": "ignored", "event_type": event_type}
+
+    record_keys = ingest_record_changes(db, changes)
+    return {
+        "status": "accepted",
+        "event_type": event_type,
+        "record_keys": record_keys,
+    }
 
 
 @router.post("/webhooks/{cloud_id}/dynamic/register", status_code=status.HTTP_200_OK)

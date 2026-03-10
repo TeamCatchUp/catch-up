@@ -1231,6 +1231,21 @@ class SyncEventStatus(StrEnum):
     FAILED = "failed"
     RETRYING = "retrying"
 
+
+class IncrementalRecordStatus(StrEnum):
+    DEBOUNCING = "debouncing"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    RETRY_WAIT = "retry_wait"
+    DEAD = "dead"
+    SYNCED = "synced"
+
+
+class IncrementalOutboxStatus(StrEnum):
+    PENDING = "pending"
+    PUBLISHED = "published"
+    FAILED = "failed"
+
 class SyncJob(Base):
     __tablename__ = "sync_jobs"
 
@@ -1353,6 +1368,167 @@ class SyncEvent(Base):
             "requested_at",
         ),
         Index("idx_sync_events_job_id_requested_at", "job_id", "requested_at"),
+    )
+
+
+class IncrementalRecordState(Base):
+    __tablename__ = "incremental_record_states"
+
+    record_key: Mapped[str] = mapped_column(String(255), primary_key=True)
+    connector: Mapped[SyncConnector] = mapped_column(String(32), nullable=False)
+    scope_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    record_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    record_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    parent_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    parent_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    event_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    status: Mapped[IncrementalRecordStatus] = mapped_column(
+        String(20),
+        nullable=False,
+        default=IncrementalRecordStatus.DEBOUNCING,
+        server_default=text(f"'{IncrementalRecordStatus.DEBOUNCING.value}'"),
+    )
+    generation: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default=text("1"),
+    )
+    attempt: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+
+    last_event_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    debounce_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    queued_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    processing_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    outbox_entries: Mapped[list["IncrementalStreamOutbox"]] = relationship(
+        back_populates="record",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('debouncing', 'queued', 'processing', 'retry_wait', 'dead', 'synced')",
+            name="ck_incremental_record_states_status",
+        ),
+        CheckConstraint("generation >= 1", name="ck_incremental_record_states_generation_positive"),
+        CheckConstraint("attempt >= 0", name="ck_incremental_record_states_attempt_non_negative"),
+        CheckConstraint(
+            "queued_generation IS NULL OR queued_generation >= 1",
+            name="ck_incremental_record_states_queued_generation_positive",
+        ),
+        CheckConstraint(
+            "processing_generation IS NULL OR processing_generation >= 1",
+            name="ck_incremental_record_states_processing_generation_positive",
+        ),
+        Index(
+            "idx_incremental_record_states_connector_status_debounce_until",
+            "connector",
+            "status",
+            "debounce_until",
+        ),
+        Index(
+            "idx_incremental_record_states_connector_status_next_retry_at",
+            "connector",
+            "status",
+            "next_retry_at",
+        ),
+        Index(
+            "idx_incremental_record_states_parent_status",
+            "connector",
+            "scope_id",
+            "parent_type",
+            "parent_id",
+            "status",
+        ),
+        Index(
+            "idx_incremental_record_states_scope_updated_at",
+            "scope_id",
+            "updated_at",
+        ),
+    )
+
+
+class IncrementalStreamOutbox(Base):
+    __tablename__ = "incremental_stream_outbox"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    record_key: Mapped[str] = mapped_column(
+        ForeignKey("incremental_record_states.record_key", ondelete="CASCADE"),
+        nullable=False,
+    )
+    generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    connector: Mapped[SyncConnector] = mapped_column(String(32), nullable=False)
+    scope_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    parent_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    parent_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    event_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[IncrementalOutboxStatus] = mapped_column(
+        String(20),
+        nullable=False,
+        default=IncrementalOutboxStatus.PENDING,
+        server_default=text(f"'{IncrementalOutboxStatus.PENDING.value}'"),
+    )
+    attempt: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+    stream_message_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    record: Mapped["IncrementalRecordState"] = relationship(back_populates="outbox_entries")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "record_key",
+            "generation",
+            name="uq_incremental_stream_outbox_record_generation",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'published', 'failed')",
+            name="ck_incremental_stream_outbox_status",
+        ),
+        CheckConstraint("generation >= 1", name="ck_incremental_stream_outbox_generation_positive"),
+        CheckConstraint("attempt >= 0", name="ck_incremental_stream_outbox_attempt_non_negative"),
+        Index(
+            "idx_incremental_stream_outbox_status_created_at",
+            "status",
+            "created_at",
+        ),
+        Index(
+            "idx_incremental_stream_outbox_connector_status_created_at",
+            "connector",
+            "status",
+            "created_at",
+        ),
     )
 
 

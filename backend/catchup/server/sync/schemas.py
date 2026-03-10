@@ -89,19 +89,6 @@ class FullSyncRequest(BaseModel):
         return normalized
 
 
-class IncrementalSyncRequest(BaseModel):
-    """
-    공통 Incremental Sync 요청
-    """
-
-    connector: SyncConnector = Field(..., description="sync connector type")
-    scope_id: str = Field(..., description="connector scope id (team_id / installation_id / cloud_id)")
-    target_ids: list[str] | None = Field(
-        default=None,
-        description="incremental sync targets (optional)",
-    )
-
-
 class SyncAcceptedResponse(BaseModel):
     """
     공통 Sync 접수 응답
@@ -146,29 +133,6 @@ class SyncStatusResponse(BaseModel):
 
     last_error: str | None = None
     metrics: dict[str, int] = Field(default_factory=dict)
-
-
-class SyncFlushRequest(BaseModel):
-    """
-    공통 Flush 요청
-    """
-
-    connector: SyncConnector = Field(..., description="flush target connector")
-    scope_ids: list[str] | None = Field(
-        default=None,
-        description="connector scope ids to flush (optional)",
-    )
-
-
-class SyncFlushResponse(BaseModel):
-    """
-    공통 Flush 응답
-    """
-
-    status: str = Field(..., description="no_events | not_implemented")
-    connector: SyncConnector
-    scope_ids: list[str] = Field(default_factory=list)
-    message: str | None = None
 
 
 class SyncErrorResponse(BaseModel):
