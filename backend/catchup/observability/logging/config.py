@@ -86,7 +86,7 @@ def _build_json_file_handler() -> logging.Handler:
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             structlog.processors.format_exc_info,
-            structlog.processors.JSONRenderer(),
+            structlog.processors.JSONRenderer(ensure_ascii=False),
         ],
     )
 

@@ -120,8 +120,8 @@ async def request_context_middleware(
     
     logger.debug(
         "request_trace_info",
-        trace_id=request.state.trace_id,
-        actor=request.state.actor
+        trace_id_=request.state.trace_id,
+        actor_=request.state.actor.model_dump(mode="json")
     )
     
     # BackgroundTasks를 ContextVars로 설정

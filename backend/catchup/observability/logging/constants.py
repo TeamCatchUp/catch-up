@@ -31,7 +31,7 @@ CONSOLE_EXCLUDE_KEYS: Final[set[str]] = {
     "actor",
     "environment",
     "event_action",
-    "event_type",
+    # "event_type",
     "metadata",
     "service",
     "trace_id",
