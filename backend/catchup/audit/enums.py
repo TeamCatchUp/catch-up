@@ -1,3 +1,4 @@
+### TODO: events/enums로 이관
 from __future__ import annotations
 
 from enum import StrEnum
@@ -40,3 +41,17 @@ class SyncEventAction(StrEnum):
 class ChatEventAction(StrEnum):
     MESSAGE_SENT = "message_sent"
     MESSAGE_FAILED = "message_failed"
+
+### =================
+class AuditLevel(StrEnum):
+    DEBUG = "debug"
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+
+
+class AuditResult(StrEnum):
+    SUCCESS = "success"
+    FAILURE = "failure"
+    TIMEOUT = "timeout"

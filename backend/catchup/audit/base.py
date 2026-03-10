@@ -3,21 +3,10 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Literal
 
-from catchup.audit.enums import EventType
+from catchup.audit.enums import AuditLevel, AuditResult, EventType
 from catchup.observability.logging import get_logger
 
-
-AuditLevel = Literal["debug", "info", "warning", "error", "critical"]
-
-DEFAULT_FAILURE_VALUES = {
-    "failure",
-    "failed",
-    "error",
-    "partial_failure",
-    "timeout",
-}
-
-
+# TODO: 삭제
 def build_actor(
     *,
     user_id: int | str | None = None,
@@ -40,11 +29,12 @@ def build_actor(
     }
 
 
+# TODO: 삭제
 def resolve_audit_level(
     result: str,
     level: AuditLevel | None,
     *,
-    failure_values: set[str] = DEFAULT_FAILURE_VALUES,
+    failure_values: AuditResult | None = AuditResult.FAILURE,
     failure_level: AuditLevel = "warning",
     success_level: AuditLevel = "info",
 ) -> AuditLevel:

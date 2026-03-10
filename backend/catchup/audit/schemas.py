@@ -8,13 +8,13 @@ class AuditActor(BaseModel):
     department: str | None = None
     
     @classmethod
-    def from_dict(
+    def from_user_snapshot(
         cls,
         data: dict | None
     ) -> "AuditActor":
         
         if not data or not isinstance(data, dict):
-            return cls()
+            return None
         
         obj_type = data.get("__type__")        
         user_id = data.get("sub") or str(data.get("id") or "")
@@ -39,4 +39,15 @@ class AuditActor(BaseModel):
             email=data.get("email"),
             role=data.get("role"),
             department=data.get("department")
+        )
+    
+    @classmethod
+    def from_token_payload(
+        cls,
+        payload: dict[str, str]
+    ):
+        return cls(
+            user_id=payload.get("sub"),
+            email=payload.get("email"),
+            role=payload.get("role")
         )
