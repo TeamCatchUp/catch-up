@@ -4,22 +4,7 @@ import json
 from typing import Any
 
 from catchup.configs.config import settings
-
-SENSITIVE_KEYS = {
-    "password",
-    "passphrase",
-    "authorization",
-    "cookie",
-    "set-cookie",
-    "access_token",
-    "refresh_token",
-    "id_token",
-    "token",
-    "client_secret",
-    "api_key",
-    "secret",
-    "private_key",
-}
+from catchup.observability.logging.constants import SENSITIVE_KEYS
 
 DEFAULT_ACTOR = {
     "user_id": None,
