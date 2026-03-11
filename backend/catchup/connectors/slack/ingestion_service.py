@@ -162,7 +162,7 @@ class SlackIngestionService:
 
         while True:
             response = await self.client.list_conversations(
-                types="public_channel,private_channel,mpim,im",
+                types="public_channel,private_channel",
                 cursor=cursor,
             )
             for channel in response.get("channels", []):

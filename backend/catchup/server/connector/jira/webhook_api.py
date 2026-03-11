@@ -9,11 +9,10 @@ from catchup.connectors.jira.dynamic_webhook_service import (
     JiraDynamicWebhookService,
     get_jira_dynamic_webhook_service,
 )
-from catchup.connectors.jira import webhook_service
+from catchup.connectors.jira.webhook_ingress import handle_webhook as handle_jira_webhook_ingress
 from catchup.db.dependencies import get_db
 from catchup.db.jira import webhook_repository as jira_webhook
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
-from catchup.sync.incremental import ingest_record_changes, normalize_jira_event
 
 logger = logging.getLogger(__name__)
 
@@ -54,43 +53,25 @@ async def handle_jira_webhook(
             detail="Invalid JSON payload",
         )
     
-    event_type = payload.get("webhookEvent", "")
-    
-    if event_type in webhook_service.SUPPORTED_METADATA_EVENTS:
-        try:
-            result = webhook_service.handle_metadata_event(
-                db=db,
-                cloud_id=cloud_id,
-                event_type=event_type,
-                payload=payload
-            )
-            return result
-        except Exception as e:
-            logger.error(
-                f"[JIRA][WEBHOOK] Failed: cloud_id={cloud_id}, event_type={event_type}, error={e}",
-                exc_info=True,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to process Jira metadata webhook event",
-            )
-    
-    changes = normalize_jira_event(
-        cloud_id=cloud_id,
-        payload=payload,
-    )
-    if not changes:
-        logger.info(
-            f"[JIRA][WEBHOOK] Ignored unsupported webhook payload: cloud_id={cloud_id}, event_type={event_type}"
+    try:
+        return handle_jira_webhook_ingress(
+            db=db,
+            cloud_id=cloud_id,
+            payload=payload,
         )
-        return {"status": "ignored", "event_type": event_type}
-
-    record_keys = ingest_record_changes(db, changes)
-    return {
-        "status": "accepted",
-        "event_type": event_type,
-        "record_keys": record_keys,
-    }
+    except Exception as exc:
+        event_type = str(payload.get("webhookEvent") or "").strip()
+        logger.error(
+            "[JIRA][WEBHOOK] Failed: cloud_id=%s, event_type=%s, error=%s",
+            cloud_id,
+            event_type,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process Jira webhook event",
+        )
 
 
 @router.post("/webhooks/{cloud_id}/dynamic/register", status_code=status.HTTP_200_OK)

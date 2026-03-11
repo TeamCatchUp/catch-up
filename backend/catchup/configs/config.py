@@ -129,7 +129,7 @@ class Settings(BaseSettings):
     SLACK_CLIENT_ID: str
     SLACK_CLIENT_SECRET: str
     SLACK_REDIRECT_URI: str
-    SLACK_BOT_SCOPES: str = "channels:read channels:history groups:read groups:history mpim:history mpim:read users:read users:read.email users.profile:read usergroups:read team:read app_mentions:read assistant:write chat:write chat:write.customize commands reactions:read reactions:write emoji:read files:read links:read im:read im:history"
+    SLACK_BOT_SCOPES: str = "channels:read channels:history groups:read groups:history users:read users:read.email users.profile:read usergroups:read team:read app_mentions:read assistant:write chat:write chat:write.customize commands reactions:read reactions:write emoji:read files:read links:read"
     SLACK_SIGNING_SECRET: str
 
     # Slack API URLs

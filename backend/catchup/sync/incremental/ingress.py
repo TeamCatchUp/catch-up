@@ -113,6 +113,8 @@ def normalize_slack_event(
 
     subtype = str(event.get("subtype") or "").strip().lower()
     channel_id = str(event.get("channel") or "").strip()
+    if not channel_id.startswith(("C", "G")):
+        return []
     message_payload = event.get("message") if subtype in {"message_changed", "message_deleted"} else event
     if not isinstance(message_payload, dict):
         message_payload = event
