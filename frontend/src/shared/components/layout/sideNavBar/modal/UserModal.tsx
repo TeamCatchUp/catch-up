@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 
@@ -41,13 +41,12 @@ interface UserMenuContentProps {
  */
 export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
   const router = useRouter();
-  const queryClient = useQueryClient();
+
   const { theme, setTheme } = useTheme();
 
   const logoutMutation = useMutation({
     ...authMutations.logout(),
     onSuccess: () => {
-      queryClient.clear();
       window.location.href = '/login';
     },
   });
@@ -65,7 +64,7 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
         <DefaultProfile className="h-10 w-10 shrink-0" />
         <div className="relative top-px flex min-w-0 flex-col">
           <span className="text-heading-small text-content-normal truncate">{userName ?? '이름없음'}</span>
-          <span className="text-body-small truncate text-content-alternative">{userEmail ?? ''}</span>
+          <span className="text-body-small text-content-alternative truncate">{userEmail ?? ''}</span>
         </div>
       </DropdownMenuLabel>
 
