@@ -76,7 +76,8 @@ async def oauth2_login(
     emit_audit_event(
         event_type=EventType.AUTH,
         event_action=AuthEventAction.LOGIN_ATTEMPT,
-        level=AuditLevel.INFO
+        level=AuditLevel.INFO,
+        immediate=True
     )
 
     return response
@@ -99,6 +100,7 @@ async def oauth_callback(
             event_action=AuthEventAction.LOGIN_FAILURE,
             level=AuditLevel.WARNING,
             metadata={"reason": "invalid_refresh_token"},
+            immediate=True
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -116,7 +118,8 @@ async def oauth_callback(
             event_type=EventType.AUTH,
             event_action=AuthEventAction.LOGIN_FAILURE,
             level=AuditLevel.WARNING,
-            metadata={"reason": "expired_state"}
+            metadata={"reason": "expired_state"},
+            immediate=True
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -163,8 +166,9 @@ def refresh_token(
         emit_audit_event(
             event_type=EventType.AUTH,
             event_action=AuthEventAction.LOGIN_FAILURE,
+            level=AuditLevel.WARNING,
             metadata={"reason": "invalid_or_expired_token", "detail": e.detail},
-            level=AuditLevel.WARNING
+            immediate=True
         )
         
         # 유효하지 않은 토큰인 경우 사용자 쿠키 삭제
@@ -195,6 +199,7 @@ def refresh_token(
             event_action=AuthEventAction.LOGIN_FAILURE,
             level=AuditLevel.WARNING,
             metadata={"reason": "invalid_refresh_token"},
+            immediate=True,
             actor=snapshot,
         )
         err_response = JSONResponse(
@@ -230,8 +235,9 @@ def refresh_token(
     emit_audit_event(
         event_type=EventType.AUTH,
         event_action=AuthEventAction.TOKEN_REFRESH,
+        level=AuditLevel.INFO,
+        immediate=True,
         actor=snapshot,
-        level=AuditLevel.INFO
     )
 
     return {
@@ -264,7 +270,8 @@ async def logout(
     emit_audit_event(
         event_type=EventType.AUTH,
         event_action=AuthEventAction.LOGOUT,
-        level=AuditLevel.INFO
+        level=AuditLevel.INFO,
+        immediate=True
     )
 
     return {"status": "success", "detail": "Logged out successfully"}
