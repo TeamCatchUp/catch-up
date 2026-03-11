@@ -16,5 +16,6 @@ class SyncStreamFailureReason(StrEnum):
     EVENT_NOT_FOUND = "event_not_found"
     EVENT_ALREADY_TERMINAL = "event_already_terminal"
     EVENT_CAS_CONFLICT = "event_cas_conflict"
+    RECORD_STATE_CONFLICT = "record_state_conflict"
     PROCESSING_EXCEPTION = "processing_exception"
     UNSUPPORTED_HANDLER = "unsupported_handler"

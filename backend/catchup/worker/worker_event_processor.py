@@ -344,6 +344,54 @@ async def _mark_incremental_success(context: SyncEventContext) -> bool:
             last_synced_at=datetime.now(timezone.utc),
         )
 
+async def _transition_incremental_failure_state(
+    *,
+    context: SyncEventContext,
+    message: SyncStreamMessage,
+    to_status: IncrementalRecordStatus,
+    attempt: int,
+    last_error: str,
+    next_retry_at: datetime | None = None,
+) -> bool:
+    if context.record_key is None or context.generation is None:
+        return False
+    
+    with SessionLocal() as db:
+        transitioned = transition_record_status(
+            db,
+            record_key=context.record_key,
+            from_statuses=[IncrementalRecordStatus.PROCESSING],
+            to_status=to_status,
+            expected_generation=context.generation,
+            attempt=attempt,
+            next_retry_at=next_retry_at,
+            last_error=last_error,
+        )
+    
+    if transitioned:
+        return True
+    
+    await _deadletter(
+        message=message,
+        reason=SyncStreamFailureReason.RECORD_STATE_CONFLICT,
+        error_message=(
+            "failed to transition incremental record state: "
+            f"record_key={context.record_key}, "
+            f"generation={context.generation}, "
+            f"to_status={to_status.value}"
+        ),
+    )
+    logger.error(
+        "[%s][INCREMENTAL][WORKER] Record state transition failed: "
+        "record_key=%s, generation=%s, to_status=%s",
+        context.connector.upper(),
+        context.record_key,
+        context.generation,
+        to_status.value,
+    )
+    return False
+
+
 
 async def _handle_incremental_failure(
     *,
@@ -364,16 +412,15 @@ async def _handle_incremental_failure(
     next_attempt = context.attempt + 1
 
     if next_attempt >= context.max_attempts:
-        with SessionLocal() as db:
-            transition_record_status(
-                db,
-                record_key=context.record_key,
-                from_statuses=[IncrementalRecordStatus.PROCESSING],
-                to_status=IncrementalRecordStatus.DEAD,
-                expected_generation=context.generation,
-                attempt=next_attempt,
-                last_error=error_summary,
-            )
+        transitioned = await _transition_incremental_failure_state(
+            context=context,
+            message=message,
+            to_status=IncrementalRecordStatus.DEAD,
+            attempt=next_attempt,
+            last_error=error_summary,
+        )
+        if not transitioned:
+            return
 
         await _deadletter(
             message=message,
@@ -396,17 +443,16 @@ async def _handle_incremental_failure(
         return
 
     next_retry_at = datetime.now(timezone.utc) + _incremental_retry_delay(next_attempt)
-    with SessionLocal() as db:
-        transition_record_status(
-            db,
-            record_key=context.record_key,
-            from_statuses=[IncrementalRecordStatus.PROCESSING],
-            to_status=IncrementalRecordStatus.RETRY_WAIT,
-            expected_generation=context.generation,
-            attempt=next_attempt,
-            next_retry_at=next_retry_at,
-            last_error=error_summary,
-        )
+    transitioned = await _transition_incremental_failure_state(
+        context=context,
+        message=message,
+        to_status=IncrementalRecordStatus.RETRY_WAIT,
+        attempt=next_attempt,
+        next_retry_at=next_retry_at,
+        last_error=error_summary,
+    )
+    if not transitioned:
+        return
 
     await handler.on_target_requeued(
         context=context,
