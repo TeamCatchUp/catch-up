@@ -8,5 +8,6 @@ export const authMutations = {
     ({
       mutationKey: ['auth', 'logout'] as const,
       mutationFn: () => api.post(API.auth.logout),
+      meta: { invalidates: [] },
     }) satisfies UseMutationOptions,
 };
