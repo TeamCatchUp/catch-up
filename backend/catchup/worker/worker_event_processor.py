@@ -8,7 +8,12 @@ from uuid import uuid4
 
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
-from catchup.db.incremental import get_record_state, transition_record_status
+from catchup.db.incremental import (
+    get_record_state,
+    list_parent_cohort_records,
+    mark_parent_cohort_synced,
+    transition_record_status,
+)
 from catchup.db.models import (
     IncrementalRecordStatus,
     SyncConnector,
@@ -30,6 +35,7 @@ from catchup.db.sync import (
 )
 from catchup.sync.common.protocols import IngestionHandlerProtocol, WorkerProtocol
 from catchup.sync.common.schemas import SyncEventContext, SyncStreamMessage, SyncStreamTask
+from catchup.sync.incremental.error_policy import is_retryable_incremental_error
 from catchup.sync.stream_runtime.stream_constants import (
     STREAM_CLAIM_START_ID,
     SyncStreamFailureReason,
@@ -73,8 +79,29 @@ def _consumer_name() -> str:
     return f"sync-worker-{uuid4().hex[:8]}"
 
 
+def _incremental_lease_until() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(
+        seconds=max(1, int(settings.SYNC_LOCK_CHANNEL_TTL_SECONDS))
+    )
+
+
 def _task_fields(task: SyncStreamTask) -> dict[str, str]:
     return task.to_stream_fields()
+
+
+def _task_lock_key(task: SyncStreamTask) -> tuple[str, str, str, str]:
+    target_type = (task.target_type or "").strip() or ("record" if task.record_key else "event")
+    target_id = (
+        (task.target_id or "").strip()
+        or (task.record_key or "").strip()
+        or task.event_id
+    )
+    return (
+        task.connector.strip(),
+        (task.scope_id or "").strip(),
+        target_type,
+        target_id,
+    )
 
 
 def _select_handler(context: SyncEventContext) -> IngestionHandlerProtocol | None:
@@ -261,7 +288,7 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
     )
 
 
-def _claim_incremental_task(task: SyncStreamTask) -> ClaimResult:
+def _claim_incremental_task(task: SyncStreamTask, *, lease_owner: str) -> ClaimResult:
     record_key = (task.record_key or "").strip()
     if not record_key or task.generation is None:
         return ClaimResult(state="invalid_incremental_task")
@@ -284,12 +311,28 @@ def _claim_incremental_task(task: SyncStreamTask) -> ClaimResult:
             to_status=IncrementalRecordStatus.PROCESSING,
             expected_generation=task.generation,
             processing_generation=task.generation,
+            lease_owner=lease_owner,
+            lease_until=_incremental_lease_until(),
         ):
             return ClaimResult(state="record_cas_conflict")
 
         claimed = get_record_state(db, record_key)
         if claimed is None:
             return ClaimResult(state="record_not_found")
+
+        cohort = list_parent_cohort_records(
+            db,
+            connector=claimed.connector,
+            scope_id=claimed.scope_id,
+            parent_type=claimed.parent_type,
+            parent_id=claimed.parent_id,
+            max_generation=claimed.generation,
+        )
+        batch_sync_from = claimed.last_event_at.isoformat()
+        batch_generation_ceiling = claimed.generation
+        if cohort:
+            batch_sync_from = min(item.last_event_at for item in cohort).isoformat()
+            batch_generation_ceiling = max(item.generation for item in cohort)
 
         context = SyncEventContext(
             event_id=task.event_id,
@@ -311,6 +354,8 @@ def _claim_incremental_task(task: SyncStreamTask) -> ClaimResult:
             parent_id=claimed.parent_id,
             event_kind=claimed.event_kind,
             last_event_at=claimed.last_event_at.isoformat(),
+            batch_sync_from=batch_sync_from,
+            batch_generation_ceiling=batch_generation_ceiling,
             metadata={},
         )
 
@@ -333,7 +378,24 @@ async def _mark_incremental_success(context: SyncEventContext) -> bool:
     if context.record_key is None or context.generation is None:
         return False
 
+    synced_at = datetime.now(timezone.utc)
     with SessionLocal() as db:
+        if (
+            context.parent_type
+            and context.parent_id
+            and context.batch_generation_ceiling is not None
+        ):
+            updated = mark_parent_cohort_synced(
+                db,
+                connector=SyncConnector(context.connector),
+                scope_id=context.scope_id,
+                parent_type=context.parent_type,
+                parent_id=context.parent_id,
+                max_generation=context.batch_generation_ceiling,
+                last_synced_at=synced_at,
+            )
+            return updated >= 1
+
         return transition_record_status(
             db,
             record_key=context.record_key,
@@ -341,7 +403,7 @@ async def _mark_incremental_success(context: SyncEventContext) -> bool:
             to_status=IncrementalRecordStatus.SYNCED,
             expected_generation=context.generation,
             attempt=0,
-            last_synced_at=datetime.now(timezone.utc),
+            last_synced_at=synced_at,
         )
 
 async def _transition_incremental_failure_state(
@@ -410,8 +472,9 @@ async def _handle_incremental_failure(
 
     error_summary = str(exc)
     next_attempt = context.attempt + 1
+    retryable = is_retryable_incremental_error(exc)
 
-    if next_attempt >= context.max_attempts:
+    if not retryable or next_attempt >= context.max_attempts:
         transitioned = await _transition_incremental_failure_state(
             context=context,
             message=message,
@@ -431,13 +494,14 @@ async def _handle_incremental_failure(
             context=context,
             next_attempt=next_attempt,
             error_summary=error_summary,
-            retryable=False,
+            retryable=retryable,
         )
         logger.error(
-            "[%s][INCREMENTAL][WORKER] Record dead: record_key=%s, attempt=%s, error=%s",
+            "[%s][INCREMENTAL][WORKER] Record dead: record_key=%s, attempt=%s, retryable=%s, error=%s",
             context.connector.upper(),
             context.record_key,
             next_attempt,
+            retryable,
             error_summary,
         )
         return
@@ -705,13 +769,15 @@ async def _finalize_job_if_done(
 async def _process_incremental_message(
     message: SyncStreamMessage,
     service_cache: dict[str, object],
+    *,
+    lease_owner: str,
 ) -> None:
     task = message.task
     context: SyncEventContext | None = None
     handler: IngestionHandlerProtocol | None = None
 
     try:
-        claim = _claim_incremental_task(task)
+        claim = _claim_incremental_task(task, lease_owner=lease_owner)
         if claim.state == "invalid_incremental_task":
             await _deadletter(
                 message=message,
@@ -838,10 +904,16 @@ async def _process_incremental_message(
 async def _process_message(
     message: SyncStreamMessage,
     service_cache: dict[str, object],
+    *,
+    lease_owner: str,
 ) -> None:
     task = message.task
     if task.sync_type == "incremental":
-        await _process_incremental_message(message, service_cache)
+        await _process_incremental_message(
+            message,
+            service_cache,
+            lease_owner=lease_owner,
+        )
         return
 
     context: SyncEventContext | None = None
@@ -1052,14 +1124,30 @@ async def _process_message(
 class SyncWorker(WorkerProtocol):
     def __init__(self) -> None:
         self._service_cache: dict[str, object] = {}
+        self._target_locks: dict[tuple[str, str, str, str], asyncio.Lock] = {}
+        self._parallelism = max(1, int(settings.SYNC_WORKER_CHANNEL_CONCURRENCY))
+        self._semaphore = asyncio.Semaphore(self._parallelism)
+        self._consumer = ""
 
     async def process(self, message: SyncStreamMessage) -> None:
-        await _process_message(message, self._service_cache)
+        lock_key = _task_lock_key(message.task)
+        lock = self._target_locks.setdefault(lock_key, asyncio.Lock())
+        async with lock:
+            async with self._semaphore:
+                await _process_message(
+                    message,
+                    self._service_cache,
+                    lease_owner=self._consumer,
+                )
 
     async def run_forever(self, stop_event: asyncio.Event) -> None:
         consumer = _consumer_name()
         reclaim_start_id = STREAM_CLAIM_START_ID
         self._service_cache = {}
+        self._consumer = consumer
+        self._target_locks = {}
+        self._parallelism = max(1, int(settings.SYNC_WORKER_CHANNEL_CONCURRENCY))
+        self._semaphore = asyncio.Semaphore(self._parallelism)
 
         await initialize_stream_runtime()
         logger.info("[SYNC][WORKER] Worker started: consumer=%s", consumer)
@@ -1083,10 +1171,21 @@ class SyncWorker(WorkerProtocol):
                     await asyncio.sleep(settings.SYNC_WORKER_IDLE_SLEEP_SECONDS)
                     continue
 
-                for message in messages:
-                    if stop_event.is_set():
-                        break
-                    await self.process(message)
+                tasks = [
+                    asyncio.create_task(self.process(message))
+                    for message in messages
+                    if not stop_event.is_set()
+                ]
+                if not tasks:
+                    continue
+
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for result in results:
+                    if isinstance(result, Exception):
+                        logger.exception(
+                            "[SYNC][WORKER] Worker task failed",
+                            exc_info=result,
+                        )
 
             except Exception:
                 logger.exception("[SYNC][WORKER] Worker loop error")

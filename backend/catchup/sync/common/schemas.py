@@ -259,4 +259,6 @@ class SyncEventContext:
     parent_id: str | None = None
     event_kind: str | None = None
     last_event_at: str | None = None
+    batch_sync_from: str | None = None
+    batch_generation_ceiling: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)

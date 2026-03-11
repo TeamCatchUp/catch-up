@@ -18,6 +18,7 @@ from catchup.sync.incremental import (
     promote_incremental_records,
     publish_incremental_outbox,
 )
+from catchup.db.incremental import recover_stale_processing_records
 
 logger = logging.getLogger(__name__)
 
@@ -97,10 +98,16 @@ async def refresh_atlassian_tokens():
 
 async def run_incremental_runtime_jobs():
     logger.info("[INCREMENTAL][SCHEDULER] Starting promoter/publisher cycle")
+    with SessionLocal() as db:
+        recovered_processing = recover_stale_processing_records(
+            db,
+            stale_seconds=max(1, int(settings.SYNC_LOCK_CHANNEL_TTL_SECONDS)),
+        )
     promote_result = promote_incremental_records()
     publish_result = await publish_incremental_outbox()
     logger.info(
-        "[INCREMENTAL][SCHEDULER] Runtime cycle completed: promote=%s publish=%s",
+        "[INCREMENTAL][SCHEDULER] Runtime cycle completed: recovered_processing=%s promote=%s publish=%s",
+        recovered_processing,
         promote_result,
         publish_result,
     )

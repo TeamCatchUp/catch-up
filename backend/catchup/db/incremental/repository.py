@@ -80,6 +80,7 @@ _ALLOWED_OUTBOX_TRANSITIONS: dict[IncrementalOutboxStatus, set[IncrementalOutbox
     },
     IncrementalOutboxStatus.PUBLISHING: {
         IncrementalOutboxStatus.PUBLISHED,
+        IncrementalOutboxStatus.SKIPPED,
         IncrementalOutboxStatus.FAILED,
     },
 }
@@ -236,6 +237,41 @@ def list_retry_ready_records(
     return list(db.execute(stmt).scalars().all())
 
 
+def list_parent_cohort_records(
+    db: Session,
+    *,
+    connector: SyncConnector,
+    scope_id: str,
+    parent_type: str,
+    parent_id: str,
+    max_generation: int,
+    statuses: Sequence[IncrementalRecordStatus] | None = None,
+    limit: int = 1000,
+) -> list[IncrementalRecordState]:
+    target_statuses = list(
+        statuses
+        or [
+            IncrementalRecordStatus.QUEUED,
+            IncrementalRecordStatus.RETRY_WAIT,
+            IncrementalRecordStatus.PROCESSING,
+        ]
+    )
+    stmt: Select[tuple[IncrementalRecordState]] = select(IncrementalRecordState).where(
+        IncrementalRecordState.connector == connector,
+        IncrementalRecordState.scope_id == _normalize_text(scope_id, "scope_id"),
+        IncrementalRecordState.parent_type == _normalize_text(parent_type, "parent_type"),
+        IncrementalRecordState.parent_id == _normalize_text(parent_id, "parent_id"),
+        IncrementalRecordState.generation <= max_generation,
+        IncrementalRecordState.status.in_(target_statuses),
+    )
+    stmt = stmt.order_by(
+        IncrementalRecordState.generation.asc(),
+        IncrementalRecordState.last_event_at.asc(),
+        IncrementalRecordState.updated_at.asc(),
+    ).limit(limit)
+    return list(db.execute(stmt).scalars().all())
+
+
 def _update_record_status(
     db: Session,
     *,
@@ -323,6 +359,55 @@ def transition_record_status(
         )
         db.commit()
         return updated == 1
+    except Exception:
+        db.rollback()
+        raise
+
+
+def mark_parent_cohort_synced(
+    db: Session,
+    *,
+    connector: SyncConnector,
+    scope_id: str,
+    parent_type: str,
+    parent_id: str,
+    max_generation: int,
+    last_synced_at: datetime | None = None,
+) -> int:
+    synced_at = _to_utc(last_synced_at or _utc_now())
+    stmt = (
+        update(IncrementalRecordState)
+        .where(
+            IncrementalRecordState.connector == connector,
+            IncrementalRecordState.scope_id == _normalize_text(scope_id, "scope_id"),
+            IncrementalRecordState.parent_type == _normalize_text(parent_type, "parent_type"),
+            IncrementalRecordState.parent_id == _normalize_text(parent_id, "parent_id"),
+            IncrementalRecordState.generation <= max_generation,
+            IncrementalRecordState.status.in_(
+                [
+                    IncrementalRecordStatus.QUEUED,
+                    IncrementalRecordStatus.RETRY_WAIT,
+                    IncrementalRecordStatus.PROCESSING,
+                ]
+            ),
+        )
+        .values(
+            status=IncrementalRecordStatus.SYNCED,
+            attempt=0,
+            next_retry_at=None,
+            queued_generation=None,
+            processing_generation=None,
+            last_synced_at=synced_at,
+            last_error=None,
+            lease_owner=None,
+            lease_until=None,
+            updated_at=_utc_now(),
+        )
+    )
+    try:
+        result = db.execute(stmt)
+        db.commit()
+        return result.rowcount or 0
     except Exception:
         db.rollback()
         raise
@@ -579,6 +664,22 @@ def complete_outbox_publish(
     )
 
 
+def complete_outbox_skip(
+    db: Session,
+    *,
+    outbox_id: int,
+    last_error: str | None = None,
+) -> bool:
+    return transition_outbox_status(
+        db,
+        outbox_id=outbox_id,
+        from_statuses=[IncrementalOutboxStatus.PUBLISHING],
+        to_status=IncrementalOutboxStatus.SKIPPED,
+        stream_message_id=None,
+        last_error=last_error,
+    )
+
+
 def fail_outbox_publish(
     db: Session,
     *,
@@ -627,6 +728,52 @@ def recover_stale_outbox_claims(
             last_error="stale_publishing_timeout",
             updated_at=_utc_now(),
             published_at=None,
+        )
+    )
+    try:
+        result = db.execute(stmt)
+        db.commit()
+        return result.rowcount or 0
+    except Exception:
+        db.rollback()
+        raise
+
+
+def recover_stale_processing_records(
+    db: Session,
+    *,
+    stale_seconds: int,
+    connector: SyncConnector | None = None,
+    limit: int = 100,
+) -> int:
+    stale_before = _utc_now() - timedelta(seconds=max(1, stale_seconds))
+    ids_stmt = select(IncrementalRecordState.record_key).where(
+        IncrementalRecordState.status == IncrementalRecordStatus.PROCESSING,
+        IncrementalRecordState.lease_until.is_not(None),
+        IncrementalRecordState.lease_until <= stale_before,
+    )
+    if connector is not None:
+        ids_stmt = ids_stmt.where(IncrementalRecordState.connector == connector)
+
+    ids_stmt = ids_stmt.order_by(
+        IncrementalRecordState.lease_until.asc(),
+        IncrementalRecordState.updated_at.asc(),
+    ).limit(limit)
+    record_keys = list(db.execute(ids_stmt).scalars().all())
+    if not record_keys:
+        return 0
+
+    stmt = (
+        update(IncrementalRecordState)
+        .where(IncrementalRecordState.record_key.in_(record_keys))
+        .values(
+            status=IncrementalRecordStatus.RETRY_WAIT,
+            next_retry_at=_utc_now(),
+            processing_generation=None,
+            lease_owner=None,
+            lease_until=None,
+            last_error="stale_processing_timeout",
+            updated_at=_utc_now(),
         )
     )
     try:

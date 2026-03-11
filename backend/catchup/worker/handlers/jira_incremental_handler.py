@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from catchup.connectors.jira.factory import create_jira_ingestion_service
+from catchup.sync.common.exceptions import SyncInternalError
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
 
 
@@ -48,5 +49,8 @@ class JiraIncrementalHandler(BaseIncrementalHandler):
             )
 
         if int(result.get("errors", 0)) > 0:
-            raise RuntimeError(f"jira incremental sync failed: record_key={context.record_key}")
+            raise SyncInternalError(
+                "jira incremental sync failed",
+                metadata={"record_key": context.record_key},
+            )
         return result

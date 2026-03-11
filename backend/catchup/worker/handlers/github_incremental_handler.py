@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from catchup.connectors.github.factory import create_github_ingestion_service
+from catchup.sync.common.exceptions import SyncInternalError
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
 
 
@@ -52,5 +53,8 @@ class GithubIncrementalHandler(BaseIncrementalHandler):
             )
 
         if int(result.get("errors", 0)) > 0:
-            raise RuntimeError(f"github incremental sync failed: record_key={context.record_key}")
+            raise SyncInternalError(
+                "github incremental sync failed",
+                metadata={"record_key": context.record_key},
+            )
         return result

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from catchup.connectors.confluence.factory import create_confluence_ingestion_service
+from catchup.sync.common.exceptions import SyncInternalError
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
 
 
@@ -49,5 +50,8 @@ class ConfluenceIncrementalHandler(BaseIncrementalHandler):
             )
 
         if int(result.get("errors", 0)) > 0:
-            raise RuntimeError(f"confluence incremental sync failed: record_key={context.record_key}")
+            raise SyncInternalError(
+                "confluence incremental sync failed",
+                metadata={"record_key": context.record_key},
+            )
         return result

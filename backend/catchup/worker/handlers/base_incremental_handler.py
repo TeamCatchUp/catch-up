@@ -15,7 +15,7 @@ class BaseIncrementalHandler(IngestionHandlerProtocol):
         return f"{self.connector}:{scope_id}"
 
     def _resolve_since(self, context: SyncEventContext) -> datetime:
-        raw = context.last_event_at or context.sync_from
+        raw = context.batch_sync_from or context.last_event_at or context.sync_from
         if raw:
             try:
                 return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(

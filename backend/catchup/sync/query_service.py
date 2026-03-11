@@ -23,7 +23,9 @@ from catchup.db.models import (
     JiraProject,
     SlackChannel,
     SyncConnector,
+    SyncEventStatus,
     SyncJob,
+    SyncJobStatus,
     SyncType,
 )
 from catchup.db.sync import get_job, list_events_by_job

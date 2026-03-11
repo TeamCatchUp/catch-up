@@ -6,6 +6,7 @@ from catchup.db.engine import SessionLocal
 from catchup.db.incremental import (
     claim_outbox_for_publish,
     complete_outbox_publish,
+    complete_outbox_skip,
     fail_outbox_publish,
     get_record_state,
     list_pending_outbox_entries,
@@ -69,20 +70,18 @@ async def publish_incremental_outbox(
                 
                 record = get_record_state(db, entry.record_key)
                 if record is None:
-                    if complete_outbox_publish(
+                    if complete_outbox_skip(
                         db,
                         outbox_id=entry.id,
-                        stream_message_id="stale-skipped",
                         last_error="record_not_found",
                     ):
                         skipped += 1
                     continue
 
                 if record.generation != entry.generation or record.status != IncrementalRecordStatus.QUEUED:
-                    if complete_outbox_publish(
+                    if complete_outbox_skip(
                         db,
                         outbox_id=entry.id,
-                        stream_message_id="stale-skipped",
                         last_error="stale_outbox",
                     ):
                         skipped += 1

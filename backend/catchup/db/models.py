@@ -2,11 +2,10 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Optional
-from pytz import timezone
 from sqlalchemy import CheckConstraint, ForeignKey, Index, UniqueConstraint, func, inspect, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.associationproxy import association_proxy
-from sqlalchemy.orm import DeclarativeBase, Mapped, MappedCollection, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import String, Boolean, Integer, BigInteger, DateTime, Text
 
 
@@ -1260,6 +1259,7 @@ class IncrementalOutboxStatus(StrEnum):
     PENDING = "pending"
     PUBLISHING = "publishing"
     PUBLISHED = "published"
+    SKIPPED = "skipped"
     FAILED = "failed"
 
 class SyncJob(Base):
@@ -1529,7 +1529,7 @@ class IncrementalStreamOutbox(Base):
             name="uq_incremental_stream_outbox_record_generation",
         ),
         CheckConstraint(
-            "status IN ('pending', 'publishing', 'published', 'failed')",
+            "status IN ('pending', 'publishing', 'published', 'skipped', 'failed')",
             name="ck_incremental_stream_outbox_status",
         ),
         CheckConstraint("generation >= 1", name="ck_incremental_stream_outbox_generation_positive"),
