@@ -1,19 +1,24 @@
 import asyncio
-import logging
 import time
 from typing import Any, AsyncGenerator, Optional
 import uuid
 
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.tracers.stdout import elapsed
 from langgraph.pregel.types import StateSnapshot
 from sqlalchemy.orm import Session
+import structlog
 
+from catchup.audit.enums import AuditLevel
+from catchup.audit.metadata import ChatAuditMetadata
+from catchup.audit.service import emit_audit_event
 from catchup.chat.chat_room import generate_chat_room_title
 from catchup.chat.utils import restore_conversation_context
 from catchup.configs.config import settings
 from catchup.db.chat_room import add_message, create_chat_room, get_chat_room, soft_delete_last_conversation_turn
 from catchup.db.models import ChatRoom, SourceType
+from catchup.events.enums import ChatEventAction, EventType
 from catchup.observability.langfuse import observe
 from catchup.chat.schemas import (
     NODE_STATUS_MAP,
@@ -28,7 +33,7 @@ from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.checkpoint import get_langgraph_checkpointer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ChatService:
@@ -36,7 +41,12 @@ class ChatService:
     _app = None
 
     def __init__(self):
-        pass
+        if settings.ENABLE_LANGFUSE:
+            logger.info(
+                "langfuse_initialized",
+                host=settings.LANGFUSE_BASE_URL,
+                active=True
+            )
 
     async def _get_app(self):
         # 싱글톤
@@ -102,11 +112,17 @@ class ChatService:
                     yield parsed_event
 
         except asyncio.CancelledError:
-            logger.warning(f"({session_id}) 답변 생성이 중지되었습니다.")
+            emit_audit_event(
+                event_type=EventType.CHAT,
+                event_action=ChatEventAction.RESPONSE_FAILED,
+                level=AuditLevel.INFO,
+                metadata=ChatAuditMetadata(session_id=session_id),
+                immediate=True
+            )
             raise
 
         except Exception as e:
-            logger.error(f"({session_id})Streaming 중 에러 발생: {e}", exc_info=True)
+            logger.exception("streaming_error")
             
             room = await run_in_threadpool(
                 get_chat_room,
@@ -121,13 +137,37 @@ class ChatService:
                     room
                 )
             else:
-                logger.warning(f"({session_id}) 에러 발생 후 복구를 시도했으나 채팅방을 찾을 수 없습니다.")
+                logger.warning(
+                    "chatroom_not_found",
+                    context="post_streaming_error",
+                    msg="스트리밍 에러 이후 세션 복구 실패",
+                    session_id=str(session_id)
+                )
                 
-            
+            emit_audit_event(
+                event_type=EventType.CHAT,
+                event_action=ChatEventAction.RESPONSE_FAILED,
+                level=AuditLevel.WARNING,
+                metadata=ChatAuditMetadata(session_id=session_id),
+                immediate=True
+            )
+
+        else:
+            emit_audit_event(
+                event_type=EventType.CHAT,
+                event_action=ChatEventAction.RESPONSE_GENERATED,
+                level=AuditLevel.INFO,
+                metadata=ChatAuditMetadata(session_id=session_id),
+                immediate=True
+            )
 
         finally:
-            elapsed_time = time.perf_counter() - start
-            logger.info(f"({session_id}) Streaming 종료: total {elapsed_time:.4f}s")
+            elapsed = time.perf_counter() - start
+            logger.info(
+                "streaming_finished",
+                session_id=str(session_id),
+                duration=round(elapsed, 4)
+            )
             
     def _resolve_input_messages(
         self,
@@ -146,10 +186,18 @@ class ChatService:
         )
         
         if has_history_in_graph:
-            logger.info(f"({session_id}) State not empty: appending new query.")
+            logger.info(
+                "state_retained",
+                context="state_not_empty",
+                session_id=str(session_id)
+            )
             input_messages = [HumanMessage(content=query)]
         else:
-            logger.info(f"({session_id}) State empty: restoring context from DB.")
+            logger.info(
+                "state_restored_from_db", 
+                context="state_empty",
+                session_id=str(session_id)
+            )
             past_messages = restore_conversation_context(
                 db=db,
                 session_id=session_id
@@ -207,12 +255,22 @@ class ChatService:
         if name == "generate_final_answer":
             input_data = event["data"].get("input", {})
             docs = input_data.get("retrieved_docs", [])
-            logger.info(f"Initial docs count: {len(docs)}")
-
             sources = [
                 BaseSource.from_document(index=i, doc=doc)
                 for i, doc in enumerate(docs, start=1)
             ]
+            emit_audit_event(
+                event_type=EventType.CHAT,
+                event_action=ChatEventAction.SOURCES_PROVIDED,
+                level=AuditLevel.INFO,
+                metadata=ChatAuditMetadata(
+                    session_id=session_id,
+                    provided_sources_count=len(sources),
+                    provided_source_ids=[src.id for src in sources]
+                ),
+                immediate=True
+            )
+            
             yield ChatStreamingSourceResponse(session_id=session_id, sources=sources)
             
     async def _handle_token_stream(
@@ -305,7 +363,10 @@ class ChatService:
                 final_content,
                 final_sources_data
             )
-            logger.info(f"({session_id}) Final answer & sources saved to DB.")
+            logger.info(
+                "final_contents_saved", 
+                session_id=str(session_id)
+            )
         
         # case 1: Fallback 처리: 모델 자체 스트리밍 없이 종료된 경우 메시지 내용 전송
         if not stream_state.get("has_streamed", False):
@@ -313,7 +374,12 @@ class ChatService:
             if messages:
                 last_msg = messages[-1]
                 fallback_content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-                logger.warning("Fallback Answer 전송 (Streaming 미감지)")
+                logger.warning(
+                    "fallback_answer_sent", 
+                    context="no_streaming_event",
+                    session_id=str(session_id)
+                )
+                
                 yield ChatStreamingTokenResponse(
                     session_id=session_id,
                     token=fallback_content
@@ -323,7 +389,10 @@ class ChatService:
         if "sources" in output:
             final_sources = output["sources"]
             if final_sources:
-                logger.info("Sending final sources with rationale.")
+                logger.info(
+                    "final_sources_sent",
+                    session_id=str(session_id)
+                )
                 yield ChatStreamingSourceResponse(
                     session_id=session_id, sources=final_sources
                 )
@@ -424,7 +493,10 @@ class ChatService:
                 thread_id=str(room.session_id)
             )
             
-            logger.info(f"Session {room.session_id}: LangGraph memory & Legacy history flushed.")
+            logger.info(
+                "langgraph_checkpointer_flushed",
+                session_id=str(room.session_id)
+            )
         
         return deleted_query
     
@@ -433,8 +505,6 @@ class ChatService:
         if settings.ENABLE_LANGFUSE:
             from catchup.observability.langfuse import langfuse_handler
             default_config["callbacks"] = [langfuse_handler]
-            logger.info(f"Langfuse Status: {settings.ENABLE_LANGFUSE}, Handler: {langfuse_handler is not None}")
-
         return default_config
     
     async def chat(

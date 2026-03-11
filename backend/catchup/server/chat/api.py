@@ -51,8 +51,7 @@ async def chat_response_stream(
     db: Session = Depends(get_db),
     service: ChatService = Depends(get_chat_service),
     global_context: GlobalContext = Depends(get_rag_global_context)
-):
-    
+):    
     session_id = request.session_id
     query = request.query
     tool_filters = request.tool_filters
@@ -65,7 +64,8 @@ async def chat_response_stream(
             session_id=session_id,
             query=query,
             tool_filters=tool_filters
-        )
+        ),
+        immediate=True
     )
     
     async def event_generator():
