@@ -18,9 +18,6 @@ from catchup.configs.config import settings
 
 logger = logging.getLogger(__name__)
 
-
-
-
 class AtlassianOAuthClient:
 
     def __init__(self):
@@ -185,32 +182,9 @@ class AtlassianOAuthClient:
                 name=data.get("name"),
                 picture=data.get("picture"),
             )
-        
-
-# ──────────────────────────────────────────
-# 호환성 shim (Phase 3 마이그레이션 전까지 유지)
-# ──────────────────────────────────────────
-
-class AtlassianOAuthService(AtlassianOAuthClient):
-    """
-    기존 호환성 유지용 별칭.
-
-    Phase 3에서 모든 사용처를 AtlassianOAuthClient로 마이그레이션한 후 제거.
-    get_valid_access_token()은 token_manager.py로 이동됨.
-    """
-
-    async def get_valid_access_token(self, db, token):
-        """
-        호환성 shim — 새 코드에서는 token_manager.resolve_access_token() 사용.
-        """
-        from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
-        from catchup.db.atlassian import oauth_repository as repo
-
-        manager = AtlassianTokenManager(oauth_client=self, oauth_repository=repo)
-        return await manager.resolve_access_token(db, token)
 
 
 @lru_cache(maxsize=1)
-def get_atlassian_oauth_service() -> AtlassianOAuthService:
-    """기존 호환성 유지용 싱글톤. Phase 3 이후 제거."""
-    return AtlassianOAuthService()
+def get_atlassian_oauth_client() -> AtlassianOAuthClient:
+    """AtlassianOAuthClient 싱글톤 반환."""
+    return AtlassianOAuthClient()

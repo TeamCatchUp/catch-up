@@ -16,6 +16,7 @@ from catchup.sync.stream_runtime.stream_constants import (
     SyncStreamFailureReason,
 )
 from catchup.sync.stream_runtime.stream_schemas import (
+    PublishTasksResult,
     SyncClaimBatch,
     SyncStreamMessage,
     SyncStreamTask,
@@ -95,14 +96,37 @@ async def publish_task(task: SyncStreamTask) -> str:
     return _decode_redis_value(message_id)
 
 
-async def publish_tasks(tasks: list[SyncStreamTask]) -> list[str]:
+async def publish_tasks(tasks: list[SyncStreamTask]) -> PublishTasksResult:
     if not tasks:
-        return []
+        return PublishTasksResult(
+            requested_count=0,
+            published_count=0,
+            message_ids=[],
+            partial_success=False,
+        )
 
     message_ids: list[str] = []
-    for task in tasks:
-        message_ids.append(await publish_task(task))
-    return message_ids
+
+    for index, task in enumerate(tasks):
+        try:
+            message_ids.append(await publish_task(task))
+        except Exception as exc:
+            return PublishTasksResult(
+                requested_count=len(tasks),
+                published_count=len(message_ids),
+                message_ids=message_ids,
+                partial_success=len(message_ids) > 0,
+                error_message=str(exc),
+                failed_at_index=index,
+                failed_event_id=task.event_id,
+            )
+
+    return PublishTasksResult(
+        requested_count=len(tasks),
+        published_count=len(message_ids),
+        message_ids=message_ids,
+        partial_success=False,
+    )
 
 
 async def ack_message(message_id: str) -> int:

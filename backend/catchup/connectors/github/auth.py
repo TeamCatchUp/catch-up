@@ -7,11 +7,15 @@ GitHub App 인증을 담당하는 서비스.
 - App 정보 조회
 """
 
+import base64
 import time
+from binascii import Error as BinasciiError
 from functools import lru_cache
+from pathlib import Path
 
 import httpx
 import jwt
+from cryptography.hazmat.primitives import serialization
 
 from catchup.configs.config import settings
 
@@ -94,7 +98,65 @@ def _load_private_key() -> str:
     if not private_key:
         raise ValueError("GITHUB_APP_PRIVATE_KEY NOT FOUND.")
 
-    return private_key.replace("\\r\\n", "\n").replace("\\n", "\n")
+    private_key = _resolve_private_key_source(private_key)
+    private_key = _normalize_private_key(private_key)
+    _validate_private_key(private_key)
+    return private_key
+
+
+def _resolve_private_key_source(value: str) -> str:
+    candidate = value.strip()
+
+    if len(candidate) >= 2 and candidate[0] == candidate[-1] and candidate[0] in {"'", '"'}:
+        candidate = candidate[1:-1].strip()
+
+    if "\n" in candidate or "\\n" in candidate:
+        return candidate
+
+    if len(candidate) > 255:
+        return candidate
+
+    key_path = Path(candidate).expanduser()
+    looks_like_path = (
+        "/" in candidate
+        or "\\" in candidate
+        or candidate.startswith(".")
+        or key_path.suffix.lower() in {".pem", ".key"}
+    )
+    if looks_like_path and key_path.is_file():
+        return key_path.read_text(encoding="utf-8").strip()
+
+    return candidate
+
+
+def _normalize_private_key(value: str) -> str:
+    candidate = value.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\n").strip()
+
+    if "-----BEGIN" in candidate:
+        return candidate
+
+    try:
+        decoded = base64.b64decode(candidate, validate=True).decode("utf-8").strip()
+    except (BinasciiError, UnicodeDecodeError):
+        return candidate
+
+    return decoded
+
+
+def _validate_private_key(value: str) -> None:
+    if "-----BEGIN" not in value or "-----END" not in value:
+        raise ValueError(
+            "GITHUB_APP_PRIVATE_KEY must be a complete PEM private key. "
+            "Raw PEM, escaped \\n PEM, base64-encoded PEM, or a readable PEM file path are supported."
+        )
+
+    try:
+        serialization.load_pem_private_key(value.encode("utf-8"), password=None)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "GITHUB_APP_PRIVATE_KEY is not a valid PEM private key. "
+            "Check that the key was copied completely and was not truncated in .env."
+        ) from exc
 
 
 @lru_cache

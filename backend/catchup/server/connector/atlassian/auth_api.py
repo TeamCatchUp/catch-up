@@ -17,8 +17,7 @@ from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.oauth_client import (
     AtlassianOAuthClient,
-    AtlassianOAuthService,
-    get_atlassian_oauth_service,
+    get_atlassian_oauth_client,
 )
 from catchup.connectors.atlassian.callback_service import (
     AtlassianCallbackService,
@@ -55,7 +54,7 @@ async def install_atlassian():
     """
     Atlassian OAuth 설치 시작
     """
-    atlassian_service = get_atlassian_oauth_service()
+    atlassian_service = get_atlassian_oauth_client()
     state = secrets.token_urlsafe(32)
 
     await store_oauth_state(state, provider="atlassian")
@@ -70,7 +69,7 @@ async def atlassian_oauth_callback(
     background_tasks: BackgroundTasks,
     state: str | None = None,
     db: Session = Depends(get_db),
-    atlassian_service: AtlassianOAuthService = Depends(get_atlassian_oauth_service),
+    atlassian_service: AtlassianOAuthClient = Depends(get_atlassian_oauth_client),
 ):
     """
     Atlassian OAuth 콜백 처리
@@ -121,7 +120,7 @@ async def atlassian_oauth_callback(
 @router.get("/status", response_model=AtlassianInstallationStatus)
 async def atlassian_installation_status(
     db: Session = Depends(get_db),
-    atlassian_service: AtlassianOAuthService = Depends(get_atlassian_oauth_service),
+    atlassian_service: AtlassianOAuthClient = Depends(get_atlassian_oauth_client),
 ):
     """
     Atlassian 설치 상태 조회
@@ -132,7 +131,11 @@ async def atlassian_installation_status(
         return AtlassianInstallationStatus(installed=False)
 
     try:
-        valid_token = await atlassian_service.get_valid_access_token(db, tokens[0])
+        token_manager = AtlassianTokenManager(
+            oauth_client=atlassian_service,
+            oauth_repository=atlassian_crud,
+        )
+        valid_token = await token_manager.resolve_access_token(db, tokens[0])
         resources = await atlassian_service.get_accessible_resources(valid_token)
         return AtlassianInstallationStatus(installed=True, resources=resources)
     except HTTPException as e:

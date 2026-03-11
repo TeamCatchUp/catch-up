@@ -23,12 +23,8 @@ from catchup.server.chat_room.api import router as chatroom_router
 from catchup.server.connector.atlassian.auth_api import (
     router as atlassian_auth_router,
 )
-from catchup.server.connector.confluence.sync_api import (
-    router as confluence_sync_router,
-)
 from catchup.server.connector.github.auth_api import router as github_auth_router
-from catchup.server.connector.github.sync_api import router as github_sync_router
-from catchup.server.connector.jira.sync_api import router as jira_sync_router
+from catchup.server.connector.github.webhook_api import router as github_webhook_router
 from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.webhook_api import router as slack_webhook_router
@@ -38,7 +34,7 @@ from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.settings.api import router as settings_router
 from catchup.server.sync.api import router as sync_runtime_router
 from catchup.server.state import state
-from catchup.worker.runtime import run_forever as run_sync_worker
+from catchup.worker.worker_event_processor import run_forever as run_sync_worker
 from catchup.utils.redis import get_redis_client
 from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
 from catchup.utils.client import _shared_client
@@ -319,11 +315,9 @@ app.include_router(chatroom_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(github_auth_router)
-app.include_router(github_sync_router)
+app.include_router(github_webhook_router)
 app.include_router(atlassian_auth_router)
-app.include_router(jira_sync_router)
 app.include_router(jira_webhook_router)
-app.include_router(confluence_sync_router)
 app.include_router(slack_auth_router)
 app.include_router(slack_webhook_router)
 app.include_router(github_mapping_csv_router)

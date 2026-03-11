@@ -5,72 +5,55 @@ import logging
 from sqlalchemy.orm import Session
 
 from catchup.db.models import SyncConnector
-from catchup.sync.contracts import (
-    FullSyncDispatchCommand,
-    IncrementalSyncDispatchCommand,
+from catchup.sync.common.schemas import (
+    FullSyncDispatchRequest,
     SyncDispatchResult,
 )
-from catchup.sync.registry import get_connector_sync_service
+from catchup.sync.event_publisher.redis_stream_publisher import get_event_publisher
+from catchup.sync.registry import get_full_sync_target_resolver
+from catchup.sync.services.full_sync_orchestrator import FullSyncDispatchOrchestrator
+from catchup.sync.services.sync_orchestrator import SyncDispatchOrchestrator
 
 logger = logging.getLogger(__name__)
 
-
 class SyncDispatchService:
+    def __init__(self, orchestrator: FullSyncDispatchOrchestrator):
+        self._full_sync_orchestrator = orchestrator
+
     async def dispatch_full_sync(
         self,
         *,
         db: Session,
         connector: SyncConnector,
-        command: FullSyncDispatchCommand,
+        request: FullSyncDispatchRequest,
         base_url: str | None,
     ) -> SyncDispatchResult:
-        """
-        공통 Full Sync 디스패치
-        """
-        service = get_connector_sync_service(connector)
-
         logger.info(
-            "[SYNC][FULL SYNC][DISPATCH] Dispatching request: connector=%s, scope_id=%s, target_count=%s, sync_days=%s",
+            "[SYNC][FULL SYNC][DISPATCH] Dispatching request: connector=%s, scope_id=%s, target_count=%s, sync_days=%s, trigger=%s",
             connector,
-            command.scope_id,
-            len(command.target_ids) if command.target_ids else 0,
-            command.sync_days,
+            request.scope_id,
+            len(request.target_ids) if request.target_ids else 0,
+            request.sync_days,
+            request.trigger,
         )
 
-        return await service.dispatch_full_sync(
+        resolver = get_full_sync_target_resolver(connector)
+
+        return await self._full_sync_orchestrator.dispatch(
             db=db,
-            command=command,
+            connector=connector,
+            request=request,
             base_url=base_url,
+            resolver=resolver,
         )
 
-    async def dispatch_incremental_sync(
-        self,
-        *,
-        db: Session,
-        connector: SyncConnector,
-        command: IncrementalSyncDispatchCommand,
-        base_url: str | None,
-    ) -> SyncDispatchResult:
-        """
-        공통 Incremental Sync 디스패치
-        """
-        service = get_connector_sync_service(connector)
-
-        logger.info(
-            "[SYNC][INCREMENTAL SYNC][DISPATCH] Dispatching request: connector=%s, scope_id=%s, target_count=%s",
-            connector,
-            command.scope_id,
-            len(command.target_ids) if command.target_ids else 0,
+_sync_dispatch_service = SyncDispatchService(
+    orchestrator=FullSyncDispatchOrchestrator(
+        orchestrator=SyncDispatchOrchestrator(
+            event_publisher=get_event_publisher(),
         )
-
-        return await service.dispatch_incremental_sync(
-            db=db,
-            command=command,
-            base_url=base_url,
-        )
-
-
-_sync_dispatch_service = SyncDispatchService()
+    )
+)
 
 
 def get_sync_dispatch_service() -> SyncDispatchService:

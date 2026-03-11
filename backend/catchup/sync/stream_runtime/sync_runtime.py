@@ -3,6 +3,10 @@ from __future__ import annotations
 import logging
 from typing import Iterable
 
+from catchup.sync.common.exceptions import (
+    RedisStreamInitializationError,
+    RedisStreamPublishError,
+)
 from catchup.sync.stream_runtime.stream_constants import STREAM_CLAIM_START_ID
 from catchup.sync.stream_runtime.stream_queue import (
     ack_messages,
@@ -12,6 +16,7 @@ from catchup.sync.stream_runtime.stream_queue import (
     read_new_messages,
 )
 from catchup.sync.stream_runtime.stream_schemas import (
+    PublishTasksResult,
     SyncStreamMessage,
     SyncStreamTask,
 )
@@ -74,7 +79,7 @@ async def publish_job_events(
     target_type: str,
     target_ids: list[str] | None = None,
     max_attempts: int = 3,
-) -> list[str]:
+) -> PublishTasksResult:
     tasks = build_stream_tasks(
         job_id=job_id,
         event_ids=event_ids,
@@ -86,19 +91,61 @@ async def publish_job_events(
         max_attempts=max_attempts,
     )
     if not tasks:
-        return []
+        return PublishTasksResult(
+            requested_count=0,
+            published_count=0,
+            message_ids=[],
+            partial_success=False,
+        )
 
-    message_ids = await publish_tasks(tasks)
+    try:
+        await initialize_stream_runtime()
+    except Exception as exc:
+        raise RedisStreamInitializationError(
+            metadata={
+                "requested_count": len(tasks),
+                "job_id": job_id,
+                "scope_id": scope_id,
+                "error_message": str(exc),
+            },
+        ) from exc
+
+    try:
+        publish_result = await publish_tasks(tasks)
+    except Exception as exc:
+        raise RedisStreamPublishError(
+            metadata={
+                "requested_count": len(tasks),
+                "job_id": job_id,
+                "scope_id": scope_id,
+                "error_message": str(exc),
+            },
+        ) from exc
+
     logger.info(
-        "[SYNC][STREAM][RUNTIME] Published tasks: connector=%s, sync_type=%s, scope_id=%s, job_id=%s, event_count=%s, message_count=%s",
+        "[SYNC][STREAM][RUNTIME] Published tasks: connector=%s, sync_type=%s, scope_id=%s, job_id=%s, event_count=%s, published_count=%s, partial_success=%s",
         connector,
         sync_type,
         scope_id,
         job_id,
         len(tasks),
-        len(message_ids),
+        publish_result.published_count,
+        publish_result.partial_success,
     )
-    return message_ids
+    if publish_result.published_count != publish_result.requested_count:
+        raise RedisStreamPublishError(
+            metadata={
+                "requested_count": publish_result.requested_count,
+                "published_count": publish_result.published_count,
+                "partial_success": publish_result.partial_success,
+                "failed_at_index": publish_result.failed_at_index,
+                "failed_event_id": publish_result.failed_event_id,
+                "error_message": publish_result.error_message,
+                "job_id": job_id,
+                "scope_id": scope_id,
+            },
+        )
+    return publish_result
 
 
 async def read_ready_messages(

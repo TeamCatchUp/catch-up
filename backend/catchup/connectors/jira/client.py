@@ -90,7 +90,7 @@ class JiraAuthError(AuthenticationError, JiraApiError):
         try:
             await client.search_issues(...)
         except JiraAuthError:
-            # JiraOAuthService.get_valid_access_token()으로 토큰 갱신 후 재시도
+            # AtlassianTokenManager.resolve_access_token()으로 토큰 갱신 후 재시도
     """
 
     service = "jira"
@@ -109,7 +109,7 @@ class JiraApiClient:
 
     - 초기화
     # cloud_id: Jira Cloud 인스턴스 ID (JiraOAuthToken 테이블에서 조회)
-    # access_token: OAuth access token (JiraOAuthService.get_valid_access_token()로 획득)
+    # access_token: OAuth access token (AtlassianTokenManager.resolve_access_token()로 획득)
     client = JiraApiClient(
         cloud_id="abc123-def456",
         access_token="eyJhbGciOiJSUzI1NiIs..."

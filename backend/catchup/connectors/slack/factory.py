@@ -17,6 +17,7 @@ from catchup.connectors.slack.auth import get_slack_oauth_service
 from catchup.connectors.slack.ingestion_service import SlackIngestionService
 from catchup.connectors.slack.metadata_service import SlackMetadataService
 from catchup.db.slack import oauth_repository as slack_crud
+from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
 
 logger = logging.getLogger(__name__)
 
@@ -25,78 +26,93 @@ async def _resolve_access_token(
     db: Session,
     team_id: str,
 ) -> str:
-    """
-    Team ID 기준으로 유효한 Slack Bot Access Token을 반환한다.
-
-    Args:
-        db: SQLAlchemy Session
-        team_id: Slack Team/Workspace ID
-
-    Returns:
-        유효한 Access Token
-
-    Raises:
-        HTTPException: Token을 찾을 수 없거나 유효하지 않은 경우
-    """
-    # Token 조회
     token_record = slack_crud.get_slack_token_by_team_id(db, team_id)
     if not token_record:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Slack 연결을 찾을 수 없습니다: {team_id}",
+        raise SyncConnectorError(
+            f"Slack 연결을 찾을 수 없습니다: {team_id}",
+            metadata={"team_id": team_id},
         )
 
-    # 유효한 Access Token 획득
     slack_service = get_slack_oauth_service()
     try:
-        access_token = await slack_service.get_valid_access_token(db, token_record)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get valid access token for team_id={team_id}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Token 획득 중 오류가 발생했습니다: {str(e)}",
+        return await slack_service.get_valid_access_token(db, token_record)
+    except HTTPException as exc:
+        message = (
+            exc.detail
+            if isinstance(exc.detail, str)
+            else "Slack 인증 정보를 확인할 수 없습니다"
         )
-
-    return access_token
+        error_cls = SyncInternalError if exc.status_code >= 500 else SyncConnectorError
+        raise error_cls(
+            message,
+            metadata={"team_id": team_id},
+        ) from exc
+    except Exception as exc:
+        logger.error(
+            "[SLACK][FACTORY] Failed to resolve access token: team_id=%s, error=%s",
+            team_id,
+            exc,
+            exc_info=True,
+        )
+        raise SyncInternalError(
+            "Slack access token 획득 중 오류가 발생했습니다",
+            metadata={"team_id": team_id},
+        ) from exc
 
 
 async def create_slack_ingestion_service(
     db: Session,
     team_id: str,
 ) -> SlackIngestionService:
-    """
-    Event 단위 SlackIngestionService 인스턴스 생성.
-    """
     access_token = await _resolve_access_token(db, team_id)
 
-    repository = PGVectorRepository(
-        embeddings=get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
-    )
-
-    service = SlackIngestionService(
-        repository=repository,
-        team_id=team_id,
-        access_token=access_token,
-    )
-    await service.initialize()
-
-    return service
+    try:
+        repository = PGVectorRepository(
+            embeddings=get_embedding_service(
+                EmbeddingProvider.AWS_BEDROCK
+            ).get_embedder()
+        )
+        service = SlackIngestionService(
+            repository=repository,
+            team_id=team_id,
+            access_token=access_token,
+        )
+        await service.initialize()
+        return service
+    except Exception as exc:
+        logger.error(
+            "[SLACK][FACTORY] Failed to initialize ingestion service: team_id=%s, error=%s",
+            team_id,
+            exc,
+            exc_info=True,
+        )
+        raise SyncInternalError(
+            "Slack ingestion service 초기화에 실패했습니다",
+            metadata={"team_id": team_id},
+        ) from exc
 
 
 async def create_slack_metadata_service(
     db: Session,
     team_id: str,
 ) -> SlackMetadataService:
-    """
-    설치 직후 메타데이터 수집용 SlackMetadataService 인스턴스 생성.
-    """
     access_token = await _resolve_access_token(db, team_id)
 
-    service = SlackMetadataService(
-        team_id=team_id,
-        access_token=access_token,
-    )
-    await service.initialize()
-    return service
+    try:
+        service = SlackMetadataService(
+            team_id=team_id,
+            access_token=access_token,
+        )
+        await service.initialize()
+        return service
+    except Exception as exc:
+        logger.error(
+            "[SLACK][FACTORY] Failed to initialize metadata service: team_id=%s, error=%s",
+            team_id,
+            exc,
+            exc_info=True,
+        )
+        raise SyncInternalError(
+            "Slack metadata service 초기화에 실패했습니다",
+            metadata={"team_id": team_id},
+        ) from exc

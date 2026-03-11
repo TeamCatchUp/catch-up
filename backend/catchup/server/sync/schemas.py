@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from catchup.db.models import SyncConnector, SyncJobStatus
 
@@ -36,47 +36,57 @@ class SyncJobSnapshotResponse(BaseModel):
 
 class SyncStreamEventResponse(BaseModel):
     """
-    SSE data payload 포맷
+    Sync 상태 스트림 SSE payload 포맷
     """
 
     connector: SyncConnector
     job_id: str
     scope_id: str
     event_type: str
-    sequence: int
     timestamp: str
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
-class SyncFullRequest(BaseModel):
+class FullSyncRequest(BaseModel):
     """
     공통 Full Sync 요청
     """
 
     connector: SyncConnector = Field(..., description="sync connector type")
-    scope_id: str = Field(..., description="connector scope id (team_id / installation_id / cloud_id)")
-    target_ids: list[str] | None = Field(
-        default=None,
-        description="sync targets (channel/repository/space/project ids)",
+    scope_id: str = Field(
+        ...,
+        description="connector scope id (team_id / installation_id / cloud_id)",
+    )
+    target_ids: list[str] = Field(
+        ...,
+        min_length=1,
+        description="required target ids returned by GET /api/v1/sync/targets",
     )
     sync_days: int | None = Field(
         default=None,
         ge=1,
         description="collection period in days; if omitted connector default is used",
     )
+    
+    @field_validator("target_ids")
+    @classmethod
+    def _validate_target_ids(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
 
+        for item in value:
+            candidate = (item or "").strip()
+            if not candidate:
+                raise ValueError("target_ids must not contain empty values")
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
 
-class SyncIncrementalRequest(BaseModel):
-    """
-    공통 Incremental Sync 요청
-    """
+        if not normalized:
+            raise ValueError("target_ids must not be empty")
 
-    connector: SyncConnector = Field(..., description="sync connector type")
-    scope_id: str = Field(..., description="connector scope id (team_id / installation_id / cloud_id)")
-    target_ids: list[str] | None = Field(
-        default=None,
-        description="incremental sync targets (optional)",
-    )
+        return normalized
 
 
 class SyncAcceptedResponse(BaseModel):
@@ -93,12 +103,36 @@ class SyncAcceptedResponse(BaseModel):
 
     total_targets: int = 0
     queued_targets: int = 0
-    dropped_targets: int = 0
-    dropped_events: int = 0
 
     message: str | None = None
     snapshot_url: str | None = None
     stream_url: str | None = None
+
+
+class SyncStatusResponse(BaseModel):
+    """
+    scope 기준 최신 Full Sync 상태 응답
+    """
+
+    connector: SyncConnector
+    scope_id: str
+    sync_type: str = "full"
+    job_id: str
+    status: SyncJobStatus
+
+    requested_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+
+    total_targets: int = 0
+    queued_targets: int = 0
+    processing_targets: int = 0
+    completed_targets: int = 0
+    failed_targets: int = 0
+    requeued_targets: int = 0
+
+    last_error: str | None = None
+    metrics: dict[str, int] = Field(default_factory=dict)
 
 
 class SyncErrorResponse(BaseModel):

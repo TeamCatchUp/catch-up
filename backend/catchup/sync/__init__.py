@@ -1,15 +1,13 @@
-from catchup.sync.contracts import (
-    ConnectorSyncService,
-    FullSyncDispatchCommand,
-    IncrementalSyncDispatchCommand,
+from catchup.sync.common.schemas import (
+    FullSyncDispatchRequest,
     SyncDispatchResult,
     SyncDispatchStatus,
+    SyncTrigger,
 )
 
 __all__ = [
     "SyncDispatchStatus",
-    "FullSyncDispatchCommand",
-    "IncrementalSyncDispatchCommand",
+    "SyncTrigger",
+    "FullSyncDispatchRequest",
     "SyncDispatchResult",
-    "ConnectorSyncService",
 ]

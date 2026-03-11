@@ -32,7 +32,13 @@ class ConfluenceMetadataService:
     def __init__(self, token_manager: AtlassianTokenManager):
         self.token_manager = token_manager
 
-    async def sync_all(self, db: Session, cloud_id: str) -> dict[str, Any]:
+    async def sync_all(
+        self,
+        db: Session,
+        cloud_id: str,
+        *,
+        auto_commit: bool = True,
+    ) -> dict[str, Any]:
         token = atlassian_crud.get_token_by_cloud_id(db, cloud_id)
         if not token:
             logger.warning(
@@ -51,12 +57,29 @@ class ConfluenceMetadataService:
         access_token = await self.token_manager.resolve_access_token(db, token)
         client = ConfluenceApiClient(cloud_id, access_token)
 
-        users_count = await self._sync_users(db, client, cloud_id)
-        spaces_count = await self._sync_spaces(db, client, cloud_id)
+        users_count = await self._sync_users(
+            db,
+            client,
+            cloud_id,
+            auto_commit=auto_commit,
+        )
+        spaces_count = await self._sync_spaces(
+            db,
+            client,
+            cloud_id,
+            auto_commit=auto_commit,
+        )
 
         return {"users": users_count, "spaces": spaces_count}
 
-    async def _sync_users(self, db: Session, client: ConfluenceApiClient, cloud_id: str) -> int:
+    async def _sync_users(
+        self,
+        db: Session,
+        client: ConfluenceApiClient,
+        cloud_id: str,
+        *,
+        auto_commit: bool = True,
+    ) -> int:
         users_data = await client.get_users()
         payloads: list[dict] = []
         for raw_user in users_data:
@@ -85,10 +108,21 @@ class ConfluenceMetadataService:
                     f"[CONFLUENCE][METADATA] Failed to parse user: cloud_id={cloud_id}, error={e}"
                 )
         if payloads:
-            confluence_entities.upsert_users_bulk(db, payloads)
+            confluence_entities.upsert_users_bulk(
+                db,
+                payloads,
+                auto_commit=auto_commit,
+            )
         return len(payloads)
 
-    async def _sync_spaces(self, db: Session, client: ConfluenceApiClient, cloud_id: str) -> int:
+    async def _sync_spaces(
+        self,
+        db: Session,
+        client: ConfluenceApiClient,
+        cloud_id: str,
+        *,
+        auto_commit: bool = True,
+    ) -> int:
         spaces = await client.get_spaces(space_type=None, status="current")
         payloads: list[dict] = []
         for raw_space in spaces:
@@ -115,7 +149,16 @@ class ConfluenceMetadataService:
                 logger.error(
                     f"[CONFLUENCE][METADATA] Failed to parse space: cloud_id={cloud_id}, error={e}"
                 )
-        if payloads:
-            confluence_entities.upsert_spaces_bulk(db, payloads)
+        sync_result = confluence_entities.sync_spaces_snapshot(
+            db,
+            cloud_id,
+            payloads,
+            auto_commit=auto_commit,
+        )
+        logger.info(
+            "[CONFLUENCE][METADATA] Space snapshot synced: cloud_id=%s, upserted=%s, deleted=%s",
+            cloud_id,
+            sync_result["upserted"],
+            sync_result["deleted"],
+        )
         return len(payloads)
-

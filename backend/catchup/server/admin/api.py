@@ -13,20 +13,20 @@ from catchup.db.dependencies import get_db
 from catchup.db.models import (
     AtlassianOAuthToken,
     ConfluenceSpace,
-    ConfluenceSyncState,
     ConfluenceUser,
     GitHubUser,
     GithubInstallation,
     GithubRepository,
-    GithubSyncState,
     InactiveUser,
     JiraAccountType,
     JiraProject,
-    JiraSyncState,
     JiraUser,
     PreMappingBuffer,
     SlackOAuthToken,
-    SlackSyncState,
+    SyncConnector,
+    SyncJob,
+    SyncJobStatus,
+    SyncType,
     SlackUser,
     SlackChannel,
     SourceType,
@@ -88,13 +88,34 @@ def _format_date(dt):
         return None
 
 
+def _latest_full_sync_succeeded_at(
+    db: Session,
+    *,
+    connector: SyncConnector,
+    scope_ids: list[str],
+):
+    if not scope_ids:
+        return None
+
+    return (
+        db.query(func.max(SyncJob.succeeded_at))
+        .filter(
+            SyncJob.connector == connector,
+            SyncJob.sync_type == SyncType.FULL,
+            SyncJob.status == SyncJobStatus.SUCCESS,
+            SyncJob.scope_id.in_(scope_ids),
+        )
+        .scalar()
+    )
+
+
 def _get_github_status(db: Session) -> GithubConnectorStatus:
     installation_ids = [
         row[0] for row in db.query(GithubInstallation.installation_id).all()
     ]
 
     if not installation_ids:
-        logger.info("[JIRA][FULL SYNC] Github connector status: no installation found")
+        logger.info("[GITHUB][FULL SYNC] Github connector status: no installation found")
         return GithubConnectorStatus(
             connected=False,
             oldest=None,
@@ -109,10 +130,10 @@ def _get_github_status(db: Session) -> GithubConnectorStatus:
         .all()
     ]
 
-    latest_dt = (
-        db.query(func.max(GithubSyncState.last_successful_sync_at))
-        .filter(GithubSyncState.installation_id.in_(installation_ids))
-        .scalar()
+    latest_dt = _latest_full_sync_succeeded_at(
+        db,
+        connector=SyncConnector.GITHUB,
+        scope_ids=[str(installation_id) for installation_id in installation_ids],
     )
 
     oldest_dt = None
@@ -136,7 +157,7 @@ def _get_github_status(db: Session) -> GithubConnectorStatus:
         oldest_dt = result[0] if result and result[0] else None
     except Exception as e:
         logger.warning(
-            "[JIRA][FULL SYNC] Failed to fetch github oldest embedding date: %s", e
+            "[GITHUB][FULL SYNC] Failed to fetch github oldest embedding date: %s", e
         )
 
     return GithubConnectorStatus(
@@ -179,10 +200,10 @@ def _get_jira_status(db: Session) -> JiraConnectorStatus:
         .all()
     ]
 
-    latest_dt = (
-        db.query(func.max(JiraSyncState.last_successful_sync_at))
-        .filter(JiraSyncState.cloud_id.in_(cloud_ids))
-        .scalar()
+    latest_dt = _latest_full_sync_succeeded_at(
+        db,
+        connector=SyncConnector.JIRA,
+        scope_ids=cloud_ids,
     )
 
     oldest_dt = None
@@ -249,10 +270,10 @@ def _get_slack_status(db: Session) -> SlackConnectorStatus:
         if row[0]
     ]
 
-    latest_dt = (
-        db.query(func.max(SlackSyncState.last_successful_sync_at))
-        .filter(SlackSyncState.team_id.in_(team_ids))
-        .scalar()
+    latest_dt = _latest_full_sync_succeeded_at(
+        db,
+        connector=SyncConnector.SLACK,
+        scope_ids=team_ids,
     )
 
     oldest_dt = None
@@ -319,10 +340,10 @@ def _get_confluence_status(db: Session) -> ConfluenceConnectorStatus:
         if row[0] and row[1]
     ]
 
-    latest_dt = (
-        db.query(func.max(ConfluenceSyncState.last_successful_sync_at))
-        .filter(ConfluenceSyncState.cloud_id.in_(cloud_ids))
-        .scalar()
+    latest_dt = _latest_full_sync_succeeded_at(
+        db,
+        connector=SyncConnector.CONFLUENCE,
+        scope_ids=cloud_ids,
     )
 
     oldest_dt = None

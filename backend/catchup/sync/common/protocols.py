@@ -3,9 +3,12 @@ from __future__ import annotations
 import asyncio
 from typing import Protocol
 
+from sqlalchemy.orm import Session
+
 from catchup.sync.common.schemas import (
-    IncrementalSyncDispatchCommand,
-    FullSyncDispatchCommand,
+    FullSyncDispatchRequest,
+    FullSyncResolvedTargets,
+    PublishTasksResult,
     SyncDispatchResult,
     SyncEventContext,
     SyncStreamMessage,
@@ -14,8 +17,8 @@ from catchup.sync.common.schemas import (
 
 
 class EventPublisherProtocol(Protocol):
-    async def publish(self, *, tasks: list[SyncStreamTask]) -> list[str]:
-        """이벤트 목록을 Stream에 publish 하고 message_id 목록을 반환."""
+    async def publish(self, *, tasks: list[SyncStreamTask]) -> PublishTasksResult:
+        """이벤트 목록을 Stream에 publish 하고 publish 결과를 반환."""
         ...
 
 
@@ -107,16 +110,18 @@ class ConnectorSyncServiceProtocol(Protocol):
         self,
         *,
         db,
-        command: FullSyncDispatchCommand,
+        request: FullSyncDispatchRequest,
         base_url: str | None,
     ) -> SyncDispatchResult:
         ...
 
-    async def dispatch_incremental_sync(
+
+class FullSyncTargetResolverProtocol(Protocol):
+    async def resolve_full_sync_targets(
         self,
         *,
-        db,
-        command: IncrementalSyncDispatchCommand,
-        base_url: str | None,
-    ) -> SyncDispatchResult:
+        db: Session,
+        request: FullSyncDispatchRequest,
+        sync_from: str,
+    ) -> FullSyncResolvedTargets:
         ...
