@@ -23,6 +23,7 @@ from catchup.server.connector.atlassian.auth_api import (
     router as atlassian_auth_router,
 )
 from catchup.server.connector.github.auth_api import router as github_auth_router
+from catchup.server.connector.github.webhook_api import router as github_webhook_router
 from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.webhook_api import router as slack_webhook_router
@@ -311,6 +312,7 @@ app.include_router(chatroom_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(github_auth_router)
+app.include_router(github_webhook_router)
 app.include_router(atlassian_auth_router)
 app.include_router(jira_webhook_router)
 app.include_router(slack_auth_router)
