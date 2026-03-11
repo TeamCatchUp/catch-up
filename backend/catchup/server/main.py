@@ -14,6 +14,7 @@ from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal, engine
 from catchup.db.global_state import has_admin_ever_onboarded, has_csv_file_ever_been_uploaded
 from catchup.db.models import Base
+from catchup.events.enums import EventTopic
 from catchup.observability.logging import configure_logging
 from catchup.server.admin.api import router as admin_router
 from catchup.server.auth.api import router as auth_router
@@ -38,6 +39,8 @@ from catchup.utils.redis import get_redis_client
 from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
 from catchup.utils.client import _shared_client
 from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_checkpointer
+from catchup.events.bus import bus
+from catchup.audit.handlers import audit_event_handler
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -334,22 +337,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# 감사 로그 이벤트 리스너 등록
+bus.subscribe(EventTopic.AUDIT, audit_event_handler)
+
+
+# 미들웨어 등록
+app.middleware("http")(request_context_middleware)
+
+
 # 헬스 체크
 @app.get("/api/v1/health")
 async def health_check():
     return {"status": "ok", "message": "Catch Up backend is running."}
-
-
-# 응답 시간 추출
-@app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
-    start_time = time.perf_counter()
-
-    response = await call_next(request)
-
-    process_time = time.perf_counter() - start_time
-    logger.info("%s %s ===> %.4fs", request.method, request.url.path, process_time)
-
-    return response
-
-app.middleware("http")(request_context_middleware)

@@ -2,9 +2,12 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from catchup.audit.service import emit_audit_event
+from catchup.audit.enums import AuditLevel
+from catchup.events.enums import AuthEventAction
 from catchup.auth.service import OAuthService
 from catchup.auth.cookies import delete_auth_cookies, delete_oauth_state_cookie, set_auth_cookies, set_oauth_state_cookie
 from catchup.auth.dependencies import (
@@ -29,6 +32,7 @@ from catchup.db.models import (
 )
 from catchup.db.users import get_user_by_sub, update_user_refresh_token
 from sqlalchemy import select
+from catchup.events.enums import EventType
 from catchup.server.auth.schemas import (
     CurrentUserInfo,
     CurrentUserProfile,
@@ -49,6 +53,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
     description="OAuth2 로그인 (현재는 Keycloak만 지원)"
 )
 async def oauth2_login(
+    request: Request,
     # TODO: Path()로 변경. 수정 범위를 최소화하기 위한 PoC 한정 임시방편
     provider_type: OAuthIdentityProviderType = Query(default=OAuthIdentityProviderType.KEYCLOAK),
     provider: OAuthIdentityProvider = Depends(get_oauth_provider)
@@ -67,6 +72,13 @@ async def oauth2_login(
         response=response,
         state=provider.state
     )
+    
+    emit_audit_event(
+        event_type=EventType.AUTH,
+        event_action=AuthEventAction.LOGIN_ATTEMPT,
+        level=AuditLevel.INFO,
+        immediate=True
+    )
 
     return response
 
@@ -83,6 +95,13 @@ async def oauth_callback(
 ):
     cookie_state = request.cookies.get("oauth_state")
     if not cookie_state or cookie_state != state:
+        emit_audit_event(
+            event_type=EventType.AUTH,
+            event_action=AuthEventAction.LOGIN_FAILURE,
+            level=AuditLevel.WARNING,
+            metadata={"reason": "invalid_refresh_token"},
+            immediate=True
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="유효하지 않은 인증 접근입니다."
@@ -95,6 +114,13 @@ async def oauth_callback(
     )
     
     if not is_valid:
+        emit_audit_event(
+            event_type=EventType.AUTH,
+            event_action=AuthEventAction.LOGIN_FAILURE,
+            level=AuditLevel.WARNING,
+            metadata={"reason": "expired_state"},
+            immediate=True
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="유효하지 않거나 만료된 인증입니다."
@@ -131,10 +157,28 @@ def refresh_token(
         )
 
     # refresh token 유효성 검사
-    payload = verify_token(
-        token=refresh_token,
-        type="refresh"
-    )
+    try:
+        payload = verify_token(
+            token=refresh_token,
+            type="refresh"
+        )
+    except HTTPException as e:
+        emit_audit_event(
+            event_type=EventType.AUTH,
+            event_action=AuthEventAction.LOGIN_FAILURE,
+            level=AuditLevel.WARNING,
+            metadata={"reason": "invalid_or_expired_token", "detail": e.detail},
+            immediate=True
+        )
+        
+        # 유효하지 않은 토큰인 경우 사용자 쿠키 삭제
+        err_response = JSONResponse(
+            status_code=e.status_code, 
+            content={"detail": e.detail}
+        )
+        delete_auth_cookies(err_response)
+        return err_response
+    
     
     # sub 기반 User 조회
     sub = payload.get("sub")
@@ -142,14 +186,28 @@ def refresh_token(
         db=db,
         sub=sub
     )
+    
+    snapshot = None
+    if user:
+        snapshot = user.to_snapshot()
+        snapshot["sub"] = user.oauth_user.sub
 
     # 존재하지 않는 사용자이거나 refresh token이 일치하지 않는 경우
     if not user or user.refresh_token != refresh_token:
-        delete_auth_cookies(response)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh Token이 유효하지 않습니다."
+        emit_audit_event(
+            event_type=EventType.AUTH,
+            event_action=AuthEventAction.LOGIN_FAILURE,
+            level=AuditLevel.WARNING,
+            metadata={"reason": "invalid_refresh_token"},
+            immediate=True,
+            actor=snapshot,
         )
+        err_response = JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "Refresh Token이 유효하지 않습니다."}
+        )
+        delete_auth_cookies(err_response)
+        return err_response
     
     # token 재발급
     token_data = {
@@ -172,6 +230,14 @@ def refresh_token(
         response=response,
         access_token=new_access_token,
         refresh_token=new_refresh_token
+    )
+
+    emit_audit_event(
+        event_type=EventType.AUTH,
+        event_action=AuthEventAction.TOKEN_REFRESH,
+        level=AuditLevel.INFO,
+        immediate=True,
+        actor=snapshot,
     )
 
     return {
@@ -200,6 +266,13 @@ async def logout(
     await run_in_threadpool(_update_user_refresh_token_sync)
 
     delete_auth_cookies(response)
+    
+    emit_audit_event(
+        event_type=EventType.AUTH,
+        event_action=AuthEventAction.LOGOUT,
+        level=AuditLevel.INFO,
+        immediate=True
+    )
 
     return {"status": "success", "detail": "Logged out successfully"}
 

@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Optional
 from pytz import timezone
-from sqlalchemy import CheckConstraint, ForeignKey, Index, UniqueConstraint, func, text
+from sqlalchemy import CheckConstraint, ForeignKey, Index, UniqueConstraint, func, inspect, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import DeclarativeBase, Mapped, MappedCollection, mapped_column, relationship
@@ -11,7 +11,22 @@ from sqlalchemy.types import String, Boolean, Integer, BigInteger, DateTime, Tex
 
 
 class Base(DeclarativeBase):
-    pass
+    def to_snapshot(self):
+        ins = inspect(self)
+        data = {c.key: getattr(self, c.key) for c in ins.mapper.column_attrs}
+        data["__type__"] = self.__class__.__name__
+        
+        for rel in ins.mapper.relationships:
+            if rel.key not in ins.unloaded:
+                value = getattr(self, rel.key)
+                if value is None:
+                    data[rel.key] = None
+                elif isinstance(value, list):
+                    data[rel.key] =[i.to_snapshot() for i in value]
+                else:
+                    data[rel.key] = value.to_snapshot()
+                    
+        return data
 
 
 class UserRole(StrEnum):
