@@ -11,9 +11,11 @@ from catchup.db.incremental import (
     get_record_state,
     list_pending_outbox_entries,
     recover_stale_outbox_claims,
+    transition_record_status,
 )
 from catchup.db.models import IncrementalOutboxStatus, IncrementalRecordStatus, SyncConnector
 from catchup.sync.common.schemas import SyncStreamTask
+from catchup.sync.incremental.full_sync_guard import is_incremental_target_eligible
 from catchup.sync.stream_runtime.stream_queue import publish_task
 
 logger = logging.getLogger(__name__)
@@ -63,6 +65,7 @@ async def publish_incremental_outbox(
         )
 
     published = 0
+    blocked = 0
     skipped = 0
     errors = 0
 
@@ -90,6 +93,41 @@ async def publish_incremental_outbox(
                         outbox_id=entry.id,
                         last_error="stale_outbox",
                     ):
+                        skipped += 1
+                    continue
+
+                if not is_incremental_target_eligible(
+                    db,
+                    connector=_connector_key(record.connector),
+                    scope_id=record.scope_id,
+                    target_type=record.parent_type,
+                    target_id=record.parent_id,
+                ):
+                    transition_record_status(
+                        db,
+                        record_key=record.record_key,
+                        from_statuses=[IncrementalRecordStatus.QUEUED],
+                        to_status=IncrementalRecordStatus.DEAD,
+                        expected_generation=record.generation,
+                        attempt=int(record.attempt),
+                        last_error="full_sync_required",
+                    )
+                    if complete_outbox_skip(
+                        db,
+                        outbox_id=entry.id,
+                        last_error="full_sync_required",
+                    ):
+                        blocked += 1
+                        logger.info(
+                            "[INCREMENTAL][PUBLISH] Skipped due to missing full sync: connector=%s, scope_id=%s, parent_type=%s, parent_id=%s, record_key=%s, generation=%s",
+                            record.connector.value,
+                            record.scope_id,
+                            record.parent_type,
+                            record.parent_id,
+                            record.record_key,
+                            record.generation,
+                        )
+                    else:
                         skipped += 1
                     continue
 
@@ -149,6 +187,7 @@ async def publish_incremental_outbox(
 
     return {
         "published": published,
+        "blocked_full_sync_required": blocked,
         "skipped": skipped,
         "errors": errors,
         "recovered": recovered,
