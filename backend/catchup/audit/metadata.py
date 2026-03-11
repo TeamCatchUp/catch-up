@@ -15,11 +15,11 @@ class ChatAuditMetadata(BaseAuditMetadata):
     
     # 검색 관련
     retrieved_docs_count: int | None = None
-    retrieved_doc_ids: list[int] | None = Field(default_factory=list)
+    retrieved_doc_ids: list[str] | None = Field(default_factory=list)
     
     # 출처 제공 관련
     provided_sources_count: int | None = None
-    provided_source_ids: list[int] | None = Field(default_factory=list)
+    provided_source_ids: list[str] | None = Field(default_factory=list)
     
     def _sync_count_and_ids(self, count_field: str, ids_field: str):
         """리스트 길이와 카운트 필드 사이의 정합성을 맞추는 내부 헬퍼"""

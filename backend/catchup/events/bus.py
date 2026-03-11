@@ -1,3 +1,5 @@
+import asyncio
+import inspect
 from collections import defaultdict
 from typing import Callable
 
@@ -10,6 +12,7 @@ class EventBus:
         리스너 목록
         """
         self._listeners: dict[str, list[Callable]] = defaultdict(list)
+        self._retained_tasks = set()  # GC 방지 용도
         
     def subscribe(
         self,
@@ -24,6 +27,7 @@ class EventBus:
     def emit(
         self,
         topic: str,
+        immediate: bool = False,
         **payload
     ):
         """
@@ -31,10 +35,30 @@ class EventBus:
         """
         bg_tasks = current_bg_tasks.get()
         for func in self._listeners[topic]:
-            if bg_tasks:
-                bg_tasks.add_task(func, **payload)
+            if immediate or not bg_tasks:
+                try:
+                    loop = asyncio.get_running_loop()
+                    
+                    # case) async def
+                    if inspect.iscoroutinefunction(func):
+                        task = loop.create_task(func(**payload))
+                    
+                    # case) def (sync)
+                    else:                    
+                        task = asyncio.create_task(asyncio.to_thread(func, **payload))
+                    
+                    # GC 방지
+                    self._retained_tasks.add(task)
+                    task.add_done_callback(self._retained_tasks.discard)
+
+                except RuntimeError:
+                    # 동기 환경에서 비동기 리스너를 호출하는 경우
+                    if inspect.iscoroutinefunction(func):
+                        asyncio.run(func(**payload))
+                    else:
+                        func(**payload)
             else:
-                func(**payload)
+                bg_tasks.add_task(func, **payload)
 
 # 전역 event bus 인스턴스
 bus = EventBus()

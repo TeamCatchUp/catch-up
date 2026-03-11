@@ -95,8 +95,9 @@ class OAuthService:
                 emit_audit_event(
                     event_type=EventType.AUTH,
                     event_action=AuthEventAction.LOGIN_SUCCESS,
+                    level=AuditLevel.INFO,
+                    immediate=True,
                     actor=snapshot,
-                    level=AuditLevel.INFO
                 )
                 
                 return access_token, refresh_token

@@ -1,3 +1,4 @@
+from importlib import metadata
 import logging
 import uuid
 
@@ -5,12 +6,16 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from catchup.audit.enums import AuditLevel
+from catchup.audit.metadata import ChatAuditMetadata
+from catchup.audit.service import emit_audit_event
 from catchup.chat.dependencies import get_valid_chat_room
 from catchup.chat.factory import get_chat_service
 from catchup.chat.schemas import ChatRequest, ChatResponse
 from catchup.chat.engine import ChatService
 from catchup.db.dependencies import get_db
 from catchup.db.models import ChatRoom
+from catchup.events.enums import ChatEventAction, EventType
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.dependencies import get_rag_global_context
 
@@ -47,12 +52,28 @@ async def chat_response_stream(
     service: ChatService = Depends(get_chat_service),
     global_context: GlobalContext = Depends(get_rag_global_context)
 ):
+    
+    session_id = request.session_id
+    query = request.query
+    tool_filters = request.tool_filters
+    
+    emit_audit_event(
+        event_type=EventType.CHAT,
+        event_action=ChatEventAction.MESSAGE_RECEIVED,
+        level=AuditLevel.INFO,
+        metadata=ChatAuditMetadata(
+            session_id=session_id,
+            query=query,
+            tool_filters=tool_filters
+        )
+    )
+    
     async def event_generator():
         async for chunk in service.chat_stream(
             db=db,
-            query=request.query,
-            session_id=request.session_id,
-            tool_filters=request.tool_filters,
+            query=query,
+            session_id=session_id,
+            tool_filters=tool_filters,
             global_context=global_context
         ):
             yield f"data: {chunk.model_dump_json(ensure_ascii=False)}\n\n"
