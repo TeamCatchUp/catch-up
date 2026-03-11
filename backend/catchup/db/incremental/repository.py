@@ -50,6 +50,7 @@ _ALLOWED_RECORD_TRANSITIONS: dict[IncrementalRecordStatus, set[IncrementalRecord
     IncrementalRecordStatus.QUEUED: {
         IncrementalRecordStatus.PROCESSING,
         IncrementalRecordStatus.DEBOUNCING,
+        IncrementalRecordStatus.DEAD,
     },
     IncrementalRecordStatus.PROCESSING: {
         IncrementalRecordStatus.SYNCED,
