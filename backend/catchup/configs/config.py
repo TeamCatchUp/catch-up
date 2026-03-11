@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     LOG_CONSOLE_ENABLED: bool = True
     
     # logging - file (dev)
-    LOG_JSON_FILE_ENABLED: bool = True
+    LOG_JSON_FILE_ENABLED: bool = False
     LOG_JSON_FILE_PATH: str = "/var/log/catchup/app.jsonl"
     LOG_JSON_MAX_BYTES: int = 50 * 1024 * 1024
     LOG_JSON_BACKUP_COUNT: int = 5
@@ -61,10 +61,10 @@ class Settings(BaseSettings):
     DB_DATABASE: str
     
     # AWS S3
-    AWS_S3_AUDIT_ENABLE: bool = False
+    AWS_S3_AUDIT_ENABLED: bool = False
     AWS_S3_AUDIT_BUCKET_NAME: str | None = None
     AWS_S3_AUDIT_PREFIX: str | None = None
-    AWS_S3_UPLOAD_INTERVAL_SECONDS: int | None = None
+    AWS_S3_AUDIT_UPLOAD_INTERVAL_SECONDS: int | None = None
     
     # Neo4j (Deprecated)
     NEO4J_USER: str | None = None

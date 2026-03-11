@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
             settings.LOG_AUDIT_BACKUP_COUNT,
         )
 
-    if settings.AWS_S3_AUDIT_ENABLE:
+    if settings.AWS_S3_AUDIT_ENABLED:
         logger.info("[AUDIT][AWS_S3] Starting audit log uploader task to S3")
         uploader_task = asyncio.create_task(audit_log_uploader_task())
 

@@ -71,7 +71,7 @@ def _process_audit_logs() -> None:
 async def audit_log_uploader_task() -> None:
     """백그라운드에서 주기적으로 _process_audit_log를 실행하는 무한 루프"""
     while True:
-        await asyncio.sleep(settings.AWS_S3_UPLOAD_INTERVAL_SECONDS)
+        await asyncio.sleep(settings.AWS_S3_AUDIT_UPLOAD_INTERVAL_SECONDS)
         try:
             await asyncio.to_thread(_process_audit_logs)
             
