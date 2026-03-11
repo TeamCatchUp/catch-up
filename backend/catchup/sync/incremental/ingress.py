@@ -113,29 +113,24 @@ def normalize_slack_event(
 
     subtype = str(event.get("subtype") or "").strip().lower()
     channel_id = str(event.get("channel") or "").strip()
+
+    # Public/Private channel만 허용하고 DM 계열은 제외한다.
     if not channel_id.startswith(("C", "G")):
         return []
-    message_payload = event.get("message") if subtype in {"message_changed", "message_deleted"} else event
-    if not isinstance(message_payload, dict):
-        message_payload = event
 
-    record_id = str(
-        message_payload.get("ts")
-        or event.get("deleted_ts")
-        or event.get("ts")
-        or ""
-    ).strip()
+    message_payload = _resolve_slack_message_payload(event, subtype)
+    if not isinstance(message_payload, dict):
+        return []
+
+    record_id = _resolve_slack_record_id(event, message_payload)
     if not channel_id or not record_id:
         return []
 
-    if subtype == "message_deleted":
-        event_kind = "deleted"
-    elif subtype == "message_changed":
-        event_kind = "updated"
-    else:
-        event_kind = "created"
+    event_kind = _resolve_slack_event_kind(subtype, event, message_payload)
+    last_event_at = _parse_slack_ts(
+        str(event.get("event_ts") or message_payload.get("ts") or record_id)
+    ) or _utc_now()
 
-    last_event_at = _parse_slack_ts(str(event.get("event_ts") or record_id)) or _utc_now()
     return [
         RecordChange(
             connector=SyncConnector.SLACK,
@@ -148,6 +143,67 @@ def normalize_slack_event(
             last_event_at=last_event_at,
         )
     ]
+
+def _resolve_slack_message_payload(
+    event: dict[str, Any],
+    subtype: str,
+) -> dict[str, Any]:
+    if subtype == "message_deleted":
+        previous_message = event.get("previous_message")
+        if isinstance(previous_message, dict):
+            return previous_message
+
+        message = event.get("message")
+        if isinstance(message, dict):
+            return message
+
+    if subtype == "message_changed":
+        message = event.get("message")
+        if isinstance(message, dict):
+            return message
+
+    return event
+
+
+def _resolve_slack_record_id(
+    event: dict[str, Any],
+    message_payload: dict[str, Any],
+) -> str:
+    message_ts = str(
+        message_payload.get("ts")
+        or event.get("deleted_ts")
+        or event.get("ts")
+        or ""
+    ).strip()
+    thread_ts = str(message_payload.get("thread_ts") or "").strip()
+
+    return thread_ts or message_ts
+
+
+def _resolve_slack_event_kind(
+    subtype: str,
+    event: dict[str, Any],
+    message_payload: dict[str, Any],
+) -> str:
+    message_ts = str(
+        message_payload.get("ts")
+        or event.get("deleted_ts")
+        or event.get("ts")
+        or ""
+    ).strip()
+    thread_ts = str(message_payload.get("thread_ts") or "").strip()
+    is_thread_reply = bool(thread_ts) and thread_ts != message_ts
+
+    if subtype == "message_deleted":
+        return "updated" if is_thread_reply else "deleted"
+
+    if subtype == "message_changed":
+        return "updated"
+
+    if is_thread_reply:
+        return "updated"
+
+    return "created"
 
 
 def build_confluence_record_change(
