@@ -21,7 +21,7 @@ async def get_redis_client() -> RedisCluster | Redis:
 
     # 이미 생성된 클라이언트가 있으면 재사용한다.
     if _redis_client is not None:
-        logger.debug("[REDIS][CLIENT][INIT] Reusing existing Redis client")
+        # logger.debug("[REDIS][CLIENT][INIT] Reusing existing Redis client")
         return _redis_client
 
     # Redis 연결/명령 타임아웃 설정
