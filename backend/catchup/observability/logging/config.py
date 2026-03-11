@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from logging.handlers import RotatingFileHandler
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
 from typing import Any, Final
 import structlog
@@ -32,7 +32,7 @@ def _resolve_log_level() -> int:
     return LOG_LEVELS[settings.LOG_LEVEL.upper()]
 
 
-def _reorder_console_logger(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+def _reorder_console_logger(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, Any]:    
     logger_name = event_dict.pop("logger", None)
     if logger_name:
         event = event_dict.get("event", "")
@@ -50,6 +50,29 @@ def _drop_console_noise_fields(_: Any, __: str, event_dict: dict[str, Any]) -> d
         event_dict.pop("actor", None)
 
     return event_dict
+
+
+def _reorder_audit_keys(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+    """감사 로그 JSON의 키 순서를 읽기 편하게 재배치하는 커스텀 프로세서"""
+    
+    desired_order = [
+        "timestamp",
+        "level",
+        "event_type",
+        "event_action",
+        "event",
+        "actor",
+        "metadata",
+        "trace_id"
+    ]
+    
+    ordered_dict = {}
+    for key in desired_order:
+        if key in event_dict:
+            ordered_dict[key] = event_dict.pop(key)
+
+    ordered_dict.update(event_dict)
+    return ordered_dict
 
 
 def _build_console_handler() -> logging.Handler:
@@ -100,6 +123,34 @@ def _build_json_file_handler() -> logging.Handler:
     return handler
 
 
+def _build_audit_file_handler() -> logging.Handler:
+    """
+    감사 로그 전용 파일 핸들러 (S3 업로드용 롤링)
+    """
+    
+    log_path = Path(settings.LOG_AUDIT_FILE_PATH)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    formatter = structlog.stdlib.ProcessorFormatter(
+        foreign_pre_chain=SHARED_PROCESSORS,
+        processors=[
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            structlog.processors.TimeStamper(fmt="iso", utc=True),
+            _reorder_audit_keys,
+            structlog.processors.JSONRenderer(ensure_ascii=False),
+        ],
+    )
+    
+    handler = TimedRotatingFileHandler(
+        filename=log_path,
+        when=settings.LOG_AUDIT_ROTATION_WHEN,
+        interval=settings.LOG_AUDIT_ROTATION_INTERVAL,
+        backupCount=settings.LOG_AUDIT_BACKUP_COUNT,
+        encoding="utf-8"
+    )
+    handler.setFormatter(formatter)
+    return handler
+
 def configure_logging() -> None:
     log_level = _resolve_log_level()
 
@@ -143,6 +194,24 @@ def configure_logging() -> None:
     access_logger = logging.getLogger("uvicorn.access")
     access_logger.handlers.clear()
     access_logger.propagate = False
+    
+    # catchup.audit 전용 로거 격리
+    audit_logger = logging.getLogger("catchup.audit")
+    audit_logger.handlers.clear()
+    audit_logger.setLevel(logging.INFO)  # 감사로그 유실 방지
+    audit_logger.propagate = False
+    
+    # S3용 핸들러 적용
+    if settings.LOG_CONSOLE_ENABLED:
+        audit_logger.addHandler(_build_console_handler())
+    
+    if settings.LOG_AUDIT_FILE_ENABLED:
+        try:
+            audit_logger.addHandler(_build_audit_file_handler())
+        except Exception as exc:
+            warnings.append(
+                f"[LOGGING][AUDIT HANDLER] Failed to initialize Audit File Handler :{exc}"
+            )
 
     structlog.configure(
         processors = SHARED_PROCESSORS + [

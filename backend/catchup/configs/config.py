@@ -26,11 +26,23 @@ class Settings(BaseSettings):
     SERVICE_NAME: str = "catchup"
     APP_VERSIONS: str = "0.1.0"  #TODO: app version 갱신 방법
     LOG_LEVEL: str
+    
+    # logging - console
+    LOG_CONSOLE_ENABLED: bool = True
+    
+    # logging - file (dev)
+    LOG_JSON_FILE_ENABLED: bool = True
     LOG_JSON_FILE_PATH: str = "/var/log/catchup/app.jsonl"
     LOG_JSON_MAX_BYTES: int = 50 * 1024 * 1024
     LOG_JSON_BACKUP_COUNT: int = 5
-    LOG_CONSOLE_ENABLED: bool = True
-    LOG_JSON_FILE_ENABLED: bool = True
+
+    # Logging - audit (prod)
+    LOG_AUDIT_FILE_ENABLED: bool = True
+    LOG_AUDIT_FILE_PATH: str = "/var/log/catchup/audit/audit.jsonl"
+    LOG_AUDIT_ROTATION_WHEN: str = "H"
+    LOG_AUDIT_ROTATION_INTERVAL: int = 1
+    LOG_AUDIT_BACKUP_COUNT: int = 168 # 24 * 7
+    
     
     #========================#
     #     InfraStructures    #
@@ -47,6 +59,12 @@ class Settings(BaseSettings):
     DB_HOST: str
     DB_PORT: int
     DB_DATABASE: str
+    
+    # AWS S3
+    AWS_S3_AUDIT_ENABLE: bool = False
+    AWS_S3_AUDIT_BUCKET_NAME: str | None = None
+    AWS_S3_AUDIT_PREFIX: str | None = None
+    AWS_S3_UPLOAD_INTERVAL_SECONDS: int | None = None
     
     # Neo4j (Deprecated)
     NEO4J_USER: str | None = None

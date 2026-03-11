@@ -10,6 +10,7 @@ class EventType(StrEnum):
     INTEGRATION = "INTEGRATION"
     SYNC = "SYNC"
     CHAT = "CHAT"
+    AUDIT = "AUDIT"
     SYSTEM = "SYSTEM"
 
 
@@ -45,6 +46,15 @@ class ChatEventAction(StrEnum):
     
     # 출처 목록 노출
     SOURCES_PROVIDED = "sources_provided"
+    
+
+class AwsS3EventAction(StrEnum):
+    # s3 업로드 성공
+    UPLOAD_SUCCESS = "upload_success"
+    
+    # s3 업로드 실패
+    UPLOAD_FAILED = "upload_failed"
+    
 
 
 # class SystemEventAction(StrEnum):
