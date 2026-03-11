@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from catchup.connectors.jira import webhook_service
 from catchup.sync.incremental import ingest_record_changes, normalize_jira_event
+from catchup.sync.incremental.full_sync_guard import filter_record_changes_by_full_sync
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +60,44 @@ def handle_webhook(
         )
         return {"status": "ignored", "event_type": event_type, "reason": "unsupported_payload"}
 
-    record_keys = ingest_record_changes(db, changes)
-    return {
+    guard_result = filter_record_changes_by_full_sync(db, changes)
+    blocked_count = len(guard_result.blocked_changes)
+    if blocked_count > 0:
+        blocked_targets = guard_result.blocked_targets
+        if not guard_result.allowed_changes:
+            logger.info(
+                "[JIRA][WEBHOOK][INGRESS] Incremental blocked before ingest: cloud_id=%s, source=webhook, blocked_count=%s, blocked_targets=%s",
+                cloud_id,
+                blocked_count,
+                [
+                    f"{target.target_type}:{target.target_id}"
+                    for target in blocked_targets
+                ],
+            )
+            return {
+                "status": "ignored",
+                "event_type": event_type,
+                "reason": "full_sync_required",
+                "blocked_count": blocked_count,
+            }
+
+        logger.info(
+            "[JIRA][WEBHOOK][INGRESS] Incremental partially blocked before ingest: cloud_id=%s, source=webhook, allowed_count=%s, blocked_count=%s, blocked_targets=%s",
+            cloud_id,
+            len(guard_result.allowed_changes),
+            blocked_count,
+            [
+                f"{target.target_type}:{target.target_id}"
+                for target in blocked_targets
+            ],
+        )
+
+    record_keys = ingest_record_changes(db, guard_result.allowed_changes)
+    response = {
         "status": "accepted",
         "event_type": event_type,
         "record_keys": record_keys,
     }
+    if blocked_count > 0:
+        response["blocked_count"] = blocked_count
+    return response

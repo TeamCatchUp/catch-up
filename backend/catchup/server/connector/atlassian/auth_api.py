@@ -19,6 +19,7 @@ from catchup.connectors.atlassian.oauth_client import (
     AtlassianOAuthClient,
     get_atlassian_oauth_client,
 )
+from catchup.connectors.atlassian.exceptions import AtlassianError
 from catchup.connectors.atlassian.callback_service import (
     AtlassianCallbackService,
     CallbackError,
@@ -140,6 +141,9 @@ async def atlassian_installation_status(
         return AtlassianInstallationStatus(installed=True, resources=resources)
     except HTTPException as e:
         logger.warning(f"[ATLASSIAN][AUTH] 상태 조회 실패: {e.detail}")
+        return AtlassianInstallationStatus(installed=True, resources=[])
+    except AtlassianError as e:
+        logger.warning(f"[ATLASSIAN][AUTH] Atlassian 상태 조회 실패: {e.message}")
         return AtlassianInstallationStatus(installed=True, resources=[])
     except (HTTPStatusError, RequestError) as e:
         logger.warning(f"[ATLASSIAN][AUTH] API 요청 실패: {e}")

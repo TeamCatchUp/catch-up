@@ -11,6 +11,7 @@ from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.db.atlassian import oauth_repository
 from catchup.db.confluence import domain_repository as confluence_domain
 from catchup.db.engine import SessionLocal
+from catchup.sync.incremental.full_sync_guard import filter_record_changes_by_full_sync
 from catchup.sync.incremental.ingress import build_confluence_record_change, ingest_record_changes
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ async def poll_confluence_incremental_changes() -> dict[str, int]:
     lookback_minutes = max(1, int(settings.CONFLUENCE_INCREMENTAL_POLL_LOOKBACK_MINUTES))
     since = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
     changed = 0
+    blocked = 0
     errors = 0
 
     token_manager = AtlassianTokenManager(
@@ -59,7 +61,36 @@ async def poll_confluence_incremental_changes() -> dict[str, int]:
                 )
 
                 with SessionLocal() as db:
-                    changed += len(ingest_record_changes(db, [*page_changes, *blogpost_changes]))
+                    changes = [*page_changes, *blogpost_changes]
+                    guard_result = filter_record_changes_by_full_sync(db, changes)
+                    blocked_count = len(guard_result.blocked_changes)
+                    if blocked_count > 0:
+                        blocked += blocked_count
+                        blocked_targets = guard_result.blocked_targets
+                        if not guard_result.allowed_changes:
+                            logger.info(
+                                "[CONFLUENCE][POLL] Incremental blocked before ingest: cloud_id=%s, source=poll, blocked_count=%s, blocked_targets=%s",
+                                token.cloud_id,
+                                blocked_count,
+                                [
+                                    f"{target.target_type}:{target.target_id}"
+                                    for target in blocked_targets
+                                ],
+                            )
+                        else:
+                            logger.info(
+                                "[CONFLUENCE][POLL] Incremental partially blocked before ingest: cloud_id=%s, source=poll, allowed_count=%s, blocked_count=%s, blocked_targets=%s",
+                                token.cloud_id,
+                                len(guard_result.allowed_changes),
+                                blocked_count,
+                                [
+                                    f"{target.target_type}:{target.target_id}"
+                                    for target in blocked_targets
+                                ],
+                            )
+
+                    if guard_result.allowed_changes:
+                        changed += len(ingest_record_changes(db, guard_result.allowed_changes))
         except Exception:
             logger.exception(
                 "[CONFLUENCE][POLL] Failed to poll cloud: cloud_id=%s",
@@ -69,6 +100,7 @@ async def poll_confluence_incremental_changes() -> dict[str, int]:
 
     return {
         "changed": changed,
+        "blocked_full_sync_required": blocked,
         "errors": errors,
     }
 

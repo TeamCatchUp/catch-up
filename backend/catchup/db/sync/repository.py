@@ -251,6 +251,31 @@ def list_events_by_job(
     return list(db.execute(stmt).scalars().all())
 
 
+def has_successful_full_sync_event(
+    db: Session,
+    *,
+    connector: SyncConnector,
+    scope_id: str,
+    resource_type: str,
+    resource_id: str,
+) -> bool:
+    stmt = (
+        select(SyncEvent.event_id)
+        .join(SyncJob, SyncJob.job_id == SyncEvent.job_id)
+        .where(
+            SyncJob.connector == connector,
+            SyncJob.scope_id == scope_id,
+            SyncJob.sync_type == SyncType.FULL,
+            SyncEvent.connector == connector,
+            SyncEvent.resource_type == resource_type,
+            SyncEvent.resource_id == resource_id,
+            SyncEvent.status == SyncEventStatus.SUCCESS,
+        )
+        .limit(1)
+    )
+    return db.execute(stmt).scalar_one_or_none() is not None
+
+
 def update_event_status_cas(
     db: Session,
     *,

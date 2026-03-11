@@ -27,7 +27,9 @@ from catchup.db.models import (
     SyncConnector,
 )
 from catchup.db.workspaces import get_workspace_limit_one
+from catchup.sync.common.exceptions import SyncAPIError
 from catchup.sync.incremental import ingest_record_changes
+from catchup.sync.incremental.full_sync_guard import filter_record_changes_by_full_sync
 from catchup.sync.incremental.schemas import RecordChange
 
 logger = logging.getLogger(__name__)
@@ -107,8 +109,43 @@ def _handle_incremental_event(
     if not changes:
         return {"status": "ignored", "event": event_name, "reason": "unsupported_payload"}
 
-    record_keys = ingest_record_changes(db, changes)
-    return {"status": "accepted", "event": event_name, "record_keys": record_keys}
+    guard_result = filter_record_changes_by_full_sync(db, changes)
+    blocked_count = len(guard_result.blocked_changes)
+    if blocked_count > 0:
+        blocked_targets = guard_result.blocked_targets
+        if not guard_result.allowed_changes:
+            logger.info(
+                "[GITHUB][WEBHOOK][INGRESS] Incremental blocked before ingest: installation_id=%s, source=webhook, blocked_count=%s, blocked_targets=%s",
+                changes[0].scope_id,
+                blocked_count,
+                [
+                    f"{target.target_type}:{target.target_id}"
+                    for target in blocked_targets
+                ],
+            )
+            return {
+                "status": "ignored",
+                "event": event_name,
+                "reason": "full_sync_required",
+                "blocked_count": blocked_count,
+            }
+
+        logger.info(
+            "[GITHUB][WEBHOOK][INGRESS] Incremental partially blocked before ingest: installation_id=%s, source=webhook, allowed_count=%s, blocked_count=%s, blocked_targets=%s",
+            changes[0].scope_id,
+            len(guard_result.allowed_changes),
+            blocked_count,
+            [
+                f"{target.target_type}:{target.target_id}"
+                for target in blocked_targets
+            ],
+        )
+
+    record_keys = ingest_record_changes(db, guard_result.allowed_changes)
+    response = {"status": "accepted", "event": event_name, "record_keys": record_keys}
+    if blocked_count > 0:
+        response["blocked_count"] = blocked_count
+    return response
 
 
 async def _handle_metadata_event(
@@ -455,6 +492,14 @@ async def _sync_installation_metadata(installation_id: int) -> None:
         with SessionLocal() as db:
             service = await create_github_ingestion_service(db, installation_id)
             await service.sync_installation_metadata(db)
+    except SyncAPIError as exc:
+        logger.warning(
+            "[GITHUB][WEBHOOK][INGRESS] Installation metadata sync failed: installation_id=%s, code=%s, message=%s, metadata=%s",
+            installation_id,
+            exc.code,
+            exc.message,
+            exc.metadata,
+        )
     except Exception as exc:
         logger.error(
             "[GITHUB][WEBHOOK][INGRESS] Installation metadata sync failed: installation_id=%s, error=%s",
