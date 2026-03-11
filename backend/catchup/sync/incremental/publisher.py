@@ -19,6 +19,12 @@ from catchup.sync.stream_runtime.stream_queue import publish_task
 logger = logging.getLogger(__name__)
 
 
+def _connector_key(connector: SyncConnector | str) -> str:
+    if isinstance(connector, SyncConnector):
+        return connector.value
+    return str(connector).strip()
+
+
 def build_incremental_event_id(record_key: str, generation: int) -> str:
     return f"inc:{record_key}:{generation}"
 
@@ -87,15 +93,16 @@ async def publish_incremental_outbox(
                         skipped += 1
                     continue
 
+                connector = _connector_key(record.connector)
                 task = SyncStreamTask(
                     event_id=build_incremental_event_id(record.record_key, record.generation),
                     job_id=build_incremental_job_id(
-                        connector=record.connector.value,
+                        connector=connector,
                         scope_id=record.scope_id,
                         parent_type=record.parent_type,
                         parent_id=record.parent_id,
                     ),
-                    connector=record.connector.value,
+                    connector=connector,
                     sync_type="incremental",
                     scope_id=record.scope_id,
                     target_type=record.parent_type,
