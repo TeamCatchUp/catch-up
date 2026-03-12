@@ -7,7 +7,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 
-from catchup import __version__
 from catchup.audit.enums import SystemEventAction
 from catchup.audit.system import system_event
 from catchup.configs.config import settings
@@ -326,7 +325,7 @@ app = FastAPI(
     title="CatchUp RAG Server",
     lifespan=lifespan,
     redirect_slashes=False,
-    version=__version__,
+    version=settings.APP_VERSION,
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
 )
