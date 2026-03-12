@@ -20,19 +20,19 @@ interface PermissionsTableProps {
 /** 권한 목록 테이블 */
 const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) => {
   return (
-    <section className="border-neutral-3 flex min-h-0 flex-1 flex-col overflow-hidden border-y bg-white">
-      <div className="border-neutral-3 bg-neutral-1 flex h-9 shrink-0 items-center border-b px-6 lg:px-9">
+    <section className="border-edge-neutral flex min-h-0 flex-1 flex-col overflow-hidden border-y bg-fill-normal">
+      <div className="border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-b px-6 lg:px-9">
         <div className="grid flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-6 lg:gap-9">
-          <span className="text-body-xsmall pl-1.5 text-left text-gray-50">이름</span>
-          <span className="text-body-xsmall text-center text-gray-50">직급</span>
-          <span className="text-body-xsmall text-center text-gray-50">부서</span>
-          <span className="text-body-xsmall text-center text-gray-50">권한</span>
+          <span className="text-body-xsmall pl-1.5 text-left text-content-alternative">이름</span>
+          <span className="text-body-xsmall text-center text-content-alternative">직급</span>
+          <span className="text-body-xsmall text-center text-content-alternative">부서</span>
+          <span className="text-body-xsmall text-center text-content-alternative">권한</span>
           <span aria-hidden className="block w-[110px]" />
         </div>
       </div>
 
       {rows.length === 0 ? (
-        <div className="text-body-small flex h-full min-h-25 items-center justify-center text-gray-50">
+        <div className="text-body-small flex h-full min-h-25 items-center justify-center text-content-alternative">
           조회된 권한 정보가 없습니다.
         </div>
       ) : (
@@ -41,18 +41,18 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
             const roleLabel = ROLE_LABEL[member.role];
 
             return (
-              <div key={member.id} className="border-neutral-3 flex h-12.5 shrink-0 items-center border-b px-6 lg:px-9">
+              <div key={member.id} className="border-edge-neutral flex h-12.5 shrink-0 items-center border-b px-6 lg:px-9">
                 <div className="grid flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-6 lg:gap-9">
                   <div className="flex items-center gap-4">
-                    <DefaultProfile className="border-neutral-2 text-gray-30 size-7.5 shrink-0 rounded-full border" />
-                    <span className="text-body-small text-gray-80 truncate">{member.name}</span>
+                    <DefaultProfile className="text-content-assistive size-7.5 shrink-0 rounded-full" />
+                    <span className="text-body-small text-content-normal truncate">{member.name}</span>
                   </div>
 
                   <div className="flex items-center justify-center">
                     <span
                       className={cn(
                         TAG_BASE_CLASS,
-                        RANK_BADGE_CLASS[JOB_LEVEL_LABEL[member.jobLevel]] ?? 'bg-neutral-2 text-gray-50',
+                        RANK_BADGE_CLASS[JOB_LEVEL_LABEL[member.jobLevel]] ?? 'bg-fill-interaction-hover text-content-alternative',
                       )}
                     >
                       {JOB_LEVEL_LABEL[member.jobLevel]}
@@ -64,7 +64,7 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
                       <PopoverTrigger asChild>
                         <button
                           type="button"
-                          className="text-body-xsmall text-gray-80 max-w-full cursor-pointer truncate"
+                          className="text-body-xsmall text-content-normal max-w-full cursor-pointer truncate"
                         >
                           {member.department}
                         </button>
@@ -72,7 +72,7 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
                       <PopoverContent
                         side="top"
                         align="center"
-                        className="text-body-xsmall text-gray-70 w-auto px-3 py-2"
+                        className="text-body-xsmall text-icon-normal w-auto px-3 py-2"
                       >
                         {member.department}
                       </PopoverContent>

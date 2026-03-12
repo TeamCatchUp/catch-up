@@ -198,10 +198,10 @@ const UsersStatusSection = ({
     <section className="flex w-250 flex-col gap-3">
       {/* 헤더: 제목 + 설명 */}
       <div className="flex flex-col gap-0.5">
-        <h2 className="text-heading-large text-gray-80">
-          이용자 계정 등록 상태 <span className="text-blue-40">{total}</span>
+        <h2 className="text-heading-large text-content-normal">
+          이용자 계정 등록 상태 <span className="text-content-primary-assistive">{total}</span>
         </h2>
-        <p className="text-body-small text-gray-50">Catch Up 사용자의 협업 툴 계정 등록 상태를 확인할 수 있어요.</p>
+        <p className="text-body-small text-content-alternative">Catch Up 사용자의 협업 툴 계정 등록 상태를 확인할 수 있어요.</p>
       </div>
 
       {/* 필터 칩 + 버튼 영역 */}
@@ -217,7 +217,7 @@ const UsersStatusSection = ({
                 onClick={() => onFilterChange(key)}
                 className={cn(
                   'text-body-small h-9 cursor-pointer rounded-full border px-3 py-1.5 transition-colors',
-                  isSelected ? 'bg-neutral-80 border-transparent text-white' : 'border-neutral-3 text-gray-60',
+                  isSelected ? 'bg-neutral-80 border-transparent text-white' : 'border-edge-neutral text-content-alternative',
                 )}
               >
                 {label}
@@ -262,7 +262,7 @@ const UsersStatusSection = ({
       </div>
 
       {/* 테이블 */}
-      <div className="border-neutral-3 w-250 border-y">
+      <div className="border-edge-neutral w-250 border-y">
         <UsersTable
           displayRows={effectiveRows}
           isEditMode={isEditMode}
@@ -280,11 +280,11 @@ const UsersStatusSection = ({
         <div className="flex flex-1 items-center justify-end gap-6">
           <div className="flex items-center gap-2">
             <div className="h-2.5 w-2.5 rounded-full bg-green-50" />
-            <p className="text-body-small text-gray-50">모두 연동된 이용자</p>
+            <p className="text-body-small text-content-alternative">모두 연동된 이용자</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="bg-red-40 h-2.5 w-2.5 rounded-full" />
-            <p className="text-body-small text-gray-50">연동되지 않은 이용자</p>
+            <p className="text-body-small text-content-alternative">연동되지 않은 이용자</p>
           </div>
         </div>
       </div>

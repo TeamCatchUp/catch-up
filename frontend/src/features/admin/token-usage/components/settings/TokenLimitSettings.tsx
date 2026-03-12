@@ -33,13 +33,13 @@ function LimitRow({ title, description, defaultValue, hasBorder }: LimitRowProps
   };
 
   return (
-    <div className={`flex items-center gap-5 py-3 ${hasBorder ? 'border-neutral-3 border-b' : ''}`}>
+    <div className={`flex items-center gap-5 py-3 ${hasBorder ? 'border-edge-neutral border-b' : ''}`}>
       {/* 설명 */}
       <div className="flex flex-1 flex-col gap-1.5">
-        <label htmlFor={inputId} className="text-heading-small text-gray-80">
+        <label htmlFor={inputId} className="text-heading-small text-content-normal">
           {title}
         </label>
-        <span id={descId} className="text-label-small whitespace-pre-line text-gray-50">
+        <span id={descId} className="text-label-small whitespace-pre-line text-content-alternative">
           {description}
         </span>
       </div>
@@ -56,7 +56,7 @@ function LimitRow({ title, description, defaultValue, hasBorder }: LimitRowProps
             aria-describedby={descId}
             onChange={(e) => setValue(e.target.value)}
           />
-          <span className="text-body-small text-gray-50" aria-hidden="true">
+          <span className="text-body-small text-content-alternative" aria-hidden="true">
             $
           </span>
         </div>
@@ -86,8 +86,8 @@ export default function TokenLimitSettings({ mode = 'my' }: TokenLimitSettingsPr
   return (
     <div className="flex flex-col gap-1">
       {/* 헤더 */}
-      <div className="bg-neutral-1 rounded px-5 py-1.5">
-        <span className="text-heading-small text-gray-70">{header}</span>
+      <div className="bg-fill-strong rounded px-5 py-1.5">
+        <span className="text-heading-small text-content-neutral">{header}</span>
       </div>
 
       {/* 설정 행들 */}

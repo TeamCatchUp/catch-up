@@ -66,41 +66,41 @@ const QuestionsHistoryPanel = () => {
   };
 
   return (
-    <div className="border-neutral-3 bg-neutral-1 shadow-panel flex h-screen w-95 shrink-0 flex-col gap-2.5 border-r px-2 pt-4">
+    <div className="border-edge-neutral bg-fill-strong shadow-panel flex h-screen w-95 shrink-0 flex-col gap-2.5 border-r px-2 pt-4">
       {/* Header: Title + Action Buttons */}
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-heading-medium text-gray-80">내 질문 기록</h2>
+        <h2 className="text-heading-medium text-content-normal">내 질문 기록</h2>
         <div className="flex items-center gap-1.5">
           {/* 새 질문 Button - Box button with icon + text per Figma */}
           <button
             onClick={handleNewQuestion}
-            className="border-neutral-3 hover:bg-neutral-2 flex h-7.5 cursor-pointer items-center gap-1 rounded-lg border bg-white px-2 py-1"
+            className="border-edge-neutral hover:bg-fill-interaction-hover flex h-7.5 cursor-pointer items-center gap-1 rounded-lg border bg-fill-normal px-2 py-1"
             aria-label="새 질문"
           >
-            <AddSmall className="h-5 w-5 text-gray-50" />
-            <span className="text-body-xsmall text-gray-80">새 질문</span>
+            <AddSmall className="h-5 w-5 text-icon-neutral" />
+            <span className="text-body-xsmall text-content-normal">새 질문</span>
           </button>
           {/* Close Icon Button */}
           <button
             onClick={handleClose}
-            className="border-neutral-3 rounded-md2 hover:bg-neutral-2 flex h-7.5 w-7.5 cursor-pointer items-center justify-center border bg-white"
+            className="border-edge-neutral rounded-md2 hover:bg-fill-interaction-hover flex h-7.5 w-7.5 cursor-pointer items-center justify-center border bg-fill-normal"
             aria-label="패널 닫기"
           >
-            <Cancel className="h-5 w-5 text-gray-50" />
+            <Cancel className="h-5 w-5 text-icon-neutral" />
           </button>
         </div>
       </div>
 
       {/* Search Input Field */}
       <div className="px-1">
-        <div className="border-neutral-3 flex h-9 items-center gap-1 rounded-lg border bg-white px-2.5 py-1.5">
-          <Search className="text-gray-40 h-5 w-5 shrink-0" />
+        <div className="border-edge-neutral flex h-9 items-center gap-1 rounded-lg border bg-fill-normal px-2.5 py-1.5">
+          <Search className="text-icon-assistive h-5 w-5 shrink-0" />
           <input
             type="text"
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
             placeholder="지난 질문 검색"
-            className="text-body-small text-gray-80 placeholder:text-gray-30 w-full bg-transparent outline-none"
+            className="text-body-small text-content-normal placeholder:text-content-assistive w-full bg-transparent outline-none"
           />
         </div>
       </div>
@@ -108,11 +108,11 @@ const QuestionsHistoryPanel = () => {
       {/* Question List - Scrollable Area */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1">
         {isLoading ? (
-          <div className="text-gray-30 flex items-center justify-center py-8">데이터를 불러오는 중입니다...</div>
+          <div className="text-content-assistive flex items-center justify-center py-8">데이터를 불러오는 중입니다...</div>
         ) : (
           <SearchHistory querys={recentQueries} isModal={false} onItemClick={handleItemClick} />
         )}
-        {isFetchingNextPage && <div className="text-gray-30 flex items-center justify-center py-4">불러오는 중...</div>}
+        {isFetchingNextPage && <div className="text-content-assistive flex items-center justify-center py-4">불러오는 중...</div>}
         <div ref={sentinelRef} className="h-1" />
       </div>
     </div>

@@ -13,6 +13,7 @@ export interface UseRagChatOptions {
   repo: string | null;
   initialQuery: string | null;
   scrollToMessageId?: string | null;
+  toolFilters?: string[];
 }
 
 /**

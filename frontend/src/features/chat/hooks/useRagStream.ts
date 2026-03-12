@@ -6,7 +6,12 @@ import chatService from '@/features/chat/services/chatService';
 import type { StreamEvent } from '@/features/chat/types';
 
 interface UseRagStreamReturn {
-  streamChat: (query: string, sessionId: string | undefined, onEvent: (event: StreamEvent) => void) => Promise<void>;
+  streamChat: (
+    query: string,
+    sessionId: string | undefined,
+    onEvent: (event: StreamEvent) => void,
+    toolFilters?: string[],
+  ) => Promise<void>;
   abortStream: () => void;
   markStopped: () => void;
   resetStopped: () => void;
@@ -33,13 +38,18 @@ export const useRagStream = (): UseRagStreamReturn => {
   }, []);
 
   const streamChat = useCallback(
-    async (query: string, sessionId: string | undefined, onEvent: (event: StreamEvent) => void) => {
+    async (
+      query: string,
+      sessionId: string | undefined,
+      onEvent: (event: StreamEvent) => void,
+      toolFilters?: string[],
+    ) => {
       const activeController = abortRef.current;
       if (activeController && !activeController.signal.aborted) return;
       const controller = new AbortController();
       abortRef.current = controller;
       try {
-        await chatService.streamChat(query, sessionId, onEvent, controller.signal);
+        await chatService.streamChat(query, sessionId, onEvent, controller.signal, toolFilters);
       } finally {
         if (abortRef.current === controller) {
           abortRef.current = null;

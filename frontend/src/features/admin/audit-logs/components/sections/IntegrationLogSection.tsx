@@ -72,11 +72,11 @@ const IntegrationLogSection = () => {
       />
 
       {/* 테이블 + 디테일 패널 */}
-      <div className="border-neutral-3 flex min-h-0 overflow-clip border-y" style={{ height: 558 }}>
+      <div className="border-edge-neutral flex min-h-0 overflow-clip border-y" style={{ height: 558 }}>
         {/* 좌측: 테이블 */}
-        <div className="border-neutral-3 flex min-w-0 flex-1 flex-col overflow-clip border-r bg-white">
+        <div className="border-edge-neutral flex min-w-0 flex-1 flex-col overflow-clip border-r bg-fill-normal">
           {/* 헤더 */}
-          <div className="border-neutral-3 bg-neutral-1 text-body-xsmall flex h-9 shrink-0 items-center gap-1 px-5 text-gray-50">
+          <div className="border-edge-neutral bg-fill-strong text-body-xsmall flex h-9 shrink-0 items-center gap-1 border-b px-5 text-content-alternative">
             <span className="w-13.75 shrink-0">커넥터</span>
             <span className="min-w-25 flex-1 text-center">실행 일자</span>
             <span className="flex-1 text-center">구분</span>
@@ -86,7 +86,7 @@ const IntegrationLogSection = () => {
 
           {/* 행 */}
           {sorted.length === 0 ? (
-            <div className="text-body-small flex h-full min-h-25 items-center justify-center text-gray-50">
+            <div className="text-body-small flex h-full min-h-25 items-center justify-center text-content-alternative">
               연동 로그가 없습니다.
             </div>
           ) : (
@@ -94,7 +94,7 @@ const IntegrationLogSection = () => {
               {sorted.map((log) => {
                 const isActive = activeKey === log.logId;
                 const statusLabel = STATUS_LABEL[log.status];
-                const badgeCls = STATUS_BADGE_CLASS[statusLabel] ?? 'bg-neutral-2 text-gray-50';
+                const badgeCls = STATUS_BADGE_CLASS[statusLabel] ?? 'bg-fill-interaction-hover text-content-alternative';
                 const isSuccess = log.status === 'success';
                 const iconCls = getServiceIconCls(log.service);
 
@@ -104,31 +104,31 @@ const IntegrationLogSection = () => {
                     type="button"
                     onClick={() => setActiveKey(log.logId)}
                     className={cn(
-                      'border-neutral-3 flex h-12.5 shrink-0 cursor-pointer items-center gap-1 border-b px-5 text-left',
-                      isActive ? 'bg-blue-1' : 'hover:bg-neutral-1 bg-white',
+                      'border-edge-neutral flex h-12.5 shrink-0 cursor-pointer items-center gap-1 border-b px-5 text-left',
+                      isActive ? 'bg-fill-primary-assistive' : 'hover:bg-fill-strong bg-fill-normal',
                     )}
                   >
                     {/* 커넥터 */}
                     <div className="flex w-13.75 shrink-0 items-center">
-                      <div className="bg-neutral-1 border-neutral-3 flex items-center justify-center rounded-full border p-1">
+                      <div className="bg-fill-strong border-edge-neutral flex items-center justify-center rounded-full border p-1">
                         <ServiceIcon service={log.service} className={iconCls} />
                       </div>
                     </div>
 
                     {/* 실행 일자 */}
-                    <div className="text-body-xsmall text-gray-80 min-w-25 flex-1 truncate text-center">
+                    <div className="text-body-xsmall text-content-normal min-w-25 flex-1 truncate text-center">
                       {formatDate(log.executedAt)}
                     </div>
 
                     {/* 구분 */}
-                    <div className="text-body-xsmall text-gray-80 flex-1 truncate text-center">
+                    <div className="text-body-xsmall text-content-normal flex-1 truncate text-center">
                       {CATEGORY_LABEL[log.category]}
                     </div>
 
                     {/* 이용자 */}
                     <div className="flex w-32 min-w-32 items-center justify-center gap-1.5">
-                      <DefaultProfile className="border-neutral-2 text-gray-30 size-6.25 shrink-0 rounded-full border" />
-                      <span className="text-body-xsmall text-gray-80 truncate">{log.userName}</span>
+                      <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
+                      <span className="text-body-xsmall text-content-normal truncate">{log.userName}</span>
                     </div>
 
                     {/* 상태 */}
@@ -151,9 +151,9 @@ const IntegrationLogSection = () => {
         </div>
 
         {/* 우측: 디테일 패널 */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-white py-5 pl-6">
+        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-fill-normal py-5 pl-6">
           {!selectedLog ? (
-            <div className="text-body-small flex h-full items-center justify-center text-gray-50">
+            <div className="text-body-small flex h-full items-center justify-center text-content-alternative">
               선택된 로그 정보가 없습니다.
             </div>
           ) : selectedLog.category === 'api_call' ? (

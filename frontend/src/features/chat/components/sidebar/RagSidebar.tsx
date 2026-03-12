@@ -100,7 +100,7 @@ const RagSidebar = ({ currentQA, isLoading, isError }: RagSidebarProps) => {
     : { transform: `translateY(${isVisible ? 0 : SIDEBAR_SHIFT_PX}px)` };
 
   return (
-    <div className="border-neutral-3 hidden w-100 flex-none flex-col border-l bg-white lg:flex">
+    <div className="border-edge-neutral hidden w-100 flex-none flex-col border-l bg-fill-normal lg:flex">
       <SidebarHeader sourceCount={sourceCount} className={transitionClass} />
       <div className={cn('min-h-0 flex-1 overflow-y-auto', transitionClass)} style={transitionStyle}>
         <SourceList

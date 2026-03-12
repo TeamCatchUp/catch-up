@@ -36,12 +36,16 @@ export interface UseRagFiltersReturn {
   projectLabel: string;
 }
 
-export const useRagFilters = (): UseRagFiltersReturn => {
-  // Filter Bar
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
+interface UseRagFiltersOptions {
+  initialSources?: SourceType[];
+}
+
+export const useRagFilters = (options?: UseRagFiltersOptions): UseRagFiltersReturn => {
+  // Filter Bar — initialSources가 있으면 자동으로 열기
+  const [isFilterOpen, setIsFilterOpen] = useState(Boolean(options?.initialSources?.length));
 
   // 소스 토글
-  const [selectedSources, setSelectedSources] = useState<SourceType[]>([]);
+  const [selectedSources, setSelectedSources] = useState<SourceType[]>(options?.initialSources ?? []);
 
   const toggleSource = useCallback((source: SourceType) => {
     setSelectedSources((prev) => (prev.includes(source) ? prev.filter((s) => s !== source) : [...prev, source]));

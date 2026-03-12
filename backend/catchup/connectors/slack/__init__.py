@@ -5,7 +5,12 @@ Slack 데이터를 PGVector에 적재하기 위한 커넥터.
 """
 
 from catchup.connectors.slack.client import SlackApiClientWrapper
-from catchup.connectors.slack.factory import create_slack_ingestion_service
+from catchup.connectors.slack.factory import (
+    create_slack_ingestion_service,
+    create_slack_metadata_service,
+)
+from catchup.connectors.slack.ingestion_service import SlackIngestionService
+from catchup.connectors.slack.metadata_service import SlackMetadataService
 from catchup.connectors.slack.schemas import (
     SlackChannel,
     SlackFile,
@@ -15,7 +20,6 @@ from catchup.connectors.slack.schemas import (
     SlackUserProfile,
     SlackWorkspace,
 )
-from catchup.connectors.slack.service import SlackIngestionService
 from catchup.connectors.slack.transformers import SlackTransformer
 
 __all__ = [
@@ -23,6 +27,7 @@ __all__ = [
     "SlackChannel",
     "SlackFile",
     "SlackIngestionService",
+    "SlackMetadataService",
     "SlackMessage",
     "SlackThreadReply",
     "SlackTransformer",
@@ -30,4 +35,5 @@ __all__ = [
     "SlackUserProfile",
     "SlackWorkspace",
     "create_slack_ingestion_service",
+    "create_slack_metadata_service",
 ]

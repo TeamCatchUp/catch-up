@@ -23,7 +23,7 @@ export const RecentActivityExplorer = () => {
   }, [queriesQuery.data]);
 
   if (queriesQuery.isLoading) {
-    return <div className="text-gray-40 p-5">데이터를 불러오는 중입니다...</div>;
+    return <div className="text-content-alternative p-5">데이터를 불러오는 중입니다...</div>;
   }
 
   return <RecentSearchList title="최근 질문" querys={recentQueries} />;

@@ -107,9 +107,9 @@ export default function UserManagementSection() {
       {/* 헤더 행: 요약 + DateRangePicker */}
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1.5">
-          <span className="text-heading-small text-gray-50">조직 전체 사용 토큰량</span>
+          <span className="text-heading-small text-content-alternative">조직 전체 사용 토큰량</span>
           <div className="flex items-center gap-3">
-            <span className="text-heading-xlarge text-gray-80">{totalCost.toFixed(2)} $</span>
+            <span className="text-heading-xlarge text-content-normal">{totalCost.toFixed(2)} $</span>
             {summary ? (
               <Badge variant={STATUS_CONFIG[summary.status].variant} size="sm" className="rounded-md2 gap-1 py-0.5">
                 <IconCheckCircle className="size-4" aria-hidden="true" />
@@ -125,13 +125,13 @@ export default function UserManagementSection() {
       <div className="flex items-center justify-between">
         <FilterDropdown options={sortOptions} value={sortKey} onChange={setSortKey} />
         <div className="relative w-70">
-          <IconSearch className="text-gray-30 pointer-events-none absolute top-1/2 left-2.5 size-5 -translate-y-1/2" />
+          <IconSearch className="text-content-assistive pointer-events-none absolute top-1/2 left-2.5 size-5 -translate-y-1/2" />
           <Input
             inputSize="sm"
-            placeholder="임직원의 이름을 검색해보세요.."
+            placeholder="임직원의 이름을 검색해보세요."
             value={searchTerm}
             onChange={(e) => handleSearch(e.target.value)}
-            className="pl-9"
+            className="border-edge-assistive bg-fill-strong pl-9"
           />
         </div>
       </div>

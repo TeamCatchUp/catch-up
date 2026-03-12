@@ -37,11 +37,11 @@ const MemberTable = ({
   const allSelected = isSelecting && rows.length > 0 && selectedKeys?.size === rows.length;
 
   return (
-    <section className="border-neutral-3 flex h-full min-h-0 flex-col overflow-clip border-r bg-white">
+    <section className="border-edge-neutral flex h-full min-h-0 flex-col overflow-clip border-r bg-fill-normal">
       {/* 헤더 */}
       <div
         className={cn(
-          'border-neutral-3 bg-neutral-1 flex h-9 shrink-0 items-center border-b px-5',
+          'border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-b px-5',
           isSelecting && 'gap-3',
         )}
       >
@@ -53,16 +53,16 @@ const MemberTable = ({
           </button>
         )}
         <div className="grid flex-1 grid-cols-4 items-center">
-          <span className="text-body-xsmall pl-7.5 text-left text-gray-50">이름</span>
-          <span className="text-body-xsmall text-center text-gray-50">직급</span>
-          <span className="text-body-xsmall text-center text-gray-50">부서</span>
-          <span className="text-body-xsmall text-center text-gray-50">{lastColumnHeader}</span>
+          <span className="text-body-xsmall pl-7.5 text-left text-content-alternative">이름</span>
+          <span className="text-body-xsmall text-center text-content-alternative">직급</span>
+          <span className="text-body-xsmall text-center text-content-alternative">부서</span>
+          <span className="text-body-xsmall text-center text-content-alternative">{lastColumnHeader}</span>
         </div>
       </div>
 
       {/* 행 */}
       {rows.length === 0 ? (
-        <div className="text-body-small flex h-full min-h-25 items-center justify-center px-4 text-center text-gray-50">
+        <div className="text-body-small flex h-full min-h-25 items-center justify-center px-4 text-center text-content-alternative">
           {emptyMessage}
         </div>
       ) : (
@@ -77,9 +77,9 @@ const MemberTable = ({
                 type="button"
                 onClick={() => (isSelecting ? onToggleKey?.(row.key) : onSelectKey(row.key))}
                 className={cn(
-                  'border-neutral-3 flex h-12.5 shrink-0 cursor-pointer items-center border-b px-5 text-left',
+                  'border-edge-neutral flex h-12.5 shrink-0 cursor-pointer items-center border-b px-5 text-left',
                   isSelecting && 'gap-3',
-                  isActive || isChecked ? 'bg-blue-1' : 'hover:bg-neutral-1 bg-white',
+                  isActive || isChecked ? 'bg-fill-primary-assistive' : 'hover:bg-fill-strong bg-fill-normal',
                 )}
               >
                 {isSelecting && (
@@ -92,20 +92,20 @@ const MemberTable = ({
                 <div className="grid flex-1 grid-cols-4 items-center">
                   {/* 이름 */}
                   <div className="flex items-center gap-4">
-                    <DefaultProfile className="border-neutral-2 text-gray-30 size-7.5 shrink-0 rounded-full border" />
-                    <span className="text-body-small text-gray-80 truncate">{row.name}</span>
+                    <DefaultProfile className="text-content-assistive size-7.5 shrink-0 rounded-full" />
+                    <span className="text-body-small text-content-normal truncate">{row.name}</span>
                   </div>
 
                   {/* 직급 */}
                   <div className="flex items-center justify-center">
-                    <span className={cn(TAG_BASE_CLASS, RANK_BADGE_CLASS[row.rank] ?? 'bg-neutral-2 text-gray-50')}>
+                    <span className={cn(TAG_BASE_CLASS, RANK_BADGE_CLASS[row.rank] ?? 'bg-fill-interaction-hover text-content-alternative')}>
                       {row.rank}
                     </span>
                   </div>
 
                   {/* 부서 */}
                   <div className="flex items-center justify-center">
-                    <span className="text-body-xsmall text-gray-80 truncate">{row.department}</span>
+                    <span className="text-body-xsmall text-content-normal truncate">{row.department}</span>
                   </div>
 
                   {/* 4번째 컬럼 */}
@@ -113,7 +113,7 @@ const MemberTable = ({
                     <span
                       className={cn(
                         TAG_BASE_CLASS,
-                        lastColumnBadgeClass[row.lastColumn] ?? 'bg-neutral-2 text-gray-50',
+                        lastColumnBadgeClass[row.lastColumn] ?? 'bg-fill-interaction-hover text-content-alternative',
                       )}
                     >
                       {row.lastColumn}

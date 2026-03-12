@@ -28,8 +28,8 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
   return (
     <section className="flex w-250 flex-col gap-3">
       <div className="flex flex-col gap-0.5">
-        <h2 className="text-heading-large text-gray-80">계정 등록 상태</h2>
-        <p className="text-body-small text-gray-50">팀의 매핑 등록 상태를 확인할 수 있어요.</p>
+        <h2 className="text-heading-large text-content-normal">계정 등록 상태</h2>
+        <p className="text-body-small text-content-alternative">팀의 매핑 등록 상태를 확인할 수 있어요.</p>
       </div>
 
       <div className="flex items-center gap-5">
@@ -40,21 +40,21 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
           return (
             <article
               key={service}
-              className="border-neutral-3 flex h-51 w-58.75 flex-col gap-4 rounded-xl border bg-white p-4"
+              className="border-edge-neutral flex h-51 w-58.75 flex-col gap-4 rounded-xl border bg-fill-normal p-4"
             >
               <div className="flex items-center gap-2.5">
                 <Icon className={iconClassName} />
-                <span className="text-heading-medium text-gray-80">{name}</span>
+                <span className="text-heading-medium text-content-normal">{name}</span>
               </div>
 
               <div className="flex flex-col gap-3">
-                <div className="border-neutral-2 bg-neutral-1 relative flex flex-col gap-1.5 overflow-clip rounded-lg border px-3 py-3">
+                <div className="border-edge-assistive bg-fill-strong relative flex flex-col gap-1.5 overflow-clip rounded-lg border px-3 py-3">
                   <div className="flex items-center gap-1">
-                    <span className="text-body-xsmall text-gray-70">연동 완료율</span>
+                    <span className="text-body-xsmall text-content-neutral">연동 완료율</span>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex">
-                          <IconInfo className="text-gray-30 size-4.5" />
+                          <IconInfo className="text-content-assistive size-4.5" />
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" align="start">
@@ -72,8 +72,8 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
                     </Tooltip>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-heading-medium text-gray-70">{completionRate}%</span>
-                    <span className="rounded-md2 text-body-xsmall bg-blue-5 px-1.5 py-0.5 leading-none tracking-tight text-blue-50">
+                    <span className="text-heading-medium text-content-neutral">{completionRate}%</span>
+                    <span className="rounded-md2 text-body-xsmall bg-fill-primary-normal-neutral px-1.5 py-0.5 leading-none tracking-tight text-content-primary">
                       {`${completedCount}/${totalCount}`}
                     </span>
                   </div>

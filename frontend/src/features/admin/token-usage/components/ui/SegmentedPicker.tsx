@@ -10,7 +10,7 @@ interface SegmentedPickerProps {
 
 export default function SegmentedPicker({ options, value, onChange }: SegmentedPickerProps) {
   return (
-    <div className="border-neutral-3 bg-neutral-3 flex h-9 items-center gap-0.5 rounded-lg border p-0.5">
+    <div className="border-edge-neutral bg-fill-interaction-pressed flex h-9 items-center gap-0.5 rounded-lg border p-0.5">
       {options.map((option) => {
         const isSelected = option === value;
         return (
@@ -21,8 +21,8 @@ export default function SegmentedPicker({ options, value, onChange }: SegmentedP
             className={cn(
               'text-body-small cursor-pointer rounded-[7px] px-3 py-1 transition-colors',
               isSelected
-                ? 'border-neutral-5 text-gray-70 shadow-button border bg-white'
-                : 'hover:text-gray-60 text-gray-50',
+                ? 'border-edge-strong text-content-neutral shadow-button border bg-fill-normal'
+                : 'hover:text-content-alternative text-content-alternative',
             )}
           >
             {option}

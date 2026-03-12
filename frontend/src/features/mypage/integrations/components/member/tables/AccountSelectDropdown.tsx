@@ -41,8 +41,8 @@ const AccountSelectDropdown = ({ status, options, selectedAccount, onSelect, onT
       <PopoverTrigger asChild>
         <button
           className={cn(
-            'border-neutral-3 hover:bg-neutral-1 flex h-9 w-full min-w-0 cursor-pointer items-center justify-between rounded-lg border bg-white px-2.5 py-1.5',
-            open && 'bg-neutral-3',
+            'border-edge-neutral hover:bg-fill-strong flex h-9 w-full min-w-0 cursor-pointer items-center justify-between rounded-lg border bg-fill-normal px-2.5 py-1.5',
+            open && 'bg-fill-interaction-pressed',
           )}
         >
           {selectedAccount ? (
@@ -56,12 +56,12 @@ const AccountSelectDropdown = ({ status, options, selectedAccount, onSelect, onT
                   className="size-5 shrink-0 rounded-full"
                 />
               ) : (
-                <DefaultProfile className="border-neutral-2 text-gray-30 size-5 shrink-0 rounded-full border" />
+                <DefaultProfile className="text-content-assistive size-5 shrink-0 rounded-full" />
               )}
-              <span className="text-body-small text-gray-90 truncate">{selectedAccount.name}</span>
+              <span className="text-body-small text-content-strong truncate">{selectedAccount.name}</span>
             </div>
           ) : (
-            <span className={cn('text-body-small truncate', isUnused ? 'text-gray-90' : 'text-gray-30')}>
+            <span className={cn('text-body-small truncate', isUnused ? 'text-content-strong' : 'text-content-assistive')}>
               {isUnused ? '해당 협업 툴 미사용' : '계정 선택하기'}
             </span>
           )}
@@ -72,7 +72,7 @@ const AccountSelectDropdown = ({ status, options, selectedAccount, onSelect, onT
       <PopoverContent
         align="start"
         sideOffset={2}
-        className="shadow-dropdown-menu border-neutral-4 w-71 overflow-clip rounded-xl p-0 py-2.5"
+        className="shadow-dropdown-menu border-edge-normal w-71 overflow-clip rounded-xl p-0 py-2.5"
       >
         <Command shouldFilter>
           {/* 검색바 */}
@@ -82,8 +82,8 @@ const AccountSelectDropdown = ({ status, options, selectedAccount, onSelect, onT
 
           {/* 미사용 토글 */}
           <div className="px-2.5 py-2">
-            <div className="border-neutral-2 flex items-center gap-2 rounded-lg border bg-[#fffafa] px-2.5 py-2">
-              <span className="text-body-small flex-1 text-gray-50">해당 협업 툴을 사용하지 않습니다.</span>
+            <div className="border-edge-assistive flex items-center gap-2 rounded-lg border bg-[#fffafa] px-2.5 py-2">
+              <span className="text-body-small flex-1 text-content-alternative">해당 협업 툴을 사용하지 않습니다.</span>
               <Switch
                 checked={isUnused}
                 onCheckedChange={(checked) => {
@@ -105,7 +105,7 @@ const AccountSelectDropdown = ({ status, options, selectedAccount, onSelect, onT
                   onSelect(account);
                   setOpen(false);
                 }}
-                className="border-neutral-2 gap-3 rounded-none border-b px-3 py-2"
+                className="border-edge-assistive gap-3 rounded-none border-b px-3 py-2"
               >
                 {account.picture ? (
                   <Image
@@ -116,11 +116,11 @@ const AccountSelectDropdown = ({ status, options, selectedAccount, onSelect, onT
                     className="size-10 shrink-0 rounded-full"
                   />
                 ) : (
-                  <DefaultProfile className="border-neutral-2 text-gray-30 size-10 shrink-0 rounded-full border" />
+                  <DefaultProfile className="text-content-assistive size-10 shrink-0 rounded-full" />
                 )}
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-heading-small text-gray-80 max-w-43.75 truncate">{account.name}</span>
-                  <span className="text-label-xsmall truncate text-gray-50">{account.identifier}</span>
+                  <span className="text-heading-small text-content-normal max-w-43.75 truncate">{account.name}</span>
+                  <span className="text-label-xsmall truncate text-content-alternative">{account.identifier}</span>
                 </div>
               </CommandItem>
             ))}

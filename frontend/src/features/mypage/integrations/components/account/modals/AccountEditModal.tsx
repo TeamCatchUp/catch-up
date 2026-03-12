@@ -82,33 +82,33 @@ const AccountEditModal = ({
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         hideClose
-        className="border-neutral-3 shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-white px-5 pt-3 pb-4"
+        className="border-edge-neutral shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-fill-normal px-5 pt-3 pb-4"
       >
         <div className="flex h-9 items-center justify-between">
-          <DialogTitle className="text-heading-medium text-gray-80">계정 정보 수정하기</DialogTitle>
+          <DialogTitle className="text-heading-medium text-content-normal">계정 정보 수정하기</DialogTitle>
           <button type="button" onClick={handleClose} className="cursor-pointer" aria-label="닫기">
-            <Cancel className="size-5 text-gray-50" />
+            <Cancel className="size-5 text-content-alternative" />
           </button>
         </div>
 
-        <div className="border-neutral-3 max-h-[378px] w-full overflow-y-auto border-t pt-4">
-          <div className="border-neutral-3 relative w-full overflow-clip rounded-xl border">
-            <div className="bg-neutral-1 border-neutral-3 flex flex-col gap-2 border-b p-4">
-              <span className="text-body-small text-gray-80">현재 연결된 계정</span>
+        <div className="border-edge-neutral max-h-[378px] w-full overflow-y-auto border-t pt-4">
+          <div className="border-edge-neutral relative w-full overflow-clip rounded-xl border">
+            <div className="bg-fill-strong border-edge-neutral flex flex-col gap-2 border-b p-4">
+              <span className="text-body-small text-content-normal">현재 연결된 계정</span>
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
-                  <DefaultProfile className="border-neutral-1 text-gray-30 size-6.25 shrink-0 rounded-full border" />
-                  <span className="text-body-small text-gray-80 truncate">{selectedRow.userName}</span>
-                  <span className="rounded-md2 bg-neutral-2 text-body-xsmall shrink-0 px-1.5 py-0.5 text-gray-50">
+                  <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
+                  <span className="text-body-small text-content-normal truncate">{selectedRow.userName}</span>
+                  <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall shrink-0 px-1.5 py-0.5 text-content-alternative">
                     {currentAccountId}
                   </span>
                 </div>
-                <span className="text-body-xsmall truncate text-gray-50">{selectedRow.email}</span>
+                <span className="text-body-xsmall truncate text-content-alternative">{selectedRow.email}</span>
               </div>
             </div>
 
-            <div className="flex flex-col gap-1.5 bg-white p-4">
-              <div className="text-body-small text-gray-80 flex items-center gap-1">
+            <div className="flex flex-col gap-1.5 bg-fill-normal p-4">
+              <div className="text-body-small text-content-normal flex items-center gap-1">
                 새 계정 선택
                 <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
               </div>
@@ -133,7 +133,7 @@ const AccountEditModal = ({
               </p>
             </div>
 
-            <div className="border-neutral-1 bg-gray-80 absolute top-[101px] left-1/2 -translate-x-1/2 rounded-full border p-1">
+            <div className="border-edge-assistive bg-gray-80 absolute top-[101px] left-1/2 -translate-x-1/2 rounded-full border p-1">
               <ArrowDown className="size-[18px] text-white" />
             </div>
           </div>
@@ -147,7 +147,7 @@ const AccountEditModal = ({
             onCustomValueChange={setCustomReason}
           />
 
-          <p className="text-label-xsmall mt-4 text-gray-50">
+          <p className="text-label-xsmall mt-4 text-content-alternative">
             자신의 계정이 아닌 타인의 계정을 연동하면 Catch Up이 드리는 답변의 내용이 부정확해지거나 관련 내용이 누락될
             수 있어요.
           </p>

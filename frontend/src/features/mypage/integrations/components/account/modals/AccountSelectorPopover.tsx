@@ -36,30 +36,30 @@ const AccountSelectorPopover = ({
     <PopoverTrigger asChild>
       <button
         type="button"
-        className={`border-neutral-3 flex w-full cursor-pointer items-center rounded-[10px] border bg-white text-left ${
+        className={`border-edge-neutral flex w-full cursor-pointer items-center rounded-[10px] border bg-fill-normal text-left ${
           selectedAccount ? 'gap-4 px-3 py-2.5' : 'h-[46px] justify-between px-2.5 py-1.5'
         }`}
       >
         {selectedAccount ? (
           <>
-            <DefaultProfile className="border-neutral-1 text-gray-30 size-10 shrink-0 rounded-full border" />
+            <DefaultProfile className="text-content-assistive size-10 shrink-0 rounded-full" />
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <div className="flex items-center gap-2.5">
-                <span className="text-heading-small text-gray-80 max-w-[133px] truncate">
+                <span className="text-heading-small text-content-normal max-w-[133px] truncate">
                   {selectedAccount.userName}
                 </span>
-                <span className="rounded-md2 bg-neutral-2 text-body-xsmall shrink-0 px-1.5 py-0.5 text-gray-50">
+                <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall shrink-0 px-1.5 py-0.5 text-content-alternative">
                   {selectedAccount.accountId}
                 </span>
               </div>
-              <span className="text-body-xsmall truncate text-gray-50">{selectedAccount.userEmail}</span>
+              <span className="text-body-xsmall truncate text-content-alternative">{selectedAccount.userEmail}</span>
             </div>
-            <UnfoldMore className="text-gray-40 size-6 shrink-0" />
+            <UnfoldMore className="text-content-assistive size-6 shrink-0" />
           </>
         ) : (
           <>
-            <span className="text-body-small text-gray-30 truncate">{placeholder}</span>
-            <UnfoldMore className="text-gray-40 size-5.5 shrink-0" />
+            <span className="text-body-small text-content-assistive truncate">{placeholder}</span>
+            <UnfoldMore className="text-content-assistive size-5.5 shrink-0" />
           </>
         )}
       </button>
@@ -69,7 +69,7 @@ const AccountSelectorPopover = ({
       align="start"
       sideOffset={6}
       avoidCollisions={false}
-      className="border-neutral-4 shadow-dropdown-menu w-[336px] rounded-xl p-0"
+      className="border-edge-normal shadow-dropdown-menu w-[336px] rounded-xl p-0"
     >
       <Command className="gap-2.5 rounded-xl py-2.5">
         <div className="px-2.5">
@@ -86,17 +86,17 @@ const AccountSelectorPopover = ({
               key={option.key}
               value={`${option.userName} ${option.userEmail} ${option.accountId}`}
               onSelect={() => onSelect(option.key)}
-              className="border-neutral-2 data-[selected=true]:bg-neutral-1 gap-3 rounded-none border-b px-3 py-2"
+              className="border-edge-assistive data-[selected=true]:bg-fill-strong gap-3 rounded-none border-b px-3 py-2"
             >
-              <DefaultProfile className="border-neutral-1 text-gray-30 size-10 shrink-0 rounded-full border" />
+              <DefaultProfile className="text-content-assistive size-10 shrink-0 rounded-full" />
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-heading-small text-gray-80 max-w-[160px] truncate">{option.userName}</span>
-                  <span className="rounded-md2 bg-neutral-2 text-body-xsmall shrink-0 px-1.5 py-0.5 text-gray-50">
+                  <span className="text-heading-small text-content-normal max-w-[160px] truncate">{option.userName}</span>
+                  <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall shrink-0 px-1.5 py-0.5 text-content-alternative">
                     {option.accountId}
                   </span>
                 </div>
-                <span className="text-label-xsmall truncate text-gray-50">{option.userEmail}</span>
+                <span className="text-label-xsmall truncate text-content-alternative">{option.userEmail}</span>
               </div>
             </CommandItem>
           ))}

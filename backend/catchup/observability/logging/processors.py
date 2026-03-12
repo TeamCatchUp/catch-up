@@ -4,22 +4,7 @@ import json
 from typing import Any
 
 from catchup.configs.config import settings
-
-SENSITIVE_KEYS = {
-    "password",
-    "passphrase",
-    "authorization",
-    "cookie",
-    "set-cookie",
-    "access_token",
-    "refresh_token",
-    "id_token",
-    "token",
-    "client_secret",
-    "api_key",
-    "secret",
-    "private_key",
-}
+from catchup.observability.logging.constants import SENSITIVE_KEYS
 
 DEFAULT_ACTOR = {
     "user_id": None,
@@ -138,8 +123,8 @@ def truncate_large_fields_processor(_: Any, __: str, event_dict: dict[str, Any])
 def ensure_required_fields_processor(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, Any]:
     event_dict.setdefault("service", settings.SERVICE_NAME)
     event_dict.setdefault("environment", str(settings.ENV))
-    event_dict.setdefault("version", settings.APP_VERSIONS)
-    event_dict.setdefault("trace_id", "unknown")
+    event_dict.setdefault("version", settings.APP_VERSION)
+    #event_dict.setdefault("trace_id", "unknown")
 
     event_dict["actor"] = _normalize_actor(event_dict.get("actor"))
     event_dict["metadata"] = _normalize_metadata(event_dict.get("metadata"))

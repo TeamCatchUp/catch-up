@@ -30,9 +30,9 @@ interface UserManagementTableProps {
 
 export default function UserManagementTable({ data, onToggleToken }: UserManagementTableProps) {
   return (
-    <div className="border-neutral-3 overflow-hidden rounded-xl border bg-white">
+    <div className="overflow-hidden">
       {/* 헤더 */}
-      <div className="text-heading-small bg-neutral-1 text-gray-70 grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center px-5 py-1.5">
+      <div className="text-body-xsmall border-edge-neutral bg-fill-strong text-content-alternative grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center border-b px-5 py-1.5">
         <span>이름</span>
         <span>사용량</span>
         <span>직급</span>
@@ -44,7 +44,7 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
       {data.map((member) => (
         <div
           key={member.id}
-          className="border-neutral-3 grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center border-t px-5 py-3"
+          className="border-edge-neutral grid grid-cols-[2fr_1fr_1fr_1fr_1fr] items-center border-t px-5 py-3"
         >
           {/* 이름 */}
           <div className="flex items-center gap-2.5">
@@ -57,9 +57,9 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
                 className="size-7.5 shrink-0 rounded-full object-cover"
               />
             ) : (
-              <DefaultProfile className="border-neutral-2 text-gray-30 size-7.5 shrink-0 rounded-full border" />
+              <DefaultProfile className="text-content-assistive size-7.5 shrink-0 rounded-full" />
             )}
-            <span className="text-body-small text-gray-80 truncate">{member.name}</span>
+            <span className="text-body-small text-content-normal truncate">{member.name}</span>
             {!member.tokenEnabled && (
               <div className="rounded-md2 bg-pink-5 flex shrink-0 items-center gap-0.5 px-1.5 py-0.5">
                 <IconError className="text-pink-60 size-3.5" />
@@ -69,11 +69,11 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
           </div>
 
           {/* 사용량 */}
-          <span className="text-body-small text-gray-80">{member.cost.toFixed(1)} $</span>
+          <span className="text-body-small text-content-normal">{member.cost.toFixed(1)} $</span>
 
           {/* 직급 */}
           <div>
-            <span className={`${TAG_BASE} ${POSITION_BADGE_CLASS[member.position] ?? 'bg-neutral-2 text-gray-50'}`}>
+            <span className={`${TAG_BASE} ${POSITION_BADGE_CLASS[member.position] ?? 'bg-fill-interaction-hover text-content-alternative'}`}>
               {member.position}
             </span>
           </div>
@@ -94,11 +94,11 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={4} className="min-w-[260px]">
                 <DropdownMenuItem>
-                  <IconGraph className="size-6 text-gray-50" />
+                  <IconGraph className="size-6 text-content-alternative" />
                   토큰 이용 대시보드 바로가기
                 </DropdownMenuItem>
                 <DropdownMenuItem>
-                  <IconChip className="size-6 text-gray-50" />
+                  <IconChip className="size-6 text-content-alternative" />
                   개인 토큰 사용 제한 설정 바로가기
                 </DropdownMenuItem>
               </DropdownMenuContent>

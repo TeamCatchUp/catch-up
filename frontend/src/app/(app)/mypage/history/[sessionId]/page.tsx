@@ -78,14 +78,14 @@ export default function HistoryDetailPage() {
 
   return (
     <section className="flex flex-col gap-6 px-16 pt-9 pb-[120px]">
-      <h1 className="text-heading-xlarge text-gray-80">질문 히스토리</h1>
+      <h1 className="text-heading-xlarge text-content-normal">질문 히스토리</h1>
 
       <Separator />
 
       <DetailHeader sessionId={sessionId} prevQuery={prevQuery} nextQuery={nextQuery} />
 
       {messagesQuery.isLoading && (
-        <div className="text-body-small text-gray-40 py-4">데이터를 불러오는 중입니다...</div>
+        <div className="text-body-small text-content-assistive py-4">데이터를 불러오는 중입니다...</div>
       )}
 
       {messagesQuery.isError && (
@@ -121,13 +121,13 @@ export default function HistoryDetailPage() {
                   </ReactMarkdown>
                 </div>
               ) : (
-                <div className="text-body-small text-gray-40">답변이 없습니다.</div>
+                <div className="text-body-small text-content-assistive">답변이 없습니다.</div>
               )}
             </div>
           </div>
 
           {/* 사이드바 */}
-          <div className="border-neutral-3 hidden w-100 shrink-0 flex-col rounded-xl border bg-white lg:flex">
+          <div className="border-edge-neutral hidden w-100 shrink-0 flex-col rounded-xl border bg-fill-normal lg:flex">
             <SidebarHeader sourceCount={sourceCount} />
             <div className="min-h-0 flex-1 overflow-y-auto">
               <SourceList sources={sources} answerContent={currentQA.answer?.content ?? ''} />

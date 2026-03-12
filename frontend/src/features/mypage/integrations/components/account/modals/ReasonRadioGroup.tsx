@@ -55,12 +55,12 @@ const ReasonRadioGroup = ({
   customPlaceholder = '반려 사유를 입력해주세요.',
 }: ReasonRadioGroupProps) => (
   <div className="mt-4 flex w-full flex-col gap-2">
-    <div className="text-body-small text-gray-80 flex items-center gap-1">
+    <div className="text-body-small text-content-normal flex items-center gap-1">
       {title}
       <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
     </div>
 
-    <div className="border-neutral-1 flex flex-col gap-4 rounded-xl border px-4 py-4">
+    <div className="border-edge-assistive flex flex-col gap-4 rounded-xl border px-4 py-4">
       {options.map((option) => {
         if (option.key !== 'custom') {
           return (
@@ -70,7 +70,7 @@ const ReasonRadioGroup = ({
                 onClick={() => onSelect(option.key)}
                 ariaLabel={option.label}
               />
-              <span className="text-body-small text-gray-70">{option.label}</span>
+              <span className="text-body-small text-content-neutral">{option.label}</span>
             </div>
           );
         }
@@ -81,7 +81,7 @@ const ReasonRadioGroup = ({
           <div key={option.key} className={`flex w-full gap-3 ${isCustomSelected ? 'items-start' : 'items-center'}`}>
             <ReasonRadio selected={isCustomSelected} onClick={() => onSelect('custom')} ariaLabel={option.label} />
             <div className={`flex min-w-0 flex-1 ${isCustomSelected ? 'flex-col gap-1.5' : 'items-center'}`}>
-              <span className="text-body-small text-gray-70">{option.label}</span>
+              <span className="text-body-small text-content-neutral">{option.label}</span>
               {isCustomSelected && (
                 <Input
                   inputSize="lg"

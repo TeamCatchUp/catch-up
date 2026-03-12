@@ -4,64 +4,128 @@ Github Connector Factory
 GithubIngestionService 인스턴스 생성을 위한 팩토리 함수.
 """
 
-from functools import lru_cache
+import logging
 
+from httpx import HTTPStatusError, RequestError
 from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.pgvector import PGVectorRepository
-from catchup.connectors.github.service import GithubService, GithubIngestionService
+from catchup.connectors.github.service import GithubIngestionService
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
+from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
+
+logger = logging.getLogger(__name__)
 
 
-@lru_cache(maxsize=1)
-def get_github_service() -> GithubService:
-    """
-    Legacy GithubService 인스턴스 반환 (PR 컨텍스트 조회용)
+def _extract_http_error_message(exc: HTTPStatusError) -> str:
+    response = exc.response
 
-    Note: 새로운 코드에서는 create_github_ingestion_service 사용 권장
-    """
-    return GithubService()
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+
+    if isinstance(payload, dict):
+        message = payload.get("message")
+        if isinstance(message, str) and message.strip():
+            return message.strip()
+
+    text = response.text.strip()
+    if text:
+        return text
+
+    return str(exc)
 
 
 async def create_github_ingestion_service(
     db: Session,
     installation_id: int,
 ) -> GithubIngestionService:
-    """
-    GithubIngestionService 인스턴스 생성
-
-    Args:
-        db: SQLAlchemy Session
-        installation_id: Github App Installation ID
-
-    Returns:
-        초기화된 GithubIngestionService 인스턴스
-
-    Raises:
-        ValueError: Installation을 찾을 수 없는 경우
-    """
-    # Installation 정보 확인
     installation = get_installation_by_installation_id(db, installation_id)
     if not installation:
-        raise ValueError(f"Github Installation not found: {installation_id}")
+        raise SyncConnectorError(
+            f"Github Installation not found: {installation_id}",
+            metadata={"installation_id": installation_id},
+        )
 
-    # Installation Access Token 발급
-    github_app_service = get_github_app_service()
-    access_token = await github_app_service.get_installation_access_token(installation_id)
+    try:
+        github_app_service = get_github_app_service()
+        access_token = await github_app_service.get_installation_access_token(
+            installation_id
+        )
 
-    # Service 인스턴스 생성 및 초기화
-    repository = PGVectorRepository(
-        embeddings=get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
-    )
-    
-    service = GithubIngestionService(
-        repository=repository,
-        installation_id=installation_id,
-        access_token=access_token,
-    )
-    await service.initialize()
+        repository = PGVectorRepository(
+            embeddings=get_embedding_service(
+                EmbeddingProvider.AWS_BEDROCK
+            ).get_embedder()
+        )
+        service = GithubIngestionService(
+            repository=repository,
+            installation_id=installation_id,
+            access_token=access_token,
+        )
+        await service.initialize()
+        return service
+    except HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        detail = _extract_http_error_message(exc)
+        metadata = {
+            "installation_id": installation_id,
+            "status_code": status_code,
+            "detail": detail,
+        }
 
-    return service
+        if status_code == 401:
+            raise SyncConnectorError(
+                "GitHub App 인증에 실패했습니다. GITHUB_APP_ID와 GITHUB_APP_PRIVATE_KEY 조합, 앱 키 재발급 여부를 확인하세요.",
+                metadata=metadata,
+                code="github_auth_failed",
+            ) from exc
+
+        if 400 <= status_code < 500:
+            raise SyncConnectorError(
+                "GitHub installation access token 발급에 실패했습니다.",
+                metadata=metadata,
+                code="github_installation_token_failed",
+            ) from exc
+
+        logger.error(
+            "[GITHUB][FACTORY] GitHub API request failed: installation_id=%s, status_code=%s, detail=%s",
+            installation_id,
+            status_code,
+            detail,
+            exc_info=True,
+        )
+        raise SyncInternalError(
+            "GitHub API 요청 중 오류가 발생했습니다",
+            metadata=metadata,
+            code="github_api_failed",
+        ) from exc
+    except RequestError as exc:
+        logger.error(
+            "[GITHUB][FACTORY] GitHub API network request failed: installation_id=%s, error=%s",
+            installation_id,
+            exc,
+            exc_info=True,
+        )
+        raise SyncInternalError(
+            "GitHub API 네트워크 요청 중 오류가 발생했습니다",
+            metadata={"installation_id": installation_id},
+            code="github_api_network_failed",
+        ) from exc
+    except SyncConnectorError:
+        raise
+    except Exception as exc:
+        logger.error(
+            "[GITHUB][FACTORY] Failed to initialize ingestion service: installation_id=%s, error=%s",
+            installation_id,
+            exc,
+            exc_info=True,
+        )
+        raise SyncInternalError(
+            "Github ingestion service initialization failed",
+            metadata={"installation_id": installation_id},
+        ) from exc

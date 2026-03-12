@@ -35,7 +35,6 @@ from catchup.connectors.github.auth import (
 )
 # Note: service, factory는 순환 import 방지를 위해 직접 import 필요
 # from catchup.connectors.github.service import GithubIngestionService
-# from catchup.connectors.github.factory import get_github_service
 
 __all__ = [
     # Client

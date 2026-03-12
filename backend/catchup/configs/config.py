@@ -1,9 +1,11 @@
 from enum import StrEnum
 
 from dotenv import load_dotenv
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
+
+from catchup.configs.utils import get_version
 
 load_dotenv()
 
@@ -24,13 +26,25 @@ class Settings(BaseSettings):
     
     # Logging
     SERVICE_NAME: str = "catchup"
-    APP_VERSIONS: str = "0.1.0"  #TODO: app version 갱신 방법
+    APP_VERSION: str = Field(default_factory=get_version)
     LOG_LEVEL: str
+    
+    # logging - console
+    LOG_CONSOLE_ENABLED: bool = True
+    
+    # logging - file (dev)
+    LOG_JSON_FILE_ENABLED: bool = False
     LOG_JSON_FILE_PATH: str = "/var/log/catchup/app.jsonl"
     LOG_JSON_MAX_BYTES: int = 50 * 1024 * 1024
     LOG_JSON_BACKUP_COUNT: int = 5
-    LOG_CONSOLE_ENABLED: bool = True
-    LOG_JSON_FILE_ENABLED: bool = True
+
+    # Logging - audit (prod)
+    LOG_AUDIT_FILE_ENABLED: bool = True
+    LOG_AUDIT_FILE_PATH: str = "/var/log/catchup/audit/audit.jsonl"
+    LOG_AUDIT_ROTATION_WHEN: str = "H"
+    LOG_AUDIT_ROTATION_INTERVAL: int = 1
+    LOG_AUDIT_BACKUP_COUNT: int = 168 # 24 * 7
+    
     
     #========================#
     #     InfraStructures    #
@@ -47,6 +61,12 @@ class Settings(BaseSettings):
     DB_HOST: str
     DB_PORT: int
     DB_DATABASE: str
+    
+    # AWS S3
+    AWS_S3_AUDIT_ENABLED: bool = False
+    AWS_S3_AUDIT_BUCKET_NAME: str | None = None
+    AWS_S3_AUDIT_PREFIX: str | None = None
+    AWS_S3_AUDIT_UPLOAD_INTERVAL_SECONDS: int | None = None
     
     # Neo4j (Deprecated)
     NEO4J_USER: str | None = None
@@ -129,7 +149,7 @@ class Settings(BaseSettings):
     SLACK_CLIENT_ID: str
     SLACK_CLIENT_SECRET: str
     SLACK_REDIRECT_URI: str
-    SLACK_BOT_SCOPES: str = "channels:read channels:history groups:read groups:history mpim:history mpim:read users:read users:read.email users.profile:read usergroups:read team:read app_mentions:read assistant:write chat:write chat:write.customize commands reactions:read reactions:write emoji:read files:read links:read im:read im:history"
+    SLACK_BOT_SCOPES: str = "channels:read channels:history groups:read groups:history users:read users:read.email users.profile:read usergroups:read team:read app_mentions:read assistant:write chat:write chat:write.customize commands reactions:read reactions:write emoji:read files:read links:read"
     SLACK_SIGNING_SECRET: str
 
     # Slack API URLs
@@ -170,11 +190,6 @@ class Settings(BaseSettings):
     GITHUB_SYNC_BATCH_SIZE: int = 100  # 한 번에 가져올 엔티티 수 (per_page)
     GITHUB_API_RATE_LIMIT_DELAY: float = 0.1  # 요청 간 딜레이 (초)
     GITHUB_SYNC_COMMENTS_LIMIT: int = 10  # Issue/PR에 포함할 최근 코멘트 수
-    # Wehbhook Event Buffering & Scheduler Settings
-    WEBHOOK_BUFFER_TTL: int = 3900 # 65분 : Buffer 60분
-    WEBHOOK_FLUSH_INTERVAL_HOURS: int = 1  
-    WEBHOOK_ENABLE_AUTO_SYNC: bool = True
-
     # api_server 시작 시 Sync Worker 자동 기동 여부
     SYNC_WORKER_AUTOSTART: bool = True
     # 큐가 비었을 때 worker 루프 대기 시간(초)
@@ -203,6 +218,16 @@ class Settings(BaseSettings):
     SYNC_SSE_HEARTBEAT_SECONDS: int = 15
     # Incremental sync_from fallback (team/channel cursor 없을 때)
     SYNC_INCREMENTAL_FALLBACK_HOURS: int = 2
+    INCREMENTAL_DEBOUNCE_SECONDS: int = 300
+    INCREMENTAL_MAX_ATTEMPTS: int = 5
+    INCREMENTAL_RETRY_BASE_DELAY_SECONDS: float = 30.0
+    INCREMENTAL_RETRY_MAX_DELAY_SECONDS: float = 900.0
+    INCREMENTAL_PROMOTER_BATCH_SIZE: int = 100
+    INCREMENTAL_OUTBOX_BATCH_SIZE: int = 100
+    INCREMENTAL_OUTBOX_PUBLISHING_STALE_SECONDS: int = 300
+    INCREMENTAL_RUNTIME_INTERVAL_MINUTES: int = 1
+    CONFLUENCE_INCREMENTAL_POLL_INTERVAL_MINUTES: int = 15
+    CONFLUENCE_INCREMENTAL_POLL_LOOKBACK_MINUTES: int = 20
 
     model_config = SettingsConfigDict(
         env_file=".env",

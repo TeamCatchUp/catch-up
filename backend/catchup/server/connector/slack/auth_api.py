@@ -21,7 +21,7 @@ from catchup.db.models import KnowledgeSource, SourceType
 from catchup.db.slack import oauth_repository as slack_crud
 from catchup.db.workspaces import get_workspace_limit_one
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
-from catchup.connectors.slack.factory import create_slack_ingestion_service
+from catchup.connectors.slack.factory import create_slack_metadata_service
 from catchup.db.engine import SessionLocal
 
 
@@ -241,7 +241,7 @@ async def _sync_workspace_metadata(team_id: str) -> None:
 
     db = SessionLocal()
     try:
-        service = await create_slack_ingestion_service(db, team_id)
+        service = await create_slack_metadata_service(db, team_id)
         results = await service.sync_metadata(db)
         logger.info(f"[SLACK][AUTH] Background metadata sync completed: team_id={team_id}, results={results}")
     except Exception as e:

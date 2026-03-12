@@ -87,8 +87,12 @@ export const loadSessionChatData = async ({
   const allItems: ChatHistoryMessageResponse[] = [];
 
   while (true) {
-    // React Query 캐시를 활용하면서 강제 fetch 동기화를 수행
-    const response = await queryClient.fetchQuery(chatQueries.sessionMessages(sessionId, page, MESSAGE_PAGE_SIZE));
+    // staleTime: 0으로 글로벌 staleTime(60s)을 무시하고 항상 최신 데이터를 유지
+    // 스트림 종료 직후 서버 동기화에서 캐시된 이전 데이터를 반환하는 문제를 방지
+    const response = await queryClient.fetchQuery({
+      ...chatQueries.sessionMessages(sessionId, page, MESSAGE_PAGE_SIZE),
+      staleTime: 0,
+    });
 
     title = response.title || title;
     total = response.total;
@@ -148,7 +152,10 @@ export const loadLatestSessionPage = async ({
   initialQuery,
 }: LoadSessionChatDataOptions): Promise<LatestPageResult> => {
   // page 1을 먼저 가져와서 total 확인
-  const firstResponse = await queryClient.fetchQuery(chatQueries.sessionMessages(sessionId, 1, MESSAGE_PAGE_SIZE));
+  const firstResponse = await queryClient.fetchQuery({
+    ...chatQueries.sessionMessages(sessionId, 1, MESSAGE_PAGE_SIZE),
+    staleTime: 0,
+  });
 
   const total = firstResponse.total;
   const totalPages = Math.max(1, Math.ceil(total / MESSAGE_PAGE_SIZE));
@@ -167,9 +174,10 @@ export const loadLatestSessionPage = async ({
   }
 
   // 마지막 페이지 로드
-  const lastResponse = await queryClient.fetchQuery(
-    chatQueries.sessionMessages(sessionId, totalPages, MESSAGE_PAGE_SIZE),
-  );
+  const lastResponse = await queryClient.fetchQuery({
+    ...chatQueries.sessionMessages(sessionId, totalPages, MESSAGE_PAGE_SIZE),
+    staleTime: 0,
+  });
 
   return {
     chatData: {
@@ -196,7 +204,10 @@ export const loadPreviousSessionPage = async ({
   sessionId: string;
   page: number;
 }): Promise<Message[]> => {
-  const response = await queryClient.fetchQuery(chatQueries.sessionMessages(sessionId, page, MESSAGE_PAGE_SIZE));
+  const response = await queryClient.fetchQuery({
+    ...chatQueries.sessionMessages(sessionId, page, MESSAGE_PAGE_SIZE),
+    staleTime: 0,
+  });
 
   return sortItems(response.items).map(toUiMessage);
 };

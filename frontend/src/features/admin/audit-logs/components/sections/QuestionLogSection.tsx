@@ -77,19 +77,19 @@ const QuestionLogSection = () => {
 
       {/* 테이블 + 페이지네이션 */}
       <div className="flex flex-col gap-14">
-        <div className="border-neutral-3 flex flex-col overflow-clip border-r">
+        <div className="flex flex-col overflow-clip">
           {/* 헤더 */}
-          <div className="border-neutral-3 bg-neutral-1 flex h-9 shrink-0 items-center border-b px-5">
+          <div className="border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-y px-5">
             <div className="grid flex-1 grid-cols-3 items-center gap-1">
-              <span className="text-body-xsmall pl-7.5 text-left text-gray-50">이름</span>
-              <span className="text-body-xsmall text-center text-gray-50">실행 일자</span>
-              <span className="text-body-xsmall text-center text-gray-50">질문</span>
+              <span className="text-body-xsmall pl-7.5 text-left text-content-alternative">이름</span>
+              <span className="text-body-xsmall text-center text-content-alternative">실행 일자</span>
+              <span className="text-body-xsmall text-center text-content-alternative">질문</span>
             </div>
           </div>
 
           {/* 행 */}
           {pageItems.length === 0 ? (
-            <div className="text-body-small flex h-80 items-center justify-center text-gray-50">
+            <div className="text-body-small flex h-80 items-center justify-center text-content-alternative">
               질문 로그가 없습니다.
             </div>
           ) : (
@@ -98,23 +98,23 @@ const QuestionLogSection = () => {
                 <Link
                   key={log.logId}
                   href={`/admin/question-logs/${log.messageId}?userId=${log.userId}&from=audit-logs`}
-                  className="border-neutral-3 hover:bg-neutral-1 flex h-12.5 shrink-0 items-center border-b px-5 transition-colors"
+                  className="border-edge-neutral hover:bg-fill-strong flex h-12.5 shrink-0 items-center border-b px-5 transition-colors"
                 >
                   <div className="grid flex-1 grid-cols-3 items-center gap-1">
                     {/* 이름 */}
                     <div className="flex items-center gap-4">
-                      <DefaultProfile className="border-neutral-2 text-gray-30 size-7 shrink-0 rounded-full border" />
-                      <span className="text-body-small text-gray-80 truncate">{log.name}</span>
+                      <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
+                      <span className="text-body-small text-content-normal truncate">{log.name}</span>
                     </div>
 
                     {/* 실행 일자 */}
                     <div className="flex items-center justify-center">
-                      <span className="text-body-xsmall text-gray-80 truncate">{formatDate(log.executedAt)}</span>
+                      <span className="text-body-xsmall text-content-normal truncate">{formatDate(log.executedAt)}</span>
                     </div>
 
                     {/* 질문 */}
                     <div className="flex items-center justify-center">
-                      <span className="text-body-xsmall text-gray-80 truncate">{log.query}</span>
+                      <span className="text-body-xsmall text-content-normal truncate">{log.query}</span>
                     </div>
                   </div>
                 </Link>

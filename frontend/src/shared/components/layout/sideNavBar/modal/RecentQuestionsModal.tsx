@@ -48,21 +48,21 @@ const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
   return (
     <div
       ref={modalRef}
-      className="shadow-modal border-neutral-4 flex max-h-135 w-190 flex-col gap-4 rounded-3xl border bg-white px-3 py-4"
+      className="shadow-modal border-edge-normal flex max-h-135 w-190 flex-col gap-4 rounded-3xl border bg-fill-normal px-3 py-4"
     >
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div className="flex gap-2 px-1.5">
-          <AI className="text-gray-70 h-7 w-7" />
-          <span className="text-heading-large text-gray-70">캐치스턴트 히스토리</span>
+          <AI className="text-icon-normal h-7 w-7" />
+          <span className="text-heading-large text-content-neutral">캐치스턴트 히스토리</span>
         </div>
         <div className="flex gap-1.5">
           <button
             onClick={handleNewQuestion}
             className="capsule-button-outline-blue flex cursor-pointer items-center gap-1.5 px-3 py-1.5"
           >
-            <Add className="h-5 w-5 text-blue-50" />
-            <span className="text-body-small text-blue-55 relative top-px">새 업무 질문</span>
+            <Add className="h-5 w-5 text-icon-primary" />
+            <span className="text-body-small text-content-primary relative top-px">새 업무 질문</span>
           </button>
           <button className="icon-button-only-gray cursor-pointer p-1.5">
             <Search className="h-6 w-6" />
@@ -74,11 +74,11 @@ const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
       </div>
 
       {/* divider */}
-      <div className="bg-neutral-3 relative right-3 h-px w-189.25" />
+      <div className="bg-edge-neutral relative right-3 h-px w-189.25" />
 
       {/* 질문 목록 */}
       {isLoading ? (
-        <div className="text-gray-40 p-5">데이터를 불러오는 중입니다...</div>
+        <div className="text-content-assistive p-5">데이터를 불러오는 중입니다...</div>
       ) : (
         <div className="overflow-y-scroll">
           <SearchHistory querys={recentQueries} isModal={true} onItemClick={onClose} />

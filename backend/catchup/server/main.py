@@ -3,7 +3,7 @@ import asyncio
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 
@@ -14,7 +14,9 @@ from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal, engine
 from catchup.db.global_state import has_admin_ever_onboarded, has_csv_file_ever_been_uploaded
 from catchup.db.models import Base
+from catchup.events.enums import EventTopic
 from catchup.observability.logging import configure_logging
+from catchup.observability.logging.s3_uploader import audit_log_uploader_task
 from catchup.server.admin.api import router as admin_router
 from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
@@ -22,25 +24,24 @@ from catchup.server.chat_room.api import router as chatroom_router
 from catchup.server.connector.atlassian.auth_api import (
     router as atlassian_auth_router,
 )
-from catchup.server.connector.confluence.sync_api import (
-    router as confluence_sync_router,
-)
 from catchup.server.connector.github.auth_api import router as github_auth_router
-from catchup.server.connector.github.sync_api import router as github_sync_router
-from catchup.server.connector.jira.sync_api import router as jira_sync_router
+from catchup.server.connector.github.webhook_api import router as github_webhook_router
 from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
-from catchup.server.connector.slack.sync_api import router as slack_sync_router
+from catchup.server.connector.slack.webhook_api import router as slack_webhook_router
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.settings.api import router as settings_router
 from catchup.server.sync.api import router as sync_runtime_router
 from catchup.server.state import state
-from catchup.workers.slack_full_sync_worker import run_forever as run_slack_full_sync_worker
+from catchup.worker.worker_event_processor import run_forever as run_sync_worker
 from catchup.utils.redis import get_redis_client
 from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
+from catchup.utils.client import _shared_client
 from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_checkpointer
+from catchup.events.bus import bus
+from catchup.audit.handlers import audit_event_handler
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -51,6 +52,20 @@ async def lifespan(app: FastAPI):
     logger.info("Log level: %s", settings.LOG_LEVEL)
     sync_worker_stop_event: asyncio.Event | None = None
     sync_worker_task: asyncio.Task | None = None
+    uploader_task: asyncio.Task | None = None
+    
+
+    if settings.LOG_AUDIT_FILE_ENABLED:
+        logger.info(
+            "audit_file_rotation_config | when=%s interval=%s backupCount=%s",
+            settings.LOG_AUDIT_ROTATION_WHEN,
+            settings.LOG_AUDIT_ROTATION_INTERVAL,
+            settings.LOG_AUDIT_BACKUP_COUNT,
+        )
+
+    if settings.AWS_S3_AUDIT_ENABLED:
+        logger.info("[AUDIT][AWS_S3] Starting audit log uploader task to S3")
+        uploader_task = asyncio.create_task(audit_log_uploader_task())
 
     try:
         db_init_started_at = time.perf_counter()
@@ -226,11 +241,34 @@ async def lifespan(app: FastAPI):
     if settings.SYNC_WORKER_AUTOSTART:
         sync_worker_stop_event = asyncio.Event()
         sync_worker_task = asyncio.create_task(
-            run_slack_full_sync_worker(sync_worker_stop_event)
+            run_sync_worker(sync_worker_stop_event)
         )
-        logger.info("[SLACK][FULL SYNC][WORKER] In-process worker started")
-
+        logger.info("[SYNC][WORKER] In-process worker started")
+        
+    try:
+        with SessionLocal() as db:
+            # 어드민 온보딩 여부 테스트
+            state.is_admin_initiated = has_admin_ever_onboarded(db)
+            logger.info(f"Admin onboarding completed: {state.is_admin_initiated}")       
+            # 어드민 CSV 파일 최초 업로드 여부
+            state.has_ever_uploaded_user_list_export = has_csv_file_ever_been_uploaded(db)
+            logger.info(f"User list CSV uploaded before: {state.has_ever_uploaded_user_list_export}")
+            
+            
+    except Exception as e:
+        logger.critical(
+            "Failed to check whether admin is initiated: %s",
+            e,
+        )
+        
     yield
+    
+    if uploader_task:
+        uploader_task.cancel()
+        try:
+            await uploader_task
+        except asyncio.CancelledError:
+            pass
 
     if sync_worker_stop_event is not None:
         sync_worker_stop_event.set()
@@ -242,7 +280,7 @@ async def lifespan(app: FastAPI):
             pass
         except Exception as e:
             logger.error(
-                "[SLACK][FULL SYNC][WORKER] Worker shutdown failed: %s", e, exc_info=True
+                "[SYNC][WORKER] Worker shutdown failed: %s", e, exc_info=True
             )
 
     # Scheduler Shutdown
@@ -273,21 +311,15 @@ async def lifespan(app: FastAPI):
             level="error",
             metadata={"error": str(e)},
         )
-    
+        
     try:
-        with SessionLocal() as db:
-            # 어드민 온보딩 여부 테스트
-            state.is_admin_initiated = has_admin_ever_onboarded(db)
-            
-            # 어드민 CSV 파일 최초 업로드 여부
-            state.has_ever_uploaded_user_list_export = has_csv_file_ever_been_uploaded(db)
-            
+        await _shared_client.aclose()
     except Exception as e:
-        logger.critical(
-            "Failed to check whether admin is initiated: %s",
+        logger.error(
+            "Global shared async client shutdown failed: %s", 
             e,
+            exc_info=True
         )
-
 
 # MAIN
 app = FastAPI(
@@ -305,13 +337,11 @@ app.include_router(chatroom_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(github_auth_router)
-app.include_router(github_sync_router)
+app.include_router(github_webhook_router)
 app.include_router(atlassian_auth_router)
-app.include_router(jira_sync_router)
 app.include_router(jira_webhook_router)
-app.include_router(confluence_sync_router)
 app.include_router(slack_auth_router)
-app.include_router(slack_sync_router)
+app.include_router(slack_webhook_router)
 app.include_router(github_mapping_csv_router)
 app.include_router(onboarding_router)
 app.include_router(settings_router)
@@ -329,22 +359,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# 감사 로그 이벤트 리스너 등록
+bus.subscribe(EventTopic.AUDIT, audit_event_handler)
+
+
+# 미들웨어 등록
+app.middleware("http")(request_context_middleware)
+
+
 # 헬스 체크
 @app.get("/api/v1/health")
 async def health_check():
     return {"status": "ok", "message": "Catch Up backend is running."}
-
-
-# 응답 시간 추출
-@app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
-    start_time = time.perf_counter()
-
-    response = await call_next(request)
-
-    process_time = time.perf_counter() - start_time
-    logger.info("%s %s ===> %.4fs", request.method, request.url.path, process_time)
-
-    return response
-
-app.middleware("http")(request_context_middleware)

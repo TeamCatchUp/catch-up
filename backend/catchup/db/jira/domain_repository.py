@@ -107,13 +107,18 @@ def sync_projects_snapshot(
     db: Session,
     cloud_id: str,
     projects: list[dict],
+    *,
+    auto_commit: bool = True,
 ) -> dict[str, int]:
     now = datetime.now(timezone.utc)
 
     if not projects:
         delete_stmt = delete(JiraProject).where(JiraProject.cloud_id == cloud_id)
         delete_result = db.execute(delete_stmt)
-        db.commit()
+        if auto_commit:
+            db.commit()
+        else:
+            db.flush()
         return {
             "upserted": 0,
             "deleted": delete_result.rowcount or 0,
@@ -146,7 +151,10 @@ def sync_projects_snapshot(
     if not normalized_projects:
         delete_stmt = delete(JiraProject).where(JiraProject.cloud_id==cloud_id)
         delete_result = db.execute(delete_stmt)
-        db.commit()
+        if auto_commit:
+            db.commit()
+        else:
+            db.flush()
         return {
             "upserted": 0,
             "deleted": delete_result.rowcount or 0,
@@ -174,7 +182,10 @@ def sync_projects_snapshot(
     )
     stale_delete_result = db.execute(stale_delete_stmt)
 
-    db.commit()
+    if auto_commit:
+        db.commit()
+    else:
+        db.flush()
 
     return {
         "upserted": len(normalized_projects),
@@ -297,7 +308,12 @@ def upsert_sprint(
     return get_sprint(db, cloud_id, sprint_id)
 
 
-def upsert_sprints_bulk(db: Session, sprints: list[dict]) -> int:
+def upsert_sprints_bulk(
+    db: Session,
+    sprints: list[dict],
+    *,
+    auto_commit: bool = True,
+) -> int:
     """
     스프린트 벌크 Upsert
 
@@ -331,7 +347,10 @@ def upsert_sprints_bulk(db: Session, sprints: list[dict]) -> int:
         }
     )
     db.execute(stmt)
-    db.commit()
+    if auto_commit:
+        db.commit()
+    else:
+        db.flush()
 
     return len(sprints)
 
@@ -477,7 +496,12 @@ def upsert_user(
     return get_user(db, cloud_id, account_id)
 
 
-def upsert_users_bulk(db: Session, users: list[dict]) -> int:
+def upsert_users_bulk(
+    db: Session,
+    users: list[dict],
+    *,
+    auto_commit: bool = True,
+) -> int:
     """
     사용자 벌크 Upsert
 
@@ -513,7 +537,10 @@ def upsert_users_bulk(db: Session, users: list[dict]) -> int:
         }
     )
     db.execute(stmt)
-    db.commit()
+    if auto_commit:
+        db.commit()
+    else:
+        db.flush()
 
     return len(users)
 

@@ -25,10 +25,10 @@ const SettingDropdownRow = ({ label, description, options, value, onChange }: Se
   const selectedLabel = options.find((o) => o.value === value)?.label ?? '';
 
   return (
-    <div className="border-neutral-3 flex w-full items-center gap-5 border-b py-3">
+    <div className="border-edge-neutral flex w-full items-center gap-5 border-b py-3">
       <div className="flex w-full flex-col gap-1.5">
-        <span className="text-heading-small text-gray-80">{label}</span>
-        <span className="text-label-small text-gray-50">{description}</span>
+        <span className="text-heading-small text-content-normal">{label}</span>
+        <span className="text-label-small text-content-alternative">{description}</span>
       </div>
 
       <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -37,11 +37,11 @@ const SettingDropdownRow = ({ label, description, options, value, onChange }: Se
             type="button"
             className="flex max-w-[150px] min-w-9 shrink-0 cursor-pointer items-center gap-1 rounded-lg px-2 py-1"
           >
-            <span className="text-body-small text-gray-70 whitespace-nowrap">{selectedLabel}</span>
+            <span className="text-body-small text-content-neutral whitespace-nowrap">{selectedLabel}</span>
             {open ? (
-              <DropdownUp className="text-gray-70 size-[18px] shrink-0" />
+              <DropdownUp className="text-icon-normal size-[18px] shrink-0" />
             ) : (
-              <DropdownDown className="text-gray-70 size-[18px] shrink-0" />
+              <DropdownDown className="text-icon-normal size-[18px] shrink-0" />
             )}
           </button>
         </DropdownMenuTrigger>
@@ -50,7 +50,7 @@ const SettingDropdownRow = ({ label, description, options, value, onChange }: Se
             <DropdownMenuItem
               key={option.value}
               onClick={() => onChange(option.value)}
-              className={cn(value === option.value && 'bg-neutral-1')}
+              className={cn(value === option.value && 'bg-fill-strong')}
             >
               {option.label}
             </DropdownMenuItem>

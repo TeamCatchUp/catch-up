@@ -39,10 +39,10 @@ const AuditLogFilterBar = ({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="border-neutral-3 flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border bg-white px-2.5 py-2"
+            className="border-edge-neutral flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border bg-fill-normal px-2.5 py-2"
           >
-            <span className="text-body-small text-gray-70">{SORT_OPTIONS.find((o) => o.key === sortKey)?.label}</span>
-            <IconDropdownDown className="size-4.5 text-gray-50" />
+            <span className="text-body-small text-content-neutral">{SORT_OPTIONS.find((o) => o.key === sortKey)?.label}</span>
+            <IconDropdownDown className="size-4.5 text-content-alternative" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" sideOffset={2} className="w-30 min-w-0">
@@ -50,7 +50,7 @@ const AuditLogFilterBar = ({
             <DropdownMenuItem
               key={option.key}
               onClick={() => onSortChange(option.key)}
-              className={cn(sortKey === option.key && 'bg-neutral-1')}
+              className={cn(sortKey === option.key && 'bg-fill-strong')}
             >
               {option.label}
             </DropdownMenuItem>
@@ -63,14 +63,14 @@ const AuditLogFilterBar = ({
     </div>
 
     {/* 검색 */}
-    <label className="bg-neutral-1 border-neutral-2 flex h-10 w-70 items-center gap-1.5 rounded-lg border px-3 py-2">
-      <IconSearch className="text-gray-30 size-5 shrink-0" />
+    <label className="bg-fill-strong border-edge-assistive flex h-10 w-70 items-center gap-1.5 rounded-lg border px-3 py-2">
+      <IconSearch className="text-content-assistive size-5 shrink-0" />
       <input
         type="text"
         value={searchTerm}
         onChange={(e) => onSearchTermChange(e.target.value)}
         placeholder="질문, 키워드로 검색하세요."
-        className="text-body-small text-gray-70 placeholder:text-gray-30 w-full bg-transparent outline-none"
+        className="text-body-small text-content-neutral placeholder:text-content-assistive w-full bg-transparent outline-none"
       />
     </label>
   </div>

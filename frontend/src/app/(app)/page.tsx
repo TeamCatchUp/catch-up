@@ -35,7 +35,7 @@ export default function Home() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const filters = useSearchFilters();
-  const input = useSearchInput({ inputRef });
+  const input = useSearchInput({ inputRef, selectedSources: filters.selectedSources });
   const { shouldShowNoHistoryBox } = useQuestionHistoryGate();
   const [isNoHistoryExpanded, setIsNoHistoryExpanded] = useState(true);
 
@@ -56,7 +56,7 @@ export default function Home() {
   });
 
   return (
-    <div className={`bg-home-gradient flex flex-col ${input.isFocused ? 'h-full overflow-hidden' : ''}`}>
+    <div className={`bg-home-gradient flex min-h-full flex-col ${input.isFocused ? 'h-full overflow-hidden' : ''}`}>
       <TopNavbar pageType="home" />
 
       {/* Query Section */}
@@ -68,8 +68,8 @@ export default function Home() {
               input.isFocused ? 'pointer-events-none opacity-0' : 'opacity-100'
             }`}
           >
-            <h1 className="text-display-xlarge text-normal-normal">반갑습니다, {user?.name ?? ''}님!</h1>
-            <p className="text-heading-large text-normal-alternative">
+            <h1 className="text-display-xlarge text-content-normal">반갑습니다, {user?.name ?? ''}님!</h1>
+            <p className="text-heading-large text-content-alternative">
               무엇을 도와드릴까요? 필요한 업무정보를 찾아보세요.
             </p>
           </div>
@@ -78,10 +78,10 @@ export default function Home() {
               input.isFocused ? 'opacity-100' : 'pointer-events-none opacity-0'
             }`}
           >
-            <h1 className="text-display-xlarge text-normal-normal">
+            <h1 className="text-display-xlarge text-content-normal">
               사내 AI 탐색으로
               <br />
-              <span className="text-blue-50">필요한 업무 자료를 </span>
+              <span className="text-content-primary">필요한 업무 자료를 </span>
               바로 찾아보세요
             </h1>
           </div>

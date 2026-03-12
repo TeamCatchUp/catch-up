@@ -16,8 +16,6 @@ from catchup.connectors.confluence.schemas import (
 )
 from catchup.connectors.confluence.transformers import ConfluenceTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
-from catchup.db.models import ConfluenceEntityType
-from catchup.db.confluence import sync_repository as confluence_sync
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.db.confluence import domain_repository
 from catchup.configs.config import settings
@@ -58,9 +56,23 @@ class ConfluenceIngestionService:
         days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
         sync_from = datetime.now(timezone.utc) - timedelta(days=days)
 
+        if space_keys is None:
+            normalized_space_keys = [
+                (space.space_key or "").strip()
+                for space in domain_repository.get_spaces_by_cloud_id(db, self.cloud_id)
+                if (space.space_key or "").strip()
+            ]
+        else:
+            normalized_space_keys = [
+                key.strip()
+                for key in space_keys
+                if key and key.strip()
+            ]
+            normalized_space_keys = list(dict.fromkeys(normalized_space_keys))
+
         logger.info(
             f"[CONFLUENCE][FULL SYNC] Started: "
-            f"cloud_id={self.cloud_id}, spaces={space_keys or 'all'} since={sync_from.isoformat()}"
+            f"cloud_id={self.cloud_id}, spaces={normalized_space_keys or 'all'} since={sync_from.isoformat()}"
         )
 
         results: dict[str, Any] = {
@@ -69,15 +81,39 @@ class ConfluenceIngestionService:
         }
 
         try:
+            if not normalized_space_keys:
+                logger.warning(f"[CONFLUENCE][FULL SYNC] No spaces to sync: cloud_id={self.cloud_id}")
+                return results
+
             space_id_map = domain_repository.get_space_id_map(
-                db, self.cloud_id, space_keys,
+                db, self.cloud_id, normalized_space_keys,
             )
             space_name_map = domain_repository.get_space_name_map(
-                db, self.cloud_id, space_keys,
+                db, self.cloud_id, normalized_space_keys,
             )
             if not space_id_map:
-                logger.warning(f"[CONFLUENCE][FULL SYNC] No spaces found: cloud_id={self.cloud_id}")
+                logger.error(
+                    "[CONFLUENCE][FULL SYNC] No spaces found from requested keys: cloud_id=%s, requested_space_keys=%s",
+                    self.cloud_id,
+                    normalized_space_keys,
+                )
+                results["pages"]["errors"] += max(1, len(normalized_space_keys))
+                results["blogposts"]["errors"] += max(1, len(normalized_space_keys))
                 return results
+
+            missing_space_keys = [
+                space_key
+                for space_key in normalized_space_keys
+                if space_key not in space_id_map
+            ]
+            if missing_space_keys:
+                logger.error(
+                    "[CONFLUENCE][FULL SYNC] Some spaces are missing from metadata snapshot: cloud_id=%s, missing_space_keys=%s",
+                    self.cloud_id,
+                    missing_space_keys,
+                )
+                results["pages"]["errors"] += len(missing_space_keys)
+                results["blogposts"]["errors"] += len(missing_space_keys)
 
             user_name_map = self._load_user_name_map(db)
             
@@ -108,264 +144,6 @@ class ConfluenceIngestionService:
             logger.error(f"[CONFLUENCE][FULL SYNC] Failed: cloud_id={self.cloud_id}, error={e}")
             raise
         
-    # ================================================================
-    # Incremental Sync
-    # ================================================================
-    async def incremental_sync(
-            self,
-            db: Session,
-    ) -> dict[str, Any]:
-        logger.info(
-            f"[CONFLUENCE][INCREMENTAL SYNC] Started : cloud_id = {self.cloud_id}"
-        )
-
-        results: dict[str, Any] = {
-            "pages": {"synced": 0, "skipped": 0, "errors": 0},
-            "blogposts": {"synced": 0, "skipped": 0, "errors": 0},
-        }
-
-        try:
-            synced_keys = confluence_sync.get_synced_space_keys(db, self.cloud_id)
-            if not synced_keys:
-                logger.info(
-                    f"[CONFLUENCE][INCREMENTAL SYNC] No Synced Spaces Found : cloud_id = {self.cloud_id}"
-                )
-                return results
-            
-            space_id_map = domain_repository.get_space_id_map(
-                db, self.cloud_id, synced_keys,
-            )
-
-            for space_key, space_id in space_id_map.items():
-                page_result = await self._incremental_sync_pages(
-                    db, space_id=space_id, space_key=space_key,
-                )
-                results["pages"]["synced"] += page_result["synced"]
-                results["pages"]["skipped"] += page_result["skipped"]
-                results["pages"]["errors"] += page_result["errors"]
-
-                blog_result = await self._incremental_sync_blogposts(
-                    db, space_id=space_id, space_key=space_key,
-                )
-                results["blogposts"]["synced"] += blog_result["synced"]
-                results["blogposts"]["skipped"] += blog_result["skipped"]
-                results["blogposts"]["errors"] += blog_result["errors"]
-
-            db.commit()
-            
-            logger.info(
-                f"[CONFLUENCE][INCREMENTAL SYNC] Completed "
-                f"cloud_id = {self.cloud_id}, results = {results}"
-            )
-            return results
-
-        except Exception as e:
-            db.rollback()
-            logger.error(
-                f"[CONFLUENCE][INCREMENTAL SYNC] Failed: "
-                f"cloud_id = {self.cloud_id}, error = {e}"
-            )
-            raise
-        
-    async def _incremental_sync_pages(
-            self,
-            db: Session,
-            space_id: str,
-            space_key: str,
-    ) -> dict[str, int]:
-        
-        results = {"synced": 0, "skipped": 0, "errors": 0}
-
-        sync_state = confluence_sync.get_sync_state(
-            db, self.cloud_id, space_key, ConfluenceEntityType.PAGE,
-        )
-        if not sync_state or not sync_state.last_successful_sync_at:
-            logger.info(
-                f"[CONFLUENCE][INCREMENTAL SYNC] No Page Sync baseline, skipping : "
-                f"space_key = {space_key}"
-            )
-            return results
-        
-        since = sync_state.last_successful_sync_at
-
-        confluence_sync.mark_sync_started(
-            db, self.cloud_id, space_key, ConfluenceEntityType.PAGE
-        )
-        db.commit()
-
-        try:
-            should_stop = False
-
-            async for batch in self.client.iter_pages(
-                space_id=space_id, body_format="storage",
-            ):
-                for raw_page in batch:
-                    try:
-                        page = ConfluencePageResponse.model_validate(raw_page)
-
-                        modified_at = parse_atlassian_datetime(
-                            page.version.created_at if page.version else None
-                        )
-                        if modified_at and modified_at < since:
-                            should_stop = True
-                            results["skipped"] += 1
-                            continue
-                        
-                        documents = await self._process_page(page, space_key=space_key)
-
-                        if documents:
-                            doc_ids = [doc.id for doc in documents]
-                            await self.repository.delete_by_id_prefix(
-                                f"confluence:page:{page.id}:chunk"
-                            )
-                            await self.repository.add_documents(documents, doc_ids)
-                        
-                        results["synced"] += 1
-
-                    except Exception as e:
-                        logger.error(
-                            f"[CONFLUENCE][INCREMENTAL SYNC] Failed to process page: "
-                            f"space_key={space_key}, page_id={raw_page.get('id')}, error={e}"
-                        )
-                        results["errors"] += 1
-
-                if should_stop:
-                    break
-                
-            logger.info(
-                f"[CONFLUENCE][INCREMENTAL SYNC] Pages completed: "
-                f"space_key={space_key}, synced={results['synced']}, "
-                f"skipped={results['skipped']}, errors={results['errors']}"
-            )
-
-            if results["errors"] == 0:
-                confluence_sync.mark_sync_completed(
-                    db, self.cloud_id, space_key, ConfluenceEntityType.PAGE,
-                    synced_count=results["synced"],
-                )
-            else:
-                confluence_sync.mark_sync_failed(
-                    db, self.cloud_id, space_key, ConfluenceEntityType.PAGE,
-                    error=f"{results['errors']} pages failed to process",
-                )
-            db.commit()
-
-        except Exception as e:
-            confluence_sync.mark_sync_failed(
-                db, self.cloud_id, space_key, ConfluenceEntityType.PAGE,
-                error=str(e),
-            )
-            db.commit()
-            logger.error(
-                f"[CONFLUENCE][INCREMENTAL SYNC] Page sync failed: "
-                f"space_key={space_key}, error={e}"
-            )
-            results["errors"] += 1
-
-        return results
-    
-
-    async def _incremental_sync_blogposts(
-        self,
-        db: Session,
-        space_id: str,
-        space_key: str,
-    ) -> dict[str, int]:
-
-        results = {"synced": 0, "skipped": 0, "errors": 0}
-
-        sync_state = confluence_sync.get_sync_state(
-            db, self.cloud_id, space_key, ConfluenceEntityType.BLOGPOST,
-        )
-        if not sync_state or not sync_state.last_successful_sync_at:
-            logger.info(
-                f"[CONFLUENCE][INCREMENTAL SYNC] No blogpost sync baseline, skipping: "
-                f"space_key={space_key}"
-            )
-            return results
-
-        since = sync_state.last_successful_sync_at
-
-        confluence_sync.mark_sync_started(
-            db, self.cloud_id, space_key, ConfluenceEntityType.BLOGPOST,
-        )
-        db.commit()
-
-        try:
-            should_stop = False
-
-            async for batch in self.client.iter_blogposts(
-                space_id=space_id, body_format="storage",
-            ):
-                for raw_blogpost in batch:
-                    try:
-                        blogpost = ConfluenceBlogPostResponse.model_validate(raw_blogpost)
-
-                        modified_at = parse_atlassian_datetime(
-                            blogpost.version.created_at if blogpost.version else None
-                        )
-                        if modified_at and modified_at < since:
-                            should_stop = True
-                            results["skipped"] += 1
-                            continue
-
-                        documents = await self._process_blogpost(
-                            blogpost, space_key=space_key,
-                        )
-
-                        if documents:
-                            doc_ids = [doc.id for doc in documents]
-                            await self.repository.delete_by_id_prefix(
-                                f"confluence:blogpost:{blogpost.id}:chunk:"
-                            )
-                            await self.repository.add_documents(documents, doc_ids)
-
-                        results["synced"] += 1
-
-                    except Exception as e:
-                        logger.error(
-                            f"[CONFLUENCE][INCREMENTAL SYNC] Failed to process blogpost: "
-                            f"space_key={space_key}, blogpost_id={raw_blogpost.get('id')}, "
-                            f"error={e}"
-                        )
-                        results["errors"] += 1
-
-                if should_stop:
-                    break
-
-            logger.info(
-                f"[CONFLUENCE][INCREMENTAL SYNC] Blogposts completed: "
-                f"space_key={space_key}, synced={results['synced']}, "
-                f"skipped={results['skipped']}, errors={results['errors']}"
-            )
-
-            if results["errors"] == 0:
-                confluence_sync.mark_sync_completed(
-                    db, self.cloud_id, space_key, ConfluenceEntityType.BLOGPOST,
-                    synced_count=results["synced"],
-                )
-            else:
-                confluence_sync.mark_sync_failed(
-                    db, self.cloud_id, space_key, ConfluenceEntityType.BLOGPOST,
-                    error=f"{results['errors']} blogposts failed to process",
-                )
-            db.commit()
-
-        except Exception as e:
-            confluence_sync.mark_sync_failed(
-                db, self.cloud_id, space_key, ConfluenceEntityType.BLOGPOST,
-                error=str(e),
-            )
-            db.commit()
-            logger.error(
-                f"[CONFLUENCE][INCREMENTAL SYNC] Blogpost sync failed: "
-                f"space_key={space_key}, error={e}"
-            )
-            results["errors"] += 1
-
-        return results
-
-
     async def _sync_space_pages(
             self,
             db: Session,
@@ -377,11 +155,7 @@ class ConfluenceIngestionService:
     ) -> dict[str, int]:
 
         results = {"synced": 0, "errors": 0}
-
-        confluence_sync.mark_sync_started(
-            db, self.cloud_id, space_key, ConfluenceEntityType.PAGE,
-        )
-        db.commit()
+        _ = db
 
         try:
             should_stop = False
@@ -424,18 +198,7 @@ class ConfluenceIngestionService:
                 f"space_key={space_key}, synced={results['synced']}, errors={results['errors']}"
             )
 
-            confluence_sync.mark_sync_completed(
-                db, self.cloud_id, space_key, ConfluenceEntityType.PAGE,
-                synced_count=results["synced"],
-            )
-            db.commit()
-
         except Exception as e:
-            confluence_sync.mark_sync_failed(
-                db, self.cloud_id, space_key, ConfluenceEntityType.PAGE,
-                error=str(e),
-            )
-            db.commit()
             logger.error(
                 f"[CONFLUENCE][SYNC] Page sync failed: space_key={space_key}, error={e}"
             )
@@ -454,11 +217,7 @@ class ConfluenceIngestionService:
     ) -> dict[str, int]:
         
         results = {"synced": 0, "errors": 0}
-
-        confluence_sync.mark_sync_started(
-            db, self.cloud_id, space_key, ConfluenceEntityType.BLOGPOST,
-        )
-        db.commit()
+        _ = db
 
         try:
             should_stop = False
@@ -501,18 +260,7 @@ class ConfluenceIngestionService:
                 f"space_key={space_key}, synced={results['synced']}, errors={results['errors']}"
             )
 
-            confluence_sync.mark_sync_completed(
-                db, self.cloud_id, space_key, ConfluenceEntityType.BLOGPOST,
-                synced_count=results["synced"],
-            )
-            db.commit()
-
         except Exception as e:
-            confluence_sync.mark_sync_failed(
-                db, self.cloud_id, space_key, ConfluenceEntityType.BLOGPOST,
-                error = str(e)
-            )
-            db.commit()
             logger.error(
                 f"[CONFLUENCE][SYNC] Blogpost sync failed: space_key={space_key}, error={e}"
             )
@@ -571,6 +319,62 @@ class ConfluenceIngestionService:
             site_url=self.site_url,
             user_name_map=user_name_map,
         )
+
+    async def incremental_sync(
+        self,
+        db: Session,
+        *,
+        space_key: str,
+        record_type: str,
+        record_id: str,
+        event_kind: str,
+        since: datetime | None,
+    ) -> dict[str, int | bool]:
+        normalized_record_type = record_type.strip().lower()
+        normalized_event_kind = event_kind.strip().lower()
+
+        if normalized_event_kind == "deleted":
+            prefix = f"confluence:{normalized_record_type}:{record_id}:chunk:"
+            await self.repository.delete_by_id_prefix(prefix)
+            return {
+                "synced": 1,
+                "errors": 0,
+                "skipped": False,
+            }
+
+        space_id_map = domain_repository.get_space_id_map(db, self.cloud_id, [space_key])
+        space_name_map = domain_repository.get_space_name_map(db, self.cloud_id, [space_key])
+        space_id = space_id_map.get(space_key)
+        if not space_id:
+            raise ValueError(f"confluence space not found: space_key={space_key}")
+
+        user_name_map = self._load_user_name_map(db)
+        if normalized_record_type == "page":
+            result = await self._sync_space_pages(
+                db,
+                space_id=space_id,
+                space_key=space_key,
+                since=since,
+                user_name_map=user_name_map,
+                space_name=space_name_map.get(space_key),
+            )
+        elif normalized_record_type == "blogpost":
+            result = await self._sync_space_blogposts(
+                db,
+                space_id=space_id,
+                space_key=space_key,
+                since=since,
+                user_name_map=user_name_map,
+                space_name=space_name_map.get(space_key),
+            )
+        else:
+            raise ValueError(f"unsupported confluence record_type: {record_type}")
+
+        return {
+            "synced": int(result.get("synced", 0)),
+            "errors": int(result.get("errors", 0)),
+            "skipped": False,
+        }
     
     def _load_user_name_map(self, db: Session) -> dict[str, str | None]:
         """

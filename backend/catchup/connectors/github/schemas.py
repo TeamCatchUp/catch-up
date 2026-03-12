@@ -349,11 +349,3 @@ class FullSyncRequest(BaseModel):
         default=None,
         description="동기화할 Repository ID 목록. None이면 모든 접근 가능 레포"
     )
-
-
-class IncrementalSyncRequest(BaseModel):
-    """증분 동기화 요청"""
-    repo_ids: list[int] | None = Field(default=None)
-    entity_types: set[str] | None = Field(default=None)
-    update_repos: bool = Field(default=False)
-    

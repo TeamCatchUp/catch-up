@@ -62,40 +62,40 @@ const SourceCard = ({ source, showCount = true, count }: Props) => {
     <button
       type="button"
       onClick={handleClick}
-      className="flex w-full cursor-pointer flex-col gap-2.5 rounded-xl bg-white px-1 py-2.5 text-left"
+      className="flex w-full cursor-pointer flex-col gap-2.5 rounded-xl bg-fill-normal px-1 py-2.5 text-left"
     >
       {/* 헤더: 플랫폼 로고 + 인용 횟수 + 저장소명 */}
       <div className="flex h-6 items-center gap-1.5">
-        <div className="bg-neutral-2 flex h-6 min-w-6.5 items-center justify-center gap-1 rounded-full px-1.5 py-0.5">
+        <div className="bg-fill-interaction-hover flex h-6 min-w-6.5 items-center justify-center gap-1 rounded-full px-1.5 py-0.5">
           {renderSourceLogo()}
-          {showCount && <span className="text-body-xsmall text-gray-70 whitespace-nowrap">{count ?? 0}</span>}
+          {showCount && <span className="text-body-xsmall text-content-neutral whitespace-nowrap">{count ?? 0}</span>}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-body-xsmall truncate text-gray-50 hover:underline">{repoText}</div>
+          <div className="text-body-xsmall truncate text-content-alternative hover:underline">{repoText}</div>
         </div>
       </div>
 
       {/* 문서 제목 (최대 2줄) */}
-      <div className="text-heading-small text-gray-80 line-clamp-2 wrap-break-word hover:underline">{titleText}</div>
+      <div className="text-heading-small text-content-normal line-clamp-2 wrap-break-word hover:underline">{titleText}</div>
 
       {/* 이 출처가 사용된 이유 (content 필드, 최대 2줄 + 120자 truncate) */}
-      <div className="border-neutral-3 flex w-full flex-col gap-0.5 border-l-2 py-0.5 pl-3">
+      <div className="border-edge-neutral flex w-full flex-col gap-0.5 border-l-2 py-0.5 pl-3">
         {source.is_cited && (
           <div className="flex items-center gap-1">
-            <LightbulbFilled className="text-gray-20 h-4 w-4" />
-            <span className="text-body-xsmall whitespace-nowrap text-gray-50">이 출처가 사용된 이유</span>
+            <LightbulbFilled className="text-content-assistive h-4 w-4" />
+            <span className="text-body-xsmall whitespace-nowrap text-content-alternative">이 출처가 사용된 이유</span>
           </div>
         )}
-        <div className="text-body-small line-clamp-2 wrap-break-word text-gray-50">
+        <div className="text-body-small line-clamp-2 wrap-break-word text-content-alternative">
           {reasonPreview}
-          {isReasonTrimmed && <span className="text-gray-30"> ...더보기</span>}
+          {isReasonTrimmed && <span className="text-content-assistive"> ...더보기</span>}
         </div>
       </div>
 
       {/* 메타데이터: 날짜 | 작성자 */}
-      <div className="text-body-xsmall text-gray-30 flex items-center gap-2">
+      <div className="text-body-xsmall text-content-assistive flex items-center gap-2">
         <span className="shrink-0">{dateText}</span>
-        <div className="bg-neutral-3 h-3.75 w-px" />
+        <div className="bg-edge-neutral h-3.75 w-px" />
         <span className="shrink-0">{authorText}</span>
       </div>
     </button>

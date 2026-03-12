@@ -57,10 +57,10 @@ const TopNavbar = ({ pageType }: TopNavbarProps) => {
   const IconComponent = config.icon;
 
   return (
-    <nav aria-label="메인 네비게이션" className="border-neutral-3 sticky top-0 z-50 h-full w-full border-b bg-white">
+    <nav aria-label="메인 네비게이션" className="border-edge-neutral sticky top-0 z-50 h-full w-full border-b bg-fill-normal">
       <div className="flex justify-between px-16 py-2">
         <div className="flex items-center justify-center">
-          <Link href={config.href} className="text-gray-80 flex cursor-pointer gap-2">
+          <Link href={config.href} className="text-content-normal flex cursor-pointer gap-2">
             <IconComponent className="h-6 w-6" />
             <span className="text-heading-medium relative top-[0.5px]">{config.label}</span>
           </Link>
@@ -69,8 +69,8 @@ const TopNavbar = ({ pageType }: TopNavbarProps) => {
           <li>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="border-neutral-3 hover:border-neutral-4 hover:bg-neutral-2 active:border-neutral-5 active:bg-neutral-3 data-[state=open]:border-neutral-4 data-[state=open]:bg-neutral-2 cursor-pointer rounded-lg border bg-white px-1.5 py-1.5 transition-colors">
-                  <Kebab2 className="text-gray-70 h-6 w-6" />
+                <button className="border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed data-[state=open]:border-edge-normal data-[state=open]:bg-fill-interaction-hover cursor-pointer rounded-lg border bg-fill-normal px-1.5 py-1.5 transition-colors">
+                  <Kebab2 className="text-icon-normal h-6 w-6" />
                 </button>
               </DropdownMenuTrigger>
               <MoreButtonContent />

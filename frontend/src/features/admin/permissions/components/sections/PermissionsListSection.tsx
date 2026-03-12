@@ -45,22 +45,22 @@ const PermissionsListSection = ({
   onChangeRoleClick,
 }: PermissionsListSectionProps) => {
   return (
-    <section className="flex w-250 flex-col gap-3">
+    <section className="flex w-full flex-col gap-3">
       <div className="flex items-end justify-between">
         <div className="flex flex-col gap-0.5">
-          <h2 className="text-heading-large text-gray-80">권한 목록</h2>
-          <p className="text-body-small text-gray-50">조직 내 사용자 권한을 체계적으로 관리합니다.</p>
+          <h2 className="text-heading-large text-content-normal">권한 목록</h2>
+          <p className="text-body-small text-content-alternative">조직 내 사용자 권한을 체계적으로 관리합니다.</p>
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="bg-neutral-1 border-neutral-2 flex h-10 w-70 items-center gap-1.5 rounded-lg border px-3 py-2">
-            <IconSearch className="text-gray-30 size-5 shrink-0" />
+          <label className="bg-fill-strong border-edge-assistive flex h-10 w-70 items-center gap-1.5 rounded-lg border px-3 py-2">
+            <IconSearch className="text-content-assistive size-5 shrink-0" />
             <input
               type="text"
               value={searchTerm}
               onChange={(event) => onSearchTermChange(event.target.value)}
               placeholder="담당자 또는 스페이스를 검색하세요."
-              className="text-body-small text-gray-70 placeholder:text-gray-30 w-full bg-transparent outline-none"
+              className="text-body-small text-content-neutral placeholder:text-content-assistive w-full bg-transparent outline-none"
             />
           </label>
 
@@ -75,7 +75,7 @@ const PermissionsListSection = ({
                 <DropdownMenuItem
                   key={option.key}
                   onClick={() => onRoleFilterChange(option.key)}
-                  className={cn(roleFilter === option.key && 'bg-neutral-1')}
+                  className={cn(roleFilter === option.key && 'bg-fill-strong')}
                 >
                   {option.label}
                 </DropdownMenuItem>
@@ -85,17 +85,17 @@ const PermissionsListSection = ({
         </div>
       </div>
 
-      <div className="flex h-[872px] flex-col overflow-hidden bg-white">
+      <div className="flex h-[872px] flex-col overflow-hidden bg-fill-normal">
         {isLoading ? (
           <div className="flex h-full flex-col gap-3 p-5">
-            <div className="bg-neutral-2 h-9 animate-pulse rounded-lg" />
+            <div className="bg-fill-interaction-hover h-9 animate-pulse rounded-lg" />
             {Array.from({ length: 10 }).map((_, index) => (
-              <div key={index} className="bg-neutral-1 rounded-md2 h-12.5 animate-pulse" />
+              <div key={index} className="bg-fill-strong rounded-md2 h-12.5 animate-pulse" />
             ))}
           </div>
         ) : isError ? (
           <div className="flex h-full flex-col items-center justify-center gap-3">
-            <p className="text-body-small text-gray-50">권한 목록을 불러오지 못했습니다.</p>
+            <p className="text-body-small text-content-alternative">권한 목록을 불러오지 못했습니다.</p>
             <Button variant="box-outline-gray" size="md" onClick={onRetry}>
               재시도
             </Button>

@@ -4,13 +4,14 @@ import SourceBadge, { SourceType } from './SourceBadge';
 
 const CITATION_PATTERN = /\[(\d+)\]/g;
 
-export const getCitationDisplayOrderMap = (text: string) => {
+export const getCitationDisplayOrderMap = (text: string, validIndices?: Set<number>) => {
   const map = new Map<number, number>();
   const matches = text.matchAll(CITATION_PATTERN);
 
   for (const match of matches) {
     const sourceIndex = Number(match[1]);
     if (!Number.isFinite(sourceIndex) || map.has(sourceIndex)) continue;
+    if (validIndices && !validIndices.has(sourceIndex)) continue;
     map.set(sourceIndex, map.size + 1);
   }
 

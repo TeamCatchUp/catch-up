@@ -21,8 +21,6 @@ function makeQueryClient() {
           invalidates.forEach((key) => {
             queryClient.invalidateQueries({ queryKey: key });
           });
-        } else {
-          queryClient.invalidateQueries();
         }
       },
       onError: (error, _variables, _context, mutation) => {

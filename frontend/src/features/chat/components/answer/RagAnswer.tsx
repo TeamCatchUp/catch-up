@@ -57,7 +57,14 @@ const RagAnswer = ({
     () => formatMarkdownString(currentQA?.answer?.content ?? ''),
     [currentQA?.answer?.content],
   );
-  const citationOrderMap = useMemo(() => getCitationDisplayOrderMap(formattedAnswerContent), [formattedAnswerContent]);
+  const validIndices = useMemo(
+    () => new Set(currentQA?.answer?.sources?.map((s) => s.source_index)),
+    [currentQA?.answer?.sources],
+  );
+  const citationOrderMap = useMemo(
+    () => getCitationDisplayOrderMap(formattedAnswerContent, validIndices),
+    [formattedAnswerContent, validIndices],
+  );
 
   // 답변이 있는 경우
   if (currentQA?.answer) {
@@ -75,7 +82,7 @@ const RagAnswer = ({
               </ReactMarkdown>
             </div>
 
-            <div className="text-body-small text-gray-30">
+            <div className="text-body-small text-content-assistive">
               질문과 연관된 {currentQA.answer.sources?.length || 0}개의 핵심 자료를 선별했어요.
             </div>
 

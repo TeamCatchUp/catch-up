@@ -42,24 +42,24 @@ const UsersTable = ({
   onToggleUnused,
 }: UsersTableProps) => {
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-clip bg-white">
+    <section className="flex h-full min-h-0 flex-col overflow-clip bg-fill-normal">
       {/* 헤더: Figma gap-9(36px), px-5(20px) */}
       <div
         className={cn(
-          'border-neutral-3 grid h-9 shrink-0 grid-cols-4 items-center gap-9 border-b px-5 transition-colors',
-          isEditMode ? 'bg-blue-5' : 'bg-neutral-1',
+          'border-edge-neutral grid h-9 shrink-0 grid-cols-4 items-center gap-9 border-b px-5 transition-colors',
+          isEditMode ? 'bg-fill-primary-normal-neutral' : 'bg-fill-strong',
         )}
       >
-        <span className="text-body-xsmall pl-8 text-gray-50">Keycloack 사용자</span>
+        <span className="text-body-xsmall pl-8 text-content-alternative">Keycloack 사용자</span>
         {MEMBER_TABLE_SERVICES.map((service) => (
-          <span key={service} className="text-body-xsmall text-center text-gray-50">
+          <span key={service} className="text-body-xsmall text-center text-content-alternative">
             {SERVICE_HEADER_LABELS[service] ?? service}
           </span>
         ))}
       </div>
 
       {displayRows.length === 0 ? (
-        <div className="text-body-small flex h-full min-h-25 items-center justify-center px-4 text-center text-gray-50">
+        <div className="text-body-small flex h-full min-h-25 items-center justify-center px-4 text-center text-content-alternative">
           표시할 이용자 연동 데이터가 없습니다.
         </div>
       ) : (
@@ -70,7 +70,7 @@ const UsersTable = ({
             return (
               <div
                 key={renderKey}
-                className="border-neutral-3 grid h-17.5 grid-cols-4 items-center gap-9 border-b bg-white px-5 transition-colors"
+                className="border-edge-neutral grid h-17.5 grid-cols-4 items-center gap-9 border-b bg-fill-normal px-5 transition-colors"
               >
                 {/* Keycloack 사용자 컬럼: dot(10px) + gap-4(16px) + profile(28px) + name */}
                 <div className="flex min-w-0 items-center gap-4">
@@ -80,8 +80,8 @@ const UsersTable = ({
                       isAllLinked ? 'bg-green-50' : 'bg-red-40',
                     )}
                   />
-                  <DefaultProfile className="border-neutral-2 text-gray-30 size-7 shrink-0 rounded-full border" />
-                  <span className="text-body-small text-gray-80 truncate">{row.userName}</span>
+                  <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
+                  <span className="text-body-small text-content-normal truncate">{row.userName}</span>
                 </div>
 
                 {/* 서비스별 연동 상태 셀 */}
@@ -104,23 +104,23 @@ const UsersTable = ({
                               className="size-6.25 shrink-0 rounded-full"
                             />
                           ) : (
-                            <DefaultProfile className="border-neutral-2 text-gray-30 size-6.25 shrink-0 rounded-full border" />
+                            <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
                           )}
-                          <span className="text-body-xsmall text-gray-80 truncate">{info?.name ?? '-'}</span>
+                          <span className="text-body-xsmall text-content-normal truncate">{info?.name ?? '-'}</span>
                         </div>
-                        <span className="text-body-xsmall text-gray-50 truncate">{info?.identifier ?? '-'}</span>
+                        <span className="text-body-xsmall text-content-alternative truncate">{info?.identifier ?? '-'}</span>
                       </div>
                     );
                   }
 
-                  // 미연동 (조회 모드): full-width h-11.5 bg-neutral-1 rounded-lg 박스
+                  // 미연동 (조회 모드): full-width h-11.5 bg-fill-strong rounded-lg 박스
                   if (!isEditMode) {
                     return (
                       <div
                         key={`${renderKey}-${service}`}
-                        className="flex h-11.5 items-center justify-center rounded-lg bg-neutral-1"
+                        className="flex h-11.5 items-center justify-center rounded-lg bg-fill-strong"
                       >
-                        <span className="text-body-xsmall text-gray-50">
+                        <span className="text-body-xsmall text-content-alternative">
                           {status === '미사용' ? '미사용' : '-'}
                         </span>
                       </div>

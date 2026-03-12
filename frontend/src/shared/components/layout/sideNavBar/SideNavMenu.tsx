@@ -34,8 +34,8 @@ const navItems = [
 ];
 
 // 메뉴 상태별 스타일
-const defaultClass = 'bg-white hover:bg-neutral-2 active:bg-neutral-3 active:ring-1 active:ring-neutral-3';
-const selectedClass = 'ring-1 ring-neutral-2 bg-blue-1 hover:bg-blue-5';
+const defaultClass = 'bg-fill-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed active:ring-1 active:ring-edge-neutral';
+const selectedClass = 'ring-1 ring-edge-assistive bg-fill-primary-assistive hover:bg-fill-primary-interaction-hover-assistive';
 
 interface SideNavMenuProps {
   isOpen: boolean;
@@ -76,15 +76,15 @@ export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
                 >
                   <item.Icon
                     className={cn(
-                      isOpen ? 'h-6 w-6' : 'h-7 w-7',
-                      isActive ? 'text-blue-50 group-hover:text-blue-50' : 'text-gray-70',
+                      'size-5',
+                      isActive ? 'text-icon-primary group-hover:text-icon-primary' : 'text-icon-normal',
                     )}
                   />
                   {isOpen && (
                     <span
                       className={cn(
                         'text-body-small relative flex-1 text-left',
-                        isActive ? 'text-blue-55 group-hover:text-blue-55' : 'text-gray-80',
+                        isActive ? 'text-content-primary group-hover:text-content-primary' : 'text-content-normal',
                       )}
                     >
                       {item.name}

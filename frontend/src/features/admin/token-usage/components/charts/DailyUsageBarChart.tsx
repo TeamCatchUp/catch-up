@@ -40,15 +40,15 @@ export default function DailyUsageBarChart({
   }, [data]);
 
   return (
-    <div className="border-neutral-3 flex h-full flex-col overflow-hidden rounded-xl border bg-white px-6 py-5">
+    <div className="border-edge-neutral flex h-full flex-col overflow-hidden rounded-xl border bg-fill-normal px-6 py-5">
       {/* 헤더 */}
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
-          <span className="text-heading-small text-gray-50">{title}</span>
-          <span className="text-heading-large text-gray-80">{totalCost.toFixed(2)} $</span>
+          <span className="text-heading-small text-content-alternative">{title}</span>
+          <span className="text-heading-large text-content-normal">{totalCost.toFixed(2)} $</span>
         </div>
         {modelName && (
-          <span className="text-body-xsmall rounded-md2 bg-blue-5 text-blue-55 px-1.5 py-0.5">{modelName}</span>
+          <span className="text-body-xsmall rounded-md2 bg-fill-primary-normal-neutral text-content-primary px-1.5 py-0.5">{modelName}</span>
         )}
       </div>
 

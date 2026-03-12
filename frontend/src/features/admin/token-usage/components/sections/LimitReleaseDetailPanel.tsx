@@ -17,8 +17,8 @@ import type { LimitReleaseRequest } from '../../types/tokenUsage';
 /** 정보 행 (label w-28 = 112px, gap-14 = 56px) */
 const InfoRow = ({ label, value }: { label: string; value: string }) => (
   <div className="text-body-small flex w-full items-center gap-14">
-    <span className="w-28 shrink-0 text-gray-50">{label}</span>
-    <span className="text-gray-70 min-w-0 flex-1 truncate">{value}</span>
+    <span className="w-28 shrink-0 text-content-alternative">{label}</span>
+    <span className="text-content-neutral min-w-0 flex-1 truncate">{value}</span>
   </div>
 );
 
@@ -48,8 +48,8 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-5">
           <div className="flex flex-1 items-center gap-3">
-            <DefaultProfile className="border-neutral-2 text-gray-30 size-7 shrink-0 rounded-full border" />
-            <span className="text-heading-medium text-gray-80 truncate">{request.name}</span>
+            <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
+            <span className="text-heading-medium text-content-normal truncate">{request.name}</span>
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
             <Button variant="box-outline-gray" size="md" onClick={() => setRejectDialogOpen(true)}>
@@ -80,7 +80,7 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
 
       {/* 추가 토큰 부여량 입력 */}
       <div className="flex items-center gap-18">
-        <span className="text-body-small shrink-0 text-gray-50">추가 토큰 부여량</span>
+        <span className="text-body-small shrink-0 text-content-alternative">추가 토큰 부여량</span>
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <Input
             inputSize="lg"
@@ -90,37 +90,37 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
             onChange={(e) => setGrantAmount(e.target.value)}
             className="min-w-0 flex-1"
           />
-          <span className="text-body-small shrink-0 text-gray-50">$</span>
+          <span className="text-body-small shrink-0 text-content-alternative">$</span>
         </div>
       </div>
 
       {/* 설정 카드 영역 */}
       <div className="flex flex-col gap-3">
         {/* 개인 토큰 사용 제한 설정 카드 */}
-        <div className="bg-neutral-1 border-neutral-2 flex flex-col gap-2.5 rounded-lg border px-3 py-2.5">
+        <div className="bg-fill-strong border-edge-assistive flex flex-col gap-2.5 rounded-lg border px-3 py-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-heading-small text-gray-70">설정된 개인 토큰 사용 제한 설정</span>
+            <span className="text-heading-small text-content-neutral">설정된 개인 토큰 사용 제한 설정</span>
             <Link
               href="/admin/token-usage?tab=user-management"
-              className="border-neutral-3 rounded-md2 flex h-7 items-center gap-1 border bg-white px-1.5 py-1"
+              className="border-edge-neutral rounded-md2 flex h-7 items-center gap-1 border bg-fill-normal px-1.5 py-1"
             >
-              <IconArrowOutward className="size-6 text-gray-50" />
-              <span className="text-body-xsmall text-gray-50">수정 페이지 바로가기</span>
+              <IconArrowOutward className="size-6 text-content-alternative" />
+              <span className="text-body-xsmall text-content-alternative">수정 페이지 바로가기</span>
             </Link>
           </div>
           <Separator />
           <div className="text-body-small flex flex-col gap-1 tracking-tight">
             <div className="flex items-center justify-between">
-              <span className="text-gray-50">하루 최대 토큰 비용</span>
-              <span className="text-gray-70">
+              <span className="text-content-alternative">하루 최대 토큰 비용</span>
+              <span className="text-content-neutral">
                 {request.dailyLimit === DEFAULT_DAILY_LIMIT
                   ? `${request.dailyLimit} $ (기본값)`
                   : `${request.dailyLimit} $`}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-50">월 최대 토큰 비용</span>
-              <span className="text-gray-70">
+              <span className="text-content-alternative">월 최대 토큰 비용</span>
+              <span className="text-content-neutral">
                 {request.monthlyLimit === DEFAULT_MONTHLY_LIMIT
                   ? `${request.monthlyLimit} $ (기본값)`
                   : `${request.monthlyLimit} $`}
@@ -130,14 +130,14 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
         </div>
 
         {/* 사용자 토큰 사용량 분석 카드 */}
-        <div className="bg-neutral-1 border-neutral-2 flex items-center justify-between rounded-lg border px-3 py-2.5">
-          <span className="text-heading-small text-gray-70">사용자 토큰 사용량 분석</span>
+        <div className="bg-fill-strong border-edge-assistive flex items-center justify-between rounded-lg border px-3 py-2.5">
+          <span className="text-heading-small text-content-neutral">사용자 토큰 사용량 분석</span>
           <Link
             href="/admin/token-usage?tab=org-usage"
-            className="border-neutral-3 rounded-md2 flex h-7 items-center gap-1 border bg-white px-1.5 py-1"
+            className="border-edge-neutral rounded-md2 flex h-7 items-center gap-1 border bg-fill-normal px-1.5 py-1"
           >
-            <IconArrowOutward className="size-6 text-gray-50" />
-            <span className="text-body-xsmall text-gray-50">페이지 바로가기</span>
+            <IconArrowOutward className="size-6 text-content-alternative" />
+            <span className="text-body-xsmall text-content-alternative">페이지 바로가기</span>
           </Link>
         </div>
       </div>

@@ -88,10 +88,14 @@ const realChatService = {
     sessionId: string | undefined,
     onEvent: (event: StreamEvent) => void,
     signal?: AbortSignal,
+    toolFilters?: string[],
   ) => {
-    const payload: { query: string; session_id?: string } = { query };
+    const payload: { query: string; session_id?: string; tool_filters?: string[] } = { query };
     if (sessionId) {
       payload.session_id = sessionId;
+    }
+    if (toolFilters?.length) {
+      payload.tool_filters = toolFilters;
     }
 
     const res = await fetch(API.chat.stream, {

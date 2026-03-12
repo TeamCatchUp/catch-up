@@ -18,8 +18,6 @@ Note:
 - PR Document에 포함된 Commit SHA 목록을 통해 Graph 연결
 """
 
-import asyncio
-import httpx
 import logging
 import traceback
 from datetime import datetime, timezone, timedelta
@@ -40,19 +38,15 @@ from catchup.connectors.github.schemas import (
     GithubIssue,
     GithubPullRequest,
     GithubCommit,
-    PRFileContext,
-    PRComment,
-    IncrementalSyncRequest,
 )
 from catchup.connectors.github.transformers import GithubTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
-from catchup.db.github import sync_repository as github_sync
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.domain_repository import RepositoryUpsertData, UserUpsertData
 from catchup.db.github import installation_repository as github_installation
-from catchup.db.models import GithubEntityType, GithubSyncStatus, GithubInstallationType, SourceType
+from catchup.db.models import GithubEntityType, GithubInstallationType, SourceType
 from catchup.db.user_source_mapping import find_premapped_name_by_external_user_identifier, find_premapped_names_by_source_type
 
 logger = logging.getLogger(__name__)
@@ -170,11 +164,8 @@ class GithubIngestionService:
         entity_type: GithubEntityType,
         operation: str,
     ) -> None:
-        """동기화 시작 - Sync Status IN_PROGRESS 설정"""
-        github_sync.create_or_update_sync_state(
-            db, self.installation_id, repo_full_name,
-            entity_type, GithubSyncStatus.IN_PROGRESS
-        )
+        """동기화 시작 로그 기록."""
+        _ = db
         logger.info(f"[GITHUB][{operation}] Started: {entity_type.value} sync for {repo_full_name}")
 
     def _complete_sync(
@@ -185,11 +176,8 @@ class GithubIngestionService:
         synced_count: int,
         operation: str,
     ) -> None:
-        """동기화 완료 - Sync Status SUCCESS 설정"""
-        github_sync.mark_sync_completed(
-            db, self.installation_id, repo_full_name,
-            entity_type, synced_count
-        )
+        """동기화 완료 로그 기록."""
+        _ = db
         logger.info(
             f"[GITHUB][{operation}] Completed: {entity_type.value} sync for {repo_full_name} "
             f"({synced_count} synced)"
@@ -203,12 +191,9 @@ class GithubIngestionService:
         error: str | Exception,
         operation: str,
     ) -> None:
-        """동기화 실패 - Sync Status FAILED 설정"""
+        """동기화 실패 로그 기록."""
+        _ = db
         error_msg = str(error)[:1000]
-        github_sync.mark_sync_failed(
-            db, self.installation_id, repo_full_name,
-            entity_type, error_msg
-        )
         logger.error(
             f"[GITHUB][{operation}] Failed: {entity_type.value} sync for {repo_full_name} - {error_msg}"
         )
@@ -221,12 +206,8 @@ class GithubIngestionService:
         error: GitHubRateLimitError,
         operation: str,
     ) -> None:
-        """Rate Limit 에러 처리"""
-        error_msg = f"Rate limit: retry after {error.retry_after}s"
-        github_sync.mark_sync_failed(
-            db, self.installation_id, repo_full_name,
-            entity_type, error_msg
-        )
+        """Rate limit 로그 기록."""
+        _ = db
         logger.warning(
             f"[GITHUB][{operation}] Rate limit hit: {entity_type.value} sync for {repo_full_name} "
             f"(retry after {error.retry_after}s)"
@@ -337,6 +318,15 @@ class GithubIngestionService:
                 if repo_ids is None
                 else self._get_repo_names_by_ids(db, repo_ids)
             )
+            if repo_ids is not None and not repos_to_sync:
+                results["repositories"]["errors"] = max(1, len(repo_ids))
+                logger.error(
+                    "[GITHUB][%s] No repositories resolved from repo_ids: installation_id=%s, repo_ids=%s",
+                    SyncOperation.FULL_SYNC,
+                    self.installation_id,
+                    repo_ids,
+                )
+
             results["repositories"]["synced"] = len(repos_to_sync)
             days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
             sync_from = datetime.now(timezone.utc) - timedelta(days=days)
@@ -371,7 +361,12 @@ class GithubIngestionService:
             logger.error(f"[GITHUB][{SyncOperation.FULL_SYNC}] Full sync failed: {e}")
             raise
 
-    async def _sync_users(self, db: Session) -> dict[str, int]:
+    async def _sync_users(
+        self,
+        db: Session,
+        *,
+        auto_commit: bool = True,
+    ) -> dict[str, int]:
         """
         Organization 멤버 동기화 (RDBMS 저장)
 
@@ -457,7 +452,11 @@ class GithubIngestionService:
 
             # RDBMS에 벌크 저장
             if users_data:
-                github_entities.upsert_users_bulk(db, users_data)
+                github_entities.upsert_users_bulk(
+                    db,
+                    users_data,
+                    auto_commit=auto_commit,
+                )
 
             # 동기화 완료
             self._complete_sync(db, repo_full_name, GithubEntityType.USER, len(users_data), SyncOperation.USER_SYNC)
@@ -472,7 +471,13 @@ class GithubIngestionService:
             self._fail_sync(db, repo_full_name, GithubEntityType.USER, str(e), SyncOperation.USER_SYNC)
             return {"synced": 0, "errors": 1}
         
-    async def sync_installation_metadata(self, db : Session) -> dict[str, Any]:
+    async def sync_installation_metadata(
+        self,
+        db: Session,
+        *,
+        auto_commit: bool = True,
+        raise_on_error: bool = False,
+    ) -> dict[str, Any]:
         """
         Installtion 메타데이터 동기화 (Users + Repository)
         """
@@ -481,8 +486,16 @@ class GithubIngestionService:
             f"for installation {self.installation_id}"
         )
 
-        users_result = await self._sync_users(db)
-        repo_names = await self._sync_repositories(db)
+        users_result = await self._sync_users(db, auto_commit=auto_commit)
+        if raise_on_error and users_result["errors"] > 0:
+            raise RuntimeError(
+                f"github user metadata refresh failed: installation_id={self.installation_id}"
+            )
+
+        repo_names = await self._sync_repositories(
+            db,
+            auto_commit=auto_commit,
+        )
 
         logger.info(
             f"[GITHUB][INSTALLATION] Completed User + Repository Sync "
@@ -492,7 +505,12 @@ class GithubIngestionService:
         return {"users": users_result, "repositories": repo_names}
 
 
-    async def _sync_repositories(self, db: Session) -> list[str]:
+    async def _sync_repositories(
+        self,
+        db: Session,
+        *,
+        auto_commit: bool = True,
+    ) -> list[str]:
         """
         Installation에서 접근 가능한 Repository 목록 조회 및 RDBMS 저장
 
@@ -511,14 +529,30 @@ class GithubIngestionService:
             # dict → DTO 변환
             repos_data = _convert_repos_to_dto(raw_repos)
 
-            # RDBMS에 벌크 저장
-            github_entities.upsert_repositories_bulk(
-                db, self.installation_id, repos_data
+            sync_result = github_entities.sync_repositories_snapshot(
+                db,
+                self.installation_id,
+                repos_data,
+                auto_commit=auto_commit,
             )
 
-            # 동기화 완료
-            self._complete_sync(db, repo_full_name, GithubEntityType.REPOSITORY, len(repos_data), SyncOperation.REPO_SYNC)
+            logger.info(
+                "[GITHUB][%s] Repository snapshot synced: installation_id=%s, upserted=%s, deleted=%s",
+                SyncOperation.REPO_SYNC,
+                self.installation_id,
+                sync_result["upserted"],
+                sync_result["deleted"],
+            )
+
+            self._complete_sync(
+                db,
+                repo_full_name,
+                GithubEntityType.REPOSITORY,
+                len(repos_data),
+                SyncOperation.REPO_SYNC,
+            )
             return [repo.full_name for repo in repos_data]
+
 
         except GitHubRateLimitError as e:
             self._handle_rate_limit(db, repo_full_name, GithubEntityType.REPOSITORY, e, SyncOperation.REPO_SYNC)
@@ -527,12 +561,12 @@ class GithubIngestionService:
         except GitHubApiError as e:
             logger.error(f"[GITHUB][{SyncOperation.REPO_SYNC}] API error: {e}")
             self._fail_sync(db, repo_full_name, GithubEntityType.REPOSITORY, str(e), SyncOperation.REPO_SYNC)
-            return []
+            raise
 
         except Exception as e:
             logger.error(f"[GITHUB][{SyncOperation.REPO_SYNC}] Unexpected error: {e}", exc_info=True)
             self._fail_sync(db, repo_full_name, GithubEntityType.REPOSITORY, str(e), SyncOperation.REPO_SYNC)
-            return []
+            raise
 
     def _get_repo_names_by_ids(self, db: Session, repo_ids: list[int]) -> list[str]:
         """
@@ -548,6 +582,73 @@ class GithubIngestionService:
         repos = github_entities.get_repositories_by_installation(db, self.installation_id)
         repo_id_set = set(repo_ids)
         return [repo.full_name for repo in repos if repo.repo_id in repo_id_set]
+
+    async def incremental_sync(
+        self,
+        db: Session,
+        *,
+        repo_id: int,
+        record_type: str,
+        record_id: str,
+        event_kind: str,
+        since: datetime | None,
+    ) -> dict[str, int | bool]:
+        repo_names = self._get_repo_names_by_ids(db, [repo_id])
+        if not repo_names:
+            raise ValueError(f"github repository not found: repo_id={repo_id}")
+
+        owner, repo = repo_names[0].split("/", 1)
+        normalized_record_type = record_type.strip().lower()
+        normalized_event_kind = event_kind.strip().lower()
+
+        if normalized_event_kind == "deleted":
+            return await self._delete_incremental_record(
+                owner=owner,
+                repo=repo,
+                record_type=normalized_record_type,
+                record_id=record_id,
+            )
+
+        if normalized_record_type == "issue":
+            result = await self._sync_issues(db, owner, repo, since=since)
+        elif normalized_record_type == "pull_request":
+            result = await self._sync_pull_requests(db, owner, repo, since=since)
+        else:
+            raise ValueError(f"unsupported github record_type: {record_type}")
+
+        return {
+            "synced": int(result.get("synced", 0)),
+            "errors": int(result.get("errors", 0)),
+            "skipped": False,
+        }
+
+    async def _delete_incremental_record(
+        self,
+        *,
+        owner: str,
+        repo: str,
+        record_type: str,
+        record_id: str,
+    ) -> dict[str, int | bool]:
+        if record_type == "issue":
+            doc_id = f"github:issue:{owner}/{repo}:{record_id}"
+        elif record_type == "pull_request":
+            doc_id = f"github:pr:{owner}/{repo}:{record_id}"
+        else:
+            raise ValueError(f"unsupported github delete record_type: {record_type}")
+
+        await self.repository.delete_documents([doc_id])
+        logger.info(
+            "[GITHUB][INCREMENTAL] Deleted document: installation_id=%s, record_type=%s, doc_id=%s",
+            self.installation_id,
+            record_type,
+            doc_id,
+        )
+        return {
+            "synced": 1,
+            "errors": 0,
+            "skipped": False,
+        }
 
     # ============================================================
     # Issue Sync
@@ -713,197 +814,6 @@ class GithubIngestionService:
             self._fail_sync(db, full_name, GithubEntityType.PULL_REQUEST, str(e), SyncOperation.PR_SYNC)
             return {"synced": total_synced, "errors": errors + 1}
 
-    # ============================================================
-    # Incremental Sync
-    # ============================================================
-
-    async def incremental_sync(
-        self,
-        db: Session,
-        request: IncrementalSyncRequest,
-    ) -> dict[str, Any]:
-        """
-        Time-Triggered Flush / Manual Flush의 경우 사용하는 메서드
-
-        Redis Buffer에 존재하는 Repository, Entity Type에 한해
-        Sync Status에 기록된 마지막 동기화 시점 이후 변경된 사항을 조회한다.
-
-        Args:
-            db: SQLAlchemy Session
-            request: 증분 동기화 요청 (repo_ids, entity_types, update_repos)
-
-        Returns:
-            동기화 결과 딕셔너리
-        """
-        self._github_name_cache = {}
-        results = {
-            "repositories": {"synced": 0, "errors": 0},
-            "issues": {"synced": 0, "errors": 0},
-            "pull_requests": {"synced": 0, "errors": 0},
-        }
-
-        try:
-            # 0. Repository 동기화
-            if request.update_repos:
-                try:
-                    raw_repos = await self.client.list_installation_repos()
-                    repos_data = _convert_repos_to_dto(raw_repos)
-                    github_entities.upsert_repositories_bulk(
-                        db, self.installation_id, repos_data
-                    )
-                    results["repositories"]["synced"] = len(repos_data)
-                    logger.info(f"[GITHUB][FLUSH] Repository Info Updated: {len(repos_data)} repos")
-                except Exception as e:
-                    logger.error(f"[GITHUB][FLUSH] Failed to Update Repository Info: {e}")
-                    results["repositories"]["errors"] += 1
-
-            # Entity Type 검증
-            entity_types = request.entity_types
-            if not entity_types:
-                logger.warning(
-                    f"[GITHUB][FLUSH] No Entity Type Specified. "
-                    f"installation={self.installation_id}"
-                )
-                return results
-
-            # repo_ids 검증 및 full_name 조회
-            if not request.repo_ids:
-                logger.warning(
-                    f"[GITHUB][FLUSH] No Repository IDs Specified for Incremental Sync Request. "
-                    f"installation={self.installation_id}"
-                )
-                return results
-
-            repos_to_sync = self._get_repo_names_by_ids(db, request.repo_ids)
-
-            # Repository 검증
-            if not repos_to_sync:
-                logger.warning(
-                    f"[GITHUB][FLUSH] No Repositories found for given IDs. "
-                    f"installation={self.installation_id}, "
-                    f"requested_repo_ids={request.repo_ids}"
-                )
-                return results
-
-            logger.info(
-                f"[GITHUB][FLUSH] Incremental Sync Started: "
-                f"installation={self.installation_id}, "
-                f"repos={len(repos_to_sync)}, "
-                f"entities={entity_types}"
-            )
-
-            # Repository 단위 Incremental Sync
-            for repo_full_name in repos_to_sync:
-                try:
-                    owner, repo = repo_full_name.split("/", 1)
-
-                    # 1. Issue 증분 동기화
-                    if "issue" in entity_types:
-                        issue_result = await self._incremental_sync_issues(
-                            db, owner, repo, repo_full_name
-                        )
-                        results["issues"]["synced"] += issue_result["synced"]
-                        results["issues"]["errors"] += issue_result["errors"]
-
-                    # 2. Pull Request 증분 동기화
-                    if "pull_request" in entity_types:
-                        pr_result = await self._incremental_sync_pull_requests(
-                            db, owner, repo, repo_full_name
-                        )
-                        results["pull_requests"]["synced"] += pr_result["synced"]
-                        results["pull_requests"]["errors"] += pr_result["errors"]
-
-                except Exception as e:
-                    logger.error(
-                        f"[GITHUB][FLUSH] Incremental Sync Failed for repository {repo_full_name}: {e}"
-                    )
-                    results["repositories"]["errors"] += 1
-                    # Repository 단위 실패는 전체 동기화를 중단하지 않음
-                    continue
-
-            logger.info(f"[GITHUB][FLUSH] Incremental sync completed: {results}")
-            return results
-
-        except Exception as e:
-            logger.error(f"[GITHUB][FLUSH] Incremental sync failed: {e}")
-            raise
-
-    async def _incremental_sync_issues(
-        self,
-        db: Session,
-        owner: str,
-        repo: str,
-        repo_full_name: str,
-    ) -> dict[str, int]:
-        """
-        Issue 증분 동기화
-
-        마지막 성공한 동기화 시점 이후 업데이트된 Issue를 동기화합니다.
-
-        Args:
-            db: SQLAlchemy Session
-            owner: Repository owner
-            repo: Repository name
-            repo_full_name: Repository full name (owner/repo)
-
-        Returns:
-            {"synced": N, "errors": N}
-        """
-        issue_state = github_sync.get_sync_state(
-            db, self.installation_id, repo_full_name,
-            GithubEntityType.ISSUE
-        )
-        since = issue_state.last_successful_sync_at if issue_state else None
-
-        logger.info(
-            f"[GITHUB][FLUSH] Syncing Issues for {repo_full_name} "
-            f"(since: {since.isoformat() if since else 'all time'})"
-        )
-
-        issue_result = await self._sync_issues(db, owner, repo, since=since)
-        return {
-            "synced": issue_result.get("synced", 0),
-            "errors": issue_result.get("errors", 0),
-        }
-
-    async def _incremental_sync_pull_requests(
-        self,
-        db: Session,
-        owner: str,
-        repo: str,
-        repo_full_name: str,
-    ) -> dict[str, int]:
-        """
-        Pull Request 증분 동기화
-
-        마지막 성공한 동기화 시점 이후 업데이트된 PR을 동기화합니다.
-
-        Args:
-            db: SQLAlchemy Session
-            owner: Repository owner
-            repo: Repository name
-            repo_full_name: Repository full name (owner/repo)
-
-        Returns:
-            {"synced": N, "errors": N}
-        """
-        pr_state = github_sync.get_sync_state(
-            db, self.installation_id, repo_full_name,
-            GithubEntityType.PULL_REQUEST
-        )
-        since = pr_state.last_successful_sync_at if pr_state else None
-
-        logger.info(
-            f"[GITHUB][FLUSH] Syncing PRs for {repo_full_name} "
-            f"(since: {since.isoformat() if since else 'all time'})"
-        )
-
-        pr_result = await self._sync_pull_requests(db, owner, repo, since=since)
-        return {
-            "synced": pr_result.get("synced", 0),
-            "errors": pr_result.get("errors", 0),
-        }
-
     async def _summarize_documents(
         self,
         documents: list[Document],
@@ -940,110 +850,3 @@ class GithubIngestionService:
 
         logger.debug(f"Summarized {len(documents)} documents for embedding")
         return documents
-
-
-# ============================================================
-# Legacy GithubService (하위 호환성 유지)
-# ============================================================
-
-class GithubService:
-    """
-    기존 GithubService (PR 컨텍스트 조회용)
-
-    Note: 새로운 코드에서는 GitHubIngestionService 사용 권장
-    """
-
-    def __init__(self):
-        self.token = settings.GITHUB_TOKEN
-        self.base_url = settings.GITHUB_BASE_URL
-        self.headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-            "Accept": "application/vnd.github.v3+json",
-        }
-
-    async def get_pr_context(
-        self, owner: str, repo: str, pr_number: int
-    ) -> list[PRFileContext]:
-        async with httpx.AsyncClient(headers=self.headers, timeout=20.0) as client:
-            try:
-                base_path = f"{self.base_url}/{owner}/{repo}/pulls/{pr_number}"
-                files_url = f"{base_path}/files"
-                comments_url = f"{base_path}/comments"
-
-                logger.info(f"Fetching file context for PR {owner}/{repo}#{pr_number}")
-
-                # Diff와 Review를 병렬 조회
-                responses = await asyncio.gather(
-                    client.get(files_url, params={"per_page": 100}),
-                    client.get(comments_url, params={"per_page": 100}),
-                )
-
-                for resp in responses:
-                    resp.raise_for_status()
-
-                files_data = responses[0].json()
-                comments_data = responses[1].json()
-
-                return self._merge_files_and_comments(files_data, comments_data)
-
-            except httpx.HTTPStatusError as e:
-                logger.error(
-                    f"GitHub API Error: {e.response.status_code} - {e.response.text}"
-                )
-                return []
-            except Exception as e:
-                logger.error(f"Failed to fetch PR file context: {e}")
-                return []
-
-    def _merge_files_and_comments(
-        self, files_data: list[dict[str, Any]], comments_data: list[dict[str, Any]]
-    ) -> list[PRFileContext]:
-        merged_files: dict[str, dict] = {}
-
-        for file in files_data:
-            filename = file["filename"]
-            status = file["status"]
-            patch_content = file.get("patch", "")
-            prev_filename = file.get("previous_filename")
-
-            additions = file["additions"]
-            deletions = file["deletions"]
-
-            # RENAMED이고 additions, deletions이 0인 경우 파일 이름만 변경
-            if status == "renamed":
-                if additions == 0 and deletions == 0:
-                    patch_content = None
-
-            merged_files[filename] = {
-                "path": filename,
-                "status": status,
-                "additions": additions,
-                "deletions": deletions,
-                "previous_filename": prev_filename,
-                "patch": patch_content,
-                "comments": [],
-            }
-
-        for comment in comments_data:
-            path = comment["path"]
-
-            if path in merged_files:
-                comment_obj = {
-                    "id": comment["id"],
-                    "author": comment["user"]["login"]
-                    if comment["user"]
-                    else "unknown",
-                    "body": comment["body"],
-                    "created_at": comment["created_at"],
-                    "diff_hunk": comment.get("diff_hunk", ""),
-                    "line": comment.get("line"),
-                    "original_line": comment.get("original_line"),
-                }
-                merged_files[path]["comments"].append(PRComment(**comment_obj))
-
-        result = []
-        for file_data in merged_files.values():
-            result.append(PRFileContext(**file_data))
-
-        return result
