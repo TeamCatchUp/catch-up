@@ -24,13 +24,11 @@ def audit_event_handler(**kwargs: Any) -> None:
             meta_payload = metadata_obj.model_dump(exclude_none=True, mode="json")
     
     raw_actor = kwargs.pop("actor", None)
+    print("RAW_ACTOR:", raw_actor)
     actor_payload = None
     if raw_actor:
-        if isinstance(raw_actor, dict):
-            actor_payload = raw_actor
-        else:
-            actor = AuditActor.from_user_snapshot(raw_actor)
-            actor_payload = actor.model_dump(exclude_none=True) if actor else None
+        actor = AuditActor.from_user_snapshot(raw_actor)
+        actor_payload = actor.model_dump(exclude_none=True) if actor else None
 
     audit_logger = get_logger("catchup.audit")
     log_method = getattr(audit_logger, level, audit_logger.info)
