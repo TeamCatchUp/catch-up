@@ -26,6 +26,10 @@ export class FieldChipNode extends DecoratorNode<ReactNode> {
     this.__placeholder = placeholder;
   }
 
+  getFieldKey(): string {
+    return this.getLatest().__fieldKey;
+  }
+
   // --- DOM ---
 
   createDOM(): HTMLElement {

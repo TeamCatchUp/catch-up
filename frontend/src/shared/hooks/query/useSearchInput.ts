@@ -31,8 +31,6 @@ export interface UseSearchInputReturn {
   setTemplateFieldValue: (key: string, val: string) => void;
   templateFieldErrors: Record<string, boolean>;
   setTemplateFieldErrors: (errors: Record<string, boolean>) => void;
-  templateTextOverrides: Record<number, string>;
-  setTemplateTextOverride: (index: number, val: string) => void;
   resetTemplateFields: () => void;
   handleSubmit: (queryOverride?: string) => void;
 }
@@ -50,7 +48,6 @@ export const useSearchInput = ({
   const [selectedTipIndex, setSelectedTipIndex] = useState<number | null>(null);
   const [templateFieldValues, setTemplateFieldValues] = useState<Record<string, string>>({});
   const [templateFieldErrors, setTemplateFieldErrors] = useState<Record<string, boolean>>({});
-  const [templateTextOverrides, setTemplateTextOverrides] = useState<Record<number, string>>({});
 
   const hasText = isFromTemplate
     ? Object.values(templateFieldValues).some((v) => v.trim().length > 0)
@@ -61,14 +58,9 @@ export const useSearchInput = ({
     setTemplateFieldErrors((prev) => ({ ...prev, [key]: false }));
   }, []);
 
-  const setTemplateTextOverride = useCallback((index: number, val: string) => {
-    setTemplateTextOverrides((prev) => ({ ...prev, [index]: val }));
-  }, []);
-
   const resetTemplateFields = useCallback(() => {
     setTemplateFieldValues({});
     setTemplateFieldErrors({});
-    setTemplateTextOverrides({});
   }, []);
 
   const handleSubmit = useCallback((queryOverride?: string) => {
@@ -100,10 +92,8 @@ export const useSearchInput = ({
         return;
       }
       const query = tip.template
-        .map((seg, idx) =>
-          typeof seg === 'string'
-            ? (templateTextOverrides[idx] ?? seg)
-            : (templateFieldValues[seg.field] ?? ''),
+        .map((seg) =>
+          typeof seg === 'string' ? seg : (templateFieldValues[seg.field] ?? ''),
         )
         .join('');
       const sessionId = crypto.randomUUID();
@@ -122,7 +112,7 @@ export const useSearchInput = ({
       }
       router.push(url);
     }
-  }, [isFromTemplate, selectedTipIndex, tipData, templateFieldValues, templateTextOverrides, value, router, selectedSources]);
+  }, [isFromTemplate, selectedTipIndex, tipData, templateFieldValues, value, router, selectedSources]);
 
   // 템플릿 모드에서는 textarea가 숨겨져 있으므로 항상 multiline
   const isMultiLine = isFromTemplate || isTextareaMultiLine;
@@ -152,8 +142,6 @@ export const useSearchInput = ({
     setTemplateFieldValue,
     templateFieldErrors,
     setTemplateFieldErrors,
-    templateTextOverrides,
-    setTemplateTextOverride,
     resetTemplateFields,
     handleSubmit,
   };

@@ -1,6 +1,6 @@
 'use client';
 
-import { RefObject, useRef } from 'react';
+import { RefObject, useCallback, useRef } from 'react';
 
 import IconAdd from '@/public/icons/icon/add_small.svg';
 import IconArrowSend from '@/public/icons/icon/arrow_send.svg';
@@ -21,6 +21,20 @@ export default function QueryInput({ input, inputRef, tipData }: QueryInputProps
   const submitButtonRef = useRef<HTMLButtonElement>(null);
   const isTemplateMode = input.isFromTemplate && input.selectedTipIndex !== null && !!tipData;
 
+  // Lexical TemplateInput에서 준비된 submit 함수를 저장
+  const templateSubmitRef = useRef<(() => void) | null>(null);
+  const handleTemplateSubmitReady = useCallback((fn: () => void) => {
+    templateSubmitRef.current = fn;
+  }, []);
+
+  const handleSubmitClick = useCallback(() => {
+    if (isTemplateMode && templateSubmitRef.current) {
+      templateSubmitRef.current();
+    } else {
+      input.handleSubmit();
+    }
+  }, [isTemplateMode, input]);
+
   return (
     <div className="flex w-full items-center justify-between">
       <div className="text-button-secondary-mono mr-2 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center self-end p-1.5">
@@ -32,6 +46,7 @@ export default function QueryInput({ input, inputRef, tipData }: QueryInputProps
             tip={tipData[input.selectedTipIndex!]}
             input={input}
             submitButtonRef={submitButtonRef}
+            onSubmitReady={handleTemplateSubmitReady}
           />
         ) : (
           <textarea
@@ -58,7 +73,7 @@ export default function QueryInput({ input, inputRef, tipData }: QueryInputProps
       </div>
       <button
         ref={submitButtonRef}
-        onClick={() => input.handleSubmit()}
+        onClick={handleSubmitClick}
         className={`rounded-rounded ml-2 flex shrink-0 items-center self-end border border-solid p-2 ${
           input.hasText ? 'cursor-pointer border-fill-primary bg-fill-primary' : 'bg-fill-strong border-edge-assistive'
         }`}
