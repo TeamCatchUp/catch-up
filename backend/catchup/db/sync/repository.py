@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Sequence
 
-from sqlalchemy import func, select, update
+from sqlalchemy import exists, func, literal, select, update
 from sqlalchemy.orm import Session
 
 from catchup.db.models import (
@@ -147,6 +147,76 @@ def create_job(db: Session, payload: SyncJobCreateInput) -> SyncJob:
 def get_job(db: Session, job_id: str) -> SyncJob | None:
     stmt = select(SyncJob).where(SyncJob.job_id == job_id)
     return db.execute(stmt).scalar_one_or_none()
+
+
+def try_acquire_full_sync_scope_lock(
+    db: Session,
+    *,
+    connector: SyncConnector,
+    scope_id: str,
+) -> bool:
+    stmt = select(
+        func.pg_try_advisory_xact_lock(
+            func.hashtext(literal("full_sync_dispatch_scope")),
+            func.hashtext(literal(f"{connector.value}:{scope_id}")),
+        )
+    )
+    return bool(db.execute(stmt).scalar_one())
+
+
+def find_active_full_sync_job(
+    db: Session,
+    *,
+    connector: SyncConnector,
+    scope_id: str,
+) -> SyncJob | None:
+    in_progress_stmt = (
+        select(SyncJob)
+        .where(
+            SyncJob.connector == connector,
+            SyncJob.scope_id == scope_id,
+            SyncJob.sync_type == SyncType.FULL,
+            SyncJob.status == SyncJobStatus.IN_PROGRESS,
+        )
+        .order_by(SyncJob.requested_at.desc())
+        .limit(1)
+    )
+    in_progress_job = db.execute(in_progress_stmt).scalar_one_or_none()
+    if in_progress_job is not None:
+        return in_progress_job
+
+    active_pending_events = exists(
+        select(SyncEvent.event_id).where(
+            SyncEvent.job_id == SyncJob.job_id,
+            SyncEvent.status.in_(
+                [
+                    SyncEventStatus.PENDING,
+                    SyncEventStatus.IN_PROGRESS,
+                    SyncEventStatus.RETRYING,
+                ]
+            ),
+            SyncEvent.publish_status.in_(
+                [
+                    SyncEventPublishStatus.PENDING,
+                    SyncEventPublishStatus.PUBLISHING,
+                    SyncEventPublishStatus.PUBLISHED,
+                ]
+            ),
+        )
+    )
+    pending_stmt = (
+        select(SyncJob)
+        .where(
+            SyncJob.connector == connector,
+            SyncJob.scope_id == scope_id,
+            SyncJob.sync_type == SyncType.FULL,
+            SyncJob.status == SyncJobStatus.PENDING,
+            active_pending_events,
+        )
+        .order_by(SyncJob.requested_at.desc())
+        .limit(1)
+    )
+    return db.execute(pending_stmt).scalar_one_or_none()
 
 
 def list_jobs(

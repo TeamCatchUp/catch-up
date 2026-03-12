@@ -13,8 +13,10 @@ from catchup.db.sync import (
     SyncEventPublishResultInput,
     claim_events_for_publish,
     complete_job_success as complete_db_sync_job_success,
+    find_active_full_sync_job,
     record_event_publish_outcomes,
     start_job as start_db_sync_job,
+    try_acquire_full_sync_scope_lock,
 )
 from catchup.sync.common.exceptions import RedisStreamPublishError, SyncInternalError
 from catchup.sync.common.protocols import EventPublisherProtocol
@@ -109,7 +111,17 @@ class SyncDispatchOrchestrator:
     ) -> SyncDispatchResult:
         # Scope 정규화
         normalized_scope_id = self._normalize_scope_id(scope_id)
-        
+
+        conflict = self._check_dispatch_conflict(
+            db=db,
+            connector=connector,
+            sync_type=sync_type,
+            scope_id=normalized_scope_id,
+            base_url=base_url,
+        )
+        if conflict is not None:
+            return conflict
+
         context = self._build_dispatch_context(
             connector=connector,
             sync_type=sync_type,
@@ -185,6 +197,61 @@ class SyncDispatchOrchestrator:
             scope_id=scope_id,
             job_id=uuid4().hex,
             requested_at=datetime.now(timezone.utc),
+        )
+
+    def _check_dispatch_conflict(
+        self,
+        *,
+        db: Session,
+        connector: SyncConnector,
+        sync_type: SyncType,
+        scope_id: str,
+        base_url: str | None,
+    ) -> SyncDispatchResult | None:
+        if sync_type != SyncType.FULL:
+            return None
+
+        if not try_acquire_full_sync_scope_lock(
+            db,
+            connector=connector,
+            scope_id=scope_id,
+        ):
+            logger.warning(
+                "[%s][%s][ORCHESTRATOR] Dispatch conflict while scope lock is held: scope_id=%s",
+                connector.value.upper(),
+                sync_type.value.upper(),
+                scope_id,
+            )
+            db.rollback()
+            return SyncDispatchResult(
+                status=SyncDispatchStatus.CONFLICT,
+                connector=connector,
+                scope_id=scope_id,
+                message="another full sync dispatch is already being created for this scope",
+            )
+
+        active_job = find_active_full_sync_job(
+            db,
+            connector=connector,
+            scope_id=scope_id,
+        )
+        if active_job is None:
+            return None
+
+        logger.warning(
+            "[%s][%s][ORCHESTRATOR] Dispatch conflict due to active job: scope_id=%s, active_job_id=%s, active_status=%s",
+            connector.value.upper(),
+            sync_type.value.upper(),
+            scope_id,
+            active_job.job_id,
+            active_job.status,
+        )
+        db.rollback()
+        return self._build_conflict_response(
+            connector=connector,
+            scope_id=scope_id,
+            job_id=active_job.job_id,
+            base_url=base_url,
         )
 
     def _persist_events(
@@ -528,6 +595,29 @@ class SyncDispatchOrchestrator:
             event_ids=list(db_event_ids),
             total_targets=len(db_event_ids),
             queued_targets=queued_targets,
+            snapshot_url=snapshot_url,
+            stream_url=stream_url,
+        )
+
+    def _build_conflict_response(
+        self,
+        *,
+        connector: SyncConnector,
+        scope_id: str,
+        job_id: str | None,
+        base_url: str | None,
+    ) -> SyncDispatchResult:
+        snapshot_url = None
+        stream_url = None
+        if job_id is not None:
+            snapshot_url, stream_url = _build_job_urls(base_url, job_id)
+
+        return SyncDispatchResult(
+            status=SyncDispatchStatus.CONFLICT,
+            connector=connector,
+            scope_id=scope_id,
+            job_id=job_id,
+            message="active full sync already exists for this scope",
             snapshot_url=snapshot_url,
             stream_url=stream_url,
         )
