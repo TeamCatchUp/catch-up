@@ -1,25 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import Cancel from '@/public/icons/icon/cancel.svg';
-import CheckboxChecked from '@/public/icons/icon/checkbox_checked.svg';
-import CheckboxUnchecked from '@/public/icons/icon/checkbox_unchecked.svg';
-import api from '@/shared/api/client';
-import { API } from '@/shared/api/endpoints';
 import { Button } from '@/shared/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 import type { IntegrationService } from '@/shared/types/integrationService';
+import { cn } from '@/shared/utils/cn';
 
-import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
-import type {
-  SyncableConfluenceSpace,
-  SyncableEntity,
-  SyncableGithubRepo,
-  SyncableJiraProject,
-} from '../../../types/api';
+import { getMockTargets } from '../../../constants/mockSyncData';
+import type { SyncConnector, SyncTargetItem } from '../../../types/sync';
+import EmbeddingModalContent from './EmbeddingModalContent';
 
 const PERIOD_OPTIONS = ['1개월', '3개월', '6개월', '1년', '3년'] as const;
 
@@ -32,58 +24,14 @@ const PERIOD_TO_DAYS: Record<string, number> = {
 };
 
 /** 서비스별 항목 용어 */
-const getItemLabel = (service: IntegrationService) => (service === 'github' ? 'Repository' : 'Space');
-
-/** SyncableEntity에서 표시명 추출 */
-const getEntityName = (entity: SyncableEntity): string => {
-  if ('full_name' in entity) return (entity as SyncableGithubRepo).full_name;
-  if ('project_name' in entity)
-    return `${(entity as SyncableJiraProject).project_key}: ${(entity as SyncableJiraProject).project_name}`;
-  if ('space_name' in entity) return (entity as SyncableConfluenceSpace).space_name;
-  return String(entity);
-};
-
-/** SyncableEntity에서 고유 ID 추출 */
-const getEntityId = (entity: SyncableEntity): string => {
-  if ('repo_id' in entity) return String((entity as SyncableGithubRepo).repo_id);
-  if ('project_key' in entity) return (entity as SyncableJiraProject).project_key;
-  if ('space_key' in entity) return (entity as SyncableConfluenceSpace).space_key;
-  return getEntityName(entity);
-};
-
-interface SyncableItem {
-  id: string;
-  name: string;
-  parentId: string;
-  entity: SyncableEntity;
-}
-
-/** 서비스별 sync/full API 호출 생성 */
-const buildSyncCall = (service: IntegrationService, parentId: string, groupItems: SyncableItem[], syncDays: number) => {
+const getItemLabel = (service: IntegrationService) => {
   switch (service) {
     case 'github':
-      return api.post(API.github.syncFull, {
-        installation_id: Number(parentId),
-        repo_ids: groupItems.map((i) => (i.entity as SyncableGithubRepo).repo_id),
-        sync_days: syncDays,
-      });
-    case 'jira':
-      return api.post(API.jira.syncFull, {
-        cloud_id: parentId,
-        project_keys: groupItems.map((i) => (i.entity as SyncableJiraProject).project_key),
-        sync_days: syncDays,
-      });
-    case 'confluence':
-      return api.post(API.confluence.syncFull, {
-        cloud_id: parentId,
-        space_keys: groupItems.map((i) => (i.entity as SyncableConfluenceSpace).space_key),
-        sync_days: syncDays,
-      });
+      return 'Repository';
     case 'slack':
-      return api.post(API.slack.syncFull, {
-        team_id: parentId,
-        sync_days: syncDays,
-      });
+      return 'Channel';
+    default:
+      return 'Space';
   }
 };
 
@@ -94,74 +42,22 @@ interface EmbeddingModalProps {
   serviceName: string;
 }
 
-interface SlackInstallationStatus {
-  installed: boolean;
-  workspaces: { team_id: string; team_name: string }[];
-}
-
-/** 임베딩 모달 */
+/** 임베딩 모달 (셸) */
 const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingModalProps) => {
-  const isSlack = service === 'slack';
   const [selectedPeriod, setSelectedPeriod] = useState<string>('1개월');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const selectedScopeId = 'mock-scope-id';
 
-  const { data: syncableData, isLoading } = useQuery({
-    ...adminConnectorQueries.syncable(service),
-    enabled: open && !isSlack,
-  });
-
-  const { data: slackStatus } = useQuery<SlackInstallationStatus>({
-    queryKey: ['slack', 'installationStatus'],
-    queryFn: async () => {
-      const res = await api.get<SlackInstallationStatus>(API.slack.status);
-      return res.data;
-    },
-    enabled: open && isSlack,
-  });
-
-  const items = useMemo<SyncableItem[]>(() => {
-    if (!syncableData) return [];
-    return Object.entries(syncableData).flatMap(([parentId, entities]) =>
-      entities.map((entity) => ({
-        id: getEntityId(entity),
-        name: getEntityName(entity),
-        parentId,
-        entity,
-      })),
-    );
-  }, [syncableData]);
-
-  const syncMutation = useMutation({
-    mutationKey: ['admin', 'connector', 'syncFull', service] as const,
-    mutationFn: async (params: { syncDays: number; selected: SyncableItem[] }) => {
-      if (isSlack) {
-        const teamId = slackStatus?.workspaces[0]?.team_id;
-        if (!teamId) throw new Error('Slack team_id not found');
-        return api.post(API.slack.syncFull, { team_id: teamId, sync_days: params.syncDays });
-      }
-
-      const groups: Record<string, SyncableItem[]> = {};
-      for (const item of params.selected) {
-        (groups[item.parentId] ??= []).push(item);
-      }
-
-      await Promise.all(
-        Object.entries(groups).map(([parentId, groupItems]) =>
-          buildSyncCall(service, parentId, groupItems, params.syncDays),
-        ),
-      );
-    },
-    // onSuccess/onError 제거: 모달이 즉시 닫혀 unmount 후 콜백 실행 불가
-  });
+  const targets = useMemo(() => getMockTargets(service as SyncConnector), [service]);
 
   const itemLabel = getItemLabel(service);
-  const isSubmitDisabled = !isSlack && selectedItems.size === 0;
+  const isSubmitDisabled = selectedItems.size === 0;
 
-  const toggleItem = (id: string) => {
+  const toggleItem = (targetId: string) => {
     setSelectedItems((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(targetId)) next.delete(targetId);
+      else next.add(targetId);
       return next;
     });
   };
@@ -180,10 +76,14 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
 
   const handleSubmit = () => {
     const syncDays = PERIOD_TO_DAYS[selectedPeriod] ?? 30;
-    const selected = items.filter((item) => selectedItems.has(item.id));
+    const selectedTargets = targets.filter((t: SyncTargetItem) => selectedItems.has(t.target_id));
 
-    // Fire-and-forget: mutation은 MutationCache에서 unmount 후에도 계속 실행됨
-    syncMutation.mutate({ syncDays, selected });
+    console.log('[임베딩 요청]', {
+      connector: service,
+      scope_id: selectedScopeId,
+      target_ids: selectedTargets.map((t: SyncTargetItem) => t.target_id),
+      sync_days: syncDays,
+    });
 
     toast('임베딩이 시작되었습니다.', {
       description: '준비가 끝나면 즉시 알려드릴게요.',
@@ -195,90 +95,87 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         hideClose
-        className="border-edge-neutral shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-fill-normal px-5 pt-3 pb-4"
+        className="border-edge-normal shadow-modal w-140 gap-4 rounded-3xl border bg-fill-normal p-0 py-5"
       >
-        <div className="flex h-9 items-center justify-between">
-          <DialogTitle className="text-heading-medium text-content-normal">
-            {isSlack ? `${serviceName} 임베딩` : `임베딩 할 ${serviceName} ${itemLabel} 선택하기`}
+        {/* 헤더 */}
+        <div className="flex h-9 items-center gap-3 px-6">
+          <DialogTitle className="text-heading-large min-w-0 flex-1 text-content-normal">
+            임베딩 할 {serviceName} {itemLabel} 선택하기
           </DialogTitle>
-          <button type="button" onClick={handleClose} className="cursor-pointer" aria-label="닫기">
-            <Cancel className="size-5 text-content-alternative" />
+          <button
+            type="button"
+            onClick={handleClose}
+            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg"
+            aria-label="닫기"
+          >
+            <Cancel className="size-6 text-content-alternative" />
           </button>
         </div>
 
-        <div className="border-edge-neutral w-full border-t pt-4">
-          <div className="flex flex-col gap-4">
-            {/* 기간 선택 */}
-            <div className="flex flex-col gap-2.5">
+        {/* 바디 */}
+        <div className="flex max-h-152 min-h-102 flex-col gap-6 overflow-y-auto overflow-x-clip border-t border-edge-assistive px-6 pt-6">
+          {/* 기간 선택 */}
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-1">
+              <span className="text-body-medium text-content-strong">
+                임베딩 할 데이터의 기간을 선택해 주세요.
+              </span>
+              <span className="block size-1.25 shrink-0 rounded-full bg-accent-red-orange" />
+            </div>
+            <div className="flex gap-2">
+              {PERIOD_OPTIONS.map((period) => (
+                <button
+                  key={period}
+                  type="button"
+                  onClick={() => setSelectedPeriod(period)}
+                  className={cn(
+                    'text-body-small h-9 cursor-pointer rounded-full px-3',
+                    selectedPeriod === period
+                      ? 'bg-accent-black-lighten text-content-inverse'
+                      : 'border border-edge-neutral bg-fill-normal text-content-neutral',
+                  )}
+                >
+                  {period}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 항목 선택 */}
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-1">
-                <span className="text-body-small text-content-strong">등록 기간을 선택해주세요.</span>
-                <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
+                <span className="text-body-medium text-content-strong">
+                  {itemLabel}를 선택해주세요.
+                </span>
+                <span className="block size-1.25 shrink-0 rounded-full bg-accent-red-orange" />
               </div>
-              <div className="flex gap-2">
-                {PERIOD_OPTIONS.map((period) => (
-                  <button
-                    key={period}
-                    type="button"
-                    onClick={() => setSelectedPeriod(period)}
-                    className={`text-body-small h-9 cursor-pointer rounded-full px-3 ${
-                      selectedPeriod === period ? 'bg-gray-80 text-white' : 'border-edge-neutral text-content-alternative border'
-                    }`}
-                  >
-                    {period}
-                  </button>
-                ))}
-              </div>
+              {selectedItems.size > 0 && (
+                <span className="text-body-small text-content-primary">
+                  {selectedItems.size}개 선택됨
+                </span>
+              )}
             </div>
 
-            {/* Space/Repository 선택 (Slack 제외) */}
-            {!isSlack && (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-1">
-                  <span className="text-body-small text-content-strong">{itemLabel}를 선택해주세요.</span>
-                  <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
-                </div>
-                <div className="thin-scrollbar border-edge-assistive bg-fill-strong flex h-[200px] flex-col gap-2.5 overflow-y-auto rounded-xl border p-3">
-                  {isLoading ? (
-                    <div className="text-body-small text-content-assistive flex h-full items-center justify-center">
-                      목록을 불러오는 중...
-                    </div>
-                  ) : items.length === 0 ? (
-                    <div className="text-body-small text-content-assistive flex h-full items-center justify-center">
-                      항목이 없습니다.
-                    </div>
-                  ) : (
-                    items.map((item) => {
-                      const checked = selectedItems.has(item.id);
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => toggleItem(item.id)}
-                          className="flex w-full cursor-pointer items-center gap-3"
-                        >
-                          <span className="text-body-small text-content-alternative min-w-0 flex-1 truncate text-left">
-                            {item.name}
-                          </span>
-                          {checked ? (
-                            <CheckboxChecked className="size-6 shrink-0 text-icon-primary" />
-                          ) : (
-                            <CheckboxUnchecked className="text-content-assistive size-6 shrink-0" />
-                          )}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            )}
+            <EmbeddingModalContent
+              targets={targets}
+              selectedItems={selectedItems}
+              onToggleItem={toggleItem}
+            />
           </div>
         </div>
 
-        <div className="mt-1 flex h-9 w-full items-start justify-end gap-2.5">
+        {/* 푸터 */}
+        <div className="flex h-9 items-start justify-end gap-3 px-6">
           <Button variant="capsule-outline-mono" size="md" onClick={handleClose}>
             취소
           </Button>
-          <Button variant="capsule-solid-primary" size="md" disabled={isSubmitDisabled} onClick={handleSubmit}>
+          <Button
+            variant="capsule-solid-primary"
+            size="md"
+            disabled={isSubmitDisabled}
+            onClick={handleSubmit}
+          >
             임베딩하기
           </Button>
         </div>
