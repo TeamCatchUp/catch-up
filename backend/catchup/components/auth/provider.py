@@ -98,4 +98,19 @@ class OAuthIdentityProvider:
         token = await self._get_access_token(code)
         raw_user_data = await self._fetch_raw_user_info(token)
         
+        required_fields = ["email", "name"]
+        missing_fields = []
+        for field in required_fields:
+            data = raw_user_data.get(field)
+            if not data:
+                missing_fields.append(field)
+        
+        if missing_fields:
+            missing_fields_str = ', '.join(missing_fields)
+            logger.error(f"required_fields_missing_from_oauth_user_info: {missing_fields_str}")
+            raise ValueError(
+                f"Missing required OAuth user info: ({missing_fields_str}). "
+                f"Check OAuth user profile or client scopes."
+            )
+        
         return BaseOAuthUserInfoResponse(**raw_user_data)
