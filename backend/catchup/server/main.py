@@ -3,11 +3,10 @@ import asyncio
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 
-from catchup import __version__
 from catchup.audit.enums import SystemEventAction
 from catchup.audit.system import system_event
 from catchup.configs.config import settings
@@ -16,6 +15,7 @@ from catchup.db.global_state import has_admin_ever_onboarded, has_csv_file_ever_
 from catchup.db.models import Base
 from catchup.events.enums import EventTopic
 from catchup.observability.logging import configure_logging
+from catchup.observability.logging.s3_uploader import audit_log_uploader_task
 from catchup.server.admin.api import router as admin_router
 from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
@@ -51,6 +51,20 @@ async def lifespan(app: FastAPI):
     logger.info("Log level: %s", settings.LOG_LEVEL)
     sync_worker_stop_event: asyncio.Event | None = None
     sync_worker_task: asyncio.Task | None = None
+    uploader_task: asyncio.Task | None = None
+    
+
+    if settings.LOG_AUDIT_FILE_ENABLED:
+        logger.info(
+            "audit_file_rotation_config | when=%s interval=%s backupCount=%s",
+            settings.LOG_AUDIT_ROTATION_WHEN,
+            settings.LOG_AUDIT_ROTATION_INTERVAL,
+            settings.LOG_AUDIT_BACKUP_COUNT,
+        )
+
+    if settings.AWS_S3_AUDIT_ENABLED:
+        logger.info("[AUDIT][AWS_S3] Starting audit log uploader task to S3")
+        uploader_task = asyncio.create_task(audit_log_uploader_task())
 
     try:
         db_init_started_at = time.perf_counter()
@@ -247,6 +261,13 @@ async def lifespan(app: FastAPI):
         )
         
     yield
+    
+    if uploader_task:
+        uploader_task.cancel()
+        try:
+            await uploader_task
+        except asyncio.CancelledError:
+            pass
 
     if sync_worker_stop_event is not None:
         sync_worker_stop_event.set()
@@ -304,7 +325,7 @@ app = FastAPI(
     title="CatchUp RAG Server",
     lifespan=lifespan,
     redirect_slashes=False,
-    version=__version__,
+    version=settings.APP_VERSION,
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
 )

@@ -115,7 +115,7 @@ class ChatService:
             emit_audit_event(
                 event_type=EventType.CHAT,
                 event_action=ChatEventAction.RESPONSE_FAILED,
-                level=AuditLevel.INFO,
+                level=AuditLevel.WARNING,
                 metadata=ChatAuditMetadata(session_id=session_id),
                 immediate=True
             )
@@ -147,7 +147,7 @@ class ChatService:
             emit_audit_event(
                 event_type=EventType.CHAT,
                 event_action=ChatEventAction.RESPONSE_FAILED,
-                level=AuditLevel.WARNING,
+                level=AuditLevel.ERROR,
                 metadata=ChatAuditMetadata(session_id=session_id),
                 immediate=True
             )

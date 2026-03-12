@@ -123,7 +123,7 @@ def truncate_large_fields_processor(_: Any, __: str, event_dict: dict[str, Any])
 def ensure_required_fields_processor(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, Any]:
     event_dict.setdefault("service", settings.SERVICE_NAME)
     event_dict.setdefault("environment", str(settings.ENV))
-    event_dict.setdefault("version", settings.APP_VERSIONS)
+    event_dict.setdefault("version", settings.APP_VERSION)
     #event_dict.setdefault("trace_id", "unknown")
 
     event_dict["actor"] = _normalize_actor(event_dict.get("actor"))

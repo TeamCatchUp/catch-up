@@ -1,10 +1,10 @@
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
+import structlog
 
+from catchup.audit.metadata import AuthAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.audit.enums import AuditLevel
 from catchup.events.enums import AuthEventAction
@@ -41,7 +41,7 @@ from catchup.server.auth.schemas import (
 )
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
@@ -94,19 +94,35 @@ async def oauth_callback(
     auth_service: OAuthService = Depends(get_oauth_service_from_state)
 ):
     cookie_state = request.cookies.get("oauth_state")
-    if not cookie_state or cookie_state != state:
+    valid_state = True
+    if not cookie_state:
+        logger.warning("login_failed", context="state_not_exists")
         emit_audit_event(
             event_type=EventType.AUTH,
             event_action=AuthEventAction.LOGIN_FAILURE,
             level=AuditLevel.WARNING,
-            metadata={"reason": "invalid_refresh_token"},
+            metadata=AuthAuditMetadata(context="state_missing"),
             immediate=True
         )
+        valid_state = False
+    
+    elif cookie_state != state:
+        logger.warning("login_failed", context="invalid_state")
+        emit_audit_event(
+            event_type=EventType.AUTH,
+            event_action=AuthEventAction.LOGIN_FAILURE,
+            level=AuditLevel.WARNING,
+            metadata=AuthAuditMetadata(context="state_mismatch"),
+            immediate=True
+        )
+        valid_state = False
+        
+    if not valid_state:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="유효하지 않은 인증 접근입니다."
         )
-    
+
     # OAuth state 유효성 검사
     is_valid = await validate_oauth_state(
         state=state,
@@ -118,7 +134,7 @@ async def oauth_callback(
             event_type=EventType.AUTH,
             event_action=AuthEventAction.LOGIN_FAILURE,
             level=AuditLevel.WARNING,
-            metadata={"reason": "expired_state"},
+            metadata=AuthAuditMetadata(context="expired_state"),
             immediate=True
         )
         raise HTTPException(
@@ -167,7 +183,7 @@ def refresh_token(
             event_type=EventType.AUTH,
             event_action=AuthEventAction.LOGIN_FAILURE,
             level=AuditLevel.WARNING,
-            metadata={"reason": "invalid_or_expired_token", "detail": e.detail},
+            metadata=AuthAuditMetadata(context="refresh_token_invalid"),
             immediate=True
         )
         
@@ -198,7 +214,7 @@ def refresh_token(
             event_type=EventType.AUTH,
             event_action=AuthEventAction.LOGIN_FAILURE,
             level=AuditLevel.WARNING,
-            metadata={"reason": "invalid_refresh_token"},
+            metadata=AuthAuditMetadata(context="refresh_token_invalid"),
             immediate=True,
             actor=snapshot,
         )
@@ -371,12 +387,12 @@ async def mypage_integrations(
             )
 
     logger.info(
-        "[AUTH][ME-INTEGRATIONS] user_id=%s github=%s jira=%s confluence=%s slack=%s",
-        current_user.id,
-        bool(response.github),
-        bool(response.jira),
-        bool(response.confluence),
-        bool(response.slack),
+        "user_integrations_status",
+        user_id=current_user.oauth_user.sub,
+        github=bool(response.github),
+        jira=bool(response.jira),
+        confluence=bool(response.confluence),
+        slack=bool(response.slack)
     )
 
     return response

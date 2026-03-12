@@ -5,13 +5,17 @@ from catchup.db.models import SourceType
 
 
 class BaseAuditMetadata(BaseModel):
+    context: str | None = None
+
+
+class AuthAuditMetadata(BaseAuditMetadata):
     pass
 
 
 class ChatAuditMetadata(BaseAuditMetadata):
     session_id: uuid.UUID
     query: str | None = None
-    tool_filters: list[SourceType] | None = Field(default_factory=list)
+    tool_filters: list[SourceType] | None = Field(default=None)
     
     # 검색 관련
     retrieved_docs_count: int | None = None
@@ -48,3 +52,8 @@ class ChatAuditMetadata(BaseAuditMetadata):
         self._sync_count_and_ids("retrieved_docs_count", "retrieved_doc_ids")
         self._sync_count_and_ids("provided_sources_count", "provided_source_ids")
         return self
+    
+    
+class AwsS3AuditMetadata(BaseAuditMetadata):
+    file_name: str
+    s3_key: str
