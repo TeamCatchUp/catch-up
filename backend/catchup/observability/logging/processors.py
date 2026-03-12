@@ -91,16 +91,16 @@ def _enforce_metadata_size(metadata: dict[str, Any]) -> dict[str, Any]:
     }
 
 # actor 필드 정규화 (user_id, email, role, department)
-def _normalize_actor(actor: Any) -> dict[str, Any]:
-    normalized = dict(DEFAULT_ACTOR)
+# def _normalize_actor(actor: Any) -> dict[str, Any]:
+#     normalized = dict(DEFAULT_ACTOR)
 
-    if not isinstance(actor, dict):
-        return normalized
+#     if not isinstance(actor, dict):
+#         return normalized
     
-    for key in DEFAULT_ACTOR:
-        normalized[key] = actor.get(key)
+#     for key in DEFAULT_ACTOR:
+#         normalized[key] = actor.get(key)
     
-    return normalized
+#     return normalized
 
 # 민감 정보 제거
 def sanitize_secrets_processor(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, Any]:
@@ -126,7 +126,7 @@ def ensure_required_fields_processor(_: Any, __: str, event_dict: dict[str, Any]
     event_dict.setdefault("version", settings.APP_VERSION)
     #event_dict.setdefault("trace_id", "unknown")
 
-    event_dict["actor"] = _normalize_actor(event_dict.get("actor"))
+    # event_dict["actor"] = _normalize_actor(event_dict.get("actor"))
     event_dict["metadata"] = _normalize_metadata(event_dict.get("metadata"))
 
     event_dict.setdefault("event_type", "SYSTEM")

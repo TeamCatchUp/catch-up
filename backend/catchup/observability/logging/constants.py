@@ -28,11 +28,11 @@ LOG_LEVELS: Final[dict[str, int]] = {
 }
 
 CONSOLE_EXCLUDE_KEYS: Final[set[str]] = {
-    "actor",
+    #"actor",
     "environment",
-    "event_action",
-    "event_type",
-    "metadata",
+    #"event_action",
+    #"event_type",
+    #"metadata",
     "service",
     "trace_id",
     "version",
