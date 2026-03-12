@@ -1,0 +1,105 @@
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping, Sequence
+from typing import TypeVar
+
+from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.schemas import FullSyncTarget, SyncTargetType
+
+T = TypeVar("T")
+
+
+def _normalize_text(value: str | None) -> str:
+    return (value or "").strip()
+
+
+def normalize_target_ids(target_ids: list[str] | None) -> list[str]:
+    if target_ids is None:
+        raise SyncRequestError("target_ids is required")
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in target_ids:
+        candidate = _normalize_text(item)
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        normalized.append(candidate)
+
+    if not normalized:
+        raise SyncRequestError(
+            "target_ids is empty after normalization",
+            metadata={"requested_target_ids": target_ids},
+        )
+
+    return normalized
+
+
+def index_targets(
+    rows: Sequence[T],
+    *,
+    key_getter: Callable[[T], str | None],
+) -> dict[str, T]:
+    index: dict[str, T] = {}
+    for row in rows:
+        key = _normalize_text(key_getter(row))
+        if not key or key in index:
+            continue
+        index[key] = row
+    return index
+
+
+def resolve_requested_targets(
+    requested_ids: Sequence[str],
+    *,
+    target_index: Mapping[str, T],
+    error_message: str,
+    error_metadata: Mapping[str, object],
+) -> list[T]:
+    unknown_target_ids = [
+        target_id
+        for target_id in requested_ids
+        if target_id not in target_index
+    ]
+    if unknown_target_ids:
+        raise SyncRequestError(
+            error_message,
+            metadata={
+                **error_metadata,
+                "requested_target_ids": list(requested_ids),
+                "invalid_target_ids": unknown_target_ids,
+            },
+        )
+
+    return [target_index[target_id] for target_id in requested_ids]
+
+
+def build_full_sync_targets(
+    rows: Sequence[T],
+    *,
+    target_type: SyncTargetType | str,
+    id_getter: Callable[[T], str | None],
+    name_getter: Callable[[T], str | None],
+    metadata_getter: Callable[[T], Mapping[str, object] | None] | None = None,
+) -> list[FullSyncTarget]:
+    normalized_type = SyncTargetType(target_type)
+    targets: list[FullSyncTarget] = []
+
+    for row in rows:
+        target_id = _normalize_text(id_getter(row))
+        if not target_id:
+            raise SyncRequestError("resolved target_id is empty")
+
+        target_name = _normalize_text(name_getter(row)) or target_id
+        metadata = dict(metadata_getter(row) or {}) if metadata_getter is not None else {}
+
+        targets.append(
+            FullSyncTarget(
+                target_type=normalized_type,
+                target_id=target_id,
+                target_name=target_name,
+                metadata=metadata,
+            )
+        )
+
+    return targets
