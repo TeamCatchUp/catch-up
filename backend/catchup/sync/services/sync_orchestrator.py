@@ -8,12 +8,15 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from catchup.db.models import SyncConnector, SyncType
+from catchup.db.models import SyncConnector, SyncEvent, SyncType
 from catchup.db.sync import (
-    complete_job_success as complete_db_sync_job_success,
-    start_job as start_db_sync_job,
+    SyncEventPublishResultInput,
+    claim_events_for_publish,
+    find_active_full_sync_job,
+    record_event_publish_outcomes,
+    try_acquire_full_sync_scope_lock,
 )
-from catchup.sync.common.exceptions import SyncInternalError
+from catchup.sync.common.exceptions import RedisStreamPublishError, SyncInternalError
 from catchup.sync.common.protocols import EventPublisherProtocol
 from catchup.sync.common.schemas import (
     PublishTasksResult,
@@ -27,7 +30,7 @@ from catchup.sync.event_publisher.event_record_persistence import (
     persist_sync_job_and_events,
 )
 from catchup.sync.event_publisher.stream_task_builder import (
-    build_stream_tasks_from_event_ids,
+    build_stream_tasks_from_persisted_events,
 )
 from catchup.sync.status_stream.pubsub import publish_job_status_event
 from catchup.sync.status_stream.schemas import (
@@ -106,7 +109,25 @@ class SyncDispatchOrchestrator:
     ) -> SyncDispatchResult:
         # Scope 정규화
         normalized_scope_id = self._normalize_scope_id(scope_id)
-        
+
+        no_events = self._build_no_events_response(
+            connector=connector,
+            scope_id=normalized_scope_id,
+            total_targets=len(event_seeds),
+        )
+        if no_events is not None:
+            return no_events
+
+        conflict = self._check_dispatch_conflict(
+            db=db,
+            connector=connector,
+            sync_type=sync_type,
+            scope_id=normalized_scope_id,
+            base_url=base_url,
+        )
+        if conflict is not None:
+            return conflict
+
         context = self._build_dispatch_context(
             connector=connector,
             sync_type=sync_type,
@@ -114,7 +135,7 @@ class SyncDispatchOrchestrator:
         )
 
         # DB에 Job & Event 기록
-        db_event_ids = self._persist_events(
+        persisted_events = self._persist_dispatch_records(
             db=db,
             context=context,
             event_seeds=event_seeds,
@@ -123,11 +144,14 @@ class SyncDispatchOrchestrator:
         # Redis Stream에 저장할 Task 생성
         tasks = self._build_stream_tasks(
             context=context,
-            event_seeds=event_seeds,
-            db_event_ids=db_event_ids,
+            events=persisted_events,
         )
         # Event Publisher를 통해 Redis Stream에 이벤트 발행
-        publish_result = await self._publish_tasks(tasks=tasks)
+        publish_result = await self._publish_dispatch_tasks(
+            db=db,
+            context=context,
+            tasks=tasks,
+        )
 
         # PubSub에 Job Accepted 이벤트 발행
         await self._publish_queued_status(
@@ -137,13 +161,6 @@ class SyncDispatchOrchestrator:
             sync_from_ts=sync_from_ts,
         )
 
-        # 처리할 대상이 없는 Job이였다면 즉시 성공 처리
-        self._finalize_empty_job(
-            db=db,
-            job_id=context.job_id,
-            total_targets=len(event_seeds),
-        )
-        
         # 로깅
         self._emit_dispatch_audit(
             context=context,
@@ -155,7 +172,7 @@ class SyncDispatchOrchestrator:
         # 응답 반환
         return self._build_response(
             context=context,
-            db_event_ids=db_event_ids,
+            db_event_ids=[event.event_id for event in persisted_events],
             queued_targets=publish_result.published_count,
             base_url=base_url,
         )
@@ -181,14 +198,93 @@ class SyncDispatchOrchestrator:
             requested_at=datetime.now(timezone.utc),
         )
 
+    def _build_no_events_response(
+        self,
+        *,
+        connector: SyncConnector,
+        scope_id: str,
+        total_targets: int,
+    ) -> SyncDispatchResult | None:
+        if total_targets != 0:
+            return None
+
+        logger.info(
+            "[%s][ORCHESTRATOR] Dispatch skipped because no events were resolved: scope_id=%s",
+            connector.value.upper(),
+            scope_id,
+        )
+        return SyncDispatchResult(
+            status=SyncDispatchStatus.NO_EVENTS,
+            connector=connector,
+            scope_id=scope_id,
+            total_targets=0,
+            queued_targets=0,
+            message="no sync events were generated for this request",
+        )
+
+    def _check_dispatch_conflict(
+        self,
+        *,
+        db: Session,
+        connector: SyncConnector,
+        sync_type: SyncType,
+        scope_id: str,
+        base_url: str | None,
+    ) -> SyncDispatchResult | None:
+        if sync_type != SyncType.FULL:
+            return None
+
+        if not try_acquire_full_sync_scope_lock(
+            db,
+            connector=connector,
+            scope_id=scope_id,
+        ):
+            logger.warning(
+                "[%s][%s][ORCHESTRATOR] Dispatch conflict while scope lock is held: scope_id=%s",
+                connector.value.upper(),
+                sync_type.value.upper(),
+                scope_id,
+            )
+            db.rollback()
+            return SyncDispatchResult(
+                status=SyncDispatchStatus.CONFLICT,
+                connector=connector,
+                scope_id=scope_id,
+                message="another full sync dispatch is already being created for this scope",
+            )
+
+        active_job = find_active_full_sync_job(
+            db,
+            connector=connector,
+            scope_id=scope_id,
+        )
+        if active_job is None:
+            return None
+
+        logger.warning(
+            "[%s][%s][ORCHESTRATOR] Dispatch conflict due to active job: scope_id=%s, active_job_id=%s, active_status=%s",
+            connector.value.upper(),
+            sync_type.value.upper(),
+            scope_id,
+            active_job.job_id,
+            active_job.status,
+        )
+        db.rollback()
+        return self._build_conflict_response(
+            connector=connector,
+            scope_id=scope_id,
+            job_id=active_job.job_id,
+            base_url=base_url,
+        )
+
     def _persist_events(
         self,
         *,
         db: Session,
         context: DispatchContext,
         event_seeds: Sequence[SyncEventSeed],
-    ) -> list[str]:
-        db_event_ids = persist_sync_job_and_events(
+    ) -> list[SyncEvent]:
+        events = persist_sync_job_and_events(
             db,
             job_id=context.job_id,
             connector=context.connector,
@@ -198,7 +294,7 @@ class SyncDispatchOrchestrator:
             event_seeds=list(event_seeds),
         )
 
-        if len(db_event_ids) != len(event_seeds):
+        if len(events) != len(event_seeds):
             raise SyncInternalError(
                 "persisted event count mismatch",
                 metadata={
@@ -207,29 +303,43 @@ class SyncDispatchOrchestrator:
                     "scope_id": context.scope_id,
                     "job_id": context.job_id,
                     "requested_event_count": len(event_seeds),
-                    "persisted_event_count": len(db_event_ids),
+                    "persisted_event_count": len(events),
                 },
             )
 
-        return db_event_ids
+        return events
+
+    def _persist_dispatch_records(
+        self,
+        *,
+        db: Session,
+        context: DispatchContext,
+        event_seeds: Sequence[SyncEventSeed],
+    ) -> list[SyncEvent]:
+        try:
+            events = self._persist_events(
+                db=db,
+                context=context,
+                event_seeds=event_seeds,
+            )
+            db.commit()
+            return events
+        except Exception:
+            db.rollback()
+            raise
 
     def _build_stream_tasks(
         self,
         *,
         context: DispatchContext,
-        event_seeds: Sequence[SyncEventSeed],
-        db_event_ids: Sequence[str],
+        events: Sequence[SyncEvent],
     ) -> list[SyncStreamTask]:
-        tasks = build_stream_tasks_from_event_ids(
-            event_ids=list(db_event_ids),
-            job_id=context.job_id,
-            connector=context.connector,
-            sync_type=context.sync_type,
-            scope_id=context.scope_id,
-            event_seeds=list(event_seeds),
+        tasks = build_stream_tasks_from_persisted_events(
+            events=events,
+            fallback_scope_id=context.scope_id,
         )
 
-        if len(tasks) != len(db_event_ids):
+        if len(tasks) != len(events):
             raise SyncInternalError(
                 "stream task build count mismatch",
                 metadata={
@@ -237,7 +347,7 @@ class SyncDispatchOrchestrator:
                     "sync_type": context.sync_type.value,
                     "scope_id": context.scope_id,
                     "job_id": context.job_id,
-                    "persisted_event_count": len(db_event_ids),
+                    "persisted_event_count": len(events),
                     "built_task_count": len(tasks),
                 },
             )
@@ -250,6 +360,167 @@ class SyncDispatchOrchestrator:
         tasks: list[SyncStreamTask],
     ) -> PublishTasksResult:
         return await self._event_publisher.publish(tasks=tasks)
+
+    async def _publish_dispatch_tasks(
+        self,
+        *,
+        db: Session,
+        context: DispatchContext,
+        tasks: list[SyncStreamTask],
+    ) -> PublishTasksResult:
+        if not tasks:
+            return PublishTasksResult(
+                requested_count=0,
+                published_count=0,
+                message_ids=[],
+                partial_success=False,
+            )
+
+        self._claim_publish_records(
+            db=db,
+            context=context,
+            tasks=tasks,
+        )
+
+        try:
+            publish_result = await self._publish_tasks(tasks=tasks)
+        except Exception as exc:
+            self._record_publish_failure(
+                db=db,
+                context=context,
+                tasks=tasks,
+                error_message=str(exc),
+            )
+            raise
+
+        self._record_publish_outcomes(
+            db=db,
+            context=context,
+            tasks=tasks,
+            publish_result=publish_result,
+        )
+
+        if publish_result.published_count != publish_result.requested_count:
+            raise RedisStreamPublishError(
+                metadata={
+                    "requested_count": publish_result.requested_count,
+                    "published_count": publish_result.published_count,
+                    "partial_success": publish_result.partial_success,
+                    "failed_at_index": publish_result.failed_at_index,
+                    "failed_event_id": publish_result.failed_event_id,
+                    "error_message": publish_result.error_message,
+                    "job_id": context.job_id,
+                    "scope_id": context.scope_id,
+                },
+            )
+
+        return publish_result
+
+    def _claim_publish_records(
+        self,
+        *,
+        db: Session,
+        context: DispatchContext,
+        tasks: Sequence[SyncStreamTask],
+    ) -> None:
+        event_ids = [task.event_id for task in tasks]
+        if claim_events_for_publish(db, event_ids=event_ids):
+            return
+
+        raise SyncInternalError(
+            "failed to transition events to publishing",
+            metadata={
+                "connector": context.connector.value,
+                "sync_type": context.sync_type.value,
+                "scope_id": context.scope_id,
+                "job_id": context.job_id,
+                "event_ids": event_ids,
+            },
+        )
+
+    def _record_publish_failure(
+        self,
+        *,
+        db: Session,
+        context: DispatchContext,
+        tasks: Sequence[SyncStreamTask],
+        error_message: str,
+    ) -> None:
+        failed_event_ids = [task.event_id for task in tasks]
+        updated = record_event_publish_outcomes(
+            db,
+            published=[],
+            failed_event_ids=failed_event_ids,
+            publish_error=error_message,
+        )
+        if updated:
+            return
+
+        raise SyncInternalError(
+            "failed to persist publish failure state",
+            metadata={
+                "connector": context.connector.value,
+                "sync_type": context.sync_type.value,
+                "scope_id": context.scope_id,
+                "job_id": context.job_id,
+                "event_ids": failed_event_ids,
+                "error_message": error_message,
+            },
+        )
+
+    def _record_publish_outcomes(
+        self,
+        *,
+        db: Session,
+        context: DispatchContext,
+        tasks: Sequence[SyncStreamTask],
+        publish_result: PublishTasksResult,
+    ) -> None:
+        if publish_result.published_count != len(publish_result.message_ids):
+            raise SyncInternalError(
+                "publish result message count mismatch",
+                metadata={
+                    "connector": context.connector.value,
+                    "sync_type": context.sync_type.value,
+                    "scope_id": context.scope_id,
+                    "job_id": context.job_id,
+                    "published_count": publish_result.published_count,
+                    "message_id_count": len(publish_result.message_ids),
+                },
+            )
+
+        published = [
+            SyncEventPublishResultInput(
+                event_id=task.event_id,
+                stream_message_id=message_id,
+            )
+            for task, message_id in zip(tasks, publish_result.message_ids)
+        ]
+        failed_event_ids = [
+            task.event_id
+            for task in tasks[len(publish_result.message_ids) :]
+        ]
+
+        updated = record_event_publish_outcomes(
+            db,
+            published=published,
+            failed_event_ids=failed_event_ids,
+            publish_error=publish_result.error_message,
+        )
+        if updated:
+            return
+
+        raise SyncInternalError(
+            "failed to persist publish result state",
+            metadata={
+                "connector": context.connector.value,
+                "sync_type": context.sync_type.value,
+                "scope_id": context.scope_id,
+                "job_id": context.job_id,
+                "published_event_ids": [item.event_id for item in published],
+                "failed_event_ids": failed_event_ids,
+            },
+        )
 
     async def _publish_queued_status(
         self,
@@ -284,20 +555,6 @@ class SyncDispatchOrchestrator:
                 exc,
                 exc_info=True,
             )
-
-    def _finalize_empty_job(
-        self,
-        *,
-        db: Session,
-        job_id: str,
-        total_targets: int,
-    ) -> None:
-        if total_targets != 0:
-            return
-
-        started = start_db_sync_job(db, job_id)
-        if started:
-            complete_db_sync_job_success(db, job_id)
 
     def _emit_dispatch_audit(
         self,
@@ -347,6 +604,30 @@ class SyncDispatchOrchestrator:
             event_ids=list(db_event_ids),
             total_targets=len(db_event_ids),
             queued_targets=queued_targets,
+            message="sync dispatch accepted",
+            snapshot_url=snapshot_url,
+            stream_url=stream_url,
+        )
+
+    def _build_conflict_response(
+        self,
+        *,
+        connector: SyncConnector,
+        scope_id: str,
+        job_id: str | None,
+        base_url: str | None,
+    ) -> SyncDispatchResult:
+        snapshot_url = None
+        stream_url = None
+        if job_id is not None:
+            snapshot_url, stream_url = _build_job_urls(base_url, job_id)
+
+        return SyncDispatchResult(
+            status=SyncDispatchStatus.CONFLICT,
+            connector=connector,
+            scope_id=scope_id,
+            job_id=job_id,
+            message="active full sync already exists for this scope",
             snapshot_url=snapshot_url,
             stream_url=stream_url,
         )

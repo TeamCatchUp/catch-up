@@ -97,20 +97,40 @@ class SyncAcceptedResponse(BaseModel):
 
     status: SyncDispatchStatus = Field(
         ...,
-        description="accepted | no_events | conflict | failed",
+        description=(
+            "accepted : means a new dispatch was created, "
+            "no_events : no sync events were generated, "
+            "conflict : an active full sync already exists. "
+            "failed : internal server error"
+        ),
     )
     connector: SyncConnector
     scope_id: str
 
-    job_id: str | None = None
-    event_ids: list[str] = Field(default_factory=list)
+    job_id: str | None = Field(
+        default=None,
+        description="created job id, or the active job id when status is conflict",
+    )
+    event_ids: list[str] = Field(
+        default_factory=list,
+        description="persisted sync event ids created for the accepted dispatch",
+    )
 
     total_targets: int = 0
-    queued_targets: int = 0
+    queued_targets: int = Field(
+        default=0,
+        description="number of targets successfully published to the queue",
+    )
 
     message: str | None = None
-    snapshot_url: str | None = None
-    stream_url: str | None = None
+    snapshot_url: str | None = Field(
+        default=None,
+        description="job snapshot endpoint for the created or conflicting job",
+    )
+    stream_url: str | None = Field(
+        default=None,
+        description="job status stream endpoint for the created or conflicting job",
+    )
 
 
 class SyncStatusResponse(BaseModel):

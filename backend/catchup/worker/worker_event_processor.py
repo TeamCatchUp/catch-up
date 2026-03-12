@@ -22,6 +22,8 @@ from catchup.db.models import (
     SyncType,
 )
 from catchup.db.sync import (
+    SyncEventPublishResultInput,
+    claim_events_for_republish,
     claim_event_for_processing,
     complete_job_failed,
     complete_job_success,
@@ -31,6 +33,7 @@ from catchup.db.sync import (
     mark_event_failed,
     mark_event_retrying,
     mark_event_success,
+    record_event_publish_outcomes,
     requeue_retrying_event,
     start_job,
 )
@@ -48,11 +51,13 @@ from catchup.sync.stream_runtime.stream_constants import (
     STREAM_CLAIM_START_ID,
     SyncStreamFailureReason,
 )
-from catchup.sync.stream_runtime.stream_queue import publish_deadletter
+from catchup.sync.event_publisher.stream_task_builder import (
+    build_stream_task_from_persisted_event,
+)
+from catchup.sync.stream_runtime.stream_queue import publish_deadletter, publish_task
 from catchup.sync.stream_runtime.sync_runtime import (
     ack_consumed_messages,
     initialize_stream_runtime,
-    publish_job_events,
     read_ready_messages,
 )
 from catchup.sync.status_stream.pubsub import publish_job_status_event
@@ -245,6 +250,13 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
         )
         scope_id = str(metadata.get("scope_id") or job.scope_id)
         target_id = str(claimed.resource_id)
+        sync_from_ts = task.sync_from_ts
+        if sync_from_ts is None:
+            raw_sync_from_ts = metadata.get("sync_from_ts")
+            if raw_sync_from_ts is not None:
+                normalized_sync_from_ts = str(raw_sync_from_ts).strip()
+                sync_from_ts = normalized_sync_from_ts or None
+
         context = FullSyncContext(
             event_id=claimed.event_id,
             job_id=claimed.job_id,
@@ -253,7 +265,7 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
             target_type=claimed.resource_type,
             target_id=target_id,
             target_name=str(metadata.get("target_name") or target_id),
-            sync_from_ts=task.sync_from_ts,
+            sync_from_ts=sync_from_ts,
             attempt=int(claimed.attempt),
             max_attempts=int(claimed.max_attempts),
             metadata=metadata,
@@ -579,33 +591,16 @@ async def _handle_event_failure(
         )
         return
 
-    with SessionLocal() as db:
-        if not mark_event_retrying(db, context.event_id):
-            await _deadletter(
-                message=message,
-                reason=SyncStreamFailureReason.EVENT_CAS_CONFLICT,
-                error_message="failed to transition IN_PROGRESS -> RETRYING",
-            )
-            return
+    try:
+        await _republish_full_sync_event(context=context)
+    except Exception as publish_exc:
+        await _deadletter(
+            message=message,
+            reason=SyncStreamFailureReason.PROCESSING_EXCEPTION,
+            error_message=f"failed to republish retry event: {publish_exc}",
+        )
+        raise
 
-        if not requeue_retrying_event(db, context.event_id):
-            await _deadletter(
-                message=message,
-                reason=SyncStreamFailureReason.EVENT_CAS_CONFLICT,
-                error_message="failed to transition RETRYING -> PENDING",
-            )
-            return
-
-    await publish_job_events(
-        job_id=context.job_id,
-        event_ids=[context.event_id],
-        connector=context.connector,
-        sync_type=context.sync_type,
-        scope_id=context.scope_id,
-        target_type=context.target_type,
-        target_ids=[context.target_id],
-        max_attempts=context.max_attempts,
-    )
     await _publish_status_event(
         _build_target_status_event(
             context=context,
@@ -640,6 +635,60 @@ async def _handle_event_failure(
         next_attempt,
         error_summary,
     )
+
+
+async def _republish_full_sync_event(
+    *,
+    context: FullSyncContext,
+) -> None:
+    with SessionLocal() as db:
+        if not mark_event_retrying(db, context.event_id):
+            raise RuntimeError("failed to transition IN_PROGRESS -> RETRYING")
+
+        if not requeue_retrying_event(db, context.event_id):
+            raise RuntimeError("failed to transition RETRYING -> PENDING")
+
+    with SessionLocal() as db:
+        if not claim_events_for_republish(db, event_ids=[context.event_id]):
+            raise RuntimeError("failed to transition publish state to PUBLISHING")
+
+        event = get_event(db, context.event_id)
+        if event is None:
+            raise RuntimeError(f"event not found for republish: {context.event_id}")
+
+        task = build_stream_task_from_persisted_event(
+            event=event,
+            fallback_scope_id=context.scope_id,
+        )
+
+    try:
+        message_id = await publish_task(task)
+    except Exception as exc:
+        with SessionLocal() as db:
+            if not record_event_publish_outcomes(
+                db,
+                published=[],
+                failed_event_ids=[context.event_id],
+                publish_error=str(exc),
+            ):
+                raise RuntimeError(
+                    "failed to persist republish failure state"
+                ) from exc
+        raise
+
+    with SessionLocal() as db:
+        if not record_event_publish_outcomes(
+            db,
+            published=[
+                SyncEventPublishResultInput(
+                    event_id=context.event_id,
+                    stream_message_id=message_id,
+                )
+            ],
+            failed_event_ids=[],
+            publish_error=None,
+        ):
+            raise RuntimeError("failed to persist republish success state")
 
 
 async def _finalize_job_if_done(

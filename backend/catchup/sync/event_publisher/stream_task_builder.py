@@ -1,38 +1,57 @@
 from __future__ import annotations
 
-from catchup.db.models import SyncConnector, SyncType
-from catchup.sync.common.schemas import SyncEventSeed, SyncStreamTask
+from collections.abc import Sequence
+
+from catchup.db.models import SyncEvent
+from catchup.sync.common.schemas import SyncStreamTask
 
 
-def build_stream_tasks_from_event_ids(
+def _normalize_sync_from_ts(metadata: dict[str, object]) -> str | None:
+    raw = metadata.get("sync_from_ts")
+    if raw is None:
+        return None
+
+    value = str(raw).strip()
+    return value or None
+
+
+def build_stream_task_from_persisted_event(
     *,
-    event_ids: list[str],
-    job_id: str,
-    connector: SyncConnector,
-    sync_type: SyncType,
-    scope_id: str,
-    event_seeds: list[SyncEventSeed],
+    event: SyncEvent,
+    fallback_scope_id: str | None = None,
+) -> SyncStreamTask:
+    metadata = event.resource_metadata if isinstance(event.resource_metadata, dict) else {}
+    scope_id = str(metadata.get("scope_id") or fallback_scope_id or "").strip()
+    if not scope_id:
+        raise ValueError(f"scope_id is missing for event: {event.event_id}")
+
+    target_type = str(event.resource_type).strip()
+    target_id = str(event.resource_id).strip()
+    if not target_type or not target_id:
+        raise ValueError(f"target identity is invalid for event: {event.event_id}")
+
+    return SyncStreamTask.full(
+        event_id=event.event_id,
+        job_id=event.job_id,
+        connector=event.connector,
+        scope_id=scope_id,
+        target_type=target_type,
+        target_id=target_id,
+        sync_from_ts=_normalize_sync_from_ts(metadata),
+        attempt=max(0, int(event.attempt)),
+        max_attempts=max(1, int(event.max_attempts)),
+    )
+
+
+def build_stream_tasks_from_persisted_events(
+    *,
+    events: Sequence[SyncEvent],
+    fallback_scope_id: str | None = None,
 ) -> list[SyncStreamTask]:
-    seed_by_event_id = {seed.event_id: seed for seed in event_seeds}
-    tasks: list[SyncStreamTask] = []
-
-    for event_id in event_ids:
-        seed = seed_by_event_id.get(event_id)
-        if seed is None:
-            continue
-
-        tasks.append(
-            SyncStreamTask.full(
-                event_id=event_id,
-                job_id=job_id,
-                connector=connector,
-                scope_id=scope_id,
-                target_type=seed.target_type,
-                target_id=seed.target_id,
-                sync_from_ts=seed.sync_from_ts,
-                attempt=0,
-                max_attempts=seed.max_attempts,
-            )
+    return [
+        build_stream_task_from_persisted_event(
+            event=event,
+            fallback_scope_id=fallback_scope_id,
         )
-
-    return tasks
+        for event in events
+    ]
