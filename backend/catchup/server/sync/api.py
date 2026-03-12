@@ -27,7 +27,7 @@ from catchup.sync.common.schemas import (
     SyncTrigger,
 )
 from catchup.sync.common.exceptions import SyncAPIError
-from catchup.sync.dispatch_service import get_sync_dispatch_service
+from catchup.sync.dispatch_service import SyncDispatchService
 from catchup.sync.query_service import (
     SyncJobSnapshotResult,
     SyncScopeStatusResult,
@@ -35,6 +35,7 @@ from catchup.sync.query_service import (
     get_sync_query_service,
 )
 from catchup.sync.status_stream.service import get_sync_status_stream_service
+from catchup.server.sync.dependencies import get_sync_dispatch_service_dependency
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +59,8 @@ async def dispatch_full_sync(
     sync_request: FullSyncRequest,
     request: Request,
     db: Session = Depends(get_db),
+    dispatch_service: SyncDispatchService = Depends(get_sync_dispatch_service_dependency),
 ):
-    dispatch_service = get_sync_dispatch_service()
     sync_days = max(1, int(sync_request.sync_days or settings.DEFAULT_SYNC_DAYS))
     sync_from_ts = f"{(datetime.now(timezone.utc) - timedelta(days=sync_days)).timestamp():.6f}"
 
