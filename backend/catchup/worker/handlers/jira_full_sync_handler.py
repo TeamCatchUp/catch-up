@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from catchup.connectors.jira.factory import create_jira_ingestion_service
-from catchup.sync.common.schemas import SyncEventContext
+from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
 logger = logging.getLogger(__name__)
@@ -35,9 +35,9 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
     async def handle(
         self,
         *,
-        context: SyncEventContext,
+        context: FullSyncContext,
         service_cache: dict[str, object],
-    ) -> dict[str, int | bool]:
+    ) -> TargetSyncResult:
         service = await self._get_service(context.scope_id, service_cache)
         sync_days = self._resolve_sync_days(context)
 
@@ -82,8 +82,7 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
             synced_count,
             sync_days,
         )
-        return {
-            "synced": synced_count,
-            "errors": error_count,
-            "skipped": False,
-        }
+        return self._result(
+            synced_count=synced_count,
+            error_count=error_count,
+        )

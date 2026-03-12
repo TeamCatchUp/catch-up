@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Iterable
 
+from catchup.db.models import SyncType
 from catchup.sync.common.exceptions import (
     RedisStreamInitializationError,
     RedisStreamPublishError,
@@ -37,6 +38,12 @@ def build_stream_tasks(
 ) -> list[SyncStreamTask]:
     tasks: list[SyncStreamTask] = []
     target_ids = target_ids or []
+    normalized_sync_type = SyncType(str(sync_type).strip().lower())
+
+    if normalized_sync_type != SyncType.FULL:
+        raise ValueError(
+            f"publish_job_events only supports full sync tasks: sync_type={sync_type}"
+        )
 
     for index, event_id in enumerate(event_ids):
         normalized_event_id = event_id.strip()
@@ -49,11 +56,10 @@ def build_stream_tasks(
             else normalized_event_id
         )
         tasks.append(
-            SyncStreamTask(
+            SyncStreamTask.full(
                 event_id=normalized_event_id,
                 job_id=job_id,
                 connector=connector,
-                sync_type=sync_type,
                 scope_id=scope_id,
                 target_type=target_type,
                 target_id=target_id,

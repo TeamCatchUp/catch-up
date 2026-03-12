@@ -23,6 +23,7 @@ from catchup.server.sync.schemas import (
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
     SyncDispatchResult,
+    SyncTrigger,
 )
 from catchup.sync.common.exceptions import SyncAPIError
 from catchup.sync.dispatch_service import get_sync_dispatch_service
@@ -69,7 +70,7 @@ async def dispatch_full_sync(
                 scope_id=sync_request.scope_id,
                 target_ids=sync_request.target_ids,
                 sync_days=sync_request.sync_days,
-                trigger="api",
+                trigger=SyncTrigger.API,
             ),
             base_url=str(request.base_url),
         ),

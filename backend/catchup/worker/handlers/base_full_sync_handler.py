@@ -4,8 +4,9 @@ import math
 from datetime import datetime, timezone
 
 from catchup.configs.config import settings
+from catchup.db.models import SyncType
 from catchup.sync.common.protocols import IngestionHandlerProtocol
-from catchup.sync.common.schemas import SyncEventContext
+from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
 
 
 class BaseFullSyncHandler(IngestionHandlerProtocol):
@@ -18,7 +19,7 @@ class BaseFullSyncHandler(IngestionHandlerProtocol):
     """
 
     connector: str
-    sync_type = "full"
+    sync_type = SyncType.FULL
 
     def _as_int(self, value: object, default: int = 0) -> int:
         try:
@@ -29,7 +30,20 @@ class BaseFullSyncHandler(IngestionHandlerProtocol):
     def _cache_key(self, scope_id: str) -> str:
         return f"{self.connector}:{scope_id}"
 
-    def _resolve_sync_days(self, context: SyncEventContext) -> int:
+    def _result(
+        self,
+        *,
+        synced_count: int = 0,
+        error_count: int = 0,
+        skipped: bool = False,
+    ) -> TargetSyncResult:
+        return TargetSyncResult(
+            synced_count=synced_count,
+            error_count=error_count,
+            skipped=skipped,
+        )
+
+    def _resolve_sync_days(self, context: FullSyncContext) -> int:
         default_days = max(1, int(settings.DEFAULT_SYNC_DAYS))
         raw_sync_from = context.sync_from
         if raw_sync_from is None:
@@ -50,7 +64,7 @@ class BaseFullSyncHandler(IngestionHandlerProtocol):
     async def on_job_started(
         self,
         *,
-        context: SyncEventContext,
+        context: FullSyncContext,
         total_targets: int,
     ) -> None:
         return None
@@ -58,14 +72,14 @@ class BaseFullSyncHandler(IngestionHandlerProtocol):
     async def on_target_started(
         self,
         *,
-        context: SyncEventContext,
+        context: FullSyncContext,
     ) -> None:
         return None
 
     async def on_target_requeued(
         self,
         *,
-        context: SyncEventContext,
+        context: FullSyncContext,
         next_attempt: int,
         error_summary: str,
     ) -> None:
@@ -74,7 +88,7 @@ class BaseFullSyncHandler(IngestionHandlerProtocol):
     async def on_target_failed(
         self,
         *,
-        context: SyncEventContext,
+        context: FullSyncContext,
         next_attempt: int,
         error_summary: str,
         retryable: bool,
@@ -84,15 +98,15 @@ class BaseFullSyncHandler(IngestionHandlerProtocol):
     async def on_target_completed(
         self,
         *,
-        context: SyncEventContext,
-        result: dict[str, int | bool],
+        context: FullSyncContext,
+        result: TargetSyncResult,
     ) -> None:
         return None
 
     async def on_job_completed(
         self,
         *,
-        context: SyncEventContext,
+        context: FullSyncContext,
         total_targets: int,
         completed_targets: int,
         failed_targets: int,
@@ -103,7 +117,7 @@ class BaseFullSyncHandler(IngestionHandlerProtocol):
     async def on_job_failed(
         self,
         *,
-        context: SyncEventContext,
+        context: FullSyncContext,
         total_targets: int,
         failed_targets: int,
     ) -> None:

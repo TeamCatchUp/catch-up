@@ -18,6 +18,7 @@ from catchup.sync.common.protocols import EventPublisherProtocol
 from catchup.sync.common.schemas import (
     PublishTasksResult,
     SyncDispatchResult,
+    SyncDispatchStatus,
     SyncEventSeed,
     SyncStreamTask,
     SyncTrigger,
@@ -339,7 +340,7 @@ class SyncDispatchOrchestrator:
         )
 
         return SyncDispatchResult(
-            status="accepted",
+            status=SyncDispatchStatus.ACCEPTED,
             connector=context.connector,
             scope_id=context.scope_id,
             job_id=context.job_id,

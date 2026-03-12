@@ -3,19 +3,33 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from catchup.configs.config import settings
+from catchup.db.models import SyncType
 from catchup.sync.common.protocols import IngestionHandlerProtocol
-from catchup.sync.common.schemas import SyncEventContext
+from catchup.sync.common.schemas import IncrementalSyncContext, TargetSyncResult
 
 
 class BaseIncrementalHandler(IngestionHandlerProtocol):
     connector: str
-    sync_type = "incremental"
+    sync_type = SyncType.INCREMENTAL
 
     def _cache_key(self, scope_id: str) -> str:
         return f"{self.connector}:{scope_id}"
 
-    def _resolve_since(self, context: SyncEventContext) -> datetime:
-        raw = context.batch_sync_from or context.last_event_at or context.sync_from
+    def _result(
+        self,
+        *,
+        synced_count: int = 0,
+        error_count: int = 0,
+        skipped: bool = False,
+    ) -> TargetSyncResult:
+        return TargetSyncResult(
+            synced_count=synced_count,
+            error_count=error_count,
+            skipped=skipped,
+        )
+
+    def _resolve_since(self, context: IncrementalSyncContext) -> datetime:
+        raw = context.batch_sync_from or context.last_event_at
         if raw:
             try:
                 return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(
@@ -31,7 +45,7 @@ class BaseIncrementalHandler(IngestionHandlerProtocol):
     async def on_job_started(
         self,
         *,
-        context: SyncEventContext,
+        context: IncrementalSyncContext,
         total_targets: int,
     ) -> None:
         return None
@@ -39,14 +53,14 @@ class BaseIncrementalHandler(IngestionHandlerProtocol):
     async def on_target_started(
         self,
         *,
-        context: SyncEventContext,
+        context: IncrementalSyncContext,
     ) -> None:
         return None
 
     async def on_target_requeued(
         self,
         *,
-        context: SyncEventContext,
+        context: IncrementalSyncContext,
         next_attempt: int,
         error_summary: str,
     ) -> None:
@@ -55,7 +69,7 @@ class BaseIncrementalHandler(IngestionHandlerProtocol):
     async def on_target_failed(
         self,
         *,
-        context: SyncEventContext,
+        context: IncrementalSyncContext,
         next_attempt: int,
         error_summary: str,
         retryable: bool,
@@ -65,15 +79,15 @@ class BaseIncrementalHandler(IngestionHandlerProtocol):
     async def on_target_completed(
         self,
         *,
-        context: SyncEventContext,
-        result: dict[str, int | bool],
+        context: IncrementalSyncContext,
+        result: TargetSyncResult,
     ) -> None:
         return None
 
     async def on_job_completed(
         self,
         *,
-        context: SyncEventContext,
+        context: IncrementalSyncContext,
         total_targets: int,
         completed_targets: int,
         failed_targets: int,
@@ -84,7 +98,7 @@ class BaseIncrementalHandler(IngestionHandlerProtocol):
     async def on_job_failed(
         self,
         *,
-        context: SyncEventContext,
+        context: IncrementalSyncContext,
         total_targets: int,
         failed_targets: int,
     ) -> None:

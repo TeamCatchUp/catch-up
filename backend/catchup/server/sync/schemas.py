@@ -4,7 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from catchup.db.models import SyncConnector, SyncJobStatus
+from catchup.db.models import SyncConnector, SyncJobStatus, SyncType
+from catchup.sync.common.schemas import SyncDispatchStatus, SyncTargetType
 
 
 class SyncJobSnapshotResponse(BaseModel):
@@ -14,7 +15,7 @@ class SyncJobSnapshotResponse(BaseModel):
 
     job_id: str
     connector: SyncConnector
-    sync_type: str = "full"
+    sync_type: SyncType = SyncType.FULL
     scope_id: str
 
     status: SyncJobStatus
@@ -94,7 +95,10 @@ class SyncAcceptedResponse(BaseModel):
     공통 Sync 접수 응답
     """
 
-    status: str = Field(..., description="accepted | no_events | conflict | failed")
+    status: SyncDispatchStatus = Field(
+        ...,
+        description="accepted | no_events | conflict | failed",
+    )
     connector: SyncConnector
     scope_id: str
 
@@ -116,7 +120,7 @@ class SyncStatusResponse(BaseModel):
 
     connector: SyncConnector
     scope_id: str
-    sync_type: str = "full"
+    sync_type: SyncType = SyncType.FULL
     job_id: str
     status: SyncJobStatus
 
@@ -154,7 +158,7 @@ class SyncTargetItem(BaseModel):
 
     target_id: str
     display_name: str
-    target_type: str
+    target_type: SyncTargetType
     is_accessible: bool = True
     metadata: dict[str, Any] = Field(default_factory=dict)
 

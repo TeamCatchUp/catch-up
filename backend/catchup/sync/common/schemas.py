@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-from enum import StrEnum
 from dataclasses import dataclass, field
-from typing import Any, Literal, Mapping
+from enum import StrEnum
+from typing import Any, Mapping, TypeAlias
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from catchup.db.models import SyncConnector
+from catchup.db.models import SyncConnector, SyncType
 
-SyncDispatchStatus = Literal["accepted", "no_events", "conflict", "failed"]
+
+class SyncDispatchStatus(StrEnum):
+    ACCEPTED = "accepted"
+    NO_EVENTS = "no_events"
+    CONFLICT = "conflict"
+    FAILED = "failed"
+
 
 class SyncTrigger(StrEnum):
     API = "api"
@@ -16,29 +22,64 @@ class SyncTrigger(StrEnum):
     SYSTEM = "system"
 
 
-def _normalize_trigger(value: SyncTrigger | str) -> SyncTrigger:
-    if isinstance(value, SyncTrigger):
-        return value
-    return SyncTrigger(str(value).strip().lower())
+class SyncTargetType(StrEnum):
+    RESOURCE = "resource"
+    CHANNEL = "channel"
+    REPOSITORY = "repository"
+    PROJECT = "project"
+    SPACE = "space"
+
+
+class SyncEventKind(StrEnum):
+    CREATED = "created"
+    UPDATED = "updated"
+    DELETED = "deleted"
+
+
+class ClaimState(StrEnum):
+    CLAIMED = "claimed"
+    EVENT_NOT_FOUND = "event_not_found"
+    EVENT_JOB_MISMATCH = "event_job_mismatch"
+    EVENT_ALREADY_TERMINAL = "event_already_terminal"
+    EVENT_CAS_CONFLICT = "event_cas_conflict"
+    JOB_NOT_FOUND = "job_not_found"
+    INVALID_INCREMENTAL_TASK = "invalid_incremental_task"
+    RECORD_NOT_FOUND = "record_not_found"
+    STALE_TASK = "stale_task"
+    RECORD_CAS_CONFLICT = "record_cas_conflict"
+
+
+@dataclass(slots=True, frozen=True)
+class HandlerKey:
+    connector: SyncConnector
+    sync_type: SyncType
+
+    @classmethod
+    def of(
+        cls,
+        *,
+        connector: SyncConnector | str,
+        sync_type: SyncType | str,
+    ) -> "HandlerKey":
+        return cls(
+            connector=SyncConnector(connector),
+            sync_type=SyncType(sync_type),
+        )
 
 
 @dataclass(slots=True, frozen=True)
 class FullSyncDispatchRequest:
-    """커넥터 공통 Full Sync 요청."""
-
     scope_id: str
     target_ids: list[str] | None = None
     sync_days: int | None = None
     trigger: SyncTrigger = SyncTrigger.API
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "trigger", _normalize_trigger(self.trigger))
+        object.__setattr__(self, "trigger", SyncTrigger(self.trigger))
 
 
 @dataclass(slots=True, frozen=True)
 class SyncDispatchResult:
-    """커넥터 공통 Sync 요청 처리 결과."""
-
     status: SyncDispatchStatus
     connector: SyncConnector
     scope_id: str
@@ -50,13 +91,20 @@ class SyncDispatchResult:
     snapshot_url: str | None = None
     stream_url: str | None = None
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "status", SyncDispatchStatus(self.status))
+        object.__setattr__(self, "connector", SyncConnector(self.connector))
+
 
 @dataclass(slots=True, frozen=True)
 class FullSyncTarget:
-    target_type: str
+    target_type: SyncTargetType
     target_id: str
     target_name: str
     metadata: dict[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "target_type", SyncTargetType(self.target_type))
 
 
 @dataclass(slots=True, frozen=True)
@@ -68,87 +116,289 @@ class FullSyncResolvedTargets:
 @dataclass(slots=True, frozen=True)
 class SyncEventSeed:
     event_id: str
-    target_type: str
+    target_type: SyncTargetType
     target_id: str
     target_name: str
     sync_from: str | None = None
     metadata: dict[str, object] = field(default_factory=dict)
     max_attempts: int = 3
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "target_type", SyncTargetType(self.target_type))
 
-class SyncStreamTask(BaseModel):
-    """Redis Stream에 저장되는 이벤트 단위 작업."""
 
-    event_id: str = Field(..., description="Global Unique Event ID")
-    job_id: str = Field(..., description="Sync Job ID")
-    connector: str = Field(..., description="Connector key")
-    sync_type: str = Field(default="full", description="full | incremental")
-    scope_id: str = Field(default="", description="team_id / cloud_id / installation_id")
-    target_type: str = Field(default="resource", description="channel/repository/project/space")
-    target_id: str = Field(default="", description="target identifier")
-    record_key: str | None = Field(default=None, description="incremental record key")
-    generation: int | None = Field(default=None, ge=1, description="incremental generation")
+@dataclass(slots=True, frozen=True)
+class TargetSyncResult:
+    synced_count: int = 0
+    error_count: int = 0
+    skipped: bool = False
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> "TargetSyncResult":
+        synced_raw = payload.get("synced", 0)
+        error_raw = payload.get("errors", 0)
+        skipped_raw = payload.get("skipped", False)
+
+        try:
+            synced_count = int(synced_raw)
+        except (TypeError, ValueError):
+            synced_count = 0
+
+        try:
+            error_count = int(error_raw)
+        except (TypeError, ValueError):
+            error_count = 0
+
+        return cls(
+            synced_count=synced_count,
+            error_count=error_count,
+            skipped=bool(skipped_raw),
+        )
+
+
+class FullSyncTaskPayload(BaseModel):
+    target_type: SyncTargetType = Field(default=SyncTargetType.RESOURCE)
+    target_id: str = Field(..., description="target identifier")
+
+    @field_validator("target_id")
+    @classmethod
+    def _validate_target_id(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("target_id is empty")
+        if stripped != value:
+            raise ValueError("target_id must not include leading/trailing spaces")
+        return value
+
+    def to_stream_fields(self) -> dict[str, str]:
+        return {
+            "target_type": self.target_type.value,
+            "target_id": self.target_id,
+        }
+
+
+class IncrementalSyncTaskPayload(FullSyncTaskPayload):
+    record_key: str = Field(..., description="incremental record key")
+    generation: int = Field(..., ge=1, description="incremental generation")
     record_type: str | None = Field(default=None, description="incremental record type")
     record_id: str | None = Field(default=None, description="incremental record id")
-    parent_type: str | None = Field(default=None, description="incremental parent type")
-    parent_id: str | None = Field(default=None, description="incremental parent id")
-    event_kind: str | None = Field(default=None, description="incremental normalized event kind")
-    last_event_at: str | None = Field(default=None, description="incremental last event timestamp")
+    parent_type: SyncTargetType = Field(..., description="incremental parent type")
+    parent_id: str = Field(..., description="incremental parent id")
+    event_kind: SyncEventKind = Field(..., description="incremental normalized event kind")
+    last_event_at: str = Field(..., description="incremental last event timestamp")
+
+    @field_validator("record_key", "parent_id", "last_event_at")
+    @classmethod
+    def _validate_required_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("required incremental field is empty")
+        if stripped != value:
+            raise ValueError("required incremental field must not include surrounding spaces")
+        return value
+
+    @field_validator("record_type", "record_id")
+    @classmethod
+    def _validate_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("optional incremental field must not be blank")
+        if stripped != value:
+            raise ValueError("optional incremental field must not include surrounding spaces")
+        return value
+
+    def to_stream_fields(self) -> dict[str, str]:
+        fields = super().to_stream_fields()
+        fields.update(
+            {
+                "record_key": self.record_key,
+                "generation": str(self.generation),
+                "parent_type": self.parent_type.value,
+                "parent_id": self.parent_id,
+                "event_kind": self.event_kind.value,
+                "last_event_at": self.last_event_at,
+            }
+        )
+        if self.record_type is not None:
+            fields["record_type"] = self.record_type
+        if self.record_id is not None:
+            fields["record_id"] = self.record_id
+        return fields
+
+
+SyncTaskPayload: TypeAlias = IncrementalSyncTaskPayload | FullSyncTaskPayload
+
+
+class SyncStreamTask(BaseModel):
+    event_id: str = Field(..., description="Global Unique Event ID")
+    job_id: str = Field(..., description="Sync Job ID")
+    connector: SyncConnector = Field(..., description="Connector key")
+    sync_type: SyncType = Field(..., description="full | incremental")
+    scope_id: str = Field(..., description="team_id / cloud_id / installation_id")
+    payload: SyncTaskPayload = Field(..., description="typed task payload")
     attempt: int = Field(default=0, ge=0)
     max_attempts: int = Field(default=3, ge=1)
 
-    @field_validator("event_id", "job_id", "connector")
+    @field_validator("event_id", "job_id", "scope_id")
     @classmethod
     def _validate_not_blank(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("Value is empty")
-        return normalized
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("value is empty")
+        if stripped != value:
+            raise ValueError("value must not include leading/trailing spaces")
+        return value
 
-    @field_validator(
-        "record_key",
-        "record_type",
-        "record_id",
-        "parent_type",
-        "parent_id",
-        "event_kind",
-        "last_event_at",
-    )
+    @model_validator(mode="after")
+    def _validate_payload_type(self) -> "SyncStreamTask":
+        if self.sync_type == SyncType.FULL and type(self.payload) is not FullSyncTaskPayload:
+            raise ValueError("full sync task requires FullSyncTaskPayload")
+        if self.sync_type == SyncType.INCREMENTAL and not isinstance(
+            self.payload,
+            IncrementalSyncTaskPayload,
+        ):
+            raise ValueError("incremental sync task requires IncrementalSyncTaskPayload")
+        return self
+
     @classmethod
-    def _validate_optional_blank(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized or None
+    def full(
+        cls,
+        *,
+        event_id: str,
+        job_id: str,
+        connector: SyncConnector | str,
+        scope_id: str,
+        target_type: SyncTargetType | str,
+        target_id: str,
+        attempt: int = 0,
+        max_attempts: int = 3,
+    ) -> "SyncStreamTask":
+        return cls(
+            event_id=event_id,
+            job_id=job_id,
+            connector=connector,
+            sync_type=SyncType.FULL,
+            scope_id=scope_id,
+            payload=FullSyncTaskPayload(
+                target_type=target_type,
+                target_id=target_id,
+            ),
+            attempt=attempt,
+            max_attempts=max_attempts,
+        )
+
+    @classmethod
+    def incremental(
+        cls,
+        *,
+        event_id: str,
+        job_id: str,
+        connector: SyncConnector | str,
+        scope_id: str,
+        target_type: SyncTargetType | str,
+        target_id: str,
+        record_key: str,
+        generation: int,
+        record_type: str | None,
+        record_id: str | None,
+        parent_type: SyncTargetType | str,
+        parent_id: str,
+        event_kind: SyncEventKind | str,
+        last_event_at: str,
+        attempt: int = 0,
+        max_attempts: int = 3,
+    ) -> "SyncStreamTask":
+        return cls(
+            event_id=event_id,
+            job_id=job_id,
+            connector=connector,
+            sync_type=SyncType.INCREMENTAL,
+            scope_id=scope_id,
+            payload=IncrementalSyncTaskPayload(
+                target_type=target_type,
+                target_id=target_id,
+                record_key=record_key,
+                generation=generation,
+                record_type=record_type,
+                record_id=record_id,
+                parent_type=parent_type,
+                parent_id=parent_id,
+                event_kind=event_kind,
+                last_event_at=last_event_at,
+            ),
+            attempt=attempt,
+            max_attempts=max_attempts,
+        )
+
+    @property
+    def target_type(self) -> SyncTargetType:
+        return self.payload.target_type
+
+    @property
+    def target_id(self) -> str:
+        return self.payload.target_id
+
+    @property
+    def record_key(self) -> str | None:
+        if isinstance(self.payload, IncrementalSyncTaskPayload):
+            return self.payload.record_key
+        return None
+
+    @property
+    def generation(self) -> int | None:
+        if isinstance(self.payload, IncrementalSyncTaskPayload):
+            return self.payload.generation
+        return None
+
+    @property
+    def record_type(self) -> str | None:
+        if isinstance(self.payload, IncrementalSyncTaskPayload):
+            return self.payload.record_type
+        return None
+
+    @property
+    def record_id(self) -> str | None:
+        if isinstance(self.payload, IncrementalSyncTaskPayload):
+            return self.payload.record_id
+        return None
+
+    @property
+    def parent_type(self) -> SyncTargetType | None:
+        if isinstance(self.payload, IncrementalSyncTaskPayload):
+            return self.payload.parent_type
+        return None
+
+    @property
+    def parent_id(self) -> str | None:
+        if isinstance(self.payload, IncrementalSyncTaskPayload):
+            return self.payload.parent_id
+        return None
+
+    @property
+    def event_kind(self) -> SyncEventKind | None:
+        if isinstance(self.payload, IncrementalSyncTaskPayload):
+            return self.payload.event_kind
+        return None
+
+    @property
+    def last_event_at(self) -> str | None:
+        if isinstance(self.payload, IncrementalSyncTaskPayload):
+            return self.payload.last_event_at
+        return None
 
     def to_stream_fields(self) -> dict[str, str]:
         fields = {
             "event_id": self.event_id,
             "job_id": self.job_id,
-            "connector": self.connector,
-            "sync_type": self.sync_type,
+            "connector": self.connector.value,
+            "sync_type": self.sync_type.value,
             "scope_id": self.scope_id,
-            "target_type": self.target_type,
-            "target_id": self.target_id,
             "attempt": str(self.attempt),
             "max_attempts": str(self.max_attempts),
         }
-        if self.record_key is not None:
-            fields["record_key"] = self.record_key
-        if self.generation is not None:
-            fields["generation"] = str(self.generation)
-        if self.record_type is not None:
-            fields["record_type"] = self.record_type
-        if self.record_id is not None:
-            fields["record_id"] = self.record_id
-        if self.parent_type is not None:
-            fields["parent_type"] = self.parent_type
-        if self.parent_id is not None:
-            fields["parent_id"] = self.parent_id
-        if self.event_kind is not None:
-            fields["event_kind"] = self.event_kind
-        if self.last_event_at is not None:
-            fields["last_event_at"] = self.last_event_at
+        fields.update(self.payload.to_stream_fields())
         return fields
 
     @classmethod
@@ -156,58 +406,55 @@ class SyncStreamTask(BaseModel):
         event_id = fields.get("event_id")
         job_id = fields.get("job_id")
         connector = fields.get("connector")
+        sync_type = fields.get("sync_type")
+        scope_id = fields.get("scope_id")
 
-        if event_id is None or job_id is None or connector is None:
-            raise ValueError("stream fields must include event_id, job_id, connector")
+        if (
+            event_id is None
+            or job_id is None
+            or connector is None
+            or sync_type is None
+            or scope_id is None
+        ):
+            raise ValueError(
+                "stream fields must include event_id, job_id, connector, sync_type, scope_id"
+            )
+
+        resolved_sync_type = SyncType(str(sync_type))
+        if resolved_sync_type == SyncType.FULL:
+            payload: SyncTaskPayload = FullSyncTaskPayload(
+                target_type=str(fields.get("target_type") or SyncTargetType.RESOURCE.value),
+                target_id=str(fields.get("target_id") or ""),
+            )
+        else:
+            payload = IncrementalSyncTaskPayload(
+                target_type=str(fields.get("target_type") or SyncTargetType.RESOURCE.value),
+                target_id=str(fields.get("target_id") or ""),
+                record_key=str(fields.get("record_key") or ""),
+                generation=int(fields.get("generation") or 0),
+                record_type=(
+                    str(fields.get("record_type"))
+                    if fields.get("record_type") is not None
+                    else None
+                ),
+                record_id=(
+                    str(fields.get("record_id"))
+                    if fields.get("record_id") is not None
+                    else None
+                ),
+                parent_type=str(fields.get("parent_type") or ""),
+                parent_id=str(fields.get("parent_id") or ""),
+                event_kind=str(fields.get("event_kind") or ""),
+                last_event_at=str(fields.get("last_event_at") or ""),
+            )
 
         return cls(
             event_id=str(event_id),
             job_id=str(job_id),
             connector=str(connector),
-            sync_type=str(fields.get("sync_type") or "full"),
-            scope_id=str(fields.get("scope_id") or ""),
-            target_type=str(fields.get("target_type") or "resource"),
-            target_id=str(fields.get("target_id") or ""),
-            record_key=(
-                str(fields.get("record_key"))
-                if fields.get("record_key") is not None
-                else None
-            ),
-            generation=(
-                int(fields.get("generation"))
-                if fields.get("generation") is not None and str(fields.get("generation")).strip()
-                else None
-            ),
-            record_type=(
-                str(fields.get("record_type"))
-                if fields.get("record_type") is not None
-                else None
-            ),
-            record_id=(
-                str(fields.get("record_id"))
-                if fields.get("record_id") is not None
-                else None
-            ),
-            parent_type=(
-                str(fields.get("parent_type"))
-                if fields.get("parent_type") is not None
-                else None
-            ),
-            parent_id=(
-                str(fields.get("parent_id"))
-                if fields.get("parent_id") is not None
-                else None
-            ),
-            event_kind=(
-                str(fields.get("event_kind"))
-                if fields.get("event_kind") is not None
-                else None
-            ),
-            last_event_at=(
-                str(fields.get("last_event_at"))
-                if fields.get("last_event_at") is not None
-                else None
-            ),
+            sync_type=resolved_sync_type,
+            scope_id=str(scope_id),
+            payload=payload,
             attempt=int(fields.get("attempt") or 0),
             max_attempts=max(1, int(fields.get("max_attempts") or 3)),
         )
@@ -219,8 +466,6 @@ class SyncStreamMessage(BaseModel):
 
 
 class SyncClaimBatch(BaseModel):
-    """XAUTOCLAIM 결과."""
-
     next_start_id: str = Field(..., description="Next cursor of XAUTOCLAIM")
     messages: list[SyncStreamMessage] = Field(
         default_factory=list,
@@ -239,26 +484,47 @@ class PublishTasksResult(BaseModel):
 
 
 @dataclass(slots=True)
-class SyncEventContext:
+class SyncContextBase:
     event_id: str
     job_id: str
-    connector: str
-    sync_type: str
+    connector: SyncConnector
     scope_id: str
-    target_type: str
+    target_type: SyncTargetType
     target_id: str
     target_name: str
-    sync_from: str | None
     attempt: int
     max_attempts: int
-    record_key: str | None = None
-    generation: int | None = None
+
+    def __post_init__(self) -> None:
+        self.connector = SyncConnector(self.connector)
+        self.target_type = SyncTargetType(self.target_type)
+
+
+@dataclass(slots=True)
+class FullSyncContext(SyncContextBase):
+    sync_from: str | None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    sync_type: SyncType = field(init=False, default=SyncType.FULL)
+
+
+@dataclass(slots=True)
+class IncrementalSyncContext(SyncContextBase):
+    record_key: str
+    generation: int
     record_type: str | None = None
     record_id: str | None = None
-    parent_type: str | None = None
-    parent_id: str | None = None
-    event_kind: str | None = None
-    last_event_at: str | None = None
+    parent_type: SyncTargetType = SyncTargetType.RESOURCE
+    parent_id: str = ""
+    event_kind: SyncEventKind = SyncEventKind.UPDATED
+    last_event_at: str = ""
     batch_sync_from: str | None = None
     batch_generation_ceiling: int | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    sync_type: SyncType = field(init=False, default=SyncType.INCREMENTAL)
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.parent_type = SyncTargetType(self.parent_type)
+        self.event_kind = SyncEventKind(self.event_kind)
+
+
+SyncContext: TypeAlias = FullSyncContext | IncrementalSyncContext
