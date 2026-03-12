@@ -23,7 +23,7 @@ def bind_base_context(
     bind_contextvars(
         trace_id=trace_id,
         service=settings.SERVICE_NAME,
-        version=settings.APP_VERSIONS,
+        version=settings.APP_VERSION,
         environment=str(settings.ENV),
         remote_addr=remote_addr,
     )

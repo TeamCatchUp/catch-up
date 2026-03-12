@@ -1,9 +1,11 @@
 from enum import StrEnum
 
 from dotenv import load_dotenv
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
+
+from catchup.configs.utils import get_version
 
 load_dotenv()
 
@@ -24,7 +26,7 @@ class Settings(BaseSettings):
     
     # Logging
     SERVICE_NAME: str = "catchup"
-    APP_VERSIONS: str = "0.1.0"  #TODO: app version 갱신 방법
+    APP_VERSION: str = Field(default_factory=get_version)
     LOG_LEVEL: str
     
     # logging - console
