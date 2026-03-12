@@ -5,7 +5,7 @@ export { buildQueryFromTemplate } from '@/shared/types/template';
 
 export const tipData: TipData[] = [
   {
-    title: '반복 문의 대응',
+    title: '과거 문의 대응 사례 찾기',
     chipLabel: '과거 문의 대응 사례 찾기',
     description: '비슷한 문의를 찾아\n원인부터 결론까지 바로 가져와요.',
     image: '/image/home/light/past-inquiry.png',
@@ -21,7 +21,7 @@ export const tipData: TipData[] = [
     ],
   },
   {
-    title: '이슈 현황 파악',
+    title: '업무 진행 상황 확인',
     chipLabel: '업무 진행 상황 확인',
     description: '지라, PR, 커밋, 슬랙 등을 묶어\n실제 진행상황을 한 번에 파악해요.',
     image: '/image/home/light/work-progress.jpg',
@@ -32,19 +32,19 @@ export const tipData: TipData[] = [
     fields: [{ key: 'ticket', placeholder: '기능명/티켓번호' }],
   },
   {
-    title: '신규 입사자 온보딩',
-    chipLabel: '히스토리 따라잡기',
-    description: '주요 변경과 논의를 묶어\n참고해야 할 자료를 한 번에 정리해요.',
-    image: '/image/home/light/history-catchup.jpg',
+    title: '중복 논의 여부 확인',
+    chipLabel: '중복 논의 여부 확인',
+    description: '이전에 결정한 내용이 있는지,\n그때 기준과 이유를 바로 보여줘요.',
+    image: '/image/home/light/duplicate-discussion.jpg',
     template: [
-      { field: 'project' },
-      '의 히스토리를 핵심 타임라인, 주요 결정 배경, 관련 담당자, 참고 자료 링크로 정리하세요. ',
-      { field: 'role' },
-      ' 신규 입사자 기준으로 설명하세요.',
+      { field: 'team' },
+      ' 관련, ',
+      { field: 'topic' },
+      '의 과거 논의 여부를 확인해 결론, 결정 근거, 참여자, 출처 링크를 답하세요. 기록이 없으면 신규 안건으로 표시하고 다음 확인 사항 2가지를 제안하세요.',
     ],
     fields: [
-      { key: 'project', placeholder: '프로젝트/모듈' },
-      { key: 'role', placeholder: '직군' },
+      { key: 'topic', placeholder: '논의/요구사항' },
+      { key: 'team', placeholder: '관련 팀' },
     ],
   },
   {
@@ -67,25 +67,25 @@ export const tipData: TipData[] = [
     ],
   },
   {
-    title: '중복 논의 방어',
-    chipLabel: '중복 논의 여부 확인',
-    description: '이전에 결정한 내용이 있는지,\n그때 기준과 이유를 바로 보여줘요.',
-    image: '/image/home/light/duplicate-discussion.jpg',
+    title: '히스토리 따라잡기',
+    chipLabel: '히스토리 따라잡기',
+    description: '주요 변경과 논의를 묶어 참고해야\n할 자료를 한 번에 정리해요.',
+    image: '/image/home/light/history-catchup.jpg',
     template: [
-      { field: 'team' },
-      ' 관련, ',
-      { field: 'topic' },
-      '의 과거 논의 여부를 확인해 결론, 결정 근거, 참여자, 출처 링크를 답하세요. 기록이 없으면 신규 안건으로 표시하고 다음 확인 사항 2가지를 제안하세요.',
+      { field: 'project' },
+      '의 히스토리를 핵심 타임라인, 주요 결정 배경, 관련 담당자, 참고 자료 링크로 정리하세요. ',
+      { field: 'role' },
+      ' 신규 입사자 기준으로 설명하세요.',
     ],
     fields: [
-      { key: 'topic', placeholder: '논의/요구사항' },
-      { key: 'team', placeholder: '관련 팀' },
+      { key: 'project', placeholder: '프로젝트/모듈' },
+      { key: 'role', placeholder: '직군' },
     ],
   },
   {
-    title: '담당자 추천',
+    title: '담당자&대리인 찾기',
     chipLabel: '담당자&대리인 찾기',
-    description: '가장 가까이 작업한 사람을 찾아\n지금 연결해야 할 담당자를 추천해요.',
+    description: '가장 가까이 작업한 사람을 찾아\n연결해야 할 담당자를 추천해요.',
     image: '/image/home/light/find-assignee.png',
     template: [
       { field: 'teamRole' },
