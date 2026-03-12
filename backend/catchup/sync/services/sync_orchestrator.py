@@ -114,7 +114,7 @@ class SyncDispatchOrchestrator:
         )
 
         # DB에 Job & Event 기록
-        db_event_ids = self._persist_events(
+        db_event_ids = self._persist_dispatch_records(
             db=db,
             context=context,
             event_seeds=event_seeds,
@@ -212,6 +212,25 @@ class SyncDispatchOrchestrator:
             )
 
         return db_event_ids
+    
+    def _persist_dispatch_records(
+        self,
+        *,
+        db: Session,
+        context: DispatchContext,
+        event_seeds: Sequence[SyncEventSeed],
+    ) -> list[str]:
+        try:
+            db_event_ids = self._persist_events(
+                db=db,
+                context=context,
+                event_seeds=event_seeds
+            )
+            db.commit()
+            return db_event_ids
+        except Exception:
+            db.rollback()
+            raise
 
     def _build_stream_tasks(
         self,

@@ -101,8 +101,7 @@ def create_job(db: Session, payload: SyncJobCreateInput) -> SyncJob:
         requested_at=_to_utc(payload.requested_at),
     )
     db.add(job)
-    db.commit()
-    db.refresh(job)
+    db.flush()
     return job
 
 
@@ -221,7 +220,7 @@ def create_events(db: Session, payloads: Sequence[SyncEventCreateInput]) -> list
     ]
 
     db.add_all(events)
-    db.commit()
+    db.flush()
 
     for event in events:
         db.refresh(event)
