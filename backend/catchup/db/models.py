@@ -1246,6 +1246,13 @@ class SyncEventStatus(StrEnum):
     RETRYING = "retrying"
 
 
+class SyncEventPublishStatus(StrEnum):
+    PENDING = "pending"
+    PUBLISHING = "publishing"
+    PUBLISHED = "published"
+    FAILED = "failed"
+
+
 class IncrementalRecordStatus(StrEnum):
     DEBOUNCING = "debouncing"
     QUEUED = "queued"
@@ -1344,13 +1351,26 @@ class SyncEvent(Base):
         default=SyncEventStatus.PENDING,
         server_default=text("'pending'"),
     )
+    publish_status: Mapped[SyncEventPublishStatus] = mapped_column(
+        String(20),
+        nullable=False,
+        default=SyncEventPublishStatus.PENDING,
+        server_default=text(f"'{SyncEventPublishStatus.PENDING.value}'"),
+    )
     attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3, server_default=text("3"))
+    publish_attempt: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
 
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     succeeded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     embedding_tokens_used: Mapped[int] = mapped_column(
         BigInteger, nullable=False, default=0, server_default=text("0")
@@ -1358,6 +1378,8 @@ class SyncEvent(Base):
     summary_tokens_used: Mapped[int] = mapped_column(
         BigInteger, nullable=False, default=0, server_default=text("0")
     )
+    stream_message_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    publish_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -1373,9 +1395,14 @@ class SyncEvent(Base):
             "status IN ('pending', 'in_progress', 'success', 'failed', 'retrying')",
             name="ck_sync_events_status",
         ),
+        CheckConstraint(
+            "publish_status IN ('pending', 'publishing', 'published', 'failed')",
+            name="ck_sync_events_publish_status",
+        ),
         CheckConstraint("attempt >= 0", name="ck_sync_events_attempt_non_negative"),
         CheckConstraint("max_attempts >= 1", name="ck_sync_events_max_attempts_positive"),
         CheckConstraint("attempt <= max_attempts", name="ck_sync_events_attempt_lte_max"),
+        CheckConstraint("publish_attempt >= 0", name="ck_sync_events_publish_attempt_non_negative"),
         Index("idx_sync_events_job_id_status", "job_id", "status"),
         Index(
             "idx_sync_events_connector_status_requested_at",
@@ -1384,6 +1411,11 @@ class SyncEvent(Base):
             "requested_at",
         ),
         Index("idx_sync_events_job_id_requested_at", "job_id", "requested_at"),
+        Index(
+            "idx_sync_events_publish_status_requested_at",
+            "publish_status",
+            "requested_at",
+        ),
     )
 
 

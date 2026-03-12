@@ -1,6 +1,8 @@
 from catchup.db.sync.repository import (
     SyncEventCreateInput,
+    SyncEventPublishResultInput,
     SyncJobCreateInput,
+    claim_events_for_publish,
     claim_event_for_processing,
     complete_job_failed,
     complete_job_success,
@@ -12,6 +14,7 @@ from catchup.db.sync.repository import (
     list_events_by_job,
     list_jobs,
     mark_event_failed,
+    record_event_publish_outcomes,
     mark_event_retrying,
     mark_event_success,
     refresh_job_token_usage,
@@ -24,6 +27,7 @@ from catchup.db.sync.repository import (
 __all__ = [
     "SyncJobCreateInput",
     "SyncEventCreateInput",
+    "SyncEventPublishResultInput",
     "create_job",
     "get_job",
     "list_jobs",
@@ -34,6 +38,8 @@ __all__ = [
     "create_events",
     "get_event",
     "list_events_by_job",
+    "claim_events_for_publish",
+    "record_event_publish_outcomes",
     "has_successful_full_sync_event",
     "update_event_status_cas",
     "claim_event_for_processing",

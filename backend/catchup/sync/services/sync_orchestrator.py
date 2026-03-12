@@ -10,10 +10,13 @@ from sqlalchemy.orm import Session
 
 from catchup.db.models import SyncConnector, SyncType
 from catchup.db.sync import (
+    SyncEventPublishResultInput,
+    claim_events_for_publish,
     complete_job_success as complete_db_sync_job_success,
+    record_event_publish_outcomes,
     start_job as start_db_sync_job,
 )
-from catchup.sync.common.exceptions import SyncInternalError
+from catchup.sync.common.exceptions import RedisStreamPublishError, SyncInternalError
 from catchup.sync.common.protocols import EventPublisherProtocol
 from catchup.sync.common.schemas import (
     PublishTasksResult,
@@ -127,7 +130,11 @@ class SyncDispatchOrchestrator:
             db_event_ids=db_event_ids,
         )
         # Event Publisher를 통해 Redis Stream에 이벤트 발행
-        publish_result = await self._publish_tasks(tasks=tasks)
+        publish_result = await self._publish_dispatch_tasks(
+            db=db,
+            context=context,
+            tasks=tasks,
+        )
 
         # PubSub에 Job Accepted 이벤트 발행
         await self._publish_queued_status(
@@ -269,6 +276,167 @@ class SyncDispatchOrchestrator:
         tasks: list[SyncStreamTask],
     ) -> PublishTasksResult:
         return await self._event_publisher.publish(tasks=tasks)
+
+    async def _publish_dispatch_tasks(
+        self,
+        *,
+        db: Session,
+        context: DispatchContext,
+        tasks: list[SyncStreamTask],
+    ) -> PublishTasksResult:
+        if not tasks:
+            return PublishTasksResult(
+                requested_count=0,
+                published_count=0,
+                message_ids=[],
+                partial_success=False,
+            )
+
+        self._claim_publish_records(
+            db=db,
+            context=context,
+            tasks=tasks,
+        )
+
+        try:
+            publish_result = await self._publish_tasks(tasks=tasks)
+        except Exception as exc:
+            self._record_publish_failure(
+                db=db,
+                context=context,
+                tasks=tasks,
+                error_message=str(exc),
+            )
+            raise
+
+        self._record_publish_outcomes(
+            db=db,
+            context=context,
+            tasks=tasks,
+            publish_result=publish_result,
+        )
+
+        if publish_result.published_count != publish_result.requested_count:
+            raise RedisStreamPublishError(
+                metadata={
+                    "requested_count": publish_result.requested_count,
+                    "published_count": publish_result.published_count,
+                    "partial_success": publish_result.partial_success,
+                    "failed_at_index": publish_result.failed_at_index,
+                    "failed_event_id": publish_result.failed_event_id,
+                    "error_message": publish_result.error_message,
+                    "job_id": context.job_id,
+                    "scope_id": context.scope_id,
+                },
+            )
+
+        return publish_result
+
+    def _claim_publish_records(
+        self,
+        *,
+        db: Session,
+        context: DispatchContext,
+        tasks: Sequence[SyncStreamTask],
+    ) -> None:
+        event_ids = [task.event_id for task in tasks]
+        if claim_events_for_publish(db, event_ids=event_ids):
+            return
+
+        raise SyncInternalError(
+            "failed to transition events to publishing",
+            metadata={
+                "connector": context.connector.value,
+                "sync_type": context.sync_type.value,
+                "scope_id": context.scope_id,
+                "job_id": context.job_id,
+                "event_ids": event_ids,
+            },
+        )
+
+    def _record_publish_failure(
+        self,
+        *,
+        db: Session,
+        context: DispatchContext,
+        tasks: Sequence[SyncStreamTask],
+        error_message: str,
+    ) -> None:
+        failed_event_ids = [task.event_id for task in tasks]
+        updated = record_event_publish_outcomes(
+            db,
+            published=[],
+            failed_event_ids=failed_event_ids,
+            publish_error=error_message,
+        )
+        if updated:
+            return
+
+        raise SyncInternalError(
+            "failed to persist publish failure state",
+            metadata={
+                "connector": context.connector.value,
+                "sync_type": context.sync_type.value,
+                "scope_id": context.scope_id,
+                "job_id": context.job_id,
+                "event_ids": failed_event_ids,
+                "error_message": error_message,
+            },
+        )
+
+    def _record_publish_outcomes(
+        self,
+        *,
+        db: Session,
+        context: DispatchContext,
+        tasks: Sequence[SyncStreamTask],
+        publish_result: PublishTasksResult,
+    ) -> None:
+        if publish_result.published_count != len(publish_result.message_ids):
+            raise SyncInternalError(
+                "publish result message count mismatch",
+                metadata={
+                    "connector": context.connector.value,
+                    "sync_type": context.sync_type.value,
+                    "scope_id": context.scope_id,
+                    "job_id": context.job_id,
+                    "published_count": publish_result.published_count,
+                    "message_id_count": len(publish_result.message_ids),
+                },
+            )
+
+        published = [
+            SyncEventPublishResultInput(
+                event_id=task.event_id,
+                stream_message_id=message_id,
+            )
+            for task, message_id in zip(tasks, publish_result.message_ids)
+        ]
+        failed_event_ids = [
+            task.event_id
+            for task in tasks[len(publish_result.message_ids) :]
+        ]
+
+        updated = record_event_publish_outcomes(
+            db,
+            published=published,
+            failed_event_ids=failed_event_ids,
+            publish_error=publish_result.error_message,
+        )
+        if updated:
+            return
+
+        raise SyncInternalError(
+            "failed to persist publish result state",
+            metadata={
+                "connector": context.connector.value,
+                "sync_type": context.sync_type.value,
+                "scope_id": context.scope_id,
+                "job_id": context.job_id,
+                "published_event_ids": [item.event_id for item in published],
+                "failed_event_ids": failed_event_ids,
+            },
+        )
 
     async def _publish_queued_status(
         self,

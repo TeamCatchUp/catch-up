@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from catchup.sync.common.exceptions import (
-    RedisStreamInitializationError,
-    RedisStreamPublishError,
-)
+from catchup.sync.common.exceptions import RedisStreamInitializationError
 from catchup.sync.common.protocols import EventPublisherProtocol
 from catchup.sync.common.schemas import PublishTasksResult, SyncStreamTask
 from catchup.sync.stream_runtime.stream_queue import publish_tasks
@@ -51,16 +48,6 @@ class RedisStreamEventPublisher(EventPublisherProtocol):
                 publish_result.failed_at_index,
                 publish_result.failed_event_id,
                 publish_result.error_message,
-            )
-            raise RedisStreamPublishError(
-                metadata={
-                    "requested_count": publish_result.requested_count,
-                    "published_count": publish_result.published_count,
-                    "partial_success": publish_result.partial_success,
-                    "failed_at_index": publish_result.failed_at_index,
-                    "failed_event_id": publish_result.failed_event_id,
-                    "error_message": publish_result.error_message,
-                },
             )
 
         return publish_result
