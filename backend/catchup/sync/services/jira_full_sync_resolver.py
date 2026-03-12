@@ -46,6 +46,11 @@ class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             name_getter=lambda project: project.project_name or project.project_key,
             error_message="requested target_ids contain unknown projects",
             error_metadata={"cloud_id": cloud_id},
+            log_context={
+                "connector": "jira",
+                "cloud_id": cloud_id,
+                "target_type": "project",
+            },
         )
 
         logger.info(

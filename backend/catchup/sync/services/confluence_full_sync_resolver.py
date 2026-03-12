@@ -46,6 +46,11 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             name_getter=lambda space: space.space_name or space.space_key,
             error_message="requested target_ids contain unknown spaces",
             error_metadata={"cloud_id": cloud_id},
+            log_context={
+                "connector": "confluence",
+                "cloud_id": cloud_id,
+                "target_type": "space",
+            },
         )
 
         logger.info(

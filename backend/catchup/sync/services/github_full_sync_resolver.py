@@ -58,6 +58,11 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             name_getter=lambda repo: repo.full_name,
             error_message="requested target_ids contain unknown repositories",
             error_metadata={"installation_id": installation_id},
+            log_context={
+                "connector": "github",
+                "installation_id": installation_id,
+                "target_type": "repository",
+            },
         )
 
         logger.info(

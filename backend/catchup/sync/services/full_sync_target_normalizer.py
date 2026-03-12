@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from typing import TypeVar
 
@@ -11,6 +12,7 @@ from catchup.sync.common.schemas import (
 )
 
 T = TypeVar("T")
+logger = logging.getLogger(__name__)
 
 
 def _normalize_text(value: str | None) -> str:
@@ -43,13 +45,56 @@ def index_targets(
     rows: Sequence[T],
     *,
     key_getter: Callable[[T], str | None],
+    log_context: Mapping[str, object] | None = None,
 ) -> dict[str, T]:
     index: dict[str, T] = {}
+    blank_key_count = 0
+    duplicate_key_count = 0
+    duplicate_key_samples: list[str] = []
+    context = dict(log_context or {})
+
     for row in rows:
         key = _normalize_text(key_getter(row))
-        if not key or key in index:
+        if not key:
+            blank_key_count += 1
+            continue
+        if key in index:
+            duplicate_key_count += 1
+            if len(duplicate_key_samples) < 5:
+                duplicate_key_samples.append(key)
             continue
         index[key] = row
+
+    if blank_key_count:
+        logger.warning(
+            "[SYNC][FULL SYNC][NORMALIZER] Blank target key detected: count=%s, context=%s",
+            blank_key_count,
+            context,
+        )
+        raise SyncRequestError(
+            "resolved target rows contain blank target_id",
+            metadata={
+                **context,
+                "blank_target_key_count": blank_key_count,
+            },
+        )
+
+    if duplicate_key_samples:
+        logger.warning(
+            "[SYNC][FULL SYNC][NORMALIZER] Duplicate target key detected: count=%s, sample_keys=%s, context=%s",
+            duplicate_key_count,
+            duplicate_key_samples,
+            context,
+        )
+        raise SyncRequestError(
+            "resolved target rows contain duplicate target_id",
+            metadata={
+                **context,
+                "duplicate_target_key_count": duplicate_key_count,
+                "duplicate_target_key_samples": duplicate_key_samples,
+            },
+        )
+
     return index
 
 
@@ -119,11 +164,13 @@ def resolve_full_sync_targets_from_rows(
     error_message: str,
     error_metadata: Mapping[str, object],
     metadata_getter: Callable[[T], Mapping[str, object] | None] | None = None,
+    log_context: Mapping[str, object] | None = None,
 ) -> tuple[list[str], FullSyncResolvedTargets]:
     requested_target_ids = normalize_target_ids(request_target_ids)
     target_index = index_targets(
         rows,
         key_getter=key_getter,
+        log_context=log_context,
     )
     resolved_rows = resolve_requested_targets(
         requested_target_ids,

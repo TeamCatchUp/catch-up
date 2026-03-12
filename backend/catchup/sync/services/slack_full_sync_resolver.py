@@ -46,6 +46,11 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             name_getter=lambda channel: channel.name or channel.id,
             error_message="requested target_ids contain unknown channels",
             error_metadata={"team_id": team_id},
+            log_context={
+                "connector": "slack",
+                "team_id": team_id,
+                "target_type": "channel",
+            },
         )
 
         logger.info(
