@@ -24,7 +24,6 @@ def audit_event_handler(**kwargs: Any) -> None:
             meta_payload = metadata_obj.model_dump(exclude_none=True, mode="json")
     
     raw_actor = kwargs.pop("actor", None)
-    print("RAW_ACTOR:", raw_actor)
     actor_payload = None
     if raw_actor:
         actor = AuditActor.from_user_snapshot(raw_actor)
