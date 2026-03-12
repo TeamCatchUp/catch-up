@@ -9,6 +9,7 @@ import { RefObject } from 'react';
 
 import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
 import type { UseSearchInputReturn } from '@/shared/hooks/query/useSearchInput';
+import type { TipData } from '@/shared/types/template';
 import { cn } from '@/shared/utils/cn';
 
 import ExplorerPanel from './ExplorerPanel';
@@ -16,13 +17,14 @@ import FilterBar from './FilterBar';
 import QueryInput from './QueryInput';
 
 interface QueryBoxProps {
-  containerRef: RefObject<HTMLDivElement | null>;
+  containerRef?: RefObject<HTMLDivElement | null>;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   input: UseSearchInputReturn;
   filters: UseSearchFiltersReturn;
   variant?: 'default' | 'no-history';
   noHistoryExpanded?: boolean;
   highlightBracketPlaceholders?: boolean;
+  tipData?: TipData[];
 }
 
 const QueryBox = ({
@@ -32,7 +34,7 @@ const QueryBox = ({
   filters,
   variant = 'default',
   noHistoryExpanded = true,
-  highlightBracketPlaceholders = false,
+  tipData,
 }: QueryBoxProps) => {
   const isNoHistory = variant === 'no-history';
   const showPanel = isNoHistory ? noHistoryExpanded : input.isFocused;
@@ -55,7 +57,7 @@ const QueryBox = ({
       ref={containerRef}
       className={`shadow-rag-bar border-edge-normal flex w-190 flex-col items-center border border-solid bg-fill-normal ${containerClassName}`}
     >
-      <QueryInput input={input} inputRef={inputRef} highlightBracketPlaceholders={highlightBracketPlaceholders} />
+      <QueryInput input={input} inputRef={inputRef} tipData={tipData} />
 
       {showPanel && (
         <div
