@@ -12,10 +12,8 @@ from catchup.db.models import SyncConnector, SyncEvent, SyncType
 from catchup.db.sync import (
     SyncEventPublishResultInput,
     claim_events_for_publish,
-    complete_job_success as complete_db_sync_job_success,
     find_active_full_sync_job,
     record_event_publish_outcomes,
-    start_job as start_db_sync_job,
     try_acquire_full_sync_scope_lock,
 )
 from catchup.sync.common.exceptions import RedisStreamPublishError, SyncInternalError
@@ -112,6 +110,14 @@ class SyncDispatchOrchestrator:
         # Scope 정규화
         normalized_scope_id = self._normalize_scope_id(scope_id)
 
+        no_events = self._build_no_events_response(
+            connector=connector,
+            scope_id=normalized_scope_id,
+            total_targets=len(event_seeds),
+        )
+        if no_events is not None:
+            return no_events
+
         conflict = self._check_dispatch_conflict(
             db=db,
             connector=connector,
@@ -155,13 +161,6 @@ class SyncDispatchOrchestrator:
             sync_from_ts=sync_from_ts,
         )
 
-        # 처리할 대상이 없는 Job이였다면 즉시 성공 처리
-        self._finalize_empty_job(
-            db=db,
-            job_id=context.job_id,
-            total_targets=len(event_seeds),
-        )
-        
         # 로깅
         self._emit_dispatch_audit(
             context=context,
@@ -197,6 +196,30 @@ class SyncDispatchOrchestrator:
             scope_id=scope_id,
             job_id=uuid4().hex,
             requested_at=datetime.now(timezone.utc),
+        )
+
+    def _build_no_events_response(
+        self,
+        *,
+        connector: SyncConnector,
+        scope_id: str,
+        total_targets: int,
+    ) -> SyncDispatchResult | None:
+        if total_targets != 0:
+            return None
+
+        logger.info(
+            "[%s][ORCHESTRATOR] Dispatch skipped because no events were resolved: scope_id=%s",
+            connector.value.upper(),
+            scope_id,
+        )
+        return SyncDispatchResult(
+            status=SyncDispatchStatus.NO_EVENTS,
+            connector=connector,
+            scope_id=scope_id,
+            total_targets=0,
+            queued_targets=0,
+            message="no sync events were generated for this request",
         )
 
     def _check_dispatch_conflict(
@@ -533,20 +556,6 @@ class SyncDispatchOrchestrator:
                 exc_info=True,
             )
 
-    def _finalize_empty_job(
-        self,
-        *,
-        db: Session,
-        job_id: str,
-        total_targets: int,
-    ) -> None:
-        if total_targets != 0:
-            return
-
-        started = start_db_sync_job(db, job_id)
-        if started:
-            complete_db_sync_job_success(db, job_id)
-
     def _emit_dispatch_audit(
         self,
         *,
@@ -595,6 +604,7 @@ class SyncDispatchOrchestrator:
             event_ids=list(db_event_ids),
             total_targets=len(db_event_ids),
             queued_targets=queued_targets,
+            message="sync dispatch accepted",
             snapshot_url=snapshot_url,
             stream_url=stream_url,
         )

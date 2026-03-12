@@ -102,6 +102,12 @@ class FullSyncDispatchRequest:
 
 @dataclass(slots=True, frozen=True)
 class SyncDispatchResult:
+    """Dispatch 결과
+
+    queued_targets : dispatch 시점에 queue publish 까지 성공한 target 수
+    처리 진행 상황은 이후 job snapshot/status 에서 다시 조회
+    """
+
     status: SyncDispatchStatus
     connector: SyncConnector
     scope_id: str
