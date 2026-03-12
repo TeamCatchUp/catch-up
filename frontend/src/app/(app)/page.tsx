@@ -114,7 +114,7 @@ export default function Home() {
       </div>
 
       <div
-        className={`flex flex-col items-center gap-16 px-16 pt-10 pb-30 transition-all duration-300 ${
+        className={`flex flex-col items-center gap-16 px-16 pt-4 pb-30 transition-all duration-300 ${
           input.isFocused ? 'pointer-events-none translate-y-4 opacity-0' : 'opacity-100'
         }`}
       >
