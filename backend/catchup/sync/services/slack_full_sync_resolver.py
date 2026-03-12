@@ -13,10 +13,7 @@ from catchup.sync.common.schemas import (
     FullSyncResolvedTargets,
 )
 from catchup.sync.services.full_sync_target_normalizer import (
-    build_full_sync_targets,
-    index_targets,
-    normalize_target_ids,
-    resolve_requested_targets,
+    resolve_full_sync_targets_from_rows,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,33 +38,24 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             )
 
         channels = slack_entities.get_channels_by_team(db, team_id)
-        requested_target_ids = normalize_target_ids(request.target_ids)
-        channel_map = index_targets(
-            channels,
+        requested_target_ids, resolved_targets = resolve_full_sync_targets_from_rows(
+            request_target_ids=request.target_ids,
+            rows=channels,
+            target_type="channel",
             key_getter=lambda channel: channel.id,
-        )
-        resolved_channels = resolve_requested_targets(
-            requested_target_ids,
-            target_index=channel_map,
+            name_getter=lambda channel: channel.name or channel.id,
             error_message="requested target_ids contain unknown channels",
             error_metadata={"team_id": team_id},
-        )
-
-        targets = build_full_sync_targets(
-            resolved_channels,
-            target_type="channel",
-            id_getter=lambda channel: channel.id,
-            name_getter=lambda channel: channel.name or channel.id,
         )
 
         logger.info(
             "[SLACK][FULL SYNC][RESOLVER] Targets resolved: team_id=%s, requested=%s, resolved=%s",
             team_id,
             len(requested_target_ids),
-            len(targets),
+            len(resolved_targets.targets),
         )
 
-        return FullSyncResolvedTargets(targets=targets)
+        return resolved_targets
 
 
 _slack_full_sync_target_resolver = SlackFullSyncTargetResolver()

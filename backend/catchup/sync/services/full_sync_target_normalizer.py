@@ -4,7 +4,11 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import TypeVar
 
 from catchup.sync.common.exceptions import SyncRequestError
-from catchup.sync.common.schemas import FullSyncTarget, SyncTargetType
+from catchup.sync.common.schemas import (
+    FullSyncResolvedTargets,
+    FullSyncTarget,
+    SyncTargetType,
+)
 
 T = TypeVar("T")
 
@@ -103,3 +107,35 @@ def build_full_sync_targets(
         )
 
     return targets
+
+
+def resolve_full_sync_targets_from_rows(
+    *,
+    request_target_ids: list[str] | None,
+    rows: Sequence[T],
+    target_type: SyncTargetType | str,
+    key_getter: Callable[[T], str | None],
+    name_getter: Callable[[T], str | None],
+    error_message: str,
+    error_metadata: Mapping[str, object],
+    metadata_getter: Callable[[T], Mapping[str, object] | None] | None = None,
+) -> tuple[list[str], FullSyncResolvedTargets]:
+    requested_target_ids = normalize_target_ids(request_target_ids)
+    target_index = index_targets(
+        rows,
+        key_getter=key_getter,
+    )
+    resolved_rows = resolve_requested_targets(
+        requested_target_ids,
+        target_index=target_index,
+        error_message=error_message,
+        error_metadata=error_metadata,
+    )
+    targets = build_full_sync_targets(
+        resolved_rows,
+        target_type=target_type,
+        id_getter=key_getter,
+        name_getter=name_getter,
+        metadata_getter=metadata_getter,
+    )
+    return requested_target_ids, FullSyncResolvedTargets(targets=targets)
