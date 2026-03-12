@@ -72,6 +72,9 @@ _ALLOWED_EVENT_PUBLISH_TRANSITIONS: dict[
     SyncEventPublishStatus.FAILED: {
         SyncEventPublishStatus.PUBLISHING,
     },
+    SyncEventPublishStatus.PUBLISHED: {
+        SyncEventPublishStatus.PUBLISHING,
+    },
     SyncEventPublishStatus.PUBLISHING: {
         SyncEventPublishStatus.PUBLISHED,
         SyncEventPublishStatus.FAILED,
@@ -328,6 +331,33 @@ def claim_events_for_publish(
                     SyncEventPublishStatus.PENDING,
                     SyncEventPublishStatus.FAILED,
                 ],
+                to_status=SyncEventPublishStatus.PUBLISHING,
+                stream_message_id=None,
+                publish_error=None,
+                increment_attempt=True,
+            )
+            if updated != 1:
+                db.rollback()
+                return False
+
+        db.commit()
+        return True
+    except Exception:
+        db.rollback()
+        raise
+
+
+def claim_events_for_republish(
+    db: Session,
+    *,
+    event_ids: Sequence[str],
+) -> bool:
+    try:
+        for event_id in event_ids:
+            updated = _update_event_publish_status(
+                db,
+                event_id=event_id,
+                from_statuses=[SyncEventPublishStatus.PUBLISHED],
                 to_status=SyncEventPublishStatus.PUBLISHING,
                 stream_message_id=None,
                 publish_error=None,

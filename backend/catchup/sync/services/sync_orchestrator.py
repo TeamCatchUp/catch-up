@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from catchup.db.models import SyncConnector, SyncType
+from catchup.db.models import SyncConnector, SyncEvent, SyncType
 from catchup.db.sync import (
     SyncEventPublishResultInput,
     claim_events_for_publish,
@@ -30,7 +30,7 @@ from catchup.sync.event_publisher.event_record_persistence import (
     persist_sync_job_and_events,
 )
 from catchup.sync.event_publisher.stream_task_builder import (
-    build_stream_tasks_from_event_ids,
+    build_stream_tasks_from_persisted_events,
 )
 from catchup.sync.status_stream.pubsub import publish_job_status_event
 from catchup.sync.status_stream.schemas import (
@@ -117,7 +117,7 @@ class SyncDispatchOrchestrator:
         )
 
         # DB에 Job & Event 기록
-        db_event_ids = self._persist_dispatch_records(
+        persisted_events = self._persist_dispatch_records(
             db=db,
             context=context,
             event_seeds=event_seeds,
@@ -126,8 +126,7 @@ class SyncDispatchOrchestrator:
         # Redis Stream에 저장할 Task 생성
         tasks = self._build_stream_tasks(
             context=context,
-            event_seeds=event_seeds,
-            db_event_ids=db_event_ids,
+            events=persisted_events,
         )
         # Event Publisher를 통해 Redis Stream에 이벤트 발행
         publish_result = await self._publish_dispatch_tasks(
@@ -162,7 +161,7 @@ class SyncDispatchOrchestrator:
         # 응답 반환
         return self._build_response(
             context=context,
-            db_event_ids=db_event_ids,
+            db_event_ids=[event.event_id for event in persisted_events],
             queued_targets=publish_result.published_count,
             base_url=base_url,
         )
@@ -194,8 +193,8 @@ class SyncDispatchOrchestrator:
         db: Session,
         context: DispatchContext,
         event_seeds: Sequence[SyncEventSeed],
-    ) -> list[str]:
-        db_event_ids = persist_sync_job_and_events(
+    ) -> list[SyncEvent]:
+        events = persist_sync_job_and_events(
             db,
             job_id=context.job_id,
             connector=context.connector,
@@ -205,7 +204,7 @@ class SyncDispatchOrchestrator:
             event_seeds=list(event_seeds),
         )
 
-        if len(db_event_ids) != len(event_seeds):
+        if len(events) != len(event_seeds):
             raise SyncInternalError(
                 "persisted event count mismatch",
                 metadata={
@@ -214,27 +213,27 @@ class SyncDispatchOrchestrator:
                     "scope_id": context.scope_id,
                     "job_id": context.job_id,
                     "requested_event_count": len(event_seeds),
-                    "persisted_event_count": len(db_event_ids),
+                    "persisted_event_count": len(events),
                 },
             )
 
-        return db_event_ids
-    
+        return events
+
     def _persist_dispatch_records(
         self,
         *,
         db: Session,
         context: DispatchContext,
         event_seeds: Sequence[SyncEventSeed],
-    ) -> list[str]:
+    ) -> list[SyncEvent]:
         try:
-            db_event_ids = self._persist_events(
+            events = self._persist_events(
                 db=db,
                 context=context,
-                event_seeds=event_seeds
+                event_seeds=event_seeds,
             )
             db.commit()
-            return db_event_ids
+            return events
         except Exception:
             db.rollback()
             raise
@@ -243,19 +242,14 @@ class SyncDispatchOrchestrator:
         self,
         *,
         context: DispatchContext,
-        event_seeds: Sequence[SyncEventSeed],
-        db_event_ids: Sequence[str],
+        events: Sequence[SyncEvent],
     ) -> list[SyncStreamTask]:
-        tasks = build_stream_tasks_from_event_ids(
-            event_ids=list(db_event_ids),
-            job_id=context.job_id,
-            connector=context.connector,
-            sync_type=context.sync_type,
-            scope_id=context.scope_id,
-            event_seeds=list(event_seeds),
+        tasks = build_stream_tasks_from_persisted_events(
+            events=events,
+            fallback_scope_id=context.scope_id,
         )
 
-        if len(tasks) != len(db_event_ids):
+        if len(tasks) != len(events):
             raise SyncInternalError(
                 "stream task build count mismatch",
                 metadata={
@@ -263,7 +257,7 @@ class SyncDispatchOrchestrator:
                     "sync_type": context.sync_type.value,
                     "scope_id": context.scope_id,
                     "job_id": context.job_id,
-                    "persisted_event_count": len(db_event_ids),
+                    "persisted_event_count": len(events),
                     "built_task_count": len(tasks),
                 },
             )
