@@ -102,7 +102,10 @@ class FullSyncRequest(BaseModel):
         trigger: SyncTrigger = SyncTrigger.API,
         now: datetime | None = None,
     ) -> FullSyncDispatchRequest:
-        sync_days = max(1, int(self.sync_days or default_sync_days))
+        sync_days = self.sync_days if self.sync_days is not None else default_sync_days
+        if sync_days < 1:
+            raise ValueError("sync_days must be greater than or equal to 1")
+
         current_time = now or datetime.now(timezone.utc)
         sync_from_ts = f"{(current_time - timedelta(days=sync_days)).timestamp():.6f}"
 

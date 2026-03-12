@@ -4,6 +4,7 @@ import logging
 
 from fastapi import HTTPException, status
 
+from catchup.server.sync.schemas import FullSyncRequest
 from catchup.sync.common.exceptions import SyncAPIError
 from catchup.sync.dispatch_service import (
     SyncDispatchService,
@@ -13,17 +14,24 @@ from catchup.sync.dispatch_service import (
 logger = logging.getLogger(__name__)
 
 
-def get_sync_dispatch_service_dependency() -> SyncDispatchService:
+def get_sync_dispatch_service_dependency(
+    sync_request: FullSyncRequest,
+) -> SyncDispatchService:
     try:
         return get_sync_dispatch_service()
     except SyncAPIError as exc:
         raise HTTPException(
             status_code=exc.status_code,
-            detail=exc.to_detail(),
+            detail=exc.to_detail(
+                connector=sync_request.connector,
+                scope_id=sync_request.scope_id,
+            ),
         ) from exc
     except Exception as exc:
         logger.error(
-            "[SYNC][DISPATCH][API] Service initialization failed: error=%s",
+            "[SYNC][DISPATCH][API] Service initialization failed: connector=%s, scope_id=%s, error=%s",
+            sync_request.connector,
+            sync_request.scope_id,
             exc,
             exc_info=True,
         )
@@ -32,5 +40,7 @@ def get_sync_dispatch_service_dependency() -> SyncDispatchService:
             detail={
                 "code": "internal_error",
                 "message": "sync dispatch service initialization failed",
+                "connector": sync_request.connector,
+                "scope_id": sync_request.scope_id,
             },
         ) from exc
