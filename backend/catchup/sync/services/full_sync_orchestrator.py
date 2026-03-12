@@ -10,10 +10,27 @@ from catchup.sync.common.exceptions import SyncRequestError
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
+    FullSyncTarget,
     SyncDispatchResult,
     SyncEventSeed,
 )
 from catchup.sync.services.sync_orchestrator import SyncDispatchOrchestrator
+
+
+def _build_event_seed(
+    target: FullSyncTarget,
+    *,
+    sync_from_ts: str | None,
+) -> SyncEventSeed:
+    return SyncEventSeed(
+        event_id=uuid4().hex,
+        target_type=target.target_type,
+        target_id=target.target_id,
+        target_name=target.target_name,
+        sync_from_ts=sync_from_ts,
+        metadata=dict(target.metadata),
+        max_attempts=settings.SYNC_JOB_MAX_ATTEMPTS,
+    )
 
 
 class FullSyncDispatchOrchestrator:
@@ -42,26 +59,10 @@ class FullSyncDispatchOrchestrator:
             request=request,
         )
 
-        event_seeds: list[SyncEventSeed] = []
-        for target in resolved.targets:
-            normalized_target_id = target.target_id.strip()
-            if not normalized_target_id:
-                raise SyncRequestError("resolved target_id is empty")
-
-            normalized_target_type = target.target_type.strip() or "resource"
-            normalized_target_name = target.target_name.strip() or normalized_target_id
-
-            event_seeds.append(
-                SyncEventSeed(
-                    event_id=uuid4().hex,
-                    target_type=normalized_target_type,
-                    target_id=normalized_target_id,
-                    target_name=normalized_target_name,
-                    sync_from_ts=sync_from_ts,
-                    metadata=dict(target.metadata),
-                    max_attempts=settings.SYNC_JOB_MAX_ATTEMPTS,
-                )
-            )
+        event_seeds = [
+            _build_event_seed(target, sync_from_ts=sync_from_ts)
+            for target in resolved.targets
+        ]
 
         return await self._orchestrator.dispatch(
             db=db,
