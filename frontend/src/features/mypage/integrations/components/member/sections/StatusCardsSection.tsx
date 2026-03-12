@@ -2,11 +2,14 @@ import { useState } from 'react';
 
 import IconHelp from '@/public/icons/icon/help.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
+import IconRotate from '@/public/icons/icon/rotate.svg';
 import { Button } from '@/shared/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
+import { MOCK_BUTTON_STATES } from '../../../constants/mockSyncData';
 import type { MemberIntegrationCardItem } from '../../../types/integrations';
+import type { EmbeddingButtonState, SyncConnector } from '../../../types/sync';
 import EmbeddingModal from '../modals/EmbeddingModal';
 
 interface StatusCardsSectionProps {
@@ -21,8 +24,43 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
     serviceName: string;
   }>({ open: false, service: 'jira', serviceName: '' });
 
+  const [buttonStates] = useState<Record<SyncConnector, EmbeddingButtonState>>(MOCK_BUTTON_STATES);
+
   const openEmbeddingModal = (service: IntegrationService, serviceName: string) => {
     setEmbeddingModal({ open: true, service, serviceName });
+  };
+
+  const renderEmbeddingButton = (service: IntegrationService, name: string) => {
+    const state = buttonStates[service as SyncConnector] ?? 'idle';
+
+    switch (state) {
+      case 'idle':
+        return (
+          <Button
+            variant="box-outline-blue"
+            size="md"
+            className="text-body-small h-9 w-full"
+            onClick={() => openEmbeddingModal(service, name)}
+          >
+            임베딩하기
+          </Button>
+        );
+      case 'in_progress':
+        return (
+          <Button variant="box-outline-gray" size="md" className="text-body-small h-9 w-full" disabled>
+            <IconRotate className="size-5 animate-spin" />
+            임베딩 진행 중...
+          </Button>
+        );
+      case 'completed':
+        return (
+          <Button variant="box-outline-gray" size="md" className="text-body-small h-9 w-full" disabled>
+            임베딩 완료
+          </Button>
+        );
+      default:
+        return state satisfies never;
+    }
   };
 
   return (
@@ -78,19 +116,12 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
                     </span>
                   </div>
                   <div
-                    className="bg-blue-40 absolute bottom-0 left-0 h-[5px] rounded-full"
+                    className="bg-edge-primary absolute bottom-0 left-0 h-[5px] rounded-full"
                     style={{ width: `${completionRate}%` }}
                   />
                 </div>
 
-                <Button
-                  variant="box-outline-blue"
-                  size="md"
-                  className="text-body-small h-9 w-full"
-                  onClick={() => openEmbeddingModal(service, name)}
-                >
-                  임베딩하기
-                </Button>
+                {renderEmbeddingButton(service, name)}
               </div>
             </article>
           );
