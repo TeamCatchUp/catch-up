@@ -41,6 +41,10 @@ const InlineFieldInput = ({
   const spanRef = useRef<HTMLSpanElement | null>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
   const [minWidth, setMinWidth] = useState(0);
+  const [contentWidth, setContentWidth] = useState(0);
+
+  // 입력 폭 > placeholder 폭이면 inline(줄바꿈 가능), 아니면 inline-block(min-width 적용)
+  const useInlineMode = value && contentWidth > minWidth;
 
   // callback ref: 동기적으로 부모에 ref 전달 + 내부 ref 보관
   const setSpanRef = useCallback(
@@ -77,6 +81,8 @@ const InlineFieldInput = ({
           sel.collapse(e.currentTarget.lastChild, e.currentTarget.lastChild.textContent?.length ?? 0);
         }
       }
+      // 입력 폭 측정 (하이브리드 전환 기준)
+      setContentWidth(e.currentTarget.scrollWidth);
       onChange(fieldKey, text);
     },
     [fieldKey, onChange],
@@ -86,6 +92,7 @@ const InlineFieldInput = ({
     if (spanRef.current) {
       spanRef.current.textContent = '';
     }
+    setContentWidth(0);
     onChange(fieldKey, '');
     spanRef.current?.focus();
   }, [fieldKey, onChange]);
@@ -114,8 +121,11 @@ const InlineFieldInput = ({
         onInput={handleInput}
         onFocus={onFocus}
         onKeyDown={onKeyDown}
-        className="inline-block cursor-text align-baseline text-body-medium text-content-primary outline-none"
-        style={{ minWidth: value && minWidth > 0 ? `${minWidth}px` : undefined }}
+        className={cn(
+          'cursor-text align-baseline text-body-medium text-content-primary outline-none',
+          useInlineMode ? 'inline' : 'inline-block',
+        )}
+        style={{ minWidth: !useInlineMode && value && minWidth > 0 ? `${minWidth}px` : undefined }}
       />
       {!value && (
         <span className="pointer-events-none select-none text-content-assistive">{placeholder}</span>
