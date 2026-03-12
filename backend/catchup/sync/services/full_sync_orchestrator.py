@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -35,24 +34,18 @@ class FullSyncDispatchOrchestrator:
         if not scope_id:
             raise ValueError("scope_id is required")
 
-        sync_days = max(1, int(request.sync_days or settings.DEFAULT_SYNC_DAYS))
-        sync_from = str(
-            (
-                datetime.now(timezone.utc) - timedelta(days=sync_days)
-            ).timestamp()
-        )
+        sync_from_ts = request.sync_from_ts
 
         resolved = await resolver.resolve_full_sync_targets(
             db=db,
             request=request,
-            sync_from=sync_from,
         )
 
         event_seeds: list[SyncEventSeed] = []
         for target in resolved.targets:
             normalized_target_id = target.target_id.strip()
             if not normalized_target_id:
-                continue
+                raise ValueError("resolved target_id is empty")
 
             normalized_target_type = target.target_type.strip() or "resource"
             normalized_target_name = target.target_name.strip() or normalized_target_id
@@ -63,7 +56,7 @@ class FullSyncDispatchOrchestrator:
                     target_type=normalized_target_type,
                     target_id=normalized_target_id,
                     target_name=normalized_target_name,
-                    sync_from=sync_from,
+                    sync_from_ts=sync_from_ts,
                     metadata=dict(target.metadata),
                     max_attempts=settings.SYNC_JOB_MAX_ATTEMPTS,
                 )
@@ -77,5 +70,5 @@ class FullSyncDispatchOrchestrator:
             trigger=request.trigger,
             event_seeds=event_seeds,
             base_url=base_url,
-            sync_from=sync_from,
+            sync_from_ts=sync_from_ts,
         )

@@ -22,14 +22,14 @@ def build_stream_tasks_from_event_ids(
             continue
 
         tasks.append(
-            SyncStreamTask(
+            SyncStreamTask.full(
                 event_id=event_id,
                 job_id=job_id,
-                connector=connector.value,
-                sync_type=sync_type.value,
+                connector=connector,
                 scope_id=scope_id,
                 target_type=seed.target_type,
                 target_id=seed.target_id,
+                sync_from_ts=seed.sync_from_ts,
                 attempt=0,
                 max_attempts=seed.max_attempts,
             )

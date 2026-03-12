@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from catchup.connectors.slack.factory import create_slack_ingestion_service
-from catchup.sync.common.schemas import SyncEventContext
+from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
 
@@ -30,24 +30,18 @@ class SlackFullSyncHandler(BaseFullSyncHandler):
     async def handle(
         self,
         *,
-        context: SyncEventContext,
+        context: FullSyncContext,
         service_cache: dict[str, object],
-    ) -> dict[str, int | bool]:
+    ) -> TargetSyncResult:
         service = await self._get_service(context.scope_id, service_cache)
 
         from catchup.db.engine import SessionLocal
 
         with SessionLocal() as db:
-            result = await service.sync_channel_messages(
+            return await service.sync_channel_messages(
                 channel_id=context.target_id,
                 channel_name=context.target_name,
-                sync_from=context.sync_from,
+                sync_from_ts=context.sync_from_ts,
                 db=db,
                 skip_delete=True,
             )
-
-        return {
-            "synced": int(result.get("synced", 0)),
-            "errors": int(result.get("errors", 0)),
-            "skipped": bool(result.get("skipped", False)),
-        }

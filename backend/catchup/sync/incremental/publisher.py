@@ -132,7 +132,7 @@ async def publish_incremental_outbox(
                     continue
 
                 connector = _connector_key(record.connector)
-                task = SyncStreamTask(
+                task = SyncStreamTask.incremental(
                     event_id=build_incremental_event_id(record.record_key, record.generation),
                     job_id=build_incremental_job_id(
                         connector=connector,
@@ -141,7 +141,6 @@ async def publish_incremental_outbox(
                         parent_id=record.parent_id,
                     ),
                     connector=connector,
-                    sync_type="incremental",
                     scope_id=record.scope_id,
                     target_type=record.parent_type,
                     target_id=record.parent_id,

@@ -30,6 +30,7 @@ from catchup.db.models import (
 )
 from catchup.db.sync import get_job, list_events_by_job
 from catchup.sync.common.exceptions import SyncInternalError
+from catchup.sync.common.schemas import SyncTargetType
 
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ logger = logging.getLogger(__name__)
 class SyncJobSnapshotResult:
     job_id: str
     connector: SyncConnector
-    sync_type: str
+    sync_type: SyncType
     scope_id: str
     status: SyncJobStatus
     created_at: str
@@ -59,7 +60,7 @@ class SyncJobSnapshotResult:
 class SyncTargetResult:
     target_id: str
     display_name: str
-    target_type: str
+    target_type: SyncTargetType
     is_accessible: bool = True
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -76,7 +77,7 @@ class SyncTargetsResult:
 class SyncScopeStatusResult:
     job_id: str
     connector: SyncConnector
-    sync_type: str
+    sync_type: SyncType
     scope_id: str
     status: SyncJobStatus
     requested_at: str

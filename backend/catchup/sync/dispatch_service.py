@@ -29,11 +29,11 @@ class SyncDispatchService:
         base_url: str | None,
     ) -> SyncDispatchResult:
         logger.info(
-            "[SYNC][FULL SYNC][DISPATCH] Dispatching request: connector=%s, scope_id=%s, target_count=%s, sync_days=%s, trigger=%s",
+            "[SYNC][FULL SYNC][DISPATCH] Dispatching request: connector=%s, scope_id=%s, target_count=%s, sync_from_ts=%s, trigger=%s",
             connector,
             request.scope_id,
             len(request.target_ids) if request.target_ids else 0,
-            request.sync_days,
+            request.sync_from_ts,
             request.trigger,
         )
 

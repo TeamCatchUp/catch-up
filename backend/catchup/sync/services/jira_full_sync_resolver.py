@@ -45,7 +45,6 @@ class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         *,
         db: Session,
         request: FullSyncDispatchRequest,
-        sync_from: str,
     ) -> FullSyncResolvedTargets:
         cloud_id = request.scope_id.strip()
         if not cloud_id:
@@ -65,18 +64,18 @@ class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             for project in projects
             if (project.project_key or "").strip()
         }
-        invalid_target_ids = [
+        unknown_target_ids = [
             project_key
             for project_key in requested_project_keys
             if project_key not in project_map
         ]
-        if invalid_target_ids:
+        if unknown_target_ids:
             raise SyncRequestError(
                 "requested target_ids contain unknown projects",
                 metadata={
                     "cloud_id": cloud_id,
                     "requested_target_ids": requested_project_keys,
-                    "invalid_target_ids": invalid_target_ids,
+                    "invalid_target_ids": unknown_target_ids,
                 },
             )
 
@@ -103,10 +102,7 @@ class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             len(targets),
         )
 
-        return FullSyncResolvedTargets(
-            targets=targets,
-            invalid_target_ids=[],
-        )
+        return FullSyncResolvedTargets(targets=targets)
 
 
 _jira_full_sync_target_resolver = JiraFullSyncTargetResolver()

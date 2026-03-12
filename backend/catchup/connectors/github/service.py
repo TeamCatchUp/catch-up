@@ -48,6 +48,7 @@ from catchup.db.github.domain_repository import RepositoryUpsertData, UserUpsert
 from catchup.db.github import installation_repository as github_installation
 from catchup.db.models import GithubEntityType, GithubInstallationType, SourceType
 from catchup.db.user_source_mapping import find_premapped_name_by_external_user_identifier, find_premapped_names_by_source_type
+from catchup.sync.common.schemas import TargetSyncResult
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,7 @@ class GithubIngestionService:
     Usage:
         service = GithubIngestionService(installation_id, access_token)
         await service.initialize()
-        result = await service.full_sync(db, repo_ids=[12345, 67890])
+        result = await service.full_sync(db, repo_ids=[12345, 67890], sync_from_dt=datetime.now(timezone.utc))
     """
 
     def __init__(
@@ -298,8 +299,8 @@ class GithubIngestionService:
         self,
         db: Session,
         repo_ids: list[int] | None = None,
-        sync_days: int | None = None,
-    ) -> dict[str, Any]:
+        sync_from_dt: datetime | None = None,
+    ) -> TargetSyncResult:
         """
         Github Full Sync
         """
@@ -328,12 +329,13 @@ class GithubIngestionService:
                 )
 
             results["repositories"]["synced"] = len(repos_to_sync)
-            days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
-            sync_from = datetime.now(timezone.utc) - timedelta(days=days)
+            sync_from = sync_from_dt or (
+                datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
+            )
 
             logger.info(
                 f"[GITHUB][{SyncOperation.FULL_SYNC}] Syncing {len(repos_to_sync)} "
-                f"repositories from last {days} days"
+                f"repositories since {sync_from.isoformat()}"
             )
 
             # 2. 각 Repository별 동기화
@@ -355,7 +357,16 @@ class GithubIngestionService:
                     logger.error(f"[GITHUB][{SyncOperation.FULL_SYNC}] Failed to sync repository {repo_full_name}: {e}")
                     results["repositories"]["errors"] += 1
 
-            return results
+            return TargetSyncResult(
+                synced_count=(
+                    int(results["issues"]["synced"]) + int(results["pull_requests"]["synced"])
+                ),
+                error_count=(
+                    int(results["repositories"]["errors"])
+                    + int(results["issues"]["errors"])
+                    + int(results["pull_requests"]["errors"])
+                ),
+            )
 
         except Exception as e:
             logger.error(f"[GITHUB][{SyncOperation.FULL_SYNC}] Full sync failed: {e}")

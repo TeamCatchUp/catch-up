@@ -5,14 +5,15 @@ from typing import Protocol
 
 from sqlalchemy.orm import Session
 
+from catchup.db.models import SyncConnector, SyncType
 from catchup.sync.common.schemas import (
-    FullSyncDispatchRequest,
+    FullSyncContext,
     FullSyncResolvedTargets,
     PublishTasksResult,
-    SyncDispatchResult,
-    SyncEventContext,
+    SyncContext,
     SyncStreamMessage,
     SyncStreamTask,
+    TargetSyncResult,
 )
 
 
@@ -31,21 +32,21 @@ class WorkerProtocol(Protocol):
 
 
 class IngestionHandlerProtocol(Protocol):
-    connector: str
-    sync_type: str
+    connector: SyncConnector | str
+    sync_type: SyncType | str
 
     async def handle(
         self,
         *,
-        context: SyncEventContext,
+        context: SyncContext,
         service_cache: dict[str, object],
-    ) -> dict[str, int | bool]:
+    ) -> TargetSyncResult:
         ...
 
     async def on_job_started(
         self,
         *,
-        context: SyncEventContext,
+        context: SyncContext,
         total_targets: int,
     ) -> None:
         ...
@@ -53,14 +54,14 @@ class IngestionHandlerProtocol(Protocol):
     async def on_target_started(
         self,
         *,
-        context: SyncEventContext,
+        context: SyncContext,
     ) -> None:
         ...
 
     async def on_target_requeued(
         self,
         *,
-        context: SyncEventContext,
+        context: SyncContext,
         next_attempt: int,
         error_summary: str,
     ) -> None:
@@ -69,7 +70,7 @@ class IngestionHandlerProtocol(Protocol):
     async def on_target_failed(
         self,
         *,
-        context: SyncEventContext,
+        context: SyncContext,
         next_attempt: int,
         error_summary: str,
         retryable: bool,
@@ -79,15 +80,15 @@ class IngestionHandlerProtocol(Protocol):
     async def on_target_completed(
         self,
         *,
-        context: SyncEventContext,
-        result: dict[str, int | bool],
+        context: SyncContext,
+        result: TargetSyncResult,
     ) -> None:
         ...
 
     async def on_job_completed(
         self,
         *,
-        context: SyncEventContext,
+        context: FullSyncContext,
         total_targets: int,
         completed_targets: int,
         failed_targets: int,
@@ -98,30 +99,16 @@ class IngestionHandlerProtocol(Protocol):
     async def on_job_failed(
         self,
         *,
-        context: SyncEventContext,
+        context: FullSyncContext,
         total_targets: int,
         failed_targets: int,
     ) -> None:
         ...
-
-
-class ConnectorSyncServiceProtocol(Protocol):
-    async def dispatch_full_sync(
-        self,
-        *,
-        db,
-        request: FullSyncDispatchRequest,
-        base_url: str | None,
-    ) -> SyncDispatchResult:
-        ...
-
-
 class FullSyncTargetResolverProtocol(Protocol):
     async def resolve_full_sync_targets(
         self,
         *,
         db: Session,
         request: FullSyncDispatchRequest,
-        sync_from: str,
     ) -> FullSyncResolvedTargets:
         ...

@@ -18,6 +18,7 @@ from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizeRequest, SummarizerService, get_summarizer_service
 from catchup.configs.config import settings
 from catchup.db.slack import domain_repository
+from catchup.sync.common.schemas import TargetSyncResult
 
 logger = logging.getLogger(__name__)
 
@@ -142,17 +143,17 @@ class SlackIngestionService:
         *,
         channel_id: str,
         channel_name: str,
-        sync_from: str | None,
+        sync_from_ts: str | None,
         db: Session | None = None,
         skip_delete: bool = False,
-    ) -> dict[str, int | bool]:
+    ) -> TargetSyncResult:
         self._ensure_initialized()
         if db is not None:
             self._load_context_from_db(db)
         return await self._sync_channel_messages(
             channel_id=channel_id,
             channel_name=channel_name,
-            sync_from=sync_from,
+            sync_from_ts=sync_from_ts,
             skip_delete=skip_delete,
         )
 
@@ -185,9 +186,9 @@ class SlackIngestionService:
         *,
         channel_id: str,
         channel_name: str,
-        sync_from: str | None,
+        sync_from_ts: str | None,
         skip_delete: bool,
-    ) -> dict[str, int | bool]:
+    ) -> TargetSyncResult:
         """단일 이벤트 단위: fetch -> summarize -> embed -> store."""
         skippable_errors = {"not_in_channel", "channel_not_found", "missing_scope"}
 
@@ -199,7 +200,7 @@ class SlackIngestionService:
             async for batch in self._fetch_channel_pages(
                 channel_id=channel_id,
                 channel_name=channel_name,
-                sync_from=sync_from,
+                sync_from_ts=sync_from_ts,
             ):
                 await fetch_q.put(batch)
             await fetch_q.put(None)
@@ -279,7 +280,7 @@ class SlackIngestionService:
                             channel_id,
                             exc.response.get("error"),
                         )
-                        return {"synced": 0, "errors": 0, "skipped": True}
+                        return TargetSyncResult(skipped=True)
 
             raise eg.exceptions[0] from None
 
@@ -291,7 +292,10 @@ class SlackIngestionService:
             synced_count,
             errors,
         )
-        return {"synced": synced_count, "errors": errors, "skipped": False}
+        return TargetSyncResult(
+            synced_count=synced_count,
+            error_count=errors,
+        )
 
     async def incremental_sync(
         self,
@@ -301,23 +305,19 @@ class SlackIngestionService:
         record_id: str,
         event_kind: str,
         sync_from: str | None,
-    ) -> dict[str, int | bool]:
+    ) -> TargetSyncResult:
         normalized_event_kind = event_kind.strip().lower()
         if normalized_event_kind == "deleted":
             doc_id = f"slack:message:{self.team_id}:{channel_id}:{record_id}"
             await self.repository.delete_documents([doc_id])
-            return {
-                "synced": 1,
-                "errors": 0,
-                "skipped": False,
-            }
+            return TargetSyncResult(synced_count=1)
 
         channel = domain_repository.get_channel(db, channel_id)
         channel_name = channel.name if channel is not None else channel_id
         return await self.sync_channel_messages(
             channel_id=channel_id,
             channel_name=channel_name,
-            sync_from=sync_from,
+            sync_from_ts=sync_from,
             db=db,
             skip_delete=False,
         )
@@ -327,14 +327,14 @@ class SlackIngestionService:
         *,
         channel_id: str,
         channel_name: str,
-        sync_from: str | None,
+        sync_from_ts: str | None,
     ) -> AsyncGenerator[tuple[list[Document], list[str], int, str | None], None]:
         cursor = None
 
         while True:
             response = await self.client.get_conversation_history(
                 channel=channel_id,
-                oldest=sync_from,
+                oldest=sync_from_ts,
                 cursor=cursor,
                 limit=settings.SLACK_MESSAGE_BATCH_SIZE,
             )

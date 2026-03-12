@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.sync.common.exceptions import SyncInternalError
+from catchup.sync.common.schemas import IncrementalSyncContext, TargetSyncResult
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
 
 
@@ -29,9 +30,9 @@ class JiraIncrementalHandler(BaseIncrementalHandler):
     async def handle(
         self,
         *,
-        context,
+        context: IncrementalSyncContext,
         service_cache: dict[str, object],
-    ) -> dict[str, int | bool]:
+    ) -> TargetSyncResult:
         service = await self._get_service(context.scope_id, service_cache)
         project_key = context.parent_id or context.target_id
         if not project_key:
@@ -48,9 +49,14 @@ class JiraIncrementalHandler(BaseIncrementalHandler):
                 since=self._resolve_since(context),
             )
 
-        if int(result.get("errors", 0)) > 0:
+        error_count = int(result.get("errors", 0))
+        if error_count > 0:
             raise SyncInternalError(
                 "jira incremental sync failed",
                 metadata={"record_key": context.record_key},
             )
-        return result
+        return TargetSyncResult(
+            synced_count=int(result.get("synced", 0)),
+            error_count=error_count,
+            skipped=bool(result.get("skipped", False)),
+        )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable
+from datetime import datetime, timedelta, timezone
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -23,6 +24,7 @@ from catchup.server.sync.schemas import (
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
     SyncDispatchResult,
+    SyncTrigger,
 )
 from catchup.sync.common.exceptions import SyncAPIError
 from catchup.sync.dispatch_service import get_sync_dispatch_service
@@ -58,6 +60,8 @@ async def dispatch_full_sync(
     db: Session = Depends(get_db),
 ):
     dispatch_service = get_sync_dispatch_service()
+    sync_days = max(1, int(sync_request.sync_days or settings.DEFAULT_SYNC_DAYS))
+    sync_from_ts = f"{(datetime.now(timezone.utc) - timedelta(days=sync_days)).timestamp():.6f}"
 
     return await _execute_sync_dispatch(
         connector=sync_request.connector,
@@ -68,8 +72,8 @@ async def dispatch_full_sync(
             request=FullSyncDispatchRequest(
                 scope_id=sync_request.scope_id,
                 target_ids=sync_request.target_ids,
-                sync_days=sync_request.sync_days,
-                trigger="api",
+                sync_from_ts=sync_from_ts,
+                trigger=SyncTrigger.API,
             ),
             base_url=str(request.base_url),
         ),

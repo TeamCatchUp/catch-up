@@ -19,6 +19,7 @@ from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.db.confluence import domain_repository
 from catchup.configs.config import settings
+from catchup.sync.common.schemas import TargetSyncResult
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +52,11 @@ class ConfluenceIngestionService:
             self,
             db: Session,
             space_keys: list[str] | None = None,
-            sync_days: int | None = None,
-    ) -> dict[str, Any]:
-        days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
-        sync_from = datetime.now(timezone.utc) - timedelta(days=days)
+            sync_from_dt: datetime | None = None,
+    ) -> TargetSyncResult:
+        sync_from = sync_from_dt or (
+            datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
+        )
 
         if space_keys is None:
             normalized_space_keys = [
@@ -83,7 +85,7 @@ class ConfluenceIngestionService:
         try:
             if not normalized_space_keys:
                 logger.warning(f"[CONFLUENCE][FULL SYNC] No spaces to sync: cloud_id={self.cloud_id}")
-                return results
+                return TargetSyncResult(skipped=True)
 
             space_id_map = domain_repository.get_space_id_map(
                 db, self.cloud_id, normalized_space_keys,
@@ -99,7 +101,11 @@ class ConfluenceIngestionService:
                 )
                 results["pages"]["errors"] += max(1, len(normalized_space_keys))
                 results["blogposts"]["errors"] += max(1, len(normalized_space_keys))
-                return results
+                return TargetSyncResult(
+                    error_count=(
+                        int(results["pages"]["errors"]) + int(results["blogposts"]["errors"])
+                    )
+                )
 
             missing_space_keys = [
                 space_key
@@ -137,7 +143,14 @@ class ConfluenceIngestionService:
             logger.info(
                 f"[CONFLUENCE][FULL SYNC] Completed : cloud_id = {self.cloud_id}, results = {results}"
             )
-            return results
+            return TargetSyncResult(
+                synced_count=(
+                    int(results["pages"]["synced"]) + int(results["blogposts"]["synced"])
+                ),
+                error_count=(
+                    int(results["pages"]["errors"]) + int(results["blogposts"]["errors"])
+                ),
+            )
 
         except Exception as e:
             db.rollback()
