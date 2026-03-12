@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 import structlog
 
+from catchup.audit.metadata import AuthAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.audit.enums import AuditLevel
 from catchup.events.enums import AuthEventAction
@@ -100,7 +101,7 @@ async def oauth_callback(
             event_type=EventType.AUTH,
             event_action=AuthEventAction.LOGIN_FAILURE,
             level=AuditLevel.WARNING,
-            metadata={"reason": "state_missing"},
+            metadata=AuthAuditMetadata(context="state_missing"),
             immediate=True
         )
         valid_state = False
@@ -111,7 +112,7 @@ async def oauth_callback(
             event_type=EventType.AUTH,
             event_action=AuthEventAction.LOGIN_FAILURE,
             level=AuditLevel.WARNING,
-            metadata={"reason": "state_mismatch"},
+            metadata=AuthAuditMetadata(context="state_mismatch"),
             immediate=True
         )
         valid_state = False
@@ -133,7 +134,7 @@ async def oauth_callback(
             event_type=EventType.AUTH,
             event_action=AuthEventAction.LOGIN_FAILURE,
             level=AuditLevel.WARNING,
-            metadata={"reason": "expired_state"},
+            metadata=AuthAuditMetadata(context="expired_state"),
             immediate=True
         )
         raise HTTPException(
@@ -182,7 +183,7 @@ def refresh_token(
             event_type=EventType.AUTH,
             event_action=AuthEventAction.LOGIN_FAILURE,
             level=AuditLevel.WARNING,
-            metadata={"reason": "invalid_or_expired_token", "detail": e.detail},
+            metadata=AuthAuditMetadata(context="refresh_token_invalid"),
             immediate=True
         )
         
@@ -213,7 +214,7 @@ def refresh_token(
             event_type=EventType.AUTH,
             event_action=AuthEventAction.LOGIN_FAILURE,
             level=AuditLevel.WARNING,
-            metadata={"reason": "invalid_refresh_token"},
+            metadata=AuthAuditMetadata(context="refresh_token_invalid"),
             immediate=True,
             actor=snapshot,
         )
