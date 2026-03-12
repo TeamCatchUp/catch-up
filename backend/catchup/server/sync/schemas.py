@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
 from catchup.db.models import SyncConnector, SyncJobStatus, SyncType
-from catchup.sync.common.schemas import SyncDispatchStatus, SyncTargetType
+from catchup.sync.common.schemas import (
+    FullSyncDispatchRequest,
+    SyncDispatchStatus,
+    SyncTargetType,
+    SyncTrigger,
+)
 
 
 class SyncJobSnapshotResponse(BaseModel):
@@ -68,7 +74,7 @@ class FullSyncRequest(BaseModel):
         ge=1,
         description="collection period in days; if omitted connector default is used",
     )
-    
+
     @field_validator("target_ids")
     @classmethod
     def _validate_target_ids(cls, value: list[str]) -> list[str]:
@@ -88,6 +94,24 @@ class FullSyncRequest(BaseModel):
             raise ValueError("target_ids must not be empty")
 
         return normalized
+
+    def to_dispatch_request(
+        self,
+        *,
+        default_sync_days: int,
+        trigger: SyncTrigger = SyncTrigger.API,
+        now: datetime | None = None,
+    ) -> FullSyncDispatchRequest:
+        sync_days = max(1, int(self.sync_days or default_sync_days))
+        current_time = now or datetime.now(timezone.utc)
+        sync_from_ts = f"{(current_time - timedelta(days=sync_days)).timestamp():.6f}"
+
+        return FullSyncDispatchRequest(
+            scope_id=self.scope_id,
+            target_ids=self.target_ids,
+            sync_from_ts=sync_from_ts,
+            trigger=trigger,
+        )
 
 
 class SyncAcceptedResponse(BaseModel):

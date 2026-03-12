@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable
-from datetime import datetime, timedelta, timezone
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -21,11 +20,7 @@ from catchup.server.sync.schemas import (
     SyncTargetItem,
     SyncTargetsResponse,
 )
-from catchup.sync.common.schemas import (
-    FullSyncDispatchRequest,
-    SyncDispatchResult,
-    SyncTrigger,
-)
+from catchup.sync.common.schemas import FullSyncDispatchRequest, SyncDispatchResult
 from catchup.sync.common.exceptions import SyncAPIError
 from catchup.sync.dispatch_service import SyncDispatchService
 from catchup.sync.query_service import (
@@ -61,25 +56,19 @@ async def dispatch_full_sync(
     db: Session = Depends(get_db),
     dispatch_service: SyncDispatchService = Depends(get_sync_dispatch_service_dependency),
 ):
-    sync_days = max(1, int(sync_request.sync_days or settings.DEFAULT_SYNC_DAYS))
-    sync_from_ts = f"{(datetime.now(timezone.utc) - timedelta(days=sync_days)).timestamp():.6f}"
+    dispatch_request = sync_request.to_dispatch_request(
+        default_sync_days=settings.DEFAULT_SYNC_DAYS,
+    )
 
-    return await _execute_sync_dispatch(
+    return await _execute_full_sync_dispatch(
         connector=sync_request.connector,
-        scope_id=sync_request.scope_id,
+        dispatch_request=dispatch_request,
         dispatch_call=dispatch_service.dispatch_full_sync(
             db=db,
             connector=sync_request.connector,
-            request=FullSyncDispatchRequest(
-                scope_id=sync_request.scope_id,
-                target_ids=sync_request.target_ids,
-                sync_from_ts=sync_from_ts,
-                trigger=SyncTrigger.API,
-            ),
+            request=dispatch_request,
             base_url=str(request.base_url),
         ),
-        log_label="FULL SYNC",
-        failure_message="sync full request failed",
     )
 
 
@@ -324,14 +313,14 @@ def _build_error_detail(
     return detail
 
 
-async def _execute_sync_dispatch(
+async def _execute_full_sync_dispatch(
     *,
     connector: SyncConnector,
-    scope_id: str,
+    dispatch_request: FullSyncDispatchRequest,
     dispatch_call: Awaitable[SyncDispatchResult],
-    log_label: str,
-    failure_message: str,
 ) -> SyncAcceptedResponse:
+    scope_id = dispatch_request.scope_id
+
     try:
         result = await dispatch_call
         return _to_sync_accepted_response(result)
@@ -355,8 +344,7 @@ async def _execute_sync_dispatch(
         ) from exc
     except Exception as exc:
         logger.error(
-            "[SYNC][%s][API] Dispatch failed: connector=%s, scope_id=%s, error=%s",
-            log_label,
+            "[SYNC][FULL][API] Dispatch failed: connector=%s, scope_id=%s, error=%s",
             connector,
             scope_id,
             exc,
@@ -366,7 +354,7 @@ async def _execute_sync_dispatch(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_build_error_detail(
                 code="internal_error",
-                message=failure_message,
+                message="sync full request failed",
                 connector=connector,
                 scope_id=scope_id,
             ),
