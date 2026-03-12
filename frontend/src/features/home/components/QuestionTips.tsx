@@ -15,6 +15,10 @@ interface QuestionTipsProps {
 
 const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragScrollLeft = useRef(0);
+  const hasDragged = useRef(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
@@ -41,6 +45,36 @@ const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
     scrollRef.current?.scrollBy({ left: 260, behavior: 'smooth' });
   };
 
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    isDragging.current = true;
+    hasDragged.current = false;
+    dragStartX.current = e.pageX;
+    dragScrollLeft.current = el.scrollLeft;
+    el.style.cursor = 'grabbing';
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging.current || !scrollRef.current) return;
+    const dx = e.pageX - dragStartX.current;
+    if (Math.abs(dx) > 3) hasDragged.current = true;
+    scrollRef.current.scrollLeft = dragScrollLeft.current - dx;
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    isDragging.current = false;
+    if (scrollRef.current) scrollRef.current.style.cursor = '';
+  }, []);
+
+  const handleCardClick = useCallback(
+    (idx: number) => {
+      if (hasDragged.current) return;
+      onTipClick(idx);
+    },
+    [onTipClick],
+  );
+
   return (
     <section className="flex w-268 flex-col gap-4">
       <header className="flex items-center gap-3">
@@ -51,20 +85,28 @@ const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
       </header>
 
       <div className="relative">
-        <div ref={scrollRef} className="no-scrollbar flex gap-5 overflow-x-auto">
+        <div
+          ref={scrollRef}
+          className="no-scrollbar flex cursor-grab gap-5 overflow-x-auto select-none"
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
           {tipData.map((tip, idx) => (
             <button
               key={tip.title}
               type="button"
-              onClick={() => onTipClick(idx)}
+              onClick={() => handleCardClick(idx)}
               className="flex h-[226px] w-60 shrink-0 cursor-pointer flex-col overflow-hidden rounded-2xl border border-edge-neutral bg-fill-normal text-left"
             >
               <div className="relative h-[119px] w-full overflow-hidden">
-                <Image src={tip.image} alt={tip.title} fill className="object-cover dark:hidden" />
+                <Image src={tip.image} alt={tip.title} fill draggable={false} className="object-cover dark:hidden" />
                 <Image
                   src={tip.image.replace('/light/', '/dark/')}
                   alt={tip.title}
                   fill
+                  draggable={false}
                   className="hidden object-cover dark:block"
                 />
               </div>
