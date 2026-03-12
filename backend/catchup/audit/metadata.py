@@ -5,6 +5,10 @@ from catchup.db.models import SourceType
 
 
 class BaseAuditMetadata(BaseModel):
+    context: str | None = None
+
+
+class AuthAuditMetadata(BaseAuditMetadata):
     pass
 
 
