@@ -34,6 +34,7 @@ def build_stream_tasks(
     scope_id: str,
     target_type: str,
     target_ids: list[str] | None = None,
+    sync_from_ts: str | None = None,
     max_attempts: int = 3,
 ) -> list[SyncStreamTask]:
     tasks: list[SyncStreamTask] = []
@@ -63,6 +64,7 @@ def build_stream_tasks(
                 scope_id=scope_id,
                 target_type=target_type,
                 target_id=target_id,
+                sync_from_ts=sync_from_ts,
                 attempt=0,
                 max_attempts=max_attempts,
             )
@@ -84,6 +86,7 @@ async def publish_job_events(
     scope_id: str,
     target_type: str,
     target_ids: list[str] | None = None,
+    sync_from_ts: str | None = None,
     max_attempts: int = 3,
 ) -> PublishTasksResult:
     tasks = build_stream_tasks(
@@ -94,6 +97,7 @@ async def publish_job_events(
         scope_id=scope_id,
         target_type=target_type,
         target_ids=target_ids,
+        sync_from_ts=sync_from_ts,
         max_attempts=max_attempts,
     )
     if not tasks:

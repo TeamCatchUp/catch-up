@@ -50,7 +50,6 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         *,
         db: Session,
         request: FullSyncDispatchRequest,
-        sync_from: str,
     ) -> FullSyncResolvedTargets:
         scope_id = request.scope_id.strip()
         if not scope_id:
@@ -77,18 +76,18 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         )
         requested_repo_ids = _normalize_requested_repo_ids(request.target_ids)
         repository_map = {str(repo.repo_id): repo for repo in repositories}
-        invalid_target_ids = [
+        unknown_target_ids = [
             repo_id
             for repo_id in requested_repo_ids
             if repo_id not in repository_map
         ]
-        if invalid_target_ids:
+        if unknown_target_ids:
             raise SyncRequestError(
                 "requested target_ids contain unknown repositories",
                 metadata={
                     "installation_id": installation_id,
                     "requested_target_ids": requested_repo_ids,
-                    "invalid_target_ids": invalid_target_ids,
+                    "invalid_target_ids": unknown_target_ids,
                 },
             )
 
@@ -114,10 +113,7 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             len(targets),
         )
 
-        return FullSyncResolvedTargets(
-            targets=targets,
-            invalid_target_ids=[],
-        )
+        return FullSyncResolvedTargets(targets=targets)
 
 
 _github_full_sync_target_resolver = GithubFullSyncTargetResolver()

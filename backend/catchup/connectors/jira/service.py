@@ -10,7 +10,7 @@ JiraApiClient, JiraFieldMapper, JiraTransformer, PGVectorRepository를 조합.
     await service.initialize()
 
     # 전체 동기화
-    await service.full_sync(project_keys=["CATCH", "PROJ"])
+    await service.full_sync(db, project_keys=["CATCH", "PROJ"], sync_from_dt=datetime.now(timezone.utc))
 
     # 증분 동기화
     await service.incremental_sync()
@@ -36,6 +36,7 @@ from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
 from catchup.db.jira import domain_repository as jira_entities
+from catchup.sync.common.schemas import TargetSyncResult
 
 logger = logging.getLogger(__name__)
 
@@ -188,8 +189,8 @@ class JiraIngestionService:
         self,
         db: Session,
         project_keys: list[str] | None = None,
-        sync_days: int | None = None,
-    ) -> dict[str, Any]:
+        sync_from_dt: datetime | None = None,
+    ) -> TargetSyncResult:
         """
         전체 동기화
 
@@ -198,8 +199,9 @@ class JiraIngestionService:
         """
         self._ensure_initialized()
 
-        days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
-        sync_from = datetime.now(timezone.utc) - timedelta(days=days)
+        sync_from = sync_from_dt or (
+            datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
+        )
 
         logger.info(
             f"[JIRA][FULL SYNC] Started for cloud_id={self.cloud_id}"
@@ -240,7 +242,18 @@ class JiraIngestionService:
                     results["issues"]["errors"] += 1
                     results["epics"]["errors"] += 1
             logger.info(f"[JIRA][FULL SYNC] Completed : {results}")
-            return results
+            return TargetSyncResult(
+                synced_count=(
+                    int(results["issues"]["synced"])
+                    + int(results["epics"]["synced"])
+                    + int(results["sprints"]["synced"])
+                ),
+                error_count=(
+                    int(results["issues"]["errors"])
+                    + int(results["epics"]["errors"])
+                    + int(results["sprints"]["errors"])
+                ),
+            )
 
         except Exception as e:
             logger.error(f"[JIRA][FULL SYNC] Failed : {e}")

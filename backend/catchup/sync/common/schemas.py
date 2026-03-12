@@ -9,6 +9,23 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from catchup.db.models import SyncConnector, SyncType
 
 
+def _validate_epoch_ts(value: str | None, *, field_name: str) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError(f"{field_name} must not be blank")
+    try:
+        parsed = float(stripped)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{field_name} must be a UTC epoch seconds string"
+        ) from exc
+    if parsed < 0:
+        raise ValueError(f"{field_name} must be non-negative")
+    return stripped
+
+
 class SyncDispatchStatus(StrEnum):
     ACCEPTED = "accepted"
     NO_EVENTS = "no_events"
@@ -71,11 +88,16 @@ class HandlerKey:
 class FullSyncDispatchRequest:
     scope_id: str
     target_ids: list[str] | None = None
-    sync_days: int | None = None
+    sync_from_ts: str | None = None
     trigger: SyncTrigger = SyncTrigger.API
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "trigger", SyncTrigger(self.trigger))
+        object.__setattr__(
+            self,
+            "sync_from_ts",
+            _validate_epoch_ts(self.sync_from_ts, field_name="sync_from_ts"),
+        )
 
 
 @dataclass(slots=True, frozen=True)
@@ -110,7 +132,6 @@ class FullSyncTarget:
 @dataclass(slots=True, frozen=True)
 class FullSyncResolvedTargets:
     targets: list[FullSyncTarget] = field(default_factory=list)
-    invalid_target_ids: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True, frozen=True)
@@ -119,12 +140,17 @@ class SyncEventSeed:
     target_type: SyncTargetType
     target_id: str
     target_name: str
-    sync_from: str | None = None
+    sync_from_ts: str | None = None
     metadata: dict[str, object] = field(default_factory=dict)
     max_attempts: int = 3
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "target_type", SyncTargetType(self.target_type))
+        object.__setattr__(
+            self,
+            "sync_from_ts",
+            _validate_epoch_ts(self.sync_from_ts, field_name="sync_from_ts"),
+        )
 
 
 @dataclass(slots=True, frozen=True)
@@ -133,32 +159,14 @@ class TargetSyncResult:
     error_count: int = 0
     skipped: bool = False
 
-    @classmethod
-    def from_mapping(cls, payload: Mapping[str, object]) -> "TargetSyncResult":
-        synced_raw = payload.get("synced", 0)
-        error_raw = payload.get("errors", 0)
-        skipped_raw = payload.get("skipped", False)
-
-        try:
-            synced_count = int(synced_raw)
-        except (TypeError, ValueError):
-            synced_count = 0
-
-        try:
-            error_count = int(error_raw)
-        except (TypeError, ValueError):
-            error_count = 0
-
-        return cls(
-            synced_count=synced_count,
-            error_count=error_count,
-            skipped=bool(skipped_raw),
-        )
-
 
 class FullSyncTaskPayload(BaseModel):
     target_type: SyncTargetType = Field(default=SyncTargetType.RESOURCE)
     target_id: str = Field(..., description="target identifier")
+    sync_from_ts: str | None = Field(
+        default=None,
+        description="absolute full sync start timestamp in UTC epoch seconds string",
+    )
 
     @field_validator("target_id")
     @classmethod
@@ -170,11 +178,19 @@ class FullSyncTaskPayload(BaseModel):
             raise ValueError("target_id must not include leading/trailing spaces")
         return value
 
+    @field_validator("sync_from_ts")
+    @classmethod
+    def _validate_sync_from_ts(cls, value: str | None) -> str | None:
+        return _validate_epoch_ts(value, field_name="sync_from_ts")
+
     def to_stream_fields(self) -> dict[str, str]:
-        return {
+        fields = {
             "target_type": self.target_type.value,
             "target_id": self.target_id,
         }
+        if self.sync_from_ts is not None:
+            fields["sync_from_ts"] = self.sync_from_ts
+        return fields
 
 
 class IncrementalSyncTaskPayload(FullSyncTaskPayload):
@@ -272,6 +288,7 @@ class SyncStreamTask(BaseModel):
         scope_id: str,
         target_type: SyncTargetType | str,
         target_id: str,
+        sync_from_ts: str | None,
         attempt: int = 0,
         max_attempts: int = 3,
     ) -> "SyncStreamTask":
@@ -284,6 +301,7 @@ class SyncStreamTask(BaseModel):
             payload=FullSyncTaskPayload(
                 target_type=target_type,
                 target_id=target_id,
+                sync_from_ts=sync_from_ts,
             ),
             attempt=attempt,
             max_attempts=max_attempts,
@@ -388,6 +406,10 @@ class SyncStreamTask(BaseModel):
             return self.payload.last_event_at
         return None
 
+    @property
+    def sync_from_ts(self) -> str | None:
+        return self.payload.sync_from_ts
+
     def to_stream_fields(self) -> dict[str, str]:
         fields = {
             "event_id": self.event_id,
@@ -425,6 +447,11 @@ class SyncStreamTask(BaseModel):
             payload: SyncTaskPayload = FullSyncTaskPayload(
                 target_type=str(fields.get("target_type") or SyncTargetType.RESOURCE.value),
                 target_id=str(fields.get("target_id") or ""),
+                sync_from_ts=(
+                    str(fields.get("sync_from_ts"))
+                    if fields.get("sync_from_ts") is not None
+                    else None
+                ),
             )
         else:
             payload = IncrementalSyncTaskPayload(
@@ -502,7 +529,7 @@ class SyncContextBase:
 
 @dataclass(slots=True)
 class FullSyncContext(SyncContextBase):
-    sync_from: str | None
+    sync_from_ts: str | None
     metadata: dict[str, Any] = field(default_factory=dict)
     sync_type: SyncType = field(init=False, default=SyncType.FULL)
 

@@ -1,5 +1,4 @@
 from catchup.sync.common.protocols import (
-    ConnectorSyncServiceProtocol,
     EventPublisherProtocol,
     FullSyncTargetResolverProtocol,
     IngestionHandlerProtocol,
@@ -53,5 +52,4 @@ __all__ = [
     "WorkerProtocol",
     "IngestionHandlerProtocol",
     "FullSyncTargetResolverProtocol",
-    "ConnectorSyncServiceProtocol",
 ]

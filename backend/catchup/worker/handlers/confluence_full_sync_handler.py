@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 
 from catchup.connectors.confluence.factory import create_confluence_ingestion_service
@@ -39,7 +40,11 @@ class ConfluenceFullSyncHandler(BaseFullSyncHandler):
         service_cache: dict[str, object],
     ) -> TargetSyncResult:
         service = await self._get_service(context.scope_id, service_cache)
-        sync_days = self._resolve_sync_days(context)
+        sync_from_dt = (
+            datetime.fromtimestamp(float(context.sync_from_ts), tz=timezone.utc)
+            if context.sync_from_ts is not None
+            else None
+        )
 
         space_key = context.target_id.strip()
         if not space_key:
@@ -51,33 +56,20 @@ class ConfluenceFullSyncHandler(BaseFullSyncHandler):
             result = await service.full_sync(
                 db=db,
                 space_keys=[space_key],
-                sync_days=sync_days,
+                sync_from_dt=sync_from_dt,
             )
 
-        pages = result.get("pages", {})
-        blogposts = result.get("blogposts", {})
-
-        synced_count = self._as_int(pages.get("synced", 0)) + self._as_int(
-            blogposts.get("synced", 0)
-        )
-        error_count = self._as_int(pages.get("errors", 0)) + self._as_int(
-            blogposts.get("errors", 0)
-        )
-
-        if error_count > 0:
+        if result.error_count > 0:
             raise RuntimeError(
                 "[CONFLUENCE][FULL SYNC][WORKER] Target sync failed: "
-                f"scope_id={context.scope_id}, space_key={space_key}, errors={error_count}"
+                f"scope_id={context.scope_id}, space_key={space_key}, errors={result.error_count}"
             )
 
         logger.info(
-            "[CONFLUENCE][FULL SYNC][WORKER] Target synced: scope_id=%s, space_key=%s, synced=%s, sync_days=%s",
+            "[CONFLUENCE][FULL SYNC][WORKER] Target synced: scope_id=%s, space_key=%s, synced=%s, sync_from_ts=%s",
             context.scope_id,
             space_key,
-            synced_count,
-            sync_days,
+            result.synced_count,
+            context.sync_from_ts,
         )
-        return self._result(
-            synced_count=synced_count,
-            error_count=error_count,
-        )
+        return result

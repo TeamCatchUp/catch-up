@@ -67,7 +67,7 @@ def _build_job_queued_event(
     scope_id: str,
     total_targets: int,
     queued_targets: int,
-    sync_from: str | None,
+    sync_from_ts: str | None,
 ) -> SyncStatusStreamEvent:
     payload: dict[str, object] = {
         "status": "pending",
@@ -75,8 +75,8 @@ def _build_job_queued_event(
         "total_targets": total_targets,
         "queued_targets": queued_targets,
     }
-    if sync_from is not None:
-        payload["sync_from"] = sync_from
+    if sync_from_ts is not None:
+        payload["sync_from_ts"] = sync_from_ts
 
     return SyncStatusStreamEvent(
         connector=connector,
@@ -102,7 +102,7 @@ class SyncDispatchOrchestrator:
         trigger: SyncTrigger,
         event_seeds: list[SyncEventSeed],
         base_url: str | None,
-        sync_from: str | None = None,
+        sync_from_ts: str | None = None,
     ) -> SyncDispatchResult:
         # Scope 정규화
         normalized_scope_id = self._normalize_scope_id(scope_id)
@@ -134,7 +134,7 @@ class SyncDispatchOrchestrator:
             context=context,
             total_targets=len(event_seeds),
             queued_targets=publish_result.published_count,
-            sync_from=sync_from,
+            sync_from_ts=sync_from_ts,
         )
 
         # 처리할 대상이 없는 Job이였다면 즉시 성공 처리
@@ -257,7 +257,7 @@ class SyncDispatchOrchestrator:
         context: DispatchContext,
         total_targets: int,
         queued_targets: int,
-        sync_from: str | None,
+        sync_from_ts: str | None,
     ) -> None:
         if total_targets == 0:
             return
@@ -271,7 +271,7 @@ class SyncDispatchOrchestrator:
                     scope_id=context.scope_id,
                     total_targets=total_targets,
                     queued_targets=queued_targets,
-                    sync_from=sync_from,
+                    sync_from_ts=sync_from_ts,
                 )
             )
         except Exception as exc:

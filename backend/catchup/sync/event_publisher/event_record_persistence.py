@@ -24,8 +24,8 @@ def _build_resource_metadata(
     resource_metadata["scope_id"] = scope_id
     resource_metadata["target_name"] = seed.target_name
     resource_metadata["sync_type"] = sync_type.value
-    if seed.sync_from is not None:
-        resource_metadata["sync_from"] = seed.sync_from
+    if seed.sync_from_ts is not None:
+        resource_metadata["sync_from_ts"] = seed.sync_from_ts
     return resource_metadata
 
 

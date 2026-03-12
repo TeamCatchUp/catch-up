@@ -53,9 +53,14 @@ class GithubIncrementalHandler(BaseIncrementalHandler):
                 since=self._resolve_since(context),
             )
 
-        if int(result.get("errors", 0)) > 0:
+        error_count = int(result.get("errors", 0))
+        if error_count > 0:
             raise SyncInternalError(
                 "github incremental sync failed",
                 metadata={"record_key": context.record_key},
             )
-        return TargetSyncResult.from_mapping(result)
+        return TargetSyncResult(
+            synced_count=int(result.get("synced", 0)),
+            error_count=error_count,
+            skipped=bool(result.get("skipped", False)),
+        )

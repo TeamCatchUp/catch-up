@@ -7,11 +7,9 @@ from sqlalchemy.orm import Session
 
 from catchup.db.models import SyncConnector, SyncType
 from catchup.sync.common.schemas import (
-    FullSyncDispatchRequest,
     FullSyncContext,
     FullSyncResolvedTargets,
     PublishTasksResult,
-    SyncDispatchResult,
     SyncContext,
     SyncStreamMessage,
     SyncStreamTask,
@@ -106,25 +104,11 @@ class IngestionHandlerProtocol(Protocol):
         failed_targets: int,
     ) -> None:
         ...
-
-
-class ConnectorSyncServiceProtocol(Protocol):
-    async def dispatch_full_sync(
-        self,
-        *,
-        db,
-        request: FullSyncDispatchRequest,
-        base_url: str | None,
-    ) -> SyncDispatchResult:
-        ...
-
-
 class FullSyncTargetResolverProtocol(Protocol):
     async def resolve_full_sync_targets(
         self,
         *,
         db: Session,
         request: FullSyncDispatchRequest,
-        sync_from: str,
     ) -> FullSyncResolvedTargets:
         ...

@@ -29,6 +29,7 @@ def build_stream_tasks_from_event_ids(
                 scope_id=scope_id,
                 target_type=seed.target_type,
                 target_id=seed.target_id,
+                sync_from_ts=seed.sync_from_ts,
                 attempt=0,
                 max_attempts=seed.max_attempts,
             )

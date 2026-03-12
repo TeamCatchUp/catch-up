@@ -45,7 +45,6 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         *,
         db: Session,
         request: FullSyncDispatchRequest,
-        sync_from: str,
     ) -> FullSyncResolvedTargets:
         cloud_id = request.scope_id.strip()
         if not cloud_id:
@@ -65,18 +64,18 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             for space in spaces
             if (space.space_key or "").strip()
         }
-        invalid_target_ids = [
+        unknown_target_ids = [
             space_key
             for space_key in requested_space_keys
             if space_key not in space_map
         ]
-        if invalid_target_ids:
+        if unknown_target_ids:
             raise SyncRequestError(
                 "requested target_ids contain unknown spaces",
                 metadata={
                     "cloud_id": cloud_id,
                     "requested_target_ids": requested_space_keys,
-                    "invalid_target_ids": invalid_target_ids,
+                    "invalid_target_ids": unknown_target_ids,
                 },
             )
 
@@ -103,10 +102,7 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             len(targets),
         )
 
-        return FullSyncResolvedTargets(
-            targets=targets,
-            invalid_target_ids=[],
-        )
+        return FullSyncResolvedTargets(targets=targets)
 
 
 _confluence_full_sync_target_resolver = ConfluenceFullSyncTargetResolver()

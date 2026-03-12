@@ -53,9 +53,9 @@ class SlackIncrementalHandler(BaseIncrementalHandler):
                 sync_from=sync_from,
             )
 
-        if int(result.get("errors", 0)) > 0:
+        if result.error_count > 0:
             raise SyncInternalError(
                 "slack incremental sync failed",
                 metadata={"record_key": context.record_key},
             )
-        return TargetSyncResult.from_mapping(result)
+        return result

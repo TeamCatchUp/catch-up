@@ -45,7 +45,6 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         *,
         db: Session,
         request: FullSyncDispatchRequest,
-        sync_from: str,
     ) -> FullSyncResolvedTargets:
         team_id = request.scope_id.strip()
         if not team_id:
@@ -65,18 +64,18 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             for channel in channels
             if (channel.id or "").strip()
         }
-        invalid_target_ids = [
+        unknown_target_ids = [
             channel_id
             for channel_id in requested_target_ids
             if channel_id not in channel_map
         ]
-        if invalid_target_ids:
+        if unknown_target_ids:
             raise SyncRequestError(
                 "requested target_ids contain unknown channels",
                 metadata={
                     "team_id": team_id,
                     "requested_target_ids": requested_target_ids,
-                    "invalid_target_ids": invalid_target_ids,
+                    "invalid_target_ids": unknown_target_ids,
                 },
             )
 
@@ -103,10 +102,7 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             len(targets),
         )
 
-        return FullSyncResolvedTargets(
-            targets=targets,
-            invalid_target_ids=[],
-        )
+        return FullSyncResolvedTargets(targets=targets)
 
 
 _slack_full_sync_target_resolver = SlackFullSyncTargetResolver()

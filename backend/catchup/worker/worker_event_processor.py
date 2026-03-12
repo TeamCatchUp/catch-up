@@ -253,11 +253,7 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
             target_type=claimed.resource_type,
             target_id=target_id,
             target_name=str(metadata.get("target_name") or target_id),
-            sync_from=(
-                str(metadata.get("sync_from"))
-                if metadata.get("sync_from") is not None
-                else None
-            ),
+            sync_from_ts=task.sync_from_ts,
             attempt=int(claimed.attempt),
             max_attempts=int(claimed.max_attempts),
             metadata=metadata,

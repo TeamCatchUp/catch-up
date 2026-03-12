@@ -38,12 +38,10 @@ class SlackFullSyncHandler(BaseFullSyncHandler):
         from catchup.db.engine import SessionLocal
 
         with SessionLocal() as db:
-            result = await service.sync_channel_messages(
+            return await service.sync_channel_messages(
                 channel_id=context.target_id,
                 channel_name=context.target_name,
-                sync_from=context.sync_from,
+                sync_from_ts=context.sync_from_ts,
                 db=db,
                 skip_delete=True,
             )
-
-        return TargetSyncResult.from_mapping(result)
