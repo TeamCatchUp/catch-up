@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from catchup.configs.config import settings
 from catchup.db.models import SyncConnector, SyncType
+from catchup.sync.common.exceptions import SyncRequestError
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
@@ -32,7 +33,7 @@ class FullSyncDispatchOrchestrator:
     ) -> SyncDispatchResult:
         scope_id = request.scope_id.strip()
         if not scope_id:
-            raise ValueError("scope_id is required")
+            raise SyncRequestError("scope_id is required")
 
         sync_from_ts = request.sync_from_ts
 
@@ -45,7 +46,7 @@ class FullSyncDispatchOrchestrator:
         for target in resolved.targets:
             normalized_target_id = target.target_id.strip()
             if not normalized_target_id:
-                raise ValueError("resolved target_id is empty")
+                raise SyncRequestError("resolved target_id is empty")
 
             normalized_target_type = target.target_type.strip() or "resource"
             normalized_target_name = target.target_name.strip() or normalized_target_id

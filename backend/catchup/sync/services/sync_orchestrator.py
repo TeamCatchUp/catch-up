@@ -16,7 +16,11 @@ from catchup.db.sync import (
     record_event_publish_outcomes,
     try_acquire_full_sync_scope_lock,
 )
-from catchup.sync.common.exceptions import RedisStreamPublishError, SyncInternalError
+from catchup.sync.common.exceptions import (
+    RedisStreamPublishError,
+    SyncInternalError,
+    SyncRequestError,
+)
 from catchup.sync.common.protocols import EventPublisherProtocol
 from catchup.sync.common.schemas import (
     PublishTasksResult,
@@ -180,7 +184,7 @@ class SyncDispatchOrchestrator:
     def _normalize_scope_id(self, scope_id: str) -> str:
         normalized_scope_id = scope_id.strip()
         if not normalized_scope_id:
-            raise ValueError("scope_id is required")
+            raise SyncRequestError("scope_id is required")
         return normalized_scope_id
 
     def _build_dispatch_context(

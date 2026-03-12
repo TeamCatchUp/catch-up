@@ -21,7 +21,7 @@ from catchup.server.sync.schemas import (
     SyncTargetsResponse,
 )
 from catchup.sync.common.schemas import FullSyncDispatchRequest, SyncDispatchResult
-from catchup.sync.common.exceptions import SyncAPIError
+from catchup.sync.common.exceptions import SyncAPIError, SyncRequestError
 from catchup.sync.dispatch_service import SyncDispatchService
 from catchup.sync.query_service import (
     SyncJobSnapshotResult,
@@ -313,6 +313,16 @@ def _build_error_detail(
     return detail
 
 
+def _build_dispatch_metadata(
+    dispatch_request: FullSyncDispatchRequest,
+) -> dict[str, object]:
+    return {
+        "target_count": len(dispatch_request.target_ids or []),
+        "trigger": dispatch_request.trigger.value,
+        "sync_from_ts": dispatch_request.sync_from_ts,
+    }
+
+
 async def _execute_full_sync_dispatch(
     *,
     connector: SyncConnector,
@@ -320,10 +330,25 @@ async def _execute_full_sync_dispatch(
     dispatch_call: Awaitable[SyncDispatchResult],
 ) -> SyncAcceptedResponse:
     scope_id = dispatch_request.scope_id
+    dispatch_metadata = _build_dispatch_metadata(dispatch_request)
 
     try:
         result = await dispatch_call
         return _to_sync_accepted_response(result)
+    except SyncRequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_build_error_detail(
+                code=exc.code,
+                message=exc.message,
+                connector=connector,
+                scope_id=scope_id,
+                metadata={
+                    **dispatch_metadata,
+                    **exc.metadata,
+                },
+            ),
+        ) from exc
     except SyncAPIError as exc:
         raise HTTPException(
             status_code=exc.status_code,
@@ -332,21 +357,14 @@ async def _execute_full_sync_dispatch(
                 scope_id=scope_id,
             ),
         ) from exc
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_build_error_detail(
-                code="invalid_request",
-                message=str(exc),
-                connector=connector,
-                scope_id=scope_id,
-            ),
-        ) from exc
     except Exception as exc:
         logger.error(
-            "[SYNC][FULL][API] Dispatch failed: connector=%s, scope_id=%s, error=%s",
+            "[SYNC][FULL][API] Dispatch failed: connector=%s, scope_id=%s, target_count=%s, trigger=%s, sync_from_ts=%s, error=%s",
             connector,
             scope_id,
+            dispatch_metadata["target_count"],
+            dispatch_metadata["trigger"],
+            dispatch_metadata["sync_from_ts"],
             exc,
             exc_info=True,
         )
@@ -357,5 +375,6 @@ async def _execute_full_sync_dispatch(
                 message="sync full request failed",
                 connector=connector,
                 scope_id=scope_id,
+                metadata=dispatch_metadata,
             ),
         ) from exc
