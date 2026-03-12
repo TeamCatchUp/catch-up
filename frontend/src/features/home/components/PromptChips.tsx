@@ -62,7 +62,7 @@ const PromptChips = ({ onChipClick, selectedIndex }: PromptChipsProps) => {
                   : 'border border-edge-neutral bg-fill-normal text-content-neutral',
               )}
             >
-              {tip.title}
+              {tip.chipLabel}
             </button>
           ))}
         </div>

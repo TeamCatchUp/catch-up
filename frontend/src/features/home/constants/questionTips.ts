@@ -6,6 +6,7 @@ export { buildQueryFromTemplate } from '@/shared/types/template';
 export const tipData: TipData[] = [
   {
     title: '반복 문의 대응',
+    chipLabel: '과거 문의 대응 사례 찾기',
     description: '비슷한 문의를 찾아\n원인부터 결론까지 바로 가져와요.',
     image: '/image/home/light/past-inquiry.png',
     template: [
@@ -21,6 +22,7 @@ export const tipData: TipData[] = [
   },
   {
     title: '이슈 현황 파악',
+    chipLabel: '업무 진행 상황 확인',
     description: '지라, PR, 커밋, 슬랙 등을 묶어\n실제 진행상황을 한 번에 파악해요.',
     image: '/image/home/light/work-progress.jpg',
     template: [
@@ -31,6 +33,7 @@ export const tipData: TipData[] = [
   },
   {
     title: '신규 입사자 온보딩',
+    chipLabel: '히스토리 따라잡기',
     description: '주요 변경과 논의를 묶어\n참고해야 할 자료를 한 번에 정리해요.',
     image: '/image/home/light/history-catchup.jpg',
     template: [
@@ -46,6 +49,7 @@ export const tipData: TipData[] = [
   },
   {
     title: '장애 원인 추적',
+    chipLabel: '장애 원인 추적',
     description: '최근 변경을 시간순으로 훑어\n가장 의심되는 원인부터 좁혀가요.',
     image: '/image/home/light/incident-tracking.jpg',
     template: [
@@ -64,6 +68,7 @@ export const tipData: TipData[] = [
   },
   {
     title: '중복 논의 방어',
+    chipLabel: '중복 논의 여부 확인',
     description: '이전에 결정한 내용이 있는지,\n그때 기준과 이유를 바로 보여줘요.',
     image: '/image/home/light/duplicate-discussion.jpg',
     template: [
@@ -79,6 +84,7 @@ export const tipData: TipData[] = [
   },
   {
     title: '담당자 추천',
+    chipLabel: '담당자&대리인 찾기',
     description: '가장 가까이 작업한 사람을 찾아\n지금 연결해야 할 담당자를 추천해요.',
     image: '/image/home/light/find-assignee.png',
     template: [

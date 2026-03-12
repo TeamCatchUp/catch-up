@@ -7,6 +7,7 @@ export type TemplateSegment = string | { field: string };
 
 export interface TipData {
   title: string;
+  chipLabel: string;
   description: string;
   image: string;
   template: TemplateSegment[];
