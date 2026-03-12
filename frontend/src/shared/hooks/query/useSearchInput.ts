@@ -34,7 +34,7 @@ export interface UseSearchInputReturn {
   templateTextOverrides: Record<number, string>;
   setTemplateTextOverride: (index: number, val: string) => void;
   resetTemplateFields: () => void;
-  handleSubmit: () => void;
+  handleSubmit: (queryOverride?: string) => void;
 }
 
 export const useSearchInput = ({
@@ -71,7 +71,20 @@ export const useSearchInput = ({
     setTemplateTextOverrides({});
   }, []);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback((queryOverride?: string) => {
+    // Lexical 기반 TemplateInput에서 직접 쿼리를 넘겨주는 경우
+    if (typeof queryOverride === 'string') {
+      const trimmed = queryOverride.trim();
+      if (!trimmed) return;
+      const sessionId = crypto.randomUUID();
+      let url = `/chat/${sessionId}?q=${encodeURIComponent(trimmed)}`;
+      if (selectedSources?.length) {
+        url += `&sources=${selectedSources.join(',')}`;
+      }
+      router.push(url);
+      return;
+    }
+
     if (isFromTemplate && selectedTipIndex !== null && tipData) {
       const tip = tipData[selectedTipIndex];
       const errors: Record<string, boolean> = {};

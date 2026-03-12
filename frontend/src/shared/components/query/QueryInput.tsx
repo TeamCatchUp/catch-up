@@ -58,7 +58,7 @@ export default function QueryInput({ input, inputRef, tipData }: QueryInputProps
       </div>
       <button
         ref={submitButtonRef}
-        onClick={input.handleSubmit}
+        onClick={() => input.handleSubmit()}
         className={`rounded-rounded ml-2 flex shrink-0 items-center self-end border border-solid p-2 ${
           input.hasText ? 'cursor-pointer border-fill-primary bg-fill-primary' : 'bg-fill-strong border-edge-assistive'
         }`}

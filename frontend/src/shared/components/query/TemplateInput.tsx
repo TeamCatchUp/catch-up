@@ -1,265 +1,237 @@
 'use client';
 
-import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
+import { RefObject, useCallback, useEffect, useMemo, useRef } from 'react';
+import { InitialConfigType, LexicalComposer } from '@lexical/react/LexicalComposer';
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
+import { ContentEditable } from '@lexical/react/LexicalContentEditable';
+import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
+import { PlainTextPlugin } from '@lexical/react/LexicalPlainTextPlugin';
+import { $createParagraphNode, $createTextNode, $getRoot, $isParagraphNode, COMMAND_PRIORITY_HIGH, KEY_ENTER_COMMAND } from 'lexical';
 
-import IconDelete from '@/public/icons/icon/delete (2).svg';
 import type { UseSearchInputReturn } from '@/shared/hooks/query/useSearchInput';
 import type { TipData } from '@/shared/types/template';
-import { cn } from '@/shared/utils/cn';
 
+import { TemplateFieldContext, type TemplateFieldContextValue } from './lexical/FieldChipComponent';
+import { $createFieldChipNode, FieldChipNode } from './lexical/FieldChipNode';
+
+// ─── Props ──────────────────────────────────────────────────
 interface TemplateInputProps {
   tip: TipData;
   input: UseSearchInputReturn;
   submitButtonRef?: RefObject<HTMLButtonElement | null>;
 }
 
-interface InlineFieldInputProps {
-  fieldKey: string;
-  placeholder: string;
-  value: string;
-  hasError: boolean;
-  autoFocus?: boolean;
-  onChange: (key: string, val: string) => void;
-  onFocus?: () => void;
-  onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => void;
-  inputRef: (el: HTMLElement | null) => void;
-}
+// ─── InitPlugin: 에디터 초기 상태 설정 ─────────────────────
+function InitPlugin({ tip }: { tip: TipData }) {
+  const [editor] = useLexicalComposerContext();
 
-const FIELD_MAX_LENGTH = 40;
-
-const InlineFieldInput = ({
-  fieldKey,
-  placeholder,
-  value,
-  hasError,
-  autoFocus,
-  onChange,
-  onFocus,
-  onKeyDown,
-  inputRef,
-}: InlineFieldInputProps) => {
-  const spanRef = useRef<HTMLSpanElement | null>(null);
-  const measureRef = useRef<HTMLSpanElement>(null);
-  const [minWidth, setMinWidth] = useState(0);
-  const [contentWidth, setContentWidth] = useState(0);
-
-  // 입력 폭 > placeholder 폭이면 inline(줄바꿈 가능), 아니면 inline-block(min-width 적용)
-  const useInlineMode = value && contentWidth > minWidth;
-
-  // callback ref: 동기적으로 부모에 ref 전달 + 내부 ref 보관
-  const setSpanRef = useCallback(
-    (el: HTMLSpanElement | null) => {
-      spanRef.current = el;
-      inputRef(el);
-    },
-    [inputRef],
-  );
-
-  // placeholder 텍스트 폭 측정 → min-width
   useEffect(() => {
-    if (measureRef.current) {
-      setMinWidth(measureRef.current.scrollWidth);
-    }
-  }, [placeholder]);
+    editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+      const paragraph = $createParagraphNode();
 
-  // autoFocus 처리
-  useEffect(() => {
-    if (autoFocus && spanRef.current) {
-      spanRef.current.focus();
-    }
-  }, [autoFocus]);
-
-  const handleInput = useCallback(
-    (e: React.FormEvent<HTMLSpanElement>) => {
-      let text = e.currentTarget.textContent ?? '';
-      if (text.length > FIELD_MAX_LENGTH) {
-        text = text.slice(0, FIELD_MAX_LENGTH);
-        e.currentTarget.textContent = text;
-        // 커서를 끝으로 이동
-        const sel = window.getSelection();
-        if (sel && e.currentTarget.lastChild) {
-          sel.collapse(e.currentTarget.lastChild, e.currentTarget.lastChild.textContent?.length ?? 0);
+      for (const segment of tip.template) {
+        if (typeof segment === 'string') {
+          paragraph.append($createTextNode(segment));
+        } else {
+          const field = tip.fields.find((f) => f.key === segment.field);
+          if (field) {
+            paragraph.append($createFieldChipNode(field.key, field.placeholder));
+          }
         }
       }
-      // 입력 폭 측정 (하이브리드 전환 기준)
-      setContentWidth(e.currentTarget.scrollWidth);
-      onChange(fieldKey, text);
+
+      root.append(paragraph);
+    });
+  }, [editor, tip]);
+
+  return null;
+}
+
+// ─── SubmitPlugin: Enter → submit ───────────────────────────
+function SubmitPlugin({ onSubmit }: { onSubmit: () => void }) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    return editor.registerCommand(
+      KEY_ENTER_COMMAND,
+      (event) => {
+        if (event?.shiftKey) return false;
+        event?.preventDefault();
+        onSubmit();
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH,
+    );
+  }, [editor, onSubmit]);
+
+  return null;
+}
+
+// ─── ExitOnAllChipsRemovedPlugin: 칩이 전부 삭제되면 textarea로 전환 ──
+function ExitOnAllChipsRemovedPlugin({ input }: { input: UseSearchInputReturn }) {
+  const [editor] = useLexicalComposerContext();
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    return editor.registerMutationListener(FieldChipNode, (mutations) => {
+      // 초기 생성(InitPlugin)은 무시
+      if (!initializedRef.current) {
+        initializedRef.current = true;
+        return;
+      }
+
+      // 삭제가 발생했을 때만 체크
+      const hasDestroyed = [...mutations.values()].includes('destroyed');
+      if (!hasDestroyed) return;
+
+      editor.getEditorState().read(() => {
+        const root = $getRoot();
+        const paragraph = root.getFirstChild();
+        if (!paragraph || !$isParagraphNode(paragraph)) return;
+
+        const hasChips = paragraph.getChildren().some((child) => child instanceof FieldChipNode);
+        if (!hasChips) {
+          // 남은 텍스트를 추출해서 textarea로 전환
+          const remainingText = root.getTextContent();
+          input.setValue(remainingText);
+          input.setIsFromTemplate(false);
+          input.setSelectedTipIndex(null);
+          input.resetTemplateFields();
+        }
+      });
+    });
+  }, [editor, input]);
+
+  return null;
+}
+
+// ─── QueryExtractor: 에디터 상태에서 쿼리 추출 ─────────────
+function useExtractQuery() {
+  const [editor] = useLexicalComposerContext();
+
+  return useCallback(
+    (fieldValues: Record<string, string>): string => {
+      let query = '';
+      editor.getEditorState().read(() => {
+        const root = $getRoot();
+        const paragraph = root.getFirstChild();
+        if (!paragraph || !$isParagraphNode(paragraph)) return;
+
+        const children = paragraph.getChildren();
+        for (const child of children) {
+          if (child instanceof FieldChipNode) {
+            query += fieldValues[child.__fieldKey] ?? '';
+          } else {
+            query += child.getTextContent();
+          }
+        }
+      });
+      return query;
     },
-    [fieldKey, onChange],
+    [editor],
   );
+}
 
-  const handleClear = useCallback(() => {
-    if (spanRef.current) {
-      spanRef.current.textContent = '';
-    }
-    setContentWidth(0);
-    onChange(fieldKey, '');
-    spanRef.current?.focus();
-  }, [fieldKey, onChange]);
-
-  return (
-    <span
-      className={cn(
-        'inline cursor-text rounded-lg border bg-fill-primary-assistive px-2 py-1',
-        hasError ? 'border-edge-error' : 'border-edge-neutral',
-      )}
-      style={{ boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' }}
-      onClick={() => spanRef.current?.focus()}
-    >
-      {/* 숨겨진 측정 span: placeholder 폭 기준 min-width 계산 */}
-      <span
-        ref={measureRef}
-        className="pointer-events-none invisible absolute whitespace-pre text-body-medium select-none"
-        aria-hidden="true"
-      >
-        {placeholder}
-      </span>
-      <span
-        ref={setSpanRef}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={handleInput}
-        onFocus={onFocus}
-        onKeyDown={onKeyDown}
-        className={cn(
-          'cursor-text align-baseline text-body-medium text-content-primary outline-none',
-          useInlineMode ? 'inline' : 'inline-block',
-        )}
-        style={{ minWidth: !useInlineMode && value && minWidth > 0 ? `${minWidth}px` : undefined }}
-      />
-      {!value && (
-        <span className="pointer-events-none select-none text-content-assistive">{placeholder}</span>
-      )}
-      {value && (
-        <button
-          type="button"
-          tabIndex={-1}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleClear();
-          }}
-          className="ml-1 inline-flex h-5 w-5 cursor-pointer items-center justify-center align-middle"
-        >
-          <IconDelete className="h-5 w-5 text-icon-assistive" />
-        </button>
-      )}
-    </span>
-  );
-};
-
+// ─── Main Component ─────────────────────────────────────────
 export default function TemplateInput({ tip, input, submitButtonRef }: TemplateInputProps) {
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
-  // template 렌더링 순서로 field key 추출 (Tab 이동이 시각적 순서를 따르도록)
-  const fieldKeys = tip.template
-    .filter((seg): seg is { field: string } => typeof seg !== 'string')
-    .map((seg) => seg.field);
+  const fieldKeys = useMemo(
+    () => tip.template.filter((seg): seg is { field: string } => typeof seg !== 'string').map((seg) => seg.field),
+    [tip.template],
+  );
 
-  const setFieldRef = useCallback(
-    (key: string) => (el: HTMLElement | null) => {
-      fieldRefs.current[key] = el;
-    },
+  // Lexical 에디터 설정
+  const initialConfig: InitialConfigType = useMemo(
+    () => ({
+      namespace: 'TemplateInput',
+      nodes: [FieldChipNode],
+      onError: () => {},
+      editable: true,
+    }),
     [],
   );
 
-  // 에러 발생 시 첫 번째 에러 필드에 포커스
-  useEffect(() => {
-    const firstError = fieldKeys.find((key) => input.templateFieldErrors[key]);
-    if (firstError) {
-      fieldRefs.current[firstError]?.focus();
+  const registerFieldRef = useCallback((key: string, el: HTMLElement | null) => {
+    if (el) {
+      fieldRefs.current[key] = el;
+    } else {
+      delete fieldRefs.current[key];
     }
-  }, [input.templateFieldErrors, fieldKeys]);
+  }, []);
 
-  const handleFieldKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLElement>) => {
-      // Shift+Enter 무시
-      if (e.key === 'Enter' && e.shiftKey) {
-        e.preventDefault();
-        return;
-      }
-      // Enter → submit
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        input.handleSubmit();
-        return;
-      }
-      // Tab 이동
-      if (e.key === 'Tab') {
-        const currentKey = (e.target as HTMLElement).getAttribute('data-field-key');
-        const currentIdx = fieldKeys.indexOf(currentKey ?? '');
+  const focusField = useCallback((key: string) => {
+    fieldRefs.current[key]?.focus();
+  }, []);
 
-        if (e.shiftKey) {
-          // Shift+Tab → 이전 필드
-          if (currentIdx > 0) {
-            e.preventDefault();
-            fieldRefs.current[fieldKeys[currentIdx - 1]]?.focus();
-          }
-        } else {
-          // Tab → 다음 필드 또는 submit 버튼
-          if (currentIdx < fieldKeys.length - 1) {
-            e.preventDefault();
-            fieldRefs.current[fieldKeys[currentIdx + 1]]?.focus();
-          } else if (submitButtonRef?.current) {
-            e.preventDefault();
-            submitButtonRef.current.focus();
-          }
-        }
-      }
-    },
-    [fieldKeys, input, submitButtonRef],
+  const focusSubmitButton = useCallback(() => {
+    submitButtonRef?.current?.focus();
+  }, [submitButtonRef]);
+
+  // Context value (칩 컴포넌트가 상태에 접근)
+  const contextValue: TemplateFieldContextValue = useMemo(
+    () => ({
+      fieldValues: input.templateFieldValues,
+      fieldErrors: input.templateFieldErrors,
+      setFieldValue: input.setTemplateFieldValue,
+      onSubmit: () => {},
+      onFocus: () => input.setIsFocused(true),
+      fieldKeys,
+      registerFieldRef,
+      focusField,
+      focusSubmitButton,
+    }),
+    [input, fieldKeys, registerFieldRef, focusField, focusSubmitButton],
   );
 
-  const handleTextKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLSpanElement>) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (!e.shiftKey) input.handleSubmit();
-      }
-    },
-    [input],
+  // onSubmit을 SubmitBridge가 설정한 후 context에 반영하기 위한 ref
+  const submitRef = useRef<() => void>(() => {});
+
+  const contextWithSubmit: TemplateFieldContextValue = useMemo(
+    () => ({
+      ...contextValue,
+      onSubmit: () => submitRef.current(),
+    }),
+    [contextValue],
   );
 
   return (
     <div className="text-body-medium min-h-10 cursor-text leading-[1.7]" onClick={() => input.setIsFocused(true)}>
-      {tip.template.map((segment, index) => {
-        if (typeof segment === 'string') {
-          return (
-            <span
-              key={index}
-              contentEditable
-              suppressContentEditableWarning
-              onFocus={() => input.setIsFocused(true)}
-              onInput={(e) => input.setTemplateTextOverride(index, e.currentTarget.textContent ?? '')}
-              onKeyDown={handleTextKeyDown}
-              className="cursor-text text-content-neutral outline-none"
-            >
-              {segment}
-            </span>
-          );
-        }
-
-        const field = tip.fields.find((f) => f.key === segment.field);
-        if (!field) return null;
-
-        const isFirstField = fieldKeys[0] === field.key;
-
-        return (
-          <InlineFieldInput
-            key={field.key}
-            fieldKey={field.key}
-            placeholder={field.placeholder}
-            value={input.templateFieldValues[field.key] ?? ''}
-            hasError={!!input.templateFieldErrors[field.key]}
-            autoFocus={isFirstField}
-            onChange={input.setTemplateFieldValue}
-            onFocus={() => input.setIsFocused(true)}
-            onKeyDown={handleFieldKeyDown}
-            inputRef={(el) => {
-              setFieldRef(field.key)(el);
-              if (el) el.setAttribute('data-field-key', field.key);
-            }}
+      <LexicalComposer initialConfig={initialConfig}>
+        <TemplateFieldContext.Provider value={contextWithSubmit}>
+          <PlainTextPlugin
+            contentEditable={<ContentEditable className="text-content-neutral outline-none" />}
+            ErrorBoundary={LexicalErrorBoundary}
           />
-        );
-      })}
+          <InitPlugin tip={tip} />
+          <ExitOnAllChipsRemovedPlugin input={input} />
+          <SubmitBridgeWithRef input={input} submitRef={submitRef} />
+        </TemplateFieldContext.Provider>
+      </LexicalComposer>
     </div>
   );
+}
+
+// ─── SubmitBridgeWithRef: submit 함수를 ref로 노출 ──────────
+function SubmitBridgeWithRef({
+  input,
+  submitRef,
+}: {
+  input: UseSearchInputReturn;
+  submitRef: React.MutableRefObject<() => void>;
+}) {
+  const extractQuery = useExtractQuery();
+
+  const handleSubmit = useCallback(() => {
+    const query = extractQuery(input.templateFieldValues);
+    input.handleSubmit(query);
+  }, [extractQuery, input]);
+
+  // ref에 최신 submit 함수 등록
+  useEffect(() => {
+    submitRef.current = handleSubmit;
+  }, [handleSubmit, submitRef]);
+
+  return <SubmitPlugin onSubmit={handleSubmit} />;
 }
