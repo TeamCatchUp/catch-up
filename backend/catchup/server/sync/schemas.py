@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -8,9 +9,15 @@ from pydantic import BaseModel, Field, field_validator
 from catchup.db.models import SyncConnector, SyncJobStatus, SyncType
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
+    SyncDispatchResult,
     SyncDispatchStatus,
     SyncTargetType,
     SyncTrigger,
+)
+from catchup.sync.query_service import (
+    SyncJobSnapshotResult,
+    SyncScopeStatusResult,
+    SyncTargetsResult,
 )
 
 
@@ -39,6 +46,13 @@ class SyncJobSnapshotResponse(BaseModel):
 
     last_error: str | None = None
     metrics: dict[str, int] = Field(default_factory=dict)
+
+    @classmethod
+    def from_snapshot_result(
+        cls,
+        result: SyncJobSnapshotResult,
+    ) -> "SyncJobSnapshotResponse":
+        return cls.model_validate(asdict(result))
 
 
 class SyncStreamEventResponse(BaseModel):
@@ -128,7 +142,7 @@ class SyncAcceptedResponse(BaseModel):
             "accepted : means a new dispatch was created, "
             "no_events : no sync events were generated, "
             "conflict : an active full sync already exists. "
-            "failed : internal server error"
+            "failed : dispatch did not match accepted, no_events, or conflict"
         ),
     )
     connector: SyncConnector
@@ -159,6 +173,10 @@ class SyncAcceptedResponse(BaseModel):
         description="job status stream endpoint for the created or conflicting job",
     )
 
+    @classmethod
+    def from_dispatch_result(cls, result: SyncDispatchResult) -> "SyncAcceptedResponse":
+        return cls.model_validate(asdict(result))
+
 
 class SyncStatusResponse(BaseModel):
     """
@@ -184,6 +202,13 @@ class SyncStatusResponse(BaseModel):
 
     last_error: str | None = None
     metrics: dict[str, int] = Field(default_factory=dict)
+
+    @classmethod
+    def from_scope_status_result(
+        cls,
+        result: SyncScopeStatusResult,
+    ) -> "SyncStatusResponse":
+        return cls.model_validate(asdict(result))
 
 
 class SyncErrorResponse(BaseModel):
@@ -219,3 +244,7 @@ class SyncTargetsResponse(BaseModel):
     scope_id: str
     total_targets: int
     targets: list[SyncTargetItem] = Field(default_factory=list)
+
+    @classmethod
+    def from_targets_result(cls, result: SyncTargetsResult) -> "SyncTargetsResponse":
+        return cls.model_validate(asdict(result))

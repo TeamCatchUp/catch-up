@@ -32,6 +32,19 @@ class SyncDispatchService:
         request: FullSyncDispatchRequest,
         base_url: str | None,
     ) -> SyncDispatchResult:
+        normalized_base_url = (base_url or "").strip()
+        if not normalized_base_url:
+            raise SyncInternalError(
+                message="full sync dispatch requires base_url",
+                metadata={
+                    "connector": connector.value,
+                    "scope_id": request.scope_id,
+                    "target_count": len(request.target_ids) if request.target_ids else 0,
+                    "trigger": request.trigger.value,
+                    "sync_from_ts": request.sync_from_ts,
+                },
+            )
+
         logger.info(
             "[SYNC][FULL SYNC][DISPATCH] Dispatching request: connector=%s, scope_id=%s, target_count=%s, sync_from_ts=%s, trigger=%s",
             connector,
@@ -47,7 +60,7 @@ class SyncDispatchService:
             db=db,
             connector=connector,
             request=request,
-            base_url=base_url,
+            base_url=normalized_base_url,
             resolver=resolver,
         )
 
