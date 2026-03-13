@@ -42,12 +42,16 @@ from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_
 from catchup.events.bus import bus
 from catchup.audit.handlers import audit_event_handler
 
-configure_logging()
-logger = logging.getLogger(__name__)
 
 if settings.ENV == "development" and settings.DEBUGGER_ENABLED:
     import debugpy
     debugpy.listen(("0.0.0.0", settings.DEBUGGER_PORT))
+    # debugpy.wait_for_client()
+
+configure_logging()
+logger = logging.getLogger(__name__)
+
+if settings.ENV == "development" and settings.DEBUGGER_ENABLED:
     logger.info(f"debugpy_attachment_success: port={settings.DEBUGGER_PORT}")
 
 
