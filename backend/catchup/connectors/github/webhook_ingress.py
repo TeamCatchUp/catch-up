@@ -9,6 +9,9 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.metadata import IntegrationAuditMetadata
+from catchup.audit.service import emit_audit_event
 from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.connectors.github.schemas import (
     InstallationRepositoriesWebhookPayload,
@@ -27,6 +30,7 @@ from catchup.db.models import (
     SyncConnector,
 )
 from catchup.db.workspaces import get_workspace_limit_one
+from catchup.events.enums import EventType, IntegrationEventAction
 from catchup.sync.common.exceptions import SyncAPIError
 from catchup.sync.incremental import ingest_record_changes
 from catchup.sync.incremental.full_sync_guard import filter_record_changes_by_full_sync
@@ -331,13 +335,48 @@ async def _handle_installation_event(
 ) -> dict[str, Any]:
     data = InstallationWebhookPayload(**payload)
     action = data.action
+    installation_id = data.installation.id
+    context = f"github_installation_created:installation_id={installation_id}:event_name=installation"
 
     if action == "created":
-        return await _handle_installation_created(
-            db=db,
-            data=data,
-            schedule_task=schedule_task,
+        metadata = IntegrationAuditMetadata(
+            context=context,
+            provider="github",
         )
+        emit_audit_event(
+            event_type=EventType.INTEGRATION,
+            event_action=IntegrationEventAction.INSTALLATION_EVENT_RECEIVED,
+            event_status=AuditEventStatus.ATTEMPT,
+            level=AuditLevel.INFO,
+            metadata=metadata,
+            immediate=True,
+        )
+        try:
+            result = await _handle_installation_created(
+                db=db,
+                data=data,
+                schedule_task=schedule_task,
+            )
+        except Exception:
+            emit_audit_event(
+                event_type=EventType.INTEGRATION,
+                event_action=IntegrationEventAction.INSTALLATION_EVENT_RECEIVED,
+                event_status=AuditEventStatus.FAIL,
+                level=AuditLevel.ERROR,
+                metadata=metadata,
+                immediate=True,
+            )
+            raise
+
+        emit_audit_event(
+            event_type=EventType.INTEGRATION,
+            event_action=IntegrationEventAction.INSTALLATION_EVENT_RECEIVED,
+            event_status=AuditEventStatus.SUCCESS,
+            level=AuditLevel.INFO,
+            metadata=metadata,
+            immediate=True,
+        )
+        return result
 
     if action == "deleted":
         return _handle_installation_deleted(
