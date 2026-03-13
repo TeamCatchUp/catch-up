@@ -21,7 +21,7 @@ def _process_audit_logs() -> None:
         return
 
     log_dir = Path(settings.LOG_AUDIT_FILE_PATH).parent
-    rolled_files = glob.glob(str(log_dir / "audit.jsonl.*"))
+    rolled_files = glob.glob(str(log_dir / "audit.*.jsonl"))
 
     if not rolled_files:
         return
