@@ -15,7 +15,7 @@ from catchup.db.global_state import has_admin_ever_onboarded, has_csv_file_ever_
 from catchup.db.models import Base
 from catchup.events.enums import EventTopic
 from catchup.observability.logging import configure_logging
-from catchup.observability.logging.s3_uploader import audit_log_uploader_task
+from catchup.observability.logging.s3_uploader import audit_log_uploader_task, graceful_shutdown
 from catchup.server.admin.api import router as admin_router
 from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
@@ -43,7 +43,9 @@ from catchup.events.bus import bus
 from catchup.audit.handlers import audit_event_handler
 
 
-if settings.ENV == "development" and settings.DEBUGGER_ENABLED:
+debug_mode = settings.ENV == "development" or settings.DEBUGGER_ENABLED
+
+if debug_mode:
     import debugpy
     debugpy.listen(("0.0.0.0", settings.DEBUGGER_PORT))
     # debugpy.wait_for_client()
@@ -51,17 +53,18 @@ if settings.ENV == "development" and settings.DEBUGGER_ENABLED:
 configure_logging()
 logger = logging.getLogger(__name__)
 
-if settings.ENV == "development" and settings.DEBUGGER_ENABLED:
+if debug_mode:
     logger.info(f"debugpy_attachment_success: port={settings.DEBUGGER_PORT}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    
     logger.info("Log level: %s", settings.LOG_LEVEL)
+    
     sync_worker_stop_event: asyncio.Event | None = None
     sync_worker_task: asyncio.Task | None = None
-    uploader_task: asyncio.Task | None = None
-    
+    uploader_task: asyncio.Task | None = None  # S3 감사로그 업로드
 
     if settings.LOG_AUDIT_FILE_ENABLED:
         logger.info(
@@ -271,12 +274,20 @@ async def lifespan(app: FastAPI):
         
     yield
     
+    # 서버 종료 전 감사로그 파일 S3 업로드
     if uploader_task:
+        # 백그라운드 작업 취소
         uploader_task.cancel()
         try:
             await uploader_task
         except asyncio.CancelledError:
             pass
+        
+        try:
+            await graceful_shutdown()
+            logger.info("audit_file_flush_success (graceful shutdown)")
+        except Exception as e:
+            logger.critical("audit_file_flush_failed", exc_info=True)
 
     if sync_worker_stop_event is not None:
         sync_worker_stop_event.set()
