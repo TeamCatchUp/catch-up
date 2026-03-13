@@ -6,14 +6,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
+import structlog
 
-from catchup.audit.enums import SystemEventAction
-from catchup.audit.system import system_event
+from catchup.audit.enums import AuditEventStatus, AuditLevel, SystemEventAction
+from catchup.audit.metadata import SystemAuditMetadata
+from catchup.audit.service import emit_audit_event
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal, engine
 from catchup.db.global_state import has_admin_ever_onboarded, has_csv_file_ever_been_uploaded
 from catchup.db.models import Base
-from catchup.events.enums import EventTopic
+from catchup.events.enums import EventTopic, EventType
 from catchup.observability.logging import configure_logging
 from catchup.observability.logging.s3_uploader import audit_log_uploader_task
 from catchup.server.admin.api import router as admin_router
@@ -54,6 +56,8 @@ logger = logging.getLogger(__name__)
 if settings.ENV == "development" and settings.DEBUGGER_ENABLED:
     logger.info(f"debugpy_attachment_success: port={settings.DEBUGGER_PORT}")
 
+# 감사 로그 이벤트 리스너 등록
+bus.subscribe(EventTopic.AUDIT, audit_event_handler)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -80,14 +84,20 @@ async def lifespan(app: FastAPI):
 
         # 1) 메타데이터 기준 테이블 목록 수집
         metadata_table_names = sorted(Base.metadata.tables.keys())
-        system_event(
-            action=SystemEventAction.STARTUP_DB_INIT,
-            result="start",
-            metadata={
-                "message": "starting_db_initialization",
-                "metadata_table_count": len(metadata_table_names),
-            },
+        emit_audit_event(
+            event_type=EventType.SYSTEM,
+            event_action=SystemEventAction.STARTUP_DB_INIT,
+            event_status=AuditEventStatus.ATTEMPT,
+            level=AuditLevel.INFO,
+            metadata=SystemAuditMetadata(
+                context="startup_db_initialization",
+                result="start",
+                message="starting_db_initialization",
+                metadata_table_count=len(metadata_table_names),
+            ),
+            immediate=True,
         )
+
         logger.debug(
             "[APP][STARTUP][DB][INIT] Metadata tables loaded: count=%s, tables=%s",
             len(metadata_table_names),
@@ -128,6 +138,7 @@ async def lifespan(app: FastAPI):
             db_table_names_after = sorted(db_inspector_after.get_table_names())
 
             missing_columns_by_table: dict[str, list[str]] = {}
+            extra_columns_by_table: dict[str, list[str]] = {}
             for table_name in metadata_table_names:
                 if table_name not in db_table_names_after:
                     continue
@@ -137,8 +148,11 @@ async def lifespan(app: FastAPI):
                     column["name"] for column in db_inspector_after.get_columns(table_name)
                 )
                 missing_columns = sorted(set(model_columns) - set(db_columns))
+                extra_columns = sorted(set(db_columns) - set(model_columns))
                 if missing_columns:
                     missing_columns_by_table[table_name] = missing_columns
+                if extra_columns:
+                    extra_columns_by_table[table_name] = extra_columns
 
         created_tables = sorted(set(db_table_names_after) - set(db_table_names_before))
         missing_tables_after = sorted(set(metadata_table_names) - set(db_table_names_after))
@@ -155,96 +169,185 @@ async def lifespan(app: FastAPI):
         )
 
         if missing_tables_after:
-            system_event(
-                action=SystemEventAction.STARTUP_DB_INIT,
-                result="partial_failure",
-                metadata={
-                    "message": "missing_tables_after_create_all",
-                    "missing_tables_count": len(missing_tables_after),
-                    "missing_tables": missing_tables_after,
-                },
+            emit_audit_event(
+                event_type=EventType.SYSTEM,
+                event_action=SystemEventAction.STARTUP_DB_INIT,
+                event_status=AuditEventStatus.FAIL,
+                level=AuditLevel.WARNING,
+                metadata=SystemAuditMetadata(
+                    context="startup_db_initialization",
+                    result="partial_failure",
+                    message="missing_tables_after_create_all",
+                    missing_tables_count=len(missing_tables_after),
+                    missing_tables=missing_tables_after,
+                ),
+                immediate=True,
+            )
+
+        if extra_columns_by_table:
+            for table_name, extra_columns in extra_columns_by_table.items():
+                emit_audit_event(
+                    event_type=EventType.SYSTEM,
+                    event_action=SystemEventAction.STARTUP_DB_SCHEMA_DRIFT,
+                    event_status=AuditEventStatus.FAIL,
+                    level=AuditLevel.WARNING,
+                    metadata=SystemAuditMetadata(
+                        context="startup_db_schema_drift",
+                        result="partial_failure",
+                        table_name=table_name,
+                        extra_columns=extra_columns,
+                    ),
+                    immediate=True,
+                )
+        else:
+            logger.debug(
+                "[APP][STARTUP][DB][SCHEMA_DRIFT] No extra DB columns detected"
             )
 
         if missing_columns_by_table:
             for table_name, missing_columns in missing_columns_by_table.items():
-                system_event(
-                    action=SystemEventAction.STARTUP_DB_SCHEMA_DRIFT,
-                    result="partial_failure",
-                    metadata={
-                        "table_name": table_name,
-                        "missing_columns": missing_columns,
-                    },
+                emit_audit_event(
+                    event_type=EventType.SYSTEM,
+                    event_action=SystemEventAction.STARTUP_DB_SCHEMA_DRIFT,
+                    event_status=AuditEventStatus.FAIL,
+                    level=AuditLevel.ERROR,
+                    metadata=SystemAuditMetadata(
+                        context="startup_db_schema_drift",
+                        result="failure",
+                        table_name=table_name,
+                        missing_columns=missing_columns,
+                    ),
+                    immediate=True,
                 )
-        else:
-            logger.debug(
-                "[APP][STARTUP][DB][SCHEMA_DRIFT] No missing DB columns detected"
+
+            missing_columns_summary = ", ".join(
+                f"{table_name}: {', '.join(columns)}"
+                for table_name, columns in sorted(missing_columns_by_table.items())
+            )
+            raise RuntimeError(
+                "DB schema drift detected; missing columns: "
+                f"{missing_columns_summary}"
             )
 
+        logger.debug(
+            "[APP][STARTUP][DB][SCHEMA_DRIFT] No missing DB columns detected"
+        )
+
         db_init_elapsed_ms = (time.perf_counter() - db_init_started_at) * 1000
-        system_event(
-            action=SystemEventAction.STARTUP_DB_INIT,
-            result="success",
-            metadata={
-                "elapsed_ms": round(db_init_elapsed_ms, 2),
-                "metadata_tables": len(metadata_table_names),
-                "db_tables_before": len(db_table_names_before),
-                "db_tables_after": len(db_table_names_after),
-            },
+        emit_audit_event(
+            event_type=EventType.SYSTEM,
+            event_action=SystemEventAction.STARTUP_DB_INIT,
+            event_status=AuditEventStatus.SUCCESS,
+            level=AuditLevel.INFO,
+            metadata=SystemAuditMetadata(
+                context="startup_db_initialization",
+                result="success",
+                elapsed_ms=round(db_init_elapsed_ms, 2),
+                metadata_tables=len(metadata_table_names),
+                db_tables_before=len(db_table_names_before),
+                db_tables_after=len(db_table_names_after),
+            ),
+            immediate=True,
         )
 
     except Exception as e:
-        system_event(
-            action=SystemEventAction.STARTUP_DB_INIT,
-            result="failure",
-            level="error",
-            metadata={"error": str(e)},
+        emit_audit_event(
+            event_type=EventType.SYSTEM,
+            event_action=SystemEventAction.STARTUP_DB_INIT,
+            event_status=AuditEventStatus.FAIL,
+            level=AuditLevel.ERROR,
+            metadata=SystemAuditMetadata(
+                context="startup_db_initialization",
+                result="failure",
+                error=str(e),
+            ),
+            immediate=True,
         )
         raise
 
     # Langgraph Checkpoint INIT
     try:
         await init_langgraph_checkpointer()
-        system_event(
-            action=SystemEventAction.STARTUP_CHECKPOINTER_INIT,
-            result="success",
+        emit_audit_event(
+            event_type=EventType.SYSTEM,
+            event_action=SystemEventAction.STARTUP_CHECKPOINTER_INIT,
+            event_status=AuditEventStatus.SUCCESS,
+            level=AuditLevel.INFO,
+            metadata=SystemAuditMetadata(
+                context="startup_checkpointer_initialization",
+                result="success",
+            ),
+            immediate=True,
         )
     except Exception as e:
-        system_event(
-            action=SystemEventAction.STARTUP_CHECKPOINTER_INIT,
-            result="failure",
-            level="error",
-            metadata={"error": str(e)},
+        emit_audit_event(
+            event_type=EventType.SYSTEM,
+            event_action=SystemEventAction.STARTUP_CHECKPOINTER_INIT,
+            event_status=AuditEventStatus.FAIL,
+            level=AuditLevel.ERROR,
+            metadata=SystemAuditMetadata(
+                context="startup_checkpointer_initialization",
+                result="failure",
+                error=str(e),
+            ),
+            immediate=True,
         )
 
     # Scheduler 초기화
     try:
         init_scheduler()
-        system_event(
-            action=SystemEventAction.STARTUP_SCHEDULER_INIT,
-            result="success",
+        emit_audit_event(
+            event_type=EventType.SYSTEM,
+            event_action=SystemEventAction.STARTUP_SCHEDULER_INIT,
+            event_status=AuditEventStatus.SUCCESS,
+            level=AuditLevel.INFO,
+            metadata=SystemAuditMetadata(
+                context="startup_scheduler_initialization",
+                result="success",
+            ),
+            immediate=True,
         )
     except Exception as e:
-        system_event(
-            action=SystemEventAction.STARTUP_SCHEDULER_INIT,
-            result="failure",
-            level="error",
-            metadata={"error": str(e)},
+        emit_audit_event(
+            event_type=EventType.SYSTEM,
+            event_action=SystemEventAction.STARTUP_SCHEDULER_INIT,
+            event_status=AuditEventStatus.FAIL,
+            level=AuditLevel.ERROR,
+            metadata=SystemAuditMetadata(
+                context="startup_scheduler_initialization",
+                result="failure",
+                error=str(e),
+            ),
+            immediate=True,
         )
 
     try:
         await get_redis_client()
-        system_event(
-            action=SystemEventAction.STARTUP_REDIS_INIT,
-            result="success",
+        emit_audit_event(
+            event_type=EventType.SYSTEM,
+            event_action=SystemEventAction.STARTUP_REDIS_INIT,
+            event_status=AuditEventStatus.SUCCESS,
+            level=AuditLevel.INFO,
+            metadata=SystemAuditMetadata(
+                context="startup_redis_initialization",
+                result="success",
+            ),
+            immediate=True,
         )
     except Exception as e:
-        system_event(
-            action=SystemEventAction.STARTUP_REDIS_INIT,
-            result="failure",
-            level="error",
-            metadata={"error": str(e)},
+        emit_audit_event(
+            event_type=EventType.SYSTEM,
+            event_action=SystemEventAction.STARTUP_REDIS_INIT,
+            event_status=AuditEventStatus.FAIL,
+            level=AuditLevel.ERROR,
+            metadata=SystemAuditMetadata(
+                context="startup_redis_initialization",
+                result="failure",
+                error=str(e),
+            ),
+            immediate=True,
         )
-        raise e
+        raise
 
     if settings.SYNC_WORKER_AUTOSTART:
         sync_worker_stop_event = asyncio.Event()
@@ -294,30 +397,56 @@ async def lifespan(app: FastAPI):
     # Scheduler Shutdown
     try:
         shutdown_scheduler()
-        system_event(
-            action=SystemEventAction.SHUTDOWN_SCHEDULER,
-            result="success",
+        emit_audit_event(
+            event_type=EventType.SYSTEM,
+            event_action=SystemEventAction.SHUTDOWN_SCHEDULER,
+            event_status=AuditEventStatus.SUCCESS,
+            level=AuditLevel.INFO,
+            metadata=SystemAuditMetadata(
+                context="shutdown_scheduler",
+                result="success",
+            ),
+            immediate=True,
         )
     except Exception as e:
-        system_event(
-            action=SystemEventAction.SHUTDOWN_SCHEDULER,
-            result="failure",
-            level="error",
-            metadata={"error": str(e)},
+        emit_audit_event(
+            event_type=EventType.SYSTEM,
+            event_action=SystemEventAction.SHUTDOWN_SCHEDULER,
+            event_status=AuditEventStatus.FAIL,
+            level=AuditLevel.ERROR,
+            metadata=SystemAuditMetadata(
+                context="shutdown_scheduler",
+                result="failure",
+                error=str(e),
+            ),
+            immediate=True,
         )
 
     try:
         await close_langgraph_checkpointer()
-        system_event(
-            action=SystemEventAction.SHUTDOWN_CHECKPOINTER,
-            result="success",
+        emit_audit_event(
+            event_type=EventType.SYSTEM,
+            event_action=SystemEventAction.SHUTDOWN_CHECKPOINTER,
+            event_status=AuditEventStatus.SUCCESS,
+            level=AuditLevel.INFO,
+            metadata=SystemAuditMetadata(
+                context="shutdown_checkpointer",
+                result="success",
+            ),
+            immediate=True,
         )
     except Exception as e:
-        system_event(
-            action=SystemEventAction.SHUTDOWN_CHECKPOINTER,
-            result="failure",
-            level="error",
-            metadata={"error": str(e)},
+        emit_audit_event(
+            event_type=EventType.SYSTEM,
+            event_action=SystemEventAction.SHUTDOWN_CHECKPOINTER,
+            event_status=AuditEventStatus.FAIL,
+            level=AuditLevel.ERROR,
+            metadata=SystemAuditMetadata(
+                context="shutdown_checkpointer",
+                result="failure",
+                error=str(e),
+            ),
+            immediate=True,
         )
         
     try:
@@ -366,11 +495,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# 감사 로그 이벤트 리스너 등록
-bus.subscribe(EventTopic.AUDIT, audit_event_handler)
-
 
 # 미들웨어 등록
 app.middleware("http")(request_context_middleware)

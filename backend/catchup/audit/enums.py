@@ -51,6 +51,12 @@ class AuditLevel(StrEnum):
     CRITICAL = "critical"
 
 
+class AuditEventStatus(StrEnum):
+    ATTEMPT = "ATTEMPT"
+    SUCCESS = "SUCCESS"
+    FAIL = "FAIL"
+
+
 class AuditResult(StrEnum):
     SUCCESS = "success"
     FAILURE = "failure"
