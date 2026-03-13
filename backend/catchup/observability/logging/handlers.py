@@ -10,6 +10,7 @@ from catchup.observability.logging.utils import (
     drop_console_noise_fields,
     reorder_audit_keys,
     reorder_console_logger,
+    unix_timestamp_namer,
 )
 
 
@@ -90,5 +91,7 @@ def build_audit_file_handler() -> logging.Handler:
         backupCount=settings.LOG_AUDIT_BACKUP_COUNT,
         encoding="utf-8",
     )
+    
+    handler.namer = unix_timestamp_namer
     handler.setFormatter(formatter)
     return handler

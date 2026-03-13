@@ -1,3 +1,4 @@
+import time
 from typing import Any, Final
 
 from catchup.configs.config import settings
@@ -60,3 +61,8 @@ def reorder_audit_keys(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str,
 
     ordered_dict.update(event_dict)
     return ordered_dict
+
+
+def unix_timestamp_namer(_: str):
+    base_path = settings.LOG_AUDIT_FILE_PATH.replace(".jsonl", "")
+    return f"{base_path}.{int(time.time())}.jsonl"
