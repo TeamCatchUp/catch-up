@@ -30,8 +30,6 @@ export const API = {
 
   github: {
     installations: `${API_PREFIX}/github/installations`, // GET 설치된 GitHub App 목록
-    repositories: (installationId: string) => `${API_PREFIX}/github/sync/repositories/${installationId}`, // GET DB 저장소 목록
-    repositoriesRefresh: (installationId: string) => `${API_PREFIX}/github/sync/repositories/${installationId}/refresh`, // POST GitHub API에서 저장소 목록 재조회
   },
 
   jira: {
