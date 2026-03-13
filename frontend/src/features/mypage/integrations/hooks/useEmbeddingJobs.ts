@@ -10,8 +10,6 @@ import type {
   SyncJobStatus,
   SyncStatusResponse,
   SyncStreamEvent,
-  SyncStreamEventType,
-  SyncStreamTargetPayload,
 } from '../types/sync';
 import { isConfluenceResource, isJiraResource } from '../utils/atlassianScopeFilter';
 import { connectSyncStream } from './useSyncStream';
@@ -40,8 +38,6 @@ const TARGET_EVENT_STATUS_MAP: Record<string, EmbeddingProgressItem['status']> =
   target_failed: 'failed',
   target_requeued: 'pending',
 };
-
-const isTargetEvent = (type: SyncStreamEventType): boolean => type in TARGET_EVENT_STATUS_MAP;
 
 /** job status → 버튼 상태 변환 */
 const toButtonState = (status: SyncJobStatus | undefined): EmbeddingButtonState => {
@@ -108,20 +104,22 @@ export const useEmbeddingJobs = () => {
     })),
   });
 
+  const statusDataList = statusQueries.map((q) => q.data);
+
   const restoredJobs = useMemo((): ActiveJob[] => {
     const jobs: ActiveJob[] = [];
-    statusQueries.forEach((query, index) => {
-      if (isActiveStatus(query.data)) {
-        jobs.push({ jobId: query.data.job_id, connector: CONNECTOR_ORDER[index] });
+    statusDataList.forEach((data, index) => {
+      if (isActiveStatus(data)) {
+        jobs.push({ jobId: data.job_id, connector: CONNECTOR_ORDER[index] });
       }
     });
     return jobs;
-  }, [statusQueries]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...statusDataList]);
 
   // completed job → syncStatus 데이터로 jobStates 초기화 (SSE 불필요)
   useEffect(() => {
-    statusQueries.forEach((query, index) => {
-      const data = query.data;
+    statusDataList.forEach((data, index) => {
       if (!data || data.status !== 'success') return;
 
       const connector = CONNECTOR_ORDER[index];
@@ -140,7 +138,8 @@ export const useEmbeddingJobs = () => {
         };
       });
     });
-  }, [statusQueries]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...statusDataList]);
 
   const activeJobs = useMemo((): ActiveJob[] => {
     const manualConnectors = new Set(manualJobs.map((j) => j.connector));
@@ -161,82 +160,90 @@ export const useEmbeddingJobs = () => {
 
         // jobStates에 없으면 → syncStatus 데이터로 판단
         const connectorIndex = CONNECTOR_ORDER.indexOf(job.connector);
-        const statusData = statusQueries[connectorIndex]?.data;
+        const statusData = statusDataList[connectorIndex];
         if (statusData) return statusData.status === 'pending' || statusData.status === 'in_progress';
 
         return true; // 새 job (상태 모름) → SSE 연결
       })
       .map((job) => job.jobId);
-  }, [activeJobs, jobStates, statusQueries]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeJobs, jobStates, ...statusDataList]);
 
   const sseKey = [...sseJobIds].sort().join(',');
 
   // SSE 이벤트 핸들러
   const handleSseEvent = useCallback((jobId: string, connector: SyncConnector, event: SyncStreamEvent) => {
-    if (event.event_type === 'snapshot') {
-      // SSE 첫 이벤트: 집계 카운터 초기화
-      const p = event.payload;
-      setJobStates((prev) => ({
-        ...prev,
-        [jobId]: {
-          connector,
-          jobId,
-          status: (p.status as SyncJobStatus) ?? 'in_progress',
-          completedTargets: (p.completed_targets as number) ?? 0,
-          totalTargets: (p.total_targets as number) ?? 0,
-          items: prev[jobId]?.items ?? [],
-        },
-      }));
-    } else if (isTargetEvent(event.event_type)) {
-      // per-item 실시간 업데이트
-      const payload = event.payload as unknown as SyncStreamTargetPayload;
-      const itemStatus = TARGET_EVENT_STATUS_MAP[event.event_type] ?? 'pending';
-
-      setJobStates((prev) => {
-        const current = prev[jobId];
-        if (!current) return prev;
-
-        const items = [...current.items];
-        const idx = items.findIndex((i) => i.targetId === payload.target_id);
-
-        const wasSuccess = idx >= 0 && items[idx].status === 'success';
-        const isNowSuccess = itemStatus === 'success';
-
-        const item: EmbeddingProgressItem = {
-          targetId: payload.target_id,
-          displayName: payload.target_name,
-          status: itemStatus,
-        };
-
-        if (idx >= 0) items[idx] = item;
-        else items.push(item);
-
-        // snapshot 기준 카운터에 delta 적용
-        let completedDelta = 0;
-        if (isNowSuccess && !wasSuccess) completedDelta = 1;
-        if (!isNowSuccess && wasSuccess) completedDelta = -1;
-
-        return {
+    switch (event.event_type) {
+      case 'snapshot': {
+        // SSE 첫 이벤트: 집계 카운터 초기화
+        const { status, completed_targets, total_targets } = event.payload;
+        setJobStates((prev) => ({
           ...prev,
           [jobId]: {
-            ...current,
-            items,
-            completedTargets: current.completedTargets + completedDelta,
+            connector,
+            jobId,
+            status: status ?? 'in_progress',
+            completedTargets: completed_targets ?? 0,
+            totalTargets: total_targets ?? 0,
+            items: prev[jobId]?.items ?? [],
           },
-        };
-      });
-    } else if (event.event_type === 'job_completed') {
-      setJobStates((prev) => {
-        const current = prev[jobId];
-        if (!current) return prev;
-        return { ...prev, [jobId]: { ...current, status: 'success' } };
-      });
-    } else if (event.event_type === 'job_failed') {
-      setJobStates((prev) => {
-        const current = prev[jobId];
-        if (!current) return prev;
-        return { ...prev, [jobId]: { ...current, status: 'failed' } };
-      });
+        }));
+        break;
+      }
+      case 'target_started':
+      case 'target_completed':
+      case 'target_failed':
+      case 'target_requeued': {
+        // per-item 실시간 업데이트
+        const { target_id, target_name } = event.payload;
+        const itemStatus = TARGET_EVENT_STATUS_MAP[event.event_type] ?? 'pending';
+
+        setJobStates((prev) => {
+          const current = prev[jobId];
+          if (!current) return prev;
+
+          const items = [...current.items];
+          const idx = items.findIndex((i) => i.targetId === target_id);
+
+          const wasSuccess = idx >= 0 && items[idx].status === 'success';
+          const isNowSuccess = itemStatus === 'success';
+
+          const item: EmbeddingProgressItem = {
+            targetId: target_id,
+            displayName: target_name,
+            status: itemStatus,
+          };
+
+          if (idx >= 0) items[idx] = item;
+          else items.push(item);
+
+          // snapshot 기준 카운터에 delta 적용
+          let completedDelta = 0;
+          if (isNowSuccess && !wasSuccess) completedDelta = 1;
+          if (!isNowSuccess && wasSuccess) completedDelta = -1;
+
+          return {
+            ...prev,
+            [jobId]: {
+              ...current,
+              items,
+              completedTargets: current.completedTargets + completedDelta,
+            },
+          };
+        });
+        break;
+      }
+      case 'job_completed':
+      case 'job_failed': {
+        const finalStatus = event.event_type === 'job_completed' ? 'success' : 'failed';
+        setJobStates((prev) => {
+          const current = prev[jobId];
+          if (!current) return prev;
+          return { ...prev, [jobId]: { ...current, status: finalStatus } };
+        });
+        break;
+      }
+      // heartbeat — 무시
     }
   }, []);
 
@@ -264,11 +271,19 @@ export const useEmbeddingJobs = () => {
 
       connectSyncStream(
         jobId,
-        (event) => handleSseEvent(jobId, job.connector, event),
+        {
+          onEvent: (event) => handleSseEvent(jobId, job.connector, event),
+          onError: () => {
+            controllers.delete(jobId);
+            setJobStates((prev) => {
+              const current = prev[jobId];
+              if (!current) return prev;
+              return { ...prev, [jobId]: { ...current, status: 'failed' } };
+            });
+          },
+        },
         controller.signal,
-      ).catch(() => {
-        controllers.delete(jobId);
-      });
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sseKey]);
