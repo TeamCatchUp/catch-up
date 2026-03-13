@@ -13,10 +13,7 @@ from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
 )
 from catchup.sync.services.full_sync_target_normalizer import (
-    build_full_sync_targets,
-    index_targets,
-    normalize_target_ids,
-    resolve_requested_targets,
+    resolve_full_sync_targets_from_rows,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,33 +38,29 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             )
 
         spaces = confluence_entities.get_spaces_by_cloud_id(db, cloud_id)
-        requested_space_keys = normalize_target_ids(request.target_ids)
-        space_map = index_targets(
-            spaces,
+        requested_space_keys, resolved_targets = resolve_full_sync_targets_from_rows(
+            request_target_ids=request.target_ids,
+            rows=spaces,
+            target_type="space",
             key_getter=lambda space: space.space_key,
-        )
-        resolved_spaces = resolve_requested_targets(
-            requested_space_keys,
-            target_index=space_map,
+            name_getter=lambda space: space.space_name or space.space_key,
             error_message="requested target_ids contain unknown spaces",
             error_metadata={"cloud_id": cloud_id},
-        )
-
-        targets = build_full_sync_targets(
-            resolved_spaces,
-            target_type="space",
-            id_getter=lambda space: space.space_key,
-            name_getter=lambda space: space.space_name or space.space_key,
+            log_context={
+                "connector": "confluence",
+                "cloud_id": cloud_id,
+                "target_type": "space",
+            },
         )
 
         logger.info(
             "[CONFLUENCE][FULL SYNC][RESOLVER] Targets resolved: cloud_id=%s, requested=%s, resolved=%s",
             cloud_id,
             len(requested_space_keys),
-            len(targets),
+            len(resolved_targets.targets),
         )
 
-        return FullSyncResolvedTargets(targets=targets)
+        return resolved_targets
 
 
 _confluence_full_sync_target_resolver = ConfluenceFullSyncTargetResolver()

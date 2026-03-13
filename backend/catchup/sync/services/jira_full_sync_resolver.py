@@ -13,10 +13,7 @@ from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
 )
 from catchup.sync.services.full_sync_target_normalizer import (
-    build_full_sync_targets,
-    index_targets,
-    normalize_target_ids,
-    resolve_requested_targets,
+    resolve_full_sync_targets_from_rows,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,33 +38,29 @@ class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             )
 
         projects = jira_entities.get_projects_by_cloud_id(db, cloud_id)
-        requested_project_keys = normalize_target_ids(request.target_ids)
-        project_map = index_targets(
-            projects,
+        requested_project_keys, resolved_targets = resolve_full_sync_targets_from_rows(
+            request_target_ids=request.target_ids,
+            rows=projects,
+            target_type="project",
             key_getter=lambda project: project.project_key,
-        )
-        resolved_projects = resolve_requested_targets(
-            requested_project_keys,
-            target_index=project_map,
+            name_getter=lambda project: project.project_name or project.project_key,
             error_message="requested target_ids contain unknown projects",
             error_metadata={"cloud_id": cloud_id},
-        )
-
-        targets = build_full_sync_targets(
-            resolved_projects,
-            target_type="project",
-            id_getter=lambda project: project.project_key,
-            name_getter=lambda project: project.project_name or project.project_key,
+            log_context={
+                "connector": "jira",
+                "cloud_id": cloud_id,
+                "target_type": "project",
+            },
         )
 
         logger.info(
             "[JIRA][FULL SYNC][RESOLVER] Targets resolved: cloud_id=%s, requested=%s, resolved=%s",
             cloud_id,
             len(requested_project_keys),
-            len(targets),
+            len(resolved_targets.targets),
         )
 
-        return FullSyncResolvedTargets(targets=targets)
+        return resolved_targets
 
 
 _jira_full_sync_target_resolver = JiraFullSyncTargetResolver()

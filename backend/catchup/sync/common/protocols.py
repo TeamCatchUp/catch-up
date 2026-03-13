@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from catchup.db.models import SyncConnector, SyncType
 from catchup.sync.common.schemas import (
+    FullSyncDispatchRequest,
     FullSyncContext,
     FullSyncResolvedTargets,
     PublishTasksResult,

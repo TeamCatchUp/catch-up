@@ -183,7 +183,7 @@ class Settings(BaseSettings):
     CONFLUENCE_SYNC_RATE_LIMIT_DELAY: float = 0.1
 
     # Common Sync Settings
-    DEFAULT_SYNC_DAYS: int = 1095
+    DEFAULT_SYNC_DAYS: int = Field(default=1095, ge=1)
 
     # Slack Sync Settings
     SLACK_SYNC_MAX_CONCURRENT_REQUESTS: int = 10  # 동시 요청 수
