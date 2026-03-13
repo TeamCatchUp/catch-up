@@ -85,6 +85,70 @@ export interface SyncTargetsResponse {
   targets: SyncTargetItem[];
 }
 
+// ─── Scope 선택용 타입 ───
+
+/** GitHub scope — GET /github/installations */
+export interface GithubInstallation {
+  installation_id: number;
+  account_login: string;
+  account_type: string;
+}
+
+/** Slack scope — GET /auth/slack/status */
+export interface SlackWorkspace {
+  team_id: string;
+  team_name: string;
+}
+export interface SlackInstallationStatus {
+  installed: boolean;
+  workspaces: SlackWorkspace[];
+}
+
+/** Atlassian scope (Jira + Confluence 공용) — GET /auth/atlassian/status */
+export interface AtlassianResource {
+  id: string;
+  name: string;
+  url: string;
+  scopes: string[];
+}
+export interface AtlassianInstallationStatus {
+  installed: boolean;
+  resources: AtlassianResource[];
+}
+
+// ─── SSE Stream 타입 (GET /sync/jobs/{job_id}/stream) ───
+
+export type SyncStreamEventType =
+  | 'snapshot'
+  | 'target_started'
+  | 'target_completed'
+  | 'target_failed'
+  | 'target_requeued'
+  | 'job_completed'
+  | 'job_failed'
+  | 'heartbeat';
+
+/** target_* 이벤트의 payload (target_started, target_completed, target_failed, target_requeued) */
+export interface SyncStreamTargetPayload {
+  event_id: string;
+  target_id: string;
+  target_name: string;
+  target_type: string;
+  status: string;
+  sync_type: string;
+  attempt: number;
+}
+
+/** SSE 이벤트 공통 래퍼 */
+export interface SyncStreamEvent {
+  connector: SyncConnector;
+  job_id: string;
+  scope_id: string;
+  event_type: SyncStreamEventType;
+  timestamp: string;
+  payload: Record<string, unknown>;
+}
+
 // ─── UI 상태 타입 ───
 
 /** 커넥터 카드 버튼 상태 */
