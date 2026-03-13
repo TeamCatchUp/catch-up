@@ -9,6 +9,9 @@ from httpx import HTTPStatusError, RequestError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.metadata import IntegrationAuditMetadata
+from catchup.audit.service import emit_audit_event
 from catchup.connectors.slack.auth import get_slack_oauth_service, SlackOAuthService
 from catchup.connectors.slack.schemas import (
     SlackInstallationStatus,
@@ -20,6 +23,7 @@ from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.models import KnowledgeSource, SourceType
 from catchup.db.slack import oauth_repository as slack_crud
 from catchup.db.workspaces import get_workspace_limit_one
+from catchup.events.enums import EventType, IntegrationEventAction
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
 from catchup.connectors.slack.factory import create_slack_metadata_service
 from catchup.db.engine import SessionLocal
@@ -55,20 +59,65 @@ async def slack_oauth_callback(
     - Authorization code → 토큰 교환
     - Workspace 정보 저장
     """
+    emit_audit_event(
+        event_type=EventType.INTEGRATION,
+        event_action=IntegrationEventAction.OAUTH_CALLBACK,
+        event_status=AuditEventStatus.ATTEMPT,
+        level=AuditLevel.INFO,
+        metadata=IntegrationAuditMetadata(
+            context="slack_oauth_callback",
+            provider="slack",
+        ),
+        immediate=True,
+    )
+
     # 에러 처리 (사용자가 취소한 경우)
     if error:
+        emit_audit_event(
+            event_type=EventType.INTEGRATION,
+            event_action=IntegrationEventAction.OAUTH_CALLBACK,
+            event_status=AuditEventStatus.FAIL,
+            level=AuditLevel.WARNING,
+            metadata=IntegrationAuditMetadata(
+                context=f"slack_oauth_callback:{error}",
+                provider="slack",
+            ),
+            immediate=True,
+        )
         logger.warning(f"[SLACK][AUTH] OAuth error: {error}")
         return RedirectResponse(
             url=f"{auth_settings.FRONTEND_REDIRECT_URI}?slack_installed=false&reason={error}"
         )
 
     if not code:
+        emit_audit_event(
+            event_type=EventType.INTEGRATION,
+            event_action=IntegrationEventAction.OAUTH_CALLBACK,
+            event_status=AuditEventStatus.FAIL,
+            level=AuditLevel.WARNING,
+            metadata=IntegrationAuditMetadata(
+                context="slack_oauth_callback:no_code",
+                provider="slack",
+            ),
+            immediate=True,
+        )
         return RedirectResponse(
             url=f"{auth_settings.FRONTEND_REDIRECT_URI}?slack_installed=false&reason=no_code"
         )
 
     # State 파라미터 검증 (CSRF 방지)
     if not state:
+        emit_audit_event(
+            event_type=EventType.INTEGRATION,
+            event_action=IntegrationEventAction.OAUTH_CALLBACK,
+            event_status=AuditEventStatus.FAIL,
+            level=AuditLevel.WARNING,
+            metadata=IntegrationAuditMetadata(
+                context="slack_oauth_callback:missing_state",
+                provider="slack",
+            ),
+            immediate=True,
+        )
         logger.warning("[SLACK][AUTH] Missing OAuth state parameter")
         return RedirectResponse(
             url=f"{auth_settings.FRONTEND_REDIRECT_URI}?slack_installed=false&reason=missing_state"
@@ -76,6 +125,17 @@ async def slack_oauth_callback(
 
     is_valid_state = await validate_oauth_state(state, provider="slack")
     if not is_valid_state:
+        emit_audit_event(
+            event_type=EventType.INTEGRATION,
+            event_action=IntegrationEventAction.OAUTH_CALLBACK,
+            event_status=AuditEventStatus.FAIL,
+            level=AuditLevel.WARNING,
+            metadata=IntegrationAuditMetadata(
+                context="slack_oauth_callback:invalid_state",
+                provider="slack",
+            ),
+            immediate=True,
+        )
         logger.warning(f"[SLACK][AUTH] OAuth state validation failed: {state}")
         return RedirectResponse(
             url=f"{auth_settings.FRONTEND_REDIRECT_URI}?slack_installed=false&reason=invalid_state"
@@ -111,6 +171,18 @@ async def slack_oauth_callback(
     
     # 4. 메타데이터 동기화 (BackgroundTask)
     background_tasks.add_task(_sync_workspace_metadata, tokens.team.id)
+
+    emit_audit_event(
+        event_type=EventType.INTEGRATION,
+        event_action=IntegrationEventAction.OAUTH_CALLBACK,
+        event_status=AuditEventStatus.SUCCESS,
+        level=AuditLevel.INFO,
+        metadata=IntegrationAuditMetadata(
+            context="slack_oauth_callback:success",
+            provider="slack",
+        ),
+        immediate=True,
+    )
 
     # 5. 프론트엔드로 리다이렉트
     return RedirectResponse(

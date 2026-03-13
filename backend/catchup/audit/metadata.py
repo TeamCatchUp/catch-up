@@ -16,6 +16,10 @@ class AuthAuditMetadata(BaseAuditMetadata):
     pass
 
 
+class IntegrationAuditMetadata(BaseAuditMetadata):
+    provider: str | None = None
+
+
 class ChatAuditMetadata(BaseAuditMetadata):
     session_id: uuid.UUID
     query: str | None = None

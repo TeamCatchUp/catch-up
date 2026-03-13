@@ -68,16 +68,16 @@ class SystemEventAction(StrEnum):
 
 # 1. Slack / Atalssian : 앱 설치 Callback (metadata에 성공 / 실패 / 실패 시 사유 기록)
 # 2. Github : Installation Event를 Webhook으로 수신 (metadata에 성공 / 실패 / 실패 시 사유 기록)
-# 3. DB 저장 시점에 저장 기록
+# 3. OAUTH_TOKEN_PERSISTED : DB 저장 시점에 저장 기록
 class IntegrationEventAction(StrEnum):
     # Callback 수신
     OAUTH_CALLBACK = "oauth_callback"
     
     # Github Installation Event 수신
-    INSTALLATION_EVENT_RECIEVED = "installation_event_recieved"
+    INSTALLATION_EVENT_RECEIVED = "installation_event_received"
     
     # OAuth Token 저장 완료
-    OAUTH_PERSISTED = "oauth_persisted"
+    OAUTH_TOKEN_PERSISTED = "oauth_persisted"
 
     # Atlassian OAuth Token Refresh
     OAUTH_REFRESH_ATTEMPT = "oauth_refresh_attempt"
