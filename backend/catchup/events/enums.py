@@ -80,14 +80,10 @@ class IntegrationEventAction(StrEnum):
     OAUTH_TOKEN_PERSISTED = "oauth_persisted"
 
     # Atlassian OAuth Token Refresh
-    OAUTH_REFRESH_ATTEMPT = "oauth_refresh_attempt"
-    OAUTH_REFRESH_SUCCESS = "oauth_refresh_success"
-    OAUTH_REFRESH_FAILED = "oauth_refresh_failed"
+    OAUTH_REFRESH = "oauth_refresh"
 
     # Jira Dynamic Webhook Register
-    WEBHOOK_REGISTER = "webhook_register_attempt"
-    WEBHOOK_REGISTER_SUCCESS = "webhook_register_success"
-    WEBHOOK_REGISTER_FAILED = "webhook_register_failed"
+    WEBHOOK_REGISTER = "webhook_register"
 
 
 

@@ -110,7 +110,7 @@ def update_refreshed_token(
     db.refresh(token)
     emit_audit_event(
         event_type=EventType.INTEGRATION,
-        event_action=IntegrationEventAction.OAUTH_REFRESH_SUCCESS,
+        event_action=IntegrationEventAction.OAUTH_REFRESH,
         event_status=AuditEventStatus.SUCCESS,
         level=AuditLevel.INFO,
         metadata=IntegrationAuditMetadata(

@@ -81,7 +81,7 @@ async def refresh_atlassian_tokens():
             cloud_id = token.cloud_id
             emit_audit_event(
                 event_type=EventType.INTEGRATION,
-                event_action=IntegrationEventAction.OAUTH_REFRESH_ATTEMPT,
+                event_action=IntegrationEventAction.OAUTH_REFRESH,
                 event_status=AuditEventStatus.ATTEMPT,
                 level=AuditLevel.INFO,
                 metadata=IntegrationAuditMetadata(
@@ -108,7 +108,7 @@ async def refresh_atlassian_tokens():
                 db.rollback()
                 emit_audit_event(
                     event_type=EventType.INTEGRATION,
-                    event_action=IntegrationEventAction.OAUTH_REFRESH_FAILED,
+                    event_action=IntegrationEventAction.OAUTH_REFRESH,
                     event_status=AuditEventStatus.FAIL,
                     level=AuditLevel.ERROR,
                     metadata=IntegrationAuditMetadata(
