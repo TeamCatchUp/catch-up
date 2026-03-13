@@ -1,16 +1,21 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import Cancel from '@/public/icons/icon/cancel.svg';
+import api from '@/shared/api/client';
+import { API } from '@/shared/api/endpoints';
 import { Button } from '@/shared/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
+import { Skeleton } from '@/shared/components/ui/skeleton';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
-import { getMockTargets } from '../../../constants/mockSyncData';
-import type { SyncConnector, SyncTargetItem } from '../../../types/sync';
+import { useScopeId } from '../../../hooks/useScopeId';
+import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
+import type { FullSyncRequest, SyncAcceptedResponse, SyncConnector } from '../../../types/sync';
 import EmbeddingModalContent from './EmbeddingModalContent';
 
 const PERIOD_OPTIONS = ['1개월', '3개월', '6개월', '1년', '3년'] as const;
@@ -40,18 +45,32 @@ interface EmbeddingModalProps {
   onOpenChange: (open: boolean) => void;
   service: IntegrationService;
   serviceName: string;
+  onJobStart?: (jobId: string, connector: SyncConnector) => void;
 }
 
 /** 임베딩 모달 (셸) */
-const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingModalProps) => {
+const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }: EmbeddingModalProps) => {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('1개월');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const selectedScopeId = 'mock-scope-id';
 
-  const targets = useMemo(() => getMockTargets(service as SyncConnector), [service]);
+  const connector = service as SyncConnector;
+  const { scopeId, isLoading: isScopeLoading } = useScopeId(service);
+
+  const { data: targetsData, isLoading: isTargetsLoading } = useQuery({
+    ...adminConnectorQueries.syncTargets(connector, scopeId ?? ''),
+    enabled: !!scopeId,
+  });
+
+  const targets = useMemo(() => targetsData?.targets ?? [], [targetsData]);
+
+  const syncMutation = useMutation({
+    mutationKey: ['admin', 'sync', 'full'] as const,
+    mutationFn: (body: FullSyncRequest) => api.post<SyncAcceptedResponse>(API.sync.full, body),
+  });
 
   const itemLabel = getItemLabel(service);
-  const isSubmitDisabled = selectedItems.size === 0;
+  const isSubmitDisabled = selectedItems.size === 0 || syncMutation.isPending;
+  const noScope = !isScopeLoading && !scopeId;
 
   const toggleItem = (targetId: string) => {
     setSelectedItems((prev) => {
@@ -74,20 +93,46 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
 
   const handleClose = () => handleDialogOpenChange(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!scopeId) return;
+
     const syncDays = PERIOD_TO_DAYS[selectedPeriod] ?? 30;
-    const selectedTargets = targets.filter((t: SyncTargetItem) => selectedItems.has(t.target_id));
+    const targetIds = targets
+      .filter((t) => selectedItems.has(t.target_id))
+      .map((t) => t.target_id);
 
-    console.log('[임베딩 요청]', {
-      connector: service,
-      scope_id: selectedScopeId,
-      target_ids: selectedTargets.map((t: SyncTargetItem) => t.target_id),
-      sync_days: syncDays,
-    });
+    try {
+      const result = await syncMutation.mutateAsync({
+        connector,
+        scope_id: scopeId,
+        target_ids: targetIds,
+        sync_days: syncDays,
+      });
 
-    toast('임베딩이 시작되었습니다.', {
-      description: '준비가 끝나면 즉시 알려드릴게요.',
-    });
+      const response = result.data;
+
+      switch (response.status) {
+        case 'accepted':
+          toast('임베딩이 시작되었습니다.', {
+            description: '준비가 끝나면 즉시 알려드릴게요.',
+          });
+          if (response.job_id) onJobStart?.(response.job_id, connector);
+          break;
+        case 'conflict':
+          toast.warning('이미 진행 중인 임베딩이 있습니다.');
+          if (response.job_id) onJobStart?.(response.job_id, connector);
+          break;
+        case 'no_events':
+          toast.info('임베딩할 대상이 없습니다.');
+          break;
+        case 'failed':
+          toast.error(response.message ?? '임베딩 요청에 실패했습니다.');
+          break;
+      }
+    } catch {
+      toast.error('임베딩 요청 중 오류가 발생했습니다.');
+    }
+
     handleClose();
   };
 
@@ -114,55 +159,81 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
 
         {/* 바디 */}
         <div className="flex max-h-152 min-h-102 flex-col gap-6 overflow-y-auto overflow-x-clip border-t border-edge-assistive px-6 pt-6">
-          {/* 기간 선택 */}
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center gap-1">
-              <span className="text-body-medium text-content-strong">
-                임베딩 할 데이터의 기간을 선택해 주세요.
+          {noScope ? (
+            <div className="flex flex-1 items-center justify-center">
+              <span className="text-body-small text-content-assistive">
+                연동된 {serviceName}이(가) 없습니다. 먼저 연동을 완료해주세요.
               </span>
-              <span className="block size-1.25 shrink-0 rounded-full bg-accent-red-orange" />
             </div>
-            <div className="flex gap-2">
-              {PERIOD_OPTIONS.map((period) => (
-                <button
-                  key={period}
-                  type="button"
-                  onClick={() => setSelectedPeriod(period)}
-                  className={cn(
-                    'text-body-small h-9 cursor-pointer rounded-full px-3',
-                    selectedPeriod === period
-                      ? 'bg-accent-black-lighten text-content-inverse'
-                      : 'border border-edge-neutral bg-fill-normal text-content-neutral',
-                  )}
-                >
-                  {period}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 항목 선택 */}
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1">
-                <span className="text-body-medium text-content-strong">
-                  {itemLabel}를 선택해주세요.
-                </span>
-                <span className="block size-1.25 shrink-0 rounded-full bg-accent-red-orange" />
+          ) : (
+            <>
+              {/* 기간 선택 */}
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-center gap-1">
+                  <span className="text-body-medium text-content-strong">
+                    임베딩 할 데이터의 기간을 선택해 주세요.
+                  </span>
+                  <span className="block size-1.25 shrink-0 rounded-full bg-accent-red-orange" />
+                </div>
+                <div className="flex gap-2">
+                  {PERIOD_OPTIONS.map((period) => (
+                    <button
+                      key={period}
+                      type="button"
+                      onClick={() => setSelectedPeriod(period)}
+                      className={cn(
+                        'text-body-small h-9 cursor-pointer rounded-full px-3',
+                        selectedPeriod === period
+                          ? 'bg-accent-black-lighten text-content-inverse'
+                          : 'border border-edge-neutral bg-fill-normal text-content-neutral',
+                      )}
+                    >
+                      {period}
+                    </button>
+                  ))}
+                </div>
               </div>
-              {selectedItems.size > 0 && (
-                <span className="text-body-small text-content-primary">
-                  {selectedItems.size}개 선택됨
-                </span>
-              )}
-            </div>
 
-            <EmbeddingModalContent
-              targets={targets}
-              selectedItems={selectedItems}
-              onToggleItem={toggleItem}
-            />
-          </div>
+              {/* 항목 선택 */}
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <span className="text-body-medium text-content-strong">
+                      {itemLabel}를 선택해주세요.
+                    </span>
+                    <span className="block size-1.25 shrink-0 rounded-full bg-accent-red-orange" />
+                  </div>
+                  {selectedItems.size > 0 && (
+                    <span className="text-body-small text-content-primary">
+                      {selectedItems.size}개 선택됨
+                    </span>
+                  )}
+                </div>
+
+                {isScopeLoading || isTargetsLoading ? (
+                  <div className="overflow-clip rounded-xl border border-edge-assistive">
+                    <div className="flex flex-col">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-5 border-b border-edge-assistive px-5 py-3 last:border-b-0"
+                        >
+                          <Skeleton className="h-4 flex-1" />
+                          <Skeleton className="size-6 shrink-0 rounded" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <EmbeddingModalContent
+                    targets={targets}
+                    selectedItems={selectedItems}
+                    onToggleItem={toggleItem}
+                  />
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* 푸터 */}
@@ -173,10 +244,10 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName }: EmbeddingM
           <Button
             variant="capsule-solid-primary"
             size="md"
-            disabled={isSubmitDisabled}
+            disabled={isSubmitDisabled || noScope}
             onClick={handleSubmit}
           >
-            임베딩하기
+            {syncMutation.isPending ? '요청 중...' : '임베딩하기'}
           </Button>
         </div>
       </DialogContent>
