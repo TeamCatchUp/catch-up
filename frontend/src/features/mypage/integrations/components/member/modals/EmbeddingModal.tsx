@@ -5,8 +5,6 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import Cancel from '@/public/icons/icon/cancel.svg';
-import api from '@/shared/api/client';
-import { API } from '@/shared/api/endpoints';
 import { Button } from '@/shared/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 import { Skeleton } from '@/shared/components/ui/skeleton';
@@ -14,8 +12,9 @@ import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
 import { useScopeId } from '../../../hooks/useScopeId';
+import { adminConnectorMutations } from '../../../mutations/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
-import type { FullSyncRequest, SyncAcceptedResponse, SyncConnector } from '../../../types/sync';
+import type { SyncConnector } from '../../../types/sync';
 import EmbeddingModalContent from './EmbeddingModalContent';
 
 const PERIOD_OPTIONS = ['1개월', '3개월', '6개월', '1년', '3년'] as const;
@@ -63,10 +62,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
 
   const targets = useMemo(() => targetsData?.targets ?? [], [targetsData]);
 
-  const syncMutation = useMutation({
-    mutationKey: ['admin', 'sync', 'full'] as const,
-    mutationFn: (body: FullSyncRequest) => api.post<SyncAcceptedResponse>(API.sync.full, body),
-  });
+  const syncMutation = useMutation(adminConnectorMutations.syncFull());
 
   const itemLabel = getItemLabel(service);
   const isSubmitDisabled = selectedItems.size === 0 || syncMutation.isPending;
@@ -117,10 +113,12 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
             description: '준비가 끝나면 즉시 알려드릴게요.',
           });
           if (response.job_id) onJobStart?.(response.job_id, connector);
+          handleClose();
           break;
         case 'conflict':
           toast.warning('이미 진행 중인 임베딩이 있습니다.');
           if (response.job_id) onJobStart?.(response.job_id, connector);
+          handleClose();
           break;
         case 'no_events':
           toast.info('임베딩할 대상이 없습니다.');
@@ -132,8 +130,6 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
     } catch {
       toast.error('임베딩 요청 중 오류가 발생했습니다.');
     }
-
-    handleClose();
   };
 
   return (
