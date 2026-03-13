@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 
 import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
-import IconDelete2 from '@/public/icons/icon/delete_2.svg';
 import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
 import IconClock from '@/public/icons/icon/clock.svg';
+import IconDelete2 from '@/public/icons/icon/delete_2.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
 import IconProgress from '@/public/icons/icon/progress.svg';
 import IconRotate from '@/public/icons/icon/rotate.svg';
@@ -102,28 +102,19 @@ const ItemStatusIcon = ({ status }: { status: SyncJobStatus }) => {
 
 const EmbeddingProgressPanel = ({ progresses }: EmbeddingProgressPanelProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const hasAutoOpened = useRef(false);
-
-  // 진행 중인 job이 처음 감지되면 자동으로 펼침
-  useEffect(() => {
-    if (progresses.length > 0 && !hasAutoOpened.current) {
-      hasAutoOpened.current = true;
-      setIsOpen(true);
-    }
-  }, [progresses.length]);
+  const [hasAutoOpened, setHasAutoOpened] = useState(false);
 
   const [selectedConnector, setSelectedConnector] = useState<SyncConnector>(
     CONNECTOR_ORDER.find((c) => progresses.some((p) => p.connector === c)) ?? CONNECTOR_ORDER[0],
   );
 
-  // 현재 선택된 커넥터에 progress가 없으면 첫 번째 활성 커넥터로 전환
-  useEffect(() => {
-    const hasProgress = progresses.some((p) => p.connector === selectedConnector);
-    if (!hasProgress && progresses.length > 0) {
-      const first = CONNECTOR_ORDER.find((c) => progresses.some((p) => p.connector === c));
-      if (first) setSelectedConnector(first);
-    }
-  }, [progresses, selectedConnector]);
+  // 진행 중인 job이 처음 감지되면 자동으로 펼침 + 활성 커넥터 선택 (렌더 중 1회)
+  if (progresses.length > 0 && !hasAutoOpened) {
+    setHasAutoOpened(true);
+    if (!isOpen) setIsOpen(true);
+    const first = CONNECTOR_ORDER.find((c) => progresses.some((p) => p.connector === c));
+    if (first && first !== selectedConnector) setSelectedConnector(first);
+  }
 
   const selectedProgress = progresses.find((p) => p.connector === selectedConnector);
 
