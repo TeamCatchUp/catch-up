@@ -116,6 +116,15 @@ const EmbeddingProgressPanel = ({ progresses }: EmbeddingProgressPanelProps) => 
     CONNECTOR_ORDER.find((c) => progresses.some((p) => p.connector === c)) ?? CONNECTOR_ORDER[0],
   );
 
+  // 현재 선택된 커넥터에 progress가 없으면 첫 번째 활성 커넥터로 전환
+  useEffect(() => {
+    const hasProgress = progresses.some((p) => p.connector === selectedConnector);
+    if (!hasProgress && progresses.length > 0) {
+      const first = CONNECTOR_ORDER.find((c) => progresses.some((p) => p.connector === c));
+      if (first) setSelectedConnector(first);
+    }
+  }, [progresses, selectedConnector]);
+
   const selectedProgress = progresses.find((p) => p.connector === selectedConnector);
 
   // 접힌 상태: 토글 바
