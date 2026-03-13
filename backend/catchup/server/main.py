@@ -8,14 +8,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 import structlog
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel, SystemEventAction
+from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import SystemAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal, engine
 from catchup.db.global_state import has_admin_ever_onboarded, has_csv_file_ever_been_uploaded
 from catchup.db.models import Base
-from catchup.events.enums import EventTopic, EventType
+from catchup.events.enums import EventTopic, EventType, SystemEventAction
 from catchup.observability.logging import configure_logging
 from catchup.observability.logging.s3_uploader import audit_log_uploader_task
 from catchup.server.admin.api import router as admin_router
