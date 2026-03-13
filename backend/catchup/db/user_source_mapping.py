@@ -48,7 +48,7 @@ def update_tool_user_email(
 ) -> bool:
     target = SOURCE_MAP.get(source_type)
     if not target:
-        return
+        return False
     
     model, id_col, email_col, _, _ = target
     
