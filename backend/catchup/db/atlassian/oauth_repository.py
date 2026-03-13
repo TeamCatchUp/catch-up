@@ -92,6 +92,36 @@ def create_or_update_token(
     return new_token
 
 
+def update_refreshed_token(
+    db: Session,
+    cloud_id: str,
+    access_token: str,
+    refresh_token: str,
+    expires_at: datetime,
+) -> AtlassianOAuthToken | None:
+    token = get_token_by_cloud_id(db, cloud_id)
+    if token is None:
+        return None
+
+    token.access_token = access_token
+    token.refresh_token = refresh_token
+    token.expires_at = expires_at
+    db.commit()
+    db.refresh(token)
+    emit_audit_event(
+        event_type=EventType.INTEGRATION,
+        event_action=IntegrationEventAction.OAUTH_REFRESH_SUCCESS,
+        event_status=AuditEventStatus.SUCCESS,
+        level=AuditLevel.INFO,
+        metadata=IntegrationAuditMetadata(
+            context=f"atlassian_oauth_refresh:cloud_id={cloud_id}",
+            provider="atlassian",
+        ),
+        immediate=True,
+    )
+    return token
+
+
 def delete_token(db: Session, cloud_id: str) -> bool:
     """cloud_id로 Atlassian OAuth 토큰 삭제."""
     stmt = delete(AtlassianOAuthToken).where(AtlassianOAuthToken.cloud_id == cloud_id)
@@ -140,3 +170,19 @@ class AtlassianOAuthRepository:
 
     def delete_token(self, db: Session, cloud_id: str) -> bool:
         return delete_token(db, cloud_id)
+
+    def update_refreshed_token(
+        self,
+        db: Session,
+        cloud_id: str,
+        access_token: str,
+        refresh_token: str,
+        expires_at: datetime,
+    ) -> Optional[AtlassianOAuthToken]:
+        return update_refreshed_token(
+            db=db,
+            cloud_id=cloud_id,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_at=expires_at,
+        )

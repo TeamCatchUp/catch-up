@@ -12,6 +12,9 @@ from urllib.parse import urlparse
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.metadata import IntegrationAuditMetadata
+from catchup.audit.service import emit_audit_event
 from catchup.configs.config import settings
 from catchup.connectors.atlassian.exceptions import (
     AtlassianTokenExpiredError,
@@ -24,6 +27,7 @@ from catchup.connectors.jira.client import JiraApiClient
 from catchup.db.atlassian import oauth_repository as atlassian_oauth
 from catchup.db.jira import webhook_repository as jira_webhook
 from catchup.db.jira import domain_repository as jira_domain
+from catchup.events.enums import EventType, IntegrationEventAction
 
 logger = logging.getLogger(__name__)
 
@@ -176,26 +180,58 @@ class JiraDynamicWebhookService:
         """
         Dynamic webhook 등록
         """
+        metadata = IntegrationAuditMetadata(
+            context=f"jira_webhook_register:cloud_id={cloud_id}",
+            provider="jira",
+        )
+        emit_audit_event(
+            event_type=EventType.INTEGRATION,
+            event_action=IntegrationEventAction.WEBHOOK_REGISTER,
+            event_status=AuditEventStatus.ATTEMPT,
+            level=AuditLevel.INFO,
+            metadata=metadata,
+            immediate=True,
+        )
+
         client = await self._create_client(db, cloud_id)
         callback_url = self._build_callback_url(cloud_id)
         resolved_project_keys = self._resolve_project_keys(db, cloud_id, project_keys)
         jql_filter = self._build_jql_filter(resolved_project_keys)
         events = DEFAULT_JIRA_WEBHOOK_EVENTS
+        try:
+            response = await client.register_dynamic_webhook(
+                callback_url=callback_url,
+                jql_filter=jql_filter,
+                events=events,
+            )
 
-        response = await client.register_dynamic_webhook(
-            callback_url=callback_url,
-            jql_filter=jql_filter,
-            events=events,
+            registration_results = response.get("webhookRegistrationResult") or []
+            created_webhook_ids = [
+                int(item["createdWebhookId"])
+                for item in registration_results
+                if item.get("createdWebhookId") is not None
+            ]
+
+            subscriptions = await self.sync_webhook_state(db, cloud_id)
+        except Exception:
+            emit_audit_event(
+                event_type=EventType.INTEGRATION,
+                event_action=IntegrationEventAction.WEBHOOK_REGISTER,
+                event_status=AuditEventStatus.FAIL,
+                level=AuditLevel.ERROR,
+                metadata=metadata,
+                immediate=True,
+            )
+            raise
+
+        emit_audit_event(
+            event_type=EventType.INTEGRATION,
+            event_action=IntegrationEventAction.WEBHOOK_REGISTER,
+            event_status=AuditEventStatus.SUCCESS,
+            level=AuditLevel.INFO,
+            metadata=metadata,
+            immediate=True,
         )
-
-        registration_results = response.get("webhookRegistrationResult") or []
-        created_webhook_ids = [
-            int(item["createdWebhookId"])
-            for item in registration_results
-            if item.get("createdWebhookId") is not None
-        ]
-
-        subscriptions = await self.sync_webhook_state(db, cloud_id)
 
         logger.info(
             f"[JIRA][WEBHOOK][DYNAMIC] Registered webhook: "
