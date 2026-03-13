@@ -74,9 +74,9 @@ class AwsS3EventAction(StrEnum):
 #     WEBHOOK_REGISTER = "webhook_register"
 
 
-# class SyncEventAction(StrEnum):
-#     FULL_SYNC = "full_sync"
-#     INCREMENTAL_SYNC = "incremental_sync"
-#     SYNC_FAILURE = "sync_failure"
-#     SCHEMA_DRIFT_DETECTED = "schema_drift_detected"
-#     EMBEDDING_BATCH = "embedding_batch"
+class SyncEventAction(StrEnum):
+    FULL_SYNC_REQUESTED = "full_sync_reqeusted"
+    WEBHOOK_EVENT_ACCEPTED = "webhook_event_accepted"
+    CONFLUENCE_POLLING_STARTED = "confluence_polling_started"
+    SYNC_SUCCESS = "sync_success"
+    SYNC_FAILED = "sync_failed"

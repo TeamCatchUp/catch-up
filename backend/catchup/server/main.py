@@ -7,8 +7,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 
-from catchup.audit.enums import SystemEventAction
-from catchup.audit.system import system_event
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal, engine
 from catchup.db.global_state import has_admin_ever_onboarded, has_csv_file_ever_been_uploaded
@@ -72,18 +70,9 @@ async def lifespan(app: FastAPI):
         uploader_task = asyncio.create_task(audit_log_uploader_task())
 
     try:
-        db_init_started_at = time.perf_counter()
-
         # 1) 메타데이터 기준 테이블 목록 수집
         metadata_table_names = sorted(Base.metadata.tables.keys())
-        system_event(
-            action=SystemEventAction.STARTUP_DB_INIT,
-            result="start",
-            metadata={
-                "message": "starting_db_initialization",
-                "metadata_table_count": len(metadata_table_names),
-            },
-        )
+
         logger.debug(
             "[APP][STARTUP][DB][INIT] Metadata tables loaded: count=%s, tables=%s",
             len(metadata_table_names),
@@ -118,26 +107,12 @@ async def lifespan(app: FastAPI):
             create_all_elapsed_ms,
         )
 
-        # 4) create_all 이후 DB 상태 확인 및 스키마 드리프트 탐지
+        # 4) create_all 이후 DB 상태 확인
         with engine.connect() as connection:
             db_inspector_after = inspect(connection)
             db_table_names_after = sorted(db_inspector_after.get_table_names())
 
-            missing_columns_by_table: dict[str, list[str]] = {}
-            for table_name in metadata_table_names:
-                if table_name not in db_table_names_after:
-                    continue
-
-                model_columns = sorted(Base.metadata.tables[table_name].c.keys())
-                db_columns = sorted(
-                    column["name"] for column in db_inspector_after.get_columns(table_name)
-                )
-                missing_columns = sorted(set(model_columns) - set(db_columns))
-                if missing_columns:
-                    missing_columns_by_table[table_name] = missing_columns
-
         created_tables = sorted(set(db_table_names_after) - set(db_table_names_before))
-        missing_tables_after = sorted(set(metadata_table_names) - set(db_table_names_after))
 
         logger.debug(
             "[APP][STARTUP][DB][INIT] DB tables after create_all: count=%s, tables=%s",
@@ -150,97 +125,25 @@ async def lifespan(app: FastAPI):
             created_tables,
         )
 
-        if missing_tables_after:
-            system_event(
-                action=SystemEventAction.STARTUP_DB_INIT,
-                result="partial_failure",
-                metadata={
-                    "message": "missing_tables_after_create_all",
-                    "missing_tables_count": len(missing_tables_after),
-                    "missing_tables": missing_tables_after,
-                },
-            )
-
-        if missing_columns_by_table:
-            for table_name, missing_columns in missing_columns_by_table.items():
-                system_event(
-                    action=SystemEventAction.STARTUP_DB_SCHEMA_DRIFT,
-                    result="partial_failure",
-                    metadata={
-                        "table_name": table_name,
-                        "missing_columns": missing_columns,
-                    },
-                )
-        else:
-            logger.debug(
-                "[APP][STARTUP][DB][SCHEMA_DRIFT] No missing DB columns detected"
-            )
-
-        db_init_elapsed_ms = (time.perf_counter() - db_init_started_at) * 1000
-        system_event(
-            action=SystemEventAction.STARTUP_DB_INIT,
-            result="success",
-            metadata={
-                "elapsed_ms": round(db_init_elapsed_ms, 2),
-                "metadata_tables": len(metadata_table_names),
-                "db_tables_before": len(db_table_names_before),
-                "db_tables_after": len(db_table_names_after),
-            },
-        )
-
-    except Exception as e:
-        system_event(
-            action=SystemEventAction.STARTUP_DB_INIT,
-            result="failure",
-            level="error",
-            metadata={"error": str(e)},
-        )
+    except Exception:
         raise
 
     # Langgraph Checkpoint INIT
     try:
         await init_langgraph_checkpointer()
-        system_event(
-            action=SystemEventAction.STARTUP_CHECKPOINTER_INIT,
-            result="success",
-        )
-    except Exception as e:
-        system_event(
-            action=SystemEventAction.STARTUP_CHECKPOINTER_INIT,
-            result="failure",
-            level="error",
-            metadata={"error": str(e)},
-        )
+    except Exception:
+        pass
 
     # Scheduler 초기화
     try:
         init_scheduler()
-        system_event(
-            action=SystemEventAction.STARTUP_SCHEDULER_INIT,
-            result="success",
-        )
-    except Exception as e:
-        system_event(
-            action=SystemEventAction.STARTUP_SCHEDULER_INIT,
-            result="failure",
-            level="error",
-            metadata={"error": str(e)},
-        )
+    except Exception:
+        pass
 
     try:
         await get_redis_client()
-        system_event(
-            action=SystemEventAction.STARTUP_REDIS_INIT,
-            result="success",
-        )
-    except Exception as e:
-        system_event(
-            action=SystemEventAction.STARTUP_REDIS_INIT,
-            result="failure",
-            level="error",
-            metadata={"error": str(e)},
-        )
-        raise e
+    except Exception:
+        raise
 
     if settings.SYNC_WORKER_AUTOSTART:
         sync_worker_stop_event = asyncio.Event()
@@ -290,31 +193,13 @@ async def lifespan(app: FastAPI):
     # Scheduler Shutdown
     try:
         shutdown_scheduler()
-        system_event(
-            action=SystemEventAction.SHUTDOWN_SCHEDULER,
-            result="success",
-        )
-    except Exception as e:
-        system_event(
-            action=SystemEventAction.SHUTDOWN_SCHEDULER,
-            result="failure",
-            level="error",
-            metadata={"error": str(e)},
-        )
+    except Exception:
+        pass
 
     try:
         await close_langgraph_checkpointer()
-        system_event(
-            action=SystemEventAction.SHUTDOWN_CHECKPOINTER,
-            result="success",
-        )
-    except Exception as e:
-        system_event(
-            action=SystemEventAction.SHUTDOWN_CHECKPOINTER,
-            result="failure",
-            level="error",
-            metadata={"error": str(e)},
-        )
+    except Exception:
+        pass
         
     try:
         await _shared_client.aclose()
