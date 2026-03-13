@@ -10,7 +10,11 @@ from typing import Optional
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.metadata import IntegrationAuditMetadata
+from catchup.audit.service import emit_audit_event
 from catchup.db.models import AtlassianOAuthToken
+from catchup.events.enums import EventType, IntegrationEventAction
 
 def get_token_by_cloud_id(db: Session, cloud_id: str) -> Optional[AtlassianOAuthToken]:
     """cloud_id로 Atlassian OAuth 토큰 조회."""
@@ -48,6 +52,17 @@ def create_or_update_token(
         existing.scopes = scopes
         db.commit()
         db.refresh(existing)
+        emit_audit_event(
+            event_type=EventType.INTEGRATION,
+            event_action=IntegrationEventAction.OAUTH_TOKEN_PERSISTED,
+            event_status=AuditEventStatus.SUCCESS,
+            level=AuditLevel.INFO,
+            metadata=IntegrationAuditMetadata(
+                context=f"atlassian_oauth_token_persisted:cloud_id={cloud_id}",
+                provider="atlassian",
+            ),
+            immediate=True,
+        )
         return existing
 
     new_token = AtlassianOAuthToken(
@@ -63,6 +78,17 @@ def create_or_update_token(
     db.add(new_token)
     db.commit()
     db.refresh(new_token)
+    emit_audit_event(
+        event_type=EventType.INTEGRATION,
+        event_action=IntegrationEventAction.OAUTH_TOKEN_PERSISTED,
+        event_status=AuditEventStatus.SUCCESS,
+        level=AuditLevel.INFO,
+        metadata=IntegrationAuditMetadata(
+            context=f"atlassian_oauth_token_persisted:cloud_id={cloud_id}",
+            provider="atlassian",
+        ),
+        immediate=True,
+    )
     return new_token
 
 
