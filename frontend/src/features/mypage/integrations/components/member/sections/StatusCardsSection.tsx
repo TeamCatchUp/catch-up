@@ -7,24 +7,23 @@ import { Button } from '@/shared/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
-import { MOCK_BUTTON_STATES } from '../../../constants/mockSyncData';
 import type { MemberIntegrationCardItem } from '../../../types/integrations';
 import type { EmbeddingButtonState, SyncConnector } from '../../../types/sync';
 import EmbeddingModal from '../modals/EmbeddingModal';
 
 interface StatusCardsSectionProps {
   cards: MemberIntegrationCardItem[];
+  buttonStates: Record<SyncConnector, EmbeddingButtonState>;
+  onJobStart: (jobId: string, connector: SyncConnector) => void;
 }
 
 /** 이용자 연동 상단 계정 등록 카드 섹션 */
-const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
+const StatusCardsSection = ({ cards, buttonStates, onJobStart }: StatusCardsSectionProps) => {
   const [embeddingModal, setEmbeddingModal] = useState<{
     open: boolean;
     service: IntegrationService;
     serviceName: string;
   }>({ open: false, service: 'jira', serviceName: '' });
-
-  const [buttonStates] = useState<Record<SyncConnector, EmbeddingButtonState>>(MOCK_BUTTON_STATES);
 
   const openEmbeddingModal = (service: IntegrationService, serviceName: string) => {
     setEmbeddingModal({ open: true, service, serviceName });
@@ -133,6 +132,7 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
         onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
         service={embeddingModal.service}
         serviceName={embeddingModal.serviceName}
+        onJobStart={onJobStart}
       />
     </section>
   );
