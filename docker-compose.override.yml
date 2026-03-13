@@ -23,6 +23,7 @@ services:
       - ENABLE_NEO4J=False
     ports:
       - "8000:8000"
+      - "5678:5678"  # debugpy
     command: uvicorn catchup.server.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       - vector_db

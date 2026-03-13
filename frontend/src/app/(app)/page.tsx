@@ -4,9 +4,11 @@ import { useRef, useState } from 'react';
 
 import AdminGuideModal from '@/features/home/components/AdminGuideModal';
 import HowToUse from '@/features/home/components/HowToUse';
+import PromptChips from '@/features/home/components/PromptChips';
 import QuestionTips from '@/features/home/components/QuestionTips';
 import UserGuideModal from '@/features/home/components/UserGuideModal';
 import { ADMIN_GUIDE_STORAGE_KEY } from '@/features/home/constants/adminGuide';
+import { tipData } from '@/features/home/constants/questionTips';
 import { USER_GUIDE_STORAGE_KEY } from '@/features/home/constants/userGuide';
 import TopNavbar from '@/shared/components/layout/topNavbar/TopNavbar';
 import QueryBox from '@/shared/components/query/QueryBox';
@@ -35,7 +37,7 @@ export default function Home() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const filters = useSearchFilters();
-  const input = useSearchInput({ inputRef, selectedSources: filters.selectedSources });
+  const input = useSearchInput({ inputRef, selectedSources: filters.selectedSources, tipData });
   const { shouldShowNoHistoryBox } = useQuestionHistoryGate();
   const [isNoHistoryExpanded, setIsNoHistoryExpanded] = useState(true);
 
@@ -87,28 +89,41 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Query Box */}
-        <QueryBox
-          containerRef={containerRef}
-          inputRef={inputRef}
-          input={input}
-          filters={filters}
-          variant={shouldShowNoHistoryBox ? 'no-history' : 'default'}
-          noHistoryExpanded={isNoHistoryExpanded || input.isFocused}
-          highlightBracketPlaceholders
-        />
+        {/* Query Box + Prompt Chips wrapper (useOutsideClick 영역) */}
+        <div ref={containerRef} className="flex flex-col items-center gap-8">
+          <QueryBox
+            inputRef={inputRef}
+            input={input}
+            filters={filters}
+            variant={shouldShowNoHistoryBox ? 'no-history' : 'default'}
+            noHistoryExpanded={isNoHistoryExpanded || input.isFocused}
+            tipData={tipData}
+          />
+
+          {input.isFocused && (
+            <PromptChips
+              selectedIndex={input.selectedTipIndex}
+              onChipClick={(index) => {
+                input.resetTemplateFields();
+                input.setIsFromTemplate(true);
+                input.setSelectedTipIndex(index);
+              }}
+            />
+          )}
+        </div>
       </div>
 
       <div
-        className={`flex flex-col items-center gap-16 px-16 pt-10 pb-30 transition-all duration-300 ${
+        className={`flex flex-col items-center gap-16 px-16 pt-4 pb-30 transition-all duration-300 ${
           input.isFocused ? 'pointer-events-none translate-y-4 opacity-0' : 'opacity-100'
         }`}
       >
         <QuestionTips
-          onTipClick={(query) => {
-            input.setValue(query);
+          onTipClick={(index) => {
+            input.resetTemplateFields();
+            input.setIsFromTemplate(true);
+            input.setSelectedTipIndex(index);
             input.setIsFocused(true);
-            inputRef.current?.focus();
           }}
         />
         <HowToUse />

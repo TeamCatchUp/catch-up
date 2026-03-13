@@ -1,5 +1,7 @@
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
+import structlog
+
 from catchup.audit.enums import AuditLevel
 from catchup.auth.schemas import BaseOAuthUserInfoResponse
 from catchup.components.auth.constants import OAuthIdentityProviderType
@@ -8,9 +10,11 @@ from catchup.db.models import OAuthUser, UserStatus
 from catchup.auth.utils import reformat_name
 from catchup.auth.jwt import create_access_token, create_refresh_token
 from catchup.db.users import get_oauth_user_with_sub, get_user_by_sub, update_user_refresh_token
-from catchup.events.enums import AuthEventAction, EventTopic, EventType
+from catchup.events.enums import AuthEventAction, EventType
 from catchup.audit.service import emit_audit_event
 
+
+logger = structlog.get_logger()
 
 class OAuthService:
     def __init__(
@@ -62,7 +66,11 @@ class OAuthService:
         try:
 
             oauth_user = await self.provider.get_oauth_user_info(code)
-            
+            logger.debug(
+                "oauth_user_fetched",
+                oauth_user=oauth_user
+            )
+
             def _process_callback_sync():
                 oauth_user_record = self._get_or_register_user(oauth_user)
                 
@@ -100,6 +108,12 @@ class OAuthService:
                     actor=snapshot,
                 )
                 
+                logger.debug(
+                    "token_created",
+                    access_token=bool(access_token),
+                    refresh_token=bool(refresh_token)
+                )
+                
                 return access_token, refresh_token
             
             return await run_in_threadpool(_process_callback_sync)
@@ -114,3 +128,5 @@ class OAuthService:
                 },
                 level=AuditLevel.INFO
             )
+            
+            raise e
