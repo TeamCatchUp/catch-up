@@ -48,7 +48,6 @@ logger = logging.getLogger(__name__)
 if settings.ENV == "development" and settings.DEBUGGER_ENABLED:
     import debugpy
     debugpy.listen(("0.0.0.0", settings.DEBUGGER_PORT))
-    debugpy.wait_for_client()
     logger.info(f"debugpy_attachment_success: port={settings.DEBUGGER_PORT}")
 
 
