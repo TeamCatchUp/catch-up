@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef } from 'react';
-
 import { API } from '@/shared/api/endpoints';
 
 import type { SyncStreamEvent } from '../types/sync';
 
-type SyncStreamCallback = (event: SyncStreamEvent) => void;
+export type SyncStreamCallback = (event: SyncStreamEvent) => void;
+
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1000;
 
 /**
  * SSE 블록 파싱 — "data:" 라인에서 JSON 추출
@@ -25,11 +26,8 @@ function parseSseBlock(block: string): SyncStreamEvent | null {
   }
 }
 
-/**
- * fetch + ReadableStream 기반 SSE 연결
- * AbortSignal로 취소 가능
- */
-export async function connectSyncStream(
+/** 단일 SSE 연결 수행 (재시도 없음) */
+async function readStream(
   jobId: string,
   onEvent: SyncStreamCallback,
   signal: AbortSignal,
@@ -41,61 +39,78 @@ export async function connectSyncStream(
     signal,
   });
 
-  if (!res.ok) throw new Error(`SSE stream error: ${res.status}`);
-  if (!res.body) throw new Error('SSE stream error: empty response body');
+  if (!res.ok) throw new Error(`SSE ${res.status}`);
+  if (!res.body) throw new Error('SSE empty body');
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
 
-    const blocks = buffer.split('\n\n');
-    buffer = blocks.pop() || '';
+      const blocks = buffer.split('\n\n');
+      buffer = blocks.pop() || '';
 
-    for (const block of blocks) {
-      const event = parseSseBlock(block);
-      if (event) onEvent(event);
+      for (const block of blocks) {
+        const event = parseSseBlock(block);
+        if (event) onEvent(event);
+      }
+
+      if (done) break;
     }
 
-    if (done) break;
-  }
-
-  const tail = buffer.trim();
-  if (tail) {
-    const event = parseSseBlock(tail);
-    if (event) onEvent(event);
+    const tail = buffer.trim();
+    if (tail) {
+      const event = parseSseBlock(tail);
+      if (event) onEvent(event);
+    }
+  } finally {
+    reader.cancel();
   }
 }
 
+export interface SyncStreamOptions {
+  onEvent: SyncStreamCallback;
+  /** SSE 연결이 재시도 불가능한 에러로 종료될 때 호출 */
+  onError?: (error: Error) => void;
+}
+
 /**
- * Sync SSE 스트림 구독 훅.
+ * fetch + ReadableStream 기반 SSE 연결 (자동 재시도 포함)
  *
- * jobId가 주어지면 SSE 연결을 열고, 이벤트마다 onEvent 콜백 호출.
- * jobId가 null이면 연결하지 않음. jobId가 바뀌면 기존 연결을 끊고 재연결.
+ * - 네트워크 에러 / 5xx 시 exponential backoff 재시도 (최대 3회)
+ * - 4xx 에러는 재시도 없이 즉시 종료
+ * - AbortSignal로 취소 가능
  */
-export function useSyncStream(jobId: string | null, onEvent: SyncStreamCallback) {
-  const onEventRef = useRef(onEvent);
-  useEffect(() => {
-    onEventRef.current = onEvent;
-  }, [onEvent]);
+export async function connectSyncStream(
+  jobId: string,
+  { onEvent, onError }: SyncStreamOptions,
+  signal: AbortSignal,
+): Promise<void> {
+  let retries = 0;
 
-  const connect = useCallback((id: string, signal: AbortSignal) => {
-    connectSyncStream(id, (event) => onEventRef.current(event), signal).catch(() => {
-      // 연결 종료 (abort 또는 네트워크 에러) — 조용히 무시
-    });
-  }, []);
+  while (retries <= MAX_RETRIES) {
+    try {
+      await readStream(jobId, onEvent, signal);
+      return; // 정상 종료 (서버가 스트림을 닫음)
+    } catch (err) {
+      if (signal.aborted) return; // 의도적 취소
 
-  useEffect(() => {
-    if (!jobId) return;
+      const isRetryable =
+        err instanceof TypeError || // 네트워크 에러
+        (err instanceof Error && err.message.startsWith('SSE 5'));
 
-    const controller = new AbortController();
-    connect(jobId, controller.signal);
+      if (!isRetryable || retries >= MAX_RETRIES) {
+        onError?.(err instanceof Error ? err : new Error(String(err)));
+        return;
+      }
 
-    return () => {
-      controller.abort();
-    };
-  }, [jobId, connect]);
+      retries++;
+      const delay = BASE_DELAY_MS * 2 ** (retries - 1);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
 }
