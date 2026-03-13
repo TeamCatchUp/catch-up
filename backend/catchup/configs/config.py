@@ -18,6 +18,13 @@ class Environment(StrEnum):
 
 
 class Settings(BaseSettings):
+    
+    #===========================#
+    #     Degubber Settings     #
+    #===========================#
+    DEBUGGER_ENABLED: bool = False
+    DEBUGGER_PORT: int = 5678
+    
     #=============================#
     #     System Base Settings    #
     #=============================#

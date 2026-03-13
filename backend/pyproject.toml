@@ -50,6 +50,7 @@ dependencies = [
 # 개발 전용 의존성
 [dependency-groups]
 dev = [
+    "debugpy>=1.8.20",
     "pip-licenses",
     "pydeps>=3.0.2",
     "ruff",
