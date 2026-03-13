@@ -58,7 +58,7 @@ export default function Home() {
   });
 
   return (
-    <div className={`bg-home-gradient flex min-h-full flex-col ${input.isFocused ? 'h-full overflow-hidden' : ''}`}>
+    <div className={`bg-home-gradient flex min-h-full flex-col ${input.isFocused ? 'h-full overflow-y-auto' : ''}`}>
       <TopNavbar pageType="home" />
 
       {/* Query Section */}
@@ -115,7 +115,7 @@ export default function Home() {
 
       <div
         className={`flex flex-col items-center gap-16 px-16 pt-4 pb-30 transition-all duration-300 ${
-          input.isFocused ? 'pointer-events-none translate-y-4 opacity-0' : 'opacity-100'
+          input.isFocused ? 'pointer-events-none translate-y-4 opacity-0 h-0 overflow-hidden' : 'opacity-100'
         }`}
       >
         <QuestionTips
