@@ -6,8 +6,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
+import structlog
 
-from catchup.audit.enums import AuditLevel, SystemEventAction
+from catchup.audit.enums import AuditEventStatus, AuditLevel, SystemEventAction
 from catchup.audit.metadata import SystemAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.configs.config import settings
@@ -51,6 +52,8 @@ if settings.ENV == "development" and settings.DEBUGGER_ENABLED:
     debugpy.listen(("0.0.0.0", settings.DEBUGGER_PORT))
     logger.info(f"debugpy_attachment_success: port={settings.DEBUGGER_PORT}")
 
+# 감사 로그 이벤트 리스너 등록
+bus.subscribe(EventTopic.AUDIT, audit_event_handler)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -80,6 +83,7 @@ async def lifespan(app: FastAPI):
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.STARTUP_DB_INIT,
+            event_status=AuditEventStatus.ATTEMPT,
             level=AuditLevel.INFO,
             metadata=SystemAuditMetadata(
                 context="startup_db_initialization",
@@ -164,6 +168,7 @@ async def lifespan(app: FastAPI):
             emit_audit_event(
                 event_type=EventType.SYSTEM,
                 event_action=SystemEventAction.STARTUP_DB_INIT,
+                event_status=AuditEventStatus.FAIL,
                 level=AuditLevel.WARNING,
                 metadata=SystemAuditMetadata(
                     context="startup_db_initialization",
@@ -180,6 +185,7 @@ async def lifespan(app: FastAPI):
                 emit_audit_event(
                     event_type=EventType.SYSTEM,
                     event_action=SystemEventAction.STARTUP_DB_SCHEMA_DRIFT,
+                    event_status=AuditEventStatus.FAIL,
                     level=AuditLevel.WARNING,
                     metadata=SystemAuditMetadata(
                         context="startup_db_schema_drift",
@@ -199,6 +205,7 @@ async def lifespan(app: FastAPI):
                 emit_audit_event(
                     event_type=EventType.SYSTEM,
                     event_action=SystemEventAction.STARTUP_DB_SCHEMA_DRIFT,
+                    event_status=AuditEventStatus.FAIL,
                     level=AuditLevel.ERROR,
                     metadata=SystemAuditMetadata(
                         context="startup_db_schema_drift",
@@ -226,6 +233,7 @@ async def lifespan(app: FastAPI):
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.STARTUP_DB_INIT,
+            event_status=AuditEventStatus.SUCCESS,
             level=AuditLevel.INFO,
             metadata=SystemAuditMetadata(
                 context="startup_db_initialization",
@@ -242,6 +250,7 @@ async def lifespan(app: FastAPI):
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.STARTUP_DB_INIT,
+            event_status=AuditEventStatus.FAIL,
             level=AuditLevel.ERROR,
             metadata=SystemAuditMetadata(
                 context="startup_db_initialization",
@@ -258,6 +267,7 @@ async def lifespan(app: FastAPI):
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.STARTUP_CHECKPOINTER_INIT,
+            event_status=AuditEventStatus.SUCCESS,
             level=AuditLevel.INFO,
             metadata=SystemAuditMetadata(
                 context="startup_checkpointer_initialization",
@@ -269,6 +279,7 @@ async def lifespan(app: FastAPI):
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.STARTUP_CHECKPOINTER_INIT,
+            event_status=AuditEventStatus.FAIL,
             level=AuditLevel.ERROR,
             metadata=SystemAuditMetadata(
                 context="startup_checkpointer_initialization",
@@ -284,6 +295,7 @@ async def lifespan(app: FastAPI):
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.STARTUP_SCHEDULER_INIT,
+            event_status=AuditEventStatus.SUCCESS,
             level=AuditLevel.INFO,
             metadata=SystemAuditMetadata(
                 context="startup_scheduler_initialization",
@@ -295,6 +307,7 @@ async def lifespan(app: FastAPI):
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.STARTUP_SCHEDULER_INIT,
+            event_status=AuditEventStatus.FAIL,
             level=AuditLevel.ERROR,
             metadata=SystemAuditMetadata(
                 context="startup_scheduler_initialization",
@@ -309,6 +322,7 @@ async def lifespan(app: FastAPI):
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.STARTUP_REDIS_INIT,
+            event_status=AuditEventStatus.SUCCESS,
             level=AuditLevel.INFO,
             metadata=SystemAuditMetadata(
                 context="startup_redis_initialization",
@@ -320,6 +334,7 @@ async def lifespan(app: FastAPI):
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.STARTUP_REDIS_INIT,
+            event_status=AuditEventStatus.FAIL,
             level=AuditLevel.ERROR,
             metadata=SystemAuditMetadata(
                 context="startup_redis_initialization",
@@ -381,6 +396,7 @@ async def lifespan(app: FastAPI):
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.SHUTDOWN_SCHEDULER,
+            event_status=AuditEventStatus.SUCCESS,
             level=AuditLevel.INFO,
             metadata=SystemAuditMetadata(
                 context="shutdown_scheduler",
@@ -392,6 +408,7 @@ async def lifespan(app: FastAPI):
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.SHUTDOWN_SCHEDULER,
+            event_status=AuditEventStatus.FAIL,
             level=AuditLevel.ERROR,
             metadata=SystemAuditMetadata(
                 context="shutdown_scheduler",
@@ -406,6 +423,7 @@ async def lifespan(app: FastAPI):
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.SHUTDOWN_CHECKPOINTER,
+            event_status=AuditEventStatus.SUCCESS,
             level=AuditLevel.INFO,
             metadata=SystemAuditMetadata(
                 context="shutdown_checkpointer",
@@ -417,6 +435,7 @@ async def lifespan(app: FastAPI):
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.SHUTDOWN_CHECKPOINTER,
+            event_status=AuditEventStatus.FAIL,
             level=AuditLevel.ERROR,
             metadata=SystemAuditMetadata(
                 context="shutdown_checkpointer",
@@ -472,11 +491,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# 감사 로그 이벤트 리스너 등록
-bus.subscribe(EventTopic.AUDIT, audit_event_handler)
-
 
 # 미들웨어 등록
 app.middleware("http")(request_context_middleware)

@@ -66,12 +66,30 @@ class SystemEventAction(StrEnum):
     SHUTDOWN_SCHEDULER = "shutdown_scheduler"
     SHUTDOWN_CHECKPOINTER = "shutdown_checkpointer"
 
+# 1. Slack / Atalssian : 앱 설치 Callback (metadata에 성공 / 실패 / 실패 시 사유 기록)
+# 2. Github : Installation Event를 Webhook으로 수신 (metadata에 성공 / 실패 / 실패 시 사유 기록)
+# 3. DB 저장 시점에 저장 기록
+class IntegrationEventAction(StrEnum):
+    # Callback 수신
+    OAUTH_CALLBACK = "oauth_callback"
+    
+    # Github Installation Event 수신
+    INSTALLATION_EVENT_RECIEVED = "installation_event_recieved"
+    
+    # OAuth Token 저장 완료
+    OAUTH_PERSISTED = "oauth_persisted"
 
-# class IntegrationEventAction(StrEnum):
-#     OAUTH_CONNECT = "oauth_connect"
-#     OAUTH_DISCONNECT = "oauth_disconnect"
-#     OAUTH_REFRESH = "oauth_refresh"
-#     WEBHOOK_REGISTER = "webhook_register"
+    # Atlassian OAuth Token Refresh
+    OAUTH_REFRESH_ATTEMPT = "oauth_refresh_attempt"
+    OAUTH_REFRESH_SUCCESS = "oauth_refresh_success"
+    OAUTH_REFRESH_FAILED = "oauth_refresh_failed"
+
+    # Jira Dynamic Webhook Register
+    WEBHOOK_REGISTER = "webhook_register_attempt"
+    WEBHOOK_REGISTER_SUCCESS = "webhook_register_success"
+    WEBHOOK_REGISTER_FAILED = "webhook_register_failed"
+
+
 
 
 class SyncEventAction(StrEnum):
