@@ -128,7 +128,7 @@ export type SyncStreamEventType =
   | 'job_failed'
   | 'heartbeat';
 
-/** target_* 이벤트의 payload (target_started, target_completed, target_failed, target_requeued) */
+/** target_* 이벤트의 payload */
 export interface SyncStreamTargetPayload {
   event_id: string;
   target_id: string;
@@ -139,15 +139,53 @@ export interface SyncStreamTargetPayload {
   attempt: number;
 }
 
-/** SSE 이벤트 공통 래퍼 */
-export interface SyncStreamEvent {
+/** snapshot 이벤트의 payload (SyncJobSnapshotResponse와 동일 구조) */
+export interface SyncStreamSnapshotPayload {
+  job_id: string;
+  connector: SyncConnector;
+  sync_type: SyncType;
+  scope_id: string;
+  status: SyncJobStatus;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  total_targets: number;
+  queued_targets: number;
+  processing_targets: number;
+  completed_targets: number;
+  failed_targets: number;
+  requeued_targets: number;
+  last_error: string | null;
+  metrics: Record<string, number>;
+}
+
+/** job 종료 이벤트의 payload */
+export interface SyncStreamJobEndPayload {
+  status: SyncJobStatus;
+  completed_at: string;
+  total_targets: number;
+  completed_targets: number;
+  failed_targets: number;
+  metrics: Record<string, number>;
+}
+
+/** SSE 이벤트 공통 필드 */
+interface SyncStreamEventBase {
   connector: SyncConnector;
   job_id: string;
   scope_id: string;
-  event_type: SyncStreamEventType;
   timestamp: string;
-  payload: Record<string, unknown>;
 }
+
+/** SSE 이벤트 — event_type으로 payload 타입이 결정되는 discriminated union */
+export type SyncStreamEvent =
+  | (SyncStreamEventBase & { event_type: 'snapshot'; payload: SyncStreamSnapshotPayload })
+  | (SyncStreamEventBase & {
+      event_type: 'target_started' | 'target_completed' | 'target_failed' | 'target_requeued';
+      payload: SyncStreamTargetPayload;
+    })
+  | (SyncStreamEventBase & { event_type: 'job_completed' | 'job_failed'; payload: SyncStreamJobEndPayload })
+  | (SyncStreamEventBase & { event_type: 'heartbeat'; payload: Record<string, unknown> });
 
 // ─── UI 상태 타입 ───
 
