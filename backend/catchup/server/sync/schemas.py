@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from catchup.db.models import SyncConnector, SyncJobStatus, SyncType
+from catchup.db.models import SyncConnector, SyncEventStatus, SyncJobStatus, SyncType
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
     SyncDispatchResult,
@@ -16,9 +16,23 @@ from catchup.sync.common.schemas import (
 )
 from catchup.sync.query_service import (
     SyncJobSnapshotResult,
+    SyncJobTargetSnapshotResult,
     SyncScopeStatusResult,
     SyncTargetsResult,
 )
+
+
+class SyncJobTargetSnapshotItem(BaseModel):
+    target_id: str
+    target_name: str
+    status: SyncEventStatus
+
+    @classmethod
+    def from_snapshot_result(
+        cls,
+        result: SyncJobTargetSnapshotResult,
+    ) -> "SyncJobTargetSnapshotItem":
+        return cls.model_validate(asdict(result))
 
 
 class SyncJobSnapshotResponse(BaseModel):
@@ -38,11 +52,8 @@ class SyncJobSnapshotResponse(BaseModel):
     completed_at: str | None = None
 
     total_targets: int = 0
-    queued_targets: int = 0
-    processing_targets: int = 0
     completed_targets: int = 0
-    failed_targets: int = 0
-    requeued_targets: int = 0
+    targets: list[SyncJobTargetSnapshotItem] = Field(default_factory=list)
 
     last_error: str | None = None
     metrics: dict[str, int] = Field(default_factory=dict)

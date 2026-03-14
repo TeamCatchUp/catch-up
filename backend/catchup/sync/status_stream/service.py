@@ -32,6 +32,16 @@ class SyncStatusStreamService:
         scope_id = str(snapshot["scope_id"])
         status = SyncJobStatus(str(snapshot["status"]))
 
+        targets: list[dict[str, str]] = []
+        for item in snapshot.get("targets") or []:
+            targets.append(
+                {
+                    "target_id": str(item.get("target_id") or ""),
+                    "target_name": str(item.get("target_name") or ""),
+                    "status": str(item.get("status") or ""),
+                }
+            )
+
         return SyncStatusStreamEvent(
             connector=connector,
             job_id=job_id,
@@ -48,11 +58,8 @@ class SyncStatusStreamService:
                 "started_at": snapshot["started_at"],
                 "completed_at": snapshot["completed_at"],
                 "total_targets": int(snapshot["total_targets"]),
-                "queued_targets": int(snapshot["queued_targets"]),
-                "processing_targets": int(snapshot["processing_targets"]),
                 "completed_targets": int(snapshot["completed_targets"]),
-                "failed_targets": int(snapshot["failed_targets"]),
-                "requeued_targets": int(snapshot["requeued_targets"]),
+                "targets": targets,
                 "metrics": dict(snapshot.get("metrics") or {}),
                 "last_error": snapshot.get("last_error"),
             },

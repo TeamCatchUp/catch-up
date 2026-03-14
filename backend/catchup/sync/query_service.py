@@ -37,6 +37,13 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True, frozen=True)
+class SyncJobTargetSnapshotResult:
+    target_id: str
+    target_name: str
+    status: SyncEventStatus
+
+
+@dataclass(slots=True, frozen=True)
 class SyncJobSnapshotResult:
     job_id: str
     connector: SyncConnector
@@ -47,11 +54,8 @@ class SyncJobSnapshotResult:
     started_at: str | None
     completed_at: str | None
     total_targets: int
-    queued_targets: int
-    processing_targets: int
     completed_targets: int
-    failed_targets: int
-    requeued_targets: int
+    targets: list[SyncJobTargetSnapshotResult] = field(default_factory=list)
     metrics: dict[str, int] = field(default_factory=dict)
     last_error: str | None = None
 
@@ -126,6 +130,28 @@ class SyncQueryService:
             "requeued_targets": sum(int(event.attempt) for event in events),
         }
 
+    def _build_job_targets(
+        self,
+        events,
+    ) -> list[SyncJobTargetSnapshotResult]:
+        targets: list[SyncJobTargetSnapshotResult] = []
+
+        for event in events:
+            metadata = (
+                event.resource_metadata if isinstance(event.resource_metadata, dict) else {}
+            )
+            target_id = str(event.resource_id)
+            target_name = str(metadata.get("target_name") or target_id).strip() or target_id
+            targets.append(
+                SyncJobTargetSnapshotResult(
+                    target_id=target_id,
+                    target_name=target_name,
+                    status=event.status,
+                )
+            )
+
+        return targets
+
     def get_job_snapshot(self, job_id: str) -> SyncJobSnapshotResult | None:
         # DB에서 job + events를 읽어 snapshot으로 변환
         with SessionLocal() as db:
@@ -135,6 +161,7 @@ class SyncQueryService:
 
             events = list_events_by_job(db, job_id=job_id, limit=100000)
             counts = self._summarize_events(events)
+            targets = self._build_job_targets(events)
 
             return SyncJobSnapshotResult(
                 job_id=job.job_id,
@@ -146,11 +173,8 @@ class SyncQueryService:
                 started_at=self._to_iso(job.started_at),
                 completed_at=self._to_iso(job.succeeded_at or job.failed_at),
                 total_targets=counts["total_targets"],
-                queued_targets=counts["queued_targets"],
-                processing_targets=counts["processing_targets"],
                 completed_targets=counts["completed_targets"],
-                failed_targets=counts["failed_targets"],
-                requeued_targets=counts["requeued_targets"],
+                targets=targets,
                 metrics={
                     "synced_messages": 0,
                     "flushed_events": 0,
