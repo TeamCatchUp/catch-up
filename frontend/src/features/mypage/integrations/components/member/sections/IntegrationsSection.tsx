@@ -21,7 +21,11 @@ const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence
 const IntegrationsSection = () => {
   const [filterType, setFilterType] = useState<SyncFilterType>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [completedConnector, setCompletedConnector] = useState<SyncConnector | null>(null);
+  const [completionInfo, setCompletionInfo] = useState<{
+    connector: SyncConnector;
+    successCount: number;
+    totalCount: number;
+  } | null>(null);
 
   const { cards, rows, total } = useMemberIntegrationViewModel({
     filterType,
@@ -31,15 +35,19 @@ const IntegrationsSection = () => {
 
   const { buttonStates, progresses, handleJobStart } = useEmbeddingJobs();
 
-  // in_progress → completed 전환 감지 → 완료 모달 표시
+  // in_progress → completed 전환 감지 → 결과 모달 표시
   const [lastSeenStates, setLastSeenStates] = useState('');
   const currentStates = CONNECTOR_ORDER.map((c) => buttonStates[c]).join(',');
 
   if (currentStates !== lastSeenStates) {
     const prev = lastSeenStates.split(',') as EmbeddingButtonState[];
     for (let i = 0; i < CONNECTOR_ORDER.length; i++) {
-      if (buttonStates[CONNECTOR_ORDER[i]] === 'completed' && prev[i] === 'in_progress') {
-        setCompletedConnector(CONNECTOR_ORDER[i]);
+      const connector = CONNECTOR_ORDER[i];
+      if (buttonStates[connector] === 'completed' && prev[i] === 'in_progress') {
+        const progress = progresses.find((p) => p.connector === connector);
+        const successCount = progress?.items.filter((item) => item.status === 'success').length ?? 0;
+        const totalCount = progress?.items.length ?? 0;
+        setCompletionInfo({ connector, successCount, totalCount });
         break;
       }
     }
@@ -47,7 +55,7 @@ const IntegrationsSection = () => {
   }
 
   const completedServiceName =
-    INTEGRATION_ACCOUNTS.find((a) => a.service === completedConnector)?.name ?? '';
+    INTEGRATION_ACCOUNTS.find((a) => a.service === completionInfo?.connector)?.name ?? '';
 
   const displayRows = useMemo(() => buildMemberDisplayRows(rows), [rows]);
 
@@ -72,16 +80,26 @@ const IntegrationsSection = () => {
       />
 
       <ConfirmDialog
-        open={!!completedConnector}
+        open={!!completionInfo}
         onOpenChange={(open) => {
-          if (!open) setCompletedConnector(null);
+          if (!open) setCompletionInfo(null);
         }}
-        title="임베딩이 완료되었어요!"
-        description={`이제 Catch Up에서 ${completedServiceName} 정보를 검색할 수 있어요.`}
+        title={
+          completionInfo && completionInfo.successCount < completionInfo.totalCount
+            ? '임베딩에 실패했어요'
+            : '임베딩이 완료되었어요!'
+        }
+        description={
+          completionInfo
+            ? completionInfo.successCount === completionInfo.totalCount
+              ? `${completedServiceName} ${completionInfo.totalCount}개 중 ${completionInfo.successCount}개 성공\n이제 Catch Up에서 ${completedServiceName} 정보를 검색할 수 있어요.`
+              : `${completedServiceName} ${completionInfo.totalCount}개 중 ${completionInfo.successCount}개 성공`
+            : ''
+        }
         confirmLabel="확인"
         variant="mono"
         hideCancel
-        onConfirm={() => setCompletedConnector(null)}
+        onConfirm={() => setCompletionInfo(null)}
       />
     </section>
   );
