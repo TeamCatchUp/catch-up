@@ -5,20 +5,23 @@ import { API } from '@/shared/api/endpoints';
 
 import type {
   ConfluenceConnectorStatus,
-  ConfluenceSyncStatusItem,
   GithubConnectorStatus,
-  GithubSyncStatusResponse,
   JiraConnectorStatus,
-  JiraSyncStatusItem,
   SlackConnectorStatus,
-  SlackSyncStatusItem,
-  SyncableEntity,
-  SyncableResponse,
   SyncFilterType,
   UserSyncStatusResponse,
   VendorType,
   VendorUsersResponse,
 } from '../types/api';
+import type {
+  AtlassianInstallationStatus,
+  GithubInstallation,
+  SlackInstallationStatus,
+  SyncConnector,
+  SyncJobSnapshotResponse,
+  SyncStatusResponse,
+  SyncTargetsResponse,
+} from '../types/sync';
 
 export const adminConnectorQueries = {
   all: () => ['admin', 'connector'] as const,
@@ -59,16 +62,6 @@ export const adminConnectorQueries = {
       },
     }),
 
-  syncable: (source: string) =>
-    queryOptions({
-      queryKey: [...adminConnectorQueries.all(), 'syncable', source] as const,
-      queryFn: async (): Promise<SyncableResponse<SyncableEntity>> => {
-        const res = await api.get<SyncableResponse<SyncableEntity>>(API.admin.connector.syncable(source));
-        return res.data;
-      },
-      enabled: !!source,
-    }),
-
   userSyncStatus: (params: { filterType: SyncFilterType; page: number; size: number }) =>
     queryOptions({
       queryKey: ['admin', 'users', 'syncStatus', params] as const,
@@ -96,51 +89,68 @@ export const adminConnectorQueries = {
       },
     }),
 
-  // ─── Sync Status (임베딩 진행 상태 폴링) ───
+  // ─── 통합 Sync API ───
 
-  githubSyncStatus: (installationId: string) =>
+  syncTargets: (connector: SyncConnector, scopeId: string) =>
     queryOptions({
-      queryKey: [...adminConnectorQueries.all(), 'syncStatus', 'github', installationId] as const,
-      queryFn: async (): Promise<GithubSyncStatusResponse> => {
-        const res = await api.get<GithubSyncStatusResponse>(API.github.syncStatus(installationId));
-        return res.data;
-      },
-      enabled: !!installationId,
-    }),
-
-  jiraSyncStatus: (cloudId: string) =>
-    queryOptions({
-      queryKey: [...adminConnectorQueries.all(), 'syncStatus', 'jira', cloudId] as const,
-      queryFn: async (): Promise<JiraSyncStatusItem[]> => {
-        const res = await api.get<JiraSyncStatusItem[]>(API.jira.syncStatus, {
-          params: { cloud_id: cloudId },
+      queryKey: ['admin', 'sync', 'targets', connector, scopeId] as const,
+      queryFn: async (): Promise<SyncTargetsResponse> => {
+        const res = await api.get<SyncTargetsResponse>(API.sync.targets, {
+          params: { connector, scope_id: scopeId },
         });
         return res.data;
       },
-      enabled: !!cloudId,
+      enabled: !!scopeId,
     }),
 
-  slackSyncStatus: (teamId: string) =>
+  syncJobSnapshot: (jobId: string) =>
     queryOptions({
-      queryKey: [...adminConnectorQueries.all(), 'syncStatus', 'slack', teamId] as const,
-      queryFn: async (): Promise<SlackSyncStatusItem[]> => {
-        const res = await api.get<SlackSyncStatusItem[]>(API.slack.syncStatus, {
-          params: { team_id: teamId },
+      queryKey: ['admin', 'sync', 'job', jobId] as const,
+      queryFn: async (): Promise<SyncJobSnapshotResponse> => {
+        const res = await api.get<SyncJobSnapshotResponse>(API.sync.job(jobId));
+        return res.data;
+      },
+      enabled: !!jobId,
+    }),
+
+  syncStatus: (connector: SyncConnector, scopeId: string) =>
+    queryOptions({
+      queryKey: ['admin', 'sync', 'status', connector, scopeId] as const,
+      queryFn: async (): Promise<SyncStatusResponse> => {
+        const res = await api.get<SyncStatusResponse>(API.sync.status, {
+          params: { connector, scope_id: scopeId },
         });
         return res.data;
       },
-      enabled: !!teamId,
+      enabled: !!scopeId,
     }),
 
-  confluenceSyncStatus: (cloudId: string) =>
+  // ─── Scope 획득용 ───
+
+  githubInstallations: () =>
     queryOptions({
-      queryKey: [...adminConnectorQueries.all(), 'syncStatus', 'confluence', cloudId] as const,
-      queryFn: async (): Promise<ConfluenceSyncStatusItem[]> => {
-        const res = await api.get<ConfluenceSyncStatusItem[]>(API.confluence.syncStatus, {
-          params: { cloud_id: cloudId },
-        });
+      queryKey: ['github', 'installations'] as const,
+      queryFn: async (): Promise<GithubInstallation[]> => {
+        const res = await api.get<GithubInstallation[]>(API.github.installations);
         return res.data;
       },
-      enabled: !!cloudId,
+    }),
+
+  slackInstallationStatus: () =>
+    queryOptions({
+      queryKey: ['slack', 'status'] as const,
+      queryFn: async (): Promise<SlackInstallationStatus> => {
+        const res = await api.get<SlackInstallationStatus>(API.slack.status);
+        return res.data;
+      },
+    }),
+
+  atlassianInstallationStatus: () =>
+    queryOptions({
+      queryKey: ['atlassian', 'status'] as const,
+      queryFn: async (): Promise<AtlassianInstallationStatus> => {
+        const res = await api.get<AtlassianInstallationStatus>(API.atlassian.status);
+        return res.data;
+      },
     }),
 };

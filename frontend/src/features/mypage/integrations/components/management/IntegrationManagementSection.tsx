@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
 
 import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
 import IconCloudOff from '@/public/icons/icon/cloud_off.svg';
@@ -8,7 +7,6 @@ import IconRotate from '@/public/icons/icon/rotate.svg';
 import IconSpace from '@/public/icons/icon/space.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import IconGithubLogo from '@/public/icons/logo/GitHub.svg';
-import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
@@ -75,28 +73,8 @@ const IntegrationManagementSection = ({
     currentPage * RESOURCES_PER_PAGE,
   );
 
-  const syncMutation = useMutation({
-    mutationKey: ['admin', 'connector', 'sync', selectedService] as const,
-    mutationFn: async () => {
-      switch (selectedService) {
-        case 'github':
-          return api.post(API.github.syncFlush);
-        case 'jira':
-          return api.post(API.jira.syncFlush);
-        case 'slack':
-          return api.post(API.slack.syncFlush);
-        case 'confluence': {
-          const { data } = await api.get<{ cloudIds: string[] }>(API.confluence.cloudIds);
-          await Promise.all(
-            data.cloudIds.map((cloudId) =>
-              api.post(API.confluence.syncIncremental, null, { params: { cloud_id: cloudId } }),
-            ),
-          );
-          return;
-        }
-      }
-    },
-  });
+  // TODO: 변경된 sync API 반영 필요 — syncFlush/syncIncremental 엔드포인트 삭제됨, 대체 API 미확정
+  const syncDisabled = true;
 
   return (
     <div className="flex gap-8">
@@ -143,12 +121,11 @@ const IntegrationManagementSection = ({
             <div className="flex shrink-0 items-center gap-3">
               <button
                 type="button"
-                onClick={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending}
+                disabled={syncDisabled}
                 className="border-edge-neutral text-body-xsmall text-content-neutral flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-fill-normal px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <IconRotate className="text-icon-normal h-6 w-6" />
-                {syncMutation.isPending ? '동기화 중...' : '동기화'}
+                동기화
               </button>
             </div>
           </div>
