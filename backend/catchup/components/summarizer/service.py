@@ -12,10 +12,13 @@ from dataclasses import dataclass
 from langchain_core.messages import HumanMessage, SystemMessage
 from numpy import isin
 
+from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.components.llm.constants import LlmProvider, ModelCapacity
 from catchup.components.llm.factory import get_llm_service
 from catchup.components.summarizer.prompts import get_summary_prompt
 from catchup.configs.config import settings
+from catchup.sync.audit import SyncAuditContext, emit_sync_ingestion_audit
+from catchup.events.enums import SyncIngestionEventAction
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +99,8 @@ class SummarizerService:
         self,
         requests: list[SummarizeRequest],
         max_concurrent: int = 25,
+        audit_context: SyncAuditContext | None = None,
+        context: str | None = None,
     ) -> list[str]:
         """
         여러 문서를 병렬로 요약합니다.
@@ -107,6 +112,14 @@ class SummarizerService:
         Returns:
             요약된 텍스트 리스트 (순서 유지)
         """
+        if audit_context is not None:
+            emit_sync_ingestion_audit(
+                action=SyncIngestionEventAction.SUMMARIZE,
+                status=AuditEventStatus.ATTEMPT,
+                audit_context=audit_context,
+                context=context,
+            )
+
         semaphore = asyncio.Semaphore(max_concurrent)
 
         async def _summarize_with_semaphore(req: SummarizeRequest) -> str:
@@ -114,4 +127,32 @@ class SummarizerService:
                 return await self.summarize(req.content, req.source_type)
 
         tasks = [_summarize_with_semaphore(req) for req in requests]
-        return await asyncio.gather(*tasks)
+        try:
+            summarized = await asyncio.gather(*tasks)
+        except Exception as exc:
+            if audit_context is not None:
+                emit_sync_ingestion_audit(
+                    action=SyncIngestionEventAction.SUMMARIZE,
+                    status=AuditEventStatus.FAIL,
+                    audit_context=audit_context,
+                    context=(
+                        f"{context},error={_truncate_error(exc)}"
+                        if context
+                        else f"error={_truncate_error(exc)}"
+                    ),
+                    level=AuditLevel.ERROR,
+                )
+            raise
+
+        if audit_context is not None:
+            emit_sync_ingestion_audit(
+                action=SyncIngestionEventAction.SUMMARIZE,
+                status=AuditEventStatus.SUCCESS,
+                audit_context=audit_context,
+                context=context,
+            )
+        return summarized
+
+
+def _truncate_error(error: Exception) -> str:
+    return str(error).strip()[:200] or error.__class__.__name__
