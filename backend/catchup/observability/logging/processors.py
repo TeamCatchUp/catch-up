@@ -80,8 +80,6 @@ def ensure_required_fields(
         event_dict["metadata"] = {}
 
     event_dict.setdefault("event_type", EventType.SYSTEM)
-    if "event_action" not in event_dict:
-        event_dict["event_action"] = str(event_dict.get("event", "log"))
 
     return event_dict
 
