@@ -18,6 +18,7 @@ from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizeRequest, SummarizerService, get_summarizer_service
 from catchup.configs.config import settings
 from catchup.db.slack import domain_repository
+from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
 
 logger = logging.getLogger(__name__)
@@ -146,6 +147,7 @@ class SlackIngestionService:
         sync_from_ts: str | None,
         db: Session | None = None,
         skip_delete: bool = False,
+        audit_context: SyncAuditContext | None = None,
     ) -> TargetSyncResult:
         self._ensure_initialized()
         if db is not None:
@@ -209,7 +211,11 @@ class SlackIngestionService:
             while (batch := await fetch_q.get()) is not None:
                 batch_docs, batch_ids, batch_errors, batch_latest_synced_ts = batch
                 if self.summarizer:
-                    batch_docs = await self._summarize_documents(batch_docs)
+                    batch_docs = await self._summarize_documents(
+                        batch_docs,
+                        channel_name=channel_name,
+                        audit_context=audit_context,
+                    )
                 await embed_q.put(
                     (batch_docs, batch_ids, batch_errors, batch_latest_synced_ts)
                 )
@@ -218,7 +224,14 @@ class SlackIngestionService:
         async def _embed_stage() -> None:
             while (batch := await embed_q.get()) is not None:
                 batch_docs, batch_ids, batch_errors, batch_latest_synced_ts = batch
-                embeddings = await self.repository.generate_embeddings(batch_docs)
+                embeddings = await self.repository.generate_embeddings(
+                    batch_docs,
+                    audit_context=audit_context,
+                    context=(
+                        f"entity_type=message,channel={channel_name},"
+                        f"doc_count={len(batch_docs)}"
+                    ),
+                )
                 await store_q.put(
                     (
                         batch_docs,
@@ -250,6 +263,11 @@ class SlackIngestionService:
                     batch_docs,
                     embeddings,
                     batch_ids,
+                    audit_context=audit_context,
+                    context=(
+                        f"entity_type=message,channel={channel_name},"
+                        f"doc_count={len(batch_docs)}"
+                    ),
                 )
 
                 synced_count += len(batch_docs)
@@ -305,6 +323,7 @@ class SlackIngestionService:
         record_id: str,
         event_kind: str,
         sync_from: str | None,
+        audit_context: SyncAuditContext | None = None,
     ) -> TargetSyncResult:
         normalized_event_kind = event_kind.strip().lower()
         if normalized_event_kind == "deleted":
@@ -320,6 +339,7 @@ class SlackIngestionService:
             sync_from_ts=sync_from,
             db=db,
             skip_delete=False,
+            audit_context=audit_context,
         )
 
     async def _fetch_channel_pages(
@@ -440,6 +460,9 @@ class SlackIngestionService:
     async def _summarize_documents(
         self,
         documents: list[Document],
+        *,
+        channel_name: str,
+        audit_context: SyncAuditContext | None = None,
     ) -> list[Document]:
         if not self.summarizer or not documents:
             return documents
@@ -451,7 +474,14 @@ class SlackIngestionService:
             source_type = f"slack_{entity_type}"
             requests.append(SummarizeRequest(content=content, source_type=source_type))
 
-        summarized = await self.summarizer.summarize_batch(requests)
+        summarized = await self.summarizer.summarize_batch(
+            requests,
+            audit_context=audit_context,
+            context=(
+                f"entity_type=message,channel={channel_name},"
+                f"doc_count={len(documents)}"
+            ),
+        )
 
         for doc, summary in zip(documents, summarized):
             doc.page_content = summary

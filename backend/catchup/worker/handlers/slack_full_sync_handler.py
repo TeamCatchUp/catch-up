@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from catchup.connectors.slack.factory import create_slack_ingestion_service
+from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
@@ -44,4 +45,11 @@ class SlackFullSyncHandler(BaseFullSyncHandler):
                 sync_from_ts=context.sync_from_ts,
                 db=db,
                 skip_delete=True,
+                audit_context=SyncAuditContext(
+                    connector=context.connector,
+                    scope_id=context.scope_id,
+                    target_id=context.target_id,
+                    job_id=context.job_id,
+                    task_id=context.event_id,
+                ),
             )

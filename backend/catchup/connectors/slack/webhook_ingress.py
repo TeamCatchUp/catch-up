@@ -7,6 +7,9 @@ from sqlalchemy.orm import Session
 
 from catchup.connectors.slack import webhook_service
 from catchup.connectors.slack.schemas import SlackEventWrapper
+from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.events.enums import SyncTriggerEventAction
+from catchup.sync.audit import SyncAuditContext, emit_sync_trigger_audit
 from catchup.sync.incremental import ingest_record_changes, normalize_slack_event
 from catchup.sync.incremental.full_sync_guard import filter_record_changes_by_full_sync
 
@@ -181,7 +184,46 @@ def handle_webhook(
                 ],
             )
 
-        record_keys = ingest_record_changes(db, guard_result.allowed_changes)
+        record_keys: list[str] = []
+        if guard_result.allowed_changes:
+            first_change = guard_result.allowed_changes[0]
+            audit_context = SyncAuditContext(
+                connector=first_change.connector,
+                scope_id=first_change.scope_id,
+                target_id=first_change.parent_id,
+            )
+            emit_sync_trigger_audit(
+                action=SyncTriggerEventAction.WEBHOOK_EVENT_RECEIVED,
+                status=AuditEventStatus.ATTEMPT,
+                audit_context=audit_context,
+                context=(
+                    f"stage=record_change_ingest,event_name={event_type},"
+                    f"event_kind={first_change.event_kind},change_count={len(guard_result.allowed_changes)}"
+                ),
+            )
+            try:
+                record_keys = ingest_record_changes(db, guard_result.allowed_changes)
+            except Exception as exc:
+                emit_sync_trigger_audit(
+                    action=SyncTriggerEventAction.WEBHOOK_EVENT_RECEIVED,
+                    status=AuditEventStatus.FAIL,
+                    audit_context=audit_context,
+                    context=(
+                        f"stage=record_change_ingest_failed,event_name={event_type},"
+                        f"event_kind={first_change.event_kind},error={str(exc).strip()[:200]}"
+                    ),
+                    level=AuditLevel.ERROR,
+                )
+                raise
+            emit_sync_trigger_audit(
+                action=SyncTriggerEventAction.WEBHOOK_EVENT_RECEIVED,
+                status=AuditEventStatus.SUCCESS,
+                audit_context=audit_context,
+                context=(
+                    f"stage=record_change_ingested,event_name={event_type},"
+                    f"record_key_count={len(record_keys)},blocked_count={blocked_count}"
+                ),
+            )
         response = {"status": "accepted", "event_type": event_type, "record_keys": record_keys}
         if blocked_count > 0:
             response["blocked_count"] = blocked_count
