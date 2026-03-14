@@ -87,10 +87,15 @@ class IntegrationEventAction(StrEnum):
 
 
 
-
-class SyncEventAction(StrEnum):
-    FULL_SYNC_REQUESTED = "full_sync_reqeusted"
-    WEBHOOK_EVENT_ACCEPTED = "webhook_event_accepted"
+# DB 저장 성공 여부와 실행 Queue인 Redis Stream 발행 성공 여부로 로그에 기록
+class SyncTriggerEventAction(StrEnum):
+    # Full Sync Trigger
+    FULL_SYNC_REQUESTED = "full_sync_requested"
+    # Incremental Sync Trigger
+    WEBHOOK_EVENT_RECEIVED = "webhook_event_received"
     CONFLUENCE_POLLING_STARTED = "confluence_polling_started"
-    SYNC_SUCCESS = "sync_success"
-    SYNC_FAILED = "sync_failed"
+
+class SyncIngestionEventAction(StrEnum):
+    SUMMARIZE = "summarize"
+    EMBED = "embed"
+    DOCUMENT_PERSISTED = "document_persisted"
