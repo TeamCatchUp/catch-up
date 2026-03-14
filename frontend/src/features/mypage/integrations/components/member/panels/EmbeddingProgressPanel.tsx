@@ -138,15 +138,15 @@ const EmbeddingProgressPanel = ({ progresses }: EmbeddingProgressPanelProps) => 
       <IconTriangleUp className="h-3.75 w-7 shrink-0 text-fill-interaction-hover" />
       <div className="flex w-full flex-col gap-4 rounded-2xl bg-fill-interaction-hover p-5">
         {/* 헤더 */}
-        <div className="flex items-center justify-between">
+        <button onClick={() => setIsOpen(false)} className="flex w-full cursor-pointer items-center justify-between">
           <div className="flex items-center gap-1.5 px-1.5">
             <h3 className="text-heading-small text-content-normal">임베딩 진행 현황</h3>
             <IconInfo className="size-4.5 text-content-assistive" />
           </div>
-          <button onClick={() => setIsOpen(false)} className="cursor-pointer p-1">
+          <div className="p-1">
             <IconArrowDown className="size-6 rotate-180 text-content-assistive" />
-          </button>
-        </div>
+          </div>
+        </button>
 
       {/* 본문: 좌측 칩 목록 + 우측 아이템 목록 */}
       <div className="flex gap-14">
