@@ -18,7 +18,7 @@ def route_after_grade(state: AgentState):
     status = state.get("grade_status")
     retry_count = state.get("retry_count", 0)
     
-    if status == "bad" and retry_count < 1:
+    if status == "bad" and retry_count < 2:
         return "rewrite"
     
     # if retry_count >= 2:
