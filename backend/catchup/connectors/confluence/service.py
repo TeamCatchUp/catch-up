@@ -19,6 +19,7 @@ from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.db.confluence import domain_repository
 from catchup.configs.config import settings
+from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,7 @@ class ConfluenceIngestionService:
             db: Session,
             space_keys: list[str] | None = None,
             sync_from_dt: datetime | None = None,
+            audit_context: SyncAuditContext | None = None,
     ) -> TargetSyncResult:
         sync_from = sync_from_dt or (
             datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
@@ -127,6 +129,7 @@ class ConfluenceIngestionService:
                 page_result = await self._sync_space_pages(
                     db, space_id = space_id, space_key = space_key, since = sync_from,
                     user_name_map=user_name_map, space_name=space_name_map.get(space_key),
+                    audit_context=audit_context,
                 )
                 results["pages"]["synced"] += page_result["synced"]
                 results["pages"]["errors"] += page_result["errors"]
@@ -134,6 +137,7 @@ class ConfluenceIngestionService:
                 blog_result = await self._sync_space_blogposts(
                     db, space_id = space_id, space_key = space_key, since = sync_from,
                     user_name_map=user_name_map, space_name=space_name_map.get(space_key),
+                    audit_context=audit_context,
                 )
                 results["blogposts"]["synced"] += blog_result["synced"]
                 results["blogposts"]["errors"] += blog_result["errors"]
@@ -165,6 +169,7 @@ class ConfluenceIngestionService:
             since: datetime | None = None,
             user_name_map: dict[str, str | None] | None = None,
             space_name: str | None = None,
+            audit_context: SyncAuditContext | None = None,
     ) -> dict[str, int]:
 
         results = {"synced": 0, "errors": 0}
@@ -193,7 +198,24 @@ class ConfluenceIngestionService:
                         if documents:
                             doc_ids = [doc.id for doc in documents]
                             await self.repository.delete_by_id_prefix(f"confluence:page:{page.id}:chunk:")
-                            await self.repository.add_documents(documents, doc_ids)
+                            embeddings = await self.repository.generate_embeddings(
+                                documents,
+                                audit_context=audit_context,
+                                context=(
+                                    f"entity_type=page,space_key={space_key},"
+                                    f"doc_count={len(documents)}"
+                                ),
+                            )
+                            await self.repository.store_with_embeddings(
+                                documents,
+                                embeddings,
+                                doc_ids,
+                                audit_context=audit_context,
+                                context=(
+                                    f"entity_type=page,space_key={space_key},"
+                                    f"doc_count={len(documents)}"
+                                ),
+                            )
 
                         results["synced"] += 1
 
@@ -227,6 +249,7 @@ class ConfluenceIngestionService:
             since: datetime | None = None,
             user_name_map: dict[str, str | None] | None = None,
             space_name: str | None = None,
+            audit_context: SyncAuditContext | None = None,
     ) -> dict[str, int]:
         
         results = {"synced": 0, "errors": 0}
@@ -255,7 +278,24 @@ class ConfluenceIngestionService:
                         if documents:
                             doc_ids = [doc.id for doc in documents]
                             await self.repository.delete_by_id_prefix(f"confluence:blogpost:{blogpost.id}:chunk:")
-                            await self.repository.add_documents(documents, doc_ids)
+                            embeddings = await self.repository.generate_embeddings(
+                                documents,
+                                audit_context=audit_context,
+                                context=(
+                                    f"entity_type=blogpost,space_key={space_key},"
+                                    f"doc_count={len(documents)}"
+                                ),
+                            )
+                            await self.repository.store_with_embeddings(
+                                documents,
+                                embeddings,
+                                doc_ids,
+                                audit_context=audit_context,
+                                context=(
+                                    f"entity_type=blogpost,space_key={space_key},"
+                                    f"doc_count={len(documents)}"
+                                ),
+                            )
                         
                         results["synced"] += 1
 
@@ -342,6 +382,7 @@ class ConfluenceIngestionService:
         record_id: str,
         event_kind: str,
         since: datetime | None,
+        audit_context: SyncAuditContext | None = None,
     ) -> dict[str, int | bool]:
         normalized_record_type = record_type.strip().lower()
         normalized_event_kind = event_kind.strip().lower()
@@ -370,6 +411,7 @@ class ConfluenceIngestionService:
                 since=since,
                 user_name_map=user_name_map,
                 space_name=space_name_map.get(space_key),
+                audit_context=audit_context,
             )
         elif normalized_record_type == "blogpost":
             result = await self._sync_space_blogposts(
@@ -379,6 +421,7 @@ class ConfluenceIngestionService:
                 since=since,
                 user_name_map=user_name_map,
                 space_name=space_name_map.get(space_key),
+                audit_context=audit_context,
             )
         else:
             raise ValueError(f"unsupported confluence record_type: {record_type}")
