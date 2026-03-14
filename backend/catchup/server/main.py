@@ -8,14 +8,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 import structlog
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel, SystemEventAction
+from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import SystemAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal, engine
 from catchup.db.global_state import has_admin_ever_onboarded, has_csv_file_ever_been_uploaded
 from catchup.db.models import Base
-from catchup.events.enums import EventTopic, EventType
+from catchup.events.enums import EventTopic, EventType, SystemEventAction
 from catchup.observability.logging import configure_logging
 from catchup.observability.logging.s3_uploader import audit_log_uploader_task, graceful_shutdown
 from catchup.server.admin.api import router as admin_router
@@ -44,14 +44,14 @@ from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_
 from catchup.events.bus import bus
 from catchup.audit.handlers import audit_event_handler
 
-
-debug_mode = settings.ENV == "development" or settings.DEBUGGER_ENABLED
-
+# 디버그 모드 설정
+debug_mode = settings.ENV == "development" and settings.DEBUGGER_ENABLED
 if debug_mode:
     import debugpy
     debugpy.listen(("0.0.0.0", settings.DEBUGGER_PORT))
     # debugpy.wait_for_client()
 
+# 로깅 설정
 configure_logging()
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 import structlog
 
-from catchup.audit.enums import AuditLevel
+from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.auth.schemas import BaseOAuthUserInfoResponse
 from catchup.components.auth.constants import OAuthIdentityProviderType
 from catchup.components.auth.provider import OAuthIdentityProvider
@@ -102,7 +102,8 @@ class OAuthService:
 
                 emit_audit_event(
                     event_type=EventType.AUTH,
-                    event_action=AuthEventAction.LOGIN_SUCCESS,
+                    event_action=AuthEventAction.LOGIN,
+                    event_status=AuditEventStatus.SUCCESS,
                     level=AuditLevel.INFO,
                     immediate=True,
                     actor=snapshot,
@@ -121,7 +122,8 @@ class OAuthService:
         except Exception as e:
             emit_audit_event(
                 event_type=EventType.AUTH,
-                event_action=AuthEventAction.LOGIN_FAILURE,
+                event_action=AuthEventAction.LOGIN,
+                event_status=AuditEventStatus.FAIL,
                 metadata={
                     "reason": "idp_token_exchange_failed",
                     "error": str(e)

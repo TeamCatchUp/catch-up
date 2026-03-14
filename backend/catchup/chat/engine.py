@@ -10,7 +10,7 @@ from langgraph.pregel.types import StateSnapshot
 from sqlalchemy.orm import Session
 import structlog
 
-from catchup.audit.enums import AuditLevel
+from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import ChatAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.chat.chat_room import generate_chat_room_title
@@ -114,7 +114,8 @@ class ChatService:
         except asyncio.CancelledError:
             emit_audit_event(
                 event_type=EventType.CHAT,
-                event_action=ChatEventAction.RESPONSE_FAILED,
+                event_action=ChatEventAction.ASSISTANT_RESPONSE_GENERATED,
+                event_status=AuditEventStatus.FAIL,
                 level=AuditLevel.WARNING,
                 metadata=ChatAuditMetadata(session_id=session_id),
                 immediate=True
@@ -146,7 +147,8 @@ class ChatService:
                 
             emit_audit_event(
                 event_type=EventType.CHAT,
-                event_action=ChatEventAction.RESPONSE_FAILED,
+                event_action=ChatEventAction.ASSISTANT_RESPONSE_GENERATED,
+                event_status=AuditEventStatus.FAIL,
                 level=AuditLevel.ERROR,
                 metadata=ChatAuditMetadata(session_id=session_id),
                 immediate=True
@@ -155,7 +157,8 @@ class ChatService:
         else:
             emit_audit_event(
                 event_type=EventType.CHAT,
-                event_action=ChatEventAction.RESPONSE_GENERATED,
+                event_action=ChatEventAction.ASSISTANT_RESPONSE_GENERATED,
+                event_status=AuditEventStatus.SUCCESS,
                 level=AuditLevel.INFO,
                 metadata=ChatAuditMetadata(session_id=session_id),
                 immediate=True
@@ -262,6 +265,7 @@ class ChatService:
             emit_audit_event(
                 event_type=EventType.CHAT,
                 event_action=ChatEventAction.SOURCES_PROVIDED,
+                event_status=AuditEventStatus.SUCCESS,
                 level=AuditLevel.INFO,
                 metadata=ChatAuditMetadata(
                     session_id=session_id,
