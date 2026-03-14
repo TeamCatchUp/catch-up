@@ -42,8 +42,6 @@ from catchup.sync.status_stream.schemas import (
     SyncStatusStreamEvent,
     utc_now_iso,
 )
-from catchup.sync.sync_audit import emit_sync_dispatch_accepted
-
 logger = logging.getLogger(__name__)
 
 @dataclass(slots=True, frozen=True)
@@ -163,14 +161,6 @@ class SyncDispatchOrchestrator:
             total_targets=len(event_seeds),
             queued_targets=publish_result.published_count,
             sync_from_ts=sync_from_ts,
-        )
-
-        # 로깅
-        self._emit_dispatch_audit(
-            context=context,
-            trigger=trigger,
-            total_targets=len(event_seeds),
-            queued_targets=publish_result.published_count,
         )
 
         # 응답 반환
@@ -559,26 +549,6 @@ class SyncDispatchOrchestrator:
                 exc,
                 exc_info=True,
             )
-
-    def _emit_dispatch_audit(
-        self,
-        *,
-        context: DispatchContext,
-        trigger: SyncTrigger,
-        total_targets: int,
-        queued_targets: int,
-    ) -> None:
-        emit_sync_dispatch_accepted(
-            connector=context.connector,
-            sync_type=context.sync_type,
-            trigger=trigger.value,
-            run_id=context.job_id,
-            scope_id=context.scope_id,
-            counts={
-                "total_targets": total_targets,
-                "queued_targets": queued_targets,
-            },
-        )
 
     def _build_response(
         self,

@@ -39,11 +39,13 @@ const QueryBox = ({
   const isNoHistory = variant === 'no-history';
   const showPanel = isNoHistory ? noHistoryExpanded : input.isFocused;
 
+  const maxH = input.isFromTemplate ? 'max-h-160' : 'max-h-135';
+
   const containerClassName =
     isNoHistory && noHistoryExpanded
-      ? 'gap-3 min-h-92.5 max-h-135 overflow-hidden rounded-[30px] px-4 py-3'
+      ? `gap-3 min-h-92.5 ${maxH} overflow-hidden rounded-[30px] px-4 py-3`
       : !isNoHistory && input.isFocused
-        ? 'gap-1.5 min-h-92.5 max-h-135 overflow-hidden rounded-[30px] px-4 py-3'
+        ? `gap-1.5 min-h-92.5 ${maxH} overflow-hidden rounded-[30px] px-4 py-3`
         : `gap-1.5 h-auto px-4 py-3 ${input.isMultiLine ? 'rounded-[30px]' : 'rounded-rounded'}`;
 
   const handleExampleClick = (query: string) => {

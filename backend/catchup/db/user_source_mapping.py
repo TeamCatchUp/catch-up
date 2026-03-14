@@ -45,10 +45,10 @@ def update_tool_user_email(
     source_type: SourceType,
     external_user_id: str,
     external_email: str
-):
+) -> bool:
     target = SOURCE_MAP.get(source_type)
     if not target:
-        return
+        return False
     
     model, id_col, email_col, _, _ = target
     
@@ -58,7 +58,9 @@ def update_tool_user_email(
         .values({email_col.key: external_email})
     )
     
-    db.execute(stmt)
+    result = db.execute(stmt)
+    
+    return result.rowcount > 0
 
 
 def find_premapped_user_by_email(

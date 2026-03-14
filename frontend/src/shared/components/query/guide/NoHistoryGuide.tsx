@@ -63,7 +63,7 @@ export const NoHistoryGuide = ({ onExampleClick }: NoHistoryGuideProps) => {
       <div className="grid grid-cols-3 gap-4">
         {NO_HISTORY_STEPS.map((step) => (
           <div key={step.title} className="bg-fill-primary-assistive flex flex-col gap-2 rounded-xl p-2.5">
-            <span className="text-body-xsmall bg-information-5 w-fit rounded-full px-1.5 py-0.5 text-content-alternative">
+            <span className="text-body-xsmall bg-accent-information-lighten text-content-alternative w-fit rounded-full px-1.5 py-0.5">
               {step.title}
             </span>
             <p className="text-body-xsmall text-content-strong leading-5">
@@ -71,13 +71,13 @@ export const NoHistoryGuide = ({ onExampleClick }: NoHistoryGuideProps) => {
               <span className="text-red-orange-50">{step.highlight}</span>
               {step.suffix}
             </p>
-            <p className="text-body-xsmall leading-5 text-content-alternative">{step.body}</p>
+            <p className="text-body-xsmall text-content-alternative leading-5">{step.body}</p>
           </div>
         ))}
       </div>
 
       <div className="flex flex-col gap-2.5">
-        <span className="text-body-xsmall px-1 text-content-alternative">질문 예시</span>
+        <span className="text-body-xsmall text-content-alternative px-1">질문 예시</span>
         <div className="flex flex-col gap-1">
           {NO_HISTORY_EXAMPLES.slice(0, 3).map((example) => (
             <button
@@ -86,7 +86,7 @@ export const NoHistoryGuide = ({ onExampleClick }: NoHistoryGuideProps) => {
               className="group hover:bg-fill-interaction-hover text-body-small text-content-normal flex h-10 cursor-pointer items-center rounded-xl px-2 text-left transition-colors"
             >
               <span className="flex-1">{example}</span>
-              <IconArrowForward className="ml-2 h-5 w-5 text-icon-neutral opacity-0 transition-opacity group-hover:opacity-100" />
+              <IconArrowForward className="text-icon-neutral ml-2 h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100" />
             </button>
           ))}
         </div>

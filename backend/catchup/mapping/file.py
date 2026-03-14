@@ -60,7 +60,8 @@ def process_mapping_file_sync(
     vendor_key = vendor_type.lower()
     target_sources = VENDOR_SOURCE_MAP[vendor_key]
     
-    stats = {"updated": 0, "skipped": 0, "mapped": 0}
+    # 협업 툴 User의 email을 업로드한csv 파일 기준으로 업데이트한 결과
+    stats = {"updated": 0, "skipped": 0}
     try:
         for _, row in df.iterrows():
             external_user_id = str(row.get(required_cols.id_col, '')).strip()
@@ -73,17 +74,24 @@ def process_mapping_file_sync(
             for source in target_sources:
                 # 협업 툴 유저의 email을 어드민이 업로드한 csv에 기입된 것으로 갱신
                 # TODO: row 수만큼 쿼리를 수행함에 따라 발생하는 성능 이슈 개선
-                update_tool_user_email(
+                success = update_tool_user_email(
                     db=db, 
                     source_type=source,
                     external_user_id=external_user_id,
                     external_email=external_email
                 )
+                if success:
+                    stats["updated"] += 1
+                else:
+                    stats["skipped"] += 1
+                    logger.warning("update_tool_user_email_failed: user not found in tool users table. - Skip")
 
         db.commit()
         
         final_stats = {
+            "csv_rows_total": len(df),
             "csv_rows_skipped": stats["skipped"],
+            "email_updated_count": stats["updated"],
             "total_success": 0,
             "total_failed": 0,
             "new_mappings": 0,

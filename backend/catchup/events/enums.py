@@ -57,26 +57,44 @@ class AwsS3EventAction(StrEnum):
     
 
 
-# class SystemEventAction(StrEnum):
-#     STARTUP_DB_INIT = "startup_db_init"
-#     STARTUP_DB_SCHEMA_DRIFT = "startup_db_schema_drift"
-#     STARTUP_SCHEDULER_INIT = "startup_scheduler_init"
-#     STARTUP_CHECKPOINTER_INIT = "startup_checkpointer_init"
-#     STARTUP_REDIS_INIT = "startup_redis_init"
-#     SHUTDOWN_SCHEDULER = "shutdown_scheduler"
-#     SHUTDOWN_CHECKPOINTER = "shutdown_checkpointer"
+class SystemEventAction(StrEnum):
+    STARTUP_DB_INIT = "startup_db_init"
+    STARTUP_DB_SCHEMA_DRIFT = "startup_db_schema_drift"
+    STARTUP_SCHEDULER_INIT = "startup_scheduler_init"
+    STARTUP_CHECKPOINTER_INIT = "startup_checkpointer_init"
+    STARTUP_REDIS_INIT = "startup_redis_init"
+    SHUTDOWN_SCHEDULER = "shutdown_scheduler"
+    SHUTDOWN_CHECKPOINTER = "shutdown_checkpointer"
+
+# 1. Slack / Atalssian : 앱 설치 Callback (metadata에 성공 / 실패 / 실패 시 사유 기록)
+# 2. Github : Installation Event를 Webhook으로 수신 (metadata에 성공 / 실패 / 실패 시 사유 기록)
+# 3. DB 저장 시점에 저장 기록
+class IntegrationEventAction(StrEnum):
+    # Callback 수신
+    OAUTH_CALLBACK = "oauth_callback"
+    
+    # Github Installation Event 수신
+    INSTALLATION_EVENT_RECIEVED = "installation_event_recieved"
+    
+    # OAuth Token 저장 완료
+    OAUTH_PERSISTED = "oauth_persisted"
+
+    # Atlassian OAuth Token Refresh
+    OAUTH_REFRESH_ATTEMPT = "oauth_refresh_attempt"
+    OAUTH_REFRESH_SUCCESS = "oauth_refresh_success"
+    OAUTH_REFRESH_FAILED = "oauth_refresh_failed"
+
+    # Jira Dynamic Webhook Register
+    WEBHOOK_REGISTER = "webhook_register_attempt"
+    WEBHOOK_REGISTER_SUCCESS = "webhook_register_success"
+    WEBHOOK_REGISTER_FAILED = "webhook_register_failed"
 
 
-# class IntegrationEventAction(StrEnum):
-#     OAUTH_CONNECT = "oauth_connect"
-#     OAUTH_DISCONNECT = "oauth_disconnect"
-#     OAUTH_REFRESH = "oauth_refresh"
-#     WEBHOOK_REGISTER = "webhook_register"
 
 
-# class SyncEventAction(StrEnum):
-#     FULL_SYNC = "full_sync"
-#     INCREMENTAL_SYNC = "incremental_sync"
-#     SYNC_FAILURE = "sync_failure"
-#     SCHEMA_DRIFT_DETECTED = "schema_drift_detected"
-#     EMBEDDING_BATCH = "embedding_batch"
+class SyncEventAction(StrEnum):
+    FULL_SYNC_REQUESTED = "full_sync_reqeusted"
+    WEBHOOK_EVENT_ACCEPTED = "webhook_event_accepted"
+    CONFLUENCE_POLLING_STARTED = "confluence_polling_started"
+    SYNC_SUCCESS = "sync_success"
+    SYNC_FAILED = "sync_failed"

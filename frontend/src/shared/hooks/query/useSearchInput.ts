@@ -50,7 +50,9 @@ export const useSearchInput = ({
   const [templateFieldErrors, setTemplateFieldErrors] = useState<Record<string, boolean>>({});
 
   const hasText = isFromTemplate
-    ? Object.values(templateFieldValues).some((v) => v.trim().length > 0)
+    ? selectedTipIndex !== null && tipData
+      ? tipData[selectedTipIndex].fields.every((f) => !!templateFieldValues[f.key]?.trim())
+      : false
     : value.trim().length > 0;
 
   const setTemplateFieldValue = useCallback((key: string, val: string) => {
