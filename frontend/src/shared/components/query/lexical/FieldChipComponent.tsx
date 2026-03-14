@@ -184,7 +184,7 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
           'text-body-medium text-content-primary cursor-text align-baseline outline-none',
           useInlineMode ? 'inline' : 'inline-block',
         )}
-        style={{ minWidth: !useInlineMode && value && minWidth > 0 ? `${minWidth}px` : undefined }}
+        style={{ minWidth: !useInlineMode ? (value && minWidth > 0 ? minWidth : 1) : undefined }}
       />
       {!value && <span className="text-content-assistive pointer-events-none select-none">{placeholder}</span>}
       {value && (
