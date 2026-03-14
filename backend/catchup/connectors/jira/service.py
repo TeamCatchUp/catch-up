@@ -21,6 +21,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
 from sqlalchemy.orm import Session
 
@@ -35,6 +36,7 @@ from catchup.connectors.jira.transformers import JiraTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
+from catchup.db.engine import SessionLocal
 from catchup.db.jira import domain_repository as jira_entities
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
@@ -127,11 +129,8 @@ class JiraIngestionService:
 
     async def sync_metadata(
         self,
-        db: Session,
         project_keys: list[str] | None = None,
         *,
-        auto_commit: bool = True,
-        rollback_on_error: bool = True,
         raise_on_error: bool = False,
     ) -> dict[str, dict[str, int]]:
         """
@@ -148,20 +147,11 @@ class JiraIngestionService:
             "sprints": {"synced": 0, "errors": 0},
         }
 
-        user_results = await self._sync_all_users(
-            db,
-            auto_commit=auto_commit,
-            rollback_on_error=rollback_on_error,
-        )
+        user_results = await self._sync_all_users()
         if raise_on_error and user_results["errors"] > 0:
             raise RuntimeError(f"jira user metadata refresh failed: cloud_id={self.cloud_id}")
 
-        project_results = await self._sync_all_projects(
-            db,
-            project_keys,
-            auto_commit=auto_commit,
-            rollback_on_error=rollback_on_error,
-        )
+        project_results = await self._sync_all_projects(project_keys)
         if raise_on_error and project_results["errors"] > 0:
             raise RuntimeError(f"jira project metadata refresh failed: cloud_id={self.cloud_id}")
 
@@ -169,11 +159,7 @@ class JiraIngestionService:
         results["projects"] = project_results
 
         if await self.client.is_agile_available():
-            sprint_results = await self._sync_all_sprints(
-                db,
-                auto_commit=auto_commit,
-                rollback_on_error=rollback_on_error,
-            )
+            sprint_results = await self._sync_all_sprints()
             results["sprints"] = sprint_results
             if raise_on_error and sprint_results["errors"] > 0:
                 raise RuntimeError(
@@ -219,7 +205,7 @@ class JiraIngestionService:
 
         try:
             if await self.client.is_agile_available():
-                sprint_results = await self._sync_all_sprints(db)
+                sprint_results = await self._sync_all_sprints()
                 results["sprints"] = sprint_results
             else:
                 logger.info("[JIRA][FULL SYNC] Sprint Sync Skipped : Agile API Not Available")
@@ -499,11 +485,7 @@ class JiraIngestionService:
 
     async def _sync_all_projects(
         self,
-        db: Session,
         project_keys: list[str] | None = None,
-        *,
-        auto_commit: bool = True,
-        rollback_on_error: bool = True,
     ) -> dict[str, int]:
         """
         프로젝트 동기화 (RDBMS 저장)
@@ -519,6 +501,20 @@ class JiraIngestionService:
 
         results = {"synced": 0, "errors": 0}
         projects_data: list[dict] = []
+
+        def _sync_projects_snapshot_sync() -> dict[str, int]:
+            with SessionLocal() as db:
+                try:
+                    result = jira_entities.sync_projects_snapshot(
+                        db,
+                        self.cloud_id,
+                        projects_data,
+                    )
+                    db.commit()
+                    return result
+                except Exception:
+                    db.rollback()
+                    raise
 
         try:
             # 프로젝트 목록 결정
@@ -561,11 +557,8 @@ class JiraIngestionService:
 
                 await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
 
-            sync_result = jira_entities.sync_projects_snapshot(
-                db,
-                self.cloud_id,
-                projects_data,
-                auto_commit=auto_commit,
+            sync_result = await run_in_threadpool(
+                _sync_projects_snapshot_sync,
             )
             logger.info(
                 "[JIRA][METADATA] Project snapshot synced: cloud_id=%s, upserted=%s, deleted=%s",
@@ -578,9 +571,6 @@ class JiraIngestionService:
             logger.error(f"Failed to get project list (API error): {e}")
             results["errors"] += 1
         except Exception as e:
-            # DB 에러 등 발생 시 트랜잭션 롤백
-            if rollback_on_error:
-                db.rollback()
             logger.error(f"Failed to sync projects (DB error): {e}")
             results["errors"] += 1
 
@@ -589,16 +579,9 @@ class JiraIngestionService:
 
     async def _sync_all_sprints(
         self,
-        db: Session,
-        *,
-        auto_commit: bool = True,
-        rollback_on_error: bool = True,
     ) -> dict[str, int]:
         """
         모든 스프린트 동기화 (RDBMS 저장)
-
-        Args:
-            db: SQLAlchemy Session
 
         Returns:
             {"synced": N, "errors": M}
@@ -607,6 +590,19 @@ class JiraIngestionService:
 
         results = {"synced": 0, "errors": 0}
         sprints_data: list[dict] = []
+
+        def _upsert_sprints_sync() -> int:
+            with SessionLocal() as db:
+                try:
+                    result = jira_entities.upsert_sprints_bulk(
+                        db,
+                        sprints_data,
+                    )
+                    db.commit()
+                    return result
+                except Exception:
+                    db.rollback()
+                    raise
 
         try:
             # 모든 보드 조회
@@ -652,10 +648,8 @@ class JiraIngestionService:
 
             # RDBMS 벌크 저장
             if sprints_data:
-                jira_entities.upsert_sprints_bulk(
-                    db,
-                    sprints_data,
-                    auto_commit=auto_commit,
+                await run_in_threadpool(
+                    _upsert_sprints_sync,
                 )
                 logger.info(f"Saved {len(sprints_data)} sprints to RDBMS")
 
@@ -663,9 +657,6 @@ class JiraIngestionService:
             logger.error(f"Failed to get boards (API error): {e}")
             results["errors"] += 1
         except Exception as e:
-            # DB 에러 등 발생 시 트랜잭션 롤백
-            if rollback_on_error:
-                db.rollback()
             logger.error(f"Failed to sync sprints (DB error): {e}")
             results["errors"] += 1
 
@@ -674,18 +665,11 @@ class JiraIngestionService:
 
     async def _sync_all_users(
         self,
-        db: Session,
-        *,
-        auto_commit: bool = True,
-        rollback_on_error: bool = True,
     ) -> dict[str, int]:
         """
         모든 사용자 동기화 (RDBMS 저장)
 
         Jira Cloud의 모든 사용자를 조회하여 RDBMS에 저장.
-
-        Args:
-            db: SQLAlchemy Session
 
         Returns:
             {"synced": N, "errors": M}
@@ -694,6 +678,19 @@ class JiraIngestionService:
 
         results = {"synced": 0, "errors": 0}
         users_data: list[dict] = []
+
+        def _upsert_users_sync() -> int:
+            with SessionLocal() as db:
+                try:
+                    result = jira_entities.upsert_users_bulk(
+                        db,
+                        users_data,
+                    )
+                    db.commit()
+                    return result
+                except Exception:
+                    db.rollback()
+                    raise
 
         try:
             # 모든 사용자 조회
@@ -719,10 +716,8 @@ class JiraIngestionService:
 
             # RDBMS 벌크 저장 (저장 후 카운트)
             if users_data:
-                saved_count = jira_entities.upsert_users_bulk(
-                    db,
-                    users_data,
-                    auto_commit=auto_commit,
+                saved_count = await run_in_threadpool(
+                    _upsert_users_sync,
                 )
                 results["synced"] = saved_count
                 logger.info(f"Saved {saved_count} users to RDBMS")
@@ -733,9 +728,6 @@ class JiraIngestionService:
             logger.error(f"Failed to sync users (API error): {e}")
             results["errors"] += 1
         except Exception as e:
-            # DB 에러 등 발생 시 트랜잭션 롤백
-            if rollback_on_error:
-                db.rollback()
             logger.error(f"Failed to sync users (DB error): {e}", exc_info=True)
             results["errors"] += 1
 

@@ -11,14 +11,18 @@ from apscheduler.triggers.cron import CronTrigger
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import IntegrationAuditMetadata
 from catchup.audit.service import emit_audit_event
+from catchup.connectors.atlassian.exceptions import (
+    AtlassianAuthError,
+    AtlassianTokenExpiredError,
+)
+from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.configs.config import settings
-from catchup.db.engine import SessionLocal
-from catchup.connectors.jira.dynamic_webhook_service import get_jira_dynamic_webhook_service
 from catchup.db.atlassian.oauth_repository import (
     get_all_tokens as get_all_atlassian_tokens,
     update_refreshed_token as update_atlassian_refreshed_token,
 )
-from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
+from catchup.db.engine import SessionLocal
+from catchup.connectors.jira.dynamic_webhook_service import get_jira_dynamic_webhook_service
 from catchup.events.enums import EventType, IntegrationEventAction
 from catchup.sync.incremental import (
     poll_confluence_incremental_changes,
@@ -65,18 +69,11 @@ async def refresh_atlassian_tokens():
     """
     30분 간격으로 Atlassian Access Token을 갱신함.
     """
-    logger.info("[ATLASSIAN][TOKEN] Starting Token Refresh Job")
-
     oauth_client = AtlassianOAuthClient()
 
     with SessionLocal() as db:
         tokens = get_all_atlassian_tokens(db)
 
-        if not tokens:
-            logger.debug("[ATLASSIAN][TOKEN] No Atlassian Tokens Found")
-            return
-        
-        refreshed_count = 0
         for token in tokens:
             cloud_id = token.cloud_id
             emit_audit_event(
@@ -99,10 +96,31 @@ async def refresh_atlassian_tokens():
                     refresh_token=new_tokens.refresh_token,
                     expires_at=datetime.now(timezone.utc) + timedelta(seconds=new_tokens.expires_in),
                 )
-
-                refreshed_count += 1
-                logger.info(
-                    f"[ATLASSIAN][TOKEN] Token Refreshed : cloud_id = {cloud_id}"
+            except AtlassianTokenExpiredError:
+                db.rollback()
+                emit_audit_event(
+                    event_type=EventType.INTEGRATION,
+                    event_action=IntegrationEventAction.OAUTH_REFRESH,
+                    event_status=AuditEventStatus.FAIL,
+                    level=AuditLevel.WARNING,
+                    metadata=IntegrationAuditMetadata(
+                        context=f"atlassian_oauth_refresh:cloud_id={cloud_id}",
+                        provider="atlassian",
+                    ),
+                    immediate=True,
+                )
+            except AtlassianAuthError:
+                db.rollback()
+                emit_audit_event(
+                    event_type=EventType.INTEGRATION,
+                    event_action=IntegrationEventAction.OAUTH_REFRESH,
+                    event_status=AuditEventStatus.FAIL,
+                    level=AuditLevel.WARNING,
+                    metadata=IntegrationAuditMetadata(
+                        context=f"atlassian_oauth_refresh:cloud_id={cloud_id}",
+                        provider="atlassian",
+                    ),
+                    immediate=True,
                 )
             except Exception as e:
                 db.rollback()
@@ -118,13 +136,11 @@ async def refresh_atlassian_tokens():
                     immediate=True,
                 )
                 logger.error(
-                    "[ATLASSIAN][TOKEN] Token refresh failed: cloud_id=%s, error=%s",
-                    cloud_id, e,
+                    "[ATLASSIAN][TOKEN] token_refresh_unexpected_error cloud_id=%s error=%s",
+                    cloud_id,
+                    e,
                     exc_info=True,
                 )
-    logger.info(
-        "[ATLASSIAN][TOKEN] Token Refresh Job Completed"
-    )
 
 
 async def run_incremental_runtime_jobs():

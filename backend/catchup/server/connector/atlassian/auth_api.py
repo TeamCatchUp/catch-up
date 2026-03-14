@@ -259,10 +259,9 @@ async def _sync_jira_metadata(cloud_id: str) -> None:
         f"[ATLASSIAN][AUTH] Starting background metadata sync: cloud_id={cloud_id}"
     )
 
-    db = SessionLocal()
     try:
-        service = await create_jira_ingestion_service(db, cloud_id)
-        results = await service.sync_metadata(db)
+        service = await create_jira_ingestion_service(cloud_id=cloud_id)
+        results = await service.sync_metadata()
         logger.info(
             f"[ATLASSIAN][AUTH] Background metadata sync completed: "
             f"cloud_id={cloud_id}, results={results}"
@@ -272,8 +271,6 @@ async def _sync_jira_metadata(cloud_id: str) -> None:
             f"[ATLASSIAN][AUTH] Background metadata sync failed: "
             f"cloud_id={cloud_id}, error={e}"
         )
-    finally:
-        db.close()
 
 
 async def _ensure_jira_dynamic_webhook(cloud_id: str) -> None:

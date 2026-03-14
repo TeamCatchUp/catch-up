@@ -5,8 +5,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 
+from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
@@ -332,19 +334,39 @@ class SyncQueryService:
         db,
         scope_id: str,
     ) -> SyncTargetsResult:
-        token = (
-            db.query(AtlassianOAuthToken)
-            .filter(AtlassianOAuthToken.cloud_id == scope_id)
-            .first()
-        )
-        if token is None:
-            raise ValueError(f"jira cloud is not connected: {scope_id}")
+        def _load_jira_targets_sync() -> list[SyncTargetResult]:
+            with SessionLocal() as session:
+                projects = (
+                    session.query(JiraProject)
+                    .filter(JiraProject.cloud_id == scope_id)
+                    .order_by(JiraProject.project_key.asc())
+                    .all()
+                )
 
-        service = await create_jira_ingestion_service(db, scope_id)
+            return [
+                SyncTargetResult(
+                    target_id=project.project_key,
+                    display_name=project.project_name or project.project_key,
+                    target_type="project",
+                    is_accessible=True,
+                    metadata={
+                        "project_key": project.project_key,
+                        "project_id": str(project.project_id),
+                    },
+                )
+                for project in projects
+                if project.project_key
+            ]
+
+        try:
+            service = await create_jira_ingestion_service(cloud_id=scope_id)
+        except SyncInternalError as exc:
+            cause = exc.__cause__
+            if isinstance(cause, AtlassianTokenNotFoundError):
+                raise ValueError(f"jira cloud is not connected: {scope_id}") from exc
+            raise
+
         refresh_result = await service.sync_metadata(
-            db,
-            auto_commit=False,
-            rollback_on_error=False,
             raise_on_error=True,
         )
         self._ensure_refresh_succeeded(
@@ -354,27 +376,7 @@ class SyncQueryService:
             sections=("projects",),
         )
 
-        projects = (
-            db.query(JiraProject)
-            .filter(JiraProject.cloud_id == scope_id)
-            .order_by(JiraProject.project_key.asc())
-            .all()
-        )
-
-        targets = [
-            SyncTargetResult(
-                target_id=project.project_key,
-                display_name=project.project_name or project.project_key,
-                target_type="project",
-                is_accessible=True,
-                metadata={
-                    "project_key": project.project_key,
-                    "project_id": str(project.project_id),
-                },
-            )
-            for project in projects
-            if project.project_key
-        ]
+        targets = await run_in_threadpool(_load_jira_targets_sync)
         return self._build_targets_result(
             connector=SyncConnector.JIRA,
             scope_id=scope_id,
