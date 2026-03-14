@@ -7,6 +7,7 @@ OAuth Token을 조회하여 서비스 인스턴스를 생성.
 
 import logging
 
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
@@ -20,14 +21,15 @@ from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
 from catchup.connectors.jira.service import JiraIngestionService
 from catchup.db.atlassian import oauth_repository
+from catchup.db.engine import SessionLocal
 from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
 
 logger = logging.getLogger(__name__)
 
 
 async def create_jira_ingestion_service(
-    db: Session,
     cloud_id: str,
+    db: Session | None = None,
 ) -> JiraIngestionService:
     token_manager = AtlassianTokenManager(
         oauth_client=AtlassianOAuthClient(),
@@ -35,7 +37,25 @@ async def create_jira_ingestion_service(
     )
 
     try:
-        access_token = await token_manager.resolve_access_token_by_cloud_id(db, cloud_id)
+        if db is None:
+            def _load_context_sync() -> tuple[str, str]:
+                with SessionLocal() as session:
+                    token_record = oauth_repository.get_token_by_cloud_id(
+                        session,
+                        cloud_id,
+                    )
+                    if token_record is None:
+                        raise AtlassianTokenNotFoundError(cloud_id)
+                    return token_record.access_token, token_record.site_url or ""
+
+            access_token, site_url = await run_in_threadpool(_load_context_sync)
+        else:
+            access_token = await token_manager.resolve_access_token_by_cloud_id(
+                db,
+                cloud_id,
+            )
+            token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
+            site_url = token_record.site_url if token_record else ""
     except AtlassianTokenNotFoundError as exc:
         raise SyncConnectorError(
             f"Jira 연결을 찾을 수 없습니다: {cloud_id}",
@@ -59,8 +79,6 @@ async def create_jira_ingestion_service(
         ) from exc
 
     try:
-        token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
-        site_url = token_record.site_url if token_record else ""
         repository = PGVectorRepository(
             embeddings=get_embedding_service(
                 EmbeddingProvider.AWS_BEDROCK
