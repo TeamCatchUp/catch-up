@@ -52,12 +52,7 @@ const StatusCardsSection = ({ cards, buttonStates, onJobStart }: StatusCardsSect
           </Button>
         );
       case 'completed':
-        // TODO: 재임베딩 정책 확정 후 비활성화 복원
-        // return (
-        //   <Button variant="box-outline-gray" size="md" className="text-body-small h-9 w-full" disabled>
-        //     임베딩 완료
-        //   </Button>
-        // );
+        // TODO: 재임베딩 정책 확정 후 완료/실패 버튼 분리 검토
         return (
           <Button
             variant="box-outline-blue"
@@ -65,7 +60,7 @@ const StatusCardsSection = ({ cards, buttonStates, onJobStart }: StatusCardsSect
             className="text-body-small h-9 w-full"
             onClick={() => openEmbeddingModal(service, name)}
           >
-            임베딩하기
+            임베딩 재시도
           </Button>
         );
       default:

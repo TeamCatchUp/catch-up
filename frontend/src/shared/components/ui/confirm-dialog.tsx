@@ -11,8 +11,8 @@ interface ConfirmDialogProps {
   description?: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  /** 'danger' 시 빨간색 아웃라인, 'blue' 시 파란색 아웃라인 */
-  variant?: 'primary' | 'danger' | 'blue';
+  /** 'danger' 시 빨간색 아웃라인, 'blue' 시 파란색 아웃라인, 'mono' 시 기본 아웃라인 */
+  variant?: 'primary' | 'danger' | 'blue' | 'mono';
   /** 취소 버튼 숨김 (알림형 모달) */
   hideCancel?: boolean;
   onConfirm: () => void;
@@ -44,7 +44,7 @@ function ConfirmDialog({
           )}
           <Button
             variant={
-              variant === 'danger'
+              variant === 'danger' || variant === 'mono'
                 ? 'capsule-outline-mono'
                 : variant === 'blue'
                   ? 'capsule-outline-blue'

@@ -6,6 +6,16 @@ export type SyncType = 'full' | 'incremental';
 export type SyncTargetType = 'resource' | 'channel' | 'repository' | 'project' | 'space';
 export type SyncJobStatus = 'pending' | 'in_progress' | 'success' | 'failed';
 
+/** target(리소스) 단위 상태 — SyncJobStatus + 'retrying' */
+export type SyncTargetStatus = SyncJobStatus | 'retrying';
+
+/** GET /sync/jobs/{jobId} 및 SSE snapshot의 per-target 상태 */
+export interface SyncJobTargetSnapshotItem {
+  target_id: string;
+  target_name: string;
+  status: SyncTargetStatus;
+}
+
 // ─── API Request/Response (추후 API 연결 시 사용) ───
 
 export interface FullSyncRequest {
@@ -38,11 +48,8 @@ export interface SyncJobSnapshotResponse {
   started_at: string | null;
   completed_at: string | null;
   total_targets: number;
-  queued_targets: number;
-  processing_targets: number;
   completed_targets: number;
-  failed_targets: number;
-  requeued_targets: number;
+  targets: SyncJobTargetSnapshotItem[];
   last_error: string | null;
   metrics: Record<string, number>;
 }
@@ -150,11 +157,8 @@ export interface SyncStreamSnapshotPayload {
   started_at: string | null;
   completed_at: string | null;
   total_targets: number;
-  queued_targets: number;
-  processing_targets: number;
   completed_targets: number;
-  failed_targets: number;
-  requeued_targets: number;
+  targets: SyncJobTargetSnapshotItem[];
   last_error: string | null;
   metrics: Record<string, number>;
 }
@@ -196,7 +200,7 @@ export type EmbeddingButtonState = 'idle' | 'in_progress' | 'completed';
 export interface EmbeddingProgressItem {
   targetId: string;
   displayName: string;
-  status: SyncJobStatus;
+  status: SyncTargetStatus;
 }
 
 /** 커넥터별 진행 현황 */
