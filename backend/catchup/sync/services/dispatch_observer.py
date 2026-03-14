@@ -119,7 +119,7 @@ class NullSyncDispatchObserver:
         return None
 
 
-class GithubFullSyncDispatchObserver(NullSyncDispatchObserver):
+class FullSyncDispatchObserver(NullSyncDispatchObserver):
     def on_dispatch_requested(
         self,
         *,
@@ -231,8 +231,8 @@ def resolve_sync_dispatch_observer(
     connector: SyncConnector,
     sync_type: SyncType,
 ) -> SyncDispatchObserver:
-    if connector == SyncConnector.GITHUB and sync_type == SyncType.FULL:
-        return GithubFullSyncDispatchObserver()
+    if sync_type == SyncType.FULL:
+        return FullSyncDispatchObserver()
     return NullSyncDispatchObserver()
 
 
