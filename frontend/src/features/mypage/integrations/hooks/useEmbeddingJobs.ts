@@ -39,7 +39,7 @@ const toButtonState = (status: SyncJobStatus | undefined): EmbeddingButtonState 
     case 'success':
       return 'completed';
     case 'failed':
-      return 'idle';
+      return 'completed';
   }
 };
 
@@ -180,7 +180,7 @@ export const useEmbeddingJobs = () => {
     return activeJobs
       .map((job) => {
         const state = jobStates[job.jobId];
-        if (!state || state.status === 'failed') return null;
+        if (!state) return null;
         return {
           connector: state.connector,
           jobId: state.jobId,
