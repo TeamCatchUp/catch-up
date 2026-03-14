@@ -36,7 +36,7 @@ const IntegrationsSection = () => {
     <section className="flex w-250 flex-col gap-8">
       <div className="flex flex-col gap-3">
         <StatusCardsSection cards={cards} buttonStates={buttonStates} onJobStart={handleJobStart} />
-        <EmbeddingProgressPanel progresses={progresses} />
+        <EmbeddingProgressPanel progresses={progresses} buttonStates={buttonStates} />
       </div>
       <UsersStatusSection
         total={total}

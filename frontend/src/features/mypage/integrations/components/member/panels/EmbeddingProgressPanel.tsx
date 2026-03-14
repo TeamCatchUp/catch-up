@@ -15,7 +15,13 @@ import IconGithubLogo from '@/public/icons/logo/GitHub.svg';
 import { cn } from '@/shared/utils/cn';
 
 import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
-import type { ConnectorProgress, EmbeddingProgressItem, SyncConnector, SyncTargetStatus } from '../../../types/sync';
+import type {
+  ConnectorProgress,
+  EmbeddingButtonState,
+  EmbeddingProgressItem,
+  SyncConnector,
+  SyncTargetStatus,
+} from '../../../types/sync';
 
 /** 서비스별 리소스 아이템 아이콘 (IntegrationManagementSection과 동일) */
 const RESOURCE_ICONS: Record<SyncConnector, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
@@ -27,6 +33,7 @@ const RESOURCE_ICONS: Record<SyncConnector, React.ComponentType<React.SVGProps<S
 
 interface EmbeddingProgressPanelProps {
   progresses: ConnectorProgress[];
+  buttonStates: Record<SyncConnector, EmbeddingButtonState>;
 }
 
 type ConnectorEmbeddingStatus = 'in_progress' | 'completed' | 'idle';
@@ -103,20 +110,26 @@ const ItemStatusIcon = ({ status }: { status: SyncTargetStatus }) => {
   }
 };
 
-const EmbeddingProgressPanel = ({ progresses }: EmbeddingProgressPanelProps) => {
+const EmbeddingProgressPanel = ({ progresses, buttonStates }: EmbeddingProgressPanelProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [hasAutoOpened, setHasAutoOpened] = useState(false);
-
   const [selectedConnector, setSelectedConnector] = useState<SyncConnector>(
     CONNECTOR_ORDER.find((c) => progresses.some((p) => p.connector === c)) ?? CONNECTOR_ORDER[0],
   );
 
-  // 진행 중인 job이 처음 감지되면 자동으로 펼침 + 활성 커넥터 선택 (렌더 중 1회)
-  if (progresses.length > 0 && !hasAutoOpened) {
-    setHasAutoOpened(true);
-    if (!isOpen) setIsOpen(true);
-    const first = CONNECTOR_ORDER.find((c) => progresses.some((p) => p.connector === c));
-    if (first && first !== selectedConnector) setSelectedConnector(first);
+  // 커넥터가 in_progress로 전환되면 자동으로 펼침 + 해당 커넥터 선택
+  const [lastSeenInProgress, setLastSeenInProgress] = useState('');
+  const currentInProgress = CONNECTOR_ORDER.filter((c) => buttonStates[c] === 'in_progress').join(',');
+
+  if (currentInProgress !== lastSeenInProgress) {
+    const prevSet = new Set(lastSeenInProgress ? lastSeenInProgress.split(',') : []);
+    for (const connector of CONNECTOR_ORDER) {
+      if (buttonStates[connector] === 'in_progress' && !prevSet.has(connector)) {
+        if (!isOpen) setIsOpen(true);
+        if (selectedConnector !== connector) setSelectedConnector(connector);
+        break;
+      }
+    }
+    setLastSeenInProgress(currentInProgress);
   }
 
   const selectedProgress = progresses.find((p) => p.connector === selectedConnector);
