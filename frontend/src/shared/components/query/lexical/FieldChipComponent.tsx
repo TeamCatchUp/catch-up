@@ -3,8 +3,10 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $getNodeByKey } from 'lexical';
+import { toast } from 'sonner';
 
 import IconDelete from '@/public/icons/icon/delete (2).svg';
+import IconError from '@/public/icons/icon/error.svg';
 import { cn } from '@/shared/utils/cn';
 
 // ─── Context ────────────────────────────────────────────────
@@ -27,7 +29,17 @@ export interface TemplateFieldContextValue {
 export const TemplateFieldContext = createContext<TemplateFieldContextValue | null>(null);
 
 // ─── Constants ──────────────────────────────────────────────
-const FIELD_MAX_LENGTH = 40;
+export const FIELD_MAX_LENGTH = 40;
+
+function showMaxLengthToast() {
+  toast(
+    <span className="flex items-center gap-2">
+      <IconError className="h-6 w-6 shrink-0" />
+      최대 40자까지 입력할 수 있어요.
+    </span>,
+    { id: 'field-max-length' },
+  );
+}
 
 // ─── Component ──────────────────────────────────────────────
 interface FieldChipComponentProps {
@@ -49,6 +61,7 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
 
   const value = ctx.fieldValues[fieldKey] ?? '';
   const hasError = !!ctx.fieldErrors[fieldKey];
+  const isAtMaxLength = value.length >= FIELD_MAX_LENGTH;
   const useInlineMode = value && contentWidth > minWidth;
 
   // placeholder 폭 측정 → min-width
@@ -83,6 +96,7 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
         if (sel && e.currentTarget.lastChild) {
           sel.collapse(e.currentTarget.lastChild, e.currentTarget.lastChild.textContent?.length ?? 0);
         }
+        showMaxLengthToast();
       }
       setContentWidth(e.currentTarget.scrollWidth);
       ctx.setFieldValue(fieldKey, text);
@@ -151,7 +165,7 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
     <span
       className={cn(
         'bg-fill-primary-assistive inline cursor-text rounded-lg border px-2 py-1',
-        hasError ? 'border-edge-error' : 'border-edge-neutral',
+        hasError ? 'border-edge-error' : isAtMaxLength ? 'border-status-destructive' : 'border-edge-neutral',
       )}
       style={{ boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' }}
       onClick={() => spanRef.current?.focus()}
@@ -176,7 +190,9 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
         }}
         onCompositionEnd={(e) => {
           isComposingRef.current = false;
-          const text = (e.currentTarget.textContent ?? '').slice(0, FIELD_MAX_LENGTH);
+          const raw = e.currentTarget.textContent ?? '';
+          const text = raw.slice(0, FIELD_MAX_LENGTH);
+          if (raw.length > FIELD_MAX_LENGTH) showMaxLengthToast();
           setContentWidth(e.currentTarget.scrollWidth);
           ctx.setFieldValue(fieldKey, text);
         }}
