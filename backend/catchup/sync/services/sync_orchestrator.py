@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Sequence
 from uuid import uuid4
@@ -36,6 +35,11 @@ from catchup.sync.event_publisher.event_record_persistence import (
 from catchup.sync.event_publisher.stream_task_builder import (
     build_stream_tasks_from_persisted_events,
 )
+from catchup.sync.services.dispatch_observer import (
+    DispatchObserverContext,
+    SyncDispatchObserver,
+    resolve_sync_dispatch_observer,
+)
 from catchup.sync.status_stream.pubsub import publish_job_status_event
 from catchup.sync.status_stream.schemas import (
     SyncStatusEventType,
@@ -43,14 +47,6 @@ from catchup.sync.status_stream.schemas import (
     utc_now_iso,
 )
 logger = logging.getLogger(__name__)
-
-@dataclass(slots=True, frozen=True)
-class DispatchContext:
-    connector: SyncConnector
-    sync_type: SyncType
-    scope_id: str
-    job_id: str
-    requested_at: datetime
 
 
 def _build_job_urls(base_url: str | None, job_id: str) -> tuple[str | None, str | None]:
@@ -94,8 +90,13 @@ def _build_job_queued_event(
 
 
 class SyncDispatchOrchestrator:
-    def __init__(self, event_publisher: EventPublisherProtocol):
+    def __init__(
+        self,
+        event_publisher: EventPublisherProtocol,
+        observer_resolver=resolve_sync_dispatch_observer,
+    ):
         self._event_publisher = event_publisher
+        self._observer_resolver = observer_resolver
 
     async def dispatch(
         self,
@@ -135,12 +136,20 @@ class SyncDispatchOrchestrator:
             sync_type=sync_type,
             scope_id=normalized_scope_id,
         )
+        observer = self._resolve_observer(context)
+        observer.on_dispatch_requested(
+            context=context,
+            trigger=trigger.value,
+            event_seeds=event_seeds,
+        )
 
         # DB에 Job & Event 기록
         persisted_events = self._persist_dispatch_records(
             db=db,
             context=context,
             event_seeds=event_seeds,
+            trigger=trigger,
+            observer=observer,
         )
 
         # Redis Stream에 저장할 Task 생성
@@ -153,6 +162,9 @@ class SyncDispatchOrchestrator:
             db=db,
             context=context,
             tasks=tasks,
+            trigger=trigger,
+            target_count=len(event_seeds),
+            observer=observer,
         )
 
         # PubSub에 Job Accepted 이벤트 발행
@@ -183,8 +195,8 @@ class SyncDispatchOrchestrator:
         connector: SyncConnector,
         sync_type: SyncType,
         scope_id: str,
-    ) -> DispatchContext:
-        return DispatchContext(
+    ) -> DispatchObserverContext:
+        return DispatchObserverContext(
             connector=connector,
             sync_type=sync_type,
             scope_id=scope_id,
@@ -275,7 +287,7 @@ class SyncDispatchOrchestrator:
         self,
         *,
         db: Session,
-        context: DispatchContext,
+        context: DispatchObserverContext,
         event_seeds: Sequence[SyncEventSeed],
     ) -> list[SyncEvent]:
         events = persist_sync_job_and_events(
@@ -307,8 +319,10 @@ class SyncDispatchOrchestrator:
         self,
         *,
         db: Session,
-        context: DispatchContext,
+        context: DispatchObserverContext,
         event_seeds: Sequence[SyncEventSeed],
+        trigger: SyncTrigger,
+        observer: SyncDispatchObserver,
     ) -> list[SyncEvent]:
         try:
             events = self._persist_events(
@@ -317,15 +331,26 @@ class SyncDispatchOrchestrator:
                 event_seeds=event_seeds,
             )
             db.commit()
+            observer.on_db_persisted(
+                context=context,
+                trigger=trigger.value,
+                event_seeds=event_seeds,
+            )
             return events
-        except Exception:
+        except Exception as exc:
             db.rollback()
+            observer.on_db_persist_failed(
+                context=context,
+                trigger=trigger.value,
+                event_seeds=event_seeds,
+                error=exc,
+            )
             raise
 
     def _build_stream_tasks(
         self,
         *,
-        context: DispatchContext,
+        context: DispatchObserverContext,
         events: Sequence[SyncEvent],
     ) -> list[SyncStreamTask]:
         tasks = build_stream_tasks_from_persisted_events(
@@ -359,8 +384,11 @@ class SyncDispatchOrchestrator:
         self,
         *,
         db: Session,
-        context: DispatchContext,
+        context: DispatchObserverContext,
         tasks: list[SyncStreamTask],
+        trigger: SyncTrigger,
+        target_count: int,
+        observer: SyncDispatchObserver,
     ) -> PublishTasksResult:
         if not tasks:
             return PublishTasksResult(
@@ -385,6 +413,12 @@ class SyncDispatchOrchestrator:
                 tasks=tasks,
                 error_message=str(exc),
             )
+            observer.on_stream_publish_failed(
+                context=context,
+                trigger=trigger.value,
+                target_count=target_count,
+                error=exc,
+            )
             raise
 
         self._record_publish_outcomes(
@@ -395,6 +429,13 @@ class SyncDispatchOrchestrator:
         )
 
         if publish_result.published_count != publish_result.requested_count:
+            observer.on_stream_publish_failed(
+                context=context,
+                trigger=trigger.value,
+                target_count=target_count,
+                requested_count=publish_result.requested_count,
+                published_count=publish_result.published_count,
+            )
             raise RedisStreamPublishError(
                 metadata={
                     "requested_count": publish_result.requested_count,
@@ -408,13 +449,20 @@ class SyncDispatchOrchestrator:
                 },
             )
 
+        observer.on_stream_published(
+            context=context,
+            trigger=trigger.value,
+            target_count=target_count,
+            published_count=publish_result.published_count,
+        )
+
         return publish_result
 
     def _claim_publish_records(
         self,
         *,
         db: Session,
-        context: DispatchContext,
+        context: DispatchObserverContext,
         tasks: Sequence[SyncStreamTask],
     ) -> None:
         event_ids = [task.event_id for task in tasks]
@@ -436,7 +484,7 @@ class SyncDispatchOrchestrator:
         self,
         *,
         db: Session,
-        context: DispatchContext,
+        context: DispatchObserverContext,
         tasks: Sequence[SyncStreamTask],
         error_message: str,
     ) -> None:
@@ -466,7 +514,7 @@ class SyncDispatchOrchestrator:
         self,
         *,
         db: Session,
-        context: DispatchContext,
+        context: DispatchObserverContext,
         tasks: Sequence[SyncStreamTask],
         publish_result: PublishTasksResult,
     ) -> None:
@@ -519,7 +567,7 @@ class SyncDispatchOrchestrator:
     async def _publish_queued_status(
         self,
         *,
-        context: DispatchContext,
+        context: DispatchObserverContext,
         total_targets: int,
         queued_targets: int,
         sync_from_ts: str | None,
@@ -553,7 +601,7 @@ class SyncDispatchOrchestrator:
     def _build_response(
         self,
         *,
-        context: DispatchContext,
+        context: DispatchObserverContext,
         db_event_ids: Sequence[str],
         queued_targets: int,
         base_url: str | None,
@@ -604,4 +652,13 @@ class SyncDispatchOrchestrator:
             message="active full sync already exists for this scope",
             snapshot_url=snapshot_url,
             stream_url=stream_url,
+        )
+
+    def _resolve_observer(
+        self,
+        context: DispatchObserverContext,
+    ) -> SyncDispatchObserver:
+        return self._observer_resolver(
+            connector=context.connector,
+            sync_type=context.sync_type,
         )
