@@ -1,6 +1,5 @@
-import CheckboxChecked from '@/public/icons/icon/checkbox_checked.svg';
-import CheckboxUnchecked from '@/public/icons/icon/checkbox_unchecked.svg';
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
+import CheckboxIcon from '@/shared/components/ui/checkboxIcon';
 import { cn } from '@/shared/utils/cn';
 
 import { RANK_BADGE_CLASS, TAG_BASE_CLASS } from '../../constants/memberTableConfig';
@@ -47,9 +46,7 @@ const MemberTable = ({
       >
         {isSelecting && (
           <button type="button" onClick={onToggleAll} className="shrink-0 cursor-pointer">
-            <div className="p-1">
-              {allSelected ? <CheckboxChecked className="size-5" /> : <CheckboxUnchecked className="size-5" />}
-            </div>
+            <CheckboxIcon checked={!!allSelected} className="size-5" />
           </button>
         )}
         <div className="grid flex-1 grid-cols-4 items-center">
@@ -82,13 +79,7 @@ const MemberTable = ({
                   isActive || isChecked ? 'bg-fill-primary-assistive' : 'hover:bg-fill-strong bg-fill-normal',
                 )}
               >
-                {isSelecting && (
-                  <div className="shrink-0">
-                    <div className="p-1">
-                      {isChecked ? <CheckboxChecked className="size-5" /> : <CheckboxUnchecked className="size-5" />}
-                    </div>
-                  </div>
-                )}
+                {isSelecting && <CheckboxIcon checked={!!isChecked} className="size-5" />}
                 <div className="grid flex-1 grid-cols-4 items-center">
                   {/* 이름 */}
                   <div className="flex items-center gap-4">

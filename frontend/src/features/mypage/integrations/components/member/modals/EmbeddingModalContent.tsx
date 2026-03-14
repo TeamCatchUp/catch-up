@@ -1,5 +1,4 @@
-import CheckboxChecked from '@/public/icons/icon/checkbox_checked.svg';
-import CheckboxUnchecked from '@/public/icons/icon/checkbox_unchecked.svg';
+import CheckboxIcon from '@/shared/components/ui/checkboxIcon';
 import { cn } from '@/shared/utils/cn';
 
 import type { SyncTargetItem } from '../../../types/sync';
@@ -33,12 +32,7 @@ const EmbeddingModalContent = ({ targets, selectedItems, onToggleItem }: Embeddi
               <span className="text-body-small min-w-0 flex-1 truncate text-left text-content-neutral">
                 {target.display_name}
               </span>
-              {!disabled &&
-                (checked ? (
-                  <CheckboxChecked className="size-6 shrink-0 text-icon-primary" />
-                ) : (
-                  <CheckboxUnchecked className="size-6 shrink-0 text-content-assistive" />
-                ))}
+              {!disabled && <CheckboxIcon checked={checked} className="size-6" />}
             </button>
           );
         })}
