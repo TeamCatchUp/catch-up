@@ -24,7 +24,7 @@ interface TemplateInputProps {
 }
 
 // ─── InitPlugin: 에디터 초기 상태 설정 ─────────────────────
-function InitPlugin({ tip }: { tip: TipData }) {
+function InitPlugin({ tip, onReady }: { tip: TipData; onReady?: () => void }) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
@@ -47,8 +47,10 @@ function InitPlugin({ tip }: { tip: TipData }) {
 
         root.append(paragraph);
       });
+      // editor.update 완료 후 FieldChipComponent 마운트 + ref 등록 대기
+      requestAnimationFrame(() => onReady?.());
     });
-  }, [editor, tip]);
+  }, [editor, tip, onReady]);
 
   return null;
 }
@@ -173,6 +175,14 @@ export default function TemplateInput({ tip, input, submitButtonRef, onSubmitRea
     submitButtonRef?.current?.focus();
   }, [submitButtonRef]);
 
+  // InitPlugin 완료 후 첫 필드 포커스
+  const handleInitReady = useCallback(() => {
+    const firstKey = fieldKeys[0];
+    if (firstKey) {
+      fieldRefs.current[firstKey]?.focus();
+    }
+  }, [fieldKeys]);
+
   const { templateFieldValues, templateFieldErrors, setTemplateFieldValue, setIsFocused } = input;
 
   // Context value (칩 컴포넌트가 상태에 접근)
@@ -210,7 +220,7 @@ export default function TemplateInput({ tip, input, submitButtonRef, onSubmitRea
             contentEditable={<ContentEditable className="text-content-neutral outline-none" />}
             ErrorBoundary={LexicalErrorBoundary}
           />
-          <InitPlugin tip={tip} />
+          <InitPlugin tip={tip} onReady={handleInitReady} />
           <ExitOnAllChipsRemovedPlugin input={input} />
           <SubmitBridgeWithRef input={input} submitRef={submitRef} onSubmitReady={onSubmitReady} fieldKeys={fieldKeys} fieldRefs={fieldRefs} />
         </TemplateFieldContext.Provider>
