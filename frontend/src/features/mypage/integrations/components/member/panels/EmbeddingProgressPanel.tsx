@@ -36,7 +36,7 @@ interface EmbeddingProgressPanelProps {
   buttonStates: Record<SyncConnector, EmbeddingButtonState>;
 }
 
-type ConnectorEmbeddingStatus = 'in_progress' | 'completed' | 'idle';
+type ConnectorEmbeddingStatus = 'in_progress' | 'completed' | 'failed' | 'idle';
 
 const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence'];
 
@@ -47,6 +47,7 @@ const getConnectorStatus = (
   const progress = progresses.find((p) => p.connector === connector);
   if (!progress) return 'idle';
   if (progress.status === 'success') return 'completed';
+  if (progress.status === 'failed') return 'failed';
   return 'in_progress';
 };
 
@@ -56,6 +57,8 @@ const getConnectorStatusLabel = (status: ConnectorEmbeddingStatus) => {
       return '임베딩 진행 중';
     case 'completed':
       return '임베딩 완료';
+    case 'failed':
+      return '임베딩 실패';
     case 'idle':
       return '임베딩 전';
   }
@@ -82,6 +85,12 @@ const ConnectorStatusIcon = ({
       return (
         <IconCheckCircle
           className={cn('size-4.5', isSelected ? 'text-accent-green' : 'text-content-assistive')}
+        />
+      );
+    case 'failed':
+      return (
+        <IconDelete2
+          className={cn('size-4.5', isSelected ? 'text-status-destructive' : 'text-content-assistive')}
         />
       );
     case 'idle':
