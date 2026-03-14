@@ -134,7 +134,7 @@ const EmbeddingProgressPanel = ({ progresses }: EmbeddingProgressPanelProps) => 
 
   // 펼친 상태: 말풍선 삼각형 + 패널 본체
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center animate-[panel-slide-down_250ms_ease-out]">
       <IconTriangleUp className="h-3.75 w-7 shrink-0 text-fill-interaction-hover" />
       <div className="flex w-full flex-col gap-4 rounded-2xl bg-fill-interaction-hover p-5">
         {/* 헤더 */}
