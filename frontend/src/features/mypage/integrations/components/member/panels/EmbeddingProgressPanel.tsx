@@ -3,6 +3,7 @@ import { useState } from 'react';
 import IconArrowDown from '@/public/icons/icon/arrow_down.svg';
 import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
 import IconClock from '@/public/icons/icon/clock.svg';
+import IconClockPending from '@/public/icons/icon/clock_pending.svg';
 import IconDelete2 from '@/public/icons/icon/delete_2.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
 import IconProgress from '@/public/icons/icon/progress.svg';
@@ -14,7 +15,7 @@ import IconGithubLogo from '@/public/icons/logo/GitHub.svg';
 import { cn } from '@/shared/utils/cn';
 
 import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
-import type { ConnectorProgress, EmbeddingProgressItem, SyncConnector, SyncJobStatus } from '../../../types/sync';
+import type { ConnectorProgress, EmbeddingProgressItem, SyncConnector, SyncTargetStatus } from '../../../types/sync';
 
 /** 서비스별 리소스 아이템 아이콘 (IntegrationManagementSection과 동일) */
 const RESOURCE_ICONS: Record<SyncConnector, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
@@ -88,12 +89,14 @@ const ConnectorStatusIcon = ({
   }
 };
 
-const ItemStatusIcon = ({ status }: { status: SyncJobStatus }) => {
+const ItemStatusIcon = ({ status }: { status: SyncTargetStatus }) => {
   switch (status) {
     case 'success':
       return <IconCheckCircle className="size-6 text-accent-green" />;
-    case 'in_progress':
     case 'pending':
+      return <IconClockPending className="size-6 text-status-cautionary" />;
+    case 'in_progress':
+    case 'retrying':
       return <IconRotate className="size-6 animate-spin text-content-primary" />;
     case 'failed':
       return <IconDelete2 className="size-6 text-status-destructive" />;
