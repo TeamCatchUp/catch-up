@@ -36,6 +36,7 @@ from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
 from catchup.db.jira import domain_repository as jira_entities
+from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
 
 logger = logging.getLogger(__name__)
@@ -190,6 +191,7 @@ class JiraIngestionService:
         db: Session,
         project_keys: list[str] | None = None,
         sync_from_dt: datetime | None = None,
+        audit_context: SyncAuditContext | None = None,
     ) -> TargetSyncResult:
         """
         전체 동기화
@@ -229,7 +231,10 @@ class JiraIngestionService:
             for project_key in project_keys:
                 try:
                     project_result = await self._sync_project_issues(
-                        db, project_key, since = sync_from,
+                        db,
+                        project_key,
+                        since=sync_from,
+                        audit_context=audit_context,
                     )
                     results["issues"]["synced"] += project_result["issues"]
                     results["epics"]["synced"] += project_result["epics"]
@@ -264,6 +269,7 @@ class JiraIngestionService:
         db: Session,
         project_key: str,
         since: datetime | None = None,
+        audit_context: SyncAuditContext | None = None,
     ) -> dict[str, int]:
         """
         단일 프로젝트의 이슈 동기화 (Pipeline 방식)
@@ -309,7 +315,7 @@ class JiraIngestionService:
             self._fetch_and_transform(project_key, since, queue, results)
         )
         consumer = asyncio.create_task(
-            self._summarize_and_store(queue)
+            self._summarize_and_store(queue, project_key=project_key, audit_context=audit_context)
         )
 
         await asyncio.gather(producer, consumer)
@@ -415,6 +421,9 @@ class JiraIngestionService:
     async def _summarize_and_store(
         self,
         queue: asyncio.Queue,
+        *,
+        project_key: str,
+        audit_context: SyncAuditContext | None = None,
     ) -> None:
         """Stage 2 (Consumer): Queue에서 배치 수신 → Summarize → Embed/Upsert"""
         while True:
@@ -425,13 +434,28 @@ class JiraIngestionService:
             documents, doc_ids = batch
 
             if self.summarizer:
-                documents = await self._summarize_documents(documents)
+                documents = await self._summarize_documents(
+                    documents,
+                    project_key=project_key,
+                    audit_context=audit_context,
+                )
 
-            await self.repository.upsert_documents(documents, doc_ids)
+            await self.repository.upsert_documents(
+                documents,
+                doc_ids,
+                audit_context=audit_context,
+                context=(
+                    f"entity_type=issue,project_key={project_key},"
+                    f"doc_count={len(documents)}"
+                ),
+            )
 
     async def _summarize_documents(
         self,
         documents: list[Document],
+        *,
+        project_key: str,
+        audit_context: SyncAuditContext | None = None,
     ) -> list[Document]:
         """
         문서들의 page_content를 LLM으로 요약하여 교체
@@ -457,7 +481,14 @@ class JiraIngestionService:
             requests.append(SummarizeRequest(content=content, source_type=source_type))
 
         # 일괄 요약
-        summarized = await self.summarizer.summarize_batch(requests)
+        summarized = await self.summarizer.summarize_batch(
+            requests,
+            audit_context=audit_context,
+            context=(
+                f"entity_type=issue,project_key={project_key},"
+                f"doc_count={len(documents)}"
+            ),
+        )
 
         # 요약된 텍스트로 교체
         for doc, summary in zip(documents, summarized):
@@ -742,6 +773,7 @@ class JiraIngestionService:
         record_id: str,
         event_kind: str,
         since: datetime | None,
+        audit_context: SyncAuditContext | None = None,
     ) -> dict[str, int | bool]:
         normalized_event_kind = event_kind.strip().lower()
         if normalized_event_kind == "deleted":
@@ -754,9 +786,10 @@ class JiraIngestionService:
 
         result = await self._sync_project_issues(
             db,
-            project_key=project_key,
-            since=since,
-        )
+                project_key=project_key,
+                since=since,
+                audit_context=audit_context,
+            )
         return {
             "synced": int(result.get("issues", 0)) + int(result.get("epics", 0)),
             "errors": int(result.get("errors", 0)),
