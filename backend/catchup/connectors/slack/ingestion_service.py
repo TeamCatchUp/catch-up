@@ -1,5 +1,6 @@
 import asyncio
 from builtins import ExceptionGroup
+from dataclasses import dataclass
 import logging
 from _collections_abc import AsyncGenerator
 from typing import Any
@@ -22,6 +23,15 @@ from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True, frozen=True)
+class SlackSyncContext:
+    channel_id: str
+    channel_name: str
+    sync_from_ts: str | None
+    skip_delete: bool
+    audit_context: SyncAuditContext | None = None
 
 
 class SlackIngestionService:
@@ -152,11 +162,15 @@ class SlackIngestionService:
         self._ensure_initialized()
         if db is not None:
             self._load_context_from_db(db)
-        return await self._sync_channel_messages(
+        sync_ctx = SlackSyncContext(
             channel_id=channel_id,
             channel_name=channel_name,
             sync_from_ts=sync_from_ts,
             skip_delete=skip_delete,
+            audit_context=audit_context,
+        )
+        return await self._sync_channel_messages(
+            sync_ctx=sync_ctx,
         )
 
     async def _get_syncable_channels(self) -> list[dict[str, str]]:
@@ -186,10 +200,7 @@ class SlackIngestionService:
     async def _sync_channel_messages(
         self,
         *,
-        channel_id: str,
-        channel_name: str,
-        sync_from_ts: str | None,
-        skip_delete: bool,
+        sync_ctx: SlackSyncContext,
     ) -> TargetSyncResult:
         """단일 이벤트 단위: fetch -> summarize -> embed -> store."""
         skippable_errors = {"not_in_channel", "channel_not_found", "missing_scope"}
@@ -200,9 +211,9 @@ class SlackIngestionService:
 
         async def _fetch_stage() -> None:
             async for batch in self._fetch_channel_pages(
-                channel_id=channel_id,
-                channel_name=channel_name,
-                sync_from_ts=sync_from_ts,
+                channel_id=sync_ctx.channel_id,
+                channel_name=sync_ctx.channel_name,
+                sync_from_ts=sync_ctx.sync_from_ts,
             ):
                 await fetch_q.put(batch)
             await fetch_q.put(None)
@@ -213,8 +224,8 @@ class SlackIngestionService:
                 if self.summarizer:
                     batch_docs = await self._summarize_documents(
                         batch_docs,
-                        channel_name=channel_name,
-                        audit_context=audit_context,
+                        channel_name=sync_ctx.channel_name,
+                        audit_context=sync_ctx.audit_context,
                     )
                 await embed_q.put(
                     (batch_docs, batch_ids, batch_errors, batch_latest_synced_ts)
@@ -226,9 +237,9 @@ class SlackIngestionService:
                 batch_docs, batch_ids, batch_errors, batch_latest_synced_ts = batch
                 embeddings = await self.repository.generate_embeddings(
                     batch_docs,
-                    audit_context=audit_context,
+                    audit_context=sync_ctx.audit_context,
                     context=(
-                        f"entity_type=message,channel={channel_name},"
+                        f"entity_type=message,channel={sync_ctx.channel_name},"
                         f"doc_count={len(batch_docs)}"
                     ),
                 )
@@ -257,15 +268,15 @@ class SlackIngestionService:
                 ) = batch
 
                 errors += batch_errors
-                if not skip_delete:
+                if not sync_ctx.skip_delete:
                     await self.repository.delete_documents(batch_ids)
                 await self.repository.store_with_embeddings(
                     batch_docs,
                     embeddings,
                     batch_ids,
-                    audit_context=audit_context,
+                    audit_context=sync_ctx.audit_context,
                     context=(
-                        f"entity_type=message,channel={channel_name},"
+                        f"entity_type=message,channel={sync_ctx.channel_name},"
                         f"doc_count={len(batch_docs)}"
                     ),
                 )
@@ -294,8 +305,8 @@ class SlackIngestionService:
                         logger.info(
                             "[SLACK][INGESTION] Skipped channel: team_id=%s, channel=%s(%s), reason=%s",
                             self.team_id,
-                            channel_name,
-                            channel_id,
+                            sync_ctx.channel_name,
+                            sync_ctx.channel_id,
                             exc.response.get("error"),
                         )
                         return TargetSyncResult(skipped=True)
@@ -305,8 +316,8 @@ class SlackIngestionService:
         logger.debug(
             "[SLACK][INGESTION] Channel synced: team_id=%s, channel=%s(%s), synced=%s, errors=%s",
             self.team_id,
-            channel_name,
-            channel_id,
+            sync_ctx.channel_name,
+            sync_ctx.channel_id,
             synced_count,
             errors,
         )
