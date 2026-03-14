@@ -28,23 +28,25 @@ function InitPlugin({ tip }: { tip: TipData }) {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    editor.update(() => {
-      const root = $getRoot();
-      root.clear();
-      const paragraph = $createParagraphNode();
+    queueMicrotask(() => {
+      editor.update(() => {
+        const root = $getRoot();
+        root.clear();
+        const paragraph = $createParagraphNode();
 
-      for (const segment of tip.template) {
-        if (typeof segment === 'string') {
-          paragraph.append($createTextNode(segment));
-        } else {
-          const field = tip.fields.find((f) => f.key === segment.field);
-          if (field) {
-            paragraph.append($createFieldChipNode(field.key, field.placeholder));
+        for (const segment of tip.template) {
+          if (typeof segment === 'string') {
+            paragraph.append($createTextNode(segment));
+          } else {
+            const field = tip.fields.find((f) => f.key === segment.field);
+            if (field) {
+              paragraph.append($createFieldChipNode(field.key, field.placeholder));
+            }
           }
         }
-      }
 
-      root.append(paragraph);
+        root.append(paragraph);
+      });
     });
   }, [editor, tip]);
 
