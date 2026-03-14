@@ -37,7 +37,7 @@ export const useRagChatRefs = (resolvedSessionId: string | undefined): UseRagCha
   // 이벤트 핸들러가 stale state에 의존하지 않게 ref를 단일 source of truth로 사용한다.
   const streamingMessageIdRef = useRef<string | null>(null);
   const hasStreamedTokenRef = useRef(false);
-  const hasResultEventRef = useRef(false);
+
   const latestSourcesRef = useRef<SourceResponse[]>([]);
   const latestUiSourcesRef = useRef<ChatSource[]>([]);
   const streamInFlightRef = useRef(false);
@@ -55,7 +55,6 @@ export const useRagChatRefs = (resolvedSessionId: string | undefined): UseRagCha
   const resetStreamStateRefs = useCallback(() => {
     streamingMessageIdRef.current = null;
     hasStreamedTokenRef.current = false;
-    hasResultEventRef.current = false;
     latestSourcesRef.current = [];
     latestUiSourcesRef.current = [];
   }, []);
@@ -78,7 +77,6 @@ export const useRagChatRefs = (resolvedSessionId: string | undefined): UseRagCha
     () => ({
       streamingMessageIdRef,
       hasStreamedTokenRef,
-      hasResultEventRef,
       latestSourcesRef,
       latestUiSourcesRef,
       streamInFlightRef,
