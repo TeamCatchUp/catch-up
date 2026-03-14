@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from catchup.audit.enums import AuditLevel
+from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import ChatAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.chat.dependencies import get_valid_chat_room
@@ -58,7 +58,8 @@ async def chat_response_stream(
     
     emit_audit_event(
         event_type=EventType.CHAT,
-        event_action=ChatEventAction.MESSAGE_RECEIVED,
+        event_action=ChatEventAction.USER_QUERY_SENT,
+        event_status=AuditEventStatus.SUCCESS,
         level=AuditLevel.INFO,
         metadata=ChatAuditMetadata(
             session_id=session_id,

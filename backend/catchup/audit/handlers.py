@@ -35,7 +35,7 @@ def audit_event_handler(**kwargs: Any) -> None:
     log_method = getattr(audit_logger, level, audit_logger.info)
         
     log_method(
-        event=str(event_action),
+        str(event_action),
         event_type=str(event_type),
         event_status=str(event_status),
         actor=actor_payload,
