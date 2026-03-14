@@ -3,8 +3,10 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $getNodeByKey } from 'lexical';
+import { toast } from 'sonner';
 
 import IconDelete from '@/public/icons/icon/delete (2).svg';
+import IconError from '@/public/icons/icon/error.svg';
 import { cn } from '@/shared/utils/cn';
 
 // ─── Context ────────────────────────────────────────────────
@@ -27,7 +29,17 @@ export interface TemplateFieldContextValue {
 export const TemplateFieldContext = createContext<TemplateFieldContextValue | null>(null);
 
 // ─── Constants ──────────────────────────────────────────────
-const FIELD_MAX_LENGTH = 40;
+export const FIELD_MAX_LENGTH = 40;
+
+function showMaxLengthToast() {
+  toast(
+    <span className="flex items-center gap-2">
+      <IconError className="h-6 w-6 shrink-0" />
+      최대 40자까지 입력할 수 있어요.
+    </span>,
+    { id: 'field-max-length' },
+  );
+}
 
 // ─── Component ──────────────────────────────────────────────
 interface FieldChipComponentProps {
@@ -41,6 +53,7 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
   const [editor] = useLexicalComposerContext();
   const spanRef = useRef<HTMLSpanElement | null>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
+  const isComposingRef = useRef(false);
   const [minWidth, setMinWidth] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
 
@@ -48,6 +61,7 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
 
   const value = ctx.fieldValues[fieldKey] ?? '';
   const hasError = !!ctx.fieldErrors[fieldKey];
+  const isAtMaxLength = value.length >= FIELD_MAX_LENGTH;
   const useInlineMode = value && contentWidth > minWidth;
 
   // placeholder 폭 측정 → min-width
@@ -82,6 +96,7 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
         if (sel && e.currentTarget.lastChild) {
           sel.collapse(e.currentTarget.lastChild, e.currentTarget.lastChild.textContent?.length ?? 0);
         }
+        showMaxLengthToast();
       }
       setContentWidth(e.currentTarget.scrollWidth);
       ctx.setFieldValue(fieldKey, text);
@@ -105,8 +120,8 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
         e.preventDefault();
         return;
       }
-      // Enter → submit
-      if (e.key === 'Enter') {
+      // Enter → submit (IME 조합 중에는 무시)
+      if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
         e.preventDefault();
         ctx.onSubmit();
         return;
@@ -122,21 +137,25 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
       }
       // Tab 이동
       if (e.key === 'Tab') {
-        const currentIdx = ctx.fieldKeys.indexOf(fieldKey);
-        if (e.shiftKey) {
-          if (currentIdx > 0) {
-            e.preventDefault();
-            ctx.focusField(ctx.fieldKeys[currentIdx - 1]);
-          }
-        } else {
-          if (currentIdx < ctx.fieldKeys.length - 1) {
-            e.preventDefault();
-            ctx.focusField(ctx.fieldKeys[currentIdx + 1]);
-          } else {
-            e.preventDefault();
-            ctx.focusSubmitButton();
-          }
+        e.preventDefault();
+
+        // IME 조합 중이면 현재 텍스트 확정
+        if (isComposingRef.current && spanRef.current) {
+          const text = (spanRef.current.textContent ?? '').slice(0, FIELD_MAX_LENGTH);
+          ctx.setFieldValue(fieldKey, text);
+          isComposingRef.current = false;
         }
+
+        const currentIdx = ctx.fieldKeys.indexOf(fieldKey);
+        const shiftKey = e.shiftKey;
+        requestAnimationFrame(() => {
+          if (shiftKey) {
+            if (currentIdx > 0) ctx.focusField(ctx.fieldKeys[currentIdx - 1]);
+          } else {
+            if (currentIdx < ctx.fieldKeys.length - 1) ctx.focusField(ctx.fieldKeys[currentIdx + 1]);
+            else ctx.focusSubmitButton();
+          }
+        });
       }
     },
     [value, fieldKey, ctx, editor, nodeKey],
@@ -146,7 +165,7 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
     <span
       className={cn(
         'bg-fill-primary-assistive inline cursor-text rounded-lg border px-2 py-1',
-        hasError ? 'border-edge-error' : 'border-edge-neutral',
+        hasError ? 'border-edge-error' : isAtMaxLength ? 'border-status-destructive' : 'border-edge-neutral',
       )}
       style={{ boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' }}
       onClick={() => spanRef.current?.focus()}
@@ -166,11 +185,22 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
         onInput={handleInput}
         onFocus={ctx.onFocus}
         onKeyDown={handleKeyDown}
+        onCompositionStart={() => {
+          isComposingRef.current = true;
+        }}
+        onCompositionEnd={(e) => {
+          isComposingRef.current = false;
+          const raw = e.currentTarget.textContent ?? '';
+          const text = raw.slice(0, FIELD_MAX_LENGTH);
+          if (raw.length > FIELD_MAX_LENGTH) showMaxLengthToast();
+          setContentWidth(e.currentTarget.scrollWidth);
+          ctx.setFieldValue(fieldKey, text);
+        }}
         className={cn(
           'text-body-medium text-content-primary cursor-text align-baseline outline-none',
           useInlineMode ? 'inline' : 'inline-block',
         )}
-        style={{ minWidth: !useInlineMode && value && minWidth > 0 ? `${minWidth}px` : undefined }}
+        style={{ minWidth: !useInlineMode ? (value && minWidth > 0 ? minWidth : 1) : undefined }}
       />
       {!value && <span className="text-content-assistive pointer-events-none select-none">{placeholder}</span>}
       {value && (

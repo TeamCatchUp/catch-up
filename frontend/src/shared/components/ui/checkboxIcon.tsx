@@ -1,0 +1,29 @@
+'use client';
+
+import CheckboxChecked from '@/public/icons/icon/checkbox_checked.svg';
+import CheckboxUnchecked from '@/public/icons/icon/checkbox_unchecked.svg';
+import { cn } from '@/shared/utils/cn';
+
+interface CheckboxIconProps {
+  checked: boolean;
+  /** SVG 아이콘 크기 (e.g., "size-5", "size-6") */
+  className?: string;
+}
+
+/** Figma SVG 기반 체크박스 아이콘 (hover 시 원형 배경 효과) */
+const CheckboxIcon = ({ checked, className }: CheckboxIconProps) => (
+  <span
+    className={cn(
+      'inline-flex shrink-0 items-center justify-center rounded-full p-1 transition-colors',
+      checked ? 'hover:bg-fill-primary-interaction-hover-assistive' : 'hover:bg-fill-interaction-hover',
+    )}
+  >
+    {checked ? (
+      <CheckboxChecked className={cn('shrink-0 text-icon-primary', className)} />
+    ) : (
+      <CheckboxUnchecked className={cn('shrink-0 text-content-assistive', className)} />
+    )}
+  </span>
+);
+
+export default CheckboxIcon;

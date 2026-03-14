@@ -2,9 +2,11 @@
 
 import { useCallback, useMemo, useState } from 'react';
 
+import { useEmbeddingJobs } from '../../../hooks/useEmbeddingJobs';
 import { useMemberIntegrationViewModel } from '../../../hooks/useMemberIntegrationViewModel';
 import type { SyncFilterType } from '../../../types/api';
 import { buildMemberDisplayRows } from '../../../utils/memberDisplay';
+import EmbeddingProgressPanel from '../panels/EmbeddingProgressPanel';
 import StatusCardsSection from './StatusCardsSection';
 import UsersStatusSection from './UsersStatusSection';
 
@@ -21,6 +23,8 @@ const IntegrationsSection = () => {
     size: PAGE_SIZE,
   });
 
+  const { buttonStates, progresses, handleJobStart } = useEmbeddingJobs();
+
   const displayRows = useMemo(() => buildMemberDisplayRows(rows), [rows]);
 
   const handleFilterChange = useCallback((type: SyncFilterType) => {
@@ -29,8 +33,11 @@ const IntegrationsSection = () => {
   }, []);
 
   return (
-    <section className="flex w-250 flex-col gap-10">
-      <StatusCardsSection cards={cards} />
+    <section className="flex w-250 flex-col gap-8">
+      <div className="flex flex-col gap-3">
+        <StatusCardsSection cards={cards} buttonStates={buttonStates} onJobStart={handleJobStart} />
+        <EmbeddingProgressPanel progresses={progresses} />
+      </div>
       <UsersStatusSection
         total={total}
         displayRows={displayRows}

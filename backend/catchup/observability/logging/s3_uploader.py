@@ -1,5 +1,7 @@
 import asyncio
 import glob
+import logging
+from logging.handlers import TimedRotatingFileHandler
 import os
 from pathlib import Path
 
@@ -66,7 +68,37 @@ def _process_audit_logs() -> None:
                 immediate=True,
                 error=str(e)
             )
-            
+
+
+def _force_rotate_audit_log():
+    """
+    서버 종료 시점에 롤링되지 않은 파일을 강제로 roll over하여
+    감사 로그 유실을 방지한다.
+    """
+    
+    logger = logging.getLogger("catchup.audit")
+    for handler in logger.handlers:
+        if isinstance(handler, TimedRotatingFileHandler):
+            try:
+                handler.doRollover()
+                handler.flush()
+            except Exception:
+                logging.exception("Failed to force rotate audit log during shutdown")
+
+
+async def graceful_shutdown():
+    """
+    서버 종료 과정에서 롤링을 강제하여 누락되는 감사 로그가 없도록 보장하고,
+    모든 파일을 S3에 업로드한다.
+    """
+    # 롤링 강제
+    await asyncio.to_thread(_force_rotate_audit_log)
+    
+    # S3 업로드
+    await asyncio.to_thread(_process_audit_logs)
+
+
+
         
 async def audit_log_uploader_task() -> None:
     """백그라운드에서 주기적으로 _process_audit_log를 실행하는 무한 루프"""
