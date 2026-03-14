@@ -48,6 +48,7 @@ from catchup.db.github.domain_repository import RepositoryUpsertData, UserUpsert
 from catchup.db.github import installation_repository as github_installation
 from catchup.db.models import GithubEntityType, GithubInstallationType, SourceType
 from catchup.db.user_source_mapping import find_premapped_name_by_external_user_identifier, find_premapped_names_by_source_type
+from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
 
 logger = logging.getLogger(__name__)
@@ -300,6 +301,7 @@ class GithubIngestionService:
         db: Session,
         repo_ids: list[int] | None = None,
         sync_from_dt: datetime | None = None,
+        audit_context: SyncAuditContext | None = None,
     ) -> TargetSyncResult:
         """
         Github Full Sync
@@ -344,12 +346,24 @@ class GithubIngestionService:
                     owner, repo = repo_full_name.split("/", 1)
 
                     # Issue 동기화
-                    issue_result = await self._sync_issues(db, owner, repo, since=sync_from)
+                    issue_result = await self._sync_issues(
+                        db,
+                        owner,
+                        repo,
+                        since=sync_from,
+                        audit_context=audit_context,
+                    )
                     results["issues"]["synced"] += issue_result.get("synced", 0)
                     results["issues"]["errors"] += issue_result.get("errors", 0)
 
                     # PR 동기화 (Commits 포함)
-                    pr_result = await self._sync_pull_requests(db, owner, repo, since=sync_from)
+                    pr_result = await self._sync_pull_requests(
+                        db,
+                        owner,
+                        repo,
+                        since=sync_from,
+                        audit_context=audit_context,
+                    )
                     results["pull_requests"]["synced"] += pr_result.get("synced", 0)
                     results["pull_requests"]["errors"] += pr_result.get("errors", 0)
 
@@ -603,6 +617,7 @@ class GithubIngestionService:
         record_id: str,
         event_kind: str,
         since: datetime | None,
+        audit_context: SyncAuditContext | None,
     ) -> dict[str, int | bool]:
         repo_names = self._get_repo_names_by_ids(db, [repo_id])
         if not repo_names:
@@ -621,9 +636,21 @@ class GithubIngestionService:
             )
 
         if normalized_record_type == "issue":
-            result = await self._sync_issues(db, owner, repo, since=since)
+            result = await self._sync_issues(
+                db,
+                owner,
+                repo,
+                since=since,
+                audit_context=audit_context,
+            )
         elif normalized_record_type == "pull_request":
-            result = await self._sync_pull_requests(db, owner, repo, since=since)
+            result = await self._sync_pull_requests(
+                db,
+                owner,
+                repo,
+                since=since,
+                audit_context=audit_context,
+            )
         else:
             raise ValueError(f"unsupported github record_type: {record_type}")
 
@@ -671,6 +698,7 @@ class GithubIngestionService:
         owner: str,
         repo: str,
         since: datetime | None = None,
+        audit_context: SyncAuditContext | None = None,
     ) -> dict[str, int]:
         """
         Repository의 Issue 동기화
@@ -719,9 +747,22 @@ class GithubIngestionService:
                     continue
 
                 if self.summarizer:
-                    batch_documents = await self._summarize_documents(batch_documents)
+                    batch_documents = await self._summarize_documents(
+                        batch_documents,
+                        repo_full_name=full_name,
+                        entity_type="issue",
+                        audit_context=audit_context,
+                    )
 
-                await self.repository.upsert_documents(batch_documents, batch_doc_ids)
+                await self.repository.upsert_documents(
+                    batch_documents,
+                    batch_doc_ids,
+                    audit_context=audit_context,
+                    context=(
+                        f"entity_type=issue,repo={full_name},batch={batch_idx},"
+                        f"doc_count={len(batch_documents)}"
+                    ),
+                )
                 total_synced += len(batch_documents)
 
                 logger.info(
@@ -750,6 +791,7 @@ class GithubIngestionService:
         owner: str,
         repo: str,
         since: datetime | None = None,
+        audit_context: SyncAuditContext | None = None,
     ) -> dict[str, int]:
         """
         Repository의 Pull Request 동기화
@@ -804,9 +846,22 @@ class GithubIngestionService:
                     continue
 
                 if self.summarizer:
-                    batch_documents = await self._summarize_documents(batch_documents)
+                    batch_documents = await self._summarize_documents(
+                        batch_documents,
+                        repo_full_name=full_name,
+                        entity_type="pull_request",
+                        audit_context=audit_context,
+                    )
 
-                await self.repository.upsert_documents(batch_documents, batch_doc_ids)
+                await self.repository.upsert_documents(
+                    batch_documents,
+                    batch_doc_ids,
+                    audit_context=audit_context,
+                    context=(
+                        f"entity_type=pull_request,repo={full_name},batch={batch_idx},"
+                        f"doc_count={len(batch_documents)}"
+                    ),
+                )
                 total_synced += len(batch_documents)
 
                 logger.info(
@@ -828,6 +883,10 @@ class GithubIngestionService:
     async def _summarize_documents(
         self,
         documents: list[Document],
+        *,
+        repo_full_name: str,
+        entity_type: str,
+        audit_context: SyncAuditContext | None = None,
     ) -> list[Document]:
         """
         문서들의 page_content를 LLM으로 요약하여 교체
@@ -853,7 +912,14 @@ class GithubIngestionService:
             requests.append(SummarizeRequest(content=content, source_type=source_type))
 
         # 일괄 요약
-        summarized = await self.summarizer.summarize_batch(requests)
+        summarized = await self.summarizer.summarize_batch(
+            requests,
+            audit_context=audit_context,
+            context=(
+                f"entity_type={entity_type},repo={repo_full_name},"
+                f"doc_count={len(documents)}"
+            ),
+        )
 
         # 요약된 텍스트로 교체
         for doc, summary in zip(documents, summarized):

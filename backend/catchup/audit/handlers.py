@@ -16,7 +16,6 @@ def audit_event_handler(**kwargs: Any) -> None:
     event_action = kwargs.pop("event_action", "unknown")
     event_type = kwargs.pop("event_type", "unknown")
     event_status = kwargs.pop("event_status", "unknown")
-    
     level = str(kwargs.pop("level", "info")).lower()
     
     metadata_obj = kwargs.pop("metadata", None)

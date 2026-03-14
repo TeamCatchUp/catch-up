@@ -14,17 +14,13 @@ from catchup.sync.services.slack_full_sync_resolver import (
     SlackFullSyncTargetResolver,
     get_slack_full_sync_target_resolver,
 )
-from catchup.sync.services.sync_orchestrator import (
-    DispatchContext,
-    SyncDispatchOrchestrator,
-)
+from catchup.sync.services.sync_orchestrator import SyncDispatchOrchestrator
 
 __all__ = [
     "GithubFullSyncTargetResolver",
     "SlackFullSyncTargetResolver",
     "ConfluenceFullSyncTargetResolver",
     "JiraFullSyncTargetResolver",
-    "DispatchContext",
     "SyncDispatchOrchestrator",
     "get_github_full_sync_target_resolver",
     "get_slack_full_sync_target_resolver",

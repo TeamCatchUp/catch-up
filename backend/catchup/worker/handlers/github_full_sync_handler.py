@@ -5,6 +5,7 @@ import logging
 
 from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
+from catchup.sync.audit import SyncAuditContext
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,13 @@ class GithubFullSyncHandler(BaseFullSyncHandler):
                 db=db,
                 repo_ids=[repo_id],
                 sync_from_dt=sync_from_dt,
+                audit_context=SyncAuditContext(
+                    connector=context.connector,
+                    scope_id=context.scope_id,
+                    target_id=context.target_id,
+                    job_id=context.job_id,
+                    task_id=context.event_id,
+                ),
             )
 
         if result.error_count > 0:

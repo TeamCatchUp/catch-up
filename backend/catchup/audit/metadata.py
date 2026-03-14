@@ -1,7 +1,7 @@
 import uuid
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from catchup.db.models import SourceType
+from catchup.db.models import SourceType, SyncConnector
 
 
 class BaseAuditMetadata(BaseModel):
@@ -14,6 +14,19 @@ class SystemAuditMetadata(BaseAuditMetadata):
 
 class AuthAuditMetadata(BaseAuditMetadata):
     pass
+
+
+class IntegrationAuditMetadata(BaseAuditMetadata):
+    provider: str | None = None
+
+
+class SyncAuditMetadata(BaseAuditMetadata):
+    connector: SyncConnector | None = None
+    scope_id: str | None = None
+    target_id: str | None = None
+    job_id: str | None = None
+    task_id: str | None = None
+    token_usage: int | None = None
 
 
 class ChatAuditMetadata(BaseAuditMetadata):

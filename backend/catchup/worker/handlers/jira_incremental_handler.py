@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from catchup.connectors.jira.factory import create_jira_ingestion_service
+from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.exceptions import SyncInternalError
 from catchup.sync.common.schemas import IncrementalSyncContext, TargetSyncResult
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
@@ -47,6 +48,13 @@ class JiraIncrementalHandler(BaseIncrementalHandler):
                 record_id=context.record_id or "",
                 event_kind=context.event_kind or "updated",
                 since=self._resolve_since(context),
+                audit_context=SyncAuditContext(
+                    connector=context.connector,
+                    scope_id=context.scope_id,
+                    target_id=context.target_id,
+                    job_id=context.job_id,
+                    task_id=context.event_id,
+                ),
             )
 
         error_count = int(result.get("errors", 0))
