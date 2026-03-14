@@ -43,9 +43,9 @@ const toButtonState = (status: SyncJobStatus | undefined): EmbeddingButtonState 
   }
 };
 
-/** syncStatus → 복원 대상이면 true (failed만 제외) */
+/** syncStatus → 복원 대상이면 true */
 const isActiveStatus = (status: SyncStatusResponse | undefined): status is SyncStatusResponse =>
-  !!status && status.status !== 'failed';
+  !!status;
 
 /**
  * 임베딩 job 상태 관리 훅 (Polling 기반).
