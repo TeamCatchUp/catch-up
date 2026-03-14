@@ -41,6 +41,7 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
   const [editor] = useLexicalComposerContext();
   const spanRef = useRef<HTMLSpanElement | null>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
+  const isComposingRef = useRef(false);
   const [minWidth, setMinWidth] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
 
@@ -105,8 +106,8 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
         e.preventDefault();
         return;
       }
-      // Enter → submit
-      if (e.key === 'Enter') {
+      // Enter → submit (IME 조합 중에는 무시)
+      if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
         e.preventDefault();
         ctx.onSubmit();
         return;
@@ -122,21 +123,25 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
       }
       // Tab 이동
       if (e.key === 'Tab') {
-        const currentIdx = ctx.fieldKeys.indexOf(fieldKey);
-        if (e.shiftKey) {
-          if (currentIdx > 0) {
-            e.preventDefault();
-            ctx.focusField(ctx.fieldKeys[currentIdx - 1]);
-          }
-        } else {
-          if (currentIdx < ctx.fieldKeys.length - 1) {
-            e.preventDefault();
-            ctx.focusField(ctx.fieldKeys[currentIdx + 1]);
-          } else {
-            e.preventDefault();
-            ctx.focusSubmitButton();
-          }
+        e.preventDefault();
+
+        // IME 조합 중이면 현재 텍스트 확정
+        if (isComposingRef.current && spanRef.current) {
+          const text = (spanRef.current.textContent ?? '').slice(0, FIELD_MAX_LENGTH);
+          ctx.setFieldValue(fieldKey, text);
+          isComposingRef.current = false;
         }
+
+        const currentIdx = ctx.fieldKeys.indexOf(fieldKey);
+        const shiftKey = e.shiftKey;
+        requestAnimationFrame(() => {
+          if (shiftKey) {
+            if (currentIdx > 0) ctx.focusField(ctx.fieldKeys[currentIdx - 1]);
+          } else {
+            if (currentIdx < ctx.fieldKeys.length - 1) ctx.focusField(ctx.fieldKeys[currentIdx + 1]);
+            else ctx.focusSubmitButton();
+          }
+        });
       }
     },
     [value, fieldKey, ctx, editor, nodeKey],
@@ -166,6 +171,15 @@ export default function FieldChipComponent({ fieldKey, placeholder, nodeKey }: F
         onInput={handleInput}
         onFocus={ctx.onFocus}
         onKeyDown={handleKeyDown}
+        onCompositionStart={() => {
+          isComposingRef.current = true;
+        }}
+        onCompositionEnd={(e) => {
+          isComposingRef.current = false;
+          const text = (e.currentTarget.textContent ?? '').slice(0, FIELD_MAX_LENGTH);
+          setContentWidth(e.currentTarget.scrollWidth);
+          ctx.setFieldValue(fieldKey, text);
+        }}
         className={cn(
           'text-body-medium text-content-primary cursor-text align-baseline outline-none',
           useInlineMode ? 'inline' : 'inline-block',
