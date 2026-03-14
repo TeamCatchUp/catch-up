@@ -6,7 +6,7 @@ import structlog
 
 from catchup.audit.metadata import AuthAuditMetadata
 from catchup.audit.service import emit_audit_event
-from catchup.audit.enums import AuditLevel
+from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.events.enums import AuthEventAction
 from catchup.auth.service import OAuthService
 from catchup.auth.cookies import delete_auth_cookies, delete_oauth_state_cookie, set_auth_cookies, set_oauth_state_cookie
@@ -75,7 +75,8 @@ async def oauth2_login(
     
     emit_audit_event(
         event_type=EventType.AUTH,
-        event_action=AuthEventAction.LOGIN_ATTEMPT,
+        event_action=AuthEventAction.LOGIN,
+        event_status=AuditEventStatus.ATTEMPT,
         level=AuditLevel.INFO,
         immediate=True
     )
@@ -99,7 +100,8 @@ async def oauth_callback(
         logger.warning("login_failed", context="state_not_exists")
         emit_audit_event(
             event_type=EventType.AUTH,
-            event_action=AuthEventAction.LOGIN_FAILURE,
+            event_action=AuthEventAction.LOGIN,
+            event_status=AuditEventStatus.FAIL,
             level=AuditLevel.WARNING,
             metadata=AuthAuditMetadata(context="state_missing"),
             immediate=True
@@ -110,7 +112,8 @@ async def oauth_callback(
         logger.warning("login_failed", context="invalid_state")
         emit_audit_event(
             event_type=EventType.AUTH,
-            event_action=AuthEventAction.LOGIN_FAILURE,
+            event_action=AuthEventAction.LOGIN,
+            event_status=AuditEventStatus.FAIL,
             level=AuditLevel.WARNING,
             metadata=AuthAuditMetadata(context="state_mismatch"),
             immediate=True
@@ -132,7 +135,8 @@ async def oauth_callback(
     if not is_valid:
         emit_audit_event(
             event_type=EventType.AUTH,
-            event_action=AuthEventAction.LOGIN_FAILURE,
+            event_action=AuthEventAction.LOGIN,
+            event_status=AuditEventStatus.FAIL,
             level=AuditLevel.WARNING,
             metadata=AuthAuditMetadata(context="expired_state"),
             immediate=True
@@ -181,7 +185,8 @@ def refresh_token(
     except HTTPException as e:
         emit_audit_event(
             event_type=EventType.AUTH,
-            event_action=AuthEventAction.LOGIN_FAILURE,
+            event_action=AuthEventAction.TOKEN_REFRESH,
+            event_status=AuditEventStatus.FAIL,
             level=AuditLevel.WARNING,
             metadata=AuthAuditMetadata(context="refresh_token_invalid"),
             immediate=True
@@ -212,7 +217,8 @@ def refresh_token(
     if not user or user.refresh_token != refresh_token:
         emit_audit_event(
             event_type=EventType.AUTH,
-            event_action=AuthEventAction.LOGIN_FAILURE,
+            event_action=AuthEventAction.TOKEN_REFRESH,
+            event_status=AuditEventStatus.FAIL,
             level=AuditLevel.WARNING,
             metadata=AuthAuditMetadata(context="refresh_token_invalid"),
             immediate=True,
@@ -251,6 +257,7 @@ def refresh_token(
     emit_audit_event(
         event_type=EventType.AUTH,
         event_action=AuthEventAction.TOKEN_REFRESH,
+        event_status=AuditEventStatus.SUCCESS,
         level=AuditLevel.INFO,
         immediate=True,
         actor=snapshot,
@@ -271,21 +278,39 @@ async def logout(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    emit_audit_event(
+        event_type=EventType.AUTH,
+        event_action=AuthEventAction.LOGOUT,
+        event_status=AuditEventStatus.ATTEMPT,
+        level=AuditLevel.INFO,
+        immediate=True
+    )
+    
     def _update_user_refresh_token_sync():
-        update_user_refresh_token(
+        success = update_user_refresh_token(
             db=db,
             user_id=current_user.id,
             refresh_token=None
         )
         db.commit()
+        
+        if not success:
+            emit_audit_event(
+                event_type=EventType.AUTH,
+                event_action=AuthEventAction.LOGOUT,
+                event_status=AuditEventStatus.FAIL,
+                level=AuditLevel.WARNING,
+                immediate=True
+            )
     
     await run_in_threadpool(_update_user_refresh_token_sync)
 
     delete_auth_cookies(response)
-    
+
     emit_audit_event(
         event_type=EventType.AUTH,
         event_action=AuthEventAction.LOGOUT,
+        event_status=AuditEventStatus.SUCCESS,
         level=AuditLevel.INFO,
         immediate=True
     )

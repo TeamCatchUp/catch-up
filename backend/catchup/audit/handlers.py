@@ -15,7 +15,7 @@ def audit_event_handler(**kwargs: Any) -> None:
     """
     event_action = kwargs.pop("event_action", "unknown")
     event_type = kwargs.pop("event_type", "unknown")
-    event_status = kwargs.pop("event_status", None)
+    event_status = kwargs.pop("event_status", "unknown")
     level = str(kwargs.pop("level", "info")).lower()
     
     metadata_obj = kwargs.pop("metadata", None)
@@ -29,14 +29,14 @@ def audit_event_handler(**kwargs: Any) -> None:
     if raw_actor:
         actor = AuditActor.from_user_snapshot(raw_actor)
         actor_payload = actor.model_dump(exclude_none=True) if actor else None
-
+ 
     audit_logger = get_logger("catchup.audit")
     log_method = getattr(audit_logger, level, audit_logger.info)
         
     log_method(
         str(event_action),
         event_type=str(event_type),
-        event_status=str(event_status) if event_status else None,
+        event_status=str(event_status),
         actor=actor_payload,
         metadata=meta_payload
     )

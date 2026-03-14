@@ -7,7 +7,7 @@ from pathlib import Path
 
 import structlog
 
-from catchup.audit.enums import AuditLevel
+from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import AwsS3AuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.components.aws.s3 import S3Uploader
@@ -59,7 +59,8 @@ def _process_audit_logs() -> None:
             
             emit_audit_event(
                 event_type=EventType.SYSTEM,
-                event_action=AwsS3EventAction.UPLOAD_FAILED,
+                event_action=AwsS3EventAction.AUDIT_FILE_UPLOADED,
+                event_status=AuditEventStatus.FAIL,
                 level=AuditLevel.CRITICAL,
                 metadata=AwsS3AuditMetadata(
                     file_name=file_name,

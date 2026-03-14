@@ -15,14 +15,8 @@ class EventType(StrEnum):
 
 
 class AuthEventAction(StrEnum):
-    # 로그인 시도
-    LOGIN_ATTEMPT = "login_attempt"
-    
-    # 로그인 성공
-    LOGIN_SUCCESS = "login_success"
-    
-    # 로그인 실패
-    LOGIN_FAILURE = "login_failure"
+    # 로그인
+    LOGIN = "login"
     
     # 토큰 재발급
     TOKEN_REFRESH = "token_refresh"
@@ -33,28 +27,17 @@ class AuthEventAction(StrEnum):
 
 class ChatEventAction(StrEnum):
     # 사용자 질문 생성
-    MESSAGE_RECEIVED = "message_received"
+    USER_QUERY_SENT = "user_query_sent"
     
-    # 지식 베이스 검색 완료
-    RETRIEVAL_COMPLETED = "retrieval_completed"
-    
-    # 답변 생성 완료
-    RESPONSE_GENERATED = "response_generated"
-    
-    # 답변 생성 실패
-    RESPONSE_FAILED = "response_failed"
+    # 답변 생성
+    ASSISTANT_RESPONSE_GENERATED = "assistant_response_generated"
     
     # 출처 목록 노출
     SOURCES_PROVIDED = "sources_provided"
     
 
 class AwsS3EventAction(StrEnum):
-    # s3 업로드 성공
-    UPLOAD_SUCCESS = "upload_success"
-    
-    # s3 업로드 실패
-    UPLOAD_FAILED = "upload_failed"
-    
+    AUDIT_FILE_UPLOADED = "audit_file_uploaded"
 
 
 class SystemEventAction(StrEnum):
@@ -65,6 +48,7 @@ class SystemEventAction(StrEnum):
     STARTUP_REDIS_INIT = "startup_redis_init"
     SHUTDOWN_SCHEDULER = "shutdown_scheduler"
     SHUTDOWN_CHECKPOINTER = "shutdown_checkpointer"
+
 
 # 1. Slack / Atalssian : 앱 설치 Callback (metadata에 성공 / 실패 / 실패 시 사유 기록)
 # 2. Github : Installation Event를 Webhook으로 수신 (metadata에 성공 / 실패 / 실패 시 사유 기록)
@@ -84,7 +68,6 @@ class IntegrationEventAction(StrEnum):
 
     # Jira Dynamic Webhook Register
     WEBHOOK_REGISTER = "webhook_register"
-
 
 
 # DB 저장 성공 여부와 실행 Queue인 Redis Stream 발행 성공 여부로 로그에 기록

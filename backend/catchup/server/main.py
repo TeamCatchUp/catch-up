@@ -44,14 +44,14 @@ from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_
 from catchup.events.bus import bus
 from catchup.audit.handlers import audit_event_handler
 
-
-debug_mode = settings.ENV == "development" or settings.DEBUGGER_ENABLED
-
+# 디버그 모드 설정
+debug_mode = settings.ENV == "development" and settings.DEBUGGER_ENABLED
 if debug_mode:
     import debugpy
     debugpy.listen(("0.0.0.0", settings.DEBUGGER_PORT))
     # debugpy.wait_for_client()
 
+# 로깅 설정
 configure_logging()
 logger = logging.getLogger(__name__)
 

@@ -8,10 +8,10 @@ from catchup.observability.logging.context import get_request_context
 def emit_audit_event(
     event_type: str,
     event_action: str,
-    event_status: AuditEventStatus | None = None,
+    event_status: AuditEventStatus,
     level: AuditLevel = AuditLevel.INFO,
     metadata: BaseAuditMetadata | None = None,
-    immediate: bool = False,
+    immediate: bool = True,  # TODO: 삭제
     **extra_payload
 ):
     """
@@ -28,15 +28,13 @@ def emit_audit_event(
 
     extra_payload.setdefault("actor", context.get("actor"))
     extra_payload.setdefault("trace_id", context.get("trace_id"))
-
-    if event_status is not None:
-        extra_payload["event_status"] = event_status
-
+    
     bus.emit(
         topic=EventTopic.AUDIT,
-        immediate=immediate,
+        immediate=True,  # 감사 로그 이벤트는 언제나 즉시 실행
         event_type=event_type,
         event_action=event_action,
+        event_status=event_status,
         level=level,
         metadata=metadata,
         **extra_payload

@@ -70,8 +70,6 @@ export interface StreamRuntimeRefs {
   streamingMessageIdRef: RefObject<string | null>;
   // token 이벤트를 한 번이라도 받았는지
   hasStreamedTokenRef: RefObject<boolean>;
-  // result 이벤트를 받았는지
-  hasResultEventRef: RefObject<boolean>;
   // 최근 sources(raw) 캐시
   latestSourcesRef: RefObject<SourceResponse[]>;
   // 최근 sources(ui normalized) 캐시
