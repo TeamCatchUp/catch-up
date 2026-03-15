@@ -25,14 +25,9 @@ const RESOURCE_ICONS: Record<IntegrationService, React.ComponentType<React.SVGPr
   confluence: IconSpace,
 };
 
-const GITHUB_APP_URL = 'https://github.com/apps/catchupqa';
-
 /** 서비스별 연동 설치 핸들러 */
 const handleInstall = (service: IntegrationService) => {
   switch (service) {
-    case 'github':
-      window.open(GITHUB_APP_URL, '_blank');
-      break;
     case 'slack':
       window.location.href = API.slack.install;
       break;
@@ -126,13 +121,15 @@ const IntegrationManagementSection = ({
                       <IconCloudOff className="text-content-assistive size-5" />
                       <span className="text-body-xsmall text-content-alternative">연동 안됨</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleInstall(selectedService)}
-                      className="text-body-xsmall text-icon-primary cursor-pointer rounded-full px-1.5 py-1"
-                    >
-                      연동하기
-                    </button>
+                    {selectedService !== 'github' && (
+                      <button
+                        type="button"
+                        onClick={() => handleInstall(selectedService)}
+                        className="text-body-xsmall text-icon-primary cursor-pointer rounded-full px-1.5 py-1"
+                      >
+                        연동하기
+                      </button>
+                    )}
                   </>
                 )}
               </div>
