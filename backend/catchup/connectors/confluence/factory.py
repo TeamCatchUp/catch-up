@@ -17,7 +17,10 @@ from catchup.connectors.atlassian.exceptions import (
     AtlassianTokenNotFoundError,
 )
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
-from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import (
+    AtlassianTokenManager,
+    AtlassianTokenProvider,
+)
 from catchup.connectors.confluence.service import ConfluenceIngestionService
 from catchup.db.atlassian import oauth_repository
 from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
@@ -35,7 +38,10 @@ async def create_confluence_ingestion_service(
     )
 
     try:
-        access_token = await token_manager.resolve_access_token_by_cloud_id(db, cloud_id)
+        token_provider = AtlassianTokenProvider(token_manager)
+        token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
+        if token_record is None:
+            raise AtlassianTokenNotFoundError(cloud_id)
     except AtlassianTokenNotFoundError as exc:
         raise SyncConnectorError(
             f"Confluence 연결을 찾을 수 없습니다: {cloud_id}",
@@ -59,7 +65,6 @@ async def create_confluence_ingestion_service(
         ) from exc
 
     try:
-        token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
         site_url = token_record.site_url if token_record else ""
         repository = PGVectorRepository(
             embeddings=get_embedding_service(
@@ -68,7 +73,7 @@ async def create_confluence_ingestion_service(
         )
         service = ConfluenceIngestionService(
             cloud_id=cloud_id,
-            access_token=access_token,
+            token_provider=token_provider,
             site_url=site_url or "",
             repository=repository,
         )

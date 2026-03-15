@@ -25,6 +25,7 @@ from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
 from sqlalchemy.orm import Session
 
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.jira.client import (
     JiraApiClient,
@@ -64,7 +65,7 @@ class JiraIngestionService:
         self,
         repository: PGVectorRepository,
         cloud_id: str,
-        access_token: str,
+        token_provider: AtlassianTokenProvider,
         site_url: str,
         enable_summarization: bool = True,
     ):
@@ -73,7 +74,7 @@ class JiraIngestionService:
 
         Args:
             cloud_id: Jira Cloud 인스턴스 ID (JiraOAuthToken에서 조회)
-            access_token: OAuth access token
+            token_provider: 요청 시점 최신 토큰 제공자
             site_url: Jira 사이트 URL (예: "https://catchup.atlassian.net")
             enable_summarization: 임베딩 전 LLM 요약 활성화 여부
         """
@@ -82,7 +83,7 @@ class JiraIngestionService:
         self.enable_summarization = enable_summarization
 
         # 컴포넌트 초기화
-        self.client = JiraApiClient(cloud_id, access_token)
+        self.client = JiraApiClient(cloud_id, token_provider)
         self.field_mapper = JiraFieldMapper(self.client)
         self.transformer: JiraTransformer | None = None
         self.repository = repository

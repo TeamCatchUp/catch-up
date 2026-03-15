@@ -4,6 +4,7 @@ APScheduler for Hourly Sync
 
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -34,6 +35,7 @@ from catchup.db.incremental import recover_stale_processing_records
 logger = logging.getLogger(__name__)
 
 _scheduler: AsyncIOScheduler | None = None
+SEOUL_TZ = ZoneInfo("Asia/Seoul")
 
 
 async def refresh_jira_dynamic_webhooks():
@@ -67,7 +69,7 @@ async def refresh_jira_dynamic_webhooks():
 
 async def refresh_atlassian_tokens():
     """
-    30분 간격으로 Atlassian Access Token을 갱신함.
+    매일 자정(Asia/Seoul)에 Atlassian Access Token을 갱신함.
     """
     oauth_client = AtlassianOAuthClient()
 
@@ -173,8 +175,7 @@ def init_scheduler():
         logger.warning("Scheduler already Initialized")
         return
 
-    _scheduler = AsyncIOScheduler()
-    token_refresh_minutes = settings.ATLASSIAN_TOKEN_REFRESH_INTERVAL_MINUTES
+    _scheduler = AsyncIOScheduler(timezone=SEOUL_TZ)
 
     jira_webhook_refresh_hours = settings.JIRA_WEBHOOK_REFRESH_INTERVAL_HOURS
     _scheduler.add_job(
@@ -191,7 +192,7 @@ def init_scheduler():
 
     _scheduler.add_job(
         refresh_atlassian_tokens,
-        trigger=CronTrigger(minute=f"*/{token_refresh_minutes}"),
+        trigger=CronTrigger(hour=0, minute=0, timezone=SEOUL_TZ),
         id="atlassian_token_refresh",
         name="Atlassian OAuth Token Refresh",
         replace_existing=True,
@@ -220,9 +221,9 @@ def init_scheduler():
     
     _scheduler.start()
     logger.info(
-        "[SCHEDULER][INIT] Scheduler initialized: jira_webhook_refresh=%s, token_refresh_minutes=%s, incremental_interval_minutes=%s, confluence_poll_interval_minutes=%s",
+        "[SCHEDULER][INIT] Scheduler initialized: jira_webhook_refresh=%s, token_refresh=%s, incremental_interval_minutes=%s, confluence_poll_interval_minutes=%s",
         jira_webhook_refresh_hours,
-        token_refresh_minutes,
+        "daily 00:00 Asia/Seoul",
         incremental_interval_minutes,
         confluence_poll_interval_minutes,
     )
