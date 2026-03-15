@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
-from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.connectors.slack.auth import get_slack_oauth_service
 from catchup.connectors.slack.ingestion_service import SlackIngestionService
 from catchup.connectors.slack.metadata_service import SlackMetadataService
@@ -67,7 +67,7 @@ async def create_slack_ingestion_service(
     access_token = await _resolve_access_token(db, team_id)
 
     try:
-        repository = PGVectorRepository(
+        repository = get_pgvector_repository(
             embeddings=get_embedding_service(
                 EmbeddingProvider.AWS_BEDROCK
             ).get_embedder()

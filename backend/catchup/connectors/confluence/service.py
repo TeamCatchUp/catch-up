@@ -42,8 +42,8 @@ class ConfluenceIngestionService:
         self.repository = repository
 
     async def initialize(self) -> None:
-        logger.info(f"[CONFLUENCE][SERVICE] Initializing: cloud_id={self.cloud_id}")
-        await self.repository.initialize()
+        logger.info(f"[CONFLUENCE][SERVICE] Ensuring initialization: cloud_id={self.cloud_id}")
+        self.repository.ensure_initialized()
         logger.info(f"[CONFLUENCE][SERVICE] Initialized Successfully: cloud_id={self.cloud_id}")
 
     # ================================================================

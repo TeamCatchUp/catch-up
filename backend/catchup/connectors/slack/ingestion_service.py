@@ -67,7 +67,7 @@ class SlackIngestionService:
             self.summarizer = get_summarizer_service()
             logger.info("[SLACK][INGESTION] Summarization enabled")
 
-        await self.repository.initialize()
+        self.repository.ensure_initialized()
 
         self._initialized = True
         logger.info("[SLACK][INGESTION] Service initialized: team_id=%s", self.team_id)
