@@ -16,7 +16,7 @@ const TermsPolicySection = () => {
           <Link
             key={item.label}
             href="#"
-            className="border-edge-neutral hover:bg-fill-strong flex w-122.5 shrink-0 items-center justify-between rounded-xl border px-5 py-3 transition-colors"
+            className="border-edge-neutral hover:bg-fill-strong flex flex-1 max-w-205 items-center justify-between rounded-xl border px-5 py-3 transition-colors"
           >
             <span className="text-body-small text-content-normal">{item.label}</span>
             <ArrowRight className="text-content-alternative h-6 w-6" />

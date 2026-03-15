@@ -5,7 +5,7 @@ import { Button } from '@/shared/components/ui/button';
 
 const ContactChannelSection = () => {
   return (
-    <section className="flex w-250 shrink-0 flex-col gap-3">
+    <section className="flex w-full flex-col gap-3">
       <div className="flex items-end justify-between">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-heading-large text-content-normal">Catch Up 문의 채널</h2>
