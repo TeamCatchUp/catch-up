@@ -28,7 +28,7 @@ export default function MemberProfileCard({ members, selectedMemberId, onSelectM
   );
 
   return (
-    <div className="border-edge-neutral flex flex-col gap-4 rounded-2xl border bg-fill-normal px-6 py-5">
+    <div className="border-edge-neutral bg-fill-normal flex flex-col gap-4 rounded-2xl border px-6 py-5">
       {/* 드롭다운 */}
       <FilterDropdown options={memberOptions} value={selectedMemberId} onChange={onSelectMember} />
 

@@ -31,8 +31,8 @@ const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
   return (
     <section className="flex w-268 flex-col gap-4">
       <header className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg border-[0.5px] border-edge-neutral bg-fill-primary-assistive">
-          <Book className="h-6 w-6 text-icon-primary" />
+        <div className="border-edge-neutral bg-fill-primary-assistive flex h-8 w-8 items-center justify-center rounded-lg border-[0.5px]">
+          <Book className="text-icon-primary h-6 w-6" />
         </div>
         <h2 className="text-heading-large text-content-normal">질문 작성을 도와드릴게요!</h2>
       </header>
@@ -51,7 +51,7 @@ const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
               key={tip.title}
               type="button"
               onClick={() => onCardClick(idx)}
-              className="flex h-[226px] w-60 shrink-0 cursor-pointer flex-col overflow-hidden rounded-2xl border border-edge-neutral bg-fill-normal text-left"
+              className="border-edge-neutral bg-fill-normal flex h-[226px] w-60 shrink-0 cursor-pointer flex-col overflow-hidden rounded-2xl border text-left"
             >
               <div className="relative h-[119px] w-full overflow-hidden">
                 <Image src={tip.image} alt={tip.title} fill draggable={false} className="object-cover dark:hidden" />
@@ -65,7 +65,7 @@ const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
               </div>
               <div className="flex flex-col gap-1.5 px-5 py-4">
                 <p className="text-heading-small text-content-normal">{tip.title}</p>
-                <p className="text-label-small whitespace-pre-line text-content-alternative">{tip.description}</p>
+                <p className="text-label-small text-content-alternative whitespace-pre-line">{tip.description}</p>
               </div>
             </button>
           ))}
@@ -73,26 +73,26 @@ const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
 
         {canScrollLeft && (
           <>
-            <div className="pointer-events-none absolute top-0 left-0 h-full w-20 bg-linear-to-r from-fill-normal to-transparent" />
+            <div className="from-fill-normal pointer-events-none absolute top-0 left-0 h-full w-20 bg-linear-to-r to-transparent" />
             <button
               type="button"
               onClick={scrollLeftBy}
-              className="absolute top-1/2 left-0 flex -translate-y-1/2 cursor-pointer items-center justify-center rounded-rounded border border-edge-normal bg-fill-normal p-1.5 shadow-button"
+              className="rounded-rounded border-edge-normal bg-fill-normal shadow-button absolute top-1/2 left-0 flex -translate-y-1/2 cursor-pointer items-center justify-center border p-1.5"
             >
-              <IconArrowLeft className="h-6 w-6 text-icon-neutral" />
+              <IconArrowLeft className="text-icon-neutral h-6 w-6" />
             </button>
           </>
         )}
 
         {canScrollRight && (
           <>
-            <div className="pointer-events-none absolute top-0 right-0 h-full w-20 bg-linear-to-l from-fill-normal to-transparent" />
+            <div className="from-fill-normal pointer-events-none absolute top-0 right-0 h-full w-20 bg-linear-to-l to-transparent" />
             <button
               type="button"
               onClick={scrollRightBy}
-              className="absolute top-1/2 right-0 flex -translate-y-1/2 cursor-pointer items-center justify-center rounded-rounded border border-edge-normal bg-fill-normal p-1.5 shadow-button"
+              className="rounded-rounded border-edge-normal bg-fill-normal shadow-button absolute top-1/2 right-0 flex -translate-y-1/2 cursor-pointer items-center justify-center border p-1.5"
             >
-              <IconArrowRight className="h-6 w-6 text-icon-neutral" />
+              <IconArrowRight className="text-icon-neutral h-6 w-6" />
             </button>
           </>
         )}

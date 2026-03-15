@@ -11,7 +11,7 @@ const SidebarHeader = ({ sourceCount, className }: Props) => {
   return (
     <div
       className={cn(
-        'border-b-edge-neutral flex h-13 items-center justify-between border-b bg-fill-normal px-4 py-1.5',
+        'border-b-edge-neutral bg-fill-normal flex h-13 items-center justify-between border-b px-4 py-1.5',
         className,
       )}
     >
@@ -24,8 +24,10 @@ const SidebarHeader = ({ sourceCount, className }: Props) => {
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="bg-fill-interaction-hover rounded-md2 flex cursor-help items-center gap-1 px-1.5 py-0.5">
-              <Help className="h-4 w-4 text-content-alternative" />
-              <div className="text-body-xsmall truncate whitespace-nowrap text-content-alternative">AI 답변 근거 자료</div>
+              <Help className="text-content-alternative h-4 w-4" />
+              <div className="text-body-xsmall text-content-alternative truncate whitespace-nowrap">
+                AI 답변 근거 자료
+              </div>
             </div>
           </TooltipTrigger>
           <TooltipContent size="lg" className="flex flex-col gap-1">

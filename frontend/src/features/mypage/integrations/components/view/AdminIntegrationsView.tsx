@@ -40,7 +40,9 @@ const AdminIntegrationsView = () => {
             onClick={() => setActiveTab('my')}
             className={cn(
               'text-heading-large cursor-pointer border-b-2 pb-1 transition-colors',
-              activeTab === 'my' ? 'border-content-normal text-content-normal' : 'text-content-assistive border-transparent',
+              activeTab === 'my'
+                ? 'border-content-normal text-content-normal'
+                : 'text-content-assistive border-transparent',
             )}
           >
             내 연동
@@ -50,7 +52,9 @@ const AdminIntegrationsView = () => {
             onClick={() => setActiveTab('member')}
             className={cn(
               'text-heading-large cursor-pointer border-b-2 pb-1 transition-colors',
-              activeTab === 'member' ? 'border-content-normal text-content-normal' : 'text-content-assistive border-transparent',
+              activeTab === 'member'
+                ? 'border-content-normal text-content-normal'
+                : 'text-content-assistive border-transparent',
             )}
           >
             이용자 연동

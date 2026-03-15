@@ -22,8 +22,10 @@ interface ChatRoomQuery {
 }
 
 // 질문 아이템 상태별 스타일
-const defaultClass = 'bg-fill-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed active:ring-1 active:ring-edge-neutral';
-const selectedClass = 'ring-1 ring-edge-assistive bg-fill-primary-assistive hover:bg-fill-primary-interaction-hover-assistive';
+const defaultClass =
+  'bg-fill-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed active:ring-1 active:ring-edge-neutral';
+const selectedClass =
+  'ring-1 ring-edge-assistive bg-fill-primary-assistive hover:bg-fill-primary-interaction-hover-assistive';
 
 export default function SideNavQuestions() {
   const pathname = usePathname();
@@ -71,7 +73,7 @@ export default function SideNavQuestions() {
       <button onClick={() => togglePanel('questionsHistory')} className="h-7 w-fit cursor-pointer items-center">
         <div className="text-button-secondary-mono flex items-center px-2.5 py-1">
           <span className="text-body-xsmall text-content-neutral">내 질문</span>
-          <ArrowRight className="relative bottom-px h-5 w-5 text-icon-neutral" />
+          <ArrowRight className="text-icon-neutral relative bottom-px h-5 w-5" />
         </div>
       </button>
       <div className="mt-2 flex flex-col overflow-y-auto">
@@ -86,12 +88,14 @@ export default function SideNavQuestions() {
             >
               <span className={cn('text-body-small truncate px-2.5')}>{chatroom.title}</span>
               <span className="mr-2.5 ml-auto flex h-5 w-5 items-center opacity-0 transition-opacity group-hover:opacity-100">
-                <Kebeb className="h-4.5 w-4.5 text-icon-neutral" />
+                <Kebeb className="text-icon-neutral h-4.5 w-4.5" />
               </span>
             </Link>
           );
         })}
-        {isFetchingNextPage && <div className="text-body-xsmall text-content-assistive py-2 text-center">불러오는 중...</div>}
+        {isFetchingNextPage && (
+          <div className="text-body-xsmall text-content-assistive py-2 text-center">불러오는 중...</div>
+        )}
         <div ref={sentinelRef} className="h-1" />
       </div>
     </div>

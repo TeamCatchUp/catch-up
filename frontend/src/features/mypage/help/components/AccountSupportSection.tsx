@@ -15,7 +15,7 @@ const AccountSupportSection = () => {
         {SUPPORT_CARDS.map((card) => (
           <li
             key={card.title}
-            className="border-edge-neutral flex w-58.75 shrink-0 flex-col overflow-hidden rounded-xl border bg-fill-normal"
+            className="border-edge-neutral bg-fill-normal flex w-58.75 shrink-0 flex-col overflow-hidden rounded-xl border"
           >
             <div className="border-edge-neutral relative aspect-292/128 w-full border-b opacity-80">
               <Image src={card.image} alt={card.title} fill className="object-cover dark:hidden" />
@@ -31,7 +31,7 @@ const AccountSupportSection = () => {
                 <h3 className="text-heading-small text-content-normal">{card.title}</h3>
                 <Badge className="rounded-md2 px-1.5 py-0.5">{card.tag}</Badge>
               </div>
-              <p className="text-body-xsmall whitespace-pre-line text-content-alternative">{card.description}</p>
+              <p className="text-body-xsmall text-content-alternative whitespace-pre-line">{card.description}</p>
             </div>
           </li>
         ))}

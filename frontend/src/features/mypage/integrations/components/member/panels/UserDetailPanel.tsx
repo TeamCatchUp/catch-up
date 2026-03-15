@@ -15,8 +15,8 @@ interface UserDetailPanelProps {
 const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
   if (!selectedRow) {
     return (
-      <section className="overflow-clip bg-fill-normal pt-5 pb-5 pl-6">
-        <div className="text-body-small flex h-full items-center justify-center text-center text-content-alternative">
+      <section className="bg-fill-normal overflow-clip pt-5 pb-5 pl-6">
+        <div className="text-body-small text-content-alternative flex h-full items-center justify-center text-center">
           선택된 이용자 정보가 없습니다.
         </div>
       </section>
@@ -24,7 +24,7 @@ const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
   }
 
   return (
-    <section className="overflow-clip bg-fill-normal pt-5 pb-5 pl-6">
+    <section className="bg-fill-normal overflow-clip pt-5 pb-5 pl-6">
       <div className="flex h-full flex-col gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
@@ -34,7 +34,7 @@ const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
         <div className="flex flex-col gap-9">
           <div className="text-body-small flex flex-col gap-2 tracking-tight">
             <div className="flex w-full items-center gap-14">
-              <span className="w-19.75 shrink-0 text-content-alternative">메일</span>
+              <span className="text-content-alternative w-19.75 shrink-0">메일</span>
               <span className="text-content-neutral min-w-0 flex-1 truncate">{selectedRow.email}</span>
             </div>
           </div>
@@ -66,18 +66,26 @@ const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
                     <div className="flex shrink-0 flex-col items-start justify-center gap-0.5">
                       <div className="flex shrink-0 items-center gap-2.5">
                         {info?.picture ? (
-                          <Image src={info.picture} alt="" width={25} height={25} className="size-6.25 shrink-0 rounded-full" />
+                          <Image
+                            src={info.picture}
+                            alt=""
+                            width={25}
+                            height={25}
+                            className="size-6.25 shrink-0 rounded-full"
+                          />
                         ) : (
                           <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
                         )}
                         <span className="text-body-xsmall text-content-normal max-w-33.25 shrink-0 truncate">
                           {info?.name ?? '-'}
                         </span>
-                        <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall shrink-0 px-1.5 py-0.5 tracking-tight text-content-alternative">
+                        <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall text-content-alternative shrink-0 px-1.5 py-0.5 tracking-tight">
                           {info?.identifier ?? '-'}
                         </span>
                       </div>
-                      <span className="text-body-xsmall shrink-0 truncate text-content-alternative">{selectedRow.email}</span>
+                      <span className="text-body-xsmall text-content-alternative shrink-0 truncate">
+                        {selectedRow.email}
+                      </span>
                     </div>
                   </div>
                 );

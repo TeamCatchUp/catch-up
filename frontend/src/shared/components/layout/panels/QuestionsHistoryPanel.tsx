@@ -74,26 +74,26 @@ const QuestionsHistoryPanel = () => {
           {/* 새 질문 Button - Box button with icon + text per Figma */}
           <button
             onClick={handleNewQuestion}
-            className="border-edge-neutral hover:bg-fill-interaction-hover flex h-7.5 cursor-pointer items-center gap-1 rounded-lg border bg-fill-normal px-2 py-1"
+            className="border-edge-neutral hover:bg-fill-interaction-hover bg-fill-normal flex h-7.5 cursor-pointer items-center gap-1 rounded-lg border px-2 py-1"
             aria-label="새 질문"
           >
-            <AddSmall className="h-5 w-5 text-icon-neutral" />
+            <AddSmall className="text-icon-neutral h-5 w-5" />
             <span className="text-body-xsmall text-content-normal">새 질문</span>
           </button>
           {/* Close Icon Button */}
           <button
             onClick={handleClose}
-            className="border-edge-neutral rounded-md2 hover:bg-fill-interaction-hover flex h-7.5 w-7.5 cursor-pointer items-center justify-center border bg-fill-normal"
+            className="border-edge-neutral rounded-md2 hover:bg-fill-interaction-hover bg-fill-normal flex h-7.5 w-7.5 cursor-pointer items-center justify-center border"
             aria-label="패널 닫기"
           >
-            <Cancel className="h-5 w-5 text-icon-neutral" />
+            <Cancel className="text-icon-neutral h-5 w-5" />
           </button>
         </div>
       </div>
 
       {/* Search Input Field */}
       <div className="px-1">
-        <div className="border-edge-neutral flex h-9 items-center gap-1 rounded-lg border bg-fill-normal px-2.5 py-1.5">
+        <div className="border-edge-neutral bg-fill-normal flex h-9 items-center gap-1 rounded-lg border px-2.5 py-1.5">
           <Search className="text-icon-assistive h-5 w-5 shrink-0" />
           <input
             type="text"
@@ -108,11 +108,15 @@ const QuestionsHistoryPanel = () => {
       {/* Question List - Scrollable Area */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1">
         {isLoading ? (
-          <div className="text-content-assistive flex items-center justify-center py-8">데이터를 불러오는 중입니다...</div>
+          <div className="text-content-assistive flex items-center justify-center py-8">
+            데이터를 불러오는 중입니다...
+          </div>
         ) : (
           <SearchHistory querys={recentQueries} isModal={false} onItemClick={handleItemClick} />
         )}
-        {isFetchingNextPage && <div className="text-content-assistive flex items-center justify-center py-4">불러오는 중...</div>}
+        {isFetchingNextPage && (
+          <div className="text-content-assistive flex items-center justify-center py-4">불러오는 중...</div>
+        )}
         <div ref={sentinelRef} className="h-1" />
       </div>
     </div>

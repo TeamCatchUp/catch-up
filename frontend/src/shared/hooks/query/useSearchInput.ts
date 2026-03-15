@@ -35,11 +35,7 @@ export interface UseSearchInputReturn {
   handleSubmit: (queryOverride?: string) => void;
 }
 
-export const useSearchInput = ({
-  inputRef,
-  selectedSources,
-  tipData,
-}: UseSearchInputOptions): UseSearchInputReturn => {
+export const useSearchInput = ({ inputRef, selectedSources, tipData }: UseSearchInputOptions): UseSearchInputReturn => {
   const router = useRouter();
   const [value, setValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -65,56 +61,57 @@ export const useSearchInput = ({
     setTemplateFieldErrors({});
   }, []);
 
-  const handleSubmit = useCallback((queryOverride?: string) => {
-    // Lexical 기반 TemplateInput에서 직접 쿼리를 넘겨주는 경우
-    if (typeof queryOverride === 'string') {
-      const trimmed = queryOverride.trim();
-      if (!trimmed) return;
-      const sessionId = crypto.randomUUID();
-      let url = `/chat/${sessionId}?q=${encodeURIComponent(trimmed)}`;
-      if (selectedSources?.length) {
-        url += `&sources=${selectedSources.join(',')}`;
-      }
-      router.push(url);
-      return;
-    }
-
-    if (isFromTemplate && selectedTipIndex !== null && tipData) {
-      const tip = tipData[selectedTipIndex];
-      const errors: Record<string, boolean> = {};
-      let hasEmpty = false;
-      for (const field of tip.fields) {
-        if (!templateFieldValues[field.key]?.trim()) {
-          errors[field.key] = true;
-          hasEmpty = true;
+  const handleSubmit = useCallback(
+    (queryOverride?: string) => {
+      // Lexical 기반 TemplateInput에서 직접 쿼리를 넘겨주는 경우
+      if (typeof queryOverride === 'string') {
+        const trimmed = queryOverride.trim();
+        if (!trimmed) return;
+        const sessionId = crypto.randomUUID();
+        let url = `/chat/${sessionId}?q=${encodeURIComponent(trimmed)}`;
+        if (selectedSources?.length) {
+          url += `&sources=${selectedSources.join(',')}`;
         }
-      }
-      if (hasEmpty) {
-        setTemplateFieldErrors(errors);
+        router.push(url);
         return;
       }
-      const query = tip.template
-        .map((seg) =>
-          typeof seg === 'string' ? seg : (templateFieldValues[seg.field] ?? ''),
-        )
-        .join('');
-      const sessionId = crypto.randomUUID();
-      let url = `/chat/${sessionId}?q=${encodeURIComponent(query)}`;
-      if (selectedSources?.length) {
-        url += `&sources=${selectedSources.join(',')}`;
+
+      if (isFromTemplate && selectedTipIndex !== null && tipData) {
+        const tip = tipData[selectedTipIndex];
+        const errors: Record<string, boolean> = {};
+        let hasEmpty = false;
+        for (const field of tip.fields) {
+          if (!templateFieldValues[field.key]?.trim()) {
+            errors[field.key] = true;
+            hasEmpty = true;
+          }
+        }
+        if (hasEmpty) {
+          setTemplateFieldErrors(errors);
+          return;
+        }
+        const query = tip.template
+          .map((seg) => (typeof seg === 'string' ? seg : (templateFieldValues[seg.field] ?? '')))
+          .join('');
+        const sessionId = crypto.randomUUID();
+        let url = `/chat/${sessionId}?q=${encodeURIComponent(query)}`;
+        if (selectedSources?.length) {
+          url += `&sources=${selectedSources.join(',')}`;
+        }
+        router.push(url);
+      } else {
+        const trimmed = value.trim();
+        if (!trimmed) return;
+        const sessionId = crypto.randomUUID();
+        let url = `/chat/${sessionId}?q=${encodeURIComponent(trimmed)}`;
+        if (selectedSources?.length) {
+          url += `&sources=${selectedSources.join(',')}`;
+        }
+        router.push(url);
       }
-      router.push(url);
-    } else {
-      const trimmed = value.trim();
-      if (!trimmed) return;
-      const sessionId = crypto.randomUUID();
-      let url = `/chat/${sessionId}?q=${encodeURIComponent(trimmed)}`;
-      if (selectedSources?.length) {
-        url += `&sources=${selectedSources.join(',')}`;
-      }
-      router.push(url);
-    }
-  }, [isFromTemplate, selectedTipIndex, tipData, templateFieldValues, value, router, selectedSources]);
+    },
+    [isFromTemplate, selectedTipIndex, tipData, templateFieldValues, value, router, selectedSources],
+  );
 
   // 템플릿 모드에서는 textarea가 숨겨져 있으므로 항상 multiline
   const isMultiLine = isFromTemplate || isTextareaMultiLine;

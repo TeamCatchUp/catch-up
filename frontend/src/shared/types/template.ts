@@ -14,7 +14,5 @@ export interface TipData {
   fields: TemplateField[];
 }
 
-export const buildQueryFromTemplate = (
-  template: TemplateSegment[],
-  fieldValues: Record<string, string>,
-): string => template.map((seg) => (typeof seg === 'string' ? seg : fieldValues[seg.field] ?? '')).join('');
+export const buildQueryFromTemplate = (template: TemplateSegment[], fieldValues: Record<string, string>): string =>
+  template.map((seg) => (typeof seg === 'string' ? seg : (fieldValues[seg.field] ?? ''))).join('');

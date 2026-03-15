@@ -3,7 +3,7 @@ import { cn } from '@/shared/utils/cn';
 import { CATEGORY_LABEL, RESOURCE_LABEL } from '../../constants/auditLogConfig';
 import type { AuditIntegrationLog } from '../../types/auditIntegrationLog';
 import { formatDate } from '../../utils/formatDate';
-import { getServiceIconCls,InfoRow, ResourceIcon, SERVICE_NAMES, ServiceIcon, StatusBadgeRow } from './helpers';
+import { getServiceIconCls, InfoRow, ResourceIcon, SERVICE_NAMES, ServiceIcon, StatusBadgeRow } from './helpers';
 
 /** 동기화/연동 상세 패널 */
 const SyncIntegrationDetail = ({ log }: { log: AuditIntegrationLog }) => {
@@ -50,7 +50,7 @@ const SyncIntegrationDetail = ({ log }: { log: AuditIntegrationLog }) => {
                       idx !== log.resources!.length - 1 && 'border-b',
                     )}
                   >
-                    <div className="border-edge-neutral flex items-center justify-center overflow-clip rounded-full border bg-fill-normal/50 p-1.5">
+                    <div className="border-edge-neutral bg-fill-normal/50 flex items-center justify-center overflow-clip rounded-full border p-1.5">
                       <ResourceIcon service={log.service} />
                     </div>
                     <span className="text-body-small text-content-normal min-w-0 flex-1 truncate">{name}</span>

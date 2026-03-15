@@ -55,7 +55,7 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
       <DialogPortal>
         <DialogOverlay />
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="shadow-modal border-edge-strong flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border bg-fill-normal p-6">
+          <div className="shadow-modal border-edge-strong bg-fill-normal flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border p-6">
             {/* 콘텐츠 영역 */}
             <div
               className={`flex min-h-0 flex-1 flex-col gap-5 overflow-hidden transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}
@@ -73,7 +73,7 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
                 <button
                   type="button"
                   onClick={onDismiss}
-                  className="hover:bg-fill-interaction-hover flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-content-alternative"
+                  className="hover:bg-fill-interaction-hover text-content-alternative flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full"
                 >
                   <CloseIcon className="size-5" />
                 </button>
@@ -81,7 +81,12 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
 
               {/* 일러스트 이미지 */}
               <div className="relative h-40 w-full overflow-hidden rounded-lg">
-                <Image src={currentStep.image} alt={currentStep.title.join(' ')} fill className="object-cover dark:hidden" />
+                <Image
+                  src={currentStep.image}
+                  alt={currentStep.title.join(' ')}
+                  fill
+                  className="object-cover dark:hidden"
+                />
                 <Image
                   src={currentStep.image.replace('/light/', '/dark/')}
                   alt={currentStep.title.join(' ')}
@@ -101,7 +106,10 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
               {/* Pagination Dots */}
               <div className="flex gap-2.5 self-center px-2">
                 {Array.from({ length: USER_GUIDE_TOTAL_STEPS }).map((_, i) => (
-                  <div key={i} className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-fill-interaction-hover'}`} />
+                  <div
+                    key={i}
+                    className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-fill-interaction-hover'}`}
+                  />
                 ))}
               </div>
 

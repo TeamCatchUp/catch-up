@@ -39,10 +39,12 @@ const AuditLogFilterBar = ({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="border-edge-neutral flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border bg-fill-normal px-2.5 py-2"
+            className="border-edge-neutral bg-fill-normal flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-2"
           >
-            <span className="text-body-small text-content-neutral">{SORT_OPTIONS.find((o) => o.key === sortKey)?.label}</span>
-            <IconDropdownDown className="size-4.5 text-content-alternative" />
+            <span className="text-body-small text-content-neutral">
+              {SORT_OPTIONS.find((o) => o.key === sortKey)?.label}
+            </span>
+            <IconDropdownDown className="text-content-alternative size-4.5" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" sideOffset={2} className="w-30 min-w-0">

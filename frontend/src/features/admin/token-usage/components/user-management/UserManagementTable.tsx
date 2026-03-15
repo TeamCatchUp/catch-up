@@ -73,7 +73,9 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
 
           {/* 직급 */}
           <div>
-            <span className={`${TAG_BASE} ${POSITION_BADGE_CLASS[member.position] ?? 'bg-fill-interaction-hover text-content-alternative'}`}>
+            <span
+              className={`${TAG_BASE} ${POSITION_BADGE_CLASS[member.position] ?? 'bg-fill-interaction-hover text-content-alternative'}`}
+            >
               {member.position}
             </span>
           </div>
@@ -94,11 +96,11 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={4} className="min-w-[260px]">
                 <DropdownMenuItem>
-                  <IconGraph className="size-6 text-content-alternative" />
+                  <IconGraph className="text-content-alternative size-6" />
                   토큰 이용 대시보드 바로가기
                 </DropdownMenuItem>
                 <DropdownMenuItem>
-                  <IconChip className="size-6 text-content-alternative" />
+                  <IconChip className="text-content-alternative size-6" />
                   개인 토큰 사용 제한 설정 바로가기
                 </DropdownMenuItem>
               </DropdownMenuContent>

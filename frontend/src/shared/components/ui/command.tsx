@@ -12,7 +12,7 @@ const Command = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive
     ref={ref}
-    className={cn('flex size-full flex-col overflow-hidden rounded-2xl bg-fill-normal', className)}
+    className={cn('bg-fill-normal flex size-full flex-col overflow-hidden rounded-2xl', className)}
     {...props}
   />
 ));
@@ -82,7 +82,7 @@ const CommandEmpty = React.forwardRef<
   React.ComponentRef<typeof CommandPrimitive.Empty>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
 >((props, ref) => (
-  <CommandPrimitive.Empty ref={ref} className="text-body-small py-6 text-center text-content-alternative" {...props} />
+  <CommandPrimitive.Empty ref={ref} className="text-body-small text-content-alternative py-6 text-center" {...props} />
 ));
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
 
@@ -93,7 +93,7 @@ const CommandGroup = React.forwardRef<
   <CommandPrimitive.Group
     ref={ref}
     className={cn(
-      '[&_[cmdk-group-heading]]:text-label-xsmall overflow-hidden [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-content-alternative',
+      '[&_[cmdk-group-heading]]:text-label-xsmall [&_[cmdk-group-heading]]:text-content-alternative overflow-hidden [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5',
       className,
     )}
     {...props}

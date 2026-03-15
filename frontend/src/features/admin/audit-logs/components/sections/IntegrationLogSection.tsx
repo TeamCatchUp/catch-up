@@ -74,9 +74,9 @@ const IntegrationLogSection = () => {
       {/* 테이블 + 디테일 패널 */}
       <div className="border-edge-neutral flex min-h-0 overflow-clip border-y" style={{ height: 558 }}>
         {/* 좌측: 테이블 */}
-        <div className="border-edge-neutral flex min-w-0 flex-1 flex-col overflow-clip border-r bg-fill-normal">
+        <div className="border-edge-neutral bg-fill-normal flex min-w-0 flex-1 flex-col overflow-clip border-r">
           {/* 헤더 */}
-          <div className="border-edge-neutral bg-fill-strong text-body-xsmall flex h-9 shrink-0 items-center gap-1 border-b px-5 text-content-alternative">
+          <div className="border-edge-neutral bg-fill-strong text-body-xsmall text-content-alternative flex h-9 shrink-0 items-center gap-1 border-b px-5">
             <span className="w-13.75 shrink-0">커넥터</span>
             <span className="min-w-25 flex-1 text-center">실행 일자</span>
             <span className="flex-1 text-center">구분</span>
@@ -86,7 +86,7 @@ const IntegrationLogSection = () => {
 
           {/* 행 */}
           {sorted.length === 0 ? (
-            <div className="text-body-small flex h-full min-h-25 items-center justify-center text-content-alternative">
+            <div className="text-body-small text-content-alternative flex h-full min-h-25 items-center justify-center">
               연동 로그가 없습니다.
             </div>
           ) : (
@@ -94,7 +94,8 @@ const IntegrationLogSection = () => {
               {sorted.map((log) => {
                 const isActive = activeKey === log.logId;
                 const statusLabel = STATUS_LABEL[log.status];
-                const badgeCls = STATUS_BADGE_CLASS[statusLabel] ?? 'bg-fill-interaction-hover text-content-alternative';
+                const badgeCls =
+                  STATUS_BADGE_CLASS[statusLabel] ?? 'bg-fill-interaction-hover text-content-alternative';
                 const isSuccess = log.status === 'success';
                 const iconCls = getServiceIconCls(log.service);
 
@@ -151,9 +152,9 @@ const IntegrationLogSection = () => {
         </div>
 
         {/* 우측: 디테일 패널 */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-fill-normal py-5 pl-6">
+        <div className="bg-fill-normal flex min-w-0 flex-1 flex-col overflow-y-auto py-5 pl-6">
           {!selectedLog ? (
-            <div className="text-body-small flex h-full items-center justify-center text-content-alternative">
+            <div className="text-body-small text-content-alternative flex h-full items-center justify-center">
               선택된 로그 정보가 없습니다.
             </div>
           ) : selectedLog.category === 'api_call' ? (

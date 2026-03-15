@@ -7,7 +7,7 @@ import { SLACK_GUIDE_IMAGES } from '../../constants/integrations';
 /** Slack 연동 가이드 섹션 */
 const SlackGuideSection = () => {
   return (
-    <div className="border-edge-neutral flex flex-col gap-10 overflow-clip rounded-xl border bg-fill-normal p-6">
+    <div className="border-edge-neutral bg-fill-normal flex flex-col gap-10 overflow-clip rounded-xl border p-6">
       {/* 인트로 */}
       <div className="flex flex-col gap-2">
         <h4 className="text-heading-medium text-content-normal">결정이 내려진 순간의 대화, 휘발되지 않는 자산으로</h4>
@@ -24,7 +24,7 @@ const SlackGuideSection = () => {
         <p className="text-label-small text-content-normal">
           Catch Up 협업 툴 연동 페이지에서 &apos;연동하기&apos; 버튼을 클릭합니다.
         </p>
-        <div className="border-edge-neutral overflow-clip rounded-xl border bg-fill-normal px-4 py-2.5">
+        <div className="border-edge-neutral bg-fill-normal overflow-clip rounded-xl border px-4 py-2.5">
           <Image
             src={SLACK_GUIDE_IMAGES.integrationPage}
             alt="Catch Up 협업 툴 연동 페이지 - Slack 연동"
@@ -35,7 +35,7 @@ const SlackGuideSection = () => {
         <p className="text-label-small text-content-normal">
           Slack 연동 페이지에서 권한을 승인하고 연결할 Workspace를 선택합니다.
         </p>
-        <div className="border-edge-neutral overflow-clip rounded-xl border bg-fill-normal px-4 py-2.5">
+        <div className="border-edge-neutral bg-fill-normal overflow-clip rounded-xl border px-4 py-2.5">
           <Image
             src={SLACK_GUIDE_IMAGES.permissions}
             alt="Slack 권한 승인 및 Workspace 선택 화면"
@@ -47,7 +47,7 @@ const SlackGuideSection = () => {
           <IconSlack className="size-6 shrink-0" />
           <div className="flex min-w-0 flex-col">
             <span className="text-body-xsmall text-content-normal">Slack account</span>
-            <span className="text-label-xsmall truncate text-content-alternative">
+            <span className="text-label-xsmall text-content-alternative truncate">
               https://id.atlassian.com/manage-profile/profile-and-visibility
             </span>
           </div>

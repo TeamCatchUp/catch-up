@@ -44,8 +44,7 @@ const toButtonState = (status: SyncJobStatus | undefined): EmbeddingButtonState 
 };
 
 /** syncStatus → 복원 대상이면 true */
-const isActiveStatus = (status: SyncStatusResponse | undefined): status is SyncStatusResponse =>
-  !!status;
+const isActiveStatus = (status: SyncStatusResponse | undefined): status is SyncStatusResponse => !!status;
 
 /**
  * 임베딩 job 상태 관리 훅 (Polling 기반).
@@ -107,10 +106,7 @@ export const useEmbeddingJobs = () => {
 
   const activeJobs = useMemo((): ActiveJob[] => {
     const manualConnectors = new Set(manualJobs.map((j) => j.connector));
-    return [
-      ...manualJobs,
-      ...restoredJobs.filter((j) => !manualConnectors.has(j.connector)),
-    ];
+    return [...manualJobs, ...restoredJobs.filter((j) => !manualConnectors.has(j.connector))];
   }, [manualJobs, restoredJobs]);
 
   // ─── Step 3: Snapshot polling (모든 activeJobs) ───

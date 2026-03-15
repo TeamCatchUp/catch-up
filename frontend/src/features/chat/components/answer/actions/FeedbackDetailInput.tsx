@@ -42,7 +42,7 @@ const FeedbackDetailInput = ({
   return (
     <div
       className={cn(
-        'border-edge-primary flex w-full flex-col gap-2.5 rounded-2xl border bg-fill-normal px-4.5 py-2.5',
+        'border-edge-primary bg-fill-normal flex w-full flex-col gap-2.5 rounded-2xl border px-4.5 py-2.5',
         'transition-all duration-200 ease-out will-change-[transform,opacity]',
         entered ? 'translate-y-0 scale-100 opacity-100' : '-translate-y-1 scale-[0.99] opacity-0',
       )}

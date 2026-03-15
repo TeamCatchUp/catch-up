@@ -392,8 +392,7 @@
   .dark .bg-onboarding-gradient {
     background:
       linear-gradient(180deg, #131416 0%, transparent 50%, rgba(0, 21, 54, 0.5) 100%),
-      radial-gradient(ellipse at 50% 85%, rgba(0, 41, 102, 0.3), transparent 70%),
-      #131416;
+      radial-gradient(ellipse at 50% 85%, rgba(0, 41, 102, 0.3), transparent 70%), #131416;
   }
 
   .dark .bg-rag-github-pr-mcp {

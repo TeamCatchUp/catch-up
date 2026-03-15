@@ -153,7 +153,7 @@ const FeedbackSection = ({
           onClick={closeSection}
           className="icon-button-only-gray flex cursor-pointer items-center rounded-full p-0.5"
         >
-          <Cancel className="h-4.5 w-4.5 text-content-alternative" />
+          <Cancel className="text-content-alternative h-4.5 w-4.5" />
         </div>
       </div>
       <div className="flex flex-wrap gap-x-2.5 gap-y-1.5">

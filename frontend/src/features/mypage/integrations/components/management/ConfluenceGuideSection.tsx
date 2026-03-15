@@ -7,10 +7,12 @@ import { ATLASSIAN_PROFILE_URL, CONFLUENCE_GUIDE_IMAGES } from '../../constants/
 /** Confluence (Atlassian) 연동 가이드 섹션 */
 const ConfluenceGuideSection = () => {
   return (
-    <div className="border-edge-neutral flex flex-col gap-10 overflow-clip rounded-xl border bg-fill-normal p-6">
+    <div className="border-edge-neutral bg-fill-normal flex flex-col gap-10 overflow-clip rounded-xl border p-6">
       {/* 인트로 */}
       <div className="flex flex-col gap-2">
-        <h4 className="text-heading-medium text-content-normal">기획과 태스크의 흐름, 질문 대신 검색으로 해결하세요.</h4>
+        <h4 className="text-heading-medium text-content-normal">
+          기획과 태스크의 흐름, 질문 대신 검색으로 해결하세요.
+        </h4>
         <p className="text-label-small text-content-normal">
           기획 문서는 Confluence에, 구체적인 업무 할당은 Jira에 남아있습니다. &quot;그때 왜 이 스펙으로
           결정했더라?&quot; 누군가에게 묻는 순간, 질문하는 사람도 답하는 사람도 일이 멈춥니다. Catch Up은 흩어진 문서를
@@ -24,7 +26,7 @@ const ConfluenceGuideSection = () => {
         <p className="text-label-small text-content-normal">
           Catch Up 협업 툴 연동 페이지에서 &apos;연동하기&apos; 버튼을 클릭합니다.
         </p>
-        <div className="border-edge-neutral overflow-clip rounded-xl border bg-fill-normal px-4 py-2.5">
+        <div className="border-edge-neutral bg-fill-normal overflow-clip rounded-xl border px-4 py-2.5">
           <Image
             src={CONFLUENCE_GUIDE_IMAGES.integrationPage}
             alt="Catch Up 협업 툴 연동 페이지 - Confluence 연동하기 버튼"
@@ -39,7 +41,7 @@ const ConfluenceGuideSection = () => {
           </a>
           )를 선택하고 권한을 승인해주세요.
         </p>
-        <div className="border-edge-neutral overflow-clip rounded-xl border bg-fill-normal px-4 py-2.5">
+        <div className="border-edge-neutral bg-fill-normal overflow-clip rounded-xl border px-4 py-2.5">
           <Image
             src={CONFLUENCE_GUIDE_IMAGES.siteSelection}
             alt="Atlassian 사이트 선택 및 권한 요청 화면"
@@ -47,7 +49,7 @@ const ConfluenceGuideSection = () => {
             className="h-auto w-full"
           />
         </div>
-        <div className="border-edge-neutral overflow-clip rounded-xl border bg-fill-normal px-4 py-2.5">
+        <div className="border-edge-neutral bg-fill-normal overflow-clip rounded-xl border px-4 py-2.5">
           <Image
             src={CONFLUENCE_GUIDE_IMAGES.accept}
             alt="Atlassian 권한 승인 화면"
@@ -60,12 +62,12 @@ const ConfluenceGuideSection = () => {
           onClick={() => window.open(ATLASSIAN_PROFILE_URL, '_blank')}
           className="border-edge-normal flex cursor-pointer items-start gap-4 rounded-xl border px-3 py-2 text-left"
         >
-          <div className="flex size-10 shrink-0 items-center justify-center bg-fill-normal">
+          <div className="bg-fill-normal flex size-10 shrink-0 items-center justify-center">
             <IconAT className="size-10" />
           </div>
           <div className="flex min-w-0 flex-col">
             <span className="text-body-xsmall text-content-normal">Atlassian account</span>
-            <span className="text-label-xsmall truncate text-content-alternative">{ATLASSIAN_PROFILE_URL}</span>
+            <span className="text-label-xsmall text-content-alternative truncate">{ATLASSIAN_PROFILE_URL}</span>
           </div>
         </button>
       </div>

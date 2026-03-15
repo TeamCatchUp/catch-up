@@ -91,7 +91,7 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
         description="신규 회원의 가입 요청을 확인하고 승인하세요."
         actions={
           <>
-            <div className="border-edge-neutral flex items-center gap-0.5 rounded-lg border bg-fill-normal px-2 py-0.5">
+            <div className="border-edge-neutral bg-fill-normal flex items-center gap-0.5 rounded-lg border px-2 py-0.5">
               <Button
                 variant="text-secondary-mono"
                 size="md"

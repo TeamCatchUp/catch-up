@@ -20,19 +20,19 @@ interface PermissionsTableProps {
 /** 권한 목록 테이블 */
 const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) => {
   return (
-    <section className="border-edge-neutral flex min-h-0 flex-1 flex-col overflow-hidden border-y bg-fill-normal">
+    <section className="border-edge-neutral bg-fill-normal flex min-h-0 flex-1 flex-col overflow-hidden border-y">
       <div className="border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-b px-6 lg:px-9">
         <div className="grid flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-6 lg:gap-9">
-          <span className="text-body-xsmall pl-1.5 text-left text-content-alternative">이름</span>
-          <span className="text-body-xsmall text-center text-content-alternative">직급</span>
-          <span className="text-body-xsmall text-center text-content-alternative">부서</span>
-          <span className="text-body-xsmall text-center text-content-alternative">권한</span>
+          <span className="text-body-xsmall text-content-alternative pl-1.5 text-left">이름</span>
+          <span className="text-body-xsmall text-content-alternative text-center">직급</span>
+          <span className="text-body-xsmall text-content-alternative text-center">부서</span>
+          <span className="text-body-xsmall text-content-alternative text-center">권한</span>
           <span aria-hidden className="block w-[110px]" />
         </div>
       </div>
 
       {rows.length === 0 ? (
-        <div className="text-body-small flex h-full min-h-25 items-center justify-center text-content-alternative">
+        <div className="text-body-small text-content-alternative flex h-full min-h-25 items-center justify-center">
           조회된 권한 정보가 없습니다.
         </div>
       ) : (
@@ -41,7 +41,10 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
             const roleLabel = ROLE_LABEL[member.role];
 
             return (
-              <div key={member.id} className="border-edge-neutral flex h-12.5 shrink-0 items-center border-b px-6 lg:px-9">
+              <div
+                key={member.id}
+                className="border-edge-neutral flex h-12.5 shrink-0 items-center border-b px-6 lg:px-9"
+              >
                 <div className="grid flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-6 lg:gap-9">
                   <div className="flex items-center gap-4">
                     <DefaultProfile className="text-content-assistive size-7.5 shrink-0 rounded-full" />
@@ -52,7 +55,8 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
                     <span
                       className={cn(
                         TAG_BASE_CLASS,
-                        RANK_BADGE_CLASS[JOB_LEVEL_LABEL[member.jobLevel]] ?? 'bg-fill-interaction-hover text-content-alternative',
+                        RANK_BADGE_CLASS[JOB_LEVEL_LABEL[member.jobLevel]] ??
+                          'bg-fill-interaction-hover text-content-alternative',
                       )}
                     >
                       {JOB_LEVEL_LABEL[member.jobLevel]}
