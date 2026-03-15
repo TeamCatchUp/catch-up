@@ -37,6 +37,7 @@ from typing import Any
 import httpx
 
 from catchup.configs.config import settings
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 
 logger = logging.getLogger(__name__)
 
@@ -128,9 +129,9 @@ class JiraApiClient:
         agile_url: Agile API v1 URL (Sprint, Board - Jira Software 전용)
     """
 
-    def __init__(self, cloud_id: str, access_token: str):
+    def __init__(self, cloud_id: str, token_provider: AtlassianTokenProvider):
         self.cloud_id = cloud_id
-        self.access_token = access_token
+        self.token_provider = token_provider
         self.base_url = f"{settings.ATLASSIAN_API_URL}/ex/jira/{cloud_id}/rest/api/3"
 
         # Agile API v1: Jira Software 전용 기능
@@ -192,7 +193,7 @@ class JiraApiClient:
 
         return self._agile_available
 
-    def _get_headers(self) -> dict[str, str]:
+    def _get_headers(self, access_token: str) -> dict[str, str]:
         """
         API 요청에 사용할 HTTP 헤더 생성
 
@@ -200,7 +201,7 @@ class JiraApiClient:
             Authorization, Content-Type, Accept 헤더가 포함된 딕셔너리
         """
         return {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
@@ -240,46 +241,55 @@ class JiraApiClient:
             7. 성공 시 rate limit 방지를 위한 딜레이 후 응답 반환
         """
         async with self._semaphore:
+            auth_retried = False
             for attempt in range(max_retries):
                 try:
-                    async with httpx.AsyncClient(
-                        headers=self._get_headers(), timeout=30.0
-                    ) as client:
-                        response = await client.request(
-                            method, url, params=params, json=json_body
+                    force_refresh = False
+                    while True:
+                        access_token = await self.token_provider.get_access_token(
+                            self.cloud_id,
+                            force_refresh=force_refresh,
                         )
-
-                        # Rate limit 초과 (429 Too Many Requests)
-                        # Retry-After 헤더 값만큼 대기 후 재시도
-                        if response.status_code == 429:
-                            retry_after = int(
-                                response.headers.get("Retry-After", 60)
+                        async with httpx.AsyncClient(
+                            headers=self._get_headers(access_token), timeout=30.0
+                        ) as client:
+                            response = await client.request(
+                                method, url, params=params, json=json_body
                             )
-                            if attempt < max_retries - 1:
-                                logger.warning(
-                                    f"Rate limited. Waiting {retry_after}s before retry..."
+
+                            # Rate limit 초과 (429 Too Many Requests)
+                            # Retry-After 헤더 값만큼 대기 후 재시도
+                            if response.status_code == 429:
+                                retry_after = int(
+                                    response.headers.get("Retry-After", 60)
                                 )
-                                await asyncio.sleep(retry_after)
+                                if attempt < max_retries - 1:
+                                    logger.warning(
+                                        f"Rate limited. Waiting {retry_after}s before retry..."
+                                    )
+                                    await asyncio.sleep(retry_after)
+                                    break
+                                raise JiraRateLimitError(retry_after)
+
+                            # 인증 실패 (401 Unauthorized)
+                            # 1회에 한해 강제 refresh 후 동일 요청 재시도
+                            if response.status_code == 401:
+                                if auth_retried:
+                                    raise JiraAuthError()
+                                auth_retried = True
+                                force_refresh = True
                                 continue
-                            raise JiraRateLimitError(retry_after)
 
-                        # 인증 실패 (401 Unauthorized)
-                        # 토큰이 만료되었거나 유효하지 않음
-                        # 호출자가 토큰을 갱신한 후 새 클라이언트로 재시도해야 함
-                        if response.status_code == 401:
-                            raise JiraAuthError()
+                            # 기타 클라이언트/서버 에러
+                            if response.status_code >= 400:
+                                raise JiraApiError(
+                                    f"API error: {response.text}",
+                                    response.status_code,
+                                )
 
-                        # 기타 클라이언트/서버 에러
-                        if response.status_code >= 400:
-                            raise JiraApiError(
-                                f"API error: {response.text}",
-                                response.status_code,
-                            )
-
-                        # Rate limit 방지를 위한 요청 간 딜레이
-                        await asyncio.sleep(self._rate_limit_delay)
-
-                        return response.json()
+                            # Rate limit 방지를 위한 요청 간 딜레이
+                            await asyncio.sleep(self._rate_limit_delay)
+                            return response.json()
 
                 except httpx.TimeoutException:
                     # 타임아웃 시 exponential backoff (1초, 2초, 4초...)

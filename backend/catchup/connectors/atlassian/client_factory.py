@@ -2,7 +2,10 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import (
+    AtlassianTokenManager,
+    AtlassianTokenProvider,
+)
 from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.connectors.jira.client import JiraApiClient
 
@@ -18,23 +21,26 @@ class AtlassianClientFactory:
 
     def __init__(self, token_manager: AtlassianTokenManager):
         self.token_manager = token_manager
+        self.token_provider = AtlassianTokenProvider(token_manager)
 
     async def create_jira_client(
         self, db: Session, cloud_id: str
     ) -> JiraApiClient:
         """Jira API 클라이언트 생성."""
-        access_token = await self.token_manager.resolve_access_token_by_cloud_id(
-            db, cloud_id
-        )
+        _ = db
         logger.info("[ATLASSIAN][FACTORY] Created JiraApiClient: cloud_id=%s", cloud_id)
-        return JiraApiClient(cloud_id=cloud_id, access_token=access_token)
+        return JiraApiClient(
+            cloud_id=cloud_id,
+            token_provider=self.token_provider,
+        )
 
     async def create_confluence_client(
         self, db: Session, cloud_id: str
     ) -> ConfluenceApiClient:
         """Confluence API 클라이언트 생성."""
-        access_token = await self.token_manager.resolve_access_token_by_cloud_id(
-            db, cloud_id
-        )
+        _ = db
         logger.info("[ATLASSIAN][FACTORY] Created ConfluenceApiClient: cloud_id=%s", cloud_id)
-        return ConfluenceApiClient(cloud_id=cloud_id, access_token=access_token)
+        return ConfluenceApiClient(
+            cloud_id=cloud_id,
+            token_provider=self.token_provider,
+        )

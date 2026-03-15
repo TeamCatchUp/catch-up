@@ -9,6 +9,7 @@ from urllib.parse import urlparse, parse_qs
 import httpx
 
 from catchup.configs.config import settings
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.base import (
     AuthenticationError,
     ConnectorApiError,
@@ -27,9 +28,9 @@ class ConfluenceAuthError(AuthenticationError, ConfluenceApiError):
     service = "confluence"
 
 class ConfluenceApiClient:
-    def __init__(self, cloud_id: str, access_token:str):
+    def __init__(self, cloud_id: str, token_provider: AtlassianTokenProvider):
         self.cloud_id = cloud_id
-        self.access_token = access_token
+        self.token_provider = token_provider
         # v2 API (spaces, pages 등)
         self.base_url = f"{settings.ATLASSIAN_API_URL}/ex/confluence/{cloud_id}/wiki/api/v2"
         # v1 API (user search 등)
@@ -38,9 +39,9 @@ class ConfluenceApiClient:
         self._semaphore = asyncio.Semaphore(settings.CONFLUENCE_SYNC_MAX_CONCURRENT_REQUEST)
         self._rate_limit_delay = settings.CONFLUENCE_SYNC_RATE_LIMIT_DELAY
     
-    def _get_headers(self) -> dict[str, str]:
+    def _get_headers(self, access_token: str) -> dict[str, str]:
         return {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
@@ -54,51 +55,62 @@ class ConfluenceApiClient:
         max_retries: int = 3,
     ) -> dict[str, Any]:
         async with self._semaphore:
+            auth_retried = False
             for attempt in range(max_retries):
                 try:
-                    async with httpx.AsyncClient(
-                        headers=self._get_headers(), timeout=30.0
-                    ) as client:
-                        response = await client.request(
-                            method, url, params=params, json=json_body
+                    force_refresh = False
+                    while True:
+                        access_token = await self.token_provider.get_access_token(
+                            self.cloud_id,
+                            force_refresh=force_refresh,
                         )
-
-                        if response.status_code == 429:
-                            retry_after = int(response.headers.get("Retry-After", 5))
-                            logger.warning(
-                                f"[CONFLUENCE][API] Rate limited, retry after {retry_after}s"
+                        async with httpx.AsyncClient(
+                            headers=self._get_headers(access_token), timeout=30.0
+                        ) as client:
+                            response = await client.request(
+                                method, url, params=params, json=json_body
                             )
-                            if attempt < max_retries - 1:
-                                await asyncio.sleep(retry_after)
+
+                            if response.status_code == 429:
+                                retry_after = int(response.headers.get("Retry-After", 5))
+                                logger.warning(
+                                    f"[CONFLUENCE][API] Rate limited, retry after {retry_after}s"
+                                )
+                                if attempt < max_retries - 1:
+                                    await asyncio.sleep(retry_after)
+                                    break
+                                raise ConfluenceRateLimitError(
+                                    "Rate limit exceeded",
+                                    retry_after=retry_after,
+                                )
+
+                            if response.status_code == 401:
+                                if auth_retried:
+                                    body = (response.text or "").strip()
+                                    raise ConfluenceAuthError(
+                                        f"Authentication failed for Confluence API. body={body[:300]}"
+                                    )
+                                auth_retried = True
+                                force_refresh = True
                                 continue
-                            raise ConfluenceRateLimitError(
-                                "Rate limit exceeded",
-                                retry_after=retry_after,
-                            )
 
-                        if response.status_code == 401:
-                            body = (response.text or "").strip()
-                            raise ConfluenceAuthError(
-                                f"Authentication failed for Confluence API. body={body[:300]}"
-                            )
+                            if response.status_code == 403:
+                                body = (response.text or "").strip()
+                                raise ConfluenceApiError(
+                                    "Confluence API access forbidden. "
+                                    f"Confluence scope or admin permission may be missing. body={body[:300]}",
+                                    status_code=403,
+                                )
 
-                        if response.status_code == 403:
-                            body = (response.text or "").strip()
-                            raise ConfluenceApiError(
-                                "Confluence API access forbidden. "
-                                f"Confluence scope or admin permission may be missing. body={body[:300]}",
-                                status_code=403,
-                            )
+                            if response.status_code >= 400:
+                                error_body = (response.text or "").strip()
+                                raise ConfluenceApiError(
+                                    f"API error [{response.status_code}]: {error_body[:300]}",
+                                    status_code=response.status_code,
+                                )
 
-                        if response.status_code >= 400:
-                            error_body = (response.text or "").strip()
-                            raise ConfluenceApiError(
-                                f"API error [{response.status_code}]: {error_body[:300]}",
-                                status_code=response.status_code,
-                            )
-
-                        await asyncio.sleep(self._rate_limit_delay)
-                        return response.json()
+                            await asyncio.sleep(self._rate_limit_delay)
+                            return response.json()
 
                 except httpx.TimeoutException:
                     if attempt < max_retries - 1:

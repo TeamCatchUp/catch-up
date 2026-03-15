@@ -20,7 +20,10 @@ from catchup.connectors.atlassian.exceptions import (
     AtlassianTokenExpiredError,
     AtlassianTokenNotFoundError,
 )
-from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import (
+    AtlassianTokenManager,
+    AtlassianTokenProvider,
+)
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.jira.client import JiraApiClient
@@ -49,12 +52,17 @@ class JiraDynamicWebhookService:
             oauth_repository=atlassian_oauth,
         )
         try:
-            access_token = await token_manager.resolve_access_token_by_cloud_id(db, cloud_id)
+            token = atlassian_oauth.get_token_by_cloud_id(db, cloud_id)
+            if token is None:
+                raise AtlassianTokenNotFoundError(cloud_id)
         except AtlassianTokenNotFoundError:
             raise HTTPException(status_code=404, detail=f"Jira token not found: {cloud_id}")
         except AtlassianTokenExpiredError:
             raise HTTPException(status_code=401, detail=f"Jira token expired: {cloud_id}")
-        return JiraApiClient(cloud_id=cloud_id, access_token=access_token)
+        return JiraApiClient(
+            cloud_id=cloud_id,
+            token_provider=AtlassianTokenProvider(token_manager),
+        )
 
     def _build_callback_url(self, cloud_id: str) -> str:
         configured_base_url = settings.ATLASSIAN_WEBHOOK_CALLBACK_BASE_URL.strip()

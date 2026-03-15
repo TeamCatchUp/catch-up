@@ -6,6 +6,7 @@ from typing import Any
 from langchain_core.documents import Document
 from sqlalchemy.orm import Session
 
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.connectors.confluence.schemas import (
     ConfluenceAttachmentResponse,
@@ -30,14 +31,14 @@ class ConfluenceIngestionService:
     def __init__(
         self,
         cloud_id: str,
-        access_token: str,
+        token_provider: AtlassianTokenProvider,
         site_url: str,
         repository: PGVectorRepository
     ):
         self.cloud_id = cloud_id
         self.site_url = site_url.rstrip("/")
 
-        self.client = ConfluenceApiClient(cloud_id, access_token)
+        self.client = ConfluenceApiClient(cloud_id, token_provider)
         self.transformer = ConfluenceTransformer()
         self.repository = repository
 

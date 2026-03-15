@@ -5,7 +5,10 @@ from datetime import datetime, timedelta, timezone
 
 from catchup.configs.config import settings
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
-from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import (
+    AtlassianTokenManager,
+    AtlassianTokenProvider,
+)
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.audit.enums import AuditEventStatus, AuditLevel
@@ -32,6 +35,7 @@ async def poll_confluence_incremental_changes() -> dict[str, int]:
         oauth_client=AtlassianOAuthClient(),
         oauth_repository=oauth_repository,
     )
+    token_provider = AtlassianTokenProvider(token_manager)
 
     with SessionLocal() as db:
         tokens = oauth_repository.get_all_tokens(db)
@@ -39,10 +43,9 @@ async def poll_confluence_incremental_changes() -> dict[str, int]:
     for token in tokens:
         try:
             with SessionLocal() as db:
-                access_token = await token_manager.resolve_access_token_by_cloud_id(db, token.cloud_id)
                 spaces = confluence_domain.get_spaces_by_cloud_id(db, token.cloud_id)
 
-            client = ConfluenceApiClient(token.cloud_id, access_token)
+            client = ConfluenceApiClient(token.cloud_id, token_provider)
             for space in spaces:
                 space_id = (space.space_id or "").strip()
                 space_key = (space.space_key or "").strip()
