@@ -533,6 +533,7 @@ class SlackTransformer:
             member_ids=[],  # conversations_members로 별도 조회 필요
             is_archived=data.get("is_archived", False),
             is_private=data.get("is_private", False),
+            is_member=data.get("is_member", False),
             is_mpim=data.get("is_mpim", False),
             is_im=data.get("is_im", False),
             created_at=created_at,
