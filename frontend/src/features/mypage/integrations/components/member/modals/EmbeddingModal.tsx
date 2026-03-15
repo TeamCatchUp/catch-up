@@ -50,7 +50,7 @@ interface EmbeddingModalProps {
 
 /** 임베딩 모달 (셸) */
 const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }: EmbeddingModalProps) => {
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('1개월');
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('3년');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
   const connector = service as SyncConnector;
@@ -90,7 +90,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
   };
 
   const resetFormState = () => {
-    setSelectedPeriod('1개월');
+    setSelectedPeriod('3년');
     setSelectedItems(new Set());
   };
 
