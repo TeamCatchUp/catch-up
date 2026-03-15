@@ -299,7 +299,7 @@ async def lifespan(app: FastAPI):
         await pgvector_repo.initialize(ensure_pg_indices)
         logger.info(
             "pgvector_repository_initialized",
-            result="sucess",
+            result="success",
             context="server_startup",
         )
         
@@ -310,6 +310,7 @@ async def lifespan(app: FastAPI):
             context="server_startup",
             error=str(e),
         )
+        raise
 
 
     # Langgraph Checkpoint INIT
@@ -339,6 +340,7 @@ async def lifespan(app: FastAPI):
             ),
             immediate=True,
         )
+        raise
 
     # Scheduler 초기화
     try:
@@ -367,6 +369,7 @@ async def lifespan(app: FastAPI):
             ),
             immediate=True,
         )
+        raise
 
     try:
         await get_redis_client()

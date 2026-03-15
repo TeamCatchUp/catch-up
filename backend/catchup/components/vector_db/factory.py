@@ -1,6 +1,3 @@
-from functools import lru_cache
-from typing import Optional
-
 from langchain.embeddings import Embeddings
 
 from catchup.components.vector_db.base import BaseVectorDbService
