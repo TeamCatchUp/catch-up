@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 
 from pydantic import BaseModel
-from sqlalchemy import select, delete, and_
+from sqlalchemy import select, delete, and_, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -282,12 +282,16 @@ def _repo_upsert_set(stmt) -> dict:
     }
 
 
+def _user_email_update_value(stmt):
+    return func.coalesce(stmt.excluded.email, GitHubUserModel.email)
+
+
 def _user_upsert_set(stmt) -> dict:
     """User upsert 시 conflict 업데이트 필드"""
     return {
         "login": stmt.excluded.login,
         "name": stmt.excluded.name,
-        "email": stmt.excluded.email,
+        "email": _user_email_update_value(stmt),
         "avatar_url": stmt.excluded.avatar_url,
         "org_role": stmt.excluded.org_role,
     }
