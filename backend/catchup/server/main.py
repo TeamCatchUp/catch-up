@@ -290,10 +290,11 @@ async def lifespan(app: FastAPI):
             immediate=True,
         )
         raise
-    
-    
+
     try:
-        embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK)
+        embeddings = get_embedding_service(
+            EmbeddingProvider.AWS_BEDROCK
+        ).get_embedder()
         pgvector_repo = get_pgvector_repository(embeddings)  # Ingestion
         await pgvector_repo.initialize(ensure_pg_indices)
         logger.info(
