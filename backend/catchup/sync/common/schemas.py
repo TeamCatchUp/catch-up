@@ -555,7 +555,7 @@ class IncrementalSyncContext(SyncContextBase):
     sync_type: SyncType = field(init=False, default=SyncType.INCREMENTAL)
 
     def __post_init__(self) -> None:
-        super().__post_init__()
+        SyncContextBase.__post_init__(self)
         self.parent_type = SyncTargetType(self.parent_type)
         self.event_kind = SyncEventKind(self.event_kind)
 
