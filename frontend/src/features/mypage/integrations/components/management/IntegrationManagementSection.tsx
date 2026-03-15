@@ -78,7 +78,7 @@ const IntegrationManagementSection = ({
 
   return (
     <div className="flex gap-8">
-      <div className="flex w-81.25 flex-col gap-4">
+      <div className="flex flex-1 flex-col gap-4">
         {integrationMenu.map(({ service, Icon, actionText, connected }) => {
           const isSelected = selectedService === service;
 
@@ -88,15 +88,15 @@ const IntegrationManagementSection = ({
               type="button"
               onClick={() => onSelectService(service)}
               className={cn(
-                'shadow-card flex h-16 w-81.25 cursor-pointer items-center justify-between rounded-xl border p-4',
+                'shadow-card flex h-16 w-full cursor-pointer items-center justify-between rounded-xl border p-4',
                 isSelected ? 'border-edge-primary bg-fill-normal' : 'border-edge-neutral bg-fill-normal',
               )}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <Icon className={service === 'confluence' ? 'h-5.75 w-6 shrink-0' : 'h-6 w-6 shrink-0'} />
-                <span className="text-heading-small text-content-normal">{actionText}</span>
+                <span className="text-heading-small text-content-normal truncate">{actionText}</span>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex shrink-0 items-center gap-1">
                 {connected ? (
                   <>
                     <IconCloudCheckFilled className="text-icon-primary h-5 w-5" />
@@ -114,7 +114,7 @@ const IntegrationManagementSection = ({
         })}
       </div>
 
-      <div className="flex w-160.75 flex-none flex-col gap-6">
+      <div className="flex flex-2 flex-col gap-6">
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-5">
             <h3 className="text-heading-small text-content-normal flex-1">연동 상태 관리</h3>
