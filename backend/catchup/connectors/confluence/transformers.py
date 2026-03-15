@@ -483,7 +483,12 @@ class ConfluenceTransformer:
             return web_url
         if not site_url:
             return web_url
-        return f"{site_url.rstrip('/')}/{web_url.lstrip('/')}"
+
+        base = site_url.rstrip("/")
+        path = web_url.lstrip("/")
+        if base.endswith("/wiki") or path.startswith("wiki/"):
+            return f"{base}/{path}"
+        return f"{base}/wiki/{path}"
 
     # ================================================================
     # Dual Content Strategy
