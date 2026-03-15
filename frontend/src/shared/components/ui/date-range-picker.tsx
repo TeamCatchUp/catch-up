@@ -42,11 +42,11 @@ function DateRangePicker({
         <button
           type="button"
           className={cn(
-            'border-edge-neutral flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border bg-fill-normal px-2.5 py-2',
+            'border-edge-neutral bg-fill-normal flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-2',
             className,
           )}
         >
-          <IconCalendar className="size-6 text-icon-neutral" />
+          <IconCalendar className="text-icon-neutral size-6" />
           {displayFrom ? (
             <>
               <span className="text-body-small text-content-neutral">{displayFrom}</span>

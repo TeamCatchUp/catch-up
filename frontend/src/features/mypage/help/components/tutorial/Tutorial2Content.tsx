@@ -89,7 +89,9 @@ const Tutorial2Content = () => {
               <p className="text-content-alternative">
                 - 원인 좁히기: [증상-문제]가 있는데 원인을 찾으려면 코드/인프라/설정 중 어디부터 봐야 할까요?
               </p>
-              <p className="text-content-alternative">- 현황 정리: [이슈/프로젝트]의 지금 진행 상태랑 다음 액션을 정리해 주세요.</p>
+              <p className="text-content-alternative">
+                - 현황 정리: [이슈/프로젝트]의 지금 진행 상태랑 다음 액션을 정리해 주세요.
+              </p>
               <p className="text-content-alternative">
                 - 히스토리 찾기: [주제]에 대해 마지막으로 합의된 결론이 뭐였나요? 근거(티켓/스레드/문서)도 같이요.
               </p>

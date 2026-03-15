@@ -5,33 +5,33 @@
 @layer utilities {
   /* icon-buttons */
   .icon-button-outline-gray {
-    @apply disabled:text-content-assistive hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:border-edge-assistive text-icon-normal border-edge-neutral rounded-lg border bg-fill-normal;
+    @apply disabled:text-content-assistive hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:border-edge-assistive text-icon-normal border-edge-neutral bg-fill-normal rounded-lg border;
   }
 
   .icon-button-only-gray {
-    @apply active:text-icon-normal disabled:text-content-assistive hover:text-icon-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed disabled:bg-fill-interaction-disable rounded-lg text-icon-neutral;
+    @apply active:text-icon-normal disabled:text-content-assistive hover:text-icon-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed disabled:bg-fill-interaction-disable text-icon-neutral rounded-lg;
   }
 
   /* box-buttons */
   .box-button-solid-primary {
-    @apply hover:bg-fill-primary-interaction-hover active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive rounded-lg bg-fill-primary;
+    @apply hover:bg-fill-primary-interaction-hover active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive bg-fill-primary rounded-lg;
   }
 
   .box-button-outline-gray {
-    @apply border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:bg-fill-interaction-inactive border-edge-neutral rounded-lg border bg-fill-normal;
+    @apply border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:bg-fill-interaction-inactive border-edge-neutral bg-fill-normal rounded-lg border;
   }
 
   /* capsule-button */
   .capsule-button-solid-primary {
-    @apply active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive hover:bg-fill-primary-interaction-hover rounded-full bg-fill-primary text-white;
+    @apply active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive hover:bg-fill-primary-interaction-hover bg-fill-primary rounded-full text-white;
   }
 
   .capsule-button-outline-mono {
-    @apply border-edge-normal hover:bg-fill-interaction-hover active:border-edge-neutral active:bg-fill-interaction-pressed disabled:border-edge-normal disabled:bg-fill-interaction-inactive rounded-full border bg-fill-normal;
+    @apply border-edge-normal hover:bg-fill-interaction-hover active:border-edge-neutral active:bg-fill-interaction-pressed disabled:border-edge-normal disabled:bg-fill-interaction-inactive bg-fill-normal rounded-full border;
   }
 
   .capsule-button-outline-blue {
-    @apply border-edge-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive active:border-edge-primary-strong disabled:text-content-assistive disabled:bg-fill-interaction-inactive disabled:border-edge-assistive rounded-full border bg-fill-primary-assistive;
+    @apply border-edge-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive active:border-edge-primary-strong disabled:text-content-assistive disabled:bg-fill-interaction-inactive disabled:border-edge-assistive bg-fill-primary-assistive rounded-full border;
   }
 
   .capsule-button-solid-purple {
@@ -44,10 +44,10 @@
 
   /* text-button */
   .text-button-primary-blue {
-    @apply hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive rounded-full bg-fill-normal;
+    @apply hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive bg-fill-normal rounded-full;
   }
 
   .text-button-secondary-mono {
-    @apply hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed rounded-full bg-fill-normal;
+    @apply hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed bg-fill-normal rounded-full;
   }
 }

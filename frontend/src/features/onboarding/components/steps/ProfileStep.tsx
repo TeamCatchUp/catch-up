@@ -60,7 +60,9 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
             <br />
             간단한 정보를 알려주세요.
           </h1>
-          <p className="text-body-large tracking-tight text-content-alternative">성함과 맡고 계신 역할만 알려주셔도 충분합니다.</p>
+          <p className="text-body-large text-content-alternative tracking-tight">
+            성함과 맡고 계신 역할만 알려주셔도 충분합니다.
+          </p>
         </div>
 
         {/* 폼 영역 */}

@@ -21,7 +21,7 @@ export default function SegmentedPicker({ options, value, onChange }: SegmentedP
             className={cn(
               'text-body-small cursor-pointer rounded-[7px] px-3 py-1 transition-colors',
               isSelected
-                ? 'border-edge-strong text-content-neutral shadow-button border bg-fill-normal'
+                ? 'border-edge-strong text-content-neutral shadow-button bg-fill-normal border'
                 : 'hover:text-content-alternative text-content-alternative',
             )}
           >

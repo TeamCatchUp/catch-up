@@ -63,7 +63,7 @@ export default function PreferencesPage() {
 
             {/* 로딩 상태 */}
             {isLoading && (
-              <div className="border-edge-neutral flex h-[46px] items-center justify-center rounded-xl border bg-fill-normal">
+              <div className="border-edge-neutral bg-fill-normal flex h-[46px] items-center justify-center rounded-xl border">
                 <span className="text-body-small text-content-assistive">불러오는 중...</span>
               </div>
             )}

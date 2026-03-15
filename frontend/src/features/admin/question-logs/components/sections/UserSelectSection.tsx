@@ -50,7 +50,7 @@ const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSe
           <button
             type="button"
             className={cn(
-              'border-edge-neutral text-body-small flex h-9 w-full cursor-pointer items-center justify-between rounded-lg border bg-fill-normal px-2.5 py-1.5 tracking-tight transition-colors',
+              'border-edge-neutral text-body-small bg-fill-normal flex h-9 w-full cursor-pointer items-center justify-between rounded-lg border px-2.5 py-1.5 tracking-tight transition-colors',
               'hover:bg-fill-interaction-hover data-[state=open]:bg-fill-interaction-pressed data-[state=open]:border-edge-normal',
               selectedUser ? 'text-content-normal' : 'text-content-assistive',
             )}
@@ -58,7 +58,7 @@ const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSe
             <span className="truncate">
               {selectedUser ? `${selectedUser.name} (${selectedUser.department})` : '기록을 확인할 이용자를 선택하세요'}
             </span>
-            <UnfoldMoreIcon className="size-6 shrink-0 text-content-alternative" />
+            <UnfoldMoreIcon className="text-content-alternative size-6 shrink-0" />
           </button>
         </PopoverTrigger>
 

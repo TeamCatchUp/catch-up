@@ -68,8 +68,7 @@ const ConnectedAccountsSectionBase = ({
   const resolvedCards = useMemo(
     () =>
       INTEGRATION_ACCOUNTS.map((account) => {
-        const accountInfo =
-          accountInfoMap?.[account.service] ?? EMPTY_ACCOUNT_INFO;
+        const accountInfo = accountInfoMap?.[account.service] ?? EMPTY_ACCOUNT_INFO;
 
         return {
           account,

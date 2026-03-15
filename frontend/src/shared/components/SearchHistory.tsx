@@ -64,9 +64,9 @@ export function SearchHistory({ querys, isModal = false, onItemClick }: Recently
   return (
     <div className={`flex w-full flex-col gap-2 ${isModal ? '' : ''}`}>
       {visibleSections.map((section) => (
-        <div key={section.key} className="flex flex-col gap-1 rounded-lg bg-fill-normal px-1.5 py-2.5">
+        <div key={section.key} className="bg-fill-normal flex flex-col gap-1 rounded-lg px-1.5 py-2.5">
           <div className="px-2">
-            <span className="text-body-xsmall font-medium text-content-alternative">{section.key}</span>
+            <span className="text-body-xsmall text-content-alternative font-medium">{section.key}</span>
           </div>
 
           <div className="flex flex-col gap-2">
@@ -75,7 +75,7 @@ export function SearchHistory({ querys, isModal = false, onItemClick }: Recently
                 href={`/chat/${item.session_id}${item.message_id != null ? `?scrollTo=${item.message_id}` : ''}`}
                 onClick={() => onItemClick?.()}
                 key={`${item.session_id}-${index}`}
-                className="hover:bg-fill-interaction-hover group flex h-10 w-full items-center gap-2 rounded-lg bg-fill-normal px-2 py-1 transition-colors"
+                className="hover:bg-fill-interaction-hover group bg-fill-normal flex h-10 w-full items-center gap-2 rounded-lg px-2 py-1 transition-colors"
               >
                 <div className="text-content-normal text-body-small flex-1 truncate text-left">{item.query}</div>
                 {section.key !== '오늘' && (

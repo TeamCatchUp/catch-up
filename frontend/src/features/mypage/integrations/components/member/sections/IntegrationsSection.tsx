@@ -54,8 +54,7 @@ const IntegrationsSection = () => {
     setLastSeenStates(currentStates);
   }
 
-  const completedServiceName =
-    INTEGRATION_ACCOUNTS.find((a) => a.service === completionInfo?.connector)?.name ?? '';
+  const completedServiceName = INTEGRATION_ACCOUNTS.find((a) => a.service === completionInfo?.connector)?.name ?? '';
 
   const displayRows = useMemo(() => buildMemberDisplayRows(rows), [rows]);
 

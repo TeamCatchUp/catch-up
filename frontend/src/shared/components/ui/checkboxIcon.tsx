@@ -19,9 +19,9 @@ const CheckboxIcon = ({ checked, className }: CheckboxIconProps) => (
     )}
   >
     {checked ? (
-      <CheckboxChecked className={cn('shrink-0 text-icon-primary', className)} />
+      <CheckboxChecked className={cn('text-icon-primary shrink-0', className)} />
     ) : (
-      <CheckboxUnchecked className={cn('shrink-0 text-content-assistive', className)} />
+      <CheckboxUnchecked className={cn('text-content-assistive shrink-0', className)} />
     )}
   </span>
 );

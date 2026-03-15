@@ -16,9 +16,7 @@ const Avatar = ({ src, size = 'sm' }: { src?: string | null; size?: 'sm' | 'xs' 
     /* eslint-disable-next-line @next/next/no-img-element */
     return <img src={src} alt="" className={`${cls} shrink-0 rounded-full object-cover`} />;
   }
-  return (
-    <DefaultProfile className={`text-content-assistive ${cls} shrink-0 rounded-full`} />
-  );
+  return <DefaultProfile className={`text-content-assistive ${cls} shrink-0 rounded-full`} />;
 };
 
 interface MemberDetailPanelProps {
@@ -61,8 +59,8 @@ const getAccountIdentifier = (service: IntegrationService, integrations: UserInt
 const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) => {
   if (!member) {
     return (
-      <section className="overflow-clip bg-fill-normal pt-5 pb-5 pl-6">
-        <div className="text-body-small flex h-full items-center justify-center text-center text-content-alternative">
+      <section className="bg-fill-normal overflow-clip pt-5 pb-5 pl-6">
+        <div className="text-body-small text-content-alternative flex h-full items-center justify-center text-center">
           선택된 이용자 정보가 없습니다.
         </div>
       </section>
@@ -75,7 +73,7 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
     : INTEGRATION_ACCOUNTS;
 
   return (
-    <section className="overflow-clip bg-fill-normal pt-5 pb-5 pl-6">
+    <section className="bg-fill-normal overflow-clip pt-5 pb-5 pl-6">
       <div className="flex h-full flex-col gap-4">
         {/* 프로필 + 이름 + 액션 버튼 */}
         <div className="flex items-center justify-between pr-5">
@@ -90,15 +88,15 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
           {/* 기본 정보 */}
           <div className="text-body-small flex flex-col gap-2 tracking-tight">
             <div className="flex w-full items-center gap-14">
-              <span className="w-19.75 shrink-0 text-content-alternative">메일</span>
+              <span className="text-content-alternative w-19.75 shrink-0">메일</span>
               <span className="text-content-neutral min-w-0 flex-1 truncate">{member.email}</span>
             </div>
             <div className="flex w-full items-center gap-14">
-              <span className="w-19.75 shrink-0 text-content-alternative">부서</span>
+              <span className="text-content-alternative w-19.75 shrink-0">부서</span>
               <span className="text-content-neutral min-w-0 flex-1 truncate">{member.department}</span>
             </div>
             <div className="flex w-full items-center gap-14">
-              <span className="w-19.75 shrink-0 text-content-alternative">직급</span>
+              <span className="text-content-alternative w-19.75 shrink-0">직급</span>
               <span className="text-content-neutral min-w-0 flex-1 truncate">{member.rank}</span>
             </div>
           </div>
@@ -148,7 +146,7 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
                               {accountName ?? member.name}
                             </span>
                           </div>
-                          <span className="text-body-xsmall shrink-0 truncate text-content-alternative">
+                          <span className="text-body-xsmall text-content-alternative shrink-0 truncate">
                             {accountEmail ?? member.email}
                           </span>
                         </div>

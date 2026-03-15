@@ -52,7 +52,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
             <br />
             조금만 알려주세요!
           </h1>
-          <p className="text-body-large tracking-tight text-content-alternative">
+          <p className="text-body-large text-content-alternative tracking-tight">
             팀 구성에 따라 더 정확한 인수인계 경험을
             <br />
             준비해드릴게요.

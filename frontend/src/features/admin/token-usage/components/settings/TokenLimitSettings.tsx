@@ -39,7 +39,7 @@ function LimitRow({ title, description, defaultValue, hasBorder }: LimitRowProps
         <label htmlFor={inputId} className="text-heading-small text-content-normal">
           {title}
         </label>
-        <span id={descId} className="text-label-small whitespace-pre-line text-content-alternative">
+        <span id={descId} className="text-label-small text-content-alternative whitespace-pre-line">
           {description}
         </span>
       </div>

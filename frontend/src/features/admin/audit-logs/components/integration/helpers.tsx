@@ -32,15 +32,15 @@ export const getServiceIconCls = (service: IntegrationService) =>
 
 /** 리소스 아이콘: Jira/Confluence → space, Slack → tag, Github → 서비스 아이콘 */
 export const ResourceIcon = ({ service }: { service: IntegrationService }) => {
-  if (service === 'slack') return <IconTag className="size-6 text-content-alternative" />;
+  if (service === 'slack') return <IconTag className="text-content-alternative size-6" />;
   if (service === 'github') return <ServiceIcon service="github" className="size-6" />;
-  return <IconSpace className="size-6 text-content-alternative" />;
+  return <IconSpace className="text-content-alternative size-6" />;
 };
 
 /** 정보 행 */
 export const InfoRow = ({ label, value }: { label: string; value: string }) => (
   <div className="text-body-small flex w-full items-center gap-14">
-    <span className="w-19.75 shrink-0 text-content-alternative">{label}</span>
+    <span className="text-content-alternative w-19.75 shrink-0">{label}</span>
     <span className="text-content-neutral min-w-0 flex-1 truncate">{value}</span>
   </div>
 );
@@ -53,7 +53,7 @@ export const StatusBadgeRow = ({ status }: { status: 'success' | 'failure' }) =>
 
   return (
     <div className="text-body-small flex w-full items-center gap-14">
-      <span className="w-19.75 shrink-0 text-content-alternative">상태</span>
+      <span className="text-content-alternative w-19.75 shrink-0">상태</span>
       <span
         className={cn('rounded-md2 text-body-xsmall inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5', badgeCls)}
       >

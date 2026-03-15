@@ -40,7 +40,7 @@ export default function SideNavUser({ isOpen }: SideNavUserProps) {
                   {isOpen && (
                     <div className="relative top-px max-w-31 text-left">
                       <div className="text-heading-small text-content-normal truncate">{user?.name ?? '이름없음'}</div>
-                      <div className="text-body-small truncate text-content-alternative">{user?.email ?? ''}</div>
+                      <div className="text-body-small text-content-alternative truncate">{user?.email ?? ''}</div>
                     </div>
                   )}
                 </div>

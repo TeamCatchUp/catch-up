@@ -81,15 +81,15 @@ const QuestionLogSection = () => {
           {/* 헤더 */}
           <div className="border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-y px-5">
             <div className="grid flex-1 grid-cols-3 items-center gap-1">
-              <span className="text-body-xsmall pl-7.5 text-left text-content-alternative">이름</span>
-              <span className="text-body-xsmall text-center text-content-alternative">실행 일자</span>
-              <span className="text-body-xsmall text-center text-content-alternative">질문</span>
+              <span className="text-body-xsmall text-content-alternative pl-7.5 text-left">이름</span>
+              <span className="text-body-xsmall text-content-alternative text-center">실행 일자</span>
+              <span className="text-body-xsmall text-content-alternative text-center">질문</span>
             </div>
           </div>
 
           {/* 행 */}
           {pageItems.length === 0 ? (
-            <div className="text-body-small flex h-80 items-center justify-center text-content-alternative">
+            <div className="text-body-small text-content-alternative flex h-80 items-center justify-center">
               질문 로그가 없습니다.
             </div>
           ) : (
@@ -109,7 +109,9 @@ const QuestionLogSection = () => {
 
                     {/* 실행 일자 */}
                     <div className="flex items-center justify-center">
-                      <span className="text-body-xsmall text-content-normal truncate">{formatDate(log.executedAt)}</span>
+                      <span className="text-body-xsmall text-content-normal truncate">
+                        {formatDate(log.executedAt)}
+                      </span>
                     </div>
 
                     {/* 질문 */}

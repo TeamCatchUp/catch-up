@@ -57,7 +57,7 @@ const QueryBox = ({
   return (
     <div
       ref={containerRef}
-      className={`shadow-rag-bar border-edge-normal flex w-190 flex-col items-center border border-solid bg-fill-normal ${containerClassName}`}
+      className={`shadow-rag-bar border-edge-normal bg-fill-normal flex w-190 flex-col items-center border border-solid ${containerClassName}`}
     >
       <QueryInput input={input} inputRef={inputRef} tipData={tipData} />
 

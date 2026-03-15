@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 import Cancel from '@/public/icons/icon/cancel.svg';
 import { Button } from '@/shared/components/ui/button';
+import CheckboxIcon from '@/shared/components/ui/checkboxIcon';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import type { IntegrationService } from '@/shared/types/integrationService';
@@ -49,7 +50,7 @@ interface EmbeddingModalProps {
 
 /** 임베딩 모달 (셸) */
 const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }: EmbeddingModalProps) => {
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('1개월');
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('3년');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
   const connector = service as SyncConnector;
@@ -68,6 +69,9 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
   const isSubmitDisabled = selectedItems.size === 0 || syncMutation.isPending;
   const noScope = !isScopeLoading && !scopeId;
 
+  const accessibleTargets = useMemo(() => targets.filter((t) => t.is_accessible), [targets]);
+  const isAllSelected = accessibleTargets.length > 0 && accessibleTargets.every((t) => selectedItems.has(t.target_id));
+
   const toggleItem = (targetId: string) => {
     setSelectedItems((prev) => {
       const next = new Set(prev);
@@ -77,8 +81,16 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
     });
   };
 
+  const toggleAll = () => {
+    if (isAllSelected) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(accessibleTargets.map((t) => t.target_id)));
+    }
+  };
+
   const resetFormState = () => {
-    setSelectedPeriod('1개월');
+    setSelectedPeriod('3년');
     setSelectedItems(new Set());
   };
 
@@ -93,9 +105,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
     if (!scopeId) return;
 
     const syncDays = PERIOD_TO_DAYS[selectedPeriod] ?? 30;
-    const targetIds = targets
-      .filter((t) => selectedItems.has(t.target_id))
-      .map((t) => t.target_id);
+    const targetIds = targets.filter((t) => selectedItems.has(t.target_id)).map((t) => t.target_id);
 
     try {
       const result = await syncMutation.mutateAsync({
@@ -136,11 +146,11 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         hideClose
-        className="border-edge-normal shadow-modal w-140 gap-4 rounded-3xl border bg-fill-normal p-0 py-5"
+        className="border-edge-normal shadow-modal bg-fill-normal w-140 gap-4 rounded-3xl border p-0 py-5"
       >
         {/* 헤더 */}
         <div className="flex h-9 items-center gap-3 px-6">
-          <DialogTitle className="text-heading-large min-w-0 flex-1 text-content-normal">
+          <DialogTitle className="text-heading-large text-content-normal min-w-0 flex-1">
             임베딩 할 {serviceName} {itemLabel} 선택하기
           </DialogTitle>
           <button
@@ -149,12 +159,12 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
             className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg"
             aria-label="닫기"
           >
-            <Cancel className="size-6 text-content-alternative" />
+            <Cancel className="text-content-alternative size-6" />
           </button>
         </div>
 
         {/* 바디 */}
-        <div className="flex max-h-152 min-h-102 flex-col gap-6 overflow-y-auto overflow-x-clip border-t border-edge-assistive px-6 pt-6">
+        <div className="border-edge-assistive flex max-h-152 min-h-102 flex-col gap-6 overflow-x-clip overflow-y-auto border-t px-6 pt-6">
           {noScope ? (
             <div className="flex flex-1 items-center justify-center">
               <span className="text-body-small text-content-assistive">
@@ -166,10 +176,8 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
               {/* 기간 선택 */}
               <div className="flex flex-col gap-2.5">
                 <div className="flex items-center gap-1">
-                  <span className="text-body-medium text-content-strong">
-                    임베딩 할 데이터의 기간을 선택해 주세요.
-                  </span>
-                  <span className="block size-1.25 shrink-0 rounded-full bg-accent-red-orange" />
+                  <span className="text-body-medium text-content-strong">임베딩 할 데이터의 기간을 선택해 주세요.</span>
+                  <span className="bg-accent-red-orange block size-1.25 shrink-0 rounded-full" />
                 </div>
                 <div className="flex gap-2">
                   {PERIOD_OPTIONS.map((period) => (
@@ -181,7 +189,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
                         'text-body-small h-9 cursor-pointer rounded-full px-3',
                         selectedPeriod === period
                           ? 'bg-accent-black-lighten text-content-inverse'
-                          : 'border border-edge-neutral bg-fill-normal text-content-neutral',
+                          : 'border-edge-neutral bg-fill-normal text-content-neutral border',
                       )}
                     >
                       {period}
@@ -194,25 +202,31 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
               <div className="flex flex-col gap-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
-                    <span className="text-body-medium text-content-strong">
-                      {itemLabel}를 선택해주세요.
-                    </span>
-                    <span className="block size-1.25 shrink-0 rounded-full bg-accent-red-orange" />
+                    <span className="text-body-medium text-content-strong">{itemLabel}를 선택해주세요.</span>
+                    <span className="bg-accent-red-orange block size-1.25 shrink-0 rounded-full" />
                   </div>
-                  {selectedItems.size > 0 && (
-                    <span className="text-body-small text-content-primary">
-                      {selectedItems.size}개 선택됨
-                    </span>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {selectedItems.size > 0 && (
+                      <span className="text-body-small text-content-primary">{selectedItems.size}개 선택됨</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={toggleAll}
+                      className="flex cursor-pointer items-center gap-0.5"
+                    >
+                      <CheckboxIcon checked={isAllSelected} className="size-5" />
+                      <span className="text-body-small text-content-normal whitespace-nowrap">전체 선택하기</span>
+                    </button>
+                  </div>
                 </div>
 
                 {isScopeLoading || isTargetsLoading ? (
-                  <div className="overflow-clip rounded-xl border border-edge-assistive">
+                  <div className="border-edge-assistive overflow-clip rounded-xl border">
                     <div className="flex flex-col">
                       {Array.from({ length: 5 }).map((_, i) => (
                         <div
                           key={i}
-                          className="flex items-center gap-5 border-b border-edge-assistive px-5 py-3 last:border-b-0"
+                          className="border-edge-assistive flex items-center gap-5 border-b px-5 py-3 last:border-b-0"
                         >
                           <Skeleton className="h-4 flex-1" />
                           <Skeleton className="size-6 shrink-0 rounded" />
@@ -221,11 +235,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
                     </div>
                   </div>
                 ) : (
-                  <EmbeddingModalContent
-                    targets={targets}
-                    selectedItems={selectedItems}
-                    onToggleItem={toggleItem}
-                  />
+                  <EmbeddingModalContent targets={targets} selectedItems={selectedItems} onToggleItem={toggleItem} />
                 )}
               </div>
             </>

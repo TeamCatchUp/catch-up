@@ -11,7 +11,7 @@ import { formatDate } from '../../utils/formatDate';
 /** 정보 행 */
 const InfoRow = ({ label, value }: { label: string; value: string }) => (
   <div className="flex w-full items-center gap-14">
-    <span className="w-19.75 shrink-0 text-content-alternative">{label}</span>
+    <span className="text-content-alternative w-19.75 shrink-0">{label}</span>
     <span className="text-content-neutral min-w-0 flex-1 truncate">{value}</span>
   </div>
 );
@@ -56,16 +56,16 @@ const IntegrationAccountsSection = ({
                 <div className="flex shrink-0 items-center gap-2.5">
                   <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
                   <span className="text-body-xsmall text-content-normal max-w-33.25 shrink-0 truncate">{name}</span>
-                  <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall shrink-0 px-1.5 py-0.5 tracking-tight text-content-alternative">
+                  <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall text-content-alternative shrink-0 px-1.5 py-0.5 tracking-tight">
                     {accountId}
                   </span>
                 </div>
-                <span className="text-body-xsmall shrink-0 truncate text-content-alternative">{email}</span>
+                <span className="text-body-xsmall text-content-alternative shrink-0 truncate">{email}</span>
               </div>
             ) : (
               <div className="bg-fill-strong flex w-[259px] shrink-0 items-center justify-center self-stretch rounded-lg">
                 <div className="flex items-center gap-1">
-                  <IconCloudOff className="size-6 text-content-alternative" />
+                  <IconCloudOff className="text-content-alternative size-6" />
                   <span className="text-body-xsmall text-content-alternative">연동 안됨</span>
                 </div>
               </div>

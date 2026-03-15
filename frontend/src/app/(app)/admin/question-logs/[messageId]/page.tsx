@@ -70,7 +70,9 @@ export default function QuestionLogDetailPage() {
     <section className="flex flex-col gap-6 px-16 pt-9 pb-[120px]">
       <DetailHeader userId={userId} userName={user?.name ?? ''} userDepartment={user?.department ?? ''} from={from} />
 
-      {detailQuery.isLoading && <div className="text-body-small text-content-assistive py-4">데이터를 불러오는 중입니다...</div>}
+      {detailQuery.isLoading && (
+        <div className="text-body-small text-content-assistive py-4">데이터를 불러오는 중입니다...</div>
+      )}
 
       {detailQuery.isError && (
         <div className="text-body-small py-4 text-red-50">
@@ -111,7 +113,7 @@ export default function QuestionLogDetailPage() {
           </div>
 
           {/* 사이드바 */}
-          <div className="border-edge-neutral hidden w-100 shrink-0 flex-col rounded-xl border bg-fill-normal lg:flex">
+          <div className="border-edge-neutral bg-fill-normal hidden w-100 shrink-0 flex-col rounded-xl border lg:flex">
             <SidebarHeader sourceCount={sourceCount} />
             <div className="min-h-0 flex-1 overflow-y-auto">
               <SourceList sources={sources} answerContent={answer?.content ?? ''} />

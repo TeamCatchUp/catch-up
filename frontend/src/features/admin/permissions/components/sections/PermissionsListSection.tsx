@@ -85,7 +85,7 @@ const PermissionsListSection = ({
         </div>
       </div>
 
-      <div className="flex h-[872px] flex-col overflow-hidden bg-fill-normal">
+      <div className="bg-fill-normal flex h-[872px] flex-col overflow-hidden">
         {isLoading ? (
           <div className="flex h-full flex-col gap-3 p-5">
             <div className="bg-fill-interaction-hover h-9 animate-pulse rounded-lg" />
