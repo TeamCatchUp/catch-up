@@ -10,6 +10,10 @@ import structlog
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import SystemAuditMetadata
 from catchup.audit.service import emit_audit_event
+from catchup.components.embedder.constants import EmbeddingProvider
+from catchup.components.embedder.factory import get_embedding_service
+from catchup.components.vector_db.factory import get_pgvector_repository, get_vector_db_service
+from catchup.components.vector_db.pgvector.constants import VectorDbProvider
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal, engine
 from catchup.db.global_state import has_admin_ever_onboarded, has_csv_file_ever_been_uploaded
@@ -29,6 +33,7 @@ from catchup.server.connector.github.webhook_api import router as github_webhook
 from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.webhook_api import router as slack_webhook_router
+from catchup.server.initialization import ensure_pg_indices
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
@@ -285,6 +290,26 @@ async def lifespan(app: FastAPI):
             immediate=True,
         )
         raise
+    
+    
+    try:
+        embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK)
+        pgvector_repo = get_pgvector_repository(embeddings)  # Ingestion
+        await pgvector_repo.initialize(ensure_pg_indices)
+        logger.info(
+            "pgvector_repository_initialized",
+            result="sucess",
+            context="server_startup",
+        )
+        
+    except Exception as e:
+        logger.error(
+            "pgvector_repository_initialized",
+            result="failure",
+            context="server_startup",
+            error=str(e),
+        )
+
 
     # Langgraph Checkpoint INIT
     try:

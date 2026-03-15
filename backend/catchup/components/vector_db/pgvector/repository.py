@@ -20,14 +20,14 @@ langchain-postgres 패키지를 사용하여 LangChain Document를 직접 저장
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from langchain.embeddings import Embeddings
 from langchain_cohere import CohereEmbeddings
 from langchain_core.documents import Document
 from langchain_postgres import PGVector
 
-from sqlalchemy import delete as sa_delete
+from sqlalchemy import Engine, delete as sa_delete
 
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.configs.config import settings
@@ -71,7 +71,10 @@ class PGVectorRepository:
         self.vector_store: PGVector | None = None
         self._initialized = False
 
-    async def initialize(self) -> None:
+    async def initialize(
+            self, 
+            ensure_indices: Callable[[], Awaitable[None]] | None
+    ) -> None:
         """
         PGVector 벡터 저장소 초기화
 
@@ -97,6 +100,9 @@ class PGVectorRepository:
                 connection=settings.sqlalchemy_database_url,
                 use_jsonb=True,  # metadata를 JSONB로 저장 (필터링 지원)
             )
+            
+            if ensure_indices:
+                await ensure_indices()
 
             self._initialized = True
             logger.info(
