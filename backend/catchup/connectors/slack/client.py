@@ -17,6 +17,8 @@ import asyncio
 import logging
 from typing import Any
 
+from slack_sdk.http_retry.builtin_async_handlers import AsyncRateLimitErrorRetryHandler
+from slack_sdk.web.async_base_client import async_default_handlers
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
 
@@ -31,7 +33,7 @@ class SlackApiClientWrapper:
 
     특징:
     - Slack SDK의 AsyncWebClient 사용 (aiohttp 기반)
-    - Rate Limit 자동 처리 (SDK 내장)
+    - Rate Limit 자동 처리 (Retry-After 기반)
     - 세마포어로 동시 요청 수 제어
     """
 
@@ -44,7 +46,14 @@ class SlackApiClientWrapper:
             team_id: Slack Team/Workspace ID
         """
         self.team_id = team_id
-        self.client = AsyncWebClient(token=access_token)
+        retry_handlers = [
+            *async_default_handlers(),
+            AsyncRateLimitErrorRetryHandler(max_retry_count=3),
+        ]
+        self.client = AsyncWebClient(
+            token=access_token,
+            retry_handlers=retry_handlers,
+        )
         self._semaphore = asyncio.Semaphore(settings.SLACK_SYNC_MAX_CONCURRENT_REQUESTS)
 
     # ================================================================

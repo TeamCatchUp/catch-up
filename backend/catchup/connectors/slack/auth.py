@@ -10,6 +10,7 @@ Slack OAuth 2.0 V2 인증을 담당하는 서비스.
 - Token 취소
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
@@ -43,6 +44,7 @@ class SlackOAuthService:
         self.auth_url = settings.SLACK_AUTH_URL
         self.token_url = settings.SLACK_TOKEN_URL
         self.api_url = settings.SLACK_API_URL
+        self._max_rate_limit_retries = 3
 
     def get_authorization_url(self, state: str | None = None) -> str:
         params = {
@@ -59,7 +61,9 @@ class SlackOAuthService:
     async def exchange_code_for_tokens(self, code: str) -> SlackOAuthTokenResponse:
         """Authorization Code를 Token으로 교환"""
         async with httpx.AsyncClient() as client:
-            response = await client.post(
+            response = await self._request_with_retry(
+                client,
+                "POST",
                 self.token_url,
                 data={
                     "code": code,
@@ -86,7 +90,9 @@ class SlackOAuthService:
     ) -> SlackOAuthTokenResponse:
         """Token Rotation을 사용하는 경우 토큰 갱신"""
         async with httpx.AsyncClient() as client:
-            response = await client.post(
+            response = await self._request_with_retry(
+                client,
+                "POST",
                 self.token_url,
                 data={
                     "grant_type": "refresh_token",
@@ -111,7 +117,9 @@ class SlackOAuthService:
     async def get_team_info(self, access_token: str) -> dict:
         """Team(Workspace) 정보 조회"""
         async with httpx.AsyncClient() as client:
-            response = await client.get(
+            response = await self._request_with_retry(
+                client,
+                "GET",
                 f"{self.api_url}/team.info",
                 headers={"Authorization": f"Bearer {access_token}"},
             )
@@ -130,7 +138,9 @@ class SlackOAuthService:
     async def test_auth(self, access_token: str) -> dict:
         """인증 상태 확인 (auth.test)"""
         async with httpx.AsyncClient() as client:
-            response = await client.post(
+            response = await self._request_with_retry(
+                client,
+                "POST",
                 f"{self.api_url}/auth.test",
                 headers={"Authorization": f"Bearer {access_token}"},
             )
@@ -148,13 +158,61 @@ class SlackOAuthService:
     async def revoke_token(self, access_token: str) -> bool:
         """Token 취소 (연결 해제 시)"""
         async with httpx.AsyncClient() as client:
-            response = await client.post(
+            response = await self._request_with_retry(
+                client,
+                "POST",
                 f"{self.api_url}/auth.revoke",
                 headers={"Authorization": f"Bearer {access_token}"},
             )
 
             data = response.json()
             return data.get("ok", False)
+
+    def _get_retry_after(self, response: httpx.Response) -> int:
+        retry_after = response.headers.get("Retry-After")
+        if retry_after is None:
+            return 1
+
+        try:
+            return max(1, int(retry_after))
+        except ValueError:
+            return 1
+
+    async def _request_with_retry(
+        self,
+        client: httpx.AsyncClient,
+        method: str,
+        url: str,
+        **kwargs,
+    ) -> httpx.Response:
+        retry_count = 0
+
+        while True:
+            response = await client.request(method, url, **kwargs)
+            if response.status_code != status.HTTP_429_TOO_MANY_REQUESTS:
+                return response
+
+            retry_after = self._get_retry_after(response)
+            if retry_count >= self._max_rate_limit_retries:
+                logger.error(
+                    "[SLACK][API] Rate limit retry exhausted: url=%s, retry_after=%ss",
+                    url,
+                    retry_after,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Slack API rate limit exceeded",
+                )
+
+            retry_count += 1
+            logger.warning(
+                "[SLACK][API] Rate limited. Waiting %ss before retry (attempt %s/%s): %s",
+                retry_after,
+                retry_count,
+                self._max_rate_limit_retries,
+                url,
+            )
+            await asyncio.sleep(retry_after)
 
     async def get_valid_access_token(
         self, db: Session, slack_token: SlackOAuthToken

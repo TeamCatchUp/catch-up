@@ -20,6 +20,7 @@ GitHub REST API v3를 사용하며, GitHub App Installation Token으로 인증.
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator
 
@@ -129,6 +130,7 @@ class GitHubApiClient:
 
         # 요청 간 딜레이 (초)
         self._rate_limit_delay = float(settings.GITHUB_API_RATE_LIMIT_DELAY)
+        self._max_rate_limit_retries = 3
 
     def _handle_error(self, e: RequestFailed) -> None:
         """
@@ -160,19 +162,40 @@ class GitHubApiClient:
 
         raise GitHubApiError(str(e), status_code)
 
-    async def _with_rate_limit(self, coro):
+    async def _with_rate_limit(
+        self,
+        request_factory: Callable[[], Awaitable[Any]],
+    ) -> Any:
         """
         Rate limiting을 적용하여 코루틴 실행
         """
         async with self._semaphore:
-            try:
-                result = await coro
-                await asyncio.sleep(self._rate_limit_delay)
-                return result
-            except RequestFailed as e:
-                self._handle_error(e)
-            except RequestTimeout as e:
-                raise GitHubApiError(f"Request timeout: {e}", None)
+            retry_count = 0
+
+            while True:
+                try:
+                    result = await request_factory()
+                    await asyncio.sleep(self._rate_limit_delay)
+                    return result
+                except RequestFailed as e:
+                    try:
+                        self._handle_error(e)
+                    except GitHubRateLimitError as rate_limit_error:
+                        if retry_count >= self._max_rate_limit_retries:
+                            raise
+
+                        retry_count += 1
+                        logger.warning(
+                            "[GITHUB][API] Rate limited. Waiting %ss before retry "
+                            "(attempt %s/%s)",
+                            rate_limit_error.retry_after,
+                            retry_count,
+                            self._max_rate_limit_retries,
+                        )
+                        await asyncio.sleep(rate_limit_error.retry_after)
+                        continue
+                except RequestTimeout as e:
+                    raise GitHubApiError(f"Request timeout: {e}", None)
 
     # ============================================================
     # Repository APIs
@@ -190,7 +213,7 @@ class GitHubApiClient:
             Repository 정보 딕셔너리
         """
         response = await self._with_rate_limit(
-            self._github.rest.repos.async_get(owner=owner, repo=repo)
+            lambda: self._github.rest.repos.async_get(owner=owner, repo=repo)
         )
         return response.parsed_data.model_dump() if response else {}
 
@@ -209,7 +232,7 @@ class GitHubApiClient:
 
         while True:
             response = await self._with_rate_limit(
-                self._github.rest.apps.async_list_repos_accessible_to_installation(
+                lambda: self._github.rest.apps.async_list_repos_accessible_to_installation(
                     per_page=per_page,
                     page=page
                 )
@@ -276,7 +299,7 @@ class GitHubApiClient:
             params["until"] = until.isoformat()
 
         response = await self._with_rate_limit(
-            self._github.rest.repos.async_list_commits(**params)
+            lambda: self._github.rest.repos.async_list_commits(**params)
         )
 
         if not response:
@@ -350,7 +373,7 @@ class GitHubApiClient:
             Commit 상세 정보 (파일 변경 포함)
         """
         response = await self._with_rate_limit(
-            self._github.rest.repos.async_get_commit(
+            lambda: self._github.rest.repos.async_get_commit(
                 owner=owner,
                 repo=repo,
                 ref=ref,
@@ -373,7 +396,7 @@ class GitHubApiClient:
             사용자 정보
         """
         response = await self._with_rate_limit(
-            self._github.rest.users.async_get_by_username(username=username)
+            lambda: self._github.rest.users.async_get_by_username(username=username)
         )
         return response.parsed_data.model_dump() if response else {}
 
@@ -397,7 +420,7 @@ class GitHubApiClient:
 
         while True:
             response = await self._with_rate_limit(
-                self._github.rest.orgs.async_list_members(
+                lambda: self._github.rest.orgs.async_list_members(
                     org=org,
                     per_page=per_page,
                     page=page,
@@ -436,7 +459,7 @@ class GitHubApiClient:
             }
 
             response = await self._with_rate_limit(
-                self._github.async_graphql(ORG_MEMBERS_QUERY, variables)
+                lambda: self._github.async_graphql(ORG_MEMBERS_QUERY, variables)
             )
 
             if not response:
@@ -502,7 +525,7 @@ class GitHubApiClient:
             }
 
             response = await self._with_rate_limit(
-                self._github.async_graphql(PULL_REQUESTS_QUERY, variables)
+                lambda: self._github.async_graphql(PULL_REQUESTS_QUERY, variables)
             )
 
             if not response:
@@ -566,7 +589,7 @@ class GitHubApiClient:
             }
 
             response = await self._with_rate_limit(
-                self._github.async_graphql(ISSUES_QUERY, variables)
+                lambda: self._github.async_graphql(ISSUES_QUERY, variables)
             )
 
             if not response:
