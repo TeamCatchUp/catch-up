@@ -12,12 +12,19 @@ from catchup.components.llm.service import (
 @lru_cache(maxsize=10)
 def get_llm_service(
     provider: LlmProvider,
-    model_capacity: ModelCapacity
+    model_capacity: ModelCapacity,
+    streaming: bool = True,
 ) -> BaseLlmService:
     if provider == LlmProvider.OPENAI:
-        return OpenAiLlmService(model_capacity=model_capacity)
+        return OpenAiLlmService(
+            model_capacity=model_capacity,
+            streaming=streaming
+        )
     
     if provider == LlmProvider.AWS_BEDROCK:
-        return AwsBedrockLlmService(model_capacity=model_capacity)
+        return AwsBedrockLlmService(
+            model_capacity=model_capacity,
+            streaming=streaming
+        )
     
     raise ValueError(f"Unknown provider: {provider}")

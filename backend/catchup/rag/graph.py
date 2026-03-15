@@ -34,11 +34,26 @@ def get_compiled_graph(
     checkpointer: Optional[BaseCheckpointSaver] = None
 ):
     
-    # 분석 및 일상 대화용 (small)
-    analysis_llm = get_llm_service(LlmProvider.AWS_BEDROCK, ModelCapacity.SMALL).get_llm()
+    # 분석용 (small)
+    analysis_llm = get_llm_service(
+        LlmProvider.AWS_BEDROCK,
+        ModelCapacity.SMALL,
+        streaming=False
+    ).get_llm()
+    
+    # 일상 대화용 (small)
+    chitchat_llm = get_llm_service(
+        LlmProvider.AWS_BEDROCK,
+        ModelCapacity.SMALL,
+        streaming=True
+    ).get_llm()
     
     # 최종 답변 생성용 llm (large)
-    final_llm = get_llm_service(LlmProvider.AWS_BEDROCK, ModelCapacity.LARGE).get_llm()
+    final_llm = get_llm_service(
+        LlmProvider.AWS_BEDROCK,
+        ModelCapacity.LARGE,
+        streaming=True
+    ).get_llm()
     
     # Vector DB 서비스
     embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
@@ -79,7 +94,7 @@ def get_compiled_graph(
     )
     workflow.add_node(
         node="chitchat", 
-        action=partial(chitchat_node, llm=analysis_llm)
+        action=partial(chitchat_node, llm=chitchat_llm)
     )
     workflow.add_node(
         node="generate_final_answer", 
