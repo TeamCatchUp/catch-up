@@ -57,7 +57,7 @@ const TopNavbar = ({ pageType }: TopNavbarProps) => {
   const IconComponent = config.icon;
 
   return (
-    <nav aria-label="메인 네비게이션" className="border-edge-neutral sticky top-0 z-50 h-full w-full border-b bg-fill-normal">
+    <nav aria-label="메인 네비게이션" className="border-edge-neutral sticky top-0 z-50 w-full border-b bg-fill-normal">
       <div className="flex justify-between px-16 py-2">
         <div className="flex items-center justify-center">
           <Link href={config.href} className="text-content-normal flex cursor-pointer gap-2">
