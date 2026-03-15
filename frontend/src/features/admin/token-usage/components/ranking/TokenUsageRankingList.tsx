@@ -15,7 +15,7 @@ interface TokenUsageRankingListProps {
 
 export default function TokenUsageRankingList({ data }: TokenUsageRankingListProps) {
   return (
-    <div className="border-edge-neutral flex h-full flex-col overflow-hidden rounded-xl border bg-fill-normal">
+    <div className="border-edge-neutral bg-fill-normal flex h-full flex-col overflow-hidden rounded-xl border">
       {/* 헤더 */}
       <div className="bg-fill-strong rounded-md px-5 py-1.5">
         <span className="text-heading-small text-content-neutral">토큰 사용량 순위</span>
@@ -29,7 +29,7 @@ export default function TokenUsageRankingList({ data }: TokenUsageRankingListPro
             className={`flex items-center gap-3 px-5 py-3 ${index < data.length - 1 ? 'border-edge-neutral border-b' : ''}`}
           >
             {/* 순위 */}
-            <span className="text-body-small w-5 shrink-0 text-center text-content-alternative">{entry.rank}</span>
+            <span className="text-body-small text-content-alternative w-5 shrink-0 text-center">{entry.rank}</span>
 
             {/* 프로필 이미지 */}
             {entry.member.profileImage ? (
@@ -53,7 +53,9 @@ export default function TokenUsageRankingList({ data }: TokenUsageRankingListPro
             </Badge>
 
             {/* 비용 (우측 정렬) */}
-            <span className="text-body-small text-content-normal ml-auto shrink-0 text-right">{entry.cost.toFixed(1)} $</span>
+            <span className="text-body-small text-content-normal ml-auto shrink-0 text-right">
+              {entry.cost.toFixed(1)} $
+            </span>
           </div>
         ))}
       </div>

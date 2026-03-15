@@ -159,6 +159,7 @@ class SlackChannel(BaseModel):
     member_ids: list[str] = Field(default_factory=list)
     is_archived: bool = False
     is_private: bool = False
+    is_member: bool = False
     is_mpim: bool = False
     is_im: bool = False
     created_at: datetime

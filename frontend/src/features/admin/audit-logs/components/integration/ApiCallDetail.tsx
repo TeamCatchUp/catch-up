@@ -1,7 +1,7 @@
 import { CATEGORY_LABEL } from '../../constants/auditLogConfig';
 import type { AuditIntegrationLog } from '../../types/auditIntegrationLog';
 import { formatDate } from '../../utils/formatDate';
-import { getServiceIconCls,InfoRow, SERVICE_NAMES, ServiceIcon } from './helpers';
+import { getServiceIconCls, InfoRow, SERVICE_NAMES, ServiceIcon } from './helpers';
 
 /** API 호출 상세 패널 */
 const ApiCallDetail = ({ log }: { log: AuditIntegrationLog }) => {
@@ -39,7 +39,9 @@ const ApiCallDetail = ({ log }: { log: AuditIntegrationLog }) => {
             <div className="flex flex-col gap-2">
               <h3 className="text-heading-small text-content-neutral">수신 데이터</h3>
               <div className="bg-fill-strong border-edge-assistive max-h-80 overflow-y-auto rounded-xl border px-5 py-4">
-                <pre className="text-label-small text-content-normal break-all whitespace-pre-wrap">{log.receivedData}</pre>
+                <pre className="text-label-small text-content-normal break-all whitespace-pre-wrap">
+                  {log.receivedData}
+                </pre>
               </div>
             </div>
           )}

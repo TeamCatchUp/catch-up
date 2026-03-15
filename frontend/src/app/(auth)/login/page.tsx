@@ -13,7 +13,7 @@ export default function Login() {
   };
 
   return (
-    <div className="flex h-226.5 w-360 items-center justify-center bg-fill-normal p-6">
+    <div className="bg-fill-normal flex h-226.5 w-360 items-center justify-center p-6">
       <div className="border-edge-normal flex flex-[1_0_0] items-center gap-5 self-stretch overflow-clip rounded-2xl border p-6">
         <div className="flex min-w-80 flex-[1_0_0] flex-col items-center justify-center gap-24 self-stretch overflow-clip px-28 py-30">
           <div className="flex w-full min-w-80 flex-col gap-8">
@@ -34,11 +34,11 @@ export default function Login() {
           <div className="flex shrink-0 items-start gap-5">
             <a href="#" className="flex shrink-0 items-center gap-0.5 px-1.5 py-1 whitespace-nowrap">
               <span className="text-body-xsmall text-content-alternative underline">서비스 이용약관</span>
-              <IconOpen className="size-4.5 shrink-0 text-content-alternative" />
+              <IconOpen className="text-content-alternative size-4.5 shrink-0" />
             </a>
             <a href="#" className="flex shrink-0 items-center gap-0.5 px-1.5 py-1 whitespace-nowrap">
               <span className="text-body-xsmall text-content-alternative underline">개인정보처리방침</span>
-              <IconOpen className="size-4.5 shrink-0 text-content-alternative" />
+              <IconOpen className="text-content-alternative size-4.5 shrink-0" />
             </a>
           </div>
         </div>

@@ -42,7 +42,7 @@ const EditMessageInput = ({ initialContent, onCancel, onSubmit }: EditMessageInp
   return (
     <div
       className={cn(
-        'flex flex-col gap-2.5 rounded-2xl border bg-fill-normal px-4.5 py-2.5',
+        'bg-fill-normal flex flex-col gap-2.5 rounded-2xl border px-4.5 py-2.5',
         isFocused ? 'border-edge-primary' : 'border-edge-neutral',
       )}
     >

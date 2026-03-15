@@ -123,7 +123,12 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
             )}
           >
             <BookmarkIcon className={cn('size-5 shrink-0', savedOnly ? 'text-icon-primary' : 'text-content-neutral')} />
-            <span className={cn('text-body-small whitespace-nowrap', savedOnly ? 'text-icon-primary' : 'text-content-normal')}>
+            <span
+              className={cn(
+                'text-body-small whitespace-nowrap',
+                savedOnly ? 'text-icon-primary' : 'text-content-normal',
+              )}
+            >
               저장한 답변
             </span>
           </button>
@@ -172,7 +177,9 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
 
       {/* 무한 스크롤 sentinel + 로딩 표시 */}
       <div ref={sentinelRef} className="h-1" />
-      {isFetchingNextPage && <div className="text-body-small text-content-assistive py-2 text-center">불러오는 중...</div>}
+      {isFetchingNextPage && (
+        <div className="text-body-small text-content-assistive py-2 text-center">불러오는 중...</div>
+      )}
     </div>
   );
 };

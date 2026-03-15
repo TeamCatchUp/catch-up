@@ -166,8 +166,12 @@ const Tutorial3Content = () => {
 
         <ExampleBox>
           <p className="text-label-medium text-content-normal">- 결정이 걸린 순간: 승인/정책/방향을 확정해야 할 때</p>
-          <p className="text-label-medium text-content-normal">- 조건이 중요한 순간: 기간, 권한 범위, 수치가 포함될 때</p>
-          <p className="text-label-medium text-content-normal">- 원인이 필요한 순간: 장애/버그처럼 재현과 근거가 필요할 때</p>
+          <p className="text-label-medium text-content-normal">
+            - 조건이 중요한 순간: 기간, 권한 범위, 수치가 포함될 때
+          </p>
+          <p className="text-label-medium text-content-normal">
+            - 원인이 필요한 순간: 장애/버그처럼 재현과 근거가 필요할 때
+          </p>
         </ExampleBox>
 
         <div className="text-label-medium text-content-normal">
@@ -189,11 +193,15 @@ const Tutorial3Content = () => {
         </div>
 
         <ExampleBox>
-          <p className="text-label-medium text-content-normal">1. 답변에서 표시 확인: 이 문장이 근거가 있는 문장인지 보기</p>
+          <p className="text-label-medium text-content-normal">
+            1. 답변에서 표시 확인: 이 문장이 근거가 있는 문장인지 보기
+          </p>
           <p className="text-label-medium text-content-normal">
             2. 인용 이유 확인: 왜 이 출처가 답변 생성에 쓰였는지 확인하기
           </p>
-          <p className="text-label-medium text-content-normal">3. 필요할 때만 원문 이동: 결정에 필요한 부분만 확인하기</p>
+          <p className="text-label-medium text-content-normal">
+            3. 필요할 때만 원문 이동: 결정에 필요한 부분만 확인하기
+          </p>
         </ExampleBox>
 
         <div className="text-label-medium text-content-normal">

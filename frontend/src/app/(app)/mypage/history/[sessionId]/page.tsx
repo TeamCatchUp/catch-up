@@ -127,7 +127,7 @@ export default function HistoryDetailPage() {
           </div>
 
           {/* 사이드바 */}
-          <div className="border-edge-neutral hidden w-100 shrink-0 flex-col rounded-xl border bg-fill-normal lg:flex">
+          <div className="border-edge-neutral bg-fill-normal hidden w-100 shrink-0 flex-col rounded-xl border lg:flex">
             <SidebarHeader sourceCount={sourceCount} />
             <div className="min-h-0 flex-1 overflow-y-auto">
               <SourceList sources={sources} answerContent={currentQA.answer?.content ?? ''} />

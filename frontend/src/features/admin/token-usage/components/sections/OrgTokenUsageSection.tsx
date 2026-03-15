@@ -61,7 +61,9 @@ export default function OrgTokenUsageSection() {
       <div className="flex items-end justify-between">
         <div className="flex flex-col gap-1">
           <span className="text-heading-large text-content-normal">토큰 이용 대시보드</span>
-          <span className="text-body-small text-content-alternative">조직의 토큰 이용 현황을 확인하고 관리할 수 있습니다.</span>
+          <span className="text-body-small text-content-alternative">
+            조직의 토큰 이용 현황을 확인하고 관리할 수 있습니다.
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <SegmentedPicker

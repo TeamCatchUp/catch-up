@@ -90,7 +90,7 @@ const SettingsPanel = () => {
   };
 
   return (
-    <div className="border-edge-neutral flex h-screen w-60 shrink-0 flex-col gap-5 border-r bg-fill-normal px-2 py-5">
+    <div className="border-edge-neutral bg-fill-normal flex h-screen w-60 shrink-0 flex-col gap-5 border-r px-2 py-5">
       {SETTINGS_SECTIONS_BY_ROLE[role].map((section) => (
         <div key={section.label} className="flex flex-col gap-1.5">
           <div className="px-1">
@@ -107,8 +107,8 @@ const SettingsPanel = () => {
                   className={cn(
                     'flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 transition-colors',
                     isActive
-                      ? 'border-edge-assistive bg-fill-primary-assistive border text-content-primary'
-                      : 'text-content-normal hover:bg-fill-interaction-hover border border-transparent bg-fill-normal',
+                      ? 'border-edge-assistive bg-fill-primary-assistive text-content-primary border'
+                      : 'text-content-normal hover:bg-fill-interaction-hover bg-fill-normal border border-transparent',
                   )}
                 >
                   <item.Icon className={cn('h-6 w-6 shrink-0', isActive ? 'text-icon-primary' : 'text-icon-normal')} />

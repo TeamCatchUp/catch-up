@@ -14,8 +14,10 @@ const AdminOwnerInfoTag = () => {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={`${TAG_BASE_CLASS} bg-fill-interaction-hover inline-flex cursor-default items-center gap-1 text-content-alternative`}>
-          <IconInfo className="size-4 shrink-0 text-content-alternative" />
+        <span
+          className={`${TAG_BASE_CLASS} bg-fill-interaction-hover text-content-alternative inline-flex cursor-default items-center gap-1`}
+        >
+          <IconInfo className="text-content-alternative size-4 shrink-0" />
           {ADMIN_OWNER_LABEL}
         </span>
       </TooltipTrigger>

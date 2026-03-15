@@ -13,27 +13,27 @@ const buttonVariants = cva(
       variant: {
         /* ── Icon Buttons ── */
         'icon-solid-blue':
-          'hover:bg-fill-primary-interaction-hover active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive rounded-lg bg-fill-primary text-white',
+          'hover:bg-fill-primary-interaction-hover active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive bg-fill-primary rounded-lg text-white',
         'icon-outline-gray':
-          'border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:border-edge-assistive disabled:text-content-assistive text-icon-normal rounded-lg border bg-fill-normal',
+          'border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:border-edge-assistive disabled:text-content-assistive text-icon-normal bg-fill-normal rounded-lg border',
         'icon-only-gray':
-          'hover:text-icon-normal hover:bg-fill-interaction-hover active:text-icon-normal active:bg-fill-interaction-pressed disabled:text-content-assistive rounded-lg text-icon-neutral',
+          'hover:text-icon-normal hover:bg-fill-interaction-hover active:text-icon-normal active:bg-fill-interaction-pressed disabled:text-content-assistive text-icon-neutral rounded-lg',
         'icon-only-blue':
-          'hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive active:text-icon-primary-strong disabled:text-content-assistive rounded-full text-icon-primary',
+          'hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive active:text-icon-primary-strong disabled:text-content-assistive text-icon-primary rounded-full',
 
         /* ── Box Buttons ── */
         'box-solid-primary':
-          'hover:bg-fill-primary-interaction-hover active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive rounded-lg bg-fill-primary text-white',
+          'hover:bg-fill-primary-interaction-hover active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive bg-fill-primary rounded-lg text-white',
         'box-outline-gray':
-          'border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:bg-fill-interaction-inactive disabled:text-content-assistive text-icon-normal rounded-lg border bg-fill-normal',
+          'border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:bg-fill-interaction-inactive disabled:text-content-assistive text-icon-normal bg-fill-normal rounded-lg border',
         'box-outline-blue':
-          'border-edge-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive disabled:bg-fill-interaction-inactive disabled:text-content-assistive disabled:border-edge-assistive bg-fill-primary-assistive rounded-lg border text-content-primary',
+          'border-edge-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive disabled:bg-fill-interaction-inactive disabled:text-content-assistive disabled:border-edge-assistive bg-fill-primary-assistive text-content-primary rounded-lg border',
 
         /* ── Capsule Buttons ── */
         'capsule-solid-primary':
-          'hover:bg-fill-primary-interaction-hover active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive rounded-full bg-fill-primary text-white',
+          'hover:bg-fill-primary-interaction-hover active:bg-fill-primary-interaction-pressed disabled:bg-fill-primary-interaction-inactive bg-fill-primary rounded-full text-white',
         'capsule-outline-mono':
-          'border-edge-normal hover:bg-fill-interaction-hover active:border-edge-neutral active:bg-fill-interaction-pressed disabled:border-edge-normal disabled:bg-fill-interaction-inactive disabled:text-content-assistive rounded-full border bg-fill-normal',
+          'border-edge-normal hover:bg-fill-interaction-hover active:border-edge-neutral active:bg-fill-interaction-pressed disabled:border-edge-normal disabled:bg-fill-interaction-inactive disabled:text-content-assistive bg-fill-normal rounded-full border',
         'capsule-outline-blue':
           'border-edge-primary bg-fill-primary-assistive text-content-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive active:border-edge-primary-strong disabled:text-content-assistive disabled:bg-fill-interaction-inactive disabled:border-edge-assistive rounded-full border',
         'capsule-solid-purple': 'bg-accent-violet-lighten rounded-full',
@@ -41,14 +41,14 @@ const buttonVariants = cva(
 
         /* ── Text Buttons ── */
         'text-primary-blue':
-          'hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive rounded-full text-content-primary',
+          'hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive text-content-primary rounded-full',
         'text-secondary-mono':
           'hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed disabled:text-content-assistive text-icon-normal rounded-full',
 
         /* ── FAB ── */
         'fab-primary': 'bg-neutral-80 shadow-button rounded-full text-white',
         'fab-secondary':
-          'hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed text-icon-normal shadow-button border-edge-neutral rounded-full border bg-fill-normal',
+          'hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed text-icon-normal shadow-button border-edge-neutral bg-fill-normal rounded-full border',
       },
       size: {
         lg: '',

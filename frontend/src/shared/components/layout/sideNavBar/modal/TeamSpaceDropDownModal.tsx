@@ -41,7 +41,9 @@ export function TeamSpaceDropDownContent({ teamSpaces, selectedId, onSelect }: T
                 )}
               >
                 <ArrowRight className="text-icon-normal h-6 w-6" />
-                <span className={cn('text-body-small text-content-normal', isSelected && 'font-semibold')}>{team.name}</span>
+                <span className={cn('text-body-small text-content-normal', isSelected && 'font-semibold')}>
+                  {team.name}
+                </span>
               </button>
             </PopoverClose>
           );

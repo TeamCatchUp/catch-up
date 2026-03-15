@@ -14,7 +14,10 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.constants import REQUIRED_CONFLUENCE_SCOPES
-from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import (
+    AtlassianTokenManager,
+    AtlassianTokenProvider,
+)
 from catchup.connectors.confluence.client import (
     ConfluenceApiClient,
 )
@@ -54,8 +57,10 @@ class ConfluenceMetadataService:
             )
             return {"users": 0, "spaces": 0}
 
-        access_token = await self.token_manager.resolve_access_token(db, token)
-        client = ConfluenceApiClient(cloud_id, access_token)
+        client = ConfluenceApiClient(
+            cloud_id,
+            AtlassianTokenProvider(self.token_manager),
+        )
 
         users_count = await self._sync_users(
             db,

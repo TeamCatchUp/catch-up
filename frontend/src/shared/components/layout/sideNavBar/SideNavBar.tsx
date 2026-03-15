@@ -31,7 +31,7 @@ const SideNavBar = () => {
     <>
       <nav
         className={cn(
-          'border-edge-neutral flex h-screen flex-col gap-5 border-r bg-fill-normal',
+          'border-edge-neutral bg-fill-normal flex h-screen flex-col gap-5 border-r',
           'transition-[width,padding] duration-300 ease-out will-change-[width,padding]',
           isOpen ? 'w-60.25 px-2 py-2.5' : 'w-18 items-center px-3 pt-2.5 pb-5',
         )}
@@ -88,7 +88,7 @@ const SideNavBar = () => {
                   onClick={() => setSidebarOpen(false)}
                   className="icon-button-only-gray flex cursor-pointer items-center justify-center rounded-full! p-0.5"
                 >
-                  <Close className="h-6 w-6 text-icon-neutral" />
+                  <Close className="text-icon-neutral h-6 w-6" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>사이드바 닫기</TooltipContent>

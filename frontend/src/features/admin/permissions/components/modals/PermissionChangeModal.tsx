@@ -46,12 +46,12 @@ const PermissionChangeModal = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideClose
-        className="border-edge-neutral shadow-modal max-w-[400px] gap-2 rounded-2xl border bg-fill-normal px-5 pt-3 pb-4"
+        className="border-edge-neutral shadow-modal bg-fill-normal max-w-[400px] gap-2 rounded-2xl border px-5 pt-3 pb-4"
       >
         <div className="flex h-9 items-center justify-between">
           <DialogTitle className="text-heading-medium text-content-normal">Admin 권한 부여</DialogTitle>
           <button type="button" onClick={() => onOpenChange(false)} className="cursor-pointer" aria-label="닫기">
-            <Cancel className="size-5 text-content-alternative" />
+            <Cancel className="text-content-alternative size-5" />
           </button>
         </div>
 

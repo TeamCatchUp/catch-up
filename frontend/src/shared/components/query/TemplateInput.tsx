@@ -6,7 +6,14 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { PlainTextPlugin } from '@lexical/react/LexicalPlainTextPlugin';
-import { $createParagraphNode, $createTextNode, $getRoot, $isParagraphNode, COMMAND_PRIORITY_HIGH, KEY_ENTER_COMMAND } from 'lexical';
+import {
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  $isParagraphNode,
+  COMMAND_PRIORITY_HIGH,
+  KEY_ENTER_COMMAND,
+} from 'lexical';
 
 import type { UseSearchInputReturn } from '@/shared/hooks/query/useSearchInput';
 import type { TipData } from '@/shared/types/template';
@@ -198,7 +205,16 @@ export default function TemplateInput({ tip, input, submitButtonRef, onSubmitRea
       focusField,
       focusSubmitButton,
     }),
-    [templateFieldValues, templateFieldErrors, setTemplateFieldValue, setIsFocused, fieldKeys, registerFieldRef, focusField, focusSubmitButton],
+    [
+      templateFieldValues,
+      templateFieldErrors,
+      setTemplateFieldValue,
+      setIsFocused,
+      fieldKeys,
+      registerFieldRef,
+      focusField,
+      focusSubmitButton,
+    ],
   );
 
   // onSubmit을 SubmitBridge가 설정한 후 context에 반영하기 위한 ref
@@ -222,7 +238,13 @@ export default function TemplateInput({ tip, input, submitButtonRef, onSubmitRea
           />
           <InitPlugin tip={tip} onReady={handleInitReady} />
           <ExitOnAllChipsRemovedPlugin input={input} />
-          <SubmitBridgeWithRef input={input} submitRef={submitRef} onSubmitReady={onSubmitReady} fieldKeys={fieldKeys} fieldRefs={fieldRefs} />
+          <SubmitBridgeWithRef
+            input={input}
+            submitRef={submitRef}
+            onSubmitReady={onSubmitReady}
+            fieldKeys={fieldKeys}
+            fieldRefs={fieldRefs}
+          />
         </TemplateFieldContext.Provider>
       </LexicalComposer>
     </div>
