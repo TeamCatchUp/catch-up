@@ -75,7 +75,7 @@ export default function QueryInput({ input, inputRef, tipData }: QueryInputProps
         ref={submitButtonRef}
         onClick={handleSubmitClick}
         className={`rounded-rounded ml-2 flex shrink-0 items-center self-end border border-solid p-2 ${
-          input.hasText ? 'cursor-pointer border-fill-primary bg-fill-primary' : 'bg-fill-strong border-edge-assistive'
+          input.hasText ? 'border-fill-primary bg-fill-primary cursor-pointer' : 'bg-fill-strong border-edge-assistive'
         }`}
       >
         <IconArrowSend className={`${input.hasText ? 'brightness-0 invert' : 'text-content-assistive'} h-6 w-6`} />

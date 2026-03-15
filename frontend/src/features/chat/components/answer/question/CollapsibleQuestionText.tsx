@@ -38,7 +38,9 @@ const CollapsibleQuestionText = ({ content }: CollapsibleQuestionTextProps) => {
           aria-label={isExpanded ? '질문 접기' : '질문 펼치기'}
           className="block w-full cursor-pointer text-left"
         >
-          <p className={cn('text-heading-xlarge text-content-neutral pr-6', !isExpanded && 'line-clamp-2')}>{content}</p>
+          <p className={cn('text-heading-xlarge text-content-neutral pr-6', !isExpanded && 'line-clamp-2')}>
+            {content}
+          </p>
           <span className="absolute right-0 bottom-1.5">
             {isExpanded ? (
               <DropdownUp className="text-icon-normal h-5 w-5" />

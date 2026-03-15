@@ -45,7 +45,7 @@ const RagHeader = ({ title, sessionId }: RagHeaderProps) => {
 
   return (
     <>
-      <div className="border-r-edge-neutral border-b-edge-neutral border-r-0.5 sticky top-0 z-10 flex h-13 justify-between border-b bg-fill-normal px-6 py-2 lg:px-16">
+      <div className="border-r-edge-neutral border-b-edge-neutral border-r-0.5 bg-fill-normal sticky top-0 z-10 flex h-13 justify-between border-b px-6 py-2 lg:px-16">
         {/* 좌측 메뉴 */}
         <div className="relative flex min-w-0 items-center">
           <button
@@ -57,12 +57,12 @@ const RagHeader = ({ title, sessionId }: RagHeaderProps) => {
               isQuestionsHistoryPanelOpen && 'bg-fill-interaction-pressed rounded-xl',
             )}
           >
-            <AI className="h-5 w-5 text-content-alternative" />
-            <span className={`text-heading-small ml-1.5 hidden cursor-pointer text-content-alternative lg:inline`}>
+            <AI className="text-content-alternative h-5 w-5" />
+            <span className={`text-heading-small text-content-alternative ml-1.5 hidden cursor-pointer lg:inline`}>
               캐치스턴트 AI
             </span>
           </button>
-          <ArrowRight2 className="h-5 w-5 text-content-alternative" />
+          <ArrowRight2 className="text-content-alternative h-5 w-5" />
           <button
             onClick={handleTitleClick}
             className="text-heading-small text-content-normal! hover:bg-fill-interaction-hover max-w-50 cursor-pointer truncate rounded-lg px-2 py-1 transition-colors"
@@ -93,7 +93,7 @@ const RagHeader = ({ title, sessionId }: RagHeaderProps) => {
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed data-[state=open]:border-edge-normal data-[state=open]:bg-fill-interaction-hover cursor-pointer rounded-lg border bg-fill-normal px-1.5 py-1.5 transition-colors">
+              <button className="border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed data-[state=open]:border-edge-normal data-[state=open]:bg-fill-interaction-hover bg-fill-normal cursor-pointer rounded-lg border px-1.5 py-1.5 transition-colors">
                 <Kebeb className="text-icon-normal h-6 w-6" />
               </button>
             </DropdownMenuTrigger>

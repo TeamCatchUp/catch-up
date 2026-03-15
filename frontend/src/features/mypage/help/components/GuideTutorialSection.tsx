@@ -15,7 +15,7 @@ const GuideTutorialSection = () => {
         {GUIDE_CARDS.map((card) => (
           <li
             key={card.id}
-            className="border-edge-neutral flex w-79.25 shrink-0 flex-col overflow-hidden rounded-xl border bg-fill-normal"
+            className="border-edge-neutral bg-fill-normal flex w-79.25 shrink-0 flex-col overflow-hidden rounded-xl border"
           >
             <Link href={`/mypage/help/tutorial/${card.id}`}>
               <div className="border-edge-neutral relative aspect-59/25 w-full border-b">
@@ -23,7 +23,7 @@ const GuideTutorialSection = () => {
               </div>
               <div className="flex flex-col gap-2 p-5">
                 <h3 className="text-heading-small text-content-normal">{card.title}</h3>
-                <p className="text-body-xsmall whitespace-pre-line text-content-alternative">{card.description}</p>
+                <p className="text-body-xsmall text-content-alternative whitespace-pre-line">{card.description}</p>
               </div>
             </Link>
           </li>

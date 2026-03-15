@@ -109,7 +109,9 @@ export default function RagAnswerPage() {
             {/* 역방향 무한 스크롤 sentinel (위쪽) */}
             <div ref={topSentinelRef} className="h-1 w-full" />
             {chat.isLoadingOlderMessages && (
-              <div className="text-body-small text-content-assistive w-full py-4 text-center">이전 메시지를 불러오는 중...</div>
+              <div className="text-body-small text-content-assistive w-full py-4 text-center">
+                이전 메시지를 불러오는 중...
+              </div>
             )}
 
             {/* 날짜 구분선 */}

@@ -62,8 +62,8 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
   };
 
   return (
-    <div className="bg-gradient-to-b from-transparent to-fill-normal px-6 py-8 backdrop-blur-[10px] lg:px-24">
-      <div className="shadow-rag-bar border-edge-normal mx-auto flex w-full max-w-[776px] flex-none flex-col rounded-3xl border bg-fill-normal px-3 py-4">
+    <div className="to-fill-normal bg-gradient-to-b from-transparent px-6 py-8 backdrop-blur-[10px] lg:px-24">
+      <div className="shadow-rag-bar border-edge-normal bg-fill-normal mx-auto flex w-full max-w-[776px] flex-none flex-col rounded-3xl border px-3 py-4">
         {/* Filter Bar (카드 내부 상단) */}
         <div
           className={cn(
@@ -207,7 +207,10 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
 
           {/* 전송 / 중지 버튼 */}
           {isLoading ? (
-            <button onClick={onStop} className="bg-fill-interaction-pressed flex h-10 w-10 items-center justify-center rounded-full">
+            <button
+              onClick={onStop}
+              className="bg-fill-interaction-pressed flex h-10 w-10 items-center justify-center rounded-full"
+            >
               <Stop className="text-content-neutral relative left-px h-6 w-6 cursor-pointer" />
             </button>
           ) : (
@@ -220,7 +223,10 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
               )}
             >
               <ArrowSend
-                className={cn('h-6 w-6 cursor-pointer', newInput.trim() ? 'brightness-0 invert' : 'text-content-assistive')}
+                className={cn(
+                  'h-6 w-6 cursor-pointer',
+                  newInput.trim() ? 'brightness-0 invert' : 'text-content-assistive',
+                )}
               />
             </button>
           )}

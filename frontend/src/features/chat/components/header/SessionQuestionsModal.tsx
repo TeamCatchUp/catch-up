@@ -48,7 +48,7 @@ const SessionQuestionsModal = ({ sessionId, onClose, onSelect }: SessionQuestion
   return (
     <div
       ref={modalRef}
-      className="shadow-dropdown-menu border-edge-strong flex max-h-125 w-95 flex-col gap-1.5 overflow-hidden rounded-xl border bg-fill-normal py-4"
+      className="shadow-dropdown-menu border-edge-strong bg-fill-normal flex max-h-125 w-95 flex-col gap-1.5 overflow-hidden rounded-xl border py-4"
     >
       {/* 헤더 */}
       <div className="px-5">
@@ -76,7 +76,9 @@ const SessionQuestionsModal = ({ sessionId, onClose, onSelect }: SessionQuestion
           ) : (
             <div className="text-body-small text-content-assistive py-10 text-center">질문 내역이 없습니다.</div>
           )}
-          {isFetchingNextPage && <div className="text-body-small text-content-assistive py-2 text-center">불러오는 중...</div>}
+          {isFetchingNextPage && (
+            <div className="text-body-small text-content-assistive py-2 text-center">불러오는 중...</div>
+          )}
           <div ref={sentinelRef} className="h-1" />
         </div>
       </div>

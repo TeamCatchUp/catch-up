@@ -36,7 +36,7 @@ const MemberTable = ({
   const allSelected = isSelecting && rows.length > 0 && selectedKeys?.size === rows.length;
 
   return (
-    <section className="border-edge-neutral flex h-full min-h-0 flex-col overflow-clip border-r bg-fill-normal">
+    <section className="border-edge-neutral bg-fill-normal flex h-full min-h-0 flex-col overflow-clip border-r">
       {/* 헤더 */}
       <div
         className={cn(
@@ -50,16 +50,16 @@ const MemberTable = ({
           </button>
         )}
         <div className="grid flex-1 grid-cols-4 items-center">
-          <span className="text-body-xsmall pl-7.5 text-left text-content-alternative">이름</span>
-          <span className="text-body-xsmall text-center text-content-alternative">직급</span>
-          <span className="text-body-xsmall text-center text-content-alternative">부서</span>
-          <span className="text-body-xsmall text-center text-content-alternative">{lastColumnHeader}</span>
+          <span className="text-body-xsmall text-content-alternative pl-7.5 text-left">이름</span>
+          <span className="text-body-xsmall text-content-alternative text-center">직급</span>
+          <span className="text-body-xsmall text-content-alternative text-center">부서</span>
+          <span className="text-body-xsmall text-content-alternative text-center">{lastColumnHeader}</span>
         </div>
       </div>
 
       {/* 행 */}
       {rows.length === 0 ? (
-        <div className="text-body-small flex h-full min-h-25 items-center justify-center px-4 text-center text-content-alternative">
+        <div className="text-body-small text-content-alternative flex h-full min-h-25 items-center justify-center px-4 text-center">
           {emptyMessage}
         </div>
       ) : (
@@ -89,7 +89,12 @@ const MemberTable = ({
 
                   {/* 직급 */}
                   <div className="flex items-center justify-center">
-                    <span className={cn(TAG_BASE_CLASS, RANK_BADGE_CLASS[row.rank] ?? 'bg-fill-interaction-hover text-content-alternative')}>
+                    <span
+                      className={cn(
+                        TAG_BASE_CLASS,
+                        RANK_BADGE_CLASS[row.rank] ?? 'bg-fill-interaction-hover text-content-alternative',
+                      )}
+                    >
                       {row.rank}
                     </span>
                   </div>

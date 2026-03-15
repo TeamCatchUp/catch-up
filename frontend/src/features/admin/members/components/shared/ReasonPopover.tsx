@@ -49,7 +49,7 @@ const ReasonPopover = ({ trigger, title, reasonLabel, reasons, requestReason, on
           <div className="flex h-9 items-center justify-between">
             <h3 className="text-heading-medium text-content-normal">{title}</h3>
             <button type="button" onClick={handleClose} className="cursor-pointer p-0.5">
-              <Cancel className="size-6 text-content-alternative" />
+              <Cancel className="text-content-alternative size-6" />
             </button>
           </div>
 
@@ -58,7 +58,7 @@ const ReasonPopover = ({ trigger, title, reasonLabel, reasons, requestReason, on
             {/* 신청 사유 (반려 전용) */}
             {requestReason && (
               <div className="bg-fill-strong border-edge-assistive text-body-small flex gap-3 rounded-lg border px-3 py-2">
-                <span className="shrink-0 text-content-alternative">신청 사유</span>
+                <span className="text-content-alternative shrink-0">신청 사유</span>
                 <span className="text-content-alternative truncate">{requestReason}</span>
               </div>
             )}

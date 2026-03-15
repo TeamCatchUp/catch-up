@@ -48,7 +48,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                   return (
                     <div
                       key={name}
-                      className="border-edge-strong flex h-9 shrink-0 items-center gap-1 rounded-full border bg-fill-normal px-1.5"
+                      className="border-edge-strong bg-fill-normal flex h-9 shrink-0 items-center gap-1 rounded-full border px-1.5"
                     >
                       <div className="flex items-center gap-1.5 px-0.5">
                         {chipOption?.profile_image ? (
@@ -69,7 +69,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
                           e.stopPropagation();
                           onToggle(name);
                         }}
-                        className="flex size-5 cursor-pointer items-center justify-center rounded-full text-icon-neutral hover:bg-fill-interaction-hover"
+                        className="text-icon-neutral hover:bg-fill-interaction-hover flex size-5 cursor-pointer items-center justify-center rounded-full"
                         onMouseDown={(e) => e.preventDefault()}
                       >
                         <IconCloseSmall className="size-4.5" />
@@ -118,7 +118,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
               return (
                 <li key={uniqueKey} className="w-full">
                   <button
-                    className="flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl bg-fill-normal px-2 py-1 transition-colors hover:bg-fill-interaction-hover"
+                    className="bg-fill-normal hover:bg-fill-interaction-hover flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors"
                     onClick={() => onToggle(option.name)}
                   >
                     {option.profile_image ? (

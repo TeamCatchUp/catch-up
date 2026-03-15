@@ -27,10 +27,10 @@ const HistoryListItem = ({ item, group }: HistoryListItemProps) => {
   return (
     <Link
       href={`/mypage/history/${item.sessionId}?q=${encodeURIComponent(item.query)}`}
-      className="hover:bg-fill-interaction-hover flex h-10 w-full items-center gap-2 rounded-xl bg-fill-normal px-2 py-1 transition-colors"
+      className="hover:bg-fill-interaction-hover bg-fill-normal flex h-10 w-full items-center gap-2 rounded-xl px-2 py-1 transition-colors"
     >
       <div className="border-edge-neutral bg-fill-strong rounded-rounded flex shrink-0 items-center justify-center border p-1.5">
-        <ChatIcon className="size-5 text-content-alternative" />
+        <ChatIcon className="text-content-alternative size-5" />
       </div>
       <div className="text-body-small text-content-normal min-w-0 flex-1 truncate text-left">{item.query}</div>
       {(showSavedLabel || showDate) && (

@@ -36,7 +36,7 @@ const AccountSelectorPopover = ({
     <PopoverTrigger asChild>
       <button
         type="button"
-        className={`border-edge-neutral flex w-full cursor-pointer items-center rounded-[10px] border bg-fill-normal text-left ${
+        className={`border-edge-neutral bg-fill-normal flex w-full cursor-pointer items-center rounded-[10px] border text-left ${
           selectedAccount ? 'gap-4 px-3 py-2.5' : 'h-[46px] justify-between px-2.5 py-1.5'
         }`}
       >
@@ -48,11 +48,11 @@ const AccountSelectorPopover = ({
                 <span className="text-heading-small text-content-normal max-w-[133px] truncate">
                   {selectedAccount.userName}
                 </span>
-                <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall shrink-0 px-1.5 py-0.5 text-content-alternative">
+                <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall text-content-alternative shrink-0 px-1.5 py-0.5">
                   {selectedAccount.accountId}
                 </span>
               </div>
-              <span className="text-body-xsmall truncate text-content-alternative">{selectedAccount.userEmail}</span>
+              <span className="text-body-xsmall text-content-alternative truncate">{selectedAccount.userEmail}</span>
             </div>
             <UnfoldMore className="text-content-assistive size-6 shrink-0" />
           </>
@@ -91,12 +91,14 @@ const AccountSelectorPopover = ({
               <DefaultProfile className="text-content-assistive size-10 shrink-0 rounded-full" />
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-heading-small text-content-normal max-w-[160px] truncate">{option.userName}</span>
-                  <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall shrink-0 px-1.5 py-0.5 text-content-alternative">
+                  <span className="text-heading-small text-content-normal max-w-[160px] truncate">
+                    {option.userName}
+                  </span>
+                  <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall text-content-alternative shrink-0 px-1.5 py-0.5">
                     {option.accountId}
                   </span>
                 </div>
-                <span className="text-label-xsmall truncate text-content-alternative">{option.userEmail}</span>
+                <span className="text-label-xsmall text-content-alternative truncate">{option.userEmail}</span>
               </div>
             </CommandItem>
           ))}

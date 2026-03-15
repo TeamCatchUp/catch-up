@@ -83,7 +83,7 @@ const StatusCardsSection = ({ cards, buttonStates, onJobStart }: StatusCardsSect
           return (
             <article
               key={service}
-              className="border-edge-neutral flex h-51 w-58.75 flex-col gap-4 rounded-xl border bg-fill-normal p-4"
+              className="border-edge-neutral bg-fill-normal flex h-51 w-58.75 flex-col gap-4 rounded-xl border p-4"
             >
               <div className="flex items-center gap-2.5">
                 <Icon className={iconClassName} />
@@ -116,7 +116,7 @@ const StatusCardsSection = ({ cards, buttonStates, onJobStart }: StatusCardsSect
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-heading-medium text-content-neutral">{completionRate}%</span>
-                    <span className="rounded-md2 text-body-xsmall bg-fill-primary-normal-neutral px-1.5 py-0.5 leading-none tracking-tight text-content-primary">
+                    <span className="rounded-md2 text-body-xsmall bg-fill-primary-normal-neutral text-content-primary px-1.5 py-0.5 leading-none tracking-tight">
                       {`${completedCount}/${totalCount}`}
                     </span>
                   </div>

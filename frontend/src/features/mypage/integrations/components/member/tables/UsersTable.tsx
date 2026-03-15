@@ -42,7 +42,7 @@ const UsersTable = ({
   onToggleUnused,
 }: UsersTableProps) => {
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-clip bg-fill-normal">
+    <section className="bg-fill-normal flex h-full min-h-0 flex-col overflow-clip">
       {/* 헤더: Figma gap-9(36px), px-5(20px) */}
       <div
         className={cn(
@@ -50,16 +50,16 @@ const UsersTable = ({
           isEditMode ? 'bg-fill-primary-normal-neutral' : 'bg-fill-strong',
         )}
       >
-        <span className="text-body-xsmall pl-8 text-content-alternative">Keycloack 사용자</span>
+        <span className="text-body-xsmall text-content-alternative pl-8">Keycloack 사용자</span>
         {MEMBER_TABLE_SERVICES.map((service) => (
-          <span key={service} className="text-body-xsmall text-center text-content-alternative">
+          <span key={service} className="text-body-xsmall text-content-alternative text-center">
             {SERVICE_HEADER_LABELS[service] ?? service}
           </span>
         ))}
       </div>
 
       {displayRows.length === 0 ? (
-        <div className="text-body-small flex h-full min-h-25 items-center justify-center px-4 text-center text-content-alternative">
+        <div className="text-body-small text-content-alternative flex h-full min-h-25 items-center justify-center px-4 text-center">
           표시할 이용자 연동 데이터가 없습니다.
         </div>
       ) : (
@@ -70,16 +70,11 @@ const UsersTable = ({
             return (
               <div
                 key={renderKey}
-                className="border-edge-neutral grid h-17.5 grid-cols-4 items-center gap-9 border-b bg-fill-normal px-5 transition-colors"
+                className="border-edge-neutral bg-fill-normal grid h-17.5 grid-cols-4 items-center gap-9 border-b px-5 transition-colors"
               >
                 {/* Keycloack 사용자 컬럼: dot(10px) + gap-4(16px) + profile(28px) + name */}
                 <div className="flex min-w-0 items-center gap-4">
-                  <div
-                    className={cn(
-                      'size-2.5 shrink-0 rounded-full',
-                      isAllLinked ? 'bg-green-50' : 'bg-red-40',
-                    )}
-                  />
+                  <div className={cn('size-2.5 shrink-0 rounded-full', isAllLinked ? 'bg-green-50' : 'bg-red-40')} />
                   <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
                   <span className="text-body-small text-content-normal truncate">{row.userName}</span>
                 </div>
@@ -108,7 +103,9 @@ const UsersTable = ({
                           )}
                           <span className="text-body-xsmall text-content-normal truncate">{info?.name ?? '-'}</span>
                         </div>
-                        <span className="text-body-xsmall text-content-alternative truncate">{info?.identifier ?? '-'}</span>
+                        <span className="text-body-xsmall text-content-alternative truncate">
+                          {info?.identifier ?? '-'}
+                        </span>
                       </div>
                     );
                   }
@@ -118,7 +115,7 @@ const UsersTable = ({
                     return (
                       <div
                         key={`${renderKey}-${service}`}
-                        className="flex h-11.5 items-center justify-center rounded-lg bg-fill-strong"
+                        className="bg-fill-strong flex h-11.5 items-center justify-center rounded-lg"
                       >
                         <span className="text-body-xsmall text-content-alternative">
                           {status === '미사용' ? '미사용' : '-'}

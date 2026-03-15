@@ -17,7 +17,7 @@ import type { LimitReleaseRequest } from '../../types/tokenUsage';
 /** 정보 행 (label w-28 = 112px, gap-14 = 56px) */
 const InfoRow = ({ label, value }: { label: string; value: string }) => (
   <div className="text-body-small flex w-full items-center gap-14">
-    <span className="w-28 shrink-0 text-content-alternative">{label}</span>
+    <span className="text-content-alternative w-28 shrink-0">{label}</span>
     <span className="text-content-neutral min-w-0 flex-1 truncate">{value}</span>
   </div>
 );
@@ -80,7 +80,7 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
 
       {/* 추가 토큰 부여량 입력 */}
       <div className="flex items-center gap-18">
-        <span className="text-body-small shrink-0 text-content-alternative">추가 토큰 부여량</span>
+        <span className="text-body-small text-content-alternative shrink-0">추가 토큰 부여량</span>
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <Input
             inputSize="lg"
@@ -90,7 +90,7 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
             onChange={(e) => setGrantAmount(e.target.value)}
             className="min-w-0 flex-1"
           />
-          <span className="text-body-small shrink-0 text-content-alternative">$</span>
+          <span className="text-body-small text-content-alternative shrink-0">$</span>
         </div>
       </div>
 
@@ -102,9 +102,9 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
             <span className="text-heading-small text-content-neutral">설정된 개인 토큰 사용 제한 설정</span>
             <Link
               href="/admin/token-usage?tab=user-management"
-              className="border-edge-neutral rounded-md2 flex h-7 items-center gap-1 border bg-fill-normal px-1.5 py-1"
+              className="border-edge-neutral rounded-md2 bg-fill-normal flex h-7 items-center gap-1 border px-1.5 py-1"
             >
-              <IconArrowOutward className="size-6 text-content-alternative" />
+              <IconArrowOutward className="text-content-alternative size-6" />
               <span className="text-body-xsmall text-content-alternative">수정 페이지 바로가기</span>
             </Link>
           </div>
@@ -134,9 +134,9 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
           <span className="text-heading-small text-content-neutral">사용자 토큰 사용량 분석</span>
           <Link
             href="/admin/token-usage?tab=org-usage"
-            className="border-edge-neutral rounded-md2 flex h-7 items-center gap-1 border bg-fill-normal px-1.5 py-1"
+            className="border-edge-neutral rounded-md2 bg-fill-normal flex h-7 items-center gap-1 border px-1.5 py-1"
           >
-            <IconArrowOutward className="size-6 text-content-alternative" />
+            <IconArrowOutward className="text-content-alternative size-6" />
             <span className="text-body-xsmall text-content-alternative">페이지 바로가기</span>
           </Link>
         </div>

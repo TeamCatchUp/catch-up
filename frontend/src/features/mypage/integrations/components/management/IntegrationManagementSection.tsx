@@ -88,7 +88,7 @@ const IntegrationManagementSection = ({
               type="button"
               onClick={() => onSelectService(service)}
               className={cn(
-                'flex h-16 w-81.25 cursor-pointer items-center justify-between rounded-xl border p-4 shadow-card',
+                'shadow-card flex h-16 w-81.25 cursor-pointer items-center justify-between rounded-xl border p-4',
                 isSelected ? 'border-edge-primary bg-fill-normal' : 'border-edge-neutral bg-fill-normal',
               )}
             >
@@ -99,7 +99,7 @@ const IntegrationManagementSection = ({
               <div className="flex items-center gap-1">
                 {connected ? (
                   <>
-                    <IconCloudCheckFilled className="h-5 w-5 text-icon-primary" />
+                    <IconCloudCheckFilled className="text-icon-primary h-5 w-5" />
                     <span className="text-body-xsmall text-icon-primary">연동됨</span>
                   </>
                 ) : (
@@ -122,7 +122,7 @@ const IntegrationManagementSection = ({
               <button
                 type="button"
                 disabled={syncDisabled}
-                className="border-edge-neutral text-body-xsmall text-content-neutral flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border bg-fill-normal px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+                className="border-edge-neutral text-body-xsmall text-content-neutral bg-fill-normal flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <IconRotate className="text-icon-normal h-6 w-6" />
                 동기화
@@ -144,7 +144,7 @@ const IntegrationManagementSection = ({
                     <button
                       type="button"
                       onClick={() => handleInstall(selectedService)}
-                      className="text-body-xsmall cursor-pointer rounded-full px-1.5 py-1 text-icon-primary"
+                      className="text-body-xsmall text-icon-primary cursor-pointer rounded-full px-1.5 py-1"
                     >
                       연동하기
                     </button>
@@ -185,7 +185,7 @@ const IntegrationManagementSection = ({
                         key={`${row}-${index}`}
                         className="text-body-small text-content-neutral flex h-13 items-center gap-3 px-4 py-3"
                       >
-                        <div className="border-edge-neutral flex shrink-0 items-center justify-center overflow-hidden rounded-full border bg-fill-normal/75 p-1.5">
+                        <div className="border-edge-neutral bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
                           <ResourceIcon className="size-5" />
                         </div>
                         <span className="truncate">{row}</span>

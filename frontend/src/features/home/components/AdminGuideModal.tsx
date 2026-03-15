@@ -105,7 +105,7 @@ function GuideContent({
   onPrev: () => void;
 }) {
   return (
-    <div className="shadow-modal border-edge-strong flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border bg-fill-normal p-6">
+    <div className="shadow-modal border-edge-strong bg-fill-normal flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border p-6">
       {/* 콘텐츠 영역 */}
       <div
         className={`flex min-h-0 flex-1 flex-col gap-5 overflow-hidden transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}
@@ -123,7 +123,7 @@ function GuideContent({
           <button
             type="button"
             onClick={onClose}
-            className="hover:bg-fill-interaction-hover flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-content-alternative"
+            className="hover:bg-fill-interaction-hover text-content-alternative flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full"
           >
             <CloseIcon className="size-5" />
           </button>
@@ -151,7 +151,10 @@ function GuideContent({
         {/* Pagination Dots */}
         <div className="flex gap-2.5 px-2">
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <div key={i} className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-fill-interaction-hover'}`} />
+            <div
+              key={i}
+              className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-fill-interaction-hover'}`}
+            />
           ))}
         </div>
 
@@ -172,7 +175,7 @@ function GuideContent({
 /** 닫기 확인 모달 본문 */
 function CloseConfirmContent({ onDismiss, onNavigate }: { onDismiss: () => void; onNavigate: () => void }) {
   return (
-    <div className="shadow-modal border-edge-strong flex w-[400px] flex-col gap-3 overflow-clip rounded-2xl border bg-fill-normal p-5">
+    <div className="shadow-modal border-edge-strong bg-fill-normal flex w-[400px] flex-col gap-3 overflow-clip rounded-2xl border p-5">
       {/* 텍스트 */}
       <div className="flex flex-col gap-3">
         <p className="text-heading-medium text-orange-60">
