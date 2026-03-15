@@ -1,4 +1,3 @@
-import logging
 import asyncio
 import time
 from contextlib import asynccontextmanager
@@ -53,10 +52,13 @@ if debug_mode:
 
 # 로깅 설정
 configure_logging()
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 if debug_mode:
-    logger.info(f"debugpy_attachment_success: port={settings.DEBUGGER_PORT}")
+    logger.info(
+        "debugpy_attachment_success",
+        port=settings.DEBUGGER_PORT
+    )
 
 # 감사 로그 이벤트 리스너 등록
 bus.subscribe(EventTopic.AUDIT, audit_event_handler)
@@ -64,7 +66,11 @@ bus.subscribe(EventTopic.AUDIT, audit_event_handler)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     
-    logger.info("Log level: %s", settings.LOG_LEVEL)
+    logger.info(
+        "global_logging_config",
+        context="server_startup",
+        level=settings.LOG_LEVEL
+    )
     
     sync_worker_stop_event: asyncio.Event | None = None
     sync_worker_task: asyncio.Task | None = None
@@ -72,14 +78,18 @@ async def lifespan(app: FastAPI):
 
     if settings.LOG_AUDIT_FILE_ENABLED:
         logger.info(
-            "audit_file_rotation_config | when=%s interval=%s backupCount=%s",
-            settings.LOG_AUDIT_ROTATION_WHEN,
-            settings.LOG_AUDIT_ROTATION_INTERVAL,
-            settings.LOG_AUDIT_BACKUP_COUNT,
+            "audit_file_rotation_config",
+            context="server_startup",
+            when=settings.LOG_AUDIT_ROTATION_WHEN,
+            interval=settings.LOG_AUDIT_ROTATION_INTERVAL,
+            backup_count=settings.LOG_AUDIT_BACKUP_COUNT,
         )
 
     if settings.AWS_S3_AUDIT_ENABLED:
-        logger.info("[AUDIT][AWS_S3] Starting audit log uploader task to S3")
+        logger.info(
+            "s3_audit_file_uploader_inititated",
+            context="server_startup"
+        )
         uploader_task = asyncio.create_task(audit_log_uploader_task())
 
     try:
@@ -102,9 +112,10 @@ async def lifespan(app: FastAPI):
         )
 
         logger.debug(
-            "[APP][STARTUP][DB][INIT] Metadata tables loaded: count=%s, tables=%s",
-            len(metadata_table_names),
-            metadata_table_names,
+            "metadata_tables_loaded",
+            context="server_startup",
+            count=len(metadata_table_names),
+            tables=metadata_table_names,
         )
 
         # 2) create_all 이전 DB 상태 확인
@@ -116,14 +127,16 @@ async def lifespan(app: FastAPI):
             set(metadata_table_names) - set(db_table_names_before)
         )
         logger.debug(
-            "[APP][STARTUP][DB][INIT] DB tables before create_all: count=%s, tables=%s",
-            len(db_table_names_before),
-            db_table_names_before,
+            "db_tables_before_create_all",
+            context="server_startup",
+            count=len(db_table_names_before),
+            tables=db_table_names_before,
         )
         logger.debug(
-            "[APP][STARTUP][DB][INIT] Missing tables before create_all: count=%s, tables=%s",
-            len(missing_tables_before),
-            missing_tables_before,
+            "missing_tables_before_create_all",
+            context="server_startup",
+            count=len(missing_tables_before),
+            tables=missing_tables_before,
         )
 
         # 3) SQLAlchemy create_all 실행
@@ -131,8 +144,9 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine)
         create_all_elapsed_ms = (time.perf_counter() - create_all_started_at) * 1000
         logger.debug(
-            "[APP][STARTUP][DB][INIT] create_all completed: elapsed_ms=%.2f",
-            create_all_elapsed_ms,
+            "create_all_completed",
+            context="server_startup",
+            elapsed_ms=create_all_elapsed_ms,
         )
 
         # 4) create_all 이후 DB 상태 확인 및 스키마 드리프트 탐지
@@ -161,14 +175,16 @@ async def lifespan(app: FastAPI):
         missing_tables_after = sorted(set(metadata_table_names) - set(db_table_names_after))
 
         logger.debug(
-            "[APP][STARTUP][DB][INIT] DB tables after create_all: count=%s, tables=%s",
-            len(db_table_names_after),
-            db_table_names_after,
+            "db_tables_after_create_all",
+            context="server_startup",
+            count=len(db_table_names_after),
+            tables=db_table_names_after,
         )
         logger.debug(
-            "[APP][STARTUP][DB][INIT] Created tables in this startup: count=%s, tables=%s",
-            len(created_tables),
-            created_tables,
+            "tables_created_in_startup",
+            context="server_startup",
+            count=len(created_tables),
+            tables=created_tables,
         )
 
         if missing_tables_after:
@@ -204,7 +220,8 @@ async def lifespan(app: FastAPI):
                 )
         else:
             logger.debug(
-                "[APP][STARTUP][DB][SCHEMA_DRIFT] No extra DB columns detected"
+                "no_extra_db_columns_detected",
+                context="server_startup",
             )
 
         if missing_columns_by_table:
@@ -233,7 +250,8 @@ async def lifespan(app: FastAPI):
             )
 
         logger.debug(
-            "[APP][STARTUP][DB][SCHEMA_DRIFT] No missing DB columns detected"
+            "no_missing_db_columns_detected",
+            context="server_startup",
         )
 
         db_init_elapsed_ms = (time.perf_counter() - db_init_started_at) * 1000
@@ -357,22 +375,33 @@ async def lifespan(app: FastAPI):
         sync_worker_task = asyncio.create_task(
             run_sync_worker(sync_worker_stop_event)
         )
-        logger.info("[SYNC][WORKER] In-process worker started")
+        logger.info(
+            "in_process_worker_started",
+            context="sync_worker",
+        )
         
     try:
         with SessionLocal() as db:
             # 어드민 온보딩 여부 테스트
             state.is_admin_initiated = has_admin_ever_onboarded(db)
-            logger.info(f"Admin onboarding completed: {state.is_admin_initiated}")       
+            logger.info(
+                "admin_onboarding_status_checked",
+                context="server_startup",
+                is_admin_initiated=state.is_admin_initiated,
+            )
             # 어드민 CSV 파일 최초 업로드 여부
             state.has_ever_uploaded_user_list_export = has_csv_file_ever_been_uploaded(db)
-            logger.info(f"User list CSV uploaded before: {state.has_ever_uploaded_user_list_export}")
-            
+            logger.info(
+                "user_list_csv_upload_status_checked",
+                context="server_startup",
+                has_ever_uploaded=state.has_ever_uploaded_user_list_export,
+            )
             
     except Exception as e:
         logger.critical(
-            "Failed to check whether admin is initiated: %s",
-            e,
+            "admin_initiation_check_failed",
+            context="server_startup",
+            error=e,
         )
         
     yield
@@ -388,9 +417,17 @@ async def lifespan(app: FastAPI):
         
         try:
             await graceful_shutdown()
-            logger.info("audit_file_flush_success (graceful shutdown)")
+            logger.info(
+                "audit_file_flush_success",
+                context="server_shutdown",
+            )
         except Exception as e:
-            logger.critical("audit_file_flush_failed", exc_info=True)
+            logger.critical(
+                "audit_file_flush_failed",
+                context="server_shutdown",
+                error=e,
+                exc_info=True,
+            )
 
     if sync_worker_stop_event is not None:
         sync_worker_stop_event.set()
@@ -402,7 +439,10 @@ async def lifespan(app: FastAPI):
             pass
         except Exception as e:
             logger.error(
-                "[SYNC][WORKER] Worker shutdown failed: %s", e, exc_info=True
+                "worker_shutdown_failed",
+                context="server_shutdown",
+                error=e,
+                exc_info=True,
             )
 
     # Scheduler Shutdown
@@ -464,9 +504,10 @@ async def lifespan(app: FastAPI):
         await _shared_client.aclose()
     except Exception as e:
         logger.error(
-            "Global shared async client shutdown failed: %s", 
-            e,
-            exc_info=True
+            "global_shared_async_client_shutdown_failed",
+            context="server_shutdown",
+            error=e,
+            exc_info=True,
         )
 
 # MAIN
