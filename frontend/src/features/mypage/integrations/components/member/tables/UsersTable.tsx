@@ -43,10 +43,10 @@ const UsersTable = ({
 }: UsersTableProps) => {
   return (
     <section className="bg-fill-normal flex h-full min-h-0 flex-col overflow-clip">
-      {/* 헤더: Figma gap-9(36px), px-5(20px) */}
+      {/* 헤더: Figma gap-4(36px), px-5(20px) */}
       <div
         className={cn(
-          'border-edge-neutral grid h-9 shrink-0 grid-cols-4 items-center gap-9 border-b px-5 transition-colors',
+          'border-edge-neutral grid h-9 shrink-0 grid-cols-4 items-center gap-4 border-b px-5 transition-colors',
           isEditMode ? 'bg-fill-primary-normal-neutral' : 'bg-fill-strong',
         )}
       >
@@ -70,7 +70,7 @@ const UsersTable = ({
             return (
               <div
                 key={renderKey}
-                className="border-edge-neutral bg-fill-normal grid h-17.5 grid-cols-4 items-center gap-9 border-b px-5 transition-colors"
+                className="border-edge-neutral bg-fill-normal grid h-17.5 grid-cols-4 items-center gap-4 border-b px-5 transition-colors"
               >
                 {/* Keycloack 사용자 컬럼: dot(10px) + gap-4(16px) + profile(28px) + name */}
                 <div className="flex min-w-0 items-center gap-4">

@@ -21,24 +21,28 @@ export const GUIDE_CARDS = [
 
 export const SUPPORT_CARDS = [
   {
+    id: 1,
     title: '자주 묻는 질문',
     tag: 'FAQ',
     description: '계정, 권한, 오류까지\n자주 나오는 질문만 모아두었어요.',
     image: '/image/help/light/faq.jpg',
   },
   {
+    id: 2,
     title: '협업 툴 계정 관리',
     tag: '계정 매핑',
-    description: '답변을 정확하게 받으려면,\n계정이 제대로 연결돼 있어야 해요.',
+    description: '정확한 답변을 위해\n계정 연결 상태 확인해주세요.',
     image: '/image/help/light/integration.jpg',
   },
   {
+    id: 3,
     title: '권한과 접근 문제',
     tag: '권한 요청',
-    description: '보이지 않는 자료가 있다면,\n권한과 연동 상태부터 확인해보세요.',
+    description: '자료가 보이지 않는다면,\n권한과 연동을 확인해 주세요.',
     image: '/image/help/light/permission.jpg',
   },
   {
+    id: 4,
     title: '오류 및 장애',
     tag: '문제 해결',
     description: '문제가 생겼다면,\n빠르게 도와드릴게요.',

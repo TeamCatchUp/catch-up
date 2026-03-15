@@ -44,7 +44,7 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
   return (
     <article
       className={cn(
-        'border-edge-neutral bg-fill-normal flex w-58.75 shrink-0 rounded-xl border',
+        'border-edge-neutral bg-fill-normal flex rounded-xl border',
         isAdmin
           ? cn('flex-col gap-4 p-4', !isConnected && 'min-h-52.25')
           : cn('flex-col gap-3 p-5', !isConnected && 'min-h-62.25'),

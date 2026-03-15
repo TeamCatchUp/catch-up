@@ -116,7 +116,7 @@ const ConnectedAccountsSectionBase = ({
   return (
     <section className={cn('flex flex-col', sectionGapClassName)}>
       <h2 className="text-heading-large text-content-normal">연결된 계정 정보</h2>
-      <div className="flex flex-nowrap items-center gap-5 overflow-x-auto">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-5">
         {resolvedCards.map(({ account, accountInfo, modalRow }) => (
           <ConnectedAccountCard
             key={account.service}

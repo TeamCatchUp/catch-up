@@ -64,7 +64,7 @@ const IntegrationsSection = () => {
   }, []);
 
   return (
-    <section className="flex w-250 flex-col gap-8">
+    <section className="flex w-full flex-col gap-8">
       <div className="flex flex-col gap-3">
         <StatusCardsSection cards={cards} buttonStates={buttonStates} onJobStart={handleJobStart} />
         <EmbeddingProgressPanel progresses={progresses} buttonStates={buttonStates} />
