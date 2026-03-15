@@ -6,20 +6,42 @@ from langchain.embeddings import Embeddings
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.components.vector_db.pgvector.constants import VectorDbProvider
 from catchup.components.vector_db.pgvector.pgvector import PGVectorService
+from catchup.components.vector_db.pgvector.repository import PGVectorRepository
 from catchup.db.engine import engine
 from catchup.configs.config import settings
 
 
+# TODO: Embedding 모델을 다변화 하고 싶은 경우 dict로 싱글톤 관리하기 및 Repository & Service 통합
+_pgvector_repository : PGVectorRepository | None = None  #Ingestion
+_pgvector_service: PGVectorService | None = None  # Retrieval
+
+
+# Ingestion
+def get_pgvector_repository(
+        embeddings: Embeddings
+) -> PGVectorRepository:
+    global _pgvector_repository
+    if _pgvector_repository is None:
+        _pgvector_repository = PGVectorRepository(
+            embeddings=embeddings,
+            collection_name=settings.PGVECTOR_COLLECTION_NAME
+        )
+    return _pgvector_repository
+
+
+# Retrieval
 def get_vector_db_service(
     provider: VectorDbProvider,
     embeddings: Embeddings = None
 )-> BaseVectorDbService:
-
-    if provider == VectorDbProvider.PGVECTOR:        
-        return PGVectorService(
-            collection_name=settings.PGVECTOR_COLLECTION_NAME,
-            postgresql_engine=engine,
-            embeddings=embeddings
-        )
-    
+    if provider == VectorDbProvider.PGVECTOR:
+        global _pgvector_service
+        if _pgvector_service is None:
+            _pgvector_service = PGVectorService(
+                collection_name=settings.PGVECTOR_COLLECTION_NAME,
+                postgresql_engine=engine,
+                embeddings=embeddings
+            )
+        return _pgvector_service
     raise ValueError(f"Unknown provider: {provider}")
+
