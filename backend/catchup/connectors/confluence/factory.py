@@ -66,10 +66,9 @@ async def create_confluence_ingestion_service(
 
     try:
         site_url = token_record.site_url if token_record else ""
+        embedding_service = get_embedding_service(EmbeddingProvider.AWS_BEDROCK)
         repository = get_pgvector_repository(
-            embeddings=get_embedding_service(
-                EmbeddingProvider.AWS_BEDROCK
-            ).get_embedder()
+            embeddings=embedding_service.get_embedder()
         )
         service = ConfluenceIngestionService(
             cloud_id=cloud_id,
