@@ -3,7 +3,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from catchup.connectors.slack.client import SlackApiClientWrapper
-from catchup.connectors.slack.schemas import SlackUser
+from catchup.connectors.slack.schemas import SlackChannel, SlackUser
 from catchup.connectors.slack.transformers import SlackTransformer
 from catchup.db.slack import domain_repository
 
@@ -24,6 +24,7 @@ class SlackMetadataService:
         self.team_id = team_id
         self.client = SlackApiClientWrapper(access_token, team_id)
         self.user_cache: dict[str, SlackUser] = {}
+        self.last_channels: list[SlackChannel] = []
         self.transformer: SlackTransformer | None = None
         self._initialized = False
 
@@ -202,20 +203,8 @@ class SlackMetadataService:
         rollback_on_error: bool = True,
     ) -> dict[str, int]:
         try:
-            channels = []
-            cursor = None
-
-            while True:
-                response = await self.client.list_conversations(
-                    types="public_channel,private_channel",
-                    cursor=cursor,
-                )
-                for channel_data in response.get("channels", []):
-                    channels.append(self.transformer.parse_channel(channel_data))
-
-                cursor = response.get("response_metadata", {}).get("next_cursor")
-                if not cursor:
-                    break
+            channels = await self._fetch_channels()
+            self.last_channels = channels
 
             sync_result = domain_repository.sync_channels_snapshot(
                 db,
@@ -255,6 +244,24 @@ class SlackMetadataService:
             if rollback_on_error:
                 db.rollback()
             return {"synced": 0, "errors": 1}
+
+    async def _fetch_channels(self) -> list[SlackChannel]:
+        channels: list[SlackChannel] = []
+        cursor = None
+
+        while True:
+            response = await self.client.list_conversations(
+                types="public_channel,private_channel",
+                cursor=cursor,
+            )
+            for channel_data in response.get("channels", []):
+                channels.append(self.transformer.parse_channel(channel_data))
+
+            cursor = response.get("response_metadata", {}).get("next_cursor")
+            if not cursor:
+                break
+
+        return channels
 
     async def _sync_channel_members(
         self,

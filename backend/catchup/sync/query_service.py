@@ -23,7 +23,6 @@ from catchup.db.models import (
     GithubInstallation,
     GithubRepository,
     JiraProject,
-    SlackChannel,
     SyncConnector,
     SyncEventStatus,
     SyncJob,
@@ -455,11 +454,9 @@ class SyncQueryService:
             sections=("workspace", "users", "channels"),
         )
 
-        channels = (
-            db.query(SlackChannel)
-            .filter(SlackChannel.team_id == scope_id)
-            .order_by(SlackChannel.name.asc())
-            .all()
+        channels = sorted(
+            metadata_service.last_channels,
+            key=lambda channel: channel.name,
         )
 
         targets = [
@@ -467,10 +464,11 @@ class SyncQueryService:
                 target_id=channel.id,
                 display_name=channel.name or channel.id,
                 target_type="channel",
-                is_accessible=not bool(channel.is_archived),
+                is_accessible=bool(channel.is_member),
                 metadata={
                     "channel_kind": str(channel.channel_type),
                     "is_private": bool(channel.is_private),
+                    "is_member": bool(channel.is_member),
                     "member_count": int(channel.member_count),
                 },
             )
