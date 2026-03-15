@@ -3,7 +3,6 @@ import { useState } from 'react';
 import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
 import IconCloudOff from '@/public/icons/icon/cloud_off.svg';
 import IconOpenInNew from '@/public/icons/icon/open_in_new.svg';
-import IconRotate from '@/public/icons/icon/rotate.svg';
 import IconSpace from '@/public/icons/icon/space.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import IconGithubLogo from '@/public/icons/logo/GitHub.svg';
@@ -73,8 +72,6 @@ const IntegrationManagementSection = ({
     currentPage * RESOURCES_PER_PAGE,
   );
 
-  // TODO: 변경된 sync API 반영 필요 — syncFlush/syncIncremental 엔드포인트 삭제됨, 대체 API 미확정
-  const syncDisabled = true;
 
   return (
     <div className="flex gap-8">
@@ -116,19 +113,7 @@ const IntegrationManagementSection = ({
 
       <div className="flex flex-2 flex-col gap-6">
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-5">
-            <h3 className="text-heading-small text-content-normal flex-1">연동 상태 관리</h3>
-            <div className="flex shrink-0 items-center gap-3">
-              <button
-                type="button"
-                disabled={syncDisabled}
-                className="border-edge-neutral text-body-xsmall text-content-neutral bg-fill-normal flex h-7.5 min-w-7.5 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <IconRotate className="text-icon-normal h-6 w-6" />
-                동기화
-              </button>
-            </div>
-          </div>
+          <h3 className="text-heading-small text-content-normal">연동 상태 관리</h3>
           <div className="border-edge-neutral bg-fill-strong overflow-hidden rounded-xl border">
             <div className="border-edge-neutral flex h-13 items-center justify-between border-b px-4 py-3">
               <span className="text-body-small text-content-neutral">연동 상태</span>
