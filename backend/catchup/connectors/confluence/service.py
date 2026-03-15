@@ -335,7 +335,7 @@ class ConfluenceIngestionService:
             content_type="pages", content_id = page.id,
         )
 
-        attachment_images = await self._download_images(attachments)
+        attachment_images = await self._download_images(page.id, attachments)
 
         return self.transformer.transform_page(
             page,
@@ -361,7 +361,7 @@ class ConfluenceIngestionService:
             content_type="blogposts", content_id=blogpost.id,
         )
 
-        attachment_images = await self._download_images(attachments)
+        attachment_images = await self._download_images(blogpost.id, attachments)
 
         return self.transformer.transform_blogpost(
             blogpost,
@@ -490,6 +490,7 @@ class ConfluenceIngestionService:
     
     async def _download_images(
             self,
+            content_id: str,
             attachments: list[ConfluenceAttachmentResponse]
     ) -> dict[str, bytes]:
         image_attachments = [
@@ -503,7 +504,7 @@ class ConfluenceIngestionService:
         results: dict[str, bytes] = {}
 
         for att in image_attachments:
-            data = await self.client.download_attachment(att.id)
+            data = await self.client.download_attachment(content_id, att.id)
             if data:
                 results[att.title] = data
         

@@ -327,23 +327,27 @@ class ConfluenceApiClient:
 
     async def download_attachment(
         self,
+        content_id: str,
         attachment_id: str,
         max_size_bytes: int = 5 * 1024 * 1024,
     ) -> bytes | None:
         """
         첨부파일 바이너리 다운로드 (이미지 임베딩용)
 
-        v2 API 엔드포인트를 사용하여 Bearer 토큰 인증으로 다운로드.
-        (서블릿 경로 /download/attachments/... 는 API 게이트웨이에서 401 발생)
+        Confluence REST v1의 documented download endpoint를 사용한다.
 
         Args:
+            content_id: Page 또는 BlogPost ID
             attachment_id: Confluence Attachment ID
             max_size_bytes: 최대 다운로드 크기 (기본 5MB, Embed v4 제한)
 
         Returns:
             파일 바이너리 데이터, 실패 시 None
         """
-        url = f"{self.base_url}/attachments/{attachment_id}/download"
+        url = (
+            f"{self.base_url_v1}/content/{content_id}/child/attachment/"
+            f"{attachment_id}/download"
+        )
 
         async with self._semaphore:
             try:
@@ -366,7 +370,8 @@ class ConfluenceApiClient:
                             if auth_retried:
                                 logger.warning(
                                     "[CONFLUENCE][ATTACHMENT] Download unauthorized after refresh: "
-                                    "attachment_id=%s",
+                                    "content_id=%s, attachment_id=%s",
+                                    content_id,
                                     attachment_id,
                                 )
                                 return None
@@ -377,7 +382,8 @@ class ConfluenceApiClient:
                         if response.status_code != 200:
                             logger.warning(
                                 f"[CONFLUENCE][ATTACHMENT] Download failed: "
-                                f"status={response.status_code}, attachment_id={attachment_id}"
+                                f"status={response.status_code}, content_id={content_id}, "
+                                f"attachment_id={attachment_id}"
                             )
                             return None
 
@@ -396,12 +402,14 @@ class ConfluenceApiClient:
 
             except httpx.TimeoutException:
                 logger.warning(
-                    f"[CONFLUENCE][ATTACHMENT] Download timeout: attachment_id={attachment_id}"
+                    f"[CONFLUENCE][ATTACHMENT] Download timeout: content_id={content_id}, "
+                    f"attachment_id={attachment_id}"
                 )
                 return None
             except Exception as e:
                 logger.warning(
-                    f"[CONFLUENCE][ATTACHMENT] Download error: {e}, attachment_id={attachment_id}"
+                    f"[CONFLUENCE][ATTACHMENT] Download error: {e}, content_id={content_id}, "
+                    f"attachment_id={attachment_id}"
                 )
                 return None
 
