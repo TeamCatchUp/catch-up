@@ -163,7 +163,8 @@ class ConfluenceApiClient:
 
             current_params["cursor"] = cursor
 
-        logger.info(f"[CONFLUENCE][API] Paginated {len(all_results)} results from {url}")
+        log = logger.info if all_results else logger.debug
+        log("[CONFLUENCE][API] Paginated %s results from %s", len(all_results), url)
         return all_results
 
     async def _paginate_cursor_iter(
@@ -346,33 +347,52 @@ class ConfluenceApiClient:
 
         async with self._semaphore:
             try:
-                headers = {
-                    "Authorization": f"Bearer {self.access_token}",
-                }
-                async with httpx.AsyncClient(
-                    headers=headers, timeout=60.0, follow_redirects=True,
-                ) as client:
-                    response = await client.get(url)
+                auth_retried = False
+                force_refresh = False
 
-                    if response.status_code != 200:
-                        logger.warning(
-                            f"[CONFLUENCE][ATTACHMENT] Download failed: "
-                            f"status={response.status_code}, attachment_id={attachment_id}"
-                        )
-                        return None
+                while True:
+                    access_token = await self.token_provider.get_access_token(
+                        self.cloud_id,
+                        force_refresh=force_refresh,
+                    )
+                    async with httpx.AsyncClient(
+                        headers={"Authorization": f"Bearer {access_token}"},
+                        timeout=60.0,
+                        follow_redirects=True,
+                    ) as client:
+                        response = await client.get(url)
 
-                    content = response.content
+                        if response.status_code == 401:
+                            if auth_retried:
+                                logger.warning(
+                                    "[CONFLUENCE][ATTACHMENT] Download unauthorized after refresh: "
+                                    "attachment_id=%s",
+                                    attachment_id,
+                                )
+                                return None
+                            auth_retried = True
+                            force_refresh = True
+                            continue
 
-                    if len(content) > max_size_bytes:
-                        logger.info(
-                            f"[CONFLUENCE][ATTACHMENT] File too large "
-                            f"({len(content)} bytes > {max_size_bytes}), skipping: "
-                            f"attachment_id={attachment_id}"
-                        )
-                        return None
+                        if response.status_code != 200:
+                            logger.warning(
+                                f"[CONFLUENCE][ATTACHMENT] Download failed: "
+                                f"status={response.status_code}, attachment_id={attachment_id}"
+                            )
+                            return None
 
-                    await asyncio.sleep(self._rate_limit_delay)
-                    return content
+                        content = response.content
+
+                        if len(content) > max_size_bytes:
+                            logger.info(
+                                f"[CONFLUENCE][ATTACHMENT] File too large "
+                                f"({len(content)} bytes > {max_size_bytes}), skipping: "
+                                f"attachment_id={attachment_id}"
+                            )
+                            return None
+
+                        await asyncio.sleep(self._rate_limit_delay)
+                        return content
 
             except httpx.TimeoutException:
                 logger.warning(
