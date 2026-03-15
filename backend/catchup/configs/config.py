@@ -171,6 +171,8 @@ class Settings(BaseSettings):
     # Embedding Settings
     EMBEDDING_MAX_CONCURRENCY: int = 5  # 동시 Embedding API 호출 수
     EMBEDDING_BATCH_SIZE: int = 96  # Cohere embed-v4 max texts per request
+    SUMMARIZER_RPM_QUOTA: int = 50
+    SUMMARIZER_RPM_BUDGET: int = 45
 
     # Jira Sync Settings
     JIRA_SYNC_BATCH_SIZE: int = 100  # Jira API max per request
