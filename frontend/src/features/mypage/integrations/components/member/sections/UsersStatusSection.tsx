@@ -216,7 +216,7 @@ const UsersStatusSection = ({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <section className="flex w-250 flex-col gap-3">
+    <section className="flex w-full flex-col gap-3">
       {/* 헤더: 제목 + 설명 */}
       <div className="flex flex-col gap-0.5">
         <h2 className="text-heading-large text-content-normal">
@@ -228,7 +228,7 @@ const UsersStatusSection = ({
       </div>
 
       {/* 필터 칩 + 버튼 영역 */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         {/* 필터 칩 */}
         <div className="flex items-center gap-2">
           {FILTER_OPTIONS.map(({ key, label }) => {
@@ -287,7 +287,7 @@ const UsersStatusSection = ({
       </div>
 
       {/* 테이블 */}
-      <div className="border-edge-neutral w-250 border-y">
+      <div className="border-edge-neutral w-full border-y">
         <UsersTable
           displayRows={effectiveRows}
           isEditMode={isEditMode}
