@@ -69,13 +69,13 @@ const StatusCardsSection = ({ cards, buttonStates, onJobStart }: StatusCardsSect
   };
 
   return (
-    <section className="flex w-250 flex-col gap-3">
+    <section className="flex w-full flex-col gap-3">
       <div className="flex flex-col gap-0.5">
         <h2 className="text-heading-large text-content-normal">계정 등록 상태</h2>
         <p className="text-body-small text-content-alternative">팀의 매핑 등록 상태를 확인할 수 있어요.</p>
       </div>
 
-      <div className="flex items-center gap-5">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-5">
         {cards.map((card) => {
           const { service, name, Icon, completedCount, totalCount, completionRate } = card;
           const iconClassName = service === 'confluence' ? 'h-5.75 w-6 shrink-0' : 'h-6 w-6 shrink-0';
@@ -83,7 +83,7 @@ const StatusCardsSection = ({ cards, buttonStates, onJobStart }: StatusCardsSect
           return (
             <article
               key={service}
-              className="border-edge-neutral bg-fill-normal flex h-51 w-58.75 flex-col gap-4 rounded-xl border p-4"
+              className="border-edge-neutral bg-fill-normal flex h-51 flex-col gap-4 rounded-xl border p-4"
             >
               <div className="flex items-center gap-2.5">
                 <Icon className={iconClassName} />
