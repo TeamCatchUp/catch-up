@@ -38,6 +38,7 @@ class ConfluenceApiClient:
 
         self._semaphore = asyncio.Semaphore(settings.CONFLUENCE_SYNC_MAX_CONCURRENT_REQUEST)
         self._rate_limit_delay = settings.CONFLUENCE_SYNC_RATE_LIMIT_DELAY
+        self._attachment_max_retries = 3
     
     def _get_headers(self, access_token: str) -> dict[str, str]:
         return {
@@ -131,6 +132,16 @@ class ConfluenceApiClient:
         parsed = urlparse(link)
         query_params = parse_qs(parsed.query)
         return query_params.get("cursor", [None])[0]
+
+    def _get_retry_after(self, response: httpx.Response, default: int = 5) -> int:
+        retry_after = response.headers.get("Retry-After")
+        if retry_after is None:
+            return default
+
+        try:
+            return max(1, int(retry_after))
+        except ValueError:
+            return default
 
     async def _paginate_cursor(
         self,
@@ -353,6 +364,7 @@ class ConfluenceApiClient:
             try:
                 auth_retried = False
                 force_refresh = False
+                retry_count = 0
 
                 while True:
                     access_token = await self.token_provider.get_access_token(
@@ -365,6 +377,31 @@ class ConfluenceApiClient:
                         follow_redirects=True,
                     ) as client:
                         response = await client.get(url)
+
+                        if response.status_code == 429:
+                            retry_after = self._get_retry_after(response)
+                            if retry_count >= self._attachment_max_retries:
+                                logger.warning(
+                                    "[CONFLUENCE][ATTACHMENT] Rate limit retry exhausted: "
+                                    "content_id=%s, attachment_id=%s, retry_after=%ss",
+                                    content_id,
+                                    attachment_id,
+                                    retry_after,
+                                )
+                                return None
+
+                            retry_count += 1
+                            logger.warning(
+                                "[CONFLUENCE][ATTACHMENT] Rate limited. Waiting %ss before retry "
+                                "(attempt %s/%s): content_id=%s, attachment_id=%s",
+                                retry_after,
+                                retry_count,
+                                self._attachment_max_retries,
+                                content_id,
+                                attachment_id,
+                            )
+                            await asyncio.sleep(retry_after)
+                            continue
 
                         if response.status_code == 401:
                             if auth_retried:
