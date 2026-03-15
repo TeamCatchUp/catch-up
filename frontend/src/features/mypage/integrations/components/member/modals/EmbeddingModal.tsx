@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 import Cancel from '@/public/icons/icon/cancel.svg';
 import { Button } from '@/shared/components/ui/button';
+import CheckboxIcon from '@/shared/components/ui/checkboxIcon';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import type { IntegrationService } from '@/shared/types/integrationService';
@@ -49,7 +50,7 @@ interface EmbeddingModalProps {
 
 /** 임베딩 모달 (셸) */
 const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }: EmbeddingModalProps) => {
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('1개월');
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('3년');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
   const connector = service as SyncConnector;
@@ -68,6 +69,9 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
   const isSubmitDisabled = selectedItems.size === 0 || syncMutation.isPending;
   const noScope = !isScopeLoading && !scopeId;
 
+  const accessibleTargets = useMemo(() => targets.filter((t) => t.is_accessible), [targets]);
+  const isAllSelected = accessibleTargets.length > 0 && accessibleTargets.every((t) => selectedItems.has(t.target_id));
+
   const toggleItem = (targetId: string) => {
     setSelectedItems((prev) => {
       const next = new Set(prev);
@@ -77,8 +81,16 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
     });
   };
 
+  const toggleAll = () => {
+    if (isAllSelected) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(accessibleTargets.map((t) => t.target_id)));
+    }
+  };
+
   const resetFormState = () => {
-    setSelectedPeriod('1개월');
+    setSelectedPeriod('3년');
     setSelectedItems(new Set());
   };
 
@@ -193,9 +205,19 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
                     <span className="text-body-medium text-content-strong">{itemLabel}를 선택해주세요.</span>
                     <span className="bg-accent-red-orange block size-1.25 shrink-0 rounded-full" />
                   </div>
-                  {selectedItems.size > 0 && (
-                    <span className="text-body-small text-content-primary">{selectedItems.size}개 선택됨</span>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {selectedItems.size > 0 && (
+                      <span className="text-body-small text-content-primary">{selectedItems.size}개 선택됨</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={toggleAll}
+                      className="flex cursor-pointer items-center gap-0.5"
+                    >
+                      <CheckboxIcon checked={isAllSelected} className="size-5" />
+                      <span className="text-body-small text-content-normal whitespace-nowrap">전체 선택하기</span>
+                    </button>
+                  </div>
                 </div>
 
                 {isScopeLoading || isTargetsLoading ? (
