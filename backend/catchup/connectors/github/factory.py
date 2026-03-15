@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
-from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.connectors.github.service import GithubIngestionService
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
@@ -57,7 +57,7 @@ async def create_github_ingestion_service(
             installation_id
         )
 
-        repository = PGVectorRepository(
+        repository = get_pgvector_repository(
             embeddings=get_embedding_service(
                 EmbeddingProvider.AWS_BEDROCK
             ).get_embedder()

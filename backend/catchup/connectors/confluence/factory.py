@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
-from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.connectors.atlassian.exceptions import (
     AtlassianTokenExpiredError,
     AtlassianTokenNotFoundError,
@@ -66,9 +66,10 @@ async def create_confluence_ingestion_service(
 
     try:
         site_url = token_record.site_url if token_record else ""
-        embedding_service = get_embedding_service(EmbeddingProvider.AWS_BEDROCK)
-        repository = PGVectorRepository(
-            embeddings=embedding_service.get_embedder()
+        repository = get_pgvector_repository(
+            embeddings=get_embedding_service(
+                EmbeddingProvider.AWS_BEDROCK
+            ).get_embedder()
         )
         service = ConfluenceIngestionService(
             cloud_id=cloud_id,

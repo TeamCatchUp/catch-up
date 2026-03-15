@@ -115,7 +115,7 @@ class JiraIngestionService:
             logger.info("Summarization enabled for embedding optimization")
 
         # PGVector 초기화
-        await self.repository.initialize()
+        self.repository.ensure_initialized()
 
         self._initialized = True
         logger.info("JiraIngestionService initialized successfully")

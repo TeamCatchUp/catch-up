@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
-from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.connectors.atlassian.exceptions import (
     AtlassianTokenExpiredError,
     AtlassianTokenNotFoundError,
@@ -81,7 +81,7 @@ async def create_jira_ingestion_service(
         ) from exc
 
     try:
-        repository = PGVectorRepository(
+        repository = get_pgvector_repository(
             embeddings=get_embedding_service(
                 EmbeddingProvider.AWS_BEDROCK
             ).get_embedder()

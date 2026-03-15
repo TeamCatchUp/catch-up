@@ -145,7 +145,7 @@ class GithubIngestionService:
         - Transformer 생성
         - Summarizer 초기화 (요약 활성화 시)
         """
-        await self.repository.initialize()
+        self.repository.ensure_initialized()
         self.transformer = GithubTransformer()
 
         # Summarizer 초기화 (요약 활성화 시)
