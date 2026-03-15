@@ -104,6 +104,8 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
                 onClick={() => filters.toggleSource('slack')}
               />
             </div>
+            {/* TODO: 담당자/부서/프로젝트 필터 — 백엔드 API 준비 후 주석 해제 */}
+            {/*
             <IconDivider className="text-edge-assistive h-6 w-6 shrink-0" />
             <div className="flex items-center gap-2.5">
               <FilterDropdown
@@ -170,6 +172,7 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
                 />
               </FilterDropdown>
             </div>
+            */}
           </div>
         </div>
 
