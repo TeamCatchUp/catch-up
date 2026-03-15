@@ -57,7 +57,7 @@ const TopNavbar = ({ pageType }: TopNavbarProps) => {
   const IconComponent = config.icon;
 
   return (
-    <nav aria-label="메인 네비게이션" className="border-edge-neutral sticky top-0 z-50 w-full border-b bg-fill-normal">
+    <nav aria-label="메인 네비게이션" className="border-edge-neutral bg-fill-normal sticky top-0 z-50 w-full border-b">
       <div className="flex justify-between px-16 py-2">
         <div className="flex items-center justify-center">
           <Link href={config.href} className="text-content-normal flex cursor-pointer gap-2">
@@ -69,7 +69,7 @@ const TopNavbar = ({ pageType }: TopNavbarProps) => {
           <li>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed data-[state=open]:border-edge-normal data-[state=open]:bg-fill-interaction-hover cursor-pointer rounded-lg border bg-fill-normal px-1.5 py-1.5 transition-colors">
+                <button className="border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed data-[state=open]:border-edge-normal data-[state=open]:bg-fill-interaction-hover bg-fill-normal cursor-pointer rounded-lg border px-1.5 py-1.5 transition-colors">
                   <Kebab2 className="text-icon-normal h-6 w-6" />
                 </button>
               </DropdownMenuTrigger>
