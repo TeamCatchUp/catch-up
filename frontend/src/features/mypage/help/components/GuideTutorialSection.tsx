@@ -11,11 +11,11 @@ const GuideTutorialSection = () => {
         <p className="text-body-small text-content-alternative">주요 기능부터 활용 팁까지 단계별로 안내합니다.</p>
       </div>
 
-      <ul className="flex gap-6">
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(247px,1fr))] gap-6">
         {GUIDE_CARDS.map((card) => (
           <li
             key={card.id}
-            className="border-edge-neutral bg-fill-normal flex w-79.25 shrink-0 flex-col overflow-hidden rounded-xl border"
+            className="border-edge-neutral flex max-w-134.25 flex-col overflow-hidden rounded-xl border"
           >
             <Link href={`/mypage/help/tutorial/${card.id}`}>
               <div className="border-edge-neutral relative aspect-59/25 w-full border-b">
