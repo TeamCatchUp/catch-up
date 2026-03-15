@@ -1,8 +1,6 @@
 import Image from 'next/image';
 
-import IconGitHub from '@/public/icons/logo/GitHub.svg';
-
-import { GITHUB_GUIDE_IMAGES, GITHUB_PROFILE_URL } from '../../constants/integrations';
+import { GITHUB_GUIDE_IMAGES } from '../../constants/integrations';
 
 /** GitHub 연동 가이드 섹션 */
 const GithubGuideSection = () => {
@@ -43,19 +41,6 @@ const GithubGuideSection = () => {
             className="h-auto w-full"
           />
         </div>
-        <button
-          type="button"
-          onClick={() => window.open(GITHUB_PROFILE_URL, '_blank')}
-          className="border-edge-normal flex cursor-pointer items-start gap-4 rounded-xl border px-3 py-2 text-left"
-        >
-          <div className="bg-fill-normal flex size-10 shrink-0 items-center justify-center">
-            <IconGitHub className="size-6" />
-          </div>
-          <div className="flex min-w-0 flex-col">
-            <span className="text-body-xsmall text-content-normal">GitHub account</span>
-            <span className="text-label-xsmall text-content-alternative truncate">{GITHUB_PROFILE_URL}</span>
-          </div>
-        </button>
       </div>
 
       {/* 2. 동기화할 Repository 선택 */}
