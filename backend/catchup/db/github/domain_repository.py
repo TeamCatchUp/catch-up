@@ -283,7 +283,10 @@ def _repo_upsert_set(stmt) -> dict:
 
 
 def _user_email_update_value(stmt):
-    return func.coalesce(stmt.excluded.email, GitHubUserModel.email)
+    return func.coalesce(
+        func.nullif(stmt.excluded.email, ""),
+        GitHubUserModel.email,
+    )
 
 
 def _user_upsert_set(stmt) -> dict:
