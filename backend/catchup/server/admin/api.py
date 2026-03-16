@@ -1153,14 +1153,20 @@ async def sync_oauth_user_list(
                 context=str(e)
             )
         )
-        raise
-    
+        raise HTTPException(
+            status_code=500, 
+            detail="OAuth 유저 동기화 실패"
+        )
+
     emit_audit_event(
         event_type=EventType.OAUTH,
         event_action=AdminOAuthAction.SYNC_USERS,
         event_status=AuditEventStatus.SUCCESS,
         level=AuditLevel.INFO
     )
+    
+    return {"message": "success"}
+
 
 
 @router.get(
