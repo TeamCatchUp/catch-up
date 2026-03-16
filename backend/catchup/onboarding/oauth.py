@@ -3,7 +3,7 @@ import logging
 
 from catchup.components.auth.keycloak_admin import KeycloakAdminClient
 from catchup.db.engine import SessionLocal
-from catchup.db.user_source_mapping import upsert_oauth_users
+from catchup.db.user_source_mapping import delete_deactivated_oauth_users, upsert_oauth_users
 from catchup.mapping.schemas import OAuthUserSchema
 from catchup.configs.config import auth_settings
 from catchup.utils.client import get_global_async_client
@@ -33,6 +33,7 @@ async def sync_initial_keycloak_users():
             with SessionLocal() as db:
                 try:
                     upsert_oauth_users(db, parsed_users)
+                    delete_deactivated_oauth_users(db)
                     db.commit()
                     logger.info(f"Successfully synced {len(parsed_users)} users from Keycloak")
                 except Exception as e:

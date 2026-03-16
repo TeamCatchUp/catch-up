@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -125,13 +125,10 @@ def upsert_oauth_users(
 ):
     """PostgreSQL의 ON CONFLICT를 이용한 Upsert 로직"""
     
-    # 활성 유저만 upsert
-    active_users = [user for user in users if user.status == "active"]
-    
-    values = [user.model_dump() for user in active_users]
-    
-    if not values:
+    if not users:
         return
+
+    values = [user.model_dump() for user in users]
     
     stmt = insert(OAuthUser).values(values)
     
@@ -146,6 +143,15 @@ def upsert_oauth_users(
     )
     
     db.execute(update_stmt)
+    
+
+def delete_deactivated_oauth_users(
+    db: Session
+):
+    db.execute(
+        delete(OAuthUser)
+        .where(OAuthUser.status == "DEACTIVATED")  # TODO: Keycloak 한정
+    )
 
 
 def get_pending_source_premappings(

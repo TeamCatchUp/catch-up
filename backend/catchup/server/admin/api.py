@@ -1148,7 +1148,7 @@ async def sync_oauth_user_list(
             event_type=EventType.OAUTH,
             event_action=AdminOAuthAction.SYNC_USERS,
             event_status=AuditEventStatus.FAIL,
-            level=AuditLevel.INFO,
+            level=AuditLevel.ERROR,
             metadata=AdminOAuthAuditMetadata(
                 context=str(e)
             )
