@@ -25,6 +25,7 @@ from catchup.db.sync import (
     SyncEventPublishResultInput,
     claim_events_for_republish,
     claim_event_for_processing,
+    count_events_by_job,
     complete_job_failed,
     complete_job_success,
     get_event,
@@ -36,6 +37,7 @@ from catchup.db.sync import (
     record_event_publish_outcomes,
     requeue_retrying_event,
     start_job,
+    summarize_events_by_job,
 )
 from catchup.sync.common.protocols import IngestionHandlerProtocol, WorkerProtocol
 from catchup.sync.common.schemas import (
@@ -265,7 +267,7 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
         job_started = start_job(db, task.job_id)
         total_targets = 0
         if job_started:
-            total_targets = len(list_events_by_job(db, job_id=task.job_id, limit=100000))
+            total_targets = count_events_by_job(db, job_id=task.job_id)
 
     return ClaimResult(
         state=ClaimState.CLAIMED,
@@ -677,29 +679,17 @@ async def _finalize_job_if_done(
         if job.status in {SyncJobStatus.SUCCESS, SyncJobStatus.FAILED}:
             return
 
-        events = list_events_by_job(db, job_id=job_id, limit=100000)
-        if not events:
+        summary = summarize_events_by_job(db, job_id=job_id)
+        if summary.total_targets == 0:
             return
 
-        if any(
-            event.status
-            in {
-                SyncEventStatus.PENDING,
-                SyncEventStatus.IN_PROGRESS,
-                SyncEventStatus.RETRYING,
-            }
-            for event in events
-        ):
+        if summary.queued_targets > 0 or summary.processing_targets > 0:
             return
 
-        total_targets = len(events)
-        completed_targets = sum(
-            1 for event in events if event.status == SyncEventStatus.SUCCESS
-        )
-        failed_targets = sum(
-            1 for event in events if event.status == SyncEventStatus.FAILED
-        )
-        requeued_targets = sum(int(event.attempt) for event in events)
+        total_targets = summary.total_targets
+        completed_targets = summary.completed_targets
+        failed_targets = summary.failed_targets
+        requeued_targets = summary.requeued_targets
 
         if failed_targets == 0:
             if not complete_job_success(db, job_id):
