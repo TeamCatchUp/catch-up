@@ -42,7 +42,9 @@ class OAuthService:
         if oauth_user_record:
             return oauth_user_record
 
-        # 존재하지 않으면 OAuthUser 레코드 생성
+        # 존재하지 않으면 OAuthUser 레코드 생성 (어드민 최초 온보딩 시점 한정)
+        # 아래 OAuthUser.status는 어드민 온보딩 이후 사용자 목록 연동 과정에서 실제 값으로 대체됨.
+        # 따라서 아래 UserStatus.NEW는 not null 조건을 만족하기 위한 임시 데이터임.
         new_oauth_user = OAuthUser(
             sub=oauth_user.sub,
             email=oauth_user.email,

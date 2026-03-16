@@ -12,6 +12,11 @@ class EventType(StrEnum):
     CHAT = "CHAT"
     AUDIT = "AUDIT"
     SYSTEM = "SYSTEM"
+    OAUTH = "OAUTH"
+
+class AdminOAuthAction(StrEnum):
+    SYNC_USERS = "sync_users"
+    
 
 
 class AuthEventAction(StrEnum):

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from catchup.components.auth.keycloak__admin import KeycloakAdminClient
+from catchup.components.auth.keycloak_admin import KeycloakAdminClient
 from catchup.db.engine import SessionLocal
 from catchup.db.user_source_mapping import upsert_oauth_users
 from catchup.mapping.schemas import OAuthUserSchema

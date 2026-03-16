@@ -124,7 +124,14 @@ def upsert_oauth_users(
     users: list[OAuthUserSchema]
 ):
     """PostgreSQL의 ON CONFLICT를 이용한 Upsert 로직"""
-    values = [user.model_dump() for user in users]
+    
+    # 활성 유저만 upsert
+    active_users = [user for user in users if user.status == "active"]
+    
+    values = [user.model_dump() for user in active_users]
+    
+    if not values:
+        return
     
     stmt = insert(OAuthUser).values(values)
     
