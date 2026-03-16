@@ -168,7 +168,7 @@ class Settings(BaseSettings):
     PGVECTOR_COLLECTION_NAME: str = "vectorstore"  # 통합 Collection (Jira, Slack, GitHub 등)
     PGVECTOR_EMBEDDING_DIMENSIONS: int = 1536  # Cohere embed-v4.0
 
-    # Embedding Settings (Bedrock Codhere Embed 4)
+    # Embedding Settings (Bedrock Codere Embed 4)
     EMBEDDING_MAX_CONCURRENCY: int = 5  # 동시 Embedding API 호출 수
     EMBEDDING_BATCH_SIZE: int = 96  # Cohere embed-v4 max texts per request
 
