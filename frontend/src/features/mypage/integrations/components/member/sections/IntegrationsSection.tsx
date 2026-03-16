@@ -33,7 +33,7 @@ const IntegrationsSection = () => {
     size: PAGE_SIZE,
   });
 
-  const { buttonStates, progresses, handleJobStart } = useEmbeddingJobs();
+  const { isInitialLoading, buttonStates, progresses, handleJobStart } = useEmbeddingJobs();
 
   // in_progress → completed 전환 감지 → 결과 모달 표시
   const [lastSeenStates, setLastSeenStates] = useState('');
@@ -66,8 +66,8 @@ const IntegrationsSection = () => {
   return (
     <section className="flex w-full flex-col gap-8">
       <div className="flex flex-col gap-3">
-        <StatusCardsSection cards={cards} buttonStates={buttonStates} onJobStart={handleJobStart} />
-        <EmbeddingProgressPanel progresses={progresses} buttonStates={buttonStates} />
+        <StatusCardsSection cards={cards} buttonStates={buttonStates} onJobStart={handleJobStart} isInitialLoading={isInitialLoading} />
+        <EmbeddingProgressPanel progresses={progresses} buttonStates={buttonStates} isInitialLoading={isInitialLoading} />
       </div>
       <UsersStatusSection
         total={total}

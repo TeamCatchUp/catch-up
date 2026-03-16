@@ -15,10 +15,11 @@ interface StatusCardsSectionProps {
   cards: MemberIntegrationCardItem[];
   buttonStates: Record<SyncConnector, EmbeddingButtonState>;
   onJobStart: (jobId: string, connector: SyncConnector) => void;
+  isInitialLoading?: boolean;
 }
 
 /** 이용자 연동 상단 계정 등록 카드 섹션 */
-const StatusCardsSection = ({ cards, buttonStates, onJobStart }: StatusCardsSectionProps) => {
+const StatusCardsSection = ({ cards, buttonStates, onJobStart, isInitialLoading }: StatusCardsSectionProps) => {
   const [embeddingModal, setEmbeddingModal] = useState<{
     open: boolean;
     service: IntegrationService;
@@ -30,6 +31,15 @@ const StatusCardsSection = ({ cards, buttonStates, onJobStart }: StatusCardsSect
   };
 
   const renderEmbeddingButton = (service: IntegrationService, name: string) => {
+    if (isInitialLoading) {
+      return (
+        <Button variant="box-outline-gray" size="md" className="text-body-small h-9 w-full" disabled>
+          <IconRotate className="size-5 animate-spin" />
+          임베딩 상태 확인 중...
+        </Button>
+      );
+    }
+
     const state = buttonStates[service as SyncConnector] ?? 'idle';
 
     switch (state) {
