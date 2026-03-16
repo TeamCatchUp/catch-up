@@ -147,11 +147,13 @@ def upsert_oauth_users(
 
 def delete_deactivated_oauth_users(
     db: Session
-):
-    db.execute(
+) -> int:
+    result = db.execute(
         delete(OAuthUser)
         .where(OAuthUser.status == "DEACTIVATED")  # TODO: Keycloak 한정
     )
+    
+    return result.rowcount
 
 
 def get_pending_source_premappings(

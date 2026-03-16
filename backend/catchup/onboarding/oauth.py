@@ -33,9 +33,14 @@ async def sync_initial_keycloak_users():
             with SessionLocal() as db:
                 try:
                     upsert_oauth_users(db, parsed_users)
-                    delete_deactivated_oauth_users(db)
+                    deleted_count = delete_deactivated_oauth_users(db)
                     db.commit()
-                    logger.info(f"Successfully synced {len(parsed_users)} users from Keycloak")
+                    logger.info(
+                        f"Keycloak users sync done | "
+                        f"fetched_users: {len(parsed_users)} / "
+                        f"deleted_deactivated_users: {deleted_count} / "
+                        f"total_synced_users: {len(parsed_users) - deleted_count}"
+                    )
                 except Exception as e:
                     db.rollback()
                     logger.error(f"DB Upsert failed: {e}")
