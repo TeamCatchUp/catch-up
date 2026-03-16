@@ -85,7 +85,7 @@ class AwsBedrockLlmService(BaseLlmService):
             provider="anthropic"
 
         config = Config(
-            max_pool_connections = 100,
+            max_pool_connections = 200,
             retries = {"max_attempts": 5, "mode": "adaptive"},
         )
         
