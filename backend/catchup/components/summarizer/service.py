@@ -146,7 +146,7 @@ class SummarizerService:
     async def summarize_batch(
         self,
         requests: list[SummarizeRequest],
-        max_concurrent: int = 25,
+        max_concurrent: int = 50,
         audit_context: SyncAuditContext | None = None,
         context: str | None = None,
     ) -> list[str]:
