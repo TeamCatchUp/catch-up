@@ -8,6 +8,7 @@ Confluence 메타데이터 동기화 서비스
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -18,9 +19,7 @@ from catchup.connectors.atlassian.token_manager import (
     AtlassianTokenManager,
     AtlassianTokenProvider,
 )
-from catchup.connectors.confluence.client import (
-    ConfluenceApiClient,
-)
+from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.connectors.confluence.schemas import (
     ConfluenceSpaceResponse,
     ConfluenceUserResponse,
@@ -31,9 +30,71 @@ from catchup.db.confluence import domain_repository as confluence_entities
 logger = logging.getLogger(__name__)
 
 
+@dataclass(slots=True, frozen=True)
+class ConfluenceMetadataSnapshot:
+    users: list[dict[str, Any]] = field(default_factory=list)
+    spaces: list[dict[str, Any]] = field(default_factory=list)
+
+
 class ConfluenceMetadataService:
     def __init__(self, token_manager: AtlassianTokenManager):
         self.token_manager = token_manager
+
+    def persist_snapshot(
+        self,
+        db: Session,
+        cloud_id: str,
+        snapshot: ConfluenceMetadataSnapshot,
+        *,
+        auto_commit: bool = True,
+    ) -> None:
+        if snapshot.users:
+            confluence_entities.upsert_users_bulk(
+                db,
+                snapshot.users,
+                auto_commit=False,
+            )
+
+        sync_result = confluence_entities.sync_spaces_snapshot(
+            db,
+            cloud_id,
+            snapshot.spaces,
+            auto_commit=False,
+        )
+        logger.info(
+            "[CONFLUENCE][METADATA] Space snapshot synced: cloud_id=%s, upserted=%s, deleted=%s",
+            cloud_id,
+            sync_result["upserted"],
+            sync_result["deleted"],
+        )
+
+        if auto_commit:
+            db.commit()
+        else:
+            db.flush()
+
+    async def collect_snapshot(
+        self,
+        cloud_id: str,
+        *,
+        granted_scopes: set[str],
+    ) -> ConfluenceMetadataSnapshot | None:
+        missing = REQUIRED_CONFLUENCE_SCOPES - granted_scopes
+        if missing:
+            logger.warning(
+                "[CONFLUENCE][METADATA] Missing scopes, skip: cloud_id=%s, missing=%s",
+                cloud_id,
+                sorted(missing),
+            )
+            return None
+
+        client = ConfluenceApiClient(
+            cloud_id,
+            AtlassianTokenProvider(self.token_manager),
+        )
+        users = await self._collect_users(client, cloud_id)
+        spaces = await self._collect_spaces(client, cloud_id)
+        return ConfluenceMetadataSnapshot(users=users, spaces=spaces)
 
     async def sync_all(
         self,
@@ -45,48 +106,32 @@ class ConfluenceMetadataService:
         token = atlassian_crud.get_token_by_cloud_id(db, cloud_id)
         if not token:
             logger.warning(
-                f"[CONFLUENCE][METADATA] No token found: cloud_id={cloud_id}"
+                "[CONFLUENCE][METADATA] No token found: cloud_id=%s",
+                cloud_id,
             )
             return {"users": 0, "spaces": 0}
 
-        granted_scopes = set((token.scopes or "").split())
-        missing = REQUIRED_CONFLUENCE_SCOPES - granted_scopes
-        if missing:
-            logger.warning(
-                f"[CONFLUENCE][METADATA] Missing scopes, skip: cloud_id={cloud_id}, missing={sorted(missing)}"
-            )
+        snapshot = await self.collect_snapshot(
+            cloud_id,
+            granted_scopes=set((token.scopes or "").split()),
+        )
+        if snapshot is None:
             return {"users": 0, "spaces": 0}
-
-        client = ConfluenceApiClient(
-            cloud_id,
-            AtlassianTokenProvider(self.token_manager),
-        )
-
-        users_count = await self._sync_users(
+        self.persist_snapshot(
             db,
-            client,
             cloud_id,
+            snapshot,
             auto_commit=auto_commit,
         )
-        spaces_count = await self._sync_spaces(
-            db,
-            client,
-            cloud_id,
-            auto_commit=auto_commit,
-        )
+        return {"users": len(snapshot.users), "spaces": len(snapshot.spaces)}
 
-        return {"users": users_count, "spaces": spaces_count}
-
-    async def _sync_users(
+    async def _collect_users(
         self,
-        db: Session,
         client: ConfluenceApiClient,
         cloud_id: str,
-        *,
-        auto_commit: bool = True,
-    ) -> int:
+    ) -> list[dict[str, Any]]:
         users_data = await client.get_users()
-        payloads: list[dict] = []
+        payloads: list[dict[str, Any]] = []
         for raw_user in users_data:
             try:
                 payload = raw_user.get("user") if isinstance(raw_user, dict) else raw_user
@@ -108,28 +153,21 @@ class ConfluenceMetadataService:
                         "synced_at": datetime.now(timezone.utc),
                     }
                 )
-            except Exception as e:
+            except Exception as exc:
                 logger.error(
-                    f"[CONFLUENCE][METADATA] Failed to parse user: cloud_id={cloud_id}, error={e}"
+                    "[CONFLUENCE][METADATA] Failed to parse user: cloud_id=%s, error=%s",
+                    cloud_id,
+                    exc,
                 )
-        if payloads:
-            confluence_entities.upsert_users_bulk(
-                db,
-                payloads,
-                auto_commit=auto_commit,
-            )
-        return len(payloads)
+        return payloads
 
-    async def _sync_spaces(
+    async def _collect_spaces(
         self,
-        db: Session,
         client: ConfluenceApiClient,
         cloud_id: str,
-        *,
-        auto_commit: bool = True,
-    ) -> int:
+    ) -> list[dict[str, Any]]:
         spaces = await client.get_spaces(space_type=None, status="current")
-        payloads: list[dict] = []
+        payloads: list[dict[str, Any]] = []
         for raw_space in spaces:
             try:
                 space = ConfluenceSpaceResponse.model_validate(raw_space)
@@ -150,20 +188,10 @@ class ConfluenceMetadataService:
                         "synced_at": datetime.now(timezone.utc),
                     }
                 )
-            except Exception as e:
+            except Exception as exc:
                 logger.error(
-                    f"[CONFLUENCE][METADATA] Failed to parse space: cloud_id={cloud_id}, error={e}"
+                    "[CONFLUENCE][METADATA] Failed to parse space: cloud_id=%s, error=%s",
+                    cloud_id,
+                    exc,
                 )
-        sync_result = confluence_entities.sync_spaces_snapshot(
-            db,
-            cloud_id,
-            payloads,
-            auto_commit=auto_commit,
-        )
-        logger.info(
-            "[CONFLUENCE][METADATA] Space snapshot synced: cloud_id=%s, upserted=%s, deleted=%s",
-            cloud_id,
-            sync_result["upserted"],
-            sync_result["deleted"],
-        )
-        return len(payloads)
+        return payloads

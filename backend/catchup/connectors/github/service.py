@@ -20,6 +20,7 @@ Note:
 
 import logging
 import traceback
+from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
@@ -45,7 +46,6 @@ from catchup.components.summarizer import SummarizerService, SummarizeRequest, g
 from catchup.configs.config import settings
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.domain_repository import RepositoryUpsertData, UserUpsertData
-from catchup.db.github import installation_repository as github_installation
 from catchup.db.models import GithubEntityType, GithubInstallationType, SourceType
 from catchup.db.user_source_mapping import find_premapped_name_by_external_user_identifier, find_premapped_names_by_source_type
 from catchup.sync.audit import SyncAuditContext
@@ -103,6 +103,12 @@ def _convert_repos_to_dto(raw_repos: list[dict]) -> list[RepositoryUpsertData]:
     ]
 
 
+@dataclass(slots=True, frozen=True)
+class GithubMetadataSnapshot:
+    users: list[UserUpsertData] = field(default_factory=list)
+    repositories: list[RepositoryUpsertData] = field(default_factory=list)
+
+
 class GithubIngestionService:
     """
     Github 데이터 수집 및 PGVector 적재 서비스
@@ -118,6 +124,8 @@ class GithubIngestionService:
         repository: PGVectorRepository,
         installation_id: int,
         access_token: str,
+        account_login: str,
+        account_type: GithubInstallationType,
         enable_summarization: bool = True,
     ):
         """
@@ -134,6 +142,8 @@ class GithubIngestionService:
         self.transformer: GithubTransformer | None = None
         self.repository = repository
         self.summarizer: SummarizerService | None = None
+        self.account_login = account_login
+        self.account_type = account_type
 
         self._github_name_cache: dict[str, str | None] = {}
 
@@ -407,34 +417,20 @@ class GithubIngestionService:
             # 동기화 시작
             self._start_sync(db, repo_full_name, GithubEntityType.USER, SyncOperation.USER_SYNC)
 
-            # Installation 정보 조회
-            installation = github_installation.get_installation_by_installation_id(
-                db, self.installation_id
-            )
-
-            if not installation:
-                error_msg = f"Installation {self.installation_id} not found in DB"
-                logger.warning(f"[GITHUB][{SyncOperation.USER_SYNC}] {error_msg}")
-                self._fail_sync(db, repo_full_name, GithubEntityType.USER, error_msg, SyncOperation.USER_SYNC)
-                return {"synced": 0, "errors": 1}
-
-            account_login = installation.account_login
-            account_type = installation.account_type
-
             logger.info(
-                f"[GITHUB][{SyncOperation.USER_SYNC}] Syncing {account_type} '{account_login}' "
+                f"[GITHUB][{SyncOperation.USER_SYNC}] Syncing {self.account_type} '{self.account_login}' "
                 f"(installation_id={self.installation_id})"
             )
 
             users_data = []
 
-            if account_type == GithubInstallationType.ORGANIZATION:
+            if self.account_type == GithubInstallationType.ORGANIZATION:
                 # Organization 멤버 조회 (GraphQL)
                 try:
-                    members = await self.client.list_org_members_graphql(account_login)
+                    members = await self.client.list_org_members_graphql(self.account_login)
                     logger.info(
                         f"[GITHUB][{SyncOperation.USER_SYNC}] Found {len(members)} members "
-                        f"in organization '{account_login}'"
+                        f"in organization '{self.account_login}'"
                     )
                     users_data.extend([
                         UserUpsertData(
@@ -449,7 +445,7 @@ class GithubIngestionService:
                     ])
                 except GitHubApiError as e:
                     error_msg = (
-                        f"Failed to fetch org members for '{account_login}': {e}. "
+                        f"Failed to fetch org members for '{self.account_login}': {e}. "
                         "Organization members permission may be required."
                     )
                     logger.warning(f"[GITHUB][{SyncOperation.USER_SYNC}] {error_msg}")
@@ -459,7 +455,7 @@ class GithubIngestionService:
             else:
                 # User 계정인 경우 해당 User 정보만 조회
                 try:
-                    user_info = await self.client.get_user(account_login)
+                    user_info = await self.client.get_user(self.account_login)
                     if user_info:
                         users_data.append(UserUpsertData(
                             database_id=user_info.get("id"),
@@ -469,9 +465,9 @@ class GithubIngestionService:
                             avatar_url=user_info.get("avatar_url"),
                             org_role=None,
                         ))
-                        logger.info(f"[GITHUB][{SyncOperation.USER_SYNC}] Found user '{account_login}'")
+                        logger.info(f"[GITHUB][{SyncOperation.USER_SYNC}] Found user '{self.account_login}'")
                 except GitHubApiError as e:
-                    logger.warning(f"[GITHUB][{SyncOperation.USER_SYNC}] Failed to fetch user '{account_login}': {e}")
+                    logger.warning(f"[GITHUB][{SyncOperation.USER_SYNC}] Failed to fetch user '{self.account_login}': {e}")
                     self._fail_sync(db, repo_full_name, GithubEntityType.USER, str(e), SyncOperation.USER_SYNC)
                     return {"synced": 0, "errors": 1}
 
@@ -506,28 +502,77 @@ class GithubIngestionService:
         """
         Installtion 메타데이터 동기화 (Users + Repository)
         """
+        snapshot, result = await self.collect_installation_metadata(
+            raise_on_error=raise_on_error,
+        )
+        self.persist_installation_snapshot(
+            db,
+            snapshot,
+            auto_commit=auto_commit,
+        )
+        logger.info(
+            f"[GITHUB][INSTALLATION] Completed User + Repository Sync "
+            f"users : {result['users']}, repositories {result['repositories']}"
+        )
+        return result
+
+    async def collect_installation_metadata(
+        self,
+        *,
+        raise_on_error: bool = False,
+    ) -> tuple[GithubMetadataSnapshot, dict[str, Any]]:
         logger.info(
             f"[GITHUB][INSTALLATION] Starting User + Repository Sync "
             f"for installation {self.installation_id}"
         )
 
-        users_result = await self._sync_users(db, auto_commit=auto_commit)
+        users, users_result = await self._collect_users_snapshot()
         if raise_on_error and users_result["errors"] > 0:
             raise RuntimeError(
                 f"github user metadata refresh failed: installation_id={self.installation_id}"
             )
 
-        repo_names = await self._sync_repositories(
+        repositories = await self._collect_repository_snapshot()
+        repo_names = [repo.full_name for repo in repositories]
+
+        snapshot = GithubMetadataSnapshot(
+            users=users,
+            repositories=repositories,
+        )
+        return snapshot, {"users": users_result, "repositories": repo_names}
+
+    def persist_installation_snapshot(
+        self,
+        db: Session,
+        snapshot: GithubMetadataSnapshot,
+        *,
+        auto_commit: bool = True,
+    ) -> None:
+        if snapshot.users:
+            github_entities.upsert_users_bulk(
+                db,
+                snapshot.users,
+                auto_commit=False,
+            )
+
+        sync_result = github_entities.sync_repositories_snapshot(
             db,
-            auto_commit=auto_commit,
+            self.installation_id,
+            snapshot.repositories,
+            auto_commit=False,
         )
-
         logger.info(
-            f"[GITHUB][INSTALLATION] Completed User + Repository Sync "
-            f"users : {users_result}, repositories {repo_names}"
+            "[GITHUB][%s] Repository snapshot synced: installation_id=%s, upserted=%s, deleted=%s",
+            SyncOperation.REPO_SYNC,
+            self.installation_id,
+            sync_result["upserted"],
+            sync_result["deleted"],
         )
 
-        return {"users": users_result, "repositories": repo_names}
+        if auto_commit:
+            db.commit()
+        else:
+            db.flush()
 
 
     async def _sync_repositories(
@@ -592,6 +637,73 @@ class GithubIngestionService:
             logger.error(f"[GITHUB][{SyncOperation.REPO_SYNC}] Unexpected error: {e}", exc_info=True)
             self._fail_sync(db, repo_full_name, GithubEntityType.REPOSITORY, str(e), SyncOperation.REPO_SYNC)
             raise
+
+    async def _collect_users_snapshot(self) -> tuple[list[UserUpsertData], dict[str, int]]:
+        try:
+            logger.info(
+                f"[GITHUB][{SyncOperation.USER_SYNC}] Syncing {self.account_type} '{self.account_login}' "
+                f"(installation_id={self.installation_id})"
+            )
+
+            users_data: list[UserUpsertData] = []
+
+            if self.account_type == GithubInstallationType.ORGANIZATION:
+                try:
+                    members = await self.client.list_org_members_graphql(self.account_login)
+                    logger.info(
+                        f"[GITHUB][{SyncOperation.USER_SYNC}] Found {len(members)} members "
+                        f"in organization '{self.account_login}'"
+                    )
+                    users_data.extend([
+                        UserUpsertData(
+                            database_id=member.get("database_id"),
+                            login=member.get("login", ""),
+                            name=member.get("name"),
+                            email=member.get("email"),
+                            avatar_url=member.get("avatar_url"),
+                            org_role=member.get("org_role"),
+                        )
+                        for member in members
+                    ])
+                except GitHubApiError as exc:
+                    error_msg = (
+                        f"Failed to fetch org members for '{self.account_login}': {exc}. "
+                        "Organization members permission may be required."
+                    )
+                    logger.warning(f"[GITHUB][{SyncOperation.USER_SYNC}] {error_msg}")
+                    return [], {"synced": 0, "errors": 1}
+            else:
+                try:
+                    user_info = await self.client.get_user(self.account_login)
+                    if user_info:
+                        users_data.append(
+                            UserUpsertData(
+                                database_id=user_info.get("id"),
+                                login=user_info.get("login", ""),
+                                name=user_info.get("name"),
+                                email=user_info.get("email"),
+                                avatar_url=user_info.get("avatar_url"),
+                                org_role=None,
+                            )
+                        )
+                        logger.info(f"[GITHUB][{SyncOperation.USER_SYNC}] Found user '{self.account_login}'")
+                except GitHubApiError as exc:
+                    logger.warning(
+                        f"[GITHUB][{SyncOperation.USER_SYNC}] Failed to fetch user '{self.account_login}': {exc}"
+                    )
+                    return [], {"synced": 0, "errors": 1}
+
+            return users_data, {"synced": len(users_data), "errors": 0}
+        except GitHubRateLimitError:
+            raise
+        except Exception as exc:
+            logger.error(f"[GITHUB][{SyncOperation.USER_SYNC}] Unexpected error: {exc}", exc_info=True)
+            return [], {"synced": 0, "errors": 1}
+
+    async def _collect_repository_snapshot(self) -> list[RepositoryUpsertData]:
+        raw_repos = await self.client.list_installation_repos()
+        logger.info(f"[GITHUB][{SyncOperation.REPO_SYNC}] Found {len(raw_repos)} accessible repositories")
+        return _convert_repos_to_dto(raw_repos)
 
     def _get_repo_names_by_ids(self, db: Session, repo_ids: list[int]) -> list[str]:
         """
