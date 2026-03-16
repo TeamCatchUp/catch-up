@@ -174,7 +174,7 @@ class Settings(BaseSettings):
 
     # Summarizer Settings (Bedrock Haiku 4.5) 
     # [IMPORTANT] : Bedrock에 적용된 Quota 보다 작은 값으로 설정
-    SUMMARIZER_RPM_BUDGET: int = 45
+    AWS_BEDROCK_SMALL_RPM: int = 50
 
     # Jira Sync Settings
     JIRA_SYNC_BATCH_SIZE: int = 100  # Jira API max per request
