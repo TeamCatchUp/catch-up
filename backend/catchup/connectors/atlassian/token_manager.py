@@ -5,6 +5,7 @@ from threading import Lock
 from types import ModuleType
 from typing import Callable, ClassVar
 
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.exceptions import (
@@ -130,12 +131,32 @@ class AtlassianTokenProvider:
         self.token_manager = token_manager
         self.session_factory = session_factory
 
+    def _load_token_snapshot_sync(self, cloud_id: str) -> tuple[str, datetime]:
+        with self.session_factory() as db:
+            token = self.token_manager.oauth_repository.get_token_by_cloud_id(
+                db,
+                cloud_id,
+            )
+            if token is None:
+                raise AtlassianTokenNotFoundError(cloud_id)
+            return token.access_token, token.expires_at
+
     async def get_access_token(
         self,
         cloud_id: str,
         *,
         force_refresh: bool = False,
     ) -> str:
+        if not force_refresh:
+            access_token, expires_at = await run_in_threadpool(
+                self._load_token_snapshot_sync,
+                cloud_id,
+            )
+            if self.token_manager._normalize_expires_at(expires_at) > (
+                datetime.now(timezone.utc) + TOKEN_REFRESH_BUFFER
+            ):
+                return access_token
+
         with self.session_factory() as db:
             return await self.token_manager.resolve_access_token_by_cloud_id(
                 db,
