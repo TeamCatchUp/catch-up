@@ -24,7 +24,7 @@ class KeycloakAdminClient:
         
         base_url = server_url.rstrip("/")
         self.users_url = f"{base_url}/admin/realms/{realm}/users"
-        self.token_url = f"{base_url}/realms/master/protocol/openid-connect/token"
+        self.token_url = f"{base_url}/realms/{realm}/protocol/openid-connect/token"
     
     async def get_parsed_users(self) -> list[dict]:
         raw_data = await self._fetch_all_keycloak_users()
