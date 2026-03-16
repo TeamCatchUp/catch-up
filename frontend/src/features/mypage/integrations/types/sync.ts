@@ -48,7 +48,11 @@ export interface SyncJobSnapshotResponse {
   started_at: string | null;
   completed_at: string | null;
   total_targets: number;
+  queued_targets: number;
+  processing_targets: number;
   completed_targets: number;
+  failed_targets: number;
+  requeued_targets: number;
   targets: SyncJobTargetSnapshotItem[];
   last_error: string | null;
   metrics: Record<string, number>;
@@ -157,7 +161,11 @@ export interface SyncStreamSnapshotPayload {
   started_at: string | null;
   completed_at: string | null;
   total_targets: number;
+  queued_targets: number;
+  processing_targets: number;
   completed_targets: number;
+  failed_targets: number;
+  requeued_targets: number;
   targets: SyncJobTargetSnapshotItem[];
   last_error: string | null;
   metrics: Record<string, number>;
