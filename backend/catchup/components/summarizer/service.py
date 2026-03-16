@@ -92,7 +92,7 @@ class SummarizerService:
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.rate_limiter = rate_limiter or SummarizerRateLimiter(
-            limit=settings.SUMMARIZER_RPM_BUDGET,
+            limit=settings.AWS_BEDROCK_SMALL_RPM,
             window_seconds=60,
         )
 
