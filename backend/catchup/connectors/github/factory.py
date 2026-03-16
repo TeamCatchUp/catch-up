@@ -6,6 +6,7 @@ GithubIngestionService 인스턴스 생성을 위한 팩토리 함수.
 
 import logging
 
+from fastapi.concurrency import run_in_threadpool
 from httpx import HTTPStatusError, RequestError
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,7 @@ from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.connectors.github.service import GithubIngestionService
+from catchup.db.engine import SessionLocal
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
@@ -40,11 +42,20 @@ def _extract_http_error_message(exc: HTTPStatusError) -> str:
     return str(exc)
 
 
+def _load_installation_sync(installation_id: int):
+    with SessionLocal() as session:
+        return get_installation_by_installation_id(session, installation_id)
+
+
 async def create_github_ingestion_service(
-    db: Session,
+    db: Session | None,
     installation_id: int,
 ) -> GithubIngestionService:
-    installation = get_installation_by_installation_id(db, installation_id)
+    if db is None:
+        installation = await run_in_threadpool(_load_installation_sync, installation_id)
+    else:
+        installation = get_installation_by_installation_id(db, installation_id)
+
     if not installation:
         raise SyncConnectorError(
             f"Github Installation not found: {installation_id}",
@@ -66,6 +77,8 @@ async def create_github_ingestion_service(
             repository=repository,
             installation_id=installation_id,
             access_token=access_token,
+            account_login=installation.account_login,
+            account_type=installation.account_type,
         )
         await service.initialize()
         return service

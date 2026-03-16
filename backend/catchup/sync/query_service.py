@@ -11,17 +11,22 @@ from sqlalchemy import select
 from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
-from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
+from catchup.connectors.confluence.metadata_service import (
+    ConfluenceMetadataService,
+    ConfluenceMetadataSnapshot,
+)
 from catchup.connectors.github.factory import create_github_ingestion_service
+from catchup.connectors.github.service import GithubIngestionService, GithubMetadataSnapshot
 from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.connectors.slack.factory import create_slack_metadata_service
+from catchup.connectors.slack.metadata_service import (
+    SlackMetadataService,
+    SlackMetadataSnapshot,
+)
 from catchup.db.atlassian import oauth_repository as atlassian_oauth_repository
 from catchup.db.engine import SessionLocal
 from catchup.db.models import (
     AtlassianOAuthToken,
-    ConfluenceSpace,
-    GithubInstallation,
-    GithubRepository,
     JiraProject,
     SyncConnector,
     SyncEventStatus,
@@ -35,6 +40,92 @@ from catchup.sync.common.schemas import SyncTargetType
 
 
 logger = logging.getLogger(__name__)
+
+def _load_jira_targets_sync(scope_id: str) -> list[SyncTargetResult]:
+    with SessionLocal() as session:
+        projects = (
+            session.query(JiraProject)
+            .filter(JiraProject.cloud_id == scope_id)
+            .order_by(JiraProject.project_key.asc())
+            .all()
+        )
+
+    return [
+        SyncTargetResult(
+            target_id=project.project_key,
+            display_name=project.project_name or project.project_key,
+            target_type="project",
+            is_accessible=True,
+            metadata={
+                "project_key": project.project_key,
+                "project_id": str(project.project_id),
+            },
+        )
+        for project in projects
+        if project.project_key
+    ]
+
+
+def _load_confluence_token_sync(scope_id: str) -> AtlassianOAuthToken | None:
+    with SessionLocal() as session:
+        return (
+            session.query(AtlassianOAuthToken)
+            .filter(AtlassianOAuthToken.cloud_id == scope_id)
+            .first()
+        )
+
+
+def _persist_slack_snapshot_sync(
+    service: SlackMetadataService,
+    snapshot: SlackMetadataSnapshot,
+) -> None:
+    with SessionLocal() as session:
+        try:
+            service.persist_snapshot(
+                session,
+                snapshot,
+                auto_commit=False,
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+
+
+def _persist_github_snapshot_sync(
+    service: GithubIngestionService,
+    snapshot: GithubMetadataSnapshot,
+) -> None:
+    with SessionLocal() as session:
+        try:
+            service.persist_installation_snapshot(
+                session,
+                snapshot,
+                auto_commit=False,
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+
+
+def _persist_confluence_snapshot_sync(
+    service: ConfluenceMetadataService,
+    cloud_id: str,
+    snapshot: ConfluenceMetadataSnapshot,
+) -> None:
+    with SessionLocal() as session:
+        try:
+            service.persist_snapshot(
+                session,
+                cloud_id,
+                snapshot,
+                auto_commit=False,
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
 
 
 @dataclass(slots=True, frozen=True)
@@ -278,7 +369,6 @@ class SyncQueryService:
     async def _list_github_targets(
         self,
         *,
-        db,
         scope_id: str,
     ) -> SyncTargetsResult:
         try:
@@ -286,26 +376,17 @@ class SyncQueryService:
         except ValueError as exc:
             raise ValueError(f"github installation not found: {scope_id}") from exc
 
-        installation = (
-            db.query(GithubInstallation)
-            .filter(GithubInstallation.installation_id == installation_id)
-            .first()
+        service = await create_github_ingestion_service(
+            db=None,
+            installation_id=installation_id,
         )
-        if installation is None:
-            raise ValueError(f"github installation not found: {scope_id}")
-
-        service = await create_github_ingestion_service(db, installation_id)
-        await service.sync_installation_metadata(
-            db,
-            auto_commit=False,
+        snapshot, _ = await service.collect_installation_metadata(
             raise_on_error=True,
         )
-
-        repositories = (
-            db.query(GithubRepository)
-            .filter(GithubRepository.installation_id == installation_id)
-            .order_by(GithubRepository.full_name.asc())
-            .all()
+        await run_in_threadpool(
+            _persist_github_snapshot_sync,
+            service,
+            snapshot,
         )
 
         targets = [
@@ -319,7 +400,7 @@ class SyncQueryService:
                     "installation_id": str(installation_id),
                 },
             )
-            for repo in repositories
+            for repo in snapshot.repositories
         ]
         return self._build_targets_result(
             connector=SyncConnector.GITHUB,
@@ -330,33 +411,8 @@ class SyncQueryService:
     async def _list_jira_targets(
         self,
         *,
-        db,
         scope_id: str,
     ) -> SyncTargetsResult:
-        def _load_jira_targets_sync() -> list[SyncTargetResult]:
-            with SessionLocal() as session:
-                projects = (
-                    session.query(JiraProject)
-                    .filter(JiraProject.cloud_id == scope_id)
-                    .order_by(JiraProject.project_key.asc())
-                    .all()
-                )
-
-            return [
-                SyncTargetResult(
-                    target_id=project.project_key,
-                    display_name=project.project_name or project.project_key,
-                    target_type="project",
-                    is_accessible=True,
-                    metadata={
-                        "project_key": project.project_key,
-                        "project_id": str(project.project_id),
-                    },
-                )
-                for project in projects
-                if project.project_key
-            ]
-
         try:
             service = await create_jira_ingestion_service(cloud_id=scope_id)
         except SyncInternalError as exc:
@@ -375,7 +431,7 @@ class SyncQueryService:
             sections=("projects",),
         )
 
-        targets = await run_in_threadpool(_load_jira_targets_sync)
+        targets = await run_in_threadpool(_load_jira_targets_sync, scope_id)
         return self._build_targets_result(
             connector=SyncConnector.JIRA,
             scope_id=scope_id,
@@ -385,14 +441,9 @@ class SyncQueryService:
     async def _list_confluence_targets(
         self,
         *,
-        db,
         scope_id: str,
     ) -> SyncTargetsResult:
-        token = (
-            db.query(AtlassianOAuthToken)
-            .filter(AtlassianOAuthToken.cloud_id == scope_id)
-            .first()
-        )
+        token = await run_in_threadpool(_load_confluence_token_sync, scope_id)
         if token is None:
             raise ValueError(f"confluence cloud is not connected: {scope_id}")
 
@@ -401,32 +452,31 @@ class SyncQueryService:
             oauth_repository=atlassian_oauth_repository,
         )
         metadata_service = ConfluenceMetadataService(token_manager)
-        await metadata_service.sync_all(
-            db,
+        snapshot = await metadata_service.collect_snapshot(
             scope_id,
-            auto_commit=False,
+            granted_scopes=set((token.scopes or "").split()),
         )
-
-        spaces = (
-            db.query(ConfluenceSpace)
-            .filter(ConfluenceSpace.cloud_id == scope_id)
-            .order_by(ConfluenceSpace.space_key.asc())
-            .all()
-        )
+        if snapshot is not None:
+            await run_in_threadpool(
+                _persist_confluence_snapshot_sync,
+                metadata_service,
+                scope_id,
+                snapshot,
+            )
 
         targets = [
             SyncTargetResult(
-                target_id=space.space_key,
-                display_name=space.space_name or space.space_key,
+                target_id=space["space_key"],
+                display_name=space["space_name"] or space["space_key"],
                 target_type="space",
                 is_accessible=True,
                 metadata={
-                    "space_key": space.space_key,
-                    "space_id": str(space.space_id),
+                    "space_key": space["space_key"],
+                    "space_id": str(space["space_id"]),
                 },
             )
-            for space in spaces
-            if space.space_key
+            for space in ([] if snapshot is None else snapshot.spaces)
+            if space["space_key"]
         ]
         return self._build_targets_result(
             connector=SyncConnector.CONFLUENCE,
@@ -437,14 +487,13 @@ class SyncQueryService:
     async def _list_slack_targets(
         self,
         *,
-        db,
         scope_id: str,
     ) -> SyncTargetsResult:
-        metadata_service = await create_slack_metadata_service(db, scope_id)
-        refresh_result = await metadata_service.sync_metadata(
-            db,
-            auto_commit=False,
-            rollback_on_error=False,
+        metadata_service = await create_slack_metadata_service(
+            db=None,
+            team_id=scope_id,
+        )
+        snapshot, refresh_result = await metadata_service.collect_snapshot(
             raise_on_error=True,
         )
         self._ensure_refresh_succeeded(
@@ -453,9 +502,14 @@ class SyncQueryService:
             result=refresh_result,
             sections=("workspace", "users", "channels"),
         )
+        await run_in_threadpool(
+            _persist_slack_snapshot_sync,
+            metadata_service,
+            snapshot,
+        )
 
         channels = sorted(
-            metadata_service.last_channels,
+            snapshot.channels,
             key=lambda channel: channel.name,
         )
 
@@ -486,28 +540,16 @@ class SyncQueryService:
         connector: SyncConnector,
         scope_id: str,
     ) -> SyncTargetsResult:
-        with SessionLocal() as db:
-            try:
-                result: SyncTargetsResult
-                if connector == SyncConnector.GITHUB:
-                    result = await self._list_github_targets(db=db, scope_id=scope_id)
-                elif connector == SyncConnector.JIRA:
-                    result = await self._list_jira_targets(db=db, scope_id=scope_id)
-                elif connector == SyncConnector.CONFLUENCE:
-                    result = await self._list_confluence_targets(
-                        db=db,
-                        scope_id=scope_id,
-                    )
-                elif connector == SyncConnector.SLACK:
-                    result = await self._list_slack_targets(db=db, scope_id=scope_id)
-                else:
-                    raise ValueError(f"unsupported connector for target listing: {connector}")
+        if connector == SyncConnector.GITHUB:
+            return await self._list_github_targets(scope_id=scope_id)
+        if connector == SyncConnector.JIRA:
+            return await self._list_jira_targets(scope_id=scope_id)
+        if connector == SyncConnector.CONFLUENCE:
+            return await self._list_confluence_targets(scope_id=scope_id)
+        if connector == SyncConnector.SLACK:
+            return await self._list_slack_targets(scope_id=scope_id)
 
-                db.commit()
-                return result
-            except Exception:
-                db.rollback()
-                raise
+        raise ValueError(f"unsupported connector for target listing: {connector}")
 
 
 _sync_query_service = SyncQueryService()
