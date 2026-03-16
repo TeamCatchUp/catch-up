@@ -29,3 +29,7 @@ services:
     env_file:
       - .env
     restart: always
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
