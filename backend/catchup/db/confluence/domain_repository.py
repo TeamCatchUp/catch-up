@@ -1,10 +1,14 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 
 from catchup.db.models import ConfluenceSpace, ConfluenceUser
+
+
+def _user_email_update_value(stmt):
+    return func.coalesce(stmt.excluded.email, ConfluenceUser.email)
 
 def upsert_spaces_bulk(db:Session, spaces: list[dict]) -> int:
     if not spaces:
@@ -205,7 +209,7 @@ def upsert_users_bulk(
             "account_type": stmt.excluded.account_type,
             "display_name": stmt.excluded.display_name,
             "public_name": stmt.excluded.public_name,
-            "email": stmt.excluded.email,
+            "email": _user_email_update_value(stmt),
             "time_zone": stmt.excluded.time_zone,
             "locale": stmt.excluded.locale,
             "avatar_url": stmt.excluded.avatar_url,

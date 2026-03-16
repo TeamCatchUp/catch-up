@@ -7,7 +7,7 @@ SlackWorkspace, SlackChannel, SlackUser 테이블에 대한 CRUD 작업 수행.
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select, delete, update
+from sqlalchemy import select, delete, update, func
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 
@@ -17,6 +17,10 @@ from catchup.connectors.slack.schemas import (
     SlackWorkspace as SlackWorkspaceSchema,
 )
 from catchup.db.models import SlackChannelMember, SlackWorkspace, SlackChannel, SlackChannelType, SlackUser
+
+
+def _user_email_update_value(stmt):
+    return func.coalesce(stmt.excluded.email, SlackUser.email)
 
 
 # ============================================================
@@ -373,7 +377,7 @@ def upsert_users_bulk(
             "real_name": stmt.excluded.real_name,
             "display_name": stmt.excluded.display_name,
             "deleted": stmt.excluded.deleted,
-            "email": stmt.excluded.email,
+            "email": _user_email_update_value(stmt),
             "avatar_url": stmt.excluded.avatar_url,
             "title": stmt.excluded.title,
             "phone": stmt.excluded.phone,

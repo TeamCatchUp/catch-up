@@ -14,7 +14,7 @@ export default function ExplorerPanel({ variant = 'default', onExampleClick }: E
   }
 
   return (
-    <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-start gap-2 self-stretch overflow-y-auto">
+    <div className="flex min-h-0 flex-1 flex-col items-start gap-2 self-stretch overflow-hidden">
       <RecentActivityExplorer />
     </div>
   );

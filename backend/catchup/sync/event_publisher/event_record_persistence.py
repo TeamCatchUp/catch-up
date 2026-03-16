@@ -4,7 +4,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from catchup.db.models import SyncConnector, SyncType
+from catchup.db.models import SyncConnector, SyncEvent, SyncType
 from catchup.db.sync import (
     SyncEventCreateInput as DbSyncEventCreateInput,
     SyncJobCreateInput as DbSyncJobCreateInput,
@@ -24,8 +24,8 @@ def _build_resource_metadata(
     resource_metadata["scope_id"] = scope_id
     resource_metadata["target_name"] = seed.target_name
     resource_metadata["sync_type"] = sync_type.value
-    if seed.sync_from is not None:
-        resource_metadata["sync_from"] = seed.sync_from
+    if seed.sync_from_ts is not None:
+        resource_metadata["sync_from_ts"] = seed.sync_from_ts
     return resource_metadata
 
 
@@ -38,7 +38,7 @@ def persist_sync_job_and_events(
     scope_id: str,
     requested_at: datetime,
     event_seeds: list[SyncEventSeed],
-) -> list[str]:
+) -> list[SyncEvent]:
     create_db_sync_job(
         db,
         DbSyncJobCreateInput(
@@ -70,5 +70,4 @@ def persist_sync_job_and_events(
             )
         )
 
-    created_events = create_db_sync_events(db, payloads)
-    return [item.event_id for item in created_events]
+    return create_db_sync_events(db, payloads)

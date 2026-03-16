@@ -15,6 +15,9 @@ from httpx import HTTPStatusError, RequestError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.metadata import IntegrationAuditMetadata
+from catchup.audit.service import emit_audit_event
 from catchup.connectors.atlassian.oauth_client import (
     AtlassianOAuthClient,
     get_atlassian_oauth_client,
@@ -38,6 +41,7 @@ from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.models import KnowledgeSource, SourceType
 from catchup.db.workspaces import get_workspace_limit_one
+from catchup.events.enums import EventType, IntegrationEventAction
 from catchup.utils.redis import store_oauth_state
 
 logger = logging.getLogger(__name__)
@@ -81,6 +85,18 @@ async def atlassian_oauth_callback(
     """
     callback_service = AtlassianCallbackService(atlassian_service)
 
+    emit_audit_event(
+        event_type=EventType.INTEGRATION,
+        event_action=IntegrationEventAction.OAUTH_CALLBACK,
+        event_status=AuditEventStatus.ATTEMPT,
+        level=AuditLevel.INFO,
+        metadata=IntegrationAuditMetadata(
+            context="atlassian_oauth_callback",
+            provider="atlassian",
+        ),
+        immediate=True,
+    )
+
     try:
         result = await callback_service.handle_callback(
             db=db,
@@ -88,11 +104,33 @@ async def atlassian_oauth_callback(
             state=state,
         )
     except CallbackError as e:
+        emit_audit_event(
+            event_type=EventType.INTEGRATION,
+            event_action=IntegrationEventAction.OAUTH_CALLBACK,
+            event_status=AuditEventStatus.FAIL,
+            level=AuditLevel.WARNING,
+            metadata=IntegrationAuditMetadata(
+                context=f"atlassian_oauth_callback:{e.code}",
+                provider="atlassian",
+            ),
+            immediate=True,
+        )
         logger.warning(f"[ATLASSIAN][AUTH] Callback failed: code={e.code}, detail={e.detail}")
         return RedirectResponse(
             url=f"{auth_settings.FRONTEND_REDIRECT_URI}?atlassian_installed=false&reason={e.code}"
         )
     except Exception as e:
+        emit_audit_event(
+            event_type=EventType.INTEGRATION,
+            event_action=IntegrationEventAction.OAUTH_CALLBACK,
+            event_status=AuditEventStatus.FAIL,
+            level=AuditLevel.ERROR,
+            metadata=IntegrationAuditMetadata(
+                context="atlassian_oauth_callback:internal_error",
+                provider="atlassian",
+            ),
+            immediate=True,
+        )
         logger.error(f"[ATLASSIAN][AUTH] Callback unexpected error: {e}", exc_info=True)
         return RedirectResponse(
             url=f"{auth_settings.FRONTEND_REDIRECT_URI}?atlassian_installed=false&reason=internal_error"
@@ -111,6 +149,18 @@ async def atlassian_oauth_callback(
 
     logger.info(
         f"[ATLASSIAN][AUTH] 설치 완료: {len(result.resources)}개 사이트 연결 (Jira + Confluence)"
+    )
+
+    emit_audit_event(
+        event_type=EventType.INTEGRATION,
+        event_action=IntegrationEventAction.OAUTH_CALLBACK,
+        event_status=AuditEventStatus.SUCCESS,
+        level=AuditLevel.INFO,
+        metadata=IntegrationAuditMetadata(
+            context="atlassian_oauth_callback:success",
+            provider="atlassian",
+        ),
+        immediate=True,
     )
 
     return RedirectResponse(
@@ -209,10 +259,9 @@ async def _sync_jira_metadata(cloud_id: str) -> None:
         f"[ATLASSIAN][AUTH] Starting background metadata sync: cloud_id={cloud_id}"
     )
 
-    db = SessionLocal()
     try:
-        service = await create_jira_ingestion_service(db, cloud_id)
-        results = await service.sync_metadata(db)
+        service = await create_jira_ingestion_service(cloud_id=cloud_id)
+        results = await service.sync_metadata()
         logger.info(
             f"[ATLASSIAN][AUTH] Background metadata sync completed: "
             f"cloud_id={cloud_id}, results={results}"
@@ -222,8 +271,6 @@ async def _sync_jira_metadata(cloud_id: str) -> None:
             f"[ATLASSIAN][AUTH] Background metadata sync failed: "
             f"cloud_id={cloud_id}, error={e}"
         )
-    finally:
-        db.close()
 
 
 async def _ensure_jira_dynamic_webhook(cloud_id: str) -> None:

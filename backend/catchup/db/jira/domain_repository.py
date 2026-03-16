@@ -8,11 +8,27 @@ JiraProject, JiraSprint, JiraUser 테이블에 대한 CRUD 작업 수행.
 from datetime import datetime, timezone
 
 from regex import P
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 
 from catchup.db.models import JiraProject, JiraSprint, JiraUser
+
+
+def _user_email_update_value(stmt):
+    return func.coalesce(stmt.excluded.email_address, JiraUser.email_address)
+
+
+def _user_upsert_set(stmt) -> dict:
+    return {
+        "account_type": stmt.excluded.account_type,
+        "active": stmt.excluded.active,
+        "display_name": stmt.excluded.display_name,
+        "email_address": _user_email_update_value(stmt),
+        "avatar_url": stmt.excluded.avatar_url,
+        "self_url": stmt.excluded.self_url,
+        "synced_at": stmt.excluded.synced_at,
+    }
 
 
 # ============================================================
@@ -107,18 +123,12 @@ def sync_projects_snapshot(
     db: Session,
     cloud_id: str,
     projects: list[dict],
-    *,
-    auto_commit: bool = True,
 ) -> dict[str, int]:
     now = datetime.now(timezone.utc)
 
     if not projects:
         delete_stmt = delete(JiraProject).where(JiraProject.cloud_id == cloud_id)
         delete_result = db.execute(delete_stmt)
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
         return {
             "upserted": 0,
             "deleted": delete_result.rowcount or 0,
@@ -151,10 +161,6 @@ def sync_projects_snapshot(
     if not normalized_projects:
         delete_stmt = delete(JiraProject).where(JiraProject.cloud_id==cloud_id)
         delete_result = db.execute(delete_stmt)
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
         return {
             "upserted": 0,
             "deleted": delete_result.rowcount or 0,
@@ -181,11 +187,6 @@ def sync_projects_snapshot(
         ~JiraProject.project_key.in_(fetched_project_keys),
     )
     stale_delete_result = db.execute(stale_delete_stmt)
-
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
 
     return {
         "upserted": len(normalized_projects),
@@ -311,8 +312,6 @@ def upsert_sprint(
 def upsert_sprints_bulk(
     db: Session,
     sprints: list[dict],
-    *,
-    auto_commit: bool = True,
 ) -> int:
     """
     스프린트 벌크 Upsert
@@ -347,11 +346,6 @@ def upsert_sprints_bulk(
         }
     )
     db.execute(stmt)
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
-
     return len(sprints)
 
 
@@ -478,17 +472,10 @@ def upsert_user(
         avatar_url=avatar_url,
         self_url=self_url,
         synced_at=now,
-    ).on_conflict_do_update(
+    )
+    stmt = stmt.on_conflict_do_update(
         index_elements=["cloud_id", "account_id"],
-        set_={
-            "account_type": account_type,
-            "active": active,
-            "display_name": display_name,
-            "email_address": email_address,
-            "avatar_url": avatar_url,
-            "self_url": self_url,
-            "synced_at": now,
-        }
+        set_=_user_upsert_set(stmt),
     )
     db.execute(stmt)
     db.commit()
@@ -499,8 +486,6 @@ def upsert_user(
 def upsert_users_bulk(
     db: Session,
     users: list[dict],
-    *,
-    auto_commit: bool = True,
 ) -> int:
     """
     사용자 벌크 Upsert
@@ -526,22 +511,9 @@ def upsert_users_bulk(
     stmt = insert(JiraUser).values(users)
     stmt = stmt.on_conflict_do_update(
         index_elements=["cloud_id", "account_id"],
-        set_={
-            "account_type": stmt.excluded.account_type,
-            "active": stmt.excluded.active,
-            "display_name": stmt.excluded.display_name,
-            "email_address": stmt.excluded.email_address,
-            "avatar_url": stmt.excluded.avatar_url,
-            "self_url": stmt.excluded.self_url,
-            "synced_at": stmt.excluded.synced_at,
-        }
+        set_=_user_upsert_set(stmt),
     )
     db.execute(stmt)
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
-
     return len(users)
 
 

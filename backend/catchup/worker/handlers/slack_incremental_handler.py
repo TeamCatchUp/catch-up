@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from catchup.connectors.slack.factory import create_slack_ingestion_service
+from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.exceptions import SyncInternalError
+from catchup.sync.common.schemas import IncrementalSyncContext, TargetSyncResult
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
 
 
@@ -29,9 +31,9 @@ class SlackIncrementalHandler(BaseIncrementalHandler):
     async def handle(
         self,
         *,
-        context,
+        context: IncrementalSyncContext,
         service_cache: dict[str, object],
-    ) -> dict[str, int | bool]:
+    ) -> TargetSyncResult:
         service = await self._get_service(context.scope_id, service_cache)
         channel_id = context.parent_id or context.target_id
         if not channel_id:
@@ -50,9 +52,16 @@ class SlackIncrementalHandler(BaseIncrementalHandler):
                 record_id=context.record_id or "",
                 event_kind=context.event_kind or "updated",
                 sync_from=sync_from,
+                audit_context=SyncAuditContext(
+                    connector=context.connector,
+                    scope_id=context.scope_id,
+                    target_id=context.target_id,
+                    job_id=context.job_id,
+                    task_id=context.event_id,
+                ),
             )
 
-        if int(result.get("errors", 0)) > 0:
+        if result.error_count > 0:
             raise SyncInternalError(
                 "slack incremental sync failed",
                 metadata={"record_key": context.record_key},

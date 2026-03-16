@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 
 from catchup.connectors.jira.factory import create_jira_ingestion_service
-from catchup.sync.common.schemas import SyncEventContext
+from catchup.sync.audit import SyncAuditContext
+from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
 logger = logging.getLogger(__name__)
@@ -35,11 +37,15 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
     async def handle(
         self,
         *,
-        context: SyncEventContext,
+        context: FullSyncContext,
         service_cache: dict[str, object],
-    ) -> dict[str, int | bool]:
+    ) -> TargetSyncResult:
         service = await self._get_service(context.scope_id, service_cache)
-        sync_days = self._resolve_sync_days(context)
+        sync_from_dt = (
+            datetime.fromtimestamp(float(context.sync_from_ts), tz=timezone.utc)
+            if context.sync_from_ts is not None
+            else None
+        )
 
         project_key = context.target_id.strip()
         if not project_key:
@@ -51,39 +57,27 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
             result = await service.full_sync(
                 db=db,
                 project_keys=[project_key],
-                sync_days=sync_days,
+                sync_from_dt=sync_from_dt,
+                audit_context=SyncAuditContext(
+                    connector=context.connector,
+                    scope_id=context.scope_id,
+                    target_id=context.target_id,
+                    job_id=context.job_id,
+                    task_id=context.event_id,
+                ),
             )
 
-        issues = result.get("issues", {})
-        epics = result.get("epics", {})
-        sprints = result.get("sprints", {})
-
-        synced_count = (
-            self._as_int(issues.get("synced", 0))
-            + self._as_int(epics.get("synced", 0))
-            + self._as_int(sprints.get("synced", 0))
-        )
-        error_count = (
-            self._as_int(issues.get("errors", 0))
-            + self._as_int(epics.get("errors", 0))
-            + self._as_int(sprints.get("errors", 0))
-        )
-
-        if error_count > 0:
+        if result.error_count > 0:
             raise RuntimeError(
                 "[JIRA][FULL SYNC][WORKER] Target sync failed: "
-                f"scope_id={context.scope_id}, project_key={project_key}, errors={error_count}"
+                f"scope_id={context.scope_id}, project_key={project_key}, errors={result.error_count}"
             )
 
         logger.info(
-            "[JIRA][FULL SYNC][WORKER] Target synced: scope_id=%s, project_key=%s, synced=%s, sync_days=%s",
+            "[JIRA][FULL SYNC][WORKER] Target synced: scope_id=%s, project_key=%s, synced=%s, sync_from_ts=%s",
             context.scope_id,
             project_key,
-            synced_count,
-            sync_days,
+            result.synced_count,
+            context.sync_from_ts,
         )
-        return {
-            "synced": synced_count,
-            "errors": error_count,
-            "skipped": False,
-        }
+        return result

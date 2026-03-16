@@ -18,6 +18,13 @@ class Environment(StrEnum):
 
 
 class Settings(BaseSettings):
+    
+    #===========================#
+    #     Degubber Settings     #
+    #===========================#
+    DEBUGGER_ENABLED: bool = False
+    DEBUGGER_PORT: int = 5678
+    
     #=============================#
     #     System Base Settings    #
     #=============================#
@@ -161,9 +168,13 @@ class Settings(BaseSettings):
     PGVECTOR_COLLECTION_NAME: str = "vectorstore"  # 통합 Collection (Jira, Slack, GitHub 등)
     PGVECTOR_EMBEDDING_DIMENSIONS: int = 1536  # Cohere embed-v4.0
 
-    # Embedding Settings
+    # Embedding Settings (Bedrock Codere Embed 4)
     EMBEDDING_MAX_CONCURRENCY: int = 5  # 동시 Embedding API 호출 수
     EMBEDDING_BATCH_SIZE: int = 96  # Cohere embed-v4 max texts per request
+
+    # Summarizer Settings (Bedrock Haiku 4.5) 
+    # [IMPORTANT] : Bedrock에 적용된 Quota 보다 작은 값으로 설정
+    AWS_BEDROCK_SMALL_RPM: int = 50
 
     # Jira Sync Settings
     JIRA_SYNC_BATCH_SIZE: int = 100  # Jira API max per request
@@ -176,7 +187,7 @@ class Settings(BaseSettings):
     CONFLUENCE_SYNC_RATE_LIMIT_DELAY: float = 0.1
 
     # Common Sync Settings
-    DEFAULT_SYNC_DAYS: int = 1095
+    DEFAULT_SYNC_DAYS: int = Field(default=1095, ge=1)
 
     # Slack Sync Settings
     SLACK_SYNC_MAX_CONCURRENT_REQUESTS: int = 10  # 동시 요청 수

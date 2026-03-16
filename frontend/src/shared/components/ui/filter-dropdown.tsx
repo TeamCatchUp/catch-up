@@ -31,7 +31,7 @@ const FilterDropdown = <T extends string>({ options, value, onChange }: FilterDr
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="border-edge-neutral hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex h-9 max-w-[150px] min-w-9 cursor-pointer items-center gap-1 rounded-lg border bg-fill-normal px-2.5 py-2"
+          className="border-edge-neutral hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed bg-fill-normal flex h-9 max-w-[150px] min-w-9 cursor-pointer items-center gap-1 rounded-lg border px-2.5 py-2"
         >
           <span className="text-body-small text-content-neutral whitespace-nowrap">{selectedLabel}</span>
           {open ? (

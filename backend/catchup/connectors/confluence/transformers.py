@@ -13,23 +13,67 @@ page.body.value (Storage Format HTML)
 - confluence:page:{page_id}:chunk:{chunk_index}
 - confluence:blogpost:{page_id}:chunk:{chunk_index}
 """
+import base64
 import json
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from bs4 import BeautifulSoup
 from langchain_core.documents import Document
 
-from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.confluence.chunker import Chunk, ConfluenceChunker
 from catchup.connectors.confluence.schemas import (
     ConfluenceBlogPostResponse,
     ConfluenceCommentResponse,
     ConfluencePageResponse,
 )
-from catchup.connectors.confluence.storage_parser import ConfluenceStorageParser
+from catchup.connectors.confluence.storage_parser import (
+    ConfluenceStorageParser,
+    ContentBlock,
+)
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ConfluenceAttachmentAsset:
+    data: bytes
+    media_type: str
+
+
+@dataclass(frozen=True)
+class ConfluenceEmbedInput:
+    text: str
+    image_data_uris: list[str] = field(default_factory=list)
+    skipped_images: int = 0
+
+    @property
+    def is_multimodal(self) -> bool:
+        return bool(self.image_data_uris)
+
+    def to_bedrock_input(self) -> dict[str, Any]:
+        content: list[dict[str, Any]] = [{"type": "text", "text": self.text}]
+        content.extend(
+            {
+                "type": "image_url",
+                "image_url": {"url": image_data_uri},
+            }
+            for image_data_uri in self.image_data_uris
+        )
+        return {"content": content}
+
+    def payload_bytes(self) -> int:
+        return len(json.dumps(self.to_bedrock_input()).encode("utf-8"))
+
+
+@dataclass(frozen=True)
+class ConfluenceTransformResult:
+    documents: list[Document]
+    embed_inputs: list[ConfluenceEmbedInput]
+    skipped_images: int = 0
+
 
 class ConfluenceTransformer:
     def __init__(self):
@@ -46,10 +90,10 @@ class ConfluenceTransformer:
             labels: list[str] | None = None,
             footer_comments: list[ConfluenceCommentResponse] | None = None,
             inline_comments: list[ConfluenceCommentResponse] | None = None,
-            attachment_images: dict[str, bytes] | None = None,
+            attachment_images: dict[str, ConfluenceAttachmentAsset] | None = None,
             site_url: str | None = None,
             user_name_map: dict[str, str | None] | None = None,
-    ) -> list[Document]:
+    ) -> ConfluenceTransformResult:
         return self._transform_content(
             content_id=page.id,
             entity_type="page",
@@ -80,10 +124,10 @@ class ConfluenceTransformer:
         space_name: str | None = None,
         labels: list[str] | None = None,
         footer_comments: list[ConfluenceCommentResponse] | None = None,
-        attachment_images: dict[str, bytes] | None = None,
+        attachment_images: dict[str, ConfluenceAttachmentAsset] | None = None,
         site_url: str | None = None,
         user_name_map: dict[str, str | None] | None = None,
-    ) -> list[Document]:
+    ) -> ConfluenceTransformResult:
         return self._transform_content(
             content_id=blogpost.id,
             entity_type="blogpost",
@@ -124,10 +168,10 @@ class ConfluenceTransformer:
         labels: list[str] | None,
         footer_comments: list[ConfluenceCommentResponse] | None,
         inline_comments: list[ConfluenceCommentResponse] | None,
-        attachment_images: dict[str, bytes] | None,
+        attachment_images: dict[str, ConfluenceAttachmentAsset] | None,
         site_url: str | None = None,
         user_name_map: dict[str, str | None] | None = None,
-    ) -> list[Document]:
+    ) -> ConfluenceTransformResult:
         
         labels = labels or []
         attachment_images = attachment_images or {}
@@ -138,7 +182,7 @@ class ConfluenceTransformer:
             logger.info(
                 f"[CONFLUENCE[TRANSFORMER] Empty Body for {entity_type} {content_id}"
             )
-            return []
+            return ConfluenceTransformResult(documents=[], embed_inputs=[])
         
         web_url = self._absolutize_web_url(web_url, site_url)
 
@@ -152,12 +196,12 @@ class ConfluenceTransformer:
             logger.info(
                 f"[CONFLUENCE][TRANSFORM] No sections parsed for {entity_type} {content_id}"
             )
-            return []
+            return ConfluenceTransformResult(documents=[], embed_inputs=[])
         
         # 3) Section 트리 → Chunk 리스트
         chunks = self.chunker.chunk(sections, page_title=title)
         if not chunks:
-            return []
+            return ConfluenceTransformResult(documents=[], embed_inputs=[])
 
         # 4) Comment Injection
         #    - Inline: selection 매칭 성공 → 해당 chunk에 삽입
@@ -177,6 +221,8 @@ class ConfluenceTransformer:
 
         # 5. Chunk → LangChain Document 변환
         documents: list[Document] = []
+        embed_inputs: list[ConfluenceEmbedInput] = []
+        skipped_images = 0
         total_chunks = len(chunks)
 
         # 버전 정보 추출
@@ -186,6 +232,13 @@ class ConfluenceTransformer:
         for chunk in chunks:
             # semantic_content: 임베딩용 (chunk content 그대로)
             semantic_content = chunk.content
+            embed_input = self._build_embed_input(
+                text=semantic_content,
+                image_blocks=chunk.image_blocks,
+                attachment_images=attachment_images,
+            )
+            embed_inputs.append(embed_input)
+            skipped_images += embed_input.skipped_images
 
             # contextual_content: LLM 답변 생성용 (chunk별 section 반영)
             contextual_content = self._build_contextual_content(
@@ -261,7 +314,43 @@ class ConfluenceTransformer:
             f"[CONFLUENCE][TRANSFORM] {entity_type} '{title}' → {len(documents)} chunks"
         )
 
-        return documents
+        return ConfluenceTransformResult(
+            documents=documents,
+            embed_inputs=embed_inputs,
+            skipped_images=skipped_images,
+        )
+
+    def _build_embed_input(
+        self,
+        *,
+        text: str,
+        image_blocks: list[ContentBlock],
+        attachment_images: dict[str, ConfluenceAttachmentAsset],
+    ) -> ConfluenceEmbedInput:
+        image_data_uris: list[str] = []
+        skipped_images = 0
+
+        for block in image_blocks:
+            filename = block.image_filename
+            if not filename:
+                continue
+
+            asset = attachment_images.get(filename)
+            if asset is None:
+                skipped_images += 1
+                continue
+
+            image_data_uris.append(self._build_data_uri(asset))
+
+        return ConfluenceEmbedInput(
+            text=text,
+            image_data_uris=image_data_uris,
+            skipped_images=skipped_images,
+        )
+
+    def _build_data_uri(self, asset: ConfluenceAttachmentAsset) -> str:
+        encoded = base64.b64encode(asset.data).decode("ascii")
+        return f"data:{asset.media_type};base64,{encoded}"
     
     def _inject_inline_comments(
             self,
@@ -483,7 +572,12 @@ class ConfluenceTransformer:
             return web_url
         if not site_url:
             return web_url
-        return f"{site_url.rstrip('/')}/{web_url.lstrip('/')}"
+
+        base = site_url.rstrip("/")
+        path = web_url.lstrip("/")
+        if base.endswith("/wiki") or path.startswith("wiki/"):
+            return f"{base}/{path}"
+        return f"{base}/wiki/{path}"
 
     # ================================================================
     # Dual Content Strategy

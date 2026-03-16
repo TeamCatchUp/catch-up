@@ -90,9 +90,12 @@ const VendorFileUploader = ({
       {file ? (
         /* 파일 선택됨: 링크 아이콘 + 파일명 + X */
         <div className="border-edge-neutral flex items-center gap-2 rounded-lg border px-3 py-2">
-          <IconLink className="size-4 shrink-0 text-content-alternative" />
+          <IconLink className="text-content-alternative size-4 shrink-0" />
           <span className="text-body-xsmall text-content-neutral flex-1 truncate">{file.name}</span>
-          <button onClick={onFileRemove} className="text-content-assistive hover:text-content-alternative shrink-0 cursor-pointer">
+          <button
+            onClick={onFileRemove}
+            className="text-content-assistive hover:text-content-alternative shrink-0 cursor-pointer"
+          >
             <IconCancelSmall className="size-5" />
           </button>
         </div>
@@ -216,7 +219,7 @@ const CsvUploadModal = ({ open, onOpenChange }: CsvUploadModalProps) => {
               <DialogTitle className="text-heading-medium text-content-normal">CSV 파일 업로드하기</DialogTitle>
               <button
                 onClick={() => handleClose(false)}
-                className="hover:text-content-neutral flex size-7 cursor-pointer items-center justify-center rounded-full text-content-alternative"
+                className="hover:text-content-neutral text-content-alternative flex size-7 cursor-pointer items-center justify-center rounded-full"
               >
                 <IconCancelSmall className="size-6" />
               </button>
@@ -228,7 +231,7 @@ const CsvUploadModal = ({ open, onOpenChange }: CsvUploadModalProps) => {
               <a
                 href="/docs/user_mapping_guide.pdf"
                 download="[Catch Up] 유저 맵핑 가이드.pdf"
-                className="border-edge-neutral text-body-xsmall text-content-normal hover:bg-fill-strong flex h-7.5 w-fit cursor-pointer items-center gap-1 rounded-lg border bg-fill-normal px-2 py-1"
+                className="border-edge-neutral text-body-xsmall text-content-normal hover:bg-fill-strong bg-fill-normal flex h-7.5 w-fit cursor-pointer items-center gap-1 rounded-lg border px-2 py-1"
               >
                 <IconFile className="text-icon-normal size-5 shrink-0" />
                 CSV 업로드 가이드(PDF) 보기

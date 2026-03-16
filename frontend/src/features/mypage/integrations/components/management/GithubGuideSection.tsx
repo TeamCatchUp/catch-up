@@ -1,13 +1,11 @@
 import Image from 'next/image';
 
-import IconGitHub from '@/public/icons/logo/GitHub.svg';
-
-import { GITHUB_GUIDE_IMAGES, GITHUB_PROFILE_URL } from '../../constants/integrations';
+import { GITHUB_GUIDE_IMAGES } from '../../constants/integrations';
 
 /** GitHub 연동 가이드 섹션 */
 const GithubGuideSection = () => {
   return (
-    <div className="border-edge-neutral flex flex-col gap-10 overflow-clip rounded-xl border bg-fill-normal p-6">
+    <div className="border-edge-neutral bg-fill-normal flex flex-col gap-10 overflow-clip rounded-xl border p-6">
       {/* 인트로 */}
       <div className="flex flex-col gap-2">
         <h4 className="text-heading-medium text-content-normal">코드가 담고 있는 맥락, 이제 한 번에 찾아요.</h4>
@@ -24,7 +22,7 @@ const GithubGuideSection = () => {
         <p className="text-label-small text-content-normal">
           Catch Up 협업 툴 연동 페이지에서 &apos;연동하기&apos; 버튼을 클릭합니다.
         </p>
-        <div className="border-edge-neutral overflow-clip rounded-xl border bg-fill-normal px-4 py-2.5">
+        <div className="border-edge-neutral bg-fill-normal overflow-clip rounded-xl border px-4 py-2.5">
           <Image
             src={GITHUB_GUIDE_IMAGES.integrationPage}
             alt="Catch Up 협업 툴 연동 페이지 - GitHub 연동하기 버튼"
@@ -35,7 +33,7 @@ const GithubGuideSection = () => {
         <p className="text-label-small text-content-normal">
           이후 GitHub 연동 페이지로 이동하여 팀이 함께 볼 Organization을 선택하고 접근 권한을 승인해주세요.
         </p>
-        <div className="border-edge-neutral overflow-clip rounded-xl border bg-fill-normal px-4 py-2.5">
+        <div className="border-edge-neutral bg-fill-normal overflow-clip rounded-xl border px-4 py-2.5">
           <Image
             src={GITHUB_GUIDE_IMAGES.install}
             alt="GitHub CatchUp Connector 설치 화면"
@@ -43,25 +41,12 @@ const GithubGuideSection = () => {
             className="h-auto w-full"
           />
         </div>
-        <button
-          type="button"
-          onClick={() => window.open(GITHUB_PROFILE_URL, '_blank')}
-          className="border-edge-normal flex cursor-pointer items-start gap-4 rounded-xl border px-3 py-2 text-left"
-        >
-          <div className="flex size-10 shrink-0 items-center justify-center bg-fill-normal">
-            <IconGitHub className="size-6" />
-          </div>
-          <div className="flex min-w-0 flex-col">
-            <span className="text-body-xsmall text-content-normal">GitHub account</span>
-            <span className="text-label-xsmall truncate text-content-alternative">{GITHUB_PROFILE_URL}</span>
-          </div>
-        </button>
       </div>
 
       {/* 2. 동기화할 Repository 선택 */}
       <div className="flex flex-col gap-2">
         <h4 className="text-heading-medium text-content-normal">2. 동기화할 Repository 선택</h4>
-        <div className="border-edge-neutral flex flex-col gap-2.5 overflow-clip rounded-xl border bg-fill-normal px-4 py-2.5">
+        <div className="border-edge-neutral bg-fill-normal flex flex-col gap-2.5 overflow-clip rounded-xl border px-4 py-2.5">
           <Image
             src={GITHUB_GUIDE_IMAGES.repository}
             alt="GitHub Repository 선택 화면"

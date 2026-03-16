@@ -67,8 +67,15 @@ export default function HistoryPage() {
                   : 'border-edge-neutral hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed bg-fill-normal',
               )}
             >
-              <BookmarkIcon className={cn('size-5 shrink-0', savedOnly ? 'text-icon-primary' : 'text-content-neutral')} />
-              <span className={cn('text-body-small whitespace-nowrap', savedOnly ? 'text-icon-primary' : 'text-content-normal')}>
+              <BookmarkIcon
+                className={cn('size-5 shrink-0', savedOnly ? 'text-icon-primary' : 'text-content-neutral')}
+              />
+              <span
+                className={cn(
+                  'text-body-small whitespace-nowrap',
+                  savedOnly ? 'text-icon-primary' : 'text-content-normal',
+                )}
+              >
                 저장한 답변
               </span>
             </button>
@@ -86,7 +93,9 @@ export default function HistoryPage() {
           </label>
         </div>
 
-        {isLoading && <div className="text-body-small text-content-assistive px-1 py-4">데이터를 불러오는 중입니다...</div>}
+        {isLoading && (
+          <div className="text-body-small text-content-assistive px-1 py-4">데이터를 불러오는 중입니다...</div>
+        )}
 
         {isError && (
           <div className="text-body-small px-1 py-4 text-red-50">
@@ -120,7 +129,9 @@ export default function HistoryPage() {
 
         {/* 무한 스크롤 sentinel + 로딩 표시 */}
         <div ref={sentinelRef} className="h-1" />
-        {isFetchingNextPage && <div className="text-body-small text-content-assistive py-2 text-center">불러오는 중...</div>}
+        {isFetchingNextPage && (
+          <div className="text-body-small text-content-assistive py-2 text-center">불러오는 중...</div>
+        )}
       </div>
     </section>
   );

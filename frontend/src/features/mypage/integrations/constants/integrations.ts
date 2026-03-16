@@ -17,9 +17,6 @@ import ImgGuideSlackPermissions from '@/public/image/guide/guide_slack_permissio
 /** Atlassian 계정 관리 페이지 링크 */
 export const ATLASSIAN_PROFILE_URL = 'https://id.atlassian.com/manage-profile/profile-and-visibility';
 
-/** GitHub 계정 관리 페이지 링크 */
-export const GITHUB_PROFILE_URL = 'https://github.com/apps/catchup-connector';
-
 /** Jira 가이드 이미지 리소스 */
 export const JIRA_GUIDE_IMAGES = {
   integrationPage: ImgGuideJiraIntegrationPage,

@@ -26,7 +26,7 @@ export default function TotalQuestionBarChart({ data }: TotalQuestionBarChartPro
   const totalCount = useMemo(() => data.reduce((sum, d) => sum + d.count, 0), [data]);
 
   return (
-    <div className="border-edge-neutral flex h-full flex-col overflow-hidden rounded-xl border bg-fill-normal px-6 py-5">
+    <div className="border-edge-neutral bg-fill-normal flex h-full flex-col overflow-hidden rounded-xl border px-6 py-5">
       {/* 헤더 */}
       <div className="flex flex-col gap-1">
         <span className="text-heading-small text-content-alternative">전체 질문 횟수</span>

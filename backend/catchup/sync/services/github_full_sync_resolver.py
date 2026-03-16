@@ -11,36 +11,12 @@ from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import (
     FullSyncResolvedTargets,
     FullSyncDispatchRequest,
-    FullSyncTarget,
+)
+from catchup.sync.services.full_sync_target_normalizer import (
+    resolve_full_sync_targets_from_rows,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _normalize_requested_repo_ids(target_ids: list[str] | None) -> list[str]:
-    if target_ids is None:
-        raise SyncRequestError("target_ids is required")
-
-    normalized: list[str] = []
-    seen: set[str] = set()
-    
-    for item in target_ids:
-        candidate = (item or "").strip()
-        if not candidate:
-            continue
-        if candidate in seen:
-            continue
-        seen.add(candidate)
-        normalized.append(candidate)
-    
-    if not normalized:
-        raise SyncRequestError(
-            "target_ids is empty after normalization",
-            metadata={"requested_target_ids": target_ids},
-        )
-
-    return normalized
-    
 
 
 class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
@@ -50,7 +26,6 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         *,
         db: Session,
         request: FullSyncDispatchRequest,
-        sync_from: str,
     ) -> FullSyncResolvedTargets:
         scope_id = request.scope_id.strip()
         if not scope_id:
@@ -75,49 +50,29 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             db,
             installation_id,
         )
-        requested_repo_ids = _normalize_requested_repo_ids(request.target_ids)
-        repository_map = {str(repo.repo_id): repo for repo in repositories}
-        invalid_target_ids = [
-            repo_id
-            for repo_id in requested_repo_ids
-            if repo_id not in repository_map
-        ]
-        if invalid_target_ids:
-            raise SyncRequestError(
-                "requested target_ids contain unknown repositories",
-                metadata={
-                    "installation_id": installation_id,
-                    "requested_target_ids": requested_repo_ids,
-                    "invalid_target_ids": invalid_target_ids,
-                },
-            )
-
-        resolved_repositories = [
-            repository_map[repo_id]
-            for repo_id in requested_repo_ids
-        ]
-
-        targets = [
-            FullSyncTarget(
-                target_type="repository",
-                target_id=str(repo.repo_id),
-                target_name=repo.full_name,
-                metadata={},
-            )
-            for repo in resolved_repositories
-        ]
+        requested_repo_ids, resolved_targets = resolve_full_sync_targets_from_rows(
+            request_target_ids=request.target_ids,
+            rows=repositories,
+            target_type="repository",
+            key_getter=lambda repo: str(repo.repo_id),
+            name_getter=lambda repo: repo.full_name,
+            error_message="requested target_ids contain unknown repositories",
+            error_metadata={"installation_id": installation_id},
+            log_context={
+                "connector": "github",
+                "installation_id": installation_id,
+                "target_type": "repository",
+            },
+        )
 
         logger.info(
             "[GITHUB][FULL SYNC][RESOLVER] Targets resolved: installation_id=%s, requested=%s, resolved=%s",
             installation_id,
             len(requested_repo_ids),
-            len(targets),
+            len(resolved_targets.targets),
         )
 
-        return FullSyncResolvedTargets(
-            targets=targets,
-            invalid_target_ids=[],
-        )
+        return resolved_targets
 
 
 _github_full_sync_target_resolver = GithubFullSyncTargetResolver()

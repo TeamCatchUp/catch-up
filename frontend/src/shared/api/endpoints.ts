@@ -29,47 +29,32 @@ export const API = {
   },
 
   github: {
-    // auth
     installations: `${API_PREFIX}/github/installations`, // GET 설치된 GitHub App 목록
-    // sync (미사용 — 연동 페이지 구현 시 활성)
-    syncFull: `${API_PREFIX}/github/sync/full`, // POST 전체 재동기화 (body: installation_id, repo_ids?)
-    syncFlush: `${API_PREFIX}/github/sync/flush`, // POST 웹훅 버퍼 즉시 반영
-    syncStatus: (installationId: string) => `${API_PREFIX}/github/sync/status/${installationId}`, // GET 레포별 동기화 상태
-    repositories: (installationId: string) => `${API_PREFIX}/github/sync/repositories/${installationId}`, // GET DB 저장소 목록
-    repositoriesRefresh: (installationId: string) => `${API_PREFIX}/github/sync/repositories/${installationId}/refresh`, // POST GitHub API에서 저장소 목록 재조회
   },
 
   jira: {
-    // auth
     install: `${API_PREFIX}/auth/jira/install`, // GET OAuth 인가 URL로 리다이렉트
     uninstall: `${API_PREFIX}/auth/jira/uninstall`, // DELETE 연동 해제 (?cloud_id=)
-    // sync (syncStatus만 사용 중)
-    syncFull: `${API_PREFIX}/jira/sync/full`, // POST 전체 재동기화 (?cloud_id=)
-    syncFlush: `${API_PREFIX}/jira/sync/flush`, // POST 모든 Cloud의 웹훅 버퍼 즉시 반영
-    syncStatus: `${API_PREFIX}/jira/sync/status`, // GET 엔티티별 동기화 상태 (?cloud_id=)
   },
 
   slack: {
-    // auth
     install: `${API_PREFIX}/auth/slack/install`, // GET OAuth 인가 URL로 리다이렉트
     status: `${API_PREFIX}/auth/slack/status`, // GET 연동 상태 + workspaces
     uninstall: `${API_PREFIX}/auth/slack/uninstall`, // DELETE 연동 해제 (?team_id=)
-    // sync (미사용 — 연동 페이지 구현 시 활성)
-    syncFull: `${API_PREFIX}/slack/sync/full`, // POST 전체 재동기화 (?team_id=)
-    syncFlush: `${API_PREFIX}/slack/sync/flush`, // POST 모든 팀의 웹훅 버퍼 즉시 반영
-    syncStatus: `${API_PREFIX}/slack/sync/status`, // GET 엔티티별 동기화 상태 (?team_id=)
-    channels: `${API_PREFIX}/slack/sync/accessible/channels`, // GET Bot 접근 가능 채널 목록 (?team_id=)
   },
 
   atlassian: {
     install: `${API_PREFIX}/auth/atlassian/install`, // GET OAuth 인가 URL로 리다이렉트 (Jira + Confluence)
+    status: `${API_PREFIX}/auth/atlassian/status`, // GET 연동 상태 + resources (scope_id 획득용)
   },
 
-  confluence: {
-    syncFull: `${API_PREFIX}/confluence/sync/full`, // POST 전체 재동기화 (body: cloud_id, space_keys?)
-    syncIncremental: `${API_PREFIX}/confluence/sync/incremental`, // POST 증분 동기화 (?cloud_id=)
-    syncStatus: `${API_PREFIX}/confluence/sync/status`, // GET 엔티티별 동기화 상태 (?cloud_id=)
-    cloudIds: `${API_PREFIX}/admin/confluence/cloud-ids`, // GET 연동된 cloud_id 목록
+  // 통합 Sync API
+  sync: {
+    full: `${API_PREFIX}/sync/full`, // POST 통합 Full Sync 요청
+    targets: `${API_PREFIX}/sync/targets`, // GET Sync 대상 후보 조회 (?connector=&scope_id=)
+    status: `${API_PREFIX}/sync/status`, // GET Scope 기준 최신 상태 (?connector=&scope_id=)
+    job: (jobId: string) => `${API_PREFIX}/sync/jobs/${jobId}`, // GET Job 스냅샷 조회
+    jobStream: (jobId: string) => `${API_PREFIX}/sync/jobs/${jobId}/stream`, // GET SSE 실시간 이벤트 스트림
   },
 
   // 관리자 — 이용자 관리
@@ -85,7 +70,6 @@ export const API = {
       jiraStatus: `${API_PREFIX}/admin/connector/jira/status`, // GET Jira 연동 상태
       slackStatus: `${API_PREFIX}/admin/connector/slack/status`, // GET Slack 연동 상태
       confluenceStatus: `${API_PREFIX}/admin/connector/confluence/status`, // GET Confluence 연동 상태
-      syncable: (source: string) => `${API_PREFIX}/admin/connector/syncable/${source}`, // GET 임베딩 대상 리소스 목록
     },
     users: {
       list: `${API_PREFIX}/admin/users`, // GET 이용자 목록

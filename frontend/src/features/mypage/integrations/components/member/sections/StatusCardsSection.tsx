@@ -2,19 +2,23 @@ import { useState } from 'react';
 
 import IconHelp from '@/public/icons/icon/help.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
+import IconRotate from '@/public/icons/icon/rotate.svg';
 import { Button } from '@/shared/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
 import type { MemberIntegrationCardItem } from '../../../types/integrations';
+import type { EmbeddingButtonState, SyncConnector } from '../../../types/sync';
 import EmbeddingModal from '../modals/EmbeddingModal';
 
 interface StatusCardsSectionProps {
   cards: MemberIntegrationCardItem[];
+  buttonStates: Record<SyncConnector, EmbeddingButtonState>;
+  onJobStart: (jobId: string, connector: SyncConnector) => void;
 }
 
 /** 이용자 연동 상단 계정 등록 카드 섹션 */
-const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
+const StatusCardsSection = ({ cards, buttonStates, onJobStart }: StatusCardsSectionProps) => {
   const [embeddingModal, setEmbeddingModal] = useState<{
     open: boolean;
     service: IntegrationService;
@@ -25,14 +29,53 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
     setEmbeddingModal({ open: true, service, serviceName });
   };
 
+  const renderEmbeddingButton = (service: IntegrationService, name: string) => {
+    const state = buttonStates[service as SyncConnector] ?? 'idle';
+
+    switch (state) {
+      case 'idle':
+        return (
+          <Button
+            variant="box-outline-blue"
+            size="md"
+            className="text-body-small h-9 w-full"
+            onClick={() => openEmbeddingModal(service, name)}
+          >
+            임베딩하기
+          </Button>
+        );
+      case 'in_progress':
+        return (
+          <Button variant="box-outline-gray" size="md" className="text-body-small h-9 w-full" disabled>
+            <IconRotate className="size-5 animate-spin" />
+            임베딩 진행 중...
+          </Button>
+        );
+      case 'completed':
+        // TODO: 재임베딩 정책 확정 후 완료/실패 버튼 분리 검토
+        return (
+          <Button
+            variant="box-outline-blue"
+            size="md"
+            className="text-body-small h-9 w-full"
+            onClick={() => openEmbeddingModal(service, name)}
+          >
+            임베딩 재시도
+          </Button>
+        );
+      default:
+        return state satisfies never;
+    }
+  };
+
   return (
-    <section className="flex w-250 flex-col gap-3">
+    <section className="flex w-full flex-col gap-3">
       <div className="flex flex-col gap-0.5">
         <h2 className="text-heading-large text-content-normal">계정 등록 상태</h2>
         <p className="text-body-small text-content-alternative">팀의 매핑 등록 상태를 확인할 수 있어요.</p>
       </div>
 
-      <div className="flex items-center gap-5">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-5">
         {cards.map((card) => {
           const { service, name, Icon, completedCount, totalCount, completionRate } = card;
           const iconClassName = service === 'confluence' ? 'h-5.75 w-6 shrink-0' : 'h-6 w-6 shrink-0';
@@ -40,7 +83,7 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
           return (
             <article
               key={service}
-              className="border-edge-neutral flex h-51 w-58.75 flex-col gap-4 rounded-xl border bg-fill-normal p-4"
+              className="border-edge-neutral bg-fill-normal flex h-51 flex-col gap-4 rounded-xl border p-4"
             >
               <div className="flex items-center gap-2.5">
                 <Icon className={iconClassName} />
@@ -73,24 +116,17 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-heading-medium text-content-neutral">{completionRate}%</span>
-                    <span className="rounded-md2 text-body-xsmall bg-fill-primary-normal-neutral px-1.5 py-0.5 leading-none tracking-tight text-content-primary">
+                    <span className="rounded-md2 text-body-xsmall bg-fill-primary-normal-neutral text-content-primary px-1.5 py-0.5 leading-none tracking-tight">
                       {`${completedCount}/${totalCount}`}
                     </span>
                   </div>
                   <div
-                    className="bg-blue-40 absolute bottom-0 left-0 h-[5px] rounded-full"
+                    className="bg-edge-primary absolute bottom-0 left-0 h-[5px] rounded-full"
                     style={{ width: `${completionRate}%` }}
                   />
                 </div>
 
-                <Button
-                  variant="box-outline-blue"
-                  size="md"
-                  className="text-body-small h-9 w-full"
-                  onClick={() => openEmbeddingModal(service, name)}
-                >
-                  임베딩하기
-                </Button>
+                {renderEmbeddingButton(service, name)}
               </div>
             </article>
           );
@@ -102,6 +138,7 @@ const StatusCardsSection = ({ cards }: StatusCardsSectionProps) => {
         onOpenChange={(open) => setEmbeddingModal((prev) => ({ ...prev, open }))}
         service={embeddingModal.service}
         serviceName={embeddingModal.serviceName}
+        onJobStart={onJobStart}
       />
     </section>
   );

@@ -85,20 +85,20 @@ const AccountLogSection = () => {
       {/* 테이블 + 디테일 패널 */}
       <div className="border-edge-neutral flex min-h-0 overflow-clip border-y" style={{ height: 558 }}>
         {/* 좌측: 테이블 */}
-        <div className="border-edge-neutral flex min-w-0 flex-1 flex-col overflow-clip border-r bg-fill-normal">
+        <div className="border-edge-neutral bg-fill-normal flex min-w-0 flex-1 flex-col overflow-clip border-r">
           {/* 헤더 */}
           <div className="border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-b px-5">
             <div className="grid flex-1 grid-cols-4 items-center gap-1">
-              <span className="text-body-xsmall pl-7.5 text-left text-content-alternative">이름</span>
-              <span className="text-body-xsmall text-center text-content-alternative">실행 일자</span>
-              <span className="text-body-xsmall text-center text-content-alternative">구분</span>
-              <span className="text-body-xsmall text-center text-content-alternative">상태</span>
+              <span className="text-body-xsmall text-content-alternative pl-7.5 text-left">이름</span>
+              <span className="text-body-xsmall text-content-alternative text-center">실행 일자</span>
+              <span className="text-body-xsmall text-content-alternative text-center">구분</span>
+              <span className="text-body-xsmall text-content-alternative text-center">상태</span>
             </div>
           </div>
 
           {/* 행 */}
           {tableRows.length === 0 ? (
-            <div className="text-body-small flex h-full min-h-25 items-center justify-center text-content-alternative">
+            <div className="text-body-small text-content-alternative flex h-full min-h-25 items-center justify-center">
               감사 로그가 없습니다.
             </div>
           ) : (
@@ -156,9 +156,9 @@ const AccountLogSection = () => {
         </div>
 
         {/* 우측: 디테일 패널 */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-clip bg-fill-normal py-5 pl-6">
+        <div className="bg-fill-normal flex min-w-0 flex-1 flex-col overflow-clip py-5 pl-6">
           {!selectedLog ? (
-            <div className="text-body-small flex h-full items-center justify-center text-content-alternative">
+            <div className="text-body-small text-content-alternative flex h-full items-center justify-center">
               선택된 로그 정보가 없습니다.
             </div>
           ) : (

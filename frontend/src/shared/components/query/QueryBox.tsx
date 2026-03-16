@@ -9,6 +9,7 @@ import { RefObject } from 'react';
 
 import type { UseSearchFiltersReturn } from '@/shared/hooks/query/useSearchFilters';
 import type { UseSearchInputReturn } from '@/shared/hooks/query/useSearchInput';
+import type { TipData } from '@/shared/types/template';
 import { cn } from '@/shared/utils/cn';
 
 import ExplorerPanel from './ExplorerPanel';
@@ -16,13 +17,14 @@ import FilterBar from './FilterBar';
 import QueryInput from './QueryInput';
 
 interface QueryBoxProps {
-  containerRef: RefObject<HTMLDivElement | null>;
+  containerRef?: RefObject<HTMLDivElement | null>;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   input: UseSearchInputReturn;
   filters: UseSearchFiltersReturn;
   variant?: 'default' | 'no-history';
   noHistoryExpanded?: boolean;
   highlightBracketPlaceholders?: boolean;
+  tipData?: TipData[];
 }
 
 const QueryBox = ({
@@ -32,16 +34,18 @@ const QueryBox = ({
   filters,
   variant = 'default',
   noHistoryExpanded = true,
-  highlightBracketPlaceholders = false,
+  tipData,
 }: QueryBoxProps) => {
   const isNoHistory = variant === 'no-history';
   const showPanel = isNoHistory ? noHistoryExpanded : input.isFocused;
 
+  const maxH = input.isFromTemplate ? 'max-h-160' : 'max-h-135';
+
   const containerClassName =
     isNoHistory && noHistoryExpanded
-      ? 'gap-3 min-h-92.5 max-h-135 overflow-hidden rounded-[30px] px-4 py-3'
+      ? `gap-3 min-h-92.5 ${maxH} overflow-hidden rounded-[30px] px-4 py-3`
       : !isNoHistory && input.isFocused
-        ? 'gap-1.5 min-h-92.5 max-h-135 overflow-hidden rounded-[30px] px-4 py-3'
+        ? `gap-1.5 min-h-92.5 ${maxH} overflow-hidden rounded-[30px] px-4 py-3`
         : `gap-1.5 h-auto px-4 py-3 ${input.isMultiLine ? 'rounded-[30px]' : 'rounded-rounded'}`;
 
   const handleExampleClick = (query: string) => {
@@ -53,9 +57,9 @@ const QueryBox = ({
   return (
     <div
       ref={containerRef}
-      className={`shadow-rag-bar border-edge-normal flex w-190 flex-col items-center border border-solid bg-fill-normal ${containerClassName}`}
+      className={`shadow-rag-bar border-edge-normal bg-fill-normal flex w-190 flex-col items-center border border-solid ${containerClassName}`}
     >
-      <QueryInput input={input} inputRef={inputRef} highlightBracketPlaceholders={highlightBracketPlaceholders} />
+      <QueryInput input={input} inputRef={inputRef} tipData={tipData} />
 
       {showPanel && (
         <div

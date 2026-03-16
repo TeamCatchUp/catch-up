@@ -9,6 +9,9 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.metadata import IntegrationAuditMetadata
+from catchup.audit.service import emit_audit_event
 from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.connectors.github.schemas import (
     InstallationRepositoriesWebhookPayload,
@@ -27,7 +30,13 @@ from catchup.db.models import (
     SyncConnector,
 )
 from catchup.db.workspaces import get_workspace_limit_one
+from catchup.events.enums import (
+    EventType,
+    IntegrationEventAction,
+    SyncTriggerEventAction,
+)
 from catchup.sync.common.exceptions import SyncAPIError
+from catchup.sync.audit import SyncAuditContext, emit_sync_trigger_audit
 from catchup.sync.incremental import ingest_record_changes
 from catchup.sync.incremental.full_sync_guard import filter_record_changes_by_full_sync
 from catchup.sync.incremental.schemas import RecordChange
@@ -141,7 +150,46 @@ def _handle_incremental_event(
             ],
         )
 
-    record_keys = ingest_record_changes(db, guard_result.allowed_changes)
+    record_keys: list[str] = []
+    if guard_result.allowed_changes:
+        first_change = guard_result.allowed_changes[0]
+        audit_context = SyncAuditContext(
+            connector=first_change.connector,
+            scope_id=first_change.scope_id,
+            target_id=first_change.parent_id,
+        )
+        emit_sync_trigger_audit(
+            action=SyncTriggerEventAction.WEBHOOK_EVENT_RECEIVED,
+            status=AuditEventStatus.ATTEMPT,
+            audit_context=audit_context,
+            context=(
+                f"stage=record_change_ingest,event_name={event_name},"
+                f"event_kind={first_change.event_kind},change_count={len(guard_result.allowed_changes)}"
+            ),
+        )
+        try:
+            record_keys = ingest_record_changes(db, guard_result.allowed_changes)
+        except Exception as exc:
+            emit_sync_trigger_audit(
+                action=SyncTriggerEventAction.WEBHOOK_EVENT_RECEIVED,
+                status=AuditEventStatus.FAIL,
+                audit_context=audit_context,
+                context=(
+                    f"stage=record_change_ingest_failed,event_name={event_name},"
+                    f"event_kind={first_change.event_kind},error={str(exc).strip()[:200]}"
+                ),
+                level=AuditLevel.ERROR,
+            )
+            raise
+        emit_sync_trigger_audit(
+            action=SyncTriggerEventAction.WEBHOOK_EVENT_RECEIVED,
+            status=AuditEventStatus.SUCCESS,
+            audit_context=audit_context,
+            context=(
+                f"stage=record_change_ingested,event_name={event_name},"
+                f"record_key_count={len(record_keys)},blocked_count={blocked_count}"
+            ),
+        )
     response = {"status": "accepted", "event": event_name, "record_keys": record_keys}
     if blocked_count > 0:
         response["blocked_count"] = blocked_count
@@ -331,13 +379,48 @@ async def _handle_installation_event(
 ) -> dict[str, Any]:
     data = InstallationWebhookPayload(**payload)
     action = data.action
+    installation_id = data.installation.id
+    context = f"github_installation_created:installation_id={installation_id}:event_name=installation"
 
     if action == "created":
-        return await _handle_installation_created(
-            db=db,
-            data=data,
-            schedule_task=schedule_task,
+        metadata = IntegrationAuditMetadata(
+            context=context,
+            provider="github",
         )
+        emit_audit_event(
+            event_type=EventType.INTEGRATION,
+            event_action=IntegrationEventAction.INSTALLATION_EVENT_RECEIVED,
+            event_status=AuditEventStatus.ATTEMPT,
+            level=AuditLevel.INFO,
+            metadata=metadata,
+            immediate=True,
+        )
+        try:
+            result = await _handle_installation_created(
+                db=db,
+                data=data,
+                schedule_task=schedule_task,
+            )
+        except Exception:
+            emit_audit_event(
+                event_type=EventType.INTEGRATION,
+                event_action=IntegrationEventAction.INSTALLATION_EVENT_RECEIVED,
+                event_status=AuditEventStatus.FAIL,
+                level=AuditLevel.ERROR,
+                metadata=metadata,
+                immediate=True,
+            )
+            raise
+
+        emit_audit_event(
+            event_type=EventType.INTEGRATION,
+            event_action=IntegrationEventAction.INSTALLATION_EVENT_RECEIVED,
+            event_status=AuditEventStatus.SUCCESS,
+            level=AuditLevel.INFO,
+            metadata=metadata,
+            immediate=True,
+        )
+        return result
 
     if action == "deleted":
         return _handle_installation_deleted(

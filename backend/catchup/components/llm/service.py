@@ -11,14 +11,18 @@ from catchup.configs.config import settings
 class BaseLlmService(ABC):
     def __init__(
         self,
-        model_capacity: ModelCapacity
+        model_capacity: ModelCapacity,
+        streaming: bool = True
     ):
         self.model_capacity = model_capacity
-        self.llm: BaseChatModel = self._create_llm()
+        self.llm: BaseChatModel = self._create_llm(streaming)
         self.trimmer = self._create_trimmer()
         
     @abstractmethod
-    def _create_llm(self) -> BaseChatModel:
+    def _create_llm(
+        self,
+        streaming: bool
+    ) -> BaseChatModel:
         pass
     
     def _create_trimmer(self):
@@ -45,7 +49,10 @@ class BaseLlmService(ABC):
     
 
 class OpenAiLlmService(BaseLlmService):
-    def _create_llm(self) -> BaseChatModel:
+    def _create_llm(
+            self,
+            streaming: bool
+        ) -> BaseChatModel:
         
         model_name = (
             settings.OPENAI_SMALL_MODEL
@@ -57,12 +64,15 @@ class OpenAiLlmService(BaseLlmService):
             model=model_name,
             api_key=settings.OPENAI_API_KEY,
             temperature=0,
-            streaming=True
+            streaming=streaming
         )
 
 
 class AwsBedrockLlmService(BaseLlmService):
-    def _create_llm(self) -> BaseChatModel:
+    def _create_llm(
+            self,
+            streaming: bool
+        ) -> BaseChatModel:
         
         model_id = (
             settings.AWS_BEDROCK_SMALL_MODEL
@@ -86,6 +96,6 @@ class AwsBedrockLlmService(BaseLlmService):
             credentials_profile_name=settings.AWS_CREDENTIALS_PROFILE_NAME,
             temperature=0,
             max_tokens=8192,
-            streaming=True,
+            streaming=streaming,
             config=config
         )

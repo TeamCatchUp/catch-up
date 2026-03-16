@@ -48,7 +48,7 @@ const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
   return (
     <div
       ref={modalRef}
-      className="shadow-modal border-edge-normal flex max-h-135 w-190 flex-col gap-4 rounded-3xl border bg-fill-normal px-3 py-4"
+      className="shadow-modal border-edge-normal bg-fill-normal flex max-h-135 w-190 flex-col gap-4 rounded-3xl border px-3 py-4"
     >
       {/* 헤더 */}
       <div className="flex items-center justify-between">
@@ -61,7 +61,7 @@ const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
             onClick={handleNewQuestion}
             className="capsule-button-outline-blue flex cursor-pointer items-center gap-1.5 px-3 py-1.5"
           >
-            <Add className="h-5 w-5 text-icon-primary" />
+            <Add className="text-icon-primary h-5 w-5" />
             <span className="text-body-small text-content-primary relative top-px">새 업무 질문</span>
           </button>
           <button className="icon-button-only-gray cursor-pointer p-1.5">

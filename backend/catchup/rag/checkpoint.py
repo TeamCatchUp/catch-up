@@ -1,9 +1,9 @@
-import logging
 from psycopg_pool import AsyncConnectionPool
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+import structlog
 from catchup.configs.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _checkpointer = None
 _pool = None
@@ -11,7 +11,10 @@ _pool = None
 async def init_langgraph_checkpointer():
     global _checkpointer, _pool
     
-    logger.info("[DB][CHECKPOINTER][INIT] Initializing Async Postgres checkpointer")
+    logger.info(
+        "checkpointer_init_started",
+        context="checkpointer_initialization",
+    )
     
     try:
         conn_string = settings.sqlalchemy_database_url.replace("+psycopg", "")
@@ -28,11 +31,18 @@ async def init_langgraph_checkpointer():
         _checkpointer = AsyncPostgresSaver(conn=_pool)
         await _checkpointer.setup()
         
-        logger.info("[DB][CHECKPOINTER][INIT] Async Postgres checkpointer initialized successfully")
+        logger.info(
+            "checkpointer_init_success",
+            context="checkpointer_initialization",
+        )
         return _checkpointer
         
     except Exception as e:
-        logger.error(f"[DB][CHECKPOINTER][INIT] Failed: {str(e)}")
+        logger.error(
+            "checkpointer_init_failed",
+            context="checkpointer_initialization",
+            error=str(e),
+        )
         if _pool:
             await _pool.close()
         raise
@@ -44,7 +54,10 @@ async def close_langgraph_checkpointer():
         await _pool.close()
         _pool = None
         _checkpointer = None
-        logger.info("[DB][CHECKPOINTER][CLOSE] Connection pool closed")
+        logger.info(
+            "checkpointer_pool_closed",
+            context="checkpointer_shutdown",
+        )
 
 
 def get_langgraph_checkpointer() -> AsyncPostgresSaver:

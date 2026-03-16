@@ -31,7 +31,13 @@ interface AccountSelectDropdownProps {
   onToggleUnused: (unused: boolean) => void;
 }
 
-const AccountSelectDropdown = ({ status, options, selectedAccount, onSelect, onToggleUnused }: AccountSelectDropdownProps) => {
+const AccountSelectDropdown = ({
+  status,
+  options,
+  selectedAccount,
+  onSelect,
+  onToggleUnused,
+}: AccountSelectDropdownProps) => {
   const [open, setOpen] = useState(false);
   const [localUnused, setLocalUnused] = useState(status === '미사용');
   const isUnused = !selectedAccount && localUnused;
@@ -41,7 +47,7 @@ const AccountSelectDropdown = ({ status, options, selectedAccount, onSelect, onT
       <PopoverTrigger asChild>
         <button
           className={cn(
-            'border-edge-neutral hover:bg-fill-strong flex h-9 w-full min-w-0 cursor-pointer items-center justify-between rounded-lg border bg-fill-normal px-2.5 py-1.5',
+            'border-edge-neutral hover:bg-fill-strong bg-fill-normal flex h-9 w-full min-w-0 cursor-pointer items-center justify-between rounded-lg border px-2.5 py-1.5',
             open && 'bg-fill-interaction-pressed',
           )}
         >
@@ -61,7 +67,9 @@ const AccountSelectDropdown = ({ status, options, selectedAccount, onSelect, onT
               <span className="text-body-small text-content-strong truncate">{selectedAccount.name}</span>
             </div>
           ) : (
-            <span className={cn('text-body-small truncate', isUnused ? 'text-content-strong' : 'text-content-assistive')}>
+            <span
+              className={cn('text-body-small truncate', isUnused ? 'text-content-strong' : 'text-content-assistive')}
+            >
               {isUnused ? '해당 협업 툴 미사용' : '계정 선택하기'}
             </span>
           )}
@@ -83,7 +91,7 @@ const AccountSelectDropdown = ({ status, options, selectedAccount, onSelect, onT
           {/* 미사용 토글 */}
           <div className="px-2.5 py-2">
             <div className="border-edge-assistive flex items-center gap-2 rounded-lg border bg-[#fffafa] px-2.5 py-2">
-              <span className="text-body-small flex-1 text-content-alternative">해당 협업 툴을 사용하지 않습니다.</span>
+              <span className="text-body-small text-content-alternative flex-1">해당 협업 툴을 사용하지 않습니다.</span>
               <Switch
                 checked={isUnused}
                 onCheckedChange={(checked) => {
@@ -120,7 +128,7 @@ const AccountSelectDropdown = ({ status, options, selectedAccount, onSelect, onT
                 )}
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="text-heading-small text-content-normal max-w-43.75 truncate">{account.name}</span>
-                  <span className="text-label-xsmall truncate text-content-alternative">{account.identifier}</span>
+                  <span className="text-label-xsmall text-content-alternative truncate">{account.identifier}</span>
                 </div>
               </CommandItem>
             ))}

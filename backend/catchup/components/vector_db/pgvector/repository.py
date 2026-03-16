@@ -20,16 +20,19 @@ langchain-postgres 패키지를 사용하여 LangChain Document를 직접 저장
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from langchain.embeddings import Embeddings
 from langchain_cohere import CohereEmbeddings
 from langchain_core.documents import Document
 from langchain_postgres import PGVector
 
-from sqlalchemy import delete as sa_delete
+from sqlalchemy import Engine, delete as sa_delete
 
+from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.configs.config import settings
+from catchup.events.enums import SyncIngestionEventAction
+from catchup.sync.audit import SyncAuditContext, emit_sync_ingestion_audit
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +71,10 @@ class PGVectorRepository:
         self.vector_store: PGVector | None = None
         self._initialized = False
 
-    async def initialize(self) -> None:
+    async def initialize(
+            self, 
+            ensure_indices: Callable[[], Awaitable[None]] | None
+    ) -> None:
         """
         PGVector 벡터 저장소 초기화
 
@@ -94,6 +100,9 @@ class PGVectorRepository:
                 connection=settings.sqlalchemy_database_url,
                 use_jsonb=True,  # metadata를 JSONB로 저장 (필터링 지원)
             )
+            
+            if ensure_indices:
+                await ensure_indices()
 
             self._initialized = True
             logger.info(
@@ -106,7 +115,7 @@ class PGVectorRepository:
             logger.error(f"Failed to initialize PGVector repository: {e}")
             raise
 
-    def _ensure_initialized(self) -> None:
+    def ensure_initialized(self) -> None:
         """초기화 확인"""
         if not self._initialized or self.vector_store is None:
             raise RuntimeError(
@@ -135,7 +144,7 @@ class PGVectorRepository:
             ids = ["jira:issue:CATCH-145"]
             await repository.add_documents(docs, ids)
         """
-        self._ensure_initialized()
+        self.ensure_initialized()
 
         if not documents:
             logger.warning("No documents to add")
@@ -164,6 +173,8 @@ class PGVectorRepository:
     async def generate_embeddings(
         self,
         documents: list[Document],
+        audit_context: SyncAuditContext | None = None,
+        context: str | None = None,
     ) -> list[list[float]]:
         """
         문서 임베딩만 생성 (DB 저장 없음)
@@ -178,10 +189,18 @@ class PGVectorRepository:
         Returns:
             임베딩 벡터 리스트 (documents와 동일 순서)
         """
-        self._ensure_initialized()
+        self.ensure_initialized()
 
         if not documents:
             return []
+
+        if audit_context is not None:
+            emit_sync_ingestion_audit(
+                action=SyncIngestionEventAction.EMBED,
+                status=AuditEventStatus.ATTEMPT,
+                audit_context=audit_context,
+                context=context,
+            )
 
         texts = [doc.page_content for doc in documents]
         batch_size = settings.EMBEDDING_BATCH_SIZE
@@ -206,10 +225,29 @@ class PGVectorRepository:
             embeddings = [emb for sub in sub_results for emb in sub]
 
             logger.info(f"Successfully generated {len(embeddings)} embeddings")
+            if audit_context is not None:
+                emit_sync_ingestion_audit(
+                    action=SyncIngestionEventAction.EMBED,
+                    status=AuditEventStatus.SUCCESS,
+                    audit_context=audit_context,
+                    context=context,
+                )
             return embeddings
 
         except Exception as e:
             logger.error(f"Failed to generate embeddings: {e}")
+            if audit_context is not None:
+                emit_sync_ingestion_audit(
+                    action=SyncIngestionEventAction.EMBED,
+                    status=AuditEventStatus.FAIL,
+                    audit_context=audit_context,
+                    context=(
+                        f"{context},error={_truncate_error(e)}"
+                        if context
+                        else f"error={_truncate_error(e)}"
+                    ),
+                    level=AuditLevel.ERROR,
+                )
             raise
 
     async def store_with_embeddings(
@@ -217,6 +255,8 @@ class PGVectorRepository:
         documents: list[Document],
         embeddings: list[list[float]],
         ids: list[str],
+        audit_context: SyncAuditContext | None = None,
+        context: str | None = None,
     ) -> list[str]:
         """
         사전 생성된 임베딩과 함께 문서 저장 (임베딩 생성 없음)
@@ -232,7 +272,7 @@ class PGVectorRepository:
         Returns:
             저장된 문서 ID 리스트
         """
-        self._ensure_initialized()
+        self.ensure_initialized()
 
         if not documents:
             return []
@@ -252,10 +292,29 @@ class PGVectorRepository:
             )
 
             logger.info(f"Successfully stored {len(result_ids)} documents")
+            if audit_context is not None:
+                emit_sync_ingestion_audit(
+                    action=SyncIngestionEventAction.DOCUMENT_PERSISTED,
+                    status=AuditEventStatus.SUCCESS,
+                    audit_context=audit_context,
+                    context=context,
+                )
             return result_ids
 
         except Exception as e:
             logger.error(f"Failed to store documents with embeddings: {e}")
+            if audit_context is not None:
+                emit_sync_ingestion_audit(
+                    action=SyncIngestionEventAction.DOCUMENT_PERSISTED,
+                    status=AuditEventStatus.FAIL,
+                    audit_context=audit_context,
+                    context=(
+                        f"{context},error={_truncate_error(e)}"
+                        if context
+                        else f"error={_truncate_error(e)}"
+                    ),
+                    level=AuditLevel.ERROR,
+                )
             raise
 
     async def add_documents_batch(
@@ -275,7 +334,7 @@ class PGVectorRepository:
         Returns:
             저장된 문서의 ID 리스트
         """
-        self._ensure_initialized()
+        self.ensure_initialized()
 
         if not documents:
             return []
@@ -311,7 +370,7 @@ class PGVectorRepository:
             ids: 삭제할 문서 ID 리스트
                  형식: ["jira:issue:CATCH-145", "jira:epic:CATCH-100"]
         """
-        self._ensure_initialized()
+        self.ensure_initialized()
 
         if not ids:
             logger.warning("No document IDs to delete")
@@ -358,7 +417,7 @@ class PGVectorRepository:
                 filter={"entity_type": "issue"}
             )
         """
-        self._ensure_initialized()
+        self.ensure_initialized()
 
         logger.info(f"Searching for: '{query}' (k={k}, filter={filter})")
 
@@ -397,7 +456,7 @@ class PGVectorRepository:
             (Document, score) 튜플 리스트
             score는 유사도 점수 (낮을수록 유사)
         """
-        self._ensure_initialized()
+        self.ensure_initialized()
 
         logger.info(f"Searching with score for: '{query}' (k={k})")
 
@@ -421,6 +480,8 @@ class PGVectorRepository:
         self,
         documents: list[Document],
         ids: list[str],
+        audit_context: SyncAuditContext | None = None,
+        context: str | None = None,
     ) -> list[str]:
         """
         문서 Upsert (존재하면 업데이트, 없으면 추가)
@@ -434,7 +495,7 @@ class PGVectorRepository:
         Returns:
             저장된 문서 ID 리스트
         """
-        self._ensure_initialized()
+        self.ensure_initialized()
 
         if not documents or not ids:
             return []
@@ -446,7 +507,18 @@ class PGVectorRepository:
 
         # 기존 문서 삭제 후 새로 추가 (atomic하지 않음, 필요시 트랜잭션 추가)
         await self.delete_documents(ids)
-        return await self.add_documents(documents, ids)
+        embeddings = await self.generate_embeddings(
+            documents,
+            audit_context=audit_context,
+            context=context,
+        )
+        return await self.store_with_embeddings(
+            documents,
+            embeddings,
+            ids,
+            audit_context=audit_context,
+            context=context,
+        )
 
     async def get_collection_stats(self) -> dict[str, Any]:
         """
@@ -455,7 +527,7 @@ class PGVectorRepository:
         Returns:
             컬렉션 통계 (문서 수 등)
         """
-        self._ensure_initialized()
+        self.ensure_initialized()
 
         # langchain-postgres는 직접 통계 메서드를 제공하지 않음
         # 필요시 raw SQL 쿼리로 구현 가능
@@ -466,7 +538,7 @@ class PGVectorRepository:
         }
     
     async def delete_by_id_prefix(self, prefix: str) -> None:
-        self._ensure_initialized()
+        self.ensure_initialized()
 
         if not prefix:
             return
@@ -479,3 +551,7 @@ class PGVectorRepository:
             session.commit()
 
         logger.info(f"Deleted {result.rowcount} documents with prefix '{prefix}'")
+
+
+def _truncate_error(error: Exception) -> str:
+    return str(error).strip()[:200] or error.__class__.__name__

@@ -38,7 +38,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) 
         aria-label="이전 페이지"
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage <= 1}
-        className="disabled:text-content-assistive rounded-md2 inline-flex size-7.5 cursor-pointer items-center justify-center text-icon-neutral disabled:cursor-not-allowed"
+        className="disabled:text-content-assistive rounded-md2 text-icon-neutral inline-flex size-7.5 cursor-pointer items-center justify-center disabled:cursor-not-allowed"
       >
         <ArrowLeft className="size-6" />
       </button>
@@ -67,7 +67,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) 
         aria-label="다음 페이지"
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage >= totalPages}
-        className="disabled:text-content-assistive rounded-md2 inline-flex size-7.5 cursor-pointer items-center justify-center text-icon-neutral disabled:cursor-not-allowed"
+        className="disabled:text-content-assistive rounded-md2 text-icon-neutral inline-flex size-7.5 cursor-pointer items-center justify-center disabled:cursor-not-allowed"
       >
         <ArrowRight className="size-6" />
       </button>

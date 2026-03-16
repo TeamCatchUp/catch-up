@@ -19,8 +19,11 @@ from catchup.db.models import (
     SyncConnector,
     SyncEventStatus,
     SyncJobStatus,
+    SyncType,
 )
 from catchup.db.sync import (
+    SyncEventPublishResultInput,
+    claim_events_for_republish,
     claim_event_for_processing,
     complete_job_failed,
     complete_job_success,
@@ -30,21 +33,31 @@ from catchup.db.sync import (
     mark_event_failed,
     mark_event_retrying,
     mark_event_success,
+    record_event_publish_outcomes,
     requeue_retrying_event,
     start_job,
 )
 from catchup.sync.common.protocols import IngestionHandlerProtocol, WorkerProtocol
-from catchup.sync.common.schemas import SyncEventContext, SyncStreamMessage, SyncStreamTask
+from catchup.sync.common.schemas import (
+    ClaimState,
+    FullSyncContext,
+    IncrementalSyncContext,
+    SyncContext,
+    SyncStreamMessage,
+    SyncStreamTask,
+)
 from catchup.sync.incremental.error_policy import is_retryable_incremental_error
 from catchup.sync.stream_runtime.stream_constants import (
     STREAM_CLAIM_START_ID,
     SyncStreamFailureReason,
 )
-from catchup.sync.stream_runtime.stream_queue import publish_deadletter
+from catchup.sync.event_publisher.stream_task_builder import (
+    build_stream_task_from_persisted_event,
+)
+from catchup.sync.stream_runtime.stream_queue import publish_deadletter, publish_task
 from catchup.sync.stream_runtime.sync_runtime import (
     ack_consumed_messages,
     initialize_stream_runtime,
-    publish_job_events,
     read_ready_messages,
 )
 from catchup.sync.status_stream.pubsub import publish_job_status_event
@@ -53,15 +66,6 @@ from catchup.sync.status_stream.schemas import (
     SyncStatusStreamEvent,
     utc_now_iso,
 )
-from catchup.sync.sync_audit import (
-    emit_worker_job_completed,
-    emit_worker_job_failed,
-    emit_worker_job_started,
-    emit_worker_target_completed,
-    emit_worker_target_failed,
-    emit_worker_target_requeued,
-    emit_worker_target_started,
-)
 from catchup.worker.handlers import get_ingestion_handler
 
 logger = logging.getLogger(__name__)
@@ -69,8 +73,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class ClaimResult:
-    state: str
-    context: SyncEventContext | None = None
+    state: ClaimState
+    context: SyncContext | None = None
     job_started: bool = False
     total_targets: int = 0
 
@@ -104,35 +108,16 @@ def _task_lock_key(task: SyncStreamTask) -> tuple[str, str, str, str]:
     )
 
 
-def _select_handler(context: SyncEventContext) -> IngestionHandlerProtocol | None:
+def _select_handler(context: SyncContext) -> IngestionHandlerProtocol | None:
     return get_ingestion_handler(
         connector=context.connector,
         sync_type=context.sync_type,
     )
 
 
-def _extract_result_counts(result: dict[str, int | bool]) -> tuple[int, int, bool]:
-    synced_raw = result.get("synced", 0)
-    errors_raw = result.get("errors", 0)
-    skipped_raw = result.get("skipped", False)
-
-    try:
-        synced_count = int(synced_raw)
-    except (TypeError, ValueError):
-        synced_count = 0
-
-    try:
-        error_count = int(errors_raw)
-    except (TypeError, ValueError):
-        error_count = 0
-
-    skipped = bool(skipped_raw)
-    return synced_count, error_count, skipped
-
-
 def _build_target_status_event(
     *,
-    context: SyncEventContext,
+    context: SyncContext,
     event_type: SyncStatusEventType,
     status: str,
     attempt: int | None = None,
@@ -152,7 +137,7 @@ def _build_target_status_event(
         payload.update(extra_payload)
 
     return SyncStatusStreamEvent(
-        connector=SyncConnector(context.connector),
+        connector=context.connector,
         job_id=context.job_id,
         scope_id=context.scope_id,
         event_type=event_type,
@@ -163,7 +148,7 @@ def _build_target_status_event(
 
 def _build_job_status_event(
     *,
-    context: SyncEventContext,
+    context: FullSyncContext,
     event_type: SyncStatusEventType,
     status: str,
     total_targets: int,
@@ -185,7 +170,7 @@ def _build_job_status_event(
         payload["requeued_targets"] = requeued_targets
 
     return SyncStatusStreamEvent(
-        connector=SyncConnector(context.connector),
+        connector=context.connector,
         job_id=context.job_id,
         scope_id=context.scope_id,
         event_type=event_type,
@@ -226,28 +211,28 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
     with SessionLocal() as db:
         event = get_event(db, task.event_id)
         if event is None:
-            return ClaimResult(state="event_not_found")
+            return ClaimResult(state=ClaimState.EVENT_NOT_FOUND)
 
         if event.job_id != task.job_id:
-            return ClaimResult(state="event_job_mismatch")
+            return ClaimResult(state=ClaimState.EVENT_JOB_MISMATCH)
 
         if event.status in {SyncEventStatus.SUCCESS, SyncEventStatus.FAILED}:
-            return ClaimResult(state="event_already_terminal")
+            return ClaimResult(state=ClaimState.EVENT_ALREADY_TERMINAL)
 
         if event.status == SyncEventStatus.RETRYING:
             if not requeue_retrying_event(db, task.event_id):
-                return ClaimResult(state="event_cas_conflict")
+                return ClaimResult(state=ClaimState.EVENT_CAS_CONFLICT)
 
         if not claim_event_for_processing(db, task.event_id):
-            return ClaimResult(state="event_cas_conflict")
+            return ClaimResult(state=ClaimState.EVENT_CAS_CONFLICT)
 
         claimed = get_event(db, task.event_id)
         if claimed is None:
-            return ClaimResult(state="event_not_found")
+            return ClaimResult(state=ClaimState.EVENT_NOT_FOUND)
 
         job = get_job(db, task.job_id)
         if job is None:
-            return ClaimResult(state="job_not_found")
+            return ClaimResult(state=ClaimState.JOB_NOT_FOUND)
 
         metadata = (
             claimed.resource_metadata
@@ -256,20 +241,22 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
         )
         scope_id = str(metadata.get("scope_id") or job.scope_id)
         target_id = str(claimed.resource_id)
-        context = SyncEventContext(
+        sync_from_ts = task.sync_from_ts
+        if sync_from_ts is None:
+            raw_sync_from_ts = metadata.get("sync_from_ts")
+            if raw_sync_from_ts is not None:
+                normalized_sync_from_ts = str(raw_sync_from_ts).strip()
+                sync_from_ts = normalized_sync_from_ts or None
+
+        context = FullSyncContext(
             event_id=claimed.event_id,
             job_id=claimed.job_id,
-            connector=str(claimed.connector),
-            sync_type=str(metadata.get("sync_type") or job.sync_type),
+            connector=claimed.connector,
             scope_id=scope_id,
-            target_type=str(claimed.resource_type),
+            target_type=claimed.resource_type,
             target_id=target_id,
             target_name=str(metadata.get("target_name") or target_id),
-            sync_from=(
-                str(metadata.get("sync_from"))
-                if metadata.get("sync_from") is not None
-                else None
-            ),
+            sync_from_ts=sync_from_ts,
             attempt=int(claimed.attempt),
             max_attempts=int(claimed.max_attempts),
             metadata=metadata,
@@ -281,7 +268,7 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
             total_targets = len(list_events_by_job(db, job_id=task.job_id, limit=100000))
 
     return ClaimResult(
-        state="claimed",
+        state=ClaimState.CLAIMED,
         context=context,
         job_started=job_started,
         total_targets=total_targets,
@@ -291,18 +278,18 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
 def _claim_incremental_task(task: SyncStreamTask, *, lease_owner: str) -> ClaimResult:
     record_key = (task.record_key or "").strip()
     if not record_key or task.generation is None:
-        return ClaimResult(state="invalid_incremental_task")
+        return ClaimResult(state=ClaimState.INVALID_INCREMENTAL_TASK)
 
     with SessionLocal() as db:
         record = get_record_state(db, record_key)
         if record is None:
-            return ClaimResult(state="record_not_found")
+            return ClaimResult(state=ClaimState.RECORD_NOT_FOUND)
 
         if record.generation != task.generation:
-            return ClaimResult(state="stale_task")
+            return ClaimResult(state=ClaimState.STALE_TASK)
 
         if record.status != IncrementalRecordStatus.QUEUED:
-            return ClaimResult(state="stale_task")
+            return ClaimResult(state=ClaimState.STALE_TASK)
 
         if not transition_record_status(
             db,
@@ -314,11 +301,11 @@ def _claim_incremental_task(task: SyncStreamTask, *, lease_owner: str) -> ClaimR
             lease_owner=lease_owner,
             lease_until=_incremental_lease_until(),
         ):
-            return ClaimResult(state="record_cas_conflict")
+            return ClaimResult(state=ClaimState.RECORD_CAS_CONFLICT)
 
         claimed = get_record_state(db, record_key)
         if claimed is None:
-            return ClaimResult(state="record_not_found")
+            return ClaimResult(state=ClaimState.RECORD_NOT_FOUND)
 
         cohort = list_parent_cohort_records(
             db,
@@ -334,16 +321,14 @@ def _claim_incremental_task(task: SyncStreamTask, *, lease_owner: str) -> ClaimR
             batch_sync_from = min(item.last_event_at for item in cohort).isoformat()
             batch_generation_ceiling = max(item.generation for item in cohort)
 
-        context = SyncEventContext(
+        context = IncrementalSyncContext(
             event_id=task.event_id,
             job_id=task.job_id,
             connector=task.connector,
-            sync_type="incremental",
             scope_id=claimed.scope_id,
             target_type=claimed.parent_type,
             target_id=claimed.parent_id,
             target_name=claimed.parent_id,
-            sync_from=claimed.last_event_at.isoformat(),
             attempt=int(claimed.attempt),
             max_attempts=max(1, int(settings.INCREMENTAL_MAX_ATTEMPTS)),
             record_key=claimed.record_key,
@@ -356,13 +341,12 @@ def _claim_incremental_task(task: SyncStreamTask, *, lease_owner: str) -> ClaimR
             last_event_at=claimed.last_event_at.isoformat(),
             batch_sync_from=batch_sync_from,
             batch_generation_ceiling=batch_generation_ceiling,
-            metadata={},
         )
 
-    return ClaimResult(state="claimed", context=context)
+    return ClaimResult(state=ClaimState.CLAIMED, context=context)
 
 
-async def _mark_event_success(context: SyncEventContext) -> bool:
+async def _mark_event_success(context: FullSyncContext) -> bool:
     with SessionLocal() as db:
         return mark_event_success(db, event_id=context.event_id)
 
@@ -374,7 +358,7 @@ def _incremental_retry_delay(attempt: int) -> timedelta:
     return timedelta(seconds=seconds)
 
 
-async def _mark_incremental_success(context: SyncEventContext) -> bool:
+async def _mark_incremental_success(context: IncrementalSyncContext) -> bool:
     if context.record_key is None or context.generation is None:
         return False
 
@@ -408,7 +392,7 @@ async def _mark_incremental_success(context: SyncEventContext) -> bool:
 
 async def _transition_incremental_failure_state(
     *,
-    context: SyncEventContext,
+    context: IncrementalSyncContext,
     message: SyncStreamMessage,
     to_status: IncrementalRecordStatus,
     attempt: int,
@@ -457,7 +441,7 @@ async def _transition_incremental_failure_state(
 
 async def _handle_incremental_failure(
     *,
-    context: SyncEventContext,
+    context: IncrementalSyncContext,
     message: SyncStreamMessage,
     exc: Exception,
     handler: IngestionHandlerProtocol,
@@ -535,7 +519,7 @@ async def _handle_incremental_failure(
 
 async def _handle_event_failure(
     *,
-    context: SyncEventContext,
+    context: FullSyncContext,
     message: SyncStreamMessage,
     exc: Exception,
     handler: IngestionHandlerProtocol,
@@ -573,19 +557,7 @@ async def _handle_event_failure(
             error_summary=error_summary,
             retryable=False,
         )
-        emit_worker_target_failed(
-            connector=context.connector,
-            sync_type=context.sync_type,
-            run_id=context.job_id,
-            scope_id=context.scope_id,
-            target_type=context.target_type,
-            target_id=context.target_id,
-            target_name=context.target_name,
-            failure_reason="max_retries_exceeded",
-            error_summary=error_summary,
-            attempt=next_attempt,
-            retryable=False,
-        )
+
         logger.error(
             "[%s][%s][WORKER] Event failed: job_id=%s, event_id=%s, attempt=%s, max_attempts=%s, error=%s",
             context.connector.upper(),
@@ -598,33 +570,16 @@ async def _handle_event_failure(
         )
         return
 
-    with SessionLocal() as db:
-        if not mark_event_retrying(db, context.event_id):
-            await _deadletter(
-                message=message,
-                reason=SyncStreamFailureReason.EVENT_CAS_CONFLICT,
-                error_message="failed to transition IN_PROGRESS -> RETRYING",
-            )
-            return
+    try:
+        await _republish_full_sync_event(context=context)
+    except Exception as publish_exc:
+        await _deadletter(
+            message=message,
+            reason=SyncStreamFailureReason.PROCESSING_EXCEPTION,
+            error_message=f"failed to republish retry event: {publish_exc}",
+        )
+        raise
 
-        if not requeue_retrying_event(db, context.event_id):
-            await _deadletter(
-                message=message,
-                reason=SyncStreamFailureReason.EVENT_CAS_CONFLICT,
-                error_message="failed to transition RETRYING -> PENDING",
-            )
-            return
-
-    await publish_job_events(
-        job_id=context.job_id,
-        event_ids=[context.event_id],
-        connector=context.connector,
-        sync_type=context.sync_type,
-        scope_id=context.scope_id,
-        target_type=context.target_type,
-        target_ids=[context.target_id],
-        max_attempts=context.max_attempts,
-    )
     await _publish_status_event(
         _build_target_status_event(
             context=context,
@@ -639,17 +594,7 @@ async def _handle_event_failure(
         next_attempt=next_attempt,
         error_summary=error_summary,
     )
-    emit_worker_target_requeued(
-        connector=context.connector,
-        sync_type=context.sync_type,
-        run_id=context.job_id,
-        scope_id=context.scope_id,
-        target_type=context.target_type,
-        target_id=context.target_id,
-        target_name=context.target_name,
-        next_attempt=next_attempt,
-        error_summary=error_summary,
-    )
+
     logger.warning(
         "[%s][%s][WORKER] Event requeued: job_id=%s, event_id=%s, attempt=%s, error=%s",
         context.connector.upper(),
@@ -661,11 +606,65 @@ async def _handle_event_failure(
     )
 
 
+async def _republish_full_sync_event(
+    *,
+    context: FullSyncContext,
+) -> None:
+    with SessionLocal() as db:
+        if not mark_event_retrying(db, context.event_id):
+            raise RuntimeError("failed to transition IN_PROGRESS -> RETRYING")
+
+        if not requeue_retrying_event(db, context.event_id):
+            raise RuntimeError("failed to transition RETRYING -> PENDING")
+
+    with SessionLocal() as db:
+        if not claim_events_for_republish(db, event_ids=[context.event_id]):
+            raise RuntimeError("failed to transition publish state to PUBLISHING")
+
+        event = get_event(db, context.event_id)
+        if event is None:
+            raise RuntimeError(f"event not found for republish: {context.event_id}")
+
+        task = build_stream_task_from_persisted_event(
+            event=event,
+            fallback_scope_id=context.scope_id,
+        )
+
+    try:
+        message_id = await publish_task(task)
+    except Exception as exc:
+        with SessionLocal() as db:
+            if not record_event_publish_outcomes(
+                db,
+                published=[],
+                failed_event_ids=[context.event_id],
+                publish_error=str(exc),
+            ):
+                raise RuntimeError(
+                    "failed to persist republish failure state"
+                ) from exc
+        raise
+
+    with SessionLocal() as db:
+        if not record_event_publish_outcomes(
+            db,
+            published=[
+                SyncEventPublishResultInput(
+                    event_id=context.event_id,
+                    stream_message_id=message_id,
+                )
+            ],
+            failed_event_ids=[],
+            publish_error=None,
+        ):
+            raise RuntimeError("failed to persist republish success state")
+
+
 async def _finalize_job_if_done(
-    context: SyncEventContext,
+    context: FullSyncContext,
     handler: IngestionHandlerProtocol,
 ) -> None:
-    if context.sync_type != "full":
+    if context.sync_type != SyncType.FULL:
         return
 
     job_id = context.job_id
@@ -724,17 +723,7 @@ async def _finalize_job_if_done(
                 failed_targets=failed_targets,
                 requeued_targets=requeued_targets,
             )
-            emit_worker_job_completed(
-                connector=context.connector,
-                sync_type=context.sync_type,
-                run_id=context.job_id,
-                scope_id=context.scope_id,
-                total_targets=total_targets,
-                completed_targets=completed_targets,
-                failed_targets=failed_targets,
-                requeued_targets=requeued_targets,
-                synced_records=0,
-            )
+
             return
 
         if not complete_job_failed(db, job_id):
@@ -756,14 +745,6 @@ async def _finalize_job_if_done(
             total_targets=total_targets,
             failed_targets=failed_targets,
         )
-        emit_worker_job_failed(
-            connector=context.connector,
-            sync_type=context.sync_type,
-            run_id=context.job_id,
-            scope_id=context.scope_id,
-            failure_reason="event_failures_remaining",
-            error_summary=f"failed_events={failed_targets}, total_events={total_targets}",
-        )
 
 
 async def _process_incremental_message(
@@ -773,12 +754,12 @@ async def _process_incremental_message(
     lease_owner: str,
 ) -> None:
     task = message.task
-    context: SyncEventContext | None = None
+    context: IncrementalSyncContext | None = None
     handler: IngestionHandlerProtocol | None = None
 
     try:
         claim = _claim_incremental_task(task, lease_owner=lease_owner)
-        if claim.state == "invalid_incremental_task":
+        if claim.state == ClaimState.INVALID_INCREMENTAL_TASK:
             await _deadletter(
                 message=message,
                 reason=SyncStreamFailureReason.INVALID_STREAM_PAYLOAD,
@@ -786,7 +767,7 @@ async def _process_incremental_message(
             )
             return
 
-        if claim.state == "record_not_found":
+        if claim.state == ClaimState.RECORD_NOT_FOUND:
             logger.warning(
                 "[INCREMENTAL][WORKER] Record not found: record_key=%s, generation=%s",
                 task.record_key,
@@ -794,7 +775,7 @@ async def _process_incremental_message(
             )
             return
 
-        if claim.state in {"stale_task", "record_cas_conflict"}:
+        if claim.state in {ClaimState.STALE_TASK, ClaimState.RECORD_CAS_CONFLICT}:
             logger.info(
                 "[INCREMENTAL][WORKER] Stale task skipped: record_key=%s, generation=%s, state=%s",
                 task.record_key,
@@ -809,6 +790,13 @@ async def _process_incremental_message(
                 message=message,
                 reason=SyncStreamFailureReason.PROCESSING_EXCEPTION,
                 error_message="unexpected empty incremental claim context",
+            )
+            return
+        if not isinstance(context, IncrementalSyncContext):
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.PROCESSING_EXCEPTION,
+                error_message="unexpected incremental claim context type",
             )
             return
 
@@ -836,27 +824,14 @@ async def _process_incremental_message(
             )
             return
 
-        synced_count, error_count, skipped = _extract_result_counts(result)
-        emit_worker_target_completed(
-            connector=context.connector,
-            sync_type=context.sync_type,
-            run_id=context.job_id,
-            scope_id=context.scope_id,
-            target_type=context.target_type,
-            target_id=context.target_id,
-            target_name=context.target_name,
-            synced_count=synced_count,
-            error_count=error_count,
-            skipped=skipped,
-        )
         await handler.on_target_completed(context=context, result=result)
         logger.info(
             "[%s][INCREMENTAL][WORKER] Record synced: record_key=%s, generation=%s, synced=%s, errors=%s",
             context.connector.upper(),
             context.record_key,
             context.generation,
-            synced_count,
-            error_count,
+            result.synced_count,
+            result.error_count,
         )
     except Exception as exc:
         if context is None:
@@ -908,7 +883,7 @@ async def _process_message(
     lease_owner: str,
 ) -> None:
     task = message.task
-    if task.sync_type == "incremental":
+    if task.sync_type == SyncType.INCREMENTAL:
         await _process_incremental_message(
             message,
             service_cache,
@@ -916,13 +891,13 @@ async def _process_message(
         )
         return
 
-    context: SyncEventContext | None = None
+    context: FullSyncContext | None = None
     handler: IngestionHandlerProtocol | None = None
 
     try:
         claim = _claim_event(task)
 
-        if claim.state == "event_not_found":
+        if claim.state == ClaimState.EVENT_NOT_FOUND:
             await _deadletter(
                 message=message,
                 reason=SyncStreamFailureReason.EVENT_NOT_FOUND,
@@ -930,7 +905,7 @@ async def _process_message(
             )
             return
 
-        if claim.state == "job_not_found":
+        if claim.state == ClaimState.JOB_NOT_FOUND:
             await _deadletter(
                 message=message,
                 reason=SyncStreamFailureReason.EVENT_NOT_FOUND,
@@ -938,7 +913,7 @@ async def _process_message(
             )
             return
 
-        if claim.state == "event_job_mismatch":
+        if claim.state == ClaimState.EVENT_JOB_MISMATCH:
             logger.error(
                 "[SYNC][WORKER] Event/Job mismatch: event_id=%s, stream_job_id=%s",
                 task.event_id,
@@ -951,7 +926,7 @@ async def _process_message(
             )
             return
 
-        if claim.state == "event_already_terminal":
+        if claim.state == ClaimState.EVENT_ALREADY_TERMINAL:
             logger.warning(
                 "[SYNC][WORKER] Duplicate event skipped: job_id=%s, event_id=%s",
                 task.job_id,
@@ -964,7 +939,7 @@ async def _process_message(
             )
             return
 
-        if claim.state == "event_cas_conflict":
+        if claim.state == ClaimState.EVENT_CAS_CONFLICT:
             logger.warning(
                 "[SYNC][WORKER] Event CAS conflict: job_id=%s, event_id=%s",
                 task.job_id,
@@ -983,6 +958,13 @@ async def _process_message(
                 message=message,
                 reason=SyncStreamFailureReason.PROCESSING_EXCEPTION,
                 error_message="unexpected empty claim context",
+            )
+            return
+        if not isinstance(context, FullSyncContext):
+            await _deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.PROCESSING_EXCEPTION,
+                error_message="unexpected full sync claim context type",
             )
             return
 
@@ -1012,13 +994,6 @@ async def _process_message(
                 context=context,
                 total_targets=claim.total_targets,
             )
-            emit_worker_job_started(
-                connector=context.connector,
-                sync_type=context.sync_type,
-                run_id=context.job_id,
-                scope_id=context.scope_id,
-                total_targets=claim.total_targets,
-            )
 
         # target claim 성공 이후, 실제 처리 시점에 스트리밍
         await _publish_status_event(
@@ -1029,16 +1004,6 @@ async def _process_message(
             )
         )
         await handler.on_target_started(context=context)
-        emit_worker_target_started(
-            connector=context.connector,
-            sync_type=context.sync_type,
-            run_id=context.job_id,
-            scope_id=context.scope_id,
-            target_type=context.target_type,
-            target_id=context.target_id,
-            target_name=context.target_name,
-            attempt=context.attempt,
-        )
 
         result = await handler.handle(
             context=context,
@@ -1061,19 +1026,6 @@ async def _process_message(
         )
         await handler.on_target_completed(context=context, result=result)
 
-        synced_count, error_count, skipped = _extract_result_counts(result)
-        emit_worker_target_completed(
-            connector=context.connector,
-            sync_type=context.sync_type,
-            run_id=context.job_id,
-            scope_id=context.scope_id,
-            target_type=context.target_type,
-            target_id=context.target_id,
-            target_name=context.target_name,
-            synced_count=synced_count,
-            error_count=error_count,
-            skipped=skipped,
-        )
     except Exception as exc:
         if context is None:
             logger.exception(

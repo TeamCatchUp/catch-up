@@ -35,30 +35,39 @@ class EventBus:
         """
         bg_tasks = current_bg_tasks.get()
         for func in self._listeners[topic]:
-            if immediate or not bg_tasks:
-                try:
-                    loop = asyncio.get_running_loop()
-                    
-                    # case) async def
-                    if inspect.iscoroutinefunction(func):
-                        task = loop.create_task(func(**payload))
-                    
-                    # case) def (sync)
-                    else:                    
-                        task = asyncio.create_task(asyncio.to_thread(func, **payload))
-                    
-                    # GC 방지
-                    self._retained_tasks.add(task)
-                    task.add_done_callback(self._retained_tasks.discard)
-
-                except RuntimeError:
-                    # 동기 환경에서 비동기 리스너를 호출하는 경우
-                    if inspect.iscoroutinefunction(func):
-                        asyncio.run(func(**payload))
-                    else:
-                        func(**payload)
-            else:
+            
+            # BackgroundTasks 지연 실행
+            if not immediate and bg_tasks:
                 bg_tasks.add_task(func, **payload)
+                continue
+            
+            # 즉시 실행 (immediate=True 또는 bg_tasks가 없는 경우)
+            try:
+                # 현재 코드가 실행 중인 스레드의 이벤트 루프 획득
+                loop = asyncio.get_running_loop()
+                
+                # case) async def
+                if inspect.iscoroutinefunction(func):
+                    task = loop.create_task(func(**payload))
+                
+                # case) def (sync)
+                else:                    
+                    task = asyncio.create_task(
+                        asyncio.to_thread(func, **payload)
+                    )
+                
+                # GC 방지
+                self._retained_tasks.add(task)
+                task.add_done_callback(self._retained_tasks.discard)
+
+            except RuntimeError:
+                # 순수 동기 스레드 환경인 경우
+                # run_in_threadpool() 처럼 별도의 스레드 풀에서 동작하는 경우
+                if inspect.iscoroutinefunction(func):
+                    asyncio.run(func(**payload))
+                else:
+                    func(**payload)
+
 
 # 전역 event bus 인스턴스
 bus = EventBus()

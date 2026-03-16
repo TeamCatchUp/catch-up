@@ -13,7 +13,12 @@ import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
-import type { PreMappingBulkUpdateResponse, PreMappingUpdateItem, SyncFilterType, VendorType } from '../../../types/api';
+import type {
+  PreMappingBulkUpdateResponse,
+  PreMappingUpdateItem,
+  SyncFilterType,
+  VendorType,
+} from '../../../types/api';
 import type { IntegrationService } from '../../../types/integrations';
 import type { MemberDisplayRow } from '../../../types/memberDisplay';
 import type { AccountOption } from '../tables/AccountSelectDropdown';
@@ -51,16 +56,32 @@ const UsersStatusSection = ({
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
 
   // ─── 툴별 사용자 목록 (수정 모드 드롭다운용) ───
-  const githubUsers = useInfiniteQuery({ ...adminConnectorQueries.vendorUsers({ vendorType: 'github' }), enabled: isEditMode });
-  const atlassianUsers = useInfiniteQuery({ ...adminConnectorQueries.vendorUsers({ vendorType: 'atlassian' }), enabled: isEditMode });
-  const slackUsers = useInfiniteQuery({ ...adminConnectorQueries.vendorUsers({ vendorType: 'slack' }), enabled: isEditMode });
+  const githubUsers = useInfiniteQuery({
+    ...adminConnectorQueries.vendorUsers({ vendorType: 'github' }),
+    enabled: isEditMode,
+  });
+  const atlassianUsers = useInfiniteQuery({
+    ...adminConnectorQueries.vendorUsers({ vendorType: 'atlassian' }),
+    enabled: isEditMode,
+  });
+  const slackUsers = useInfiniteQuery({
+    ...adminConnectorQueries.vendorUsers({ vendorType: 'slack' }),
+    enabled: isEditMode,
+  });
 
   const accountOptionsByService = useMemo<Partial<Record<IntegrationService, AccountOption[]>>>(() => {
     if (!isEditMode) return {};
 
-    const toOptions = (pages: { items: { id: string; name: string; identifier: string | null; picture: string | null }[] }[] | undefined): AccountOption[] =>
+    const toOptions = (
+      pages: { items: { id: string; name: string; identifier: string | null; picture: string | null }[] }[] | undefined,
+    ): AccountOption[] =>
       pages?.flatMap((page) =>
-        page.items.map((item) => ({ id: item.id, name: item.name, identifier: item.identifier ?? '', picture: item.picture })),
+        page.items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          identifier: item.identifier ?? '',
+          picture: item.picture,
+        })),
       ) ?? [];
 
     return {
@@ -195,17 +216,19 @@ const UsersStatusSection = ({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <section className="flex w-250 flex-col gap-3">
+    <section className="flex w-full flex-col gap-3">
       {/* 헤더: 제목 + 설명 */}
       <div className="flex flex-col gap-0.5">
         <h2 className="text-heading-large text-content-normal">
           이용자 계정 등록 상태 <span className="text-content-primary-assistive">{total}</span>
         </h2>
-        <p className="text-body-small text-content-alternative">Catch Up 사용자의 협업 툴 계정 등록 상태를 확인할 수 있어요.</p>
+        <p className="text-body-small text-content-alternative">
+          Catch Up 사용자의 협업 툴 계정 등록 상태를 확인할 수 있어요.
+        </p>
       </div>
 
       {/* 필터 칩 + 버튼 영역 */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         {/* 필터 칩 */}
         <div className="flex items-center gap-2">
           {FILTER_OPTIONS.map(({ key, label }) => {
@@ -217,7 +240,9 @@ const UsersStatusSection = ({
                 onClick={() => onFilterChange(key)}
                 className={cn(
                   'text-body-small h-9 cursor-pointer rounded-full border px-3 py-1.5 transition-colors',
-                  isSelected ? 'bg-neutral-80 border-transparent text-white' : 'border-edge-neutral text-content-alternative',
+                  isSelected
+                    ? 'bg-neutral-80 border-transparent text-white'
+                    : 'border-edge-neutral text-content-alternative',
                 )}
               >
                 {label}
@@ -262,7 +287,7 @@ const UsersStatusSection = ({
       </div>
 
       {/* 테이블 */}
-      <div className="border-edge-neutral w-250 border-y">
+      <div className="border-edge-neutral w-full border-y">
         <UsersTable
           displayRows={effectiveRows}
           isEditMode={isEditMode}

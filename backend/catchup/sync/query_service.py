@@ -5,8 +5,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 
+from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
@@ -21,7 +23,6 @@ from catchup.db.models import (
     GithubInstallation,
     GithubRepository,
     JiraProject,
-    SlackChannel,
     SyncConnector,
     SyncEventStatus,
     SyncJob,
@@ -30,27 +31,32 @@ from catchup.db.models import (
 )
 from catchup.db.sync import get_job, list_events_by_job
 from catchup.sync.common.exceptions import SyncInternalError
+from catchup.sync.common.schemas import SyncTargetType
 
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True, frozen=True)
+class SyncJobTargetSnapshotResult:
+    target_id: str
+    target_name: str
+    status: SyncEventStatus
+
+
+@dataclass(slots=True, frozen=True)
 class SyncJobSnapshotResult:
     job_id: str
     connector: SyncConnector
-    sync_type: str
+    sync_type: SyncType
     scope_id: str
     status: SyncJobStatus
     created_at: str
     started_at: str | None
     completed_at: str | None
     total_targets: int
-    queued_targets: int
-    processing_targets: int
     completed_targets: int
-    failed_targets: int
-    requeued_targets: int
+    targets: list[SyncJobTargetSnapshotResult] = field(default_factory=list)
     metrics: dict[str, int] = field(default_factory=dict)
     last_error: str | None = None
 
@@ -59,7 +65,7 @@ class SyncJobSnapshotResult:
 class SyncTargetResult:
     target_id: str
     display_name: str
-    target_type: str
+    target_type: SyncTargetType
     is_accessible: bool = True
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -76,7 +82,7 @@ class SyncTargetsResult:
 class SyncScopeStatusResult:
     job_id: str
     connector: SyncConnector
-    sync_type: str
+    sync_type: SyncType
     scope_id: str
     status: SyncJobStatus
     requested_at: str
@@ -125,6 +131,28 @@ class SyncQueryService:
             "requeued_targets": sum(int(event.attempt) for event in events),
         }
 
+    def _build_job_targets(
+        self,
+        events,
+    ) -> list[SyncJobTargetSnapshotResult]:
+        targets: list[SyncJobTargetSnapshotResult] = []
+
+        for event in events:
+            metadata = (
+                event.resource_metadata if isinstance(event.resource_metadata, dict) else {}
+            )
+            target_id = str(event.resource_id)
+            target_name = str(metadata.get("target_name") or target_id).strip() or target_id
+            targets.append(
+                SyncJobTargetSnapshotResult(
+                    target_id=target_id,
+                    target_name=target_name,
+                    status=event.status,
+                )
+            )
+
+        return targets
+
     def get_job_snapshot(self, job_id: str) -> SyncJobSnapshotResult | None:
         # DB에서 job + events를 읽어 snapshot으로 변환
         with SessionLocal() as db:
@@ -134,6 +162,7 @@ class SyncQueryService:
 
             events = list_events_by_job(db, job_id=job_id, limit=100000)
             counts = self._summarize_events(events)
+            targets = self._build_job_targets(events)
 
             return SyncJobSnapshotResult(
                 job_id=job.job_id,
@@ -145,11 +174,8 @@ class SyncQueryService:
                 started_at=self._to_iso(job.started_at),
                 completed_at=self._to_iso(job.succeeded_at or job.failed_at),
                 total_targets=counts["total_targets"],
-                queued_targets=counts["queued_targets"],
-                processing_targets=counts["processing_targets"],
                 completed_targets=counts["completed_targets"],
-                failed_targets=counts["failed_targets"],
-                requeued_targets=counts["requeued_targets"],
+                targets=targets,
                 metrics={
                     "synced_messages": 0,
                     "flushed_events": 0,
@@ -307,19 +333,39 @@ class SyncQueryService:
         db,
         scope_id: str,
     ) -> SyncTargetsResult:
-        token = (
-            db.query(AtlassianOAuthToken)
-            .filter(AtlassianOAuthToken.cloud_id == scope_id)
-            .first()
-        )
-        if token is None:
-            raise ValueError(f"jira cloud is not connected: {scope_id}")
+        def _load_jira_targets_sync() -> list[SyncTargetResult]:
+            with SessionLocal() as session:
+                projects = (
+                    session.query(JiraProject)
+                    .filter(JiraProject.cloud_id == scope_id)
+                    .order_by(JiraProject.project_key.asc())
+                    .all()
+                )
 
-        service = await create_jira_ingestion_service(db, scope_id)
+            return [
+                SyncTargetResult(
+                    target_id=project.project_key,
+                    display_name=project.project_name or project.project_key,
+                    target_type="project",
+                    is_accessible=True,
+                    metadata={
+                        "project_key": project.project_key,
+                        "project_id": str(project.project_id),
+                    },
+                )
+                for project in projects
+                if project.project_key
+            ]
+
+        try:
+            service = await create_jira_ingestion_service(cloud_id=scope_id)
+        except SyncInternalError as exc:
+            cause = exc.__cause__
+            if isinstance(cause, AtlassianTokenNotFoundError):
+                raise ValueError(f"jira cloud is not connected: {scope_id}") from exc
+            raise
+
         refresh_result = await service.sync_metadata(
-            db,
-            auto_commit=False,
-            rollback_on_error=False,
             raise_on_error=True,
         )
         self._ensure_refresh_succeeded(
@@ -329,27 +375,7 @@ class SyncQueryService:
             sections=("projects",),
         )
 
-        projects = (
-            db.query(JiraProject)
-            .filter(JiraProject.cloud_id == scope_id)
-            .order_by(JiraProject.project_key.asc())
-            .all()
-        )
-
-        targets = [
-            SyncTargetResult(
-                target_id=project.project_key,
-                display_name=project.project_name or project.project_key,
-                target_type="project",
-                is_accessible=True,
-                metadata={
-                    "project_key": project.project_key,
-                    "project_id": str(project.project_id),
-                },
-            )
-            for project in projects
-            if project.project_key
-        ]
+        targets = await run_in_threadpool(_load_jira_targets_sync)
         return self._build_targets_result(
             connector=SyncConnector.JIRA,
             scope_id=scope_id,
@@ -428,11 +454,9 @@ class SyncQueryService:
             sections=("workspace", "users", "channels"),
         )
 
-        channels = (
-            db.query(SlackChannel)
-            .filter(SlackChannel.team_id == scope_id)
-            .order_by(SlackChannel.name.asc())
-            .all()
+        channels = sorted(
+            metadata_service.last_channels,
+            key=lambda channel: channel.name,
         )
 
         targets = [
@@ -440,10 +464,11 @@ class SyncQueryService:
                 target_id=channel.id,
                 display_name=channel.name or channel.id,
                 target_type="channel",
-                is_accessible=not bool(channel.is_archived),
+                is_accessible=bool(channel.is_member),
                 metadata={
                     "channel_kind": str(channel.channel_type),
                     "is_private": bool(channel.is_private),
+                    "is_member": bool(channel.is_member),
                     "member_count": int(channel.member_count),
                 },
             )

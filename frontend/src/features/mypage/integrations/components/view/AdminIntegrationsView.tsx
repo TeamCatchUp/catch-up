@@ -30,7 +30,7 @@ const AdminIntegrationsView = () => {
   const { integrationMenu, getConnectorDetail } = useAdminIntegrationViewModel();
 
   return (
-    <section className="mx-auto flex w-full max-w-282 flex-col gap-6 px-16 pt-9 pb-30">
+    <section className="mx-auto flex w-full flex-col gap-6 px-16 pt-9 pb-30 min-[1440px]:max-w-282">
       <h1 className="text-heading-xlarge text-content-normal">협업툴 연동</h1>
 
       <div className="flex flex-col gap-8">
@@ -40,7 +40,9 @@ const AdminIntegrationsView = () => {
             onClick={() => setActiveTab('my')}
             className={cn(
               'text-heading-large cursor-pointer border-b-2 pb-1 transition-colors',
-              activeTab === 'my' ? 'border-content-normal text-content-normal' : 'text-content-assistive border-transparent',
+              activeTab === 'my'
+                ? 'border-content-normal text-content-normal'
+                : 'text-content-assistive border-transparent',
             )}
           >
             내 연동
@@ -50,7 +52,9 @@ const AdminIntegrationsView = () => {
             onClick={() => setActiveTab('member')}
             className={cn(
               'text-heading-large cursor-pointer border-b-2 pb-1 transition-colors',
-              activeTab === 'member' ? 'border-content-normal text-content-normal' : 'text-content-assistive border-transparent',
+              activeTab === 'member'
+                ? 'border-content-normal text-content-normal'
+                : 'text-content-assistive border-transparent',
             )}
           >
             이용자 연동

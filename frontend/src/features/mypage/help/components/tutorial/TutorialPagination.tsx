@@ -23,7 +23,7 @@ const TutorialPagination = ({ currentId }: TutorialPaginationProps) => {
             href={`/mypage/help/tutorial/${TUTORIALS[currentIndex - 1].id}`}
             className="flex size-6 items-center justify-center"
           >
-            <ArrowLeft className="h-6 w-6 text-content-alternative" />
+            <ArrowLeft className="text-content-alternative h-6 w-6" />
           </Link>
         ) : (
           <span className="flex size-6 items-center justify-center">
@@ -37,7 +37,9 @@ const TutorialPagination = ({ currentId }: TutorialPaginationProps) => {
             href={`/mypage/help/tutorial/${tutorial.id}`}
             className={cn(
               'rounded-md2 text-body-small flex size-7.5 items-center justify-center',
-              tutorial.id === currentId ? 'bg-fill-interaction-hover text-content-normal' : 'hover:bg-fill-interaction-hover text-content-alternative',
+              tutorial.id === currentId
+                ? 'bg-fill-interaction-hover text-content-normal'
+                : 'hover:bg-fill-interaction-hover text-content-alternative',
             )}
           >
             {tutorial.id}
@@ -49,7 +51,7 @@ const TutorialPagination = ({ currentId }: TutorialPaginationProps) => {
             href={`/mypage/help/tutorial/${TUTORIALS[currentIndex + 1].id}`}
             className="flex size-6 items-center justify-center"
           >
-            <ArrowRight className="h-6 w-6 text-content-alternative" />
+            <ArrowRight className="text-content-alternative h-6 w-6" />
           </Link>
         ) : (
           <span className="flex size-6 items-center justify-center">
@@ -61,7 +63,7 @@ const TutorialPagination = ({ currentId }: TutorialPaginationProps) => {
       {/* 목록으로 버튼 */}
       <Link
         href="/mypage/help"
-        className="border-edge-neutral hover:bg-fill-interaction-hover flex h-10 items-center justify-center rounded-lg border bg-fill-normal px-4 py-1.5 transition-colors"
+        className="border-edge-neutral hover:bg-fill-interaction-hover bg-fill-normal flex h-10 items-center justify-center rounded-lg border px-4 py-1.5 transition-colors"
       >
         <span className="text-body-medium text-content-alternative">목록으로</span>
       </Link>

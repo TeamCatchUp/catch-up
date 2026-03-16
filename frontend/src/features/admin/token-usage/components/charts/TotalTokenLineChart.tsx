@@ -25,7 +25,7 @@ export default function TotalTokenLineChart({ data }: TotalTokenLineChartProps) 
   const latestValue = data.length > 0 ? data[data.length - 1].cumulative_tokens : 0;
 
   return (
-    <div className="border-edge-neutral flex h-full flex-col overflow-hidden rounded-xl border bg-fill-normal px-6 py-5">
+    <div className="border-edge-neutral bg-fill-normal flex h-full flex-col overflow-hidden rounded-xl border px-6 py-5">
       {/* 헤더 */}
       <div className="flex flex-col gap-1">
         <span className="text-heading-small text-content-alternative">전체 토큰 사용량</span>

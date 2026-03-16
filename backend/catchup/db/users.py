@@ -30,9 +30,11 @@ def update_user_refresh_token(
     db: Session,
     user_id: int,
     refresh_token: str | None
-):
+) -> bool:
     stmt = update(User).where(User.id == user_id).values(refresh_token=refresh_token)
-    db.execute(stmt)
+    result = db.execute(stmt)
+    
+    return result.rowcount > 0
 
 
 def get_user_with_full_context(

@@ -75,7 +75,7 @@ const InstructionInput = ({
     <div
       ref={containerRef}
       className={cn(
-        'w-full rounded-xl border bg-fill-normal',
+        'bg-fill-normal w-full rounded-xl border',
         !isActive && 'h-[46px]',
         isActive ? (isAtLimit ? 'border-red-50' : 'border-blue-40') : 'border-edge-neutral',
       )}

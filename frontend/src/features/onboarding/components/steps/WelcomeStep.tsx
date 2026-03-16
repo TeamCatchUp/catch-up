@@ -20,7 +20,7 @@ export function WelcomeStep({ onStart }: WelcomeStepProps) {
             <p className="text-display-large text-content-normal tracking-tight">이제 팀의 기억이 사라지지 않도록 </p>
             <div className="flex items-center gap-1.5">
               <div className="flex items-center gap-2">
-                <div className="border-edge-neutral flex size-[55px] shrink-0 flex-col items-center justify-center overflow-clip rounded-2xl border bg-fill-normal p-2">
+                <div className="border-edge-neutral bg-fill-normal flex size-[55px] shrink-0 flex-col items-center justify-center overflow-clip rounded-2xl border p-2">
                   <CatchUpIcon className="w-full shrink-0" />
                 </div>
                 <CatchUpLetter className="h-[31px] w-[133px]" />

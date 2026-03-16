@@ -43,7 +43,9 @@ const Tutorial1Content = () => {
       {/* 섹션 1: 정보를 찾는 시간이 줄면 */}
       <section className="flex flex-col gap-8">
         <div className="flex flex-col gap-4">
-          <h2 className="text-heading-xlarge text-content-strong">정보를 찾는 시간이 줄면, 일하는 시간이 늘어납니다.</h2>
+          <h2 className="text-heading-xlarge text-content-strong">
+            정보를 찾는 시간이 줄면, 일하는 시간이 늘어납니다.
+          </h2>
           <div className="text-label-medium text-content-normal">
             <p>그냥 몇 분 아끼는 얘기가 아니에요.</p>
             <p>

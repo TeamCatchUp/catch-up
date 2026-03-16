@@ -25,10 +25,10 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
         <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
         <span className="text-heading-small text-content-neutral truncate">{accountInfo.userName}</span>
       </div>
-      <div className="bg-fill-interaction-hover text-body-xsmall inline-flex w-fit rounded-md px-1.5 py-0.5 text-content-alternative">
+      <div className="bg-fill-interaction-hover text-body-xsmall text-content-alternative inline-flex w-fit rounded-md px-1.5 py-0.5">
         {accountInfo.userId}
       </div>
-      <div className="text-body-xsmall h-5 truncate text-content-alternative">{accountInfo.userEmail}</div>
+      <div className="text-body-xsmall text-content-alternative h-5 truncate">{accountInfo.userEmail}</div>
     </div>
   ) : (
     <div className="flex flex-col gap-1.5">
@@ -44,7 +44,7 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
   return (
     <article
       className={cn(
-        'border-edge-neutral flex w-58.75 shrink-0 rounded-xl border bg-fill-normal',
+        'border-edge-neutral bg-fill-normal flex rounded-xl border',
         isAdmin
           ? cn('flex-col gap-4 p-4', !isConnected && 'min-h-52.25')
           : cn('flex-col gap-3 p-5', !isConnected && 'min-h-62.25'),

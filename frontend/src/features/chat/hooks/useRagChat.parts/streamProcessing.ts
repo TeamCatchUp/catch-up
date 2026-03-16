@@ -71,7 +71,6 @@ export const useStreamProcessing = ({
   const {
     streamingMessageIdRef,
     hasStreamedTokenRef,
-    hasResultEventRef,
     latestSourcesRef,
     latestUiSourcesRef,
     streamInFlightRef,
@@ -276,8 +275,7 @@ export const useStreamProcessing = ({
 
     const targetSessionId = resolvedSessionIdRef.current;
 
-    // source_candidates는 답변 생성 전에 전송되므로 is_cited가 미확정 상태
-    // 답변 완성 후 본문의 [N] 패턴으로 is_cited를 확정
+    // 1차 sources SSE는 is_cited 미확정, 답변 완성 후 본문 [N] 패턴으로 is_cited 확정
     setChatData((prev) => {
       if (!prev) return prev;
       const updated = deriveCitedFromAnswerContent(prev.messages);
@@ -285,27 +283,13 @@ export const useStreamProcessing = ({
       return { ...prev, messages: updated };
     });
 
-    if (hasResultEventRef.current) {
-      // 로딩 해제를 먼저 수행 → 소스 즉시 표시
-      streamingMessageIdRef.current = null;
-      setIsLoading(false);
-      setCurrentStep('router');
-      streamInFlightRef.current = false;
-
-      // 서버 동기화는 백그라운드 (chat_history_id 등 보정용)
-      if (targetSessionId) {
-        syncChatDataFromServer(targetSessionId);
-      }
-      return;
-    }
-
-    // result 이벤트 없이 토큰만 온 경우 (백엔드 비정상 종료)
     setIsLoading(false);
     setCurrentStep('router');
     streamingMessageIdRef.current = null;
     streamInFlightRef.current = false;
 
     if (hasStreamedTokenRef.current) {
+      // 정상 종료: 서버 동기화 + 최근 채팅 갱신
       if (targetSessionId) {
         syncChatDataFromServer(targetSessionId);
         refreshRecentChatsNow();
@@ -313,11 +297,10 @@ export const useStreamProcessing = ({
       return;
     }
 
-    // status만 수신한 뒤 종료된 경우(예: 백엔드에서 예외 후 스트림 종료) 빈 화면 대신 에러를 노출한다.
+    // status만 수신한 뒤 종료된 경우(예: 백엔드 예외 후 스트림 종료) → 에러 노출
     setIsError(true);
   }, [
     canReplacePlaceholderRef,
-    hasResultEventRef,
     hasStreamedTokenRef,
     isStopped,
     refreshRecentChatsNow,
@@ -337,8 +320,7 @@ export const useStreamProcessing = ({
   /**
    * SSE 이벤트 라우터
    * - status: 단계(progress) 업데이트
-   * - token/sources/result: 메시지 내용 업데이트
-   * - error: 에러 플래그 전환
+   * - token/sources: 메시지 내용 업데이트
    */
   const handleStreamEvent = useCallback(
     (event: StreamEvent) => {
@@ -357,61 +339,25 @@ export const useStreamProcessing = ({
           break;
         }
         case 'sources': {
-          // 최종 답변 이전에 전달되는 후보/중간 sources
-          applyStreamingSources(event.sources ?? []);
-          break;
-        }
-        case 'source_candidates': {
-          // 백엔드 구현에 따라 별도 타입으로 전달되는 sources 후보군
           applyStreamingSources(event.sources ?? []);
           break;
         }
         case 'token': {
-          // 토큰 스트리밍 본문 누적
           hasStreamedTokenRef.current = true;
           appendTokenToStreamingMessage(event.token);
           break;
         }
-        case 'result': {
-          // 최종 답변/출처/피드백 가능 여부를 확정 반영
-          hasResultEventRef.current = true;
-          refreshRecentChatsNow();
-          appendAssistantAnswer(
-            event.answer,
-            event.sources || [],
-            event.related_jira_issues ?? [],
-            event.chat_history_id,
-            event.has_feedback,
-          );
-          break;
-        }
-        case 'error': {
-          // 서버가 명시적으로 에러 이벤트를 내려준 경우
-          console.error('[useRagChat] stream error event:', event.message);
-          setIsError(true);
-          setIsLoading(false);
-          streamInFlightRef.current = false;
-          break;
-        }
-        case 'ping':
-          break;
         default:
           break;
       }
     },
     [
-      appendAssistantAnswer,
       appendTokenToStreamingMessage,
       applyStreamingSources,
-      hasResultEventRef,
       hasStreamedTokenRef,
       isStopped,
-      refreshRecentChatsNow,
       resolveSessionIdFromStream,
       setCurrentStep,
-      setIsError,
-      setIsLoading,
-      streamInFlightRef,
     ],
   );
 

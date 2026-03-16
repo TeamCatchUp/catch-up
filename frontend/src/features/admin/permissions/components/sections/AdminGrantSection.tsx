@@ -28,7 +28,7 @@ const AdminGrantSection = ({
   const isSubmitDisabled = disabled || !selectedMemberId || !reason.trim();
 
   return (
-    <section className="border-edge-neutral flex w-250 flex-col gap-2 bg-fill-normal">
+    <section className="border-edge-neutral bg-fill-normal flex w-250 flex-col gap-2">
       <div className="flex h-9 items-center justify-between">
         <h2 className="text-heading-large text-content-normal">Admin 권한 부여하기</h2>
         <Button

@@ -237,9 +237,7 @@ export const useMessageActions = ({
         return {
           ...prev,
           messages: prev.messages.map((message) =>
-            message.id === messageId
-              ? { ...message, has_feedback: isLiked !== undefined, is_liked: isLiked }
-              : message,
+            message.id === messageId ? { ...message, has_feedback: isLiked !== undefined, is_liked: isLiked } : message,
           ),
         };
       });

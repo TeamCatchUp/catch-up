@@ -9,6 +9,7 @@ from urllib.parse import urlparse, parse_qs
 import httpx
 
 from catchup.configs.config import settings
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.base import (
     AuthenticationError,
     ConnectorApiError,
@@ -27,9 +28,9 @@ class ConfluenceAuthError(AuthenticationError, ConfluenceApiError):
     service = "confluence"
 
 class ConfluenceApiClient:
-    def __init__(self, cloud_id: str, access_token:str):
+    def __init__(self, cloud_id: str, token_provider: AtlassianTokenProvider):
         self.cloud_id = cloud_id
-        self.access_token = access_token
+        self.token_provider = token_provider
         # v2 API (spaces, pages 등)
         self.base_url = f"{settings.ATLASSIAN_API_URL}/ex/confluence/{cloud_id}/wiki/api/v2"
         # v1 API (user search 등)
@@ -37,10 +38,11 @@ class ConfluenceApiClient:
 
         self._semaphore = asyncio.Semaphore(settings.CONFLUENCE_SYNC_MAX_CONCURRENT_REQUEST)
         self._rate_limit_delay = settings.CONFLUENCE_SYNC_RATE_LIMIT_DELAY
+        self._attachment_max_retries = 3
     
-    def _get_headers(self) -> dict[str, str]:
+    def _get_headers(self, access_token: str) -> dict[str, str]:
         return {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
@@ -54,51 +56,62 @@ class ConfluenceApiClient:
         max_retries: int = 3,
     ) -> dict[str, Any]:
         async with self._semaphore:
+            auth_retried = False
             for attempt in range(max_retries):
                 try:
-                    async with httpx.AsyncClient(
-                        headers=self._get_headers(), timeout=30.0
-                    ) as client:
-                        response = await client.request(
-                            method, url, params=params, json=json_body
+                    force_refresh = False
+                    while True:
+                        access_token = await self.token_provider.get_access_token(
+                            self.cloud_id,
+                            force_refresh=force_refresh,
                         )
-
-                        if response.status_code == 429:
-                            retry_after = int(response.headers.get("Retry-After", 5))
-                            logger.warning(
-                                f"[CONFLUENCE][API] Rate limited, retry after {retry_after}s"
+                        async with httpx.AsyncClient(
+                            headers=self._get_headers(access_token), timeout=30.0
+                        ) as client:
+                            response = await client.request(
+                                method, url, params=params, json=json_body
                             )
-                            if attempt < max_retries - 1:
-                                await asyncio.sleep(retry_after)
+
+                            if response.status_code == 429:
+                                retry_after = int(response.headers.get("Retry-After", 5))
+                                logger.warning(
+                                    f"[CONFLUENCE][API] Rate limited, retry after {retry_after}s"
+                                )
+                                if attempt < max_retries - 1:
+                                    await asyncio.sleep(retry_after)
+                                    break
+                                raise ConfluenceRateLimitError(
+                                    "Rate limit exceeded",
+                                    retry_after=retry_after,
+                                )
+
+                            if response.status_code == 401:
+                                if auth_retried:
+                                    body = (response.text or "").strip()
+                                    raise ConfluenceAuthError(
+                                        f"Authentication failed for Confluence API. body={body[:300]}"
+                                    )
+                                auth_retried = True
+                                force_refresh = True
                                 continue
-                            raise ConfluenceRateLimitError(
-                                "Rate limit exceeded",
-                                retry_after=retry_after,
-                            )
 
-                        if response.status_code == 401:
-                            body = (response.text or "").strip()
-                            raise ConfluenceAuthError(
-                                f"Authentication failed for Confluence API. body={body[:300]}"
-                            )
+                            if response.status_code == 403:
+                                body = (response.text or "").strip()
+                                raise ConfluenceApiError(
+                                    "Confluence API access forbidden. "
+                                    f"Confluence scope or admin permission may be missing. body={body[:300]}",
+                                    status_code=403,
+                                )
 
-                        if response.status_code == 403:
-                            body = (response.text or "").strip()
-                            raise ConfluenceApiError(
-                                "Confluence API access forbidden. "
-                                f"Confluence scope or admin permission may be missing. body={body[:300]}",
-                                status_code=403,
-                            )
+                            if response.status_code >= 400:
+                                error_body = (response.text or "").strip()
+                                raise ConfluenceApiError(
+                                    f"API error [{response.status_code}]: {error_body[:300]}",
+                                    status_code=response.status_code,
+                                )
 
-                        if response.status_code >= 400:
-                            error_body = (response.text or "").strip()
-                            raise ConfluenceApiError(
-                                f"API error [{response.status_code}]: {error_body[:300]}",
-                                status_code=response.status_code,
-                            )
-
-                        await asyncio.sleep(self._rate_limit_delay)
-                        return response.json()
+                            await asyncio.sleep(self._rate_limit_delay)
+                            return response.json()
 
                 except httpx.TimeoutException:
                     if attempt < max_retries - 1:
@@ -119,6 +132,16 @@ class ConfluenceApiClient:
         parsed = urlparse(link)
         query_params = parse_qs(parsed.query)
         return query_params.get("cursor", [None])[0]
+
+    def _get_retry_after(self, response: httpx.Response, default: int = 5) -> int:
+        retry_after = response.headers.get("Retry-After")
+        if retry_after is None:
+            return default
+
+        try:
+            return max(1, int(retry_after))
+        except ValueError:
+            return default
 
     async def _paginate_cursor(
         self,
@@ -151,7 +174,8 @@ class ConfluenceApiClient:
 
             current_params["cursor"] = cursor
 
-        logger.info(f"[CONFLUENCE][API] Paginated {len(all_results)} results from {url}")
+        log = logger.info if all_results else logger.debug
+        log("[CONFLUENCE][API] Paginated %s results from %s", len(all_results), url)
         return all_results
 
     async def _paginate_cursor_iter(
@@ -314,62 +338,115 @@ class ConfluenceApiClient:
 
     async def download_attachment(
         self,
+        content_id: str,
         attachment_id: str,
         max_size_bytes: int = 5 * 1024 * 1024,
     ) -> bytes | None:
         """
         첨부파일 바이너리 다운로드 (이미지 임베딩용)
 
-        v2 API 엔드포인트를 사용하여 Bearer 토큰 인증으로 다운로드.
-        (서블릿 경로 /download/attachments/... 는 API 게이트웨이에서 401 발생)
+        Confluence REST v1의 documented download endpoint를 사용한다.
 
         Args:
+            content_id: Page 또는 BlogPost ID
             attachment_id: Confluence Attachment ID
             max_size_bytes: 최대 다운로드 크기 (기본 5MB, Embed v4 제한)
 
         Returns:
             파일 바이너리 데이터, 실패 시 None
         """
-        url = f"{self.base_url}/attachments/{attachment_id}/download"
+        url = (
+            f"{self.base_url_v1}/content/{content_id}/child/attachment/"
+            f"{attachment_id}/download"
+        )
 
         async with self._semaphore:
             try:
-                headers = {
-                    "Authorization": f"Bearer {self.access_token}",
-                }
-                async with httpx.AsyncClient(
-                    headers=headers, timeout=60.0, follow_redirects=True,
-                ) as client:
-                    response = await client.get(url)
+                auth_retried = False
+                force_refresh = False
+                retry_count = 0
 
-                    if response.status_code != 200:
-                        logger.warning(
-                            f"[CONFLUENCE][ATTACHMENT] Download failed: "
-                            f"status={response.status_code}, attachment_id={attachment_id}"
-                        )
-                        return None
+                while True:
+                    access_token = await self.token_provider.get_access_token(
+                        self.cloud_id,
+                        force_refresh=force_refresh,
+                    )
+                    async with httpx.AsyncClient(
+                        headers={"Authorization": f"Bearer {access_token}"},
+                        timeout=60.0,
+                        follow_redirects=True,
+                    ) as client:
+                        response = await client.get(url)
 
-                    content = response.content
+                        if response.status_code == 429:
+                            retry_after = self._get_retry_after(response)
+                            if retry_count >= self._attachment_max_retries:
+                                logger.warning(
+                                    "[CONFLUENCE][ATTACHMENT] Rate limit retry exhausted: "
+                                    "content_id=%s, attachment_id=%s, retry_after=%ss",
+                                    content_id,
+                                    attachment_id,
+                                    retry_after,
+                                )
+                                return None
 
-                    if len(content) > max_size_bytes:
-                        logger.info(
-                            f"[CONFLUENCE][ATTACHMENT] File too large "
-                            f"({len(content)} bytes > {max_size_bytes}), skipping: "
-                            f"attachment_id={attachment_id}"
-                        )
-                        return None
+                            retry_count += 1
+                            logger.warning(
+                                "[CONFLUENCE][ATTACHMENT] Rate limited. Waiting %ss before retry "
+                                "(attempt %s/%s): content_id=%s, attachment_id=%s",
+                                retry_after,
+                                retry_count,
+                                self._attachment_max_retries,
+                                content_id,
+                                attachment_id,
+                            )
+                            await asyncio.sleep(retry_after)
+                            continue
 
-                    await asyncio.sleep(self._rate_limit_delay)
-                    return content
+                        if response.status_code == 401:
+                            if auth_retried:
+                                logger.warning(
+                                    "[CONFLUENCE][ATTACHMENT] Download unauthorized after refresh: "
+                                    "content_id=%s, attachment_id=%s",
+                                    content_id,
+                                    attachment_id,
+                                )
+                                return None
+                            auth_retried = True
+                            force_refresh = True
+                            continue
+
+                        if response.status_code != 200:
+                            logger.warning(
+                                f"[CONFLUENCE][ATTACHMENT] Download failed: "
+                                f"status={response.status_code}, content_id={content_id}, "
+                                f"attachment_id={attachment_id}"
+                            )
+                            return None
+
+                        content = response.content
+
+                        if len(content) > max_size_bytes:
+                            logger.info(
+                                f"[CONFLUENCE][ATTACHMENT] File too large "
+                                f"({len(content)} bytes > {max_size_bytes}), skipping: "
+                                f"attachment_id={attachment_id}"
+                            )
+                            return None
+
+                        await asyncio.sleep(self._rate_limit_delay)
+                        return content
 
             except httpx.TimeoutException:
                 logger.warning(
-                    f"[CONFLUENCE][ATTACHMENT] Download timeout: attachment_id={attachment_id}"
+                    f"[CONFLUENCE][ATTACHMENT] Download timeout: content_id={content_id}, "
+                    f"attachment_id={attachment_id}"
                 )
                 return None
             except Exception as e:
                 logger.warning(
-                    f"[CONFLUENCE][ATTACHMENT] Download error: {e}, attachment_id={attachment_id}"
+                    f"[CONFLUENCE][ATTACHMENT] Download error: {e}, content_id={content_id}, "
+                    f"attachment_id={attachment_id}"
                 )
                 return None
 

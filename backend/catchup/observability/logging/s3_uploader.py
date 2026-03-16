@@ -1,11 +1,13 @@
 import asyncio
 import glob
+import logging
+from logging.handlers import TimedRotatingFileHandler
 import os
 from pathlib import Path
 
 import structlog
 
-from catchup.audit.enums import AuditLevel
+from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import AwsS3AuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.components.aws.s3 import S3Uploader
@@ -21,7 +23,7 @@ def _process_audit_logs() -> None:
         return
 
     log_dir = Path(settings.LOG_AUDIT_FILE_PATH).parent
-    rolled_files = glob.glob(str(log_dir / "audit.jsonl.*"))
+    rolled_files = glob.glob(str(log_dir / "audit.*.jsonl"))
 
     if not rolled_files:
         return
@@ -57,7 +59,8 @@ def _process_audit_logs() -> None:
             
             emit_audit_event(
                 event_type=EventType.SYSTEM,
-                event_action=AwsS3EventAction.UPLOAD_FAILED,
+                event_action=AwsS3EventAction.AUDIT_FILE_UPLOADED,
+                event_status=AuditEventStatus.FAIL,
                 level=AuditLevel.CRITICAL,
                 metadata=AwsS3AuditMetadata(
                     file_name=file_name,
@@ -66,7 +69,37 @@ def _process_audit_logs() -> None:
                 immediate=True,
                 error=str(e)
             )
-            
+
+
+def _force_rotate_audit_log():
+    """
+    서버 종료 시점에 롤링되지 않은 파일을 강제로 roll over하여
+    감사 로그 유실을 방지한다.
+    """
+    
+    logger = logging.getLogger("catchup.audit")
+    for handler in logger.handlers:
+        if isinstance(handler, TimedRotatingFileHandler):
+            try:
+                handler.doRollover()
+                handler.flush()
+            except Exception:
+                logging.exception("Failed to force rotate audit log during shutdown")
+
+
+async def graceful_shutdown():
+    """
+    서버 종료 과정에서 롤링을 강제하여 누락되는 감사 로그가 없도록 보장하고,
+    모든 파일을 S3에 업로드한다.
+    """
+    # 롤링 강제
+    await asyncio.to_thread(_force_rotate_audit_log)
+    
+    # S3 업로드
+    await asyncio.to_thread(_process_audit_logs)
+
+
+
         
 async def audit_log_uploader_task() -> None:
     """백그라운드에서 주기적으로 _process_audit_log를 실행하는 무한 루프"""

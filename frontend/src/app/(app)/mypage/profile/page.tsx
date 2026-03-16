@@ -47,17 +47,13 @@ const ProfilePage = () => {
         <div className="flex items-end gap-4">
           {profile?.picture ? (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={profile.picture}
-              alt={profile.name}
-              className="h-27.5 w-27.5 rounded-2xl object-cover"
-            />
+            <img src={profile.picture} alt={profile.name} className="h-27.5 w-27.5 rounded-2xl object-cover" />
           ) : (
             <Profile className="h-27.5 w-27.5 rounded-2xl" />
           )}
           <div className="flex flex-col gap-1">
             <span className="text-heading-xlarge text-content-normal">{profile?.name ?? user?.name ?? ''}</span>
-            <div className="flex gap-1 text-content-alternative">
+            <div className="text-content-alternative flex gap-1">
               <span className="text-body-small">{profile?.department ?? ''}</span>
             </div>
           </div>
@@ -105,7 +101,9 @@ const ProfilePage = () => {
             <div className="flex items-center justify-between gap-5 py-3">
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <span className="text-heading-small text-content-normal">계정 삭제하기</span>
-                <span className="text-label-small text-content-alternative">모든 데이터가 영구 삭제되며 복구할 수 없습니다.</span>
+                <span className="text-label-small text-content-alternative">
+                  모든 데이터가 영구 삭제되며 복구할 수 없습니다.
+                </span>
               </div>
               <button
                 type="button"
@@ -115,7 +113,7 @@ const ProfilePage = () => {
                   'text-body-small h-9 rounded-full border px-3 py-1.5',
                   isAdmin
                     ? 'border-edge-neutral bg-fill-strong text-content-assistive cursor-not-allowed'
-                    : 'hover:bg-red-5 active:bg-red-10 cursor-pointer border-red-50 bg-fill-normal text-red-50',
+                    : 'hover:bg-red-5 active:bg-red-10 bg-fill-normal cursor-pointer border-red-50 text-red-50',
                 )}
               >
                 삭제
