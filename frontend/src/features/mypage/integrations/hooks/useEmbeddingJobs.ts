@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
@@ -12,9 +12,13 @@ import type {
 } from '../types/sync';
 import { isConfluenceResource, isJiraResource } from '../utils/atlassianScopeFilter';
 
+const SESSION_KEY = 'catchup:activeEmbeddingJobs';
+
 interface ActiveJob {
   jobId: string;
   connector: SyncConnector;
+  /** syncStatus에서 복원 시 초기 상태 (완료 job의 spurious 전이 방지) */
+  initialStatus?: SyncJobStatus;
 }
 
 /** snapshot 쿼리에서 파생된 job별 통합 상태 */
@@ -50,12 +54,19 @@ const isActiveStatus = (status: SyncStatusResponse | undefined): status is SyncS
  * 임베딩 job 상태 관리 훅 (Polling 기반).
  *
  * - 페이지 진입 시 GET /sync/status로 활성 job 발견 (1회)
- * - 모든 활성 job → GET /sync/jobs/{jobId} polling (3초 간격)
+ * - 모든 활성 job → GET /sync/jobs/{jobId} polling (10초 간격)
  * - 완료/실패 시 polling 자동 중단
  * - 버튼 상태 + 진행 현황 데이터 도출
  */
 export const useEmbeddingJobs = () => {
-  const [manualJobs, setManualJobs] = useState<ActiveJob[]>([]);
+  const [manualJobs, setManualJobs] = useState<ActiveJob[]>(() => {
+    try {
+      const stored = sessionStorage.getItem(SESSION_KEY);
+      return stored ? (JSON.parse(stored) as ActiveJob[]) : [];
+    } catch {
+      return [];
+    }
+  });
 
   // ─── Step 1: Scope 획득 (3개 API) ───
 
@@ -97,7 +108,7 @@ export const useEmbeddingJobs = () => {
     const jobs: ActiveJob[] = [];
     statusDataList.forEach((data, index) => {
       if (isActiveStatus(data)) {
-        jobs.push({ jobId: data.job_id, connector: CONNECTOR_ORDER[index] });
+        jobs.push({ jobId: data.job_id, connector: CONNECTOR_ORDER[index], initialStatus: data.status });
       }
     });
     return jobs;
@@ -117,7 +128,7 @@ export const useEmbeddingJobs = () => {
       refetchInterval: (query: { state: { data?: { status: SyncJobStatus } } }) => {
         const status = query.state.data?.status;
         if (status === 'success' || status === 'failed') return false;
-        return 3000;
+        return 10000; // 10초로 변경 예정
       },
       staleTime: 0,
     })),
@@ -145,12 +156,23 @@ export const useEmbeddingJobs = () => {
     return states;
   }, [activeJobs, snapshotQueries]);
 
+  // ─── 초기 로딩 판별 ───
+  // scope 획득 + syncStatus 조회가 끝나야 activeJobs가 확정됨
+  const isScopeLoading = githubQuery.isLoading || slackQuery.isLoading || atlassianQuery.isLoading;
+  const isStatusLoading = statusQueries.some((q, i) => !!scopeMap[CONNECTOR_ORDER[i]] && q.isLoading);
+  // sessionStorage에서 복원된 job이 있으면 이미 activeJobs가 있으므로 초기 로딩 아님
+  const isInitialLoading = manualJobs.length === 0 && (isScopeLoading || isStatusLoading);
+
   // ─── Step 4: 파생 상태 ───
 
   const handleJobStart = useCallback((jobId: string, connector: SyncConnector) => {
     setManualJobs((prev) => {
       const filtered = prev.filter((j) => j.connector !== connector);
-      return [...filtered, { jobId, connector }];
+      const updated = [...filtered, { jobId, connector }];
+      try {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+      } catch {}
+      return updated;
     });
   }, []);
 
@@ -163,14 +185,16 @@ export const useEmbeddingJobs = () => {
     };
     for (const job of activeJobs) {
       const jobState = jobStates[job.jobId];
-      if (!jobState && manualJobs.some((m) => m.jobId === job.jobId)) {
-        states[job.connector] = 'in_progress';
+      if (!jobState) {
+        // manual job (sessionStorage 포함): in_progress로 간주
+        // restored job: syncStatus의 실제 상태 사용 (completed job이 in_progress로 깜빡이는 것 방지)
+        states[job.connector] = toButtonState(job.initialStatus ?? 'in_progress');
       } else {
-        states[job.connector] = toButtonState(jobState?.status);
+        states[job.connector] = toButtonState(jobState.status);
       }
     }
     return states;
-  }, [activeJobs, jobStates, manualJobs]);
+  }, [activeJobs, jobStates]);
 
   const progresses = useMemo((): ConnectorProgress[] => {
     return activeJobs
@@ -190,7 +214,32 @@ export const useEmbeddingJobs = () => {
       .sort((a, b) => CONNECTOR_ORDER.indexOf(a.connector) - CONNECTOR_ORDER.indexOf(b.connector));
   }, [activeJobs, jobStates]);
 
+  // ─── 완료/실패 job → sessionStorage 정리 ───
+  useEffect(() => {
+    if (manualJobs.length === 0) return;
+    const completedIds = new Set(
+      Object.entries(jobStates)
+        .filter(([, s]) => s.status === 'success' || s.status === 'failed')
+        .map(([id]) => id),
+    );
+    if (completedIds.size === 0) return;
+    if (!manualJobs.some((j) => completedIds.has(j.jobId))) return;
+
+    setManualJobs((prev) => {
+      const updated = prev.filter((j) => !completedIds.has(j.jobId));
+      try {
+        if (updated.length > 0) {
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+        } else {
+          sessionStorage.removeItem(SESSION_KEY);
+        }
+      } catch {}
+      return updated;
+    });
+  }, [jobStates, manualJobs]);
+
   return {
+    isInitialLoading,
     buttonStates,
     progresses,
     handleJobStart,
