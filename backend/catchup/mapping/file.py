@@ -1,6 +1,6 @@
 from typing import NamedTuple
 import pandas as pd
-import logging
+import structlog
 from io import BytesIO
 
 from sqlalchemy.orm import Session
@@ -9,7 +9,7 @@ from catchup.db.models import SourceType
 from catchup.db.user_source_mapping import update_tool_user_email
 from catchup.mapping.resolver import sync_users_to_pre_mapping_buffer 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RequiredColumns(NamedTuple):
@@ -84,7 +84,12 @@ def process_mapping_file_sync(
                     stats["updated"] += 1
                 else:
                     stats["skipped"] += 1
-                    logger.warning("update_tool_user_email_failed: user not found in tool users table. - Skip")
+                    logger.warning(
+                        "update_tool_user_email",
+                        status="failed",
+                        context="csv_file_uploaded",
+                        vendor_type=vendor_type
+                    )
 
         db.commit()
         
@@ -111,7 +116,11 @@ def process_mapping_file_sync(
             final_stats["updated_mappings"] += mapping_result["mapping_updated"]
             
         db.commit()
-        logger.info(f"File sync completed for {vendor_key}: {final_stats}")        
+        logger.info(
+            "file_based_user_mapping_completed",
+            vendor_key=vendor_key,
+            final_stats=final_stats
+        )        
         return final_stats
     
     except Exception as e:
