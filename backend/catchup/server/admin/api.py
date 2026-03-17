@@ -1,7 +1,6 @@
 from enum import StrEnum
 import logging
 from typing import Optional
-from fastapi.concurrency import run_in_threadpool
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 from sqlalchemy import and_, delete, func, or_, select, text
@@ -12,6 +11,7 @@ from catchup.auth.dependencies import require_admin_user
 from catchup.chat.schemas import UserQueryWithSaveStatusResponse
 from catchup.db.chat_room import get_all_queries_for_admin
 from catchup.db.dependencies import get_db
+from catchup.db.engine import SessionLocal
 from catchup.db.models import (
     AtlassianOAuthToken,
     ConfluenceSpace,
@@ -876,21 +876,20 @@ def delete_user(
     description="관리자용 사용자 Admin 승격",
     response_model=PromoteUserResponse,
 )
-async def promote_user_to_admin(
+def promote_user_to_admin(
     user_id: int,
-    db: Session = Depends(get_db),
     _admin_user: User = Depends(require_admin_user),
 ):
-    user = await run_in_threadpool(
-        promote_user_to_admin_service,
-        db,
-        user_id=user_id,
-    )
+    with SessionLocal() as db:
+        user = promote_user_to_admin_service(
+            db,
+            user_id=user_id,
+        )
 
-    return PromoteUserResponse(
-        user_id = user.id,
-        role = user.role
-    )
+        return PromoteUserResponse(
+            user_id=user.id,
+            role=user.role,
+        )
 
 
 def _get_syncable_jira_projects(db: Session) -> JiraSyncableResponse:
