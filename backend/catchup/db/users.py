@@ -2,8 +2,37 @@ from typing import Optional
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
-from catchup.db.models import OAuthUser, User, UserWorkspace, Workspace
+from catchup.db.models import OAuthUser, User, UserRole, UserWorkspace, Workspace
 
+def get_user_by_id(
+    db: Session,
+    user_id: int
+) -> User | None:
+    return db.scalar(
+        select(User).where(User.id == user_id)
+    )
+
+def get_user_by_id_for_update(
+    db: Session,
+    user_id: int,
+) -> User | None:
+    stmt = (
+        select(User)
+        .where(User.id == user_id)
+        .with_for_update()
+    )
+    return db.scalar(stmt)
+
+def update_user_role(
+    db: Session,
+    *,
+    user: User,
+    role: UserRole,
+) -> User:
+    user.role = role
+    db.flush()
+
+    return user
 
 def get_user_by_email(
     db: Session,

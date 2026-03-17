@@ -139,7 +139,7 @@ class DeleteUserResponse(BaseModel):
 
 
 class PromoteUserResponse(BaseModel):
-    userId: int
+    user_id: int
     role: UserRole
 
 

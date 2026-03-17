@@ -12,6 +12,7 @@ class EventType(StrEnum):
     CHAT = "CHAT"
     AUDIT = "AUDIT"
     SYSTEM = "SYSTEM"
+    USER = "USER"
 
 
 class AuthEventAction(StrEnum):
@@ -82,3 +83,6 @@ class SyncIngestionEventAction(StrEnum):
     SUMMARIZE = "summarize"
     EMBED = "embed"
     DOCUMENT_PERSISTED = "document_persisted"
+
+class UserEventAction(StrEnum):
+    USER_PROMOTED = "user_promoted"
