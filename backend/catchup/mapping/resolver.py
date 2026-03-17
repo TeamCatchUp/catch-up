@@ -1,4 +1,4 @@
-import logging
+import structlog
 from sqlalchemy.orm import Session
 
 from catchup.db.models import PreMappingBuffer, SourceType
@@ -11,7 +11,8 @@ from catchup.db.users import get_all_oauth_users, get_user_by_sub
 from catchup.mapping.schemas import OAuthUserSchema
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
+
 
 def sync_users_to_pre_mapping_buffer(
     db: Session,
@@ -57,10 +58,7 @@ def sync_users_to_pre_mapping_buffer(
         else:
             sync_results["mapping_updated"] += 1
         
-        sync_results["success"] += 1
-    
-    logger.info(f"Sync Result: {sync_results}")
-    
+        sync_results["success"] += 1    
     return sync_results
 
 
