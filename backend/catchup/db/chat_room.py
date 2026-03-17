@@ -80,14 +80,16 @@ def add_message(
     room_id: int,
     role: str,
     content: str,
-    sources: Optional[list[BaseSource]]
+    sources: list[BaseSource] | None = None,
+    trace_id: str | None = None 
 ) -> ChatHistory:
     """채팅 메시지 저장"""
     message = ChatHistory(
         chat_room_id=room_id,
         sender_type=SenderType.HUMAN if role == "user" else SenderType.ASSISTANT,
         content=content,
-        sources=sources or []
+        sources=sources or [],
+        trace_id=trace_id
     )
     db.add(message)
     

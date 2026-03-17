@@ -1,25 +1,18 @@
 import asyncio
 import time
-from typing import Any, AsyncGenerator, Optional
 import uuid
+from typing import Any, AsyncGenerator, Optional
 
+import structlog
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.messages import BaseMessage, HumanMessage
-from langchain_core.tracers.stdout import elapsed
 from langgraph.pregel.types import StateSnapshot
 from sqlalchemy.orm import Session
-import structlog
 
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import ChatAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.chat.chat_room import generate_chat_room_title
-from catchup.chat.utils import restore_conversation_context
-from catchup.configs.config import settings
-from catchup.db.chat_room import add_message, create_chat_room, get_chat_room, soft_delete_last_conversation_turn
-from catchup.db.models import ChatRoom, SourceType
-from catchup.events.enums import ChatEventAction, EventType
-from catchup.observability.langfuse import observe
 from catchup.chat.schemas import (
     NODE_STATUS_MAP,
     ChatResponse,
@@ -28,10 +21,21 @@ from catchup.chat.schemas import (
     ChatStreamingTokenResponse,
     StreamEvent,
 )
+from catchup.chat.utils import restore_conversation_context
+from catchup.configs.config import settings
+from catchup.db.chat_room import (
+    add_message,
+    create_chat_room,
+    get_chat_room,
+    soft_delete_last_conversation_turn,
+)
+from catchup.db.models import ChatRoom, SourceType
+from catchup.events.enums import ChatEventAction, EventType
+from catchup.observability.langfuse import observe
+from catchup.rag.checkpoint import get_langgraph_checkpointer
 from catchup.rag.graph import get_compiled_graph
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.sources import BaseSource
-from catchup.rag.checkpoint import get_langgraph_checkpointer
 
 logger = structlog.get_logger()
 
@@ -81,9 +85,10 @@ class ChatService:
             app = await self._get_app()
 
             # Checkpointer 설정
-            config = self._setup_config(session_id)
+            base_config, invoke_config, trace_id = self._setup_config(session_id)
             
-            lg_current_state = await app.aget_state(config)
+            # 단순 state 조회는 langfuse에 빈 trace를 남길 필요가 없으므로 base_config 주입
+            lg_current_state = await app.aget_state(base_config)
             
             input_messages = await run_in_threadpool(
                 self._resolve_input_messages,
@@ -104,10 +109,11 @@ class ChatService:
             stream_state = {
                 "buffer": "",
                 "is_citation_reached": False,
-                "has_streamed": False
+                "has_streamed": False,
+                "langfuse_trace_id": trace_id
             }
 
-            async for event in app.astream_events(inputs, config, version="v2"):
+            async for event in app.astream_events(inputs, invoke_config, version="v2"):
                 async for parsed_event in self._parse_stream_event(event, session_id, room_id, stream_state, db):
                     yield parsed_event
 
@@ -359,13 +365,16 @@ class ChatService:
             for source in sources
         ]
         
+        trace_id = stream_state.get("langfuse_trace_id")
+        
         if final_content:
             await self._save_message_content(
                 db,
                 room_id,
                 "assistant",
                 final_content,
-                final_sources_data
+                final_sources_data,
+                trace_id
             )
             logger.info(
                 "final_contents_saved", 
@@ -455,7 +464,8 @@ class ChatService:
         room_id: int,
         role: str,
         content: str,
-        sources: Optional[list[dict[str, Any]]] = None
+        sources: Optional[list[dict[str, Any]]] = None,
+        trace_id: str | None = None
     ):
         
         def _save_sync():
@@ -464,7 +474,8 @@ class ChatService:
                 room_id=room_id,
                 role=role,
                 content=content,
-                sources=sources
+                sources=sources,
+                trace_id=trace_id
             )
             db.commit()
             
@@ -504,12 +515,27 @@ class ChatService:
         
         return deleted_query
     
-    def _setup_config(self, session_id: uuid.UUID):
-        default_config = {"configurable": {"thread_id": session_id}}
+    def _setup_config(
+        self, 
+        session_id: uuid.UUID
+    ) -> tuple[dict, dict, Any]:
+        base_config = {"configurable": {"thread_id": session_id}} # For Langgraph checkpointer only
+        invoke_config = {**base_config}  # Langfuse가 활성화된 경우 langfuse callback handler를 포함하기 위함.
+        handler = None
+        trace_id = None
+        
         if settings.ENABLE_LANGFUSE:
-            from catchup.observability.langfuse import langfuse_handler
-            default_config["callbacks"] = [langfuse_handler]
-        return default_config
+            from langfuse import Langfuse
+            from langfuse.langchain import CallbackHandler
+            from catchup.observability.langfuse import get_langfuse_client
+            
+            langfuse = get_langfuse_client()
+            if langfuse:
+                trace_id = Langfuse.create_trace_id()
+                handler = CallbackHandler(trace_context={"trace_id": trace_id})
+                invoke_config["callbacks"] = [handler]
+            
+        return base_config, invoke_config, trace_id
     
     async def chat(
             self,
