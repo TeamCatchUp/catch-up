@@ -52,7 +52,11 @@ class SyncJobSnapshotResponse(BaseModel):
     completed_at: str | None = None
 
     total_targets: int = 0
+    queued_targets: int = 0
+    processing_targets: int = 0
     completed_targets: int = 0
+    failed_targets: int = 0
+    requeued_targets: int = 0
     targets: list[SyncJobTargetSnapshotItem] = Field(default_factory=list)
 
     last_error: str | None = None

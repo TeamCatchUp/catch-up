@@ -74,3 +74,7 @@ class ChatAuditMetadata(BaseAuditMetadata):
 class AwsS3AuditMetadata(BaseAuditMetadata):
     file_name: str
     s3_key: str
+
+
+class AdminOAuthAuditMetadata(BaseAuditMetadata):
+    pass

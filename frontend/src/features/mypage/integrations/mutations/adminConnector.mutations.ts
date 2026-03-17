@@ -12,4 +12,11 @@ export const adminConnectorMutations = {
       mutationKey: ['admin', 'sync', 'full'] as const,
       mutationFn: (body: FullSyncRequest) => api.post<SyncAcceptedResponse>(API.sync.full, body),
     }) satisfies UseMutationOptions<AxiosResponse<SyncAcceptedResponse>, Error, FullSyncRequest>,
+
+  syncOAuthUsers: () =>
+    ({
+      mutationKey: ['admin', 'oauth-users', 'sync'] as const,
+      mutationFn: () => api.post<{ message: string }>(API.admin.users.syncOAuthUsers),
+      meta: { invalidates: [['admin', 'users', 'syncStatus']] },
+    }) satisfies UseMutationOptions<AxiosResponse<{ message: string }>, Error, void>,
 };

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Sequence
 
-from sqlalchemy import exists, func, literal, select, update
+from sqlalchemy import case, exists, func, literal, select, update
 from sqlalchemy.orm import Session
 
 from catchup.db.models import (
@@ -43,6 +43,19 @@ class SyncEventCreateInput:
 class SyncEventPublishResultInput:
     event_id: str
     stream_message_id: str
+
+
+@dataclass(slots=True, frozen=True)
+class SyncEventSummary:
+    total_targets: int
+    queued_targets: int
+    processing_targets: int
+    completed_targets: int
+    failed_targets: int
+    requeued_targets: int
+    embedding_tokens_used: int
+    summary_tokens_used: int
+    last_error: str | None = None
 
 
 _ALLOWED_JOB_TRANSITIONS: dict[SyncJobStatus, set[SyncJobStatus]] = {
@@ -490,7 +503,7 @@ def list_events_by_job(
     *,
     job_id: str,
     statuses: Sequence[SyncEventStatus] | None = None,
-    limit: int = 500,
+    limit: int | None = 500,
     offset: int = 0,
 ) -> list[SyncEvent]:
     stmt = select(SyncEvent).where(SyncEvent.job_id == job_id)
@@ -498,8 +511,81 @@ def list_events_by_job(
     if statuses:
         stmt = stmt.where(SyncEvent.status.in_(list(statuses)))
 
-    stmt = stmt.order_by(SyncEvent.requested_at.asc()).offset(offset).limit(limit)
+    stmt = stmt.order_by(SyncEvent.requested_at.asc()).offset(offset)
+    if limit is not None:
+        stmt = stmt.limit(limit)
     return list(db.execute(stmt).scalars().all())
+
+
+def count_events_by_job(db: Session, *, job_id: str) -> int:
+    stmt = select(func.count(SyncEvent.event_id)).where(SyncEvent.job_id == job_id)
+    return int(db.execute(stmt).scalar_one())
+
+
+def summarize_events_by_job(db: Session, *, job_id: str) -> SyncEventSummary:
+    stmt = select(
+        func.count(SyncEvent.event_id),
+        func.coalesce(
+            func.sum(
+                case(
+                    (
+                        SyncEvent.status.in_(
+                            [SyncEventStatus.PENDING, SyncEventStatus.RETRYING]
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ),
+            0,
+        ),
+        func.coalesce(
+            func.sum(
+                case((SyncEvent.status == SyncEventStatus.IN_PROGRESS, 1), else_=0)
+            ),
+            0,
+        ),
+        func.coalesce(
+            func.sum(case((SyncEvent.status == SyncEventStatus.SUCCESS, 1), else_=0)),
+            0,
+        ),
+        func.coalesce(
+            func.sum(case((SyncEvent.status == SyncEventStatus.FAILED, 1), else_=0)),
+            0,
+        ),
+        func.coalesce(func.sum(SyncEvent.attempt), 0),
+        func.coalesce(func.sum(SyncEvent.embedding_tokens_used), 0),
+        func.coalesce(func.sum(SyncEvent.summary_tokens_used), 0),
+    ).where(SyncEvent.job_id == job_id)
+    row = db.execute(stmt).one()
+
+    error_stmt = (
+        select(SyncEvent.publish_error)
+        .where(
+            SyncEvent.job_id == job_id,
+            SyncEvent.status == SyncEventStatus.FAILED,
+            SyncEvent.publish_error.is_not(None),
+        )
+        .order_by(
+            SyncEvent.failed_at.desc(),
+            SyncEvent.updated_at.desc(),
+            SyncEvent.requested_at.desc(),
+        )
+        .limit(1)
+    )
+    last_error = db.execute(error_stmt).scalar_one_or_none()
+
+    return SyncEventSummary(
+        total_targets=int(row[0]),
+        queued_targets=int(row[1]),
+        processing_targets=int(row[2]),
+        completed_targets=int(row[3]),
+        failed_targets=int(row[4]),
+        requeued_targets=int(row[5]),
+        embedding_tokens_used=int(row[6]),
+        summary_tokens_used=int(row[7]),
+        last_error=str(last_error) if last_error is not None else None,
+    )
 
 
 def has_successful_full_sync_event(

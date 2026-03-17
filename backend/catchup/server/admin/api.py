@@ -6,6 +6,9 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 from sqlalchemy import and_, delete, func, or_, select, text
 from sqlalchemy.orm import Session, aliased
 
+from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.metadata import AdminOAuthAuditMetadata
+from catchup.audit.service import emit_audit_event
 from catchup.auth.dependencies import require_admin_user
 from catchup.chat.schemas import UserQueryWithSaveStatusResponse
 from catchup.db.chat_room import get_all_queries_for_admin
@@ -36,6 +39,8 @@ from catchup.db.models import (
 )
 from catchup.db.user_source_mapping import SOURCE_MAP
 from catchup.db.users import get_all_oauth_users_for_admin, get_all_users_for_admin
+from catchup.events.enums import AdminOAuthAction, EventType
+from catchup.onboarding.oauth import sync_initial_keycloak_users
 from catchup.server.auth.schemas import (
     ConfluenceSyncableResponse,
     ConfluenceConnectorStatus,
@@ -1100,7 +1105,7 @@ def get_admin_user_list(
     response_model=BasePagination[OAuthUserResponse],
     description="[어드민] 전체 OAuth 유저 목록 조회"
 )
-def get_admin_user_list(
+def get_admin_oauth_user_list(
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -1120,6 +1125,48 @@ def get_admin_user_list(
         "size": size,
         "items": items,
     }
+
+@router.post(
+    path='/oauth-users',
+    description="[어드민] OAuth 유저 동기화"
+)
+async def sync_oauth_user_list(
+    _admin: User = Depends(require_admin_user)
+):
+    emit_audit_event(
+        event_type=EventType.OAUTH,
+        event_action=AdminOAuthAction.SYNC_USERS,
+        event_status=AuditEventStatus.ATTEMPT,
+        level=AuditLevel.INFO
+    )
+    
+    try:
+        await sync_initial_keycloak_users()
+
+    except Exception as e:
+        emit_audit_event(
+            event_type=EventType.OAUTH,
+            event_action=AdminOAuthAction.SYNC_USERS,
+            event_status=AuditEventStatus.FAIL,
+            level=AuditLevel.ERROR,
+            metadata=AdminOAuthAuditMetadata(
+                context=str(e)
+            )
+        )
+        raise HTTPException(
+            status_code=500, 
+            detail="OAuth 유저 동기화 실패"
+        )
+
+    emit_audit_event(
+        event_type=EventType.OAUTH,
+        event_action=AdminOAuthAction.SYNC_USERS,
+        event_status=AuditEventStatus.SUCCESS,
+        level=AuditLevel.INFO
+    )
+    
+    return {"message": "success"}
+
 
 
 @router.get(
@@ -1249,3 +1296,5 @@ def bulk_update_pre_mappings(
 
     db.commit()
     return {"message": "success", "processed_count": len(request.items)}
+
+

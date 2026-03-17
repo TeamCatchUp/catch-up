@@ -34,7 +34,7 @@ from catchup.db.models import (
     SyncJobStatus,
     SyncType,
 )
-from catchup.db.sync import get_job, list_events_by_job
+from catchup.db.sync import SyncEventSummary, get_job, list_events_by_job, summarize_events_by_job
 from catchup.sync.common.exceptions import SyncInternalError
 from catchup.sync.common.schemas import SyncTargetType
 
@@ -146,7 +146,11 @@ class SyncJobSnapshotResult:
     started_at: str | None
     completed_at: str | None
     total_targets: int
+    queued_targets: int
+    processing_targets: int
     completed_targets: int
+    failed_targets: int
+    requeued_targets: int
     targets: list[SyncJobTargetSnapshotResult] = field(default_factory=list)
     metrics: dict[str, int] = field(default_factory=dict)
     last_error: str | None = None
@@ -179,6 +183,18 @@ class SyncScopeStatusResult:
     requested_at: str
     started_at: str | None
     completed_at: str | None
+    total_targets: int
+    queued_targets: int
+    processing_targets: int
+    completed_targets: int
+    failed_targets: int
+    requeued_targets: int
+    metrics: dict[str, int] = field(default_factory=dict)
+    last_error: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class SyncJobSummaryResult:
     total_targets: int
     queued_targets: int
     processing_targets: int
@@ -222,6 +238,59 @@ class SyncQueryService:
             "requeued_targets": sum(int(event.attempt) for event in events),
         }
 
+    def _build_metrics(self, events) -> dict[str, int]:
+        return {
+            "embedding_tokens_used": sum(
+                int(event.embedding_tokens_used or 0) for event in events
+            ),
+            "summary_tokens_used": sum(
+                int(event.summary_tokens_used or 0) for event in events
+            ),
+        }
+
+    def _build_last_error(self, events) -> str | None:
+        candidates = [
+            event
+            for event in events
+            if event.status == SyncEventStatus.FAILED and event.publish_error
+        ]
+        if not candidates:
+            return None
+
+        candidates.sort(
+            key=lambda event: event.failed_at or event.updated_at or event.requested_at,
+            reverse=True,
+        )
+        return str(candidates[0].publish_error)
+
+    def _build_job_summary(self, events) -> SyncJobSummaryResult:
+        counts = self._summarize_events(events)
+        return SyncJobSummaryResult(
+            total_targets=counts["total_targets"],
+            queued_targets=counts["queued_targets"],
+            processing_targets=counts["processing_targets"],
+            completed_targets=counts["completed_targets"],
+            failed_targets=counts["failed_targets"],
+            requeued_targets=counts["requeued_targets"],
+            metrics=self._build_metrics(events),
+            last_error=self._build_last_error(events),
+        )
+
+    def _to_job_summary_result(self, summary: SyncEventSummary) -> SyncJobSummaryResult:
+        return SyncJobSummaryResult(
+            total_targets=summary.total_targets,
+            queued_targets=summary.queued_targets,
+            processing_targets=summary.processing_targets,
+            completed_targets=summary.completed_targets,
+            failed_targets=summary.failed_targets,
+            requeued_targets=summary.requeued_targets,
+            metrics={
+                "embedding_tokens_used": summary.embedding_tokens_used,
+                "summary_tokens_used": summary.summary_tokens_used,
+            },
+            last_error=summary.last_error,
+        )
+
     def _build_job_targets(
         self,
         events,
@@ -251,29 +320,28 @@ class SyncQueryService:
             if job is None:
                 return None
 
-            events = list_events_by_job(db, job_id=job_id, limit=100000)
-            counts = self._summarize_events(events)
+            events = list_events_by_job(db, job_id=job_id, limit=None)
+            summary = self._build_job_summary(events)
             targets = self._build_job_targets(events)
 
             return SyncJobSnapshotResult(
                 job_id=job.job_id,
                 connector=job.connector,
-                sync_type=str(job.sync_type),
+                sync_type=job.sync_type,
                 scope_id=str(job.scope_id),
                 status=job.status,
                 created_at=self._to_iso(job.created_at) or "",
                 started_at=self._to_iso(job.started_at),
                 completed_at=self._to_iso(job.succeeded_at or job.failed_at),
-                total_targets=counts["total_targets"],
-                completed_targets=counts["completed_targets"],
+                total_targets=summary.total_targets,
+                queued_targets=summary.queued_targets,
+                processing_targets=summary.processing_targets,
+                completed_targets=summary.completed_targets,
+                failed_targets=summary.failed_targets,
+                requeued_targets=summary.requeued_targets,
                 targets=targets,
-                metrics={
-                    "synced_messages": 0,
-                    "flushed_events": 0,
-                    "dropped_targets": 0,
-                    "dropped_events": 0,
-                },
-                last_error=None,
+                metrics=summary.metrics,
+                last_error=summary.last_error,
             )
 
     def get_scope_latest_full_status(
@@ -297,31 +365,27 @@ class SyncQueryService:
             if job is None:
                 return None
 
-            events = list_events_by_job(db, job_id=job.job_id, limit=100000)
-            counts = self._summarize_events(events)
+            summary = self._to_job_summary_result(
+                summarize_events_by_job(db, job_id=job.job_id)
+            )
 
             return SyncScopeStatusResult(
                 job_id=job.job_id,
                 connector=job.connector,
-                sync_type=str(job.sync_type),
+                sync_type=job.sync_type,
                 scope_id=str(job.scope_id),
                 status=job.status,
                 requested_at=self._to_iso(job.requested_at) or "",
                 started_at=self._to_iso(job.started_at),
                 completed_at=self._to_iso(job.succeeded_at or job.failed_at),
-                total_targets=counts["total_targets"],
-                queued_targets=counts["queued_targets"],
-                processing_targets=counts["processing_targets"],
-                completed_targets=counts["completed_targets"],
-                failed_targets=counts["failed_targets"],
-                requeued_targets=counts["requeued_targets"],
-                metrics={
-                    "synced_messages": 0,
-                    "flushed_events": 0,
-                    "dropped_targets": 0,
-                    "dropped_events": 0,
-                },
-                last_error=None,
+                total_targets=summary.total_targets,
+                queued_targets=summary.queued_targets,
+                processing_targets=summary.processing_targets,
+                completed_targets=summary.completed_targets,
+                failed_targets=summary.failed_targets,
+                requeued_targets=summary.requeued_targets,
+                metrics=summary.metrics,
+                last_error=summary.last_error,
             )
 
     def _build_targets_result(

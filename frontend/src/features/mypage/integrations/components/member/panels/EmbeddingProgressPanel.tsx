@@ -34,6 +34,7 @@ const RESOURCE_ICONS: Record<SyncConnector, React.ComponentType<React.SVGProps<S
 interface EmbeddingProgressPanelProps {
   progresses: ConnectorProgress[];
   buttonStates: Record<SyncConnector, EmbeddingButtonState>;
+  isInitialLoading?: boolean;
 }
 
 type ConnectorEmbeddingStatus = 'in_progress' | 'completed' | 'failed' | 'idle';
@@ -94,7 +95,7 @@ const ItemStatusIcon = ({ status }: { status: SyncTargetStatus }) => {
   }
 };
 
-const EmbeddingProgressPanel = ({ progresses, buttonStates }: EmbeddingProgressPanelProps) => {
+const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading }: EmbeddingProgressPanelProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedConnector, setSelectedConnector] = useState<SyncConnector>(
     CONNECTOR_ORDER.find((c) => progresses.some((p) => p.connector === c)) ?? CONNECTOR_ORDER[0],
@@ -212,7 +213,13 @@ const EmbeddingProgressPanel = ({ progresses, buttonStates }: EmbeddingProgressP
               })}
               {(!selectedProgress || selectedProgress.items.length === 0) && (
                 <div className="flex flex-1 items-center justify-center px-4">
-                  <span className="text-body-small text-content-assistive">진행 중인 항목이 없습니다.</span>
+                  <span className="text-body-small text-content-assistive">
+                    {isInitialLoading
+                      ? '임베딩 상태를 불러오는 중...'
+                      : buttonStates[selectedConnector] === 'in_progress'
+                        ? '임베딩 정보를 불러오는 중...'
+                        : '진행 중인 항목이 없습니다.'}
+                  </span>
                 </div>
               )}
             </div>
