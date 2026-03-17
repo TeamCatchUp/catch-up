@@ -74,13 +74,13 @@ def promote_user_to_admin(
             event_status=AuditEventStatus.FAIL,
             user_id=user.id,
             reason="user_already_admin",
-            before_role=user.role.value,
-            status=user.status.value,
+            before_role=str(user.role),
+            status=str(user.status),
         )
         raise UserAlreadyAdminError(
             detail={
                 "user_id": user.id,
-                "current_role": user.role.value,
+                "current_role": str(user.role),
             }
         )
 
@@ -89,13 +89,13 @@ def promote_user_to_admin(
             event_status=AuditEventStatus.FAIL,
             user_id=user.id,
             reason="cannot_promote_deleted_user",
-            before_role=user.role.value,
-            status=user.status.value,
+            before_role=str(user.role),
+            status=str(user.status),
         )
         raise CannotPromoteDeletedUserError(
             detail={
                 "user_id": user.id,
-                "current_status": user.status.value,
+                "current_status": str(user.status),
             }
         )
 
@@ -104,17 +104,17 @@ def promote_user_to_admin(
             event_status=AuditEventStatus.FAIL,
             user_id=user.id,
             reason="cannot_promote_inactive_user",
-            before_role=user.role.value,
-            status=user.status.value,
+            before_role=str(user.role),
+            status=str(user.status),
         )
         raise CannotPromoteInactiveUserError(
             detail={
                 "user_id": user.id,
-                "current_status": user.status.value,
+                "current_status": str(user.status),
             }
         )
 
-    before_role = user.role.value
+    before_role = str(user.role)
 
     user = update_user_role(
         db=db,
@@ -128,15 +128,15 @@ def promote_user_to_admin(
         event_status=AuditEventStatus.SUCCESS,
         user_id=user.id,
         before_role=before_role,
-        after_role=user.role.value,
-        status=user.status.value,
+        after_role=str(user.role),
+        status=str(user.status),
     )
     logger.info(
         "user_promoted",
         target_user_id=user.id,
         before_role=before_role,
-        current_role=user.role.value,
-        status=user.status.value,
+        current_role=str(user.role),
+        status=str(user.status),
     )
 
     return user
