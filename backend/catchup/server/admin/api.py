@@ -6,6 +6,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 from sqlalchemy import and_, delete, func, or_, select, text
 from sqlalchemy.orm import Session, aliased
 
+from catchup.user.role_service import promote_user_to_admin as promote_user_to_admin_service
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import AdminOAuthAuditMetadata
 from catchup.audit.service import emit_audit_event
@@ -13,6 +14,7 @@ from catchup.auth.dependencies import require_admin_user
 from catchup.chat.schemas import UserQueryWithSaveStatusResponse
 from catchup.db.chat_room import get_all_queries_for_admin
 from catchup.db.dependencies import get_db
+from catchup.db.engine import SessionLocal
 from catchup.db.models import (
     AtlassianOAuthToken,
     ConfluenceSpace,
@@ -491,40 +493,6 @@ def _delete_user(db: Session, admin_user: User, user_id: int):
 
     return DeleteUserResponse(userId=user.id, status=user.status)
 
-
-def _promote_user_to_admin(db: Session, admin_user: User, user_id: int) -> PromoteUserResponse:
-    """
-    사용자의 role을 admin으로 승격한다.
-    관리자 자신은 이미 admin이므로 별도 체크 없이 통과한다.
-    """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        logger.info("[ADMIN][USER_PROMOTE] user not found (user_id=%s)", user_id)
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if user.role == UserRole.ADMIN:
-        logger.info("[ADMIN][USER_PROMOTE] already admin (user_id=%s)", user_id)
-        raise HTTPException(status_code=409, detail="User already admin")
-
-    if user.status == UserStatus.DELETED:
-        logger.info("[ADMIN][USER_PROMOTE] cannot promote deleted user (user_id=%s)", user_id)
-        raise HTTPException(status_code=409, detail="Cannot promote deleted user")
-    if user.status == UserStatus.INACTIVE:
-        logger.info("[ADMIN][USER_PROMOTE] cannot promote inactive user (user_id=%s)", user_id)
-        raise HTTPException(status_code=409, detail="Cannot promote inactive user")
-
-    user.role = UserRole.ADMIN
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    logger.info(
-        "[ADMIN][USER_PROMOTE] action=promote_to_admin user_id=%s admin_id=%s", user_id, admin_user.id
-    )
-
-    return PromoteUserResponse(userId=user.id, role=user.role)
-
-
 # ============================
 # Admin - User management
 # ============================
@@ -915,10 +883,18 @@ def delete_user(
 )
 def promote_user_to_admin(
     user_id: int,
-    db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin_user),
+    _admin_user: User = Depends(require_admin_user),
 ):
-    return _promote_user_to_admin(db=db, admin_user=admin_user, user_id=user_id)
+    with SessionLocal() as db:
+        user = promote_user_to_admin_service(
+            db,
+            user_id=user_id,
+        )
+
+        return PromoteUserResponse(
+            user_id=user.id,
+            role=user.role,
+        )
 
 
 def _get_syncable_jira_projects(db: Session) -> JiraSyncableResponse:

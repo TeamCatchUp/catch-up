@@ -15,6 +15,13 @@ class SystemAuditMetadata(BaseAuditMetadata):
 class AuthAuditMetadata(BaseAuditMetadata):
     pass
 
+class UserAuditMetadata(BaseAuditMetadata):
+    user_id: int
+    before_role: str | None = None
+    after_role: str | None = None
+    status: str | None = None
+    reason: str | None = None
+
 
 class IntegrationAuditMetadata(BaseAuditMetadata):
     provider: str | None = None
