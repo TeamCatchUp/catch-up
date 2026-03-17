@@ -93,7 +93,7 @@ class KeycloakAdminClient:
                 "sub": user["id"],
                 "email": user.get("email"),
                 "name": full_name or user.get("username"),
-                "status": "active" if user.get("enabled") else "DEACTIVATED"
+                "status": "ACTIVE" if user.get("enabled") else "DEACTIVATED"
             })
 
         return oauth_users

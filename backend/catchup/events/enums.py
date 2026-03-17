@@ -13,6 +13,11 @@ class EventType(StrEnum):
     AUDIT = "AUDIT"
     SYSTEM = "SYSTEM"
     USER = "USER"
+    OAUTH = "OAUTH"
+
+class AdminOAuthAction(StrEnum):
+    SYNC_USERS = "sync_users"
+    
 
 
 class AuthEventAction(StrEnum):

@@ -12,6 +12,7 @@ import { Button } from '@/shared/components/ui/button';
 import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
+import { adminConnectorMutations } from '../../../mutations/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
 import type {
   PreMappingBulkUpdateResponse,
@@ -113,6 +114,17 @@ const UsersStatusSection = ({
       return { ...prev, [userKey]: userOverrides };
     });
   }, []);
+
+  // ─── SSO 동기화 mutation ───
+  const syncOAuthMutation = useMutation({
+    ...adminConnectorMutations.syncOAuthUsers(),
+    onSuccess: () => {
+      toast('동기화가 완료되었습니다.', { description: 'SSO 사용자 정보가 반영되었습니다.' });
+    },
+    onError: () => {
+      toast('일시적인 오류가 발생했습니다.', { description: '잠시 후 다시 시도해주세요.' });
+    },
+  });
 
   // ─── 저장 mutation ───
   const SERVICE_TO_VENDOR: Record<IntegrationService, VendorType> = {
@@ -253,6 +265,16 @@ const UsersStatusSection = ({
 
         {/* 버튼 영역 */}
         <div className="flex items-center gap-2">
+          <Button
+            variant="box-outline-gray"
+            size="md"
+            className="text-body-small h-9"
+            disabled={syncOAuthMutation.isPending}
+            onClick={() => syncOAuthMutation.mutate()}
+          >
+            SSO User 동기화
+          </Button>
+
           <Button
             variant="box-outline-gray"
             size="md"
