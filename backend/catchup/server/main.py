@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 import structlog
 
+from catchup.server.error_handlers import register_exception_handlers
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import SystemAuditMetadata
 from catchup.audit.service import emit_audit_event
@@ -548,6 +549,8 @@ app = FastAPI(
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
 )
+
+register_exception_handlers(app)
 
 # Router 등록
 app.include_router(chat_router)
