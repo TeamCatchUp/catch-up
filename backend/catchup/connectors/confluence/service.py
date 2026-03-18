@@ -602,7 +602,12 @@ class ConfluenceIngestionService:
                         user_name_map=user_name_map,
                     )
                     if not transform_result.documents:
-                        failed_page_ids.append(page_id)
+                        logger.info(
+                            "[CONFLUENCE][REPAIR] Page retry produced no documents: cloud_id=%s, space_key=%s, page_id=%s",
+                            self.cloud_id,
+                            space_key,
+                            page_id,
+                        )
                         continue
                     await self._store_transform_result(
                         entity_type="page",
@@ -650,7 +655,12 @@ class ConfluenceIngestionService:
                         user_name_map=user_name_map,
                     )
                     if not transform_result.documents:
-                        failed_blogpost_ids.append(blogpost_id)
+                        logger.info(
+                            "[CONFLUENCE][REPAIR] Blogpost retry produced no documents: cloud_id=%s, space_key=%s, blogpost_id=%s",
+                            self.cloud_id,
+                            space_key,
+                            blogpost_id,
+                        )
                         continue
                     await self._store_transform_result(
                         entity_type="blogpost",
