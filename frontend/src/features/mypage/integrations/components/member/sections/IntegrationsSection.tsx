@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 
@@ -20,6 +21,7 @@ const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence
 
 /** 관리자 이용자 연동 탭 섹션 */
 const IntegrationsSection = () => {
+  const queryClient = useQueryClient();
   const [filterType, setFilterType] = useState<SyncFilterType>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [completionInfo, setCompletionInfo] = useState<{
@@ -50,6 +52,7 @@ const IntegrationsSection = () => {
         const successCount = progress?.items.filter((item) => item.status === 'success').length ?? 0;
         const totalCount = progress?.items.length ?? 0;
         setCompletionInfo({ connector, successCount, totalCount });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'connector', 'targetStatus'] });
         break;
       }
     }
