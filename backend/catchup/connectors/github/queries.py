@@ -173,7 +173,12 @@ commits(first: 100) {
 PULL_REQUESTS_QUERY = f"""
 query($owner: String!, $repo: String!, $first: Int!, $after: String) {{
   repository(owner: $owner, name: $repo) {{
-    pullRequests(first: $first, after: $after, orderBy: {{field: UPDATED_AT, direction: DESC}}) {{
+    pullRequests(
+      first: $first,
+      after: $after,
+      states: [OPEN, CLOSED, MERGED],
+      orderBy: {{field: UPDATED_AT, direction: DESC}}
+    ) {{
       pageInfo {{
         hasNextPage
         endCursor
@@ -212,7 +217,12 @@ query($org: String!, $first: Int!, $after: String) {
 ISSUES_QUERY = f"""
 query($owner: String!, $repo: String!, $first: Int!, $after: String) {{
   repository(owner: $owner, name: $repo) {{
-    issues(first: $first, after: $after, orderBy: {{field: UPDATED_AT, direction: DESC}}) {{
+    issues(
+      first: $first,
+      after: $after,
+      states: [OPEN, CLOSED],
+      orderBy: {{field: UPDATED_AT, direction: DESC}}
+    ) {{
       pageInfo {{
         hasNextPage
         endCursor
@@ -227,10 +237,20 @@ query($owner: String!, $repo: String!, $first: Int!, $after: String) {{
 
 
 def _build_numbers_query(connection_name: str) -> str:
+    states = (
+        "[OPEN, CLOSED]"
+        if connection_name == "issues"
+        else "[OPEN, CLOSED, MERGED]"
+    )
     return f"""
 query($owner: String!, $repo: String!, $first: Int!, $after: String) {{
   repository(owner: $owner, name: $repo) {{
-    {connection_name}(first: $first, after: $after, orderBy: {{field: UPDATED_AT, direction: DESC}}) {{
+    {connection_name}(
+      first: $first,
+      after: $after,
+      states: {states},
+      orderBy: {{field: UPDATED_AT, direction: DESC}}
+    ) {{
       pageInfo {{
         hasNextPage
         endCursor
