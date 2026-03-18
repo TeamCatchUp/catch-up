@@ -161,6 +161,93 @@ class PGVectorRepository:
 
         return embedding_table, collection_table, conditions
 
+    async def _count_records(
+        self,
+        *,
+        source: str,
+        entity_type: str,
+        metadata_filters: dict[str, str],
+        timestamp_field: str,
+        since: datetime | None = None,
+        record_id_metadata_key: str | None = None,
+    ) -> int:
+        self.ensure_initialized()
+
+        def _count() -> int:
+            embedding_table, collection_table, conditions = self._record_conditions(
+                source=source,
+                entity_type=entity_type,
+                metadata_filters=metadata_filters,
+                timestamp_field=timestamp_field,
+                since=since,
+            )
+            if record_id_metadata_key:
+                record_id_expr = embedding_table.c.cmetadata[record_id_metadata_key].astext
+                count_expr = func.count(func.distinct(record_id_expr))
+            else:
+                count_expr = func.count()
+
+            stmt = (
+                select(count_expr)
+                .select_from(
+                    embedding_table.join(
+                        collection_table,
+                        embedding_table.c.collection_id == collection_table.c.uuid,
+                    )
+                )
+                .where(and_(*conditions))
+            )
+
+            with self.vector_store._make_sync_session() as session:
+                result = session.execute(stmt).scalar_one()
+                return int(result or 0)
+
+        return await asyncio.to_thread(_count)
+
+    async def _list_record_ids(
+        self,
+        *,
+        source: str,
+        entity_type: str,
+        metadata_filters: dict[str, str],
+        timestamp_field: str,
+        since: datetime | None = None,
+        record_id_metadata_key: str | None = None,
+    ) -> list[str]:
+        self.ensure_initialized()
+
+        def _list_ids() -> list[str]:
+            embedding_table, collection_table, conditions = self._record_conditions(
+                source=source,
+                entity_type=entity_type,
+                metadata_filters=metadata_filters,
+                timestamp_field=timestamp_field,
+                since=since,
+            )
+            record_id_expr = (
+                embedding_table.c.cmetadata[record_id_metadata_key].astext
+                if record_id_metadata_key
+                else embedding_table.c.id
+            )
+            select_expr = func.distinct(record_id_expr) if record_id_metadata_key else record_id_expr
+            stmt = (
+                select(select_expr)
+                .select_from(
+                    embedding_table.join(
+                        collection_table,
+                        embedding_table.c.collection_id == collection_table.c.uuid,
+                    )
+                )
+                .where(and_(*conditions))
+                .order_by(record_id_expr.asc())
+            )
+
+            with self.vector_store._make_sync_session() as session:
+                rows = session.execute(stmt).all()
+                return [str(row[0]) for row in rows if row[0]]
+
+        return await asyncio.to_thread(_list_ids)
+
 
     async def add_documents(
         self,
@@ -584,35 +671,16 @@ class PGVectorRepository:
         entity_type: str,
         since: datetime | None = None,
     ) -> int:
-        self.ensure_initialized()
-
-        def _count() -> int:
-            embedding_table, collection_table, conditions = self._record_conditions(
-                source="github",
-                entity_type=entity_type,
-                metadata_filters={
-                    "owner": owner,
-                    "repo": repo,
-                },
-                timestamp_field="updated_at",
-                since=since,
-            )
-            stmt = (
-                select(func.count())
-                .select_from(
-                    embedding_table.join(
-                        collection_table,
-                        embedding_table.c.collection_id == collection_table.c.uuid,
-                    )
-                )
-                .where(and_(*conditions))
-            )
-
-            with self.vector_store._make_sync_session() as session:
-                result = session.execute(stmt).scalar_one()
-                return int(result or 0)
-
-        return await asyncio.to_thread(_count)
+        return await self._count_records(
+            source="github",
+            entity_type=entity_type,
+            metadata_filters={
+                "owner": owner,
+                "repo": repo,
+            },
+            timestamp_field="updated_at",
+            since=since,
+        )
 
     async def list_github_record_ids(
         self,
@@ -622,36 +690,16 @@ class PGVectorRepository:
         entity_type: str,
         since: datetime | None = None,
     ) -> list[str]:
-        self.ensure_initialized()
-
-        def _list_ids() -> list[str]:
-            embedding_table, collection_table, conditions = self._record_conditions(
-                source="github",
-                entity_type=entity_type,
-                metadata_filters={
-                    "owner": owner,
-                    "repo": repo,
-                },
-                timestamp_field="updated_at",
-                since=since,
-            )
-            stmt = (
-                select(embedding_table.c.id)
-                .select_from(
-                    embedding_table.join(
-                        collection_table,
-                        embedding_table.c.collection_id == collection_table.c.uuid,
-                    )
-                )
-                .where(and_(*conditions))
-                .order_by(embedding_table.c.id.asc())
-            )
-
-            with self.vector_store._make_sync_session() as session:
-                rows = session.execute(stmt).all()
-                return [str(row[0]) for row in rows if row[0]]
-
-        return await asyncio.to_thread(_list_ids)
+        return await self._list_record_ids(
+            source="github",
+            entity_type=entity_type,
+            metadata_filters={
+                "owner": owner,
+                "repo": repo,
+            },
+            timestamp_field="updated_at",
+            since=since,
+        )
 
     async def count_slack_records(
         self,
@@ -661,35 +709,16 @@ class PGVectorRepository:
         entity_type: str = "message",
         since: datetime | None = None,
     ) -> int:
-        self.ensure_initialized()
-
-        def _count() -> int:
-            embedding_table, collection_table, conditions = self._record_conditions(
-                source="slack",
-                entity_type=entity_type,
-                metadata_filters={
-                    "team_id": team_id,
-                    "channel_id": channel_id,
-                },
-                timestamp_field="created_at",
-                since=since,
-            )
-            stmt = (
-                select(func.count())
-                .select_from(
-                    embedding_table.join(
-                        collection_table,
-                        embedding_table.c.collection_id == collection_table.c.uuid,
-                    )
-                )
-                .where(and_(*conditions))
-            )
-
-            with self.vector_store._make_sync_session() as session:
-                result = session.execute(stmt).scalar_one()
-                return int(result or 0)
-
-        return await asyncio.to_thread(_count)
+        return await self._count_records(
+            source="slack",
+            entity_type=entity_type,
+            metadata_filters={
+                "team_id": team_id,
+                "channel_id": channel_id,
+            },
+            timestamp_field="created_at",
+            since=since,
+        )
 
     async def list_slack_record_ids(
         self,
@@ -699,36 +728,16 @@ class PGVectorRepository:
         entity_type: str = "message",
         since: datetime | None = None,
     ) -> list[str]:
-        self.ensure_initialized()
-
-        def _list_ids() -> list[str]:
-            embedding_table, collection_table, conditions = self._record_conditions(
-                source="slack",
-                entity_type=entity_type,
-                metadata_filters={
-                    "team_id": team_id,
-                    "channel_id": channel_id,
-                },
-                timestamp_field="created_at",
-                since=since,
-            )
-            stmt = (
-                select(embedding_table.c.id)
-                .select_from(
-                    embedding_table.join(
-                        collection_table,
-                        embedding_table.c.collection_id == collection_table.c.uuid,
-                    )
-                )
-                .where(and_(*conditions))
-                .order_by(embedding_table.c.id.asc())
-            )
-
-            with self.vector_store._make_sync_session() as session:
-                rows = session.execute(stmt).all()
-                return [str(row[0]) for row in rows if row[0]]
-
-        return await asyncio.to_thread(_list_ids)
+        return await self._list_record_ids(
+            source="slack",
+            entity_type=entity_type,
+            metadata_filters={
+                "team_id": team_id,
+                "channel_id": channel_id,
+            },
+            timestamp_field="created_at",
+            since=since,
+        )
 
     async def count_jira_records(
         self,
@@ -737,34 +746,15 @@ class PGVectorRepository:
         entity_type: str,
         since: datetime | None = None,
     ) -> int:
-        self.ensure_initialized()
-
-        def _count() -> int:
-            embedding_table, collection_table, conditions = self._record_conditions(
-                source="jira",
-                entity_type=entity_type,
-                metadata_filters={
-                    "project_key": project_key,
-                },
-                timestamp_field="updated_at",
-                since=since,
-            )
-            stmt = (
-                select(func.count())
-                .select_from(
-                    embedding_table.join(
-                        collection_table,
-                        embedding_table.c.collection_id == collection_table.c.uuid,
-                    )
-                )
-                .where(and_(*conditions))
-            )
-
-            with self.vector_store._make_sync_session() as session:
-                result = session.execute(stmt).scalar_one()
-                return int(result or 0)
-
-        return await asyncio.to_thread(_count)
+        return await self._count_records(
+            source="jira",
+            entity_type=entity_type,
+            metadata_filters={
+                "project_key": project_key,
+            },
+            timestamp_field="updated_at",
+            since=since,
+        )
 
     async def list_jira_record_ids(
         self,
@@ -773,35 +763,15 @@ class PGVectorRepository:
         entity_type: str,
         since: datetime | None = None,
     ) -> list[str]:
-        self.ensure_initialized()
-
-        def _list_ids() -> list[str]:
-            embedding_table, collection_table, conditions = self._record_conditions(
-                source="jira",
-                entity_type=entity_type,
-                metadata_filters={
-                    "project_key": project_key,
-                },
-                timestamp_field="updated_at",
-                since=since,
-            )
-            stmt = (
-                select(embedding_table.c.id)
-                .select_from(
-                    embedding_table.join(
-                        collection_table,
-                        embedding_table.c.collection_id == collection_table.c.uuid,
-                    )
-                )
-                .where(and_(*conditions))
-                .order_by(embedding_table.c.id.asc())
-            )
-
-            with self.vector_store._make_sync_session() as session:
-                rows = session.execute(stmt).all()
-                return [str(row[0]) for row in rows if row[0]]
-
-        return await asyncio.to_thread(_list_ids)
+        return await self._list_record_ids(
+            source="jira",
+            entity_type=entity_type,
+            metadata_filters={
+                "project_key": project_key,
+            },
+            timestamp_field="updated_at",
+            since=since,
+        )
 
     async def count_confluence_records(
         self,
@@ -810,35 +780,16 @@ class PGVectorRepository:
         entity_type: str,
         since: datetime | None = None,
     ) -> int:
-        self.ensure_initialized()
-
-        def _count() -> int:
-            embedding_table, collection_table, conditions = self._record_conditions(
-                source="confluence",
-                entity_type=entity_type,
-                metadata_filters={
-                    "space_key": space_key,
-                },
-                timestamp_field="updated_at",
-                since=since,
-            )
-            content_id_expr = embedding_table.c.cmetadata["id"].astext
-            stmt = (
-                select(func.count(func.distinct(content_id_expr)))
-                .select_from(
-                    embedding_table.join(
-                        collection_table,
-                        embedding_table.c.collection_id == collection_table.c.uuid,
-                    )
-                )
-                .where(and_(*conditions))
-            )
-
-            with self.vector_store._make_sync_session() as session:
-                result = session.execute(stmt).scalar_one()
-                return int(result or 0)
-
-        return await asyncio.to_thread(_count)
+        return await self._count_records(
+            source="confluence",
+            entity_type=entity_type,
+            metadata_filters={
+                "space_key": space_key,
+            },
+            timestamp_field="updated_at",
+            since=since,
+            record_id_metadata_key="id",
+        )
 
     async def list_confluence_record_ids(
         self,
@@ -847,36 +798,16 @@ class PGVectorRepository:
         entity_type: str,
         since: datetime | None = None,
     ) -> list[str]:
-        self.ensure_initialized()
-
-        def _list_ids() -> list[str]:
-            embedding_table, collection_table, conditions = self._record_conditions(
-                source="confluence",
-                entity_type=entity_type,
-                metadata_filters={
-                    "space_key": space_key,
-                },
-                timestamp_field="updated_at",
-                since=since,
-            )
-            content_id_expr = embedding_table.c.cmetadata["id"].astext
-            stmt = (
-                select(func.distinct(content_id_expr))
-                .select_from(
-                    embedding_table.join(
-                        collection_table,
-                        embedding_table.c.collection_id == collection_table.c.uuid,
-                    )
-                )
-                .where(and_(*conditions))
-                .order_by(content_id_expr.asc())
-            )
-
-            with self.vector_store._make_sync_session() as session:
-                rows = session.execute(stmt).all()
-                return [str(row[0]) for row in rows if row[0]]
-
-        return await asyncio.to_thread(_list_ids)
+        return await self._list_record_ids(
+            source="confluence",
+            entity_type=entity_type,
+            metadata_filters={
+                "space_key": space_key,
+            },
+            timestamp_field="updated_at",
+            since=since,
+            record_id_metadata_key="id",
+        )
     
     async def delete_by_id_prefix(self, prefix: str) -> None:
         self.ensure_initialized()
