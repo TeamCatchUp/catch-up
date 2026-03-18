@@ -1089,29 +1089,7 @@ class JiraIngestionService:
                 )
             )
 
-        gap_report = await self.build_record_gap_report(
-            project_key=project_key,
-            sync_days=sync_days,
-            sync_from_dt=sync_from_dt,
-        )
-        remaining_by_type = {
-            item.record_type: item.missing_ids
-            for item in gap_report.records
-        }
-
-        return JiraRecordRetryResult(
-            records=[
-                JiraRecordRetryItem(
-                    record_type=item.record_type,
-                    requested_ids=item.requested_ids,
-                    retried_count=item.retried_count,
-                    succeeded_count=item.succeeded_count,
-                    failed_ids=item.failed_ids,
-                    remaining_missing_ids=remaining_by_type.get(item.record_type, []),
-                )
-                for item in result_items
-            ]
-        )
+        return JiraRecordRetryResult(records=result_items)
 
     async def delete_issue_documents(
             self,
