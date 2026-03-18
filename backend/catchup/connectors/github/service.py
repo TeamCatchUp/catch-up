@@ -18,6 +18,7 @@ Note:
 - PR Document에 포함된 Commit SHA 목록을 통해 Graph 연결
 """
 
+import asyncio
 import logging
 import traceback
 from dataclasses import dataclass, field
@@ -44,6 +45,7 @@ from catchup.connectors.github.transformers import GithubTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
+from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.domain_repository import RepositoryUpsertData, UserUpsertData
 from catchup.db.models import GithubEntityType, GithubInstallationType, SourceType
@@ -107,6 +109,43 @@ def _convert_repos_to_dto(raw_repos: list[dict]) -> list[RepositoryUpsertData]:
 class GithubMetadataSnapshot:
     users: list[UserUpsertData] = field(default_factory=list)
     repositories: list[RepositoryUpsertData] = field(default_factory=list)
+
+
+@dataclass(slots=True, frozen=True)
+class GithubRepoRef:
+    repo_id: int
+    full_name: str
+    owner: str
+    repo: str
+
+
+@dataclass(slots=True, frozen=True)
+class GithubRecordGapItem:
+    record_type: str
+    expected_count: int = 0
+    stored_count: int = 0
+    missing_count: int = 0
+    missing_ids: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True, frozen=True)
+class GithubRecordGapReport:
+    records: list[GithubRecordGapItem] = field(default_factory=list)
+
+
+@dataclass(slots=True, frozen=True)
+class GithubRecordRetryItem:
+    record_type: str
+    requested_ids: list[str] = field(default_factory=list)
+    retried_count: int = 0
+    succeeded_count: int = 0
+    failed_ids: list[str] = field(default_factory=list)
+    remaining_missing_ids: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True, frozen=True)
+class GithubRecordRetryResult:
+    records: list[GithubRecordRetryItem] = field(default_factory=list)
 
 
 class GithubIngestionService:
@@ -719,6 +758,402 @@ class GithubIngestionService:
         repos = github_entities.get_repositories_by_installation(db, self.installation_id)
         repo_id_set = set(repo_ids)
         return [repo.full_name for repo in repos if repo.repo_id in repo_id_set]
+
+    def _resolve_sync_from_dt(
+        self,
+        sync_days: int | None,
+    ) -> datetime:
+        days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
+        return datetime.now(timezone.utc) - timedelta(days=days)
+
+    def _load_repo_ref_sync(
+        self,
+        repo_id: int,
+    ) -> GithubRepoRef:
+        with SessionLocal() as db:
+            repo_names = self._get_repo_names_by_ids(db, [repo_id])
+
+        if not repo_names:
+            raise ValueError(f"github repository not found: repo_id={repo_id}")
+
+        full_name = repo_names[0]
+        owner, repo = full_name.split("/", 1)
+        return GithubRepoRef(
+            repo_id=repo_id,
+            full_name=full_name,
+            owner=owner,
+            repo=repo,
+        )
+
+    async def _get_repo_ref(
+        self,
+        repo_id: int,
+    ) -> GithubRepoRef:
+        return await asyncio.to_thread(self._load_repo_ref_sync, repo_id)
+
+    @staticmethod
+    def _extract_record_ids_from_doc_ids(doc_ids: list[str]) -> list[str]:
+        record_ids: list[str] = []
+        for doc_id in doc_ids:
+            if not doc_id or ":" not in doc_id:
+                continue
+            record_ids.append(doc_id.rsplit(":", 1)[-1])
+        return record_ids
+
+    @staticmethod
+    def _sort_record_ids(record_ids: set[str]) -> list[str]:
+        def _key(value: str) -> tuple[int, int | str]:
+            try:
+                return (0, int(value))
+            except ValueError:
+                return (1, value)
+
+        return sorted(record_ids, key=_key)
+
+    def _build_gap_item(
+        self,
+        *,
+        record_type: str,
+        expected_ids: list[str],
+        stored_ids: list[str],
+        stored_count: int,
+    ) -> GithubRecordGapItem:
+        missing_ids = self._sort_record_ids(set(expected_ids) - set(stored_ids))
+        return GithubRecordGapItem(
+            record_type=record_type,
+            expected_count=len(expected_ids),
+            stored_count=stored_count,
+            missing_count=len(missing_ids),
+            missing_ids=missing_ids,
+        )
+
+    def _build_issue_documents_sync(
+        self,
+        owner: str,
+        repo: str,
+        issue_items: list[tuple[str, dict[str, Any]]],
+    ) -> tuple[list[Document], list[str]]:
+        documents: list[Document] = []
+        failed_ids: list[str] = []
+
+        with SessionLocal() as db:
+            self._preload_premapped_github_names(db)
+            for record_id, issue_data in issue_items:
+                try:
+                    issue = self.transformer.parse_issue(issue_data)
+                    issue = self._apply_issue_user_mapping(db, issue)
+                    documents.append(
+                        self.transformer.transform_issue(
+                            issue,
+                            owner,
+                            repo,
+                            self.installation_id,
+                        )
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "[GITHUB][REPAIR] Failed to build issue doc: installation_id=%s, repo=%s/%s, issue_id=%s, error=%s",
+                        self.installation_id,
+                        owner,
+                        repo,
+                        record_id,
+                        exc,
+                    )
+                    failed_ids.append(record_id)
+
+        return documents, failed_ids
+
+    def _build_pull_request_documents_sync(
+        self,
+        owner: str,
+        repo: str,
+        pr_items: list[tuple[str, dict[str, Any]]],
+    ) -> tuple[list[Document], list[str]]:
+        documents: list[Document] = []
+        failed_ids: list[str] = []
+
+        with SessionLocal() as db:
+            self._preload_premapped_github_names(db)
+            for record_id, pr_data in pr_items:
+                try:
+                    pr = self.transformer.parse_pull_request(pr_data)
+                    pr = self._apply_pr_user_mapping(db, pr)
+                    documents.append(
+                        self.transformer.transform_pull_request(
+                            pr,
+                            owner,
+                            repo,
+                            self.installation_id,
+                        )
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "[GITHUB][REPAIR] Failed to build pr doc: installation_id=%s, repo=%s/%s, pr_id=%s, error=%s",
+                        self.installation_id,
+                        owner,
+                        repo,
+                        record_id,
+                        exc,
+                    )
+                    failed_ids.append(record_id)
+
+        return documents, failed_ids
+
+    async def _fetch_issue_nodes(
+        self,
+        *,
+        owner: str,
+        repo: str,
+        issue_ids: list[str],
+    ) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
+        items: list[tuple[str, dict[str, Any]]] = []
+        failed_ids: list[str] = []
+
+        for record_id in issue_ids:
+            try:
+                number = int(record_id)
+                issue_data = await self.client.get_issue_graphql(owner, repo, number)
+                if not issue_data:
+                    failed_ids.append(record_id)
+                    continue
+                items.append((record_id, issue_data))
+            except Exception as exc:
+                logger.warning(
+                    "[GITHUB][REPAIR] Failed to fetch issue: installation_id=%s, repo=%s/%s, issue_id=%s, error=%s",
+                    self.installation_id,
+                    owner,
+                    repo,
+                    record_id,
+                    exc,
+                )
+                failed_ids.append(record_id)
+
+        return items, failed_ids
+
+    async def _fetch_pull_request_nodes(
+        self,
+        *,
+        owner: str,
+        repo: str,
+        pull_request_ids: list[str],
+    ) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
+        items: list[tuple[str, dict[str, Any]]] = []
+        failed_ids: list[str] = []
+
+        for record_id in pull_request_ids:
+            try:
+                number = int(record_id)
+                pr_data = await self.client.get_pull_request_graphql(owner, repo, number)
+                if not pr_data:
+                    failed_ids.append(record_id)
+                    continue
+                items.append((record_id, pr_data))
+            except Exception as exc:
+                logger.warning(
+                    "[GITHUB][REPAIR] Failed to fetch pull request: installation_id=%s, repo=%s/%s, pr_id=%s, error=%s",
+                    self.installation_id,
+                    owner,
+                    repo,
+                    record_id,
+                    exc,
+                )
+                failed_ids.append(record_id)
+
+        return items, failed_ids
+
+    async def build_record_gap_report(
+        self,
+        *,
+        repo_id: int,
+        sync_days: int | None = None,
+    ) -> GithubRecordGapReport:
+        repo_ref = await self._get_repo_ref(repo_id)
+        sync_from_dt = self._resolve_sync_from_dt(sync_days)
+
+        expected_issue_ids = await self.client.list_issue_numbers_graphql(
+            repo_ref.owner,
+            repo_ref.repo,
+            since=sync_from_dt,
+        )
+        expected_pull_request_ids = await self.client.list_pull_request_numbers_graphql(
+            repo_ref.owner,
+            repo_ref.repo,
+            since=sync_from_dt,
+        )
+
+        stored_issue_doc_ids = await self.repository.list_github_record_ids(
+            owner=repo_ref.owner,
+            repo=repo_ref.repo,
+            entity_type="issue",
+            since=sync_from_dt,
+        )
+        stored_pull_request_doc_ids = await self.repository.list_github_record_ids(
+            owner=repo_ref.owner,
+            repo=repo_ref.repo,
+            entity_type="pr",
+            since=sync_from_dt,
+        )
+
+        issue_item = self._build_gap_item(
+            record_type="issue",
+            expected_ids=expected_issue_ids,
+            stored_ids=self._extract_record_ids_from_doc_ids(stored_issue_doc_ids),
+            stored_count=len(stored_issue_doc_ids),
+        )
+        pull_request_item = self._build_gap_item(
+            record_type="pull_request",
+            expected_ids=expected_pull_request_ids,
+            stored_ids=self._extract_record_ids_from_doc_ids(stored_pull_request_doc_ids),
+            stored_count=len(stored_pull_request_doc_ids),
+        )
+
+        return GithubRecordGapReport(records=[issue_item, pull_request_item])
+
+    async def retry_missing_records(
+        self,
+        *,
+        repo_id: int,
+        sync_days: int | None = None,
+        issue_ids: list[str] | None = None,
+        pull_request_ids: list[str] | None = None,
+    ) -> GithubRecordRetryResult:
+        repo_ref = await self._get_repo_ref(repo_id)
+        requested_issue_ids = list(issue_ids or [])
+        requested_pull_request_ids = list(pull_request_ids or [])
+        result_items: list[GithubRecordRetryItem] = []
+
+        if requested_issue_ids:
+            issue_nodes, issue_failed_ids = await self._fetch_issue_nodes(
+                owner=repo_ref.owner,
+                repo=repo_ref.repo,
+                issue_ids=requested_issue_ids,
+            )
+            issue_documents, build_failed_ids = await asyncio.to_thread(
+                self._build_issue_documents_sync,
+                repo_ref.owner,
+                repo_ref.repo,
+                issue_nodes,
+            )
+            issue_failed_ids.extend(build_failed_ids)
+
+            issue_succeeded_count = 0
+            if issue_documents:
+                try:
+                    documents = issue_documents
+                    if self.summarizer:
+                        documents = await self._summarize_documents(
+                            issue_documents,
+                            repo_full_name=repo_ref.full_name,
+                            entity_type="issue",
+                            audit_context=None,
+                        )
+                    await self.repository.upsert_documents(
+                        documents,
+                        [doc.id for doc in documents],
+                        audit_context=None,
+                        context=f"entity_type=issue,repo={repo_ref.full_name},mode=partial_retry,doc_count={len(documents)}",
+                    )
+                    issue_succeeded_count = len(documents)
+                except Exception as exc:
+                    logger.error(
+                        "[GITHUB][REPAIR] Failed to upsert issue docs: installation_id=%s, repo=%s, error=%s",
+                        self.installation_id,
+                        repo_ref.full_name,
+                        exc,
+                        exc_info=True,
+                    )
+                    issue_failed_ids.extend(
+                        self._extract_record_ids_from_doc_ids([doc.id for doc in issue_documents])
+                    )
+
+            issue_failed_ids = self._sort_record_ids(set(issue_failed_ids))
+            result_items.append(
+                GithubRecordRetryItem(
+                    record_type="issue",
+                    requested_ids=requested_issue_ids,
+                    retried_count=len(requested_issue_ids),
+                    succeeded_count=issue_succeeded_count,
+                    failed_ids=issue_failed_ids,
+                )
+            )
+
+        if requested_pull_request_ids:
+            pr_nodes, pr_failed_ids = await self._fetch_pull_request_nodes(
+                owner=repo_ref.owner,
+                repo=repo_ref.repo,
+                pull_request_ids=requested_pull_request_ids,
+            )
+            pr_documents, build_failed_ids = await asyncio.to_thread(
+                self._build_pull_request_documents_sync,
+                repo_ref.owner,
+                repo_ref.repo,
+                pr_nodes,
+            )
+            pr_failed_ids.extend(build_failed_ids)
+
+            pr_succeeded_count = 0
+            if pr_documents:
+                try:
+                    documents = pr_documents
+                    if self.summarizer:
+                        documents = await self._summarize_documents(
+                            pr_documents,
+                            repo_full_name=repo_ref.full_name,
+                            entity_type="pull_request",
+                            audit_context=None,
+                        )
+                    await self.repository.upsert_documents(
+                        documents,
+                        [doc.id for doc in documents],
+                        audit_context=None,
+                        context=f"entity_type=pull_request,repo={repo_ref.full_name},mode=partial_retry,doc_count={len(documents)}",
+                    )
+                    pr_succeeded_count = len(documents)
+                except Exception as exc:
+                    logger.error(
+                        "[GITHUB][REPAIR] Failed to upsert pull request docs: installation_id=%s, repo=%s, error=%s",
+                        self.installation_id,
+                        repo_ref.full_name,
+                        exc,
+                        exc_info=True,
+                    )
+                    pr_failed_ids.extend(
+                        self._extract_record_ids_from_doc_ids([doc.id for doc in pr_documents])
+                    )
+
+            pr_failed_ids = self._sort_record_ids(set(pr_failed_ids))
+            result_items.append(
+                GithubRecordRetryItem(
+                    record_type="pull_request",
+                    requested_ids=requested_pull_request_ids,
+                    retried_count=len(requested_pull_request_ids),
+                    succeeded_count=pr_succeeded_count,
+                    failed_ids=pr_failed_ids,
+                )
+            )
+
+        gap_report = await self.build_record_gap_report(
+            repo_id=repo_id,
+            sync_days=sync_days,
+        )
+        remaining_by_type = {
+            item.record_type: item.missing_ids
+            for item in gap_report.records
+        }
+
+        return GithubRecordRetryResult(
+            records=[
+                GithubRecordRetryItem(
+                    record_type=item.record_type,
+                    requested_ids=item.requested_ids,
+                    retried_count=item.retried_count,
+                    succeeded_count=item.succeeded_count,
+                    failed_ids=item.failed_ids,
+                    remaining_missing_ids=remaining_by_type.get(item.record_type, []),
+                )
+                for item in result_items
+            ]
+        )
 
     async def incremental_sync(
         self,
