@@ -89,6 +89,15 @@ def _format_date(dt):
         return None
 
 
+def _format_datetime(dt):
+    if not dt:
+        return None
+    try:
+        return dt.isoformat()
+    except Exception:
+        return None
+
+
 def _get_connector_status_spec(source: ConnectorStatusSource):
     if source == ConnectorStatusSource.GITHUB:
         return SyncConnector.GITHUB, ConnectorResourceType.REPOSITORIES
@@ -120,6 +129,9 @@ def _get_connector_status(
                 scope_id=row.scope_id,
                 target_id=row.target_id,
                 target_name=row.target_name,
+                sync_status=row.sync_status,
+                last_succeeded_at=_format_datetime(row.last_succeeded_at),
+                last_failed_at=_format_datetime(row.last_failed_at),
                 oldest=_format_date(row.oldest_at),
                 latest=_format_date(row.latest_at),
             )
