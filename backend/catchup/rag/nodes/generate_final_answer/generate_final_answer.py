@@ -5,15 +5,20 @@ from re import DOTALL
 
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
+from langchain_core.messages import AIMessage
+from langchain_core.messages import HumanMessage
+from langchain_core.messages import SystemMessage
 from langchain_core.output_parsers import StrOutputParser
 
-from catchup.rag.policies import CITATION_POLICY_MESSAGE, FALLBACK_ANSWER
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node, prepare_context_text
+from catchup.rag.nodes.utils import get_conversation_history
+from catchup.rag.nodes.utils import llm_semaphore
+from catchup.rag.nodes.utils import log_node
+from catchup.rag.nodes.utils import prepare_context_text
+from catchup.rag.policies import CITATION_POLICY_MESSAGE
+from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.state import AgentState
-
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +96,7 @@ def _parse_citation(full_answer: str) -> tuple[str, dict[str, str]]:
     body_part = full_answer
     citation_dict = {}
     
+    # 정상 동작: 태그가 완전히 닫힘. (<citations>...</citations>)
     match = re.search(r"<citations>(.*?)</citations>", full_answer, DOTALL)
     if match:
         body_part = full_answer[:match.start()].strip()
@@ -98,6 +104,13 @@ def _parse_citation(full_answer: str) -> tuple[str, dict[str, str]]:
             citation_dict = json.loads(match.group(1).strip())
         except json.JSONDecodeError:
             logger.warning("Citations JSON parsing failed.")
+    
+    # 비정상 동작 태그가 열리거나 불완전함. (<citations>...)
+    elif open_tag_match := re.search(r"<citations>", full_answer):
+        logger.warning("citation_block_truncated, context=token_overflow")
+        body_part = full_answer[:open_tag_match.start()].strip() # 
+        if not body_part:
+            body_part = FALLBACK_ANSWER
     
     return body_part, citation_dict
 
