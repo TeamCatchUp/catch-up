@@ -90,7 +90,7 @@ const AccountSelectDropdown = ({
 
           {/* 미사용 토글 */}
           <div className="px-2.5 py-2">
-            <div className="border-edge-assistive flex items-center gap-2 rounded-lg border bg-[#fffafa] px-2.5 py-2">
+            <div className="border-edge-assistive bg-fill-strong flex items-center gap-2 rounded-lg border px-2.5 py-2">
               <span className="text-body-small text-content-alternative flex-1">해당 협업 툴을 사용하지 않습니다.</span>
               <Switch
                 checked={isUnused}
