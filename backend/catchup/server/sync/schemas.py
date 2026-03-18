@@ -4,7 +4,7 @@ from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 from catchup.db.models import SyncConnector, SyncEventStatus, SyncJobStatus, SyncType
 from catchup.sync.common.schemas import (
@@ -279,6 +279,8 @@ class SyncRecordGapResponse(BaseModel):
     scope_id: str
     target_id: str
     target_name: str
+    event_id: str | None = None
+    event_status: SyncEventStatus | None = None
     records: list[SyncRecordGapItem] = Field(default_factory=list)
 
 
@@ -325,17 +327,10 @@ class SyncRecordRetryItemResponse(BaseModel):
 
 
 class SyncRecordRetryRequest(BaseModel):
-    connector: SyncConnector = Field(..., description="sync connector type")
-    scope_id: str = Field(..., description="connector scope id")
-    target_id: str = Field(..., description="sync target id")
-    sync_days: int | None = Field(
-        default=None,
-        ge=1,
-        description="collection period in days; if omitted connector default is used",
-    )
+    event_id: str = Field(..., description="sync event id for event-based retry")
     records: list[SyncRecordRetryItemRequest] = Field(default_factory=list)
 
-    @field_validator("scope_id", "target_id")
+    @field_validator("event_id")
     @classmethod
     def _validate_text(cls, value: str) -> str:
         stripped = value.strip()
@@ -366,4 +361,6 @@ class SyncRecordRetryResponse(BaseModel):
     scope_id: str
     target_id: str
     target_name: str
+    event_id: str | None = None
+    event_status: SyncEventStatus | None = None
     records: list[SyncRecordRetryItemResponse] = Field(default_factory=list)

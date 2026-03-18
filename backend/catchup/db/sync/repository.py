@@ -74,6 +74,22 @@ _ALLOWED_EVENT_TRANSITIONS: dict[SyncEventStatus, set[SyncEventStatus]] = {
         SyncEventStatus.PENDING,
         SyncEventStatus.FAILED,
     },
+    SyncEventStatus.SUCCESS: {
+        SyncEventStatus.RETRY_SUCCEEDED,
+        SyncEventStatus.RETRY_FAILED,
+    },
+    SyncEventStatus.FAILED: {
+        SyncEventStatus.RETRY_SUCCEEDED,
+        SyncEventStatus.RETRY_FAILED,
+    },
+    SyncEventStatus.RETRY_SUCCEEDED: {
+        SyncEventStatus.RETRY_SUCCEEDED,
+        SyncEventStatus.RETRY_FAILED,
+    },
+    SyncEventStatus.RETRY_FAILED: {
+        SyncEventStatus.RETRY_SUCCEEDED,
+        SyncEventStatus.RETRY_FAILED,
+    },
 }
 
 _ALLOWED_EVENT_PUBLISH_TRANSITIONS: dict[
@@ -546,11 +562,31 @@ def summarize_events_by_job(db: Session, *, job_id: str) -> SyncEventSummary:
             0,
         ),
         func.coalesce(
-            func.sum(case((SyncEvent.status == SyncEventStatus.SUCCESS, 1), else_=0)),
+            func.sum(
+                case(
+                    (
+                        SyncEvent.status.in_(
+                            [SyncEventStatus.SUCCESS, SyncEventStatus.RETRY_SUCCEEDED]
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ),
             0,
         ),
         func.coalesce(
-            func.sum(case((SyncEvent.status == SyncEventStatus.FAILED, 1), else_=0)),
+            func.sum(
+                case(
+                    (
+                        SyncEvent.status.in_(
+                            [SyncEventStatus.FAILED, SyncEventStatus.RETRY_FAILED]
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ),
             0,
         ),
         func.coalesce(func.sum(SyncEvent.attempt), 0),
@@ -563,7 +599,7 @@ def summarize_events_by_job(db: Session, *, job_id: str) -> SyncEventSummary:
         select(SyncEvent.publish_error)
         .where(
             SyncEvent.job_id == job_id,
-            SyncEvent.status == SyncEventStatus.FAILED,
+            SyncEvent.status.in_([SyncEventStatus.FAILED, SyncEventStatus.RETRY_FAILED]),
             SyncEvent.publish_error.is_not(None),
         )
         .order_by(
@@ -606,7 +642,9 @@ def has_successful_full_sync_event(
             SyncEvent.connector == connector,
             SyncEvent.resource_type == resource_type,
             SyncEvent.resource_id == resource_id,
-            SyncEvent.status == SyncEventStatus.SUCCESS,
+            SyncEvent.status.in_(
+                [SyncEventStatus.SUCCESS, SyncEventStatus.RETRY_SUCCEEDED]
+            ),
         )
         .limit(1)
     )
@@ -644,6 +682,12 @@ def update_event_status_cas(
         values["succeeded_at"] = None
     elif to_status == SyncEventStatus.RETRYING:
         values["failed_at"] = None
+        values["succeeded_at"] = None
+    elif to_status == SyncEventStatus.RETRY_SUCCEEDED:
+        values["succeeded_at"] = now
+        values["failed_at"] = None
+    elif to_status == SyncEventStatus.RETRY_FAILED:
+        values["failed_at"] = now
         values["succeeded_at"] = None
 
     if embedding_tokens_used is not None:
@@ -720,6 +764,34 @@ def mark_event_failed(db: Session, event_id: str) -> bool:
         event_id=event_id,
         from_statuses=[SyncEventStatus.IN_PROGRESS, SyncEventStatus.RETRYING],
         to_status=SyncEventStatus.FAILED,
+    )
+
+
+def mark_event_retry_succeeded(db: Session, event_id: str) -> bool:
+    return update_event_status_cas(
+        db,
+        event_id=event_id,
+        from_statuses=[
+            SyncEventStatus.SUCCESS,
+            SyncEventStatus.FAILED,
+            SyncEventStatus.RETRY_SUCCEEDED,
+            SyncEventStatus.RETRY_FAILED,
+        ],
+        to_status=SyncEventStatus.RETRY_SUCCEEDED,
+    )
+
+
+def mark_event_retry_failed(db: Session, event_id: str) -> bool:
+    return update_event_status_cas(
+        db,
+        event_id=event_id,
+        from_statuses=[
+            SyncEventStatus.SUCCESS,
+            SyncEventStatus.FAILED,
+            SyncEventStatus.RETRY_SUCCEEDED,
+            SyncEventStatus.RETRY_FAILED,
+        ],
+        to_status=SyncEventStatus.RETRY_FAILED,
     )
 
 

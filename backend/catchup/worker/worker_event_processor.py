@@ -218,7 +218,12 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
         if event.job_id != task.job_id:
             return ClaimResult(state=ClaimState.EVENT_JOB_MISMATCH)
 
-        if event.status in {SyncEventStatus.SUCCESS, SyncEventStatus.FAILED}:
+        if event.status in {
+            SyncEventStatus.SUCCESS,
+            SyncEventStatus.FAILED,
+            SyncEventStatus.RETRY_SUCCEEDED,
+            SyncEventStatus.RETRY_FAILED,
+        }:
             return ClaimResult(state=ClaimState.EVENT_ALREADY_TERMINAL)
 
         if event.status == SyncEventStatus.RETRYING:

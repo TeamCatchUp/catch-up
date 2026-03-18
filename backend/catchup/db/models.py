@@ -1244,6 +1244,8 @@ class SyncEventStatus(StrEnum):
     SUCCESS = "success"
     FAILED = "failed"
     RETRYING = "retrying"
+    RETRY_SUCCEEDED = "retry_succeeded"
+    RETRY_FAILED = "retry_failed"
 
 
 class SyncEventPublishStatus(StrEnum):
@@ -1392,7 +1394,12 @@ class SyncEvent(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'in_progress', 'success', 'failed', 'retrying')",
+            (
+                "status IN ("
+                "'pending', 'in_progress', 'success', 'failed', 'retrying', "
+                "'retry_succeeded', 'retry_failed'"
+                ")"
+            ),
             name="ck_sync_events_status",
         ),
         CheckConstraint(

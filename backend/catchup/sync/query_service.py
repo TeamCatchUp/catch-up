@@ -223,10 +223,14 @@ class SyncQueryService:
             1 for event in events if event.status == SyncEventStatus.IN_PROGRESS
         )
         completed_targets = sum(
-            1 for event in events if event.status == SyncEventStatus.SUCCESS
+            1
+            for event in events
+            if event.status in {SyncEventStatus.SUCCESS, SyncEventStatus.RETRY_SUCCEEDED}
         )
         failed_targets = sum(
-            1 for event in events if event.status == SyncEventStatus.FAILED
+            1
+            for event in events
+            if event.status in {SyncEventStatus.FAILED, SyncEventStatus.RETRY_FAILED}
         )
 
         return {
@@ -252,7 +256,8 @@ class SyncQueryService:
         candidates = [
             event
             for event in events
-            if event.status == SyncEventStatus.FAILED and event.publish_error
+            if event.status in {SyncEventStatus.FAILED, SyncEventStatus.RETRY_FAILED}
+            and event.publish_error
         ]
         if not candidates:
             return None

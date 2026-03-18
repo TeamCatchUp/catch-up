@@ -18,6 +18,8 @@ from catchup.db.sync.repository import (
     list_events_by_job,
     list_jobs,
     mark_event_failed,
+    mark_event_retry_failed,
+    mark_event_retry_succeeded,
     record_event_publish_outcomes,
     mark_event_retrying,
     mark_event_success,
@@ -59,5 +61,7 @@ __all__ = [
     "mark_event_retrying",
     "requeue_retrying_event",
     "mark_event_failed",
+    "mark_event_retry_failed",
+    "mark_event_retry_succeeded",
     "refresh_job_token_usage",
 ]

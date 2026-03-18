@@ -966,9 +966,10 @@ class GithubIngestionService:
         *,
         repo_id: int,
         sync_days: int | None = None,
+        sync_from_dt: datetime | None = None,
     ) -> GithubRecordGapReport:
         repo_ref = await self._get_repo_ref(repo_id)
-        sync_from_dt = self._resolve_sync_from_dt(sync_days)
+        sync_from_dt = sync_from_dt or self._resolve_sync_from_dt(sync_days)
 
         expected_issue_ids = await self.client.list_issue_numbers_graphql(
             repo_ref.owner,
@@ -1014,6 +1015,7 @@ class GithubIngestionService:
         *,
         repo_id: int,
         sync_days: int | None = None,
+        sync_from_dt: datetime | None = None,
         issue_ids: list[str] | None = None,
         pull_request_ids: list[str] | None = None,
     ) -> GithubRecordRetryResult:
@@ -1135,6 +1137,7 @@ class GithubIngestionService:
         gap_report = await self.build_record_gap_report(
             repo_id=repo_id,
             sync_days=sync_days,
+            sync_from_dt=sync_from_dt,
         )
         remaining_by_type = {
             item.record_type: item.missing_ids
