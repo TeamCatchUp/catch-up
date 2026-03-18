@@ -32,16 +32,29 @@ const RESOURCE_ICONS: Record<SyncConnector, React.ComponentType<React.SVGProps<S
   confluence: IconSpace,
 };
 
-/** "2026-03-05" → "2026.03.05 (수)" 포맷. 백엔드가 날짜만 반환하므로 시간 미표시. */
+/** 날짜 문자열 → "2026.03.18 (수) 09:52 PM" 포맷. "YYYY-MM-DD" 및 ISO datetime 모두 지원. */
 const formatHistoryDate = (dateStr: string): string => {
-  const parts = dateStr.split('-');
-  if (parts.length !== 3) return dateStr;
-  const [y, m, d] = parts.map(Number);
-  const date = new Date(y, m - 1, d);
+  if (!dateStr) return '';
   const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-  const month = String(m).padStart(2, '0');
-  const day = String(d).padStart(2, '0');
-  return `${y}.${month}.${day} (${dayNames[date.getDay()]})`;
+  const format = (d: Date): string => {
+    const y = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = d.getHours();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const h12 = String(hours % 12 || 12).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${y}.${month}.${day} (${dayNames[d.getDay()]}) ${h12}:${minutes} ${ampm}`;
+  };
+  // "YYYY-MM-DD" 형태: 직접 파싱 (타임존 변환 방지)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return format(new Date(y, m - 1, d));
+  }
+  // ISO datetime: Date 파싱 후 로컬 시간 사용
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return format(d);
 };
 
 interface EmbeddingProgressPanelProps {
@@ -141,7 +154,13 @@ const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading, hi
 
   const selectedProgress = progresses.find((p) => p.connector === selectedConnector);
   const hasProgressItems = selectedProgress && selectedProgress.items.length > 0;
-  const historyItems = historyByConnector?.[selectedConnector];
+  const allHistoryItems = historyByConnector?.[selectedConnector];
+  const historyItems = allHistoryItems?.filter((item) => {
+    if (historyFilter === 'all') return true;
+    if (historyFilter === 'success') return item.sync_status === 'success';
+    if (historyFilter === 'failed') return item.sync_status === 'failed';
+    return true;
+  });
 
   // 접힌 상태: 토글 바
   if (!isOpen) {
@@ -296,12 +315,16 @@ const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading, hi
                             <span className="text-body-small text-content-normal flex-1 truncate">
                               {item.target_name}
                             </span>
-                            {item.latest && (
+                            {(item.last_succeeded_at || item.last_failed_at) && (
                               <span className="text-label-xsmall text-content-alternative shrink-0 whitespace-nowrap">
-                                {formatHistoryDate(item.latest)}
+                                {formatHistoryDate((item.sync_status === 'failed' ? item.last_failed_at : item.last_succeeded_at) ?? '')}
                               </span>
                             )}
-                            <IconCheckCircle className="text-accent-green size-6 shrink-0" />
+                            {item.sync_status === 'failed' ? (
+                              <IconDelete2 className="text-status-destructive size-6 shrink-0" />
+                            ) : (
+                              <IconCheckCircle className="text-accent-green size-6 shrink-0" />
+                            )}
                           </div>
                         );
                       })}
