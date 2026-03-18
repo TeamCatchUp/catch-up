@@ -220,3 +220,25 @@ export interface ConnectorProgress {
   totalTargets: number;
   items: EmbeddingProgressItem[];
 }
+
+// ─── 임베딩 히스토리 타입 (GET /admin/connector/status) ───
+
+export type ConnectorStatusSource = 'github' | 'jira' | 'slack' | 'confluence';
+export type ConnectorResourceType = 'repositories' | 'projects' | 'channels' | 'spaces';
+
+/** target별 임베딩 데이터 범위 */
+export interface AdminConnectorTargetRangeResponse {
+  scope_id: string;
+  target_id: string;
+  target_name: string;
+  oldest: string | null;
+  latest: string | null;
+}
+
+/** GET /admin/connector/status 응답 */
+export interface AdminConnectorStatusResponse {
+  source: ConnectorStatusSource;
+  resource_type: ConnectorResourceType;
+  total_targets: number;
+  targets: AdminConnectorTargetRangeResponse[];
+}

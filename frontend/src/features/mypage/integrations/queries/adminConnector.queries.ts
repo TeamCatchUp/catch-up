@@ -14,7 +14,9 @@ import type {
   VendorUsersResponse,
 } from '../types/api';
 import type {
+  AdminConnectorStatusResponse,
   AtlassianInstallationStatus,
+  ConnectorStatusSource,
   GithubInstallation,
   SlackInstallationStatus,
   SyncConnector,
@@ -123,6 +125,17 @@ export const adminConnectorQueries = {
         return res.data;
       },
       enabled: !!scopeId,
+    }),
+
+  connectorTargetStatus: (source: ConnectorStatusSource) =>
+    queryOptions({
+      queryKey: [...adminConnectorQueries.all(), 'targetStatus', source] as const,
+      queryFn: async (): Promise<AdminConnectorStatusResponse> => {
+        const res = await api.get<AdminConnectorStatusResponse>(API.admin.connector.status, {
+          params: { source },
+        });
+        return res.data;
+      },
     }),
 
   // ─── Scope 획득용 ───
