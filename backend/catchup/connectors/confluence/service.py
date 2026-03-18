@@ -2,7 +2,7 @@ import asyncio
 from dataclasses import dataclass, field
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
@@ -525,6 +525,93 @@ class ConfluenceIngestionService:
             user_name_map=user_name_map,
         )
 
+    async def _retry_record_batch(
+        self,
+        *,
+        space_key: str,
+        space_name: str | None,
+        user_name_map: dict[str, str | None],
+        record_type: Literal["page", "blogpost"],
+        requested_ids: list[str],
+    ) -> ConfluenceRecordRetryItem:
+        async def _retry_one(content_id: str) -> tuple[str, bool]:
+            try:
+                if record_type == "page":
+                    raw_content = await self.client.get_page_by_id(
+                        content_id,
+                        body_format="storage",
+                    )
+                    content = ConfluencePageResponse.model_validate(raw_content)
+                    transform_result = await self._process_page(
+                        content,
+                        space_key=space_key,
+                        space_name=space_name,
+                        user_name_map=user_name_map,
+                    )
+                else:
+                    raw_content = await self.client.get_blogpost_by_id(
+                        content_id,
+                        body_format="storage",
+                    )
+                    content = ConfluenceBlogPostResponse.model_validate(raw_content)
+                    transform_result = await self._process_blogpost(
+                        content,
+                        space_key=space_key,
+                        space_name=space_name,
+                        user_name_map=user_name_map,
+                    )
+
+                if not transform_result.documents:
+                    logger.info(
+                        "[CONFLUENCE][REPAIR] %s retry produced no documents: cloud_id=%s, space_key=%s, content_id=%s",
+                        record_type,
+                        self.cloud_id,
+                        space_key,
+                        content_id,
+                    )
+                    return content_id, False
+
+                await self._store_transform_result(
+                    entity_type=record_type,
+                    content_id=content.id,
+                    space_key=space_key,
+                    transform_result=transform_result,
+                    audit_context=None,
+                )
+                return content_id, True
+            except Exception as exc:
+                logger.warning(
+                    "[CONFLUENCE][REPAIR] Failed to retry %s: cloud_id=%s, space_key=%s, content_id=%s, error=%s",
+                    record_type,
+                    self.cloud_id,
+                    space_key,
+                    content_id,
+                    exc,
+                )
+                return content_id, False
+
+        succeeded_count = 0
+        failed_ids: list[str] = []
+        batch_size = max(1, settings.CONFLUENCE_SYNC_MAX_CONCURRENT_REQUEST)
+
+        for start in range(0, len(requested_ids), batch_size):
+            batch_ids = requested_ids[start : start + batch_size]
+            results = await asyncio.gather(*[_retry_one(content_id) for content_id in batch_ids])
+
+            for content_id, succeeded in results:
+                if succeeded:
+                    succeeded_count += 1
+                    continue
+                failed_ids.append(content_id)
+
+        return ConfluenceRecordRetryItem(
+            record_type=record_type,
+            requested_ids=requested_ids,
+            retried_count=len(requested_ids),
+            succeeded_count=succeeded_count,
+            failed_ids=self._sort_record_ids(set(failed_ids)),
+        )
+
     async def build_record_gap_report(
         self,
         *,
@@ -535,23 +622,30 @@ class ConfluenceIngestionService:
         since = sync_from_dt or self._resolve_sync_from_dt(sync_days)
         space_id, _space_name, _user_name_map = await self._load_space_context(space_key)
 
-        expected_page_ids = await self._collect_page_ids(
-            space_id=space_id,
-            since=since,
-        )
-        expected_blogpost_ids = await self._collect_blogpost_ids(
-            space_id=space_id,
-            since=since,
-        )
-        stored_page_ids = await self.repository.list_confluence_record_ids(
-            space_key=space_key,
-            entity_type="page",
-            since=since,
-        )
-        stored_blogpost_ids = await self.repository.list_confluence_record_ids(
-            space_key=space_key,
-            entity_type="blogpost",
-            since=since,
+        (
+            expected_page_ids,
+            expected_blogpost_ids,
+            stored_page_ids,
+            stored_blogpost_ids,
+        ) = await asyncio.gather(
+            self._collect_page_ids(
+                space_id=space_id,
+                since=since,
+            ),
+            self._collect_blogpost_ids(
+                space_id=space_id,
+                since=since,
+            ),
+            self.repository.list_confluence_record_ids(
+                space_key=space_key,
+                entity_type="page",
+                since=since,
+            ),
+            self.repository.list_confluence_record_ids(
+                space_key=space_key,
+                entity_type="blogpost",
+                since=since,
+            ),
         )
 
         return ConfluenceRecordGapReport(
@@ -584,109 +678,27 @@ class ConfluenceIngestionService:
         requested_blogpost_ids = list(blogpost_ids or [])
         result_items: list[ConfluenceRecordRetryItem] = []
 
-        space_id, space_name, user_name_map = await self._load_space_context(space_key)
-        _ = space_id
+        _space_id, space_name, user_name_map = await self._load_space_context(space_key)
 
         if requested_page_ids:
-            failed_page_ids: list[str] = []
-            succeeded_page_count = 0
-
-            for page_id in requested_page_ids:
-                try:
-                    raw_page = await self.client.get_page_by_id(page_id, body_format="storage")
-                    page = ConfluencePageResponse.model_validate(raw_page)
-                    transform_result = await self._process_page(
-                        page,
-                        space_key=space_key,
-                        space_name=space_name,
-                        user_name_map=user_name_map,
-                    )
-                    if not transform_result.documents:
-                        logger.info(
-                            "[CONFLUENCE][REPAIR] Page retry produced no documents: cloud_id=%s, space_key=%s, page_id=%s",
-                            self.cloud_id,
-                            space_key,
-                            page_id,
-                        )
-                        continue
-                    await self._store_transform_result(
-                        entity_type="page",
-                        content_id=page.id,
-                        space_key=space_key,
-                        transform_result=transform_result,
-                        audit_context=None,
-                    )
-                    succeeded_page_count += 1
-                except Exception as exc:
-                    logger.warning(
-                        "[CONFLUENCE][REPAIR] Failed to retry page: cloud_id=%s, space_key=%s, page_id=%s, error=%s",
-                        self.cloud_id,
-                        space_key,
-                        page_id,
-                        exc,
-                    )
-                    failed_page_ids.append(page_id)
-
             result_items.append(
-                ConfluenceRecordRetryItem(
+                await self._retry_record_batch(
+                    space_key=space_key,
+                    space_name=space_name,
+                    user_name_map=user_name_map,
                     record_type="page",
                     requested_ids=requested_page_ids,
-                    retried_count=len(requested_page_ids),
-                    succeeded_count=succeeded_page_count,
-                    failed_ids=self._sort_record_ids(set(failed_page_ids)),
                 )
             )
 
         if requested_blogpost_ids:
-            failed_blogpost_ids: list[str] = []
-            succeeded_blogpost_count = 0
-
-            for blogpost_id in requested_blogpost_ids:
-                try:
-                    raw_blogpost = await self.client.get_blogpost_by_id(
-                        blogpost_id,
-                        body_format="storage",
-                    )
-                    blogpost = ConfluenceBlogPostResponse.model_validate(raw_blogpost)
-                    transform_result = await self._process_blogpost(
-                        blogpost,
-                        space_key=space_key,
-                        space_name=space_name,
-                        user_name_map=user_name_map,
-                    )
-                    if not transform_result.documents:
-                        logger.info(
-                            "[CONFLUENCE][REPAIR] Blogpost retry produced no documents: cloud_id=%s, space_key=%s, blogpost_id=%s",
-                            self.cloud_id,
-                            space_key,
-                            blogpost_id,
-                        )
-                        continue
-                    await self._store_transform_result(
-                        entity_type="blogpost",
-                        content_id=blogpost.id,
-                        space_key=space_key,
-                        transform_result=transform_result,
-                        audit_context=None,
-                    )
-                    succeeded_blogpost_count += 1
-                except Exception as exc:
-                    logger.warning(
-                        "[CONFLUENCE][REPAIR] Failed to retry blogpost: cloud_id=%s, space_key=%s, blogpost_id=%s, error=%s",
-                        self.cloud_id,
-                        space_key,
-                        blogpost_id,
-                        exc,
-                    )
-                    failed_blogpost_ids.append(blogpost_id)
-
             result_items.append(
-                ConfluenceRecordRetryItem(
+                await self._retry_record_batch(
+                    space_key=space_key,
+                    space_name=space_name,
+                    user_name_map=user_name_map,
                     record_type="blogpost",
                     requested_ids=requested_blogpost_ids,
-                    retried_count=len(requested_blogpost_ids),
-                    succeeded_count=succeeded_blogpost_count,
-                    failed_ids=self._sort_record_ids(set(failed_blogpost_ids)),
                 )
             )
 
