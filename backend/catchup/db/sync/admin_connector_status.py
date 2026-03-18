@@ -8,7 +8,7 @@ from sqlalchemy import DateTime, String, cast, column, func, literal, select, ta
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
-from catchup.db.models import GithubRepository, SyncConnector, SyncEvent, SyncJob, SyncType
+from catchup.db.models import SyncConnector, SyncEvent, SyncJob, SyncType
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +108,7 @@ def _build_range_aggregates(
 def _get_embedding_range_by_github_target(
     db: Session,
     *,
-    scope_id: str,
-    target_id: str,
+    target_name: str,
 ) -> tuple[datetime | None, datetime | None]:
     time_fields = _get_time_fields(SyncConnector.GITHUB)
     oldest_at, latest_at = _build_range_aggregates(time_fields)
@@ -125,15 +124,9 @@ def _get_embedding_range_by_github_target(
             latest_at.label("latest_at"),
         )
         .select_from(_pg_embedding)
-        .join(
-            GithubRepository,
-            cast(GithubRepository.repo_id, String) == target_id,
-        )
         .where(
-            cast(GithubRepository.installation_id, String) == scope_id,
             _pg_embedding.c.cmetadata["source"].astext == SyncConnector.GITHUB.value,
-            _pg_embedding.c.cmetadata["installation_id"].astext == scope_id,
-            embedding_full_name == GithubRepository.full_name,
+            func.lower(embedding_full_name) == func.lower(target_name),
         )
     )
     row = db.execute(stmt).first()
@@ -202,13 +195,13 @@ def _get_embedding_range_by_target(
     connector: SyncConnector,
     scope_id: str,
     target_id: str,
+    target_name: str,
 ) -> tuple[datetime | None, datetime | None]:
     try:
         if connector == SyncConnector.GITHUB:
             return _get_embedding_range_by_github_target(
                 db,
-                scope_id=scope_id,
-                target_id=target_id,
+                target_name=target_name,
             )
         if connector == SyncConnector.JIRA:
             return _get_embedding_range_by_jira_target(
@@ -252,6 +245,7 @@ def list_admin_connector_target_range_rows(
             connector=connector,
             scope_id=target.scope_id,
             target_id=target.target_id,
+            target_name=target.target_name,
         )
         rows.append(
             AdminConnectorTargetRangeRow(
