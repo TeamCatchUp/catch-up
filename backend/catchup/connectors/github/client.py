@@ -509,7 +509,22 @@ class GitHubApiClient:
         response = await self._with_rate_limit(
             lambda: self._github.async_graphql(query, variables)
         )
-        return response or {}
+        if not response:
+            return {}
+
+        if isinstance(response, dict):
+            errors = response.get("errors")
+            if errors:
+                logger.error(
+                    "[GITHUB][GRAPHQL] Query returned errors: variables=%s, errors=%s",
+                    variables,
+                    errors,
+                )
+            data = response.get("data")
+            if isinstance(data, dict):
+                return data
+
+        return response
     
     @staticmethod
     def _parse_graphql_datetime(value: str | None) -> datetime | None:
