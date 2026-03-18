@@ -13,6 +13,9 @@ from catchup.sync.common.exceptions import SyncRequestError
 from catchup.sync.repair.github_record_repair_service import (
     get_github_record_repair_service,
 )
+from catchup.sync.repair.slack_record_repair_service import (
+    get_slack_record_repair_service,
+)
 
 
 class RecordRepairHandler(Protocol):
@@ -36,8 +39,10 @@ class RecordRepairService:
         self,
         *,
         github_handler: RecordRepairHandler,
+        slack_handler: RecordRepairHandler,
     ):
         self._github_handler = github_handler
+        self._slack_handler = slack_handler
 
     def _resolve_handler(
         self,
@@ -45,6 +50,8 @@ class RecordRepairService:
     ) -> RecordRepairHandler:
         if connector == SyncConnector.GITHUB:
             return self._github_handler
+        if connector == SyncConnector.SLACK:
+            return self._slack_handler
 
         raise SyncRequestError(
             "record repair not supported for this connector",
@@ -82,4 +89,5 @@ class RecordRepairService:
 def get_record_repair_service() -> RecordRepairService:
     return RecordRepairService(
         github_handler=get_github_record_repair_service(),
+        slack_handler=get_slack_record_repair_service(),
     )
