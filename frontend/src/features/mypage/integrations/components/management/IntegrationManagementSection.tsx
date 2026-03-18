@@ -67,7 +67,6 @@ const IntegrationManagementSection = ({
     currentPage * RESOURCES_PER_PAGE,
   );
 
-
   return (
     <div className="flex gap-8">
       <div className="flex flex-1 flex-col gap-4">
