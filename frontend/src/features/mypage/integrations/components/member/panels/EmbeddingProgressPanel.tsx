@@ -153,7 +153,12 @@ const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading, hi
   }
 
   const selectedProgress = progresses.find((p) => p.connector === selectedConnector);
-  const hasProgressItems = selectedProgress && selectedProgress.items.length > 0;
+  // 진행 중 섹션: pending/in_progress/retrying만
+  const activeItems = selectedProgress?.items.filter(
+    (item) => item.status === 'pending' || item.status === 'in_progress' || item.status === 'retrying',
+  );
+  const hasActiveItems = activeItems && activeItems.length > 0;
+  // 히스토리 섹션: 필터 칩 적용
   const allHistoryItems = historyByConnector?.[selectedConnector];
   const historyItems = allHistoryItems?.filter((item) => {
     if (historyFilter === 'all') return true;
@@ -257,15 +262,15 @@ const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading, hi
             {/* 스크롤 영역 */}
             <div className="border-edge-assistive bg-fill-normal flex overflow-hidden rounded-2xl border">
               <div className="thin-scrollbar flex max-h-120 flex-1 flex-col overflow-y-auto">
-                {/* 임베딩 진행 중 섹션 */}
-                {(historyFilter === 'all' || historyFilter === 'success') && hasProgressItems && (
+                {/* 임베딩 진행 중 섹션: "전체" 필터일 때만 표시 */}
+                {historyFilter === 'all' && hasActiveItems && (
                   <div className="flex flex-col gap-2.5 p-5">
                     <div className="flex items-center gap-1">
                       <span className="text-body-xsmall text-content-primary">임베딩 진행 중</span>
                       <IconRotate className="text-content-primary size-4.5" />
                     </div>
                     <div className="flex flex-col">
-                      {selectedProgress.items.map((item: EmbeddingProgressItem) => {
+                      {activeItems.map((item: EmbeddingProgressItem) => {
                         const ResourceIcon = RESOURCE_ICONS[selectedConnector];
                         return (
                           <div
@@ -284,18 +289,29 @@ const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading, hi
                   </div>
                 )}
 
-                {/* 빈 상태 (진행 중 항목 없고 히스토리도 없을 때) */}
-                {!hasProgressItems && !historyItems?.length && (
-                  <div className="flex h-14 items-center justify-center px-4">
-                    <span className="text-body-small text-content-assistive">
-                      {isInitialLoading
-                        ? '임베딩 상태를 불러오는 중...'
-                        : buttonStates[selectedConnector] === 'in_progress'
-                          ? '임베딩 정보를 불러오는 중...'
-                          : '진행 중인 항목이 없습니다.'}
-                    </span>
-                  </div>
-                )}
+                {/* 빈 상태 */}
+                {(() => {
+                  const showActive = historyFilter === 'all' && hasActiveItems;
+                  const showHistory = historyItems && historyItems.length > 0;
+                  if (showActive || showHistory) return null;
+                  let message: string;
+                  if (isInitialLoading) {
+                    message = '임베딩 상태를 불러오는 중...';
+                  } else if (historyFilter === 'success') {
+                    message = '성공한 항목이 없습니다.';
+                  } else if (historyFilter === 'failed') {
+                    message = '실패한 항목이 없습니다.';
+                  } else if (buttonStates[selectedConnector] === 'in_progress') {
+                    message = '임베딩 정보를 불러오는 중...';
+                  } else {
+                    message = '진행 중인 항목이 없습니다.';
+                  }
+                  return (
+                    <div className="flex h-14 items-center justify-center px-4">
+                      <span className="text-body-small text-content-assistive">{message}</span>
+                    </div>
+                  );
+                })()}
 
                 {/* 임베딩 히스토리 섹션 */}
                 {historyItems?.length ? (
