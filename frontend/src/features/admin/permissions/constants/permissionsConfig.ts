@@ -42,3 +42,11 @@ export const PERMISSION_CHANGE_REASONS = [
   '일시적 승격',
   '직접 입력',
 ] as const;
+
+/** promote API 에러 코드 → 사용자 메시지 */
+export const PROMOTE_ERROR_MESSAGES: Record<string, string> = {
+  user_not_found: '해당 사용자를 찾을 수 없습니다.',
+  user_already_admin: '이미 Admin 권한을 보유한 사용자입니다.',
+  cannot_promote_deleted_user: '삭제된 사용자에게 권한을 부여할 수 없습니다.',
+  cannot_promote_inactive_user: '비활성화된 사용자에게 권한을 부여할 수 없습니다.',
+};
