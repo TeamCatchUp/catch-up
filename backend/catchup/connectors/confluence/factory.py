@@ -7,6 +7,7 @@ AtlassianTokenManager로 OAuth Token을 조회하여 서비스 인스턴스를 �
 
 import logging
 
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
@@ -23,13 +24,14 @@ from catchup.connectors.atlassian.token_manager import (
 )
 from catchup.connectors.confluence.service import ConfluenceIngestionService
 from catchup.db.atlassian import oauth_repository
+from catchup.db.engine import SessionLocal
 from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
 
 logger = logging.getLogger(__name__)
 
 
 async def create_confluence_ingestion_service(
-    db: Session,
+    db: Session | None,
     cloud_id: str,
 ) -> ConfluenceIngestionService:
     token_manager = AtlassianTokenManager(
@@ -39,7 +41,15 @@ async def create_confluence_ingestion_service(
 
     try:
         token_provider = AtlassianTokenProvider(token_manager)
-        token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
+        if db is None:
+            def _load_context_sync():
+                with SessionLocal() as session:
+                    return oauth_repository.get_token_by_cloud_id(session, cloud_id)
+
+            token_record = await run_in_threadpool(_load_context_sync)
+        else:
+            token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
+
         if token_record is None:
             raise AtlassianTokenNotFoundError(cloud_id)
     except AtlassianTokenNotFoundError as exc:

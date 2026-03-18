@@ -13,6 +13,9 @@ from catchup.sync.common.exceptions import SyncRequestError
 from catchup.sync.repair.github_record_repair_service import (
     get_github_record_repair_service,
 )
+from catchup.sync.repair.confluence_record_repair_service import (
+    get_confluence_record_repair_service,
+)
 from catchup.sync.repair.jira_record_repair_service import (
     get_jira_record_repair_service,
 )
@@ -41,10 +44,12 @@ class RecordRepairService:
     def __init__(
         self,
         *,
+        confluence_handler: RecordRepairHandler,
         github_handler: RecordRepairHandler,
         jira_handler: RecordRepairHandler,
         slack_handler: RecordRepairHandler,
     ):
+        self._confluence_handler = confluence_handler
         self._github_handler = github_handler
         self._jira_handler = jira_handler
         self._slack_handler = slack_handler
@@ -53,6 +58,8 @@ class RecordRepairService:
         self,
         connector: SyncConnector,
     ) -> RecordRepairHandler:
+        if connector == SyncConnector.CONFLUENCE:
+            return self._confluence_handler
         if connector == SyncConnector.GITHUB:
             return self._github_handler
         if connector == SyncConnector.JIRA:
@@ -95,6 +102,7 @@ class RecordRepairService:
 @lru_cache(maxsize=1)
 def get_record_repair_service() -> RecordRepairService:
     return RecordRepairService(
+        confluence_handler=get_confluence_record_repair_service(),
         github_handler=get_github_record_repair_service(),
         jira_handler=get_jira_record_repair_service(),
         slack_handler=get_slack_record_repair_service(),
