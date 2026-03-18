@@ -569,7 +569,7 @@ class ConfluenceIngestionService:
                         space_key,
                         content_id,
                     )
-                    return content_id, False
+                    return content_id, True
 
                 await self._store_transform_result(
                     entity_type=record_type,
@@ -702,29 +702,7 @@ class ConfluenceIngestionService:
                 )
             )
 
-        gap_report = await self.build_record_gap_report(
-            space_key=space_key,
-            sync_days=sync_days,
-            sync_from_dt=sync_from_dt,
-        )
-        remaining_by_type = {
-            item.record_type: item.missing_ids
-            for item in gap_report.records
-        }
-
-        return ConfluenceRecordRetryResult(
-            records=[
-                ConfluenceRecordRetryItem(
-                    record_type=item.record_type,
-                    requested_ids=item.requested_ids,
-                    retried_count=item.retried_count,
-                    succeeded_count=item.succeeded_count,
-                    failed_ids=item.failed_ids,
-                    remaining_missing_ids=remaining_by_type.get(item.record_type, []),
-                )
-                for item in result_items
-            ]
-        )
+        return ConfluenceRecordRetryResult(records=result_items)
 
     async def incremental_sync(
         self,

@@ -321,14 +321,6 @@ class SlackIngestionService:
                     self._extract_record_ids_from_doc_ids([doc.id for doc in documents])
                 )
 
-        gap_report = await self.build_record_gap_report(
-            channel_id=channel_id,
-            channel_name=channel_name,
-            sync_from_ts=sync_from_ts,
-            sync_days=sync_days,
-        )
-        remaining_missing_ids = gap_report.records[0].missing_ids if gap_report.records else []
-
         return SlackRecordRetryResult(
             records=[
                 SlackRecordRetryItem(
@@ -337,7 +329,6 @@ class SlackIngestionService:
                     retried_count=len(requested_ids),
                     succeeded_count=succeeded_count,
                     failed_ids=self._sort_record_ids(set(failed_ids)),
-                    remaining_missing_ids=remaining_missing_ids,
                 )
             ]
         )
