@@ -1,10 +1,20 @@
-from datetime import datetime, time, timedelta
-from typing import Optional
 import uuid
-from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import Session, aliased, joinedload
+from datetime import datetime
+from datetime import time
+from datetime import timedelta
+from typing import Optional
 
-from catchup.db.models import ChatHistory, ChatRoom, SenderType
+from sqlalchemy import and_
+from sqlalchemy import func
+from sqlalchemy import or_
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from sqlalchemy.orm import aliased
+from sqlalchemy.orm import joinedload
+
+from catchup.db.models import ChatHistory
+from catchup.db.models import ChatRoom
+from catchup.db.models import SenderType
 from catchup.rag.schemas.sources import BaseSource
 
 
@@ -80,14 +90,16 @@ def add_message(
     room_id: int,
     role: str,
     content: str,
-    sources: Optional[list[BaseSource]]
+    sources: list[BaseSource] | None = None,
+    trace_id: str | None = None 
 ) -> ChatHistory:
     """채팅 메시지 저장"""
     message = ChatHistory(
         chat_room_id=room_id,
         sender_type=SenderType.HUMAN if role == "user" else SenderType.ASSISTANT,
         content=content,
-        sources=sources or []
+        sources=sources or [],
+        trace_id=trace_id
     )
     db.add(message)
     
@@ -304,7 +316,6 @@ def get_message(
 
 
 def update_message_feedback(
-    db: Session,
     message: ChatHistory,
     is_liked: Optional[bool] = None,
     reasons: Optional[list[str]] = None,
@@ -315,8 +326,6 @@ def update_message_feedback(
     if is_liked is False:
         message.feedback_reasons = reasons
         message.feedback_comment = comment
-    
-    db.add(message)
     
     return message
 

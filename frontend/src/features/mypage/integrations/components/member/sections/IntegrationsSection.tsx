@@ -1,10 +1,12 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 
 import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
+import { useEmbeddingHistory } from '../../../hooks/useEmbeddingHistory';
 import { useEmbeddingJobs } from '../../../hooks/useEmbeddingJobs';
 import { useMemberIntegrationViewModel } from '../../../hooks/useMemberIntegrationViewModel';
 import type { SyncFilterType } from '../../../types/api';
@@ -19,6 +21,7 @@ const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence
 
 /** 관리자 이용자 연동 탭 섹션 */
 const IntegrationsSection = () => {
+  const queryClient = useQueryClient();
   const [filterType, setFilterType] = useState<SyncFilterType>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [completionInfo, setCompletionInfo] = useState<{
@@ -34,6 +37,7 @@ const IntegrationsSection = () => {
   });
 
   const { isInitialLoading, buttonStates, progresses, handleJobStart } = useEmbeddingJobs();
+  const { historyByConnector } = useEmbeddingHistory();
 
   // in_progress → completed 전환 감지 → 결과 모달 표시
   const [lastSeenStates, setLastSeenStates] = useState('');
@@ -48,6 +52,7 @@ const IntegrationsSection = () => {
         const successCount = progress?.items.filter((item) => item.status === 'success').length ?? 0;
         const totalCount = progress?.items.length ?? 0;
         setCompletionInfo({ connector, successCount, totalCount });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'connector', 'targetStatus'] });
         break;
       }
     }
@@ -67,7 +72,7 @@ const IntegrationsSection = () => {
     <section className="flex w-full flex-col gap-8">
       <div className="flex flex-col gap-3">
         <StatusCardsSection cards={cards} buttonStates={buttonStates} onJobStart={handleJobStart} isInitialLoading={isInitialLoading} />
-        <EmbeddingProgressPanel progresses={progresses} buttonStates={buttonStates} isInitialLoading={isInitialLoading} />
+        <EmbeddingProgressPanel progresses={progresses} buttonStates={buttonStates} isInitialLoading={isInitialLoading} historyByConnector={historyByConnector} />
       </div>
       <UsersStatusSection
         total={total}

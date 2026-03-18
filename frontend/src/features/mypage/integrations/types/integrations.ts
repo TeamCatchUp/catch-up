@@ -20,11 +20,17 @@ export interface IntegrationMenuItem extends IntegrationAccountMeta {
   connected: boolean;
 }
 
+/** 연동된 리소스 항목 (per-target 임베딩 기간 포함) */
+export interface ConnectorResource {
+  name: string;
+  dateRange: string | null;
+}
+
 /** 서비스별 연동 상세 정보 */
 export interface ConnectorDetail {
   connected: boolean;
   dataRange: string;
-  resources: string[];
+  resources: ConnectorResource[];
   resourceLabel: string;
 }
 
