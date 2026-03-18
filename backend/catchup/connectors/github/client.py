@@ -517,6 +517,88 @@ class GitHubApiClient:
             return None
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
+    async def _iterate_connection_nodes_graphql(
+        self,
+        *,
+        query: str,
+        owner: str,
+        repo: str,
+        connection_name: str,
+        since: datetime | None = None,
+        per_page: int = 100,
+    ) -> AsyncIterator[list[dict[str, Any]]]:
+        after_cursor = None
+
+        while True:
+            response = await self._graphql(
+                query,
+                {
+                    "owner": owner,
+                    "repo": repo,
+                    "first": per_page,
+                    "after": after_cursor,
+                },
+            )
+
+            if not response:
+                break
+
+            connection = response.get("repository", {}).get(connection_name, {})
+            if not connection:
+                break
+
+            nodes = connection.get("nodes") or []
+            batch: list[dict[str, Any]] = []
+
+            for node in nodes:
+                if not node:
+                    continue
+
+                updated_at = self._parse_graphql_datetime(node.get("updatedAt"))
+                if since and updated_at and updated_at < since:
+                    if batch:
+                        yield batch
+                    return
+
+                batch.append(node)
+
+            if batch:
+                yield batch
+
+            page_info = connection.get("pageInfo", {})
+            if not page_info.get("hasNextPage"):
+                break
+
+            after_cursor = page_info.get("endCursor")
+
+    async def _list_entity_numbers_graphql(
+        self,
+        *,
+        query: str,
+        owner: str,
+        repo: str,
+        connection_name: str,
+        since: datetime | None = None,
+        per_page: int = 100,
+    ) -> list[str]:
+        numbers: list[str] = []
+
+        async for batch in self._iterate_connection_nodes_graphql(
+            query=query,
+            owner=owner,
+            repo=repo,
+            connection_name=connection_name,
+            since=since,
+            per_page=per_page,
+        ):
+            for node in batch:
+                number = node.get("number")
+                if number is None:
+                    continue
+                numbers.append(str(number))
+
+        return numbers
+
     # ============================================================
     # GraphQL APIs
     # ============================================================
@@ -534,53 +616,15 @@ class GitHubApiClient:
         - updatedAt이 since 이전인 항목을 만나면 즉시 종료해 불필요 호출 차단
         - 각 페이지의 노드 리스트를 yield 하여 호출 위치에서 배치 처리
         """
-        after_cursor = None 
-        per_page = 50           
-
-        while True:
-            variables = {
-                "owner": owner,
-                "repo": repo,
-                "first": per_page,
-                "after": after_cursor,
-            }
-
-            response = await self._graphql(PULL_REQUESTS_QUERY, variables)
-
-
-            if not response:
-                break
-
-            pr_connection = response.get("repository", {}).get("pullRequests", {})
-            if not pr_connection:
-                break
-
-            nodes = pr_connection.get("nodes") or []
-
-            batch: list[dict[str, Any]] = []
-            for node in nodes:
-                if not node:
-                    continue
-
-                if since:
-                    updated_at_str = node.get("updatedAt")
-                    if updated_at_str:
-                        updated_at = self._parse_graphql_datetime(updated_at_str)
-                        if updated_at < since:
-                            if batch:
-                                yield batch
-                            return
-
-                batch.append(node)
-
-            if batch:
-                yield batch
-            
-            page_info = pr_connection.get("pageInfo", {})
-            if not page_info.get("hasNextPage"):
-                break
-
-            after_cursor = page_info.get("endCursor")
+        async for batch in self._iterate_connection_nodes_graphql(
+            query=PULL_REQUESTS_QUERY,
+            owner=owner,
+            repo=repo,
+            connection_name="pullRequests",
+            since=since,
+            per_page=50,
+        ):
+            yield batch
 
     async def list_issues_graphql(
         self,
@@ -595,53 +639,15 @@ class GitHubApiClient:
         - updatedAt이 since 이전이면 즉시 종료
         - 각 페이지 노드 리스트를 yield
         """
-        after_cursor = None
-        per_page = 50
-        
-        while True:
-            variables = {
-                "owner": owner,
-                "repo": repo,
-                "first": per_page,
-                "after": after_cursor,
-            }
-
-            response = await self._graphql(ISSUES_QUERY, variables)
-
-            if not response:
-                break
-
-            issue_connection = response.get("repository", {}).get("issues", {})
-            if not issue_connection:
-                break
-
-            nodes = issue_connection.get("nodes") or []
-
-            batch: list[dict[str, Any]] = []
-            for node in nodes:
-                if not node:
-                    continue
-
-                # since 필터링: updatedAt 기준 정렬이므로 이전 시점 도달 시 종료
-                if since:
-                    updated_at_str = node.get("updatedAt")
-                    if updated_at_str:
-                        updated_at = self._parse_graphql_datetime(updated_at_str)
-                        if updated_at < since:
-                            if batch:
-                                yield batch
-                            return
-
-                batch.append(node)
-
-            if batch:
-                yield batch
-
-            page_info = issue_connection.get("pageInfo", {})
-            if not page_info.get("hasNextPage"):
-                break
-
-            after_cursor = page_info.get("endCursor")
+        async for batch in self._iterate_connection_nodes_graphql(
+            query=ISSUES_QUERY,
+            owner=owner,
+            repo=repo,
+            connection_name="issues",
+            since=since,
+            per_page=50,
+        ):
+            yield batch
 
     async def list_issue_numbers_graphql(
         self,
@@ -649,53 +655,14 @@ class GitHubApiClient:
         repo: str,
         since: datetime | None = None,
     ) -> list[str]:
-        numbers: list[str] = []
-        after_cursor = None
-        per_page = 100
-
-        while True:
-            response = await self._graphql(
-                ISSUE_NUMBERS_QUERY,
-                {
-                    "owner": owner,
-                    "repo": repo,
-                    "first": per_page,
-                    "after": after_cursor,
-                },
-            )
-
-            issue_connection = response.get("repository", {}).get("issues", {})
-            if not issue_connection:
-                break
-
-            nodes = issue_connection.get("nodes") or []
-            stop = False
-
-            for node in nodes:
-                if not node:
-                    continue
-
-                updated_at = self._parse_graphql_datetime(node.get("updatedAt"))
-                if since and updated_at and updated_at < since:
-                    stop = True
-                    break
-
-                number = node.get("number")
-                if number is None:
-                    continue
-
-                numbers.append(str(number))
-
-            if stop:
-                break
-
-            page_info = issue_connection.get("pageInfo", {})
-            if not page_info.get("hasNextPage"):
-                break
-
-            after_cursor = page_info.get("endCursor")
-
-        return numbers
+        return await self._list_entity_numbers_graphql(
+            query=ISSUE_NUMBERS_QUERY,
+            owner=owner,
+            repo=repo,
+            connection_name="issues",
+            since=since,
+            per_page=100,
+        )
 
     async def list_pull_request_numbers_graphql(
         self,
@@ -703,53 +670,14 @@ class GitHubApiClient:
         repo: str,
         since: datetime | None = None,
     ) -> list[str]:
-        numbers: list[str] = []
-        after_cursor = None
-        per_page = 100
-
-        while True:
-            response = await self._graphql(
-                PULL_REQUEST_NUMBERS_QUERY,
-                {
-                    "owner": owner,
-                    "repo": repo,
-                    "first": per_page,
-                    "after": after_cursor,
-                },
-            )
-
-            pr_connection = response.get("repository", {}).get("pullRequests", {})
-            if not pr_connection:
-                break
-
-            nodes = pr_connection.get("nodes") or []
-            stop = False
-
-            for node in nodes:
-                if not node:
-                    continue
-
-                updated_at = self._parse_graphql_datetime(node.get("updatedAt"))
-                if since and updated_at and updated_at < since:
-                    stop = True
-                    break
-
-                number = node.get("number")
-                if number is None:
-                    continue
-
-                numbers.append(str(number))
-
-            if stop:
-                break
-
-            page_info = pr_connection.get("pageInfo", {})
-            if not page_info.get("hasNextPage"):
-                break
-
-            after_cursor = page_info.get("endCursor")
-
-        return numbers
+        return await self._list_entity_numbers_graphql(
+            query=PULL_REQUEST_NUMBERS_QUERY,
+            owner=owner,
+            repo=repo,
+            connection_name="pullRequests",
+            since=since,
+            per_page=100,
+        )
 
     async def get_issue_graphql(
         self,
