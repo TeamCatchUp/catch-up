@@ -3,9 +3,10 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
-from sqlalchemy import and_, delete, func, or_, select, text
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
+from catchup.user.role_service import promote_user_to_admin as promote_user_to_admin_service
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import AdminOAuthAuditMetadata
 from catchup.audit.service import emit_audit_event
@@ -13,47 +14,40 @@ from catchup.auth.dependencies import require_admin_user
 from catchup.chat.schemas import UserQueryWithSaveStatusResponse
 from catchup.db.chat_room import get_all_queries_for_admin
 from catchup.db.dependencies import get_db
+from catchup.db.engine import SessionLocal
 from catchup.db.models import (
-    AtlassianOAuthToken,
     ConfluenceSpace,
     ConfluenceUser,
     GitHubUser,
-    GithubInstallation,
     GithubRepository,
     InactiveUser,
     JiraAccountType,
     JiraProject,
     JiraUser,
     PreMappingBuffer,
-    SlackOAuthToken,
     SyncConnector,
-    SyncJob,
-    SyncJobStatus,
-    SyncType,
     SlackUser,
-    SlackChannel,
     SourceType,
     User,
     UserStatus,
     UserRole,
 )
+from catchup.db.sync.admin_connector_status import list_admin_connector_target_range_rows
 from catchup.db.user_source_mapping import SOURCE_MAP
 from catchup.db.users import get_all_oauth_users_for_admin, get_all_users_for_admin
 from catchup.events.enums import AdminOAuthAction, EventType
 from catchup.onboarding.oauth import sync_initial_keycloak_users
 from catchup.server.auth.schemas import (
     ConfluenceSyncableResponse,
-    ConfluenceConnectorStatus,
     ConfluenceSyncableSpace,
-    GithubConnectorStatus,
     GithubSyncableRepository,
     GithubSyncableResponse,
-    JiraConnectorStatus,
     JiraSyncableProject,
     JiraSyncableResponse,
-    SlackConnectorStatus,
 )
 from catchup.server.admin.schemas import (
+    AdminConnectorStatusResponse,
+    AdminConnectorTargetRangeResponse,
     OAuthUserResponse,
     PreMappingBulkUpdateRequest,
     PreMappingInfo,
@@ -76,6 +70,8 @@ from catchup.server.admin.schemas import (
     SlackAccount,
     ConfluenceAccount,
     ConfluenceCloudIdListResponse,
+    ConnectorResourceType,
+    ConnectorStatusSource,
 )
 from catchup.server.schemas import BasePagination, calculate_skip
 
@@ -93,304 +89,68 @@ def _format_date(dt):
         return None
 
 
-def _latest_full_sync_succeeded_at(
-    db: Session,
-    *,
-    connector: SyncConnector,
-    scope_ids: list[str],
-):
-    if not scope_ids:
+def _format_datetime(dt):
+    if not dt:
+        return None
+    try:
+        return dt.isoformat()
+    except Exception:
         return None
 
-    return (
-        db.query(func.max(SyncJob.succeeded_at))
-        .filter(
-            SyncJob.connector == connector,
-            SyncJob.sync_type == SyncType.FULL,
-            SyncJob.status == SyncJobStatus.SUCCESS,
-            SyncJob.scope_id.in_(scope_ids),
-        )
-        .scalar()
-    )
+
+def _get_connector_status_spec(source: ConnectorStatusSource):
+    if source == ConnectorStatusSource.GITHUB:
+        return SyncConnector.GITHUB, ConnectorResourceType.REPOSITORIES
+    if source == ConnectorStatusSource.JIRA:
+        return SyncConnector.JIRA, ConnectorResourceType.PROJECTS
+    if source == ConnectorStatusSource.SLACK:
+        return SyncConnector.SLACK, ConnectorResourceType.CHANNELS
+    if source == ConnectorStatusSource.CONFLUENCE:
+        return SyncConnector.CONFLUENCE, ConnectorResourceType.SPACES
+    raise HTTPException(status_code=400, detail="unsupported source")
 
 
-def _get_github_status(db: Session) -> GithubConnectorStatus:
-    installation_ids = [
-        row[0] for row in db.query(GithubInstallation.installation_id).all()
-    ]
-
-    if not installation_ids:
-        logger.info("[GITHUB][FULL SYNC] Github connector status: no installation found")
-        return GithubConnectorStatus(
-            connected=False,
-            oldest=None,
-            latest=None,
-            repositories=[],
-        )
-
-    repositories = [
-        row[0]
-        for row in db.query(GithubRepository.full_name)
-        .filter(GithubRepository.installation_id.in_(installation_ids))
-        .all()
-    ]
-
-    latest_dt = _latest_full_sync_succeeded_at(
+def _get_connector_status(
+    db: Session,
+    *,
+    source: ConnectorStatusSource,
+) -> AdminConnectorStatusResponse:
+    connector, resource_type = _get_connector_status_spec(source)
+    target_rows = list_admin_connector_target_range_rows(
         db,
-        connector=SyncConnector.GITHUB,
-        scope_ids=[str(installation_id) for installation_id in installation_ids],
+        connector=connector,
     )
-
-    oldest_dt = None
-    try:
-        sql = text(
-            """
-            SELECT MIN(
-                COALESCE(
-                    cmetadata ->> 'created_at',
-                    cmetadata ->> 'committed_at',
-                    cmetadata ->> 'merged_at',
-                    cmetadata ->> 'closed_at',
-                    cmetadata ->> 'synced_at'
-                )::timestamptz
-            ) AS oldest
-            FROM langchain_pg_embedding
-            WHERE cmetadata ->> 'source' = 'github'
-            """
-        )
-        result = db.execute(sql).first()
-        oldest_dt = result[0] if result and result[0] else None
-    except Exception as e:
-        logger.warning(
-            "[GITHUB][FULL SYNC] Failed to fetch github oldest embedding date: %s", e
-        )
-
-    return GithubConnectorStatus(
-        connected=True,
-        oldest=_format_date(oldest_dt),
-        latest=_format_date(latest_dt),
-        repositories=repositories,
+    return AdminConnectorStatusResponse(
+        source=source,
+        resource_type=resource_type,
+        total_targets=len(target_rows),
+        targets=[
+            AdminConnectorTargetRangeResponse(
+                scope_id=row.scope_id,
+                target_id=row.target_id,
+                target_name=row.target_name,
+                sync_status=row.sync_status,
+                last_succeeded_at=_format_datetime(row.last_succeeded_at),
+                last_failed_at=_format_datetime(row.last_failed_at),
+                oldest=_format_date(row.oldest_at),
+                latest=_format_date(row.latest_at),
+            )
+            for row in target_rows
+        ],
     )
 
 
 @router.get(
-    path="/connector/github/status",
-    description="Github 연동 상태 조회 (admin 전용)",
-    response_model=GithubConnectorStatus,
+    path="/connector/status",
+    description="source별 sync target의 pg embedding 데이터 범위 조회 (admin 전용)",
+    response_model=AdminConnectorStatusResponse,
 )
-def get_github_connector_status(
+def get_connector_status(
+    source: ConnectorStatusSource = Query(..., description="github, jira, slack, confluence"),
     db: Session = Depends(get_db),
     _admin_user: User = Depends(require_admin_user),
 ):
-    return _get_github_status(db)
-
-
-def _get_jira_status(db: Session) -> JiraConnectorStatus:
-    # Atlassian OAuth 토큰이 있으면 Jira 연동됨으로 판단 (공용 토큰)
-    cloud_ids = [row[0] for row in db.query(AtlassianOAuthToken.cloud_id).all()]
-
-    if not cloud_ids:
-        logger.info("[JIRA][FULL SYNC] Jira connector status: no oauth token found")
-        return JiraConnectorStatus(
-            connected=False,
-            oldest=None,
-            latest=None,
-            projects=[],
-        )
-
-    projects = [
-        f"{row.project_key}:{row.project_name}"
-        for row in db.query(JiraProject.project_key, JiraProject.project_name)
-        .filter(JiraProject.cloud_id.in_(cloud_ids))
-        .all()
-    ]
-
-    latest_dt = _latest_full_sync_succeeded_at(
-        db,
-        connector=SyncConnector.JIRA,
-        scope_ids=cloud_ids,
-    )
-
-    oldest_dt = None
-    try:
-        sql = text(
-            """
-            SELECT MIN(
-                COALESCE(
-                    cmetadata ->> 'created_at',
-                    cmetadata ->> 'updated_at',
-                    cmetadata ->> 'resolved_at',
-                    cmetadata ->> 'synced_at'
-                )::timestamptz
-            ) AS oldest
-            FROM langchain_pg_embedding
-            WHERE cmetadata ->> 'source' = 'jira'
-            """
-        )
-        result = db.execute(sql).first()
-        oldest_dt = result[0] if result and result[0] else None
-    except Exception as e:
-        logger.warning(
-            "[JIRA][FULL SYNC] Failed to fetch jira oldest embedding date: %s", e
-        )
-
-    return JiraConnectorStatus(
-        connected=True,
-        oldest=_format_date(oldest_dt),
-        latest=_format_date(latest_dt),
-        projects=projects,
-    )
-
-
-@router.get(
-    path="/connector/jira/status",
-    description="Jira 연동 상태 조회 (admin 전용)",
-    response_model=JiraConnectorStatus,
-)
-def get_jira_connector_status(
-    db: Session = Depends(get_db),
-    _admin_user: User = Depends(require_admin_user),
-):
-    return _get_jira_status(db)
-
-
-def _get_slack_status(db: Session) -> SlackConnectorStatus:
-    team_ids = [row[0] for row in db.query(SlackOAuthToken.team_id).all()]
-
-    if not team_ids:
-        logger.info("[SLACK][FULL SYNC] Slack connector status: no oauth token found")
-        return SlackConnectorStatus(
-            connected=False,
-            oldest=None,
-            latest=None,
-            channels=[],
-        )
-
-    channels = [
-        row[0]
-        for row in db.query(SlackChannel.name)
-        .filter(SlackChannel.team_id.in_(team_ids))
-        .distinct()
-        .all()
-        if row[0]
-    ]
-
-    latest_dt = _latest_full_sync_succeeded_at(
-        db,
-        connector=SyncConnector.SLACK,
-        scope_ids=team_ids,
-    )
-
-    oldest_dt = None
-    try:
-        sql = text(
-            """
-            SELECT MIN(
-                COALESCE(
-                    cmetadata ->> 'created_at',
-                    cmetadata ->> 'updated_at',
-                    cmetadata ->> 'synced_at'
-                )::timestamptz
-            ) AS oldest
-            FROM langchain_pg_embedding
-            WHERE cmetadata ->> 'source' = 'slack'
-            """
-        )
-        result = db.execute(sql).first()
-        oldest_dt = result[0] if result and result[0] else None
-    except Exception as e:
-        logger.warning(
-            "[SLACK][FULL SYNC] Failed to fetch slack oldest embedding date: %s", e
-        )
-
-    return SlackConnectorStatus(
-        connected=True,
-        oldest=_format_date(oldest_dt),
-        latest=_format_date(latest_dt),
-        channels=channels,
-    )
-
-
-@router.get(
-    path="/connector/slack/status",
-    description="Slack 연동 상태 조회 (admin 전용)",
-    response_model=SlackConnectorStatus,
-)
-def get_slack_connector_status(
-    db: Session = Depends(get_db),
-    _admin_user: User = Depends(require_admin_user),
-):
-    return _get_slack_status(db)
-
-
-def _get_confluence_status(db: Session) -> ConfluenceConnectorStatus:
-    # Jira와 동일한 AtlassianOAuthToken 사용 (공용 토큰)
-    cloud_ids = [row[0] for row in db.query(AtlassianOAuthToken.cloud_id).all()]
-
-    if not cloud_ids:
-        logger.info("[CONFLUENCE][FULL SYNC] Confluence connector status: no oauth token found")
-        return ConfluenceConnectorStatus(
-            connected=False,
-            oldest=None,
-            latest=None,
-            spaces=[],
-        )
-
-    spaces = [
-        f"{row[0]}:{row[1]}"
-        for row in db.query(ConfluenceSpace.space_name, ConfluenceSpace.space_key)
-        .filter(ConfluenceSpace.cloud_id.in_(cloud_ids))
-        .distinct()
-        .all()
-        if row[0] and row[1]
-    ]
-
-    latest_dt = _latest_full_sync_succeeded_at(
-        db,
-        connector=SyncConnector.CONFLUENCE,
-        scope_ids=cloud_ids,
-    )
-
-    oldest_dt = None
-    try:
-        sql = text(
-            """
-            SELECT MIN(
-                COALESCE(
-                    cmetadata ->> 'created_at',
-                    cmetadata ->> 'updated_at',
-                    cmetadata ->> 'synced_at'
-                )::timestamptz
-            ) AS oldest
-            FROM langchain_pg_embedding
-            WHERE cmetadata ->> 'source' = 'confluence'
-            """
-        )
-        result = db.execute(sql).first()
-        oldest_dt = result[0] if result and result[0] else None
-    except Exception as e:
-        logger.warning(
-            "[CONFLUENCE][FULL SYNC] Failed to fetch confluence oldest embedding date: %s", e
-        )
-
-    return ConfluenceConnectorStatus(
-        connected=True,
-        oldest=_format_date(oldest_dt),
-        latest=_format_date(latest_dt),
-        spaces=spaces,
-    )
-
-
-@router.get(
-    path="/connector/confluence/status",
-    description="Confluence 연동 상태 조회 (admin 전용)",
-    response_model=ConfluenceConnectorStatus,
-)
-def get_confluence_connector_status(
-    db: Session = Depends(get_db),
-    _admin_user: User = Depends(require_admin_user),
-):
-    return _get_confluence_status(db)
+    return _get_connector_status(db, source=source)
 
 
 # ============================
@@ -490,40 +250,6 @@ def _delete_user(db: Session, admin_user: User, user_id: int):
     )
 
     return DeleteUserResponse(userId=user.id, status=user.status)
-
-
-def _promote_user_to_admin(db: Session, admin_user: User, user_id: int) -> PromoteUserResponse:
-    """
-    사용자의 role을 admin으로 승격한다.
-    관리자 자신은 이미 admin이므로 별도 체크 없이 통과한다.
-    """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        logger.info("[ADMIN][USER_PROMOTE] user not found (user_id=%s)", user_id)
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if user.role == UserRole.ADMIN:
-        logger.info("[ADMIN][USER_PROMOTE] already admin (user_id=%s)", user_id)
-        raise HTTPException(status_code=409, detail="User already admin")
-
-    if user.status == UserStatus.DELETED:
-        logger.info("[ADMIN][USER_PROMOTE] cannot promote deleted user (user_id=%s)", user_id)
-        raise HTTPException(status_code=409, detail="Cannot promote deleted user")
-    if user.status == UserStatus.INACTIVE:
-        logger.info("[ADMIN][USER_PROMOTE] cannot promote inactive user (user_id=%s)", user_id)
-        raise HTTPException(status_code=409, detail="Cannot promote inactive user")
-
-    user.role = UserRole.ADMIN
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    logger.info(
-        "[ADMIN][USER_PROMOTE] action=promote_to_admin user_id=%s admin_id=%s", user_id, admin_user.id
-    )
-
-    return PromoteUserResponse(userId=user.id, role=user.role)
-
 
 # ============================
 # Admin - User management
@@ -915,10 +641,18 @@ def delete_user(
 )
 def promote_user_to_admin(
     user_id: int,
-    db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin_user),
+    _admin_user: User = Depends(require_admin_user),
 ):
-    return _promote_user_to_admin(db=db, admin_user=admin_user, user_id=user_id)
+    with SessionLocal() as db:
+        user = promote_user_to_admin_service(
+            db,
+            user_id=user_id,
+        )
+
+        return PromoteUserResponse(
+            user_id=user.id,
+            role=user.role,
+        )
 
 
 def _get_syncable_jira_projects(db: Session) -> JiraSyncableResponse:
@@ -1296,5 +1030,3 @@ def bulk_update_pre_mappings(
 
     db.commit()
     return {"message": "success", "processed_count": len(request.items)}
-
-

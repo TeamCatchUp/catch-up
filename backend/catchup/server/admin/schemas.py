@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import StrEnum
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr
 
@@ -43,6 +44,38 @@ class ToolUserResponse(BaseModel):
     name: str
     identifier: str | None = None  # email 또는 github login
     picture: str | None = None
+
+
+class ConnectorStatusSource(StrEnum):
+    GITHUB = "github"
+    JIRA = "jira"
+    SLACK = "slack"
+    CONFLUENCE = "confluence"
+
+
+class ConnectorResourceType(StrEnum):
+    REPOSITORIES = "repositories"
+    PROJECTS = "projects"
+    CHANNELS = "channels"
+    SPACES = "spaces"
+
+
+class AdminConnectorTargetRangeResponse(BaseModel):
+    scope_id: str
+    target_id: str
+    target_name: str
+    sync_status: str
+    last_succeeded_at: str | None
+    last_failed_at: str | None
+    oldest: str | None
+    latest: str | None
+
+
+class AdminConnectorStatusResponse(BaseModel):
+    source: ConnectorStatusSource
+    resource_type: ConnectorResourceType
+    total_targets: int
+    targets: list[AdminConnectorTargetRangeResponse]
 
 
 # 1. 프론트엔드에서 받을 Request Schema (변수명 통일 및 필수값 추가)
@@ -139,7 +172,7 @@ class DeleteUserResponse(BaseModel):
 
 
 class PromoteUserResponse(BaseModel):
-    userId: int
+    user_id: int
     role: UserRole
 
 

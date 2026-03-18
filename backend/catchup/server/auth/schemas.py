@@ -34,38 +34,6 @@ class IntegrationProfileResponse(BaseModel):
     slack: IntegrationProfileItem | None = None
 
 
-class GithubConnectorStatus(BaseModel):
-    tool_name: str = "github"
-    connected: bool
-    oldest: str | None
-    latest: str | None
-    repositories: list[str]
-
-
-class JiraConnectorStatus(BaseModel):
-    tool_name: str = "jira"
-    connected: bool
-    oldest: str | None
-    latest: str | None
-    projects: list[str]
-
-
-class SlackConnectorStatus(BaseModel):
-    tool_name: str = "slack"
-    connected: bool
-    oldest: str | None
-    latest: str | None
-    channels: list[str]
-
-
-class ConfluenceConnectorStatus(BaseModel):
-    tool_name: str = "confluence"
-    connected: bool
-    oldest: str | None
-    latest: str | None
-    spaces: list[str]
-
-
 class JiraSyncableProject(BaseModel):
     project_key: str
     project_name: str

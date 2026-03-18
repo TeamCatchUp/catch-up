@@ -70,6 +70,7 @@ export const API = {
       jiraStatus: `${API_PREFIX}/admin/connector/jira/status`, // GET Jira 연동 상태
       slackStatus: `${API_PREFIX}/admin/connector/slack/status`, // GET Slack 연동 상태
       confluenceStatus: `${API_PREFIX}/admin/connector/confluence/status`, // GET Confluence 연동 상태
+      status: `${API_PREFIX}/admin/connector/status`, // GET target별 임베딩 데이터 범위 (?source=)
     },
     users: {
       list: `${API_PREFIX}/admin/users`, // GET 이용자 목록
