@@ -22,6 +22,7 @@ def _build_resource_metadata(
 ) -> dict[str, object]:
     resource_metadata = dict(seed.metadata)
     resource_metadata["scope_id"] = scope_id
+    resource_metadata["target_id"] = seed.target_id
     resource_metadata["target_name"] = seed.target_name
     resource_metadata["sync_type"] = sync_type.value
     if seed.sync_from_ts is not None:

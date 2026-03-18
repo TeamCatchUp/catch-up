@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
+
+from sqlalchemy import select
 
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SyncConnector
+from catchup.db.models import SyncEvent
 from catchup.db.models import SyncEventStatus
+from catchup.db.models import SyncJob
 from catchup.db.models import SyncType
-from catchup.db.sync import get_event
-from catchup.db.sync import get_job
 from catchup.sync.common.exceptions import SyncRequestError
 
 
@@ -32,14 +35,32 @@ class RecordRepairContext:
 
 
 def _parse_sync_from_ts(sync_from_ts: str) -> datetime:
+    normalized_sync_from_ts = sync_from_ts.strip()
+
     try:
-        return datetime.fromtimestamp(float(sync_from_ts), tz=timezone.utc)
-    except (TypeError, ValueError) as exc:
+        return datetime.fromtimestamp(float(normalized_sync_from_ts), tz=timezone.utc)
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        parsed = datetime.fromisoformat(normalized_sync_from_ts.replace("Z", "+00:00"))
+    except ValueError as exc:
         raise SyncRequestError(
             "event sync_from_ts is invalid",
             code="invalid_event_metadata",
             metadata={"sync_from_ts": sync_from_ts},
         ) from exc
+
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _metadata_text(metadata: dict[str, Any], key: str) -> str:
+    value = metadata.get(key)
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 def load_record_repair_context(event_id: str) -> RecordRepairContext:
@@ -48,15 +69,21 @@ def load_record_repair_context(event_id: str) -> RecordRepairContext:
         raise SyncRequestError("event_id is required", code="invalid_event_id")
 
     with SessionLocal() as db:
-        event = get_event(db, normalized_event_id)
-        if event is None:
+        stmt = (
+            select(SyncEvent, SyncJob)
+            .outerjoin(SyncJob, SyncJob.job_id == SyncEvent.job_id)
+            .where(SyncEvent.event_id == normalized_event_id)
+        )
+        row = db.execute(stmt).one_or_none()
+
+        if row is None:
             raise SyncRequestError(
                 "sync event not found",
                 code="event_not_found",
                 metadata={"event_id": normalized_event_id},
             )
 
-        job = get_job(db, event.job_id)
+        event, job = row
         if job is None:
             raise SyncRequestError(
                 "sync job not found for event",
@@ -82,10 +109,10 @@ def load_record_repair_context(event_id: str) -> RecordRepairContext:
         )
 
     metadata = event.resource_metadata if isinstance(event.resource_metadata, dict) else {}
-    scope_id = str(metadata.get("scope_id") or job.scope_id or "").strip()
-    target_id = str(event.resource_id or "").strip()
-    target_name = str(metadata.get("target_name") or target_id).strip()
-    sync_from_ts = str(metadata.get("sync_from_ts") or "").strip()
+    scope_id = _metadata_text(metadata, "scope_id") or str(job.scope_id or "").strip()
+    target_id = _metadata_text(metadata, "target_id") or str(event.resource_id or "").strip()
+    target_name = _metadata_text(metadata, "target_name") or target_id
+    sync_from_ts = _metadata_text(metadata, "sync_from_ts")
 
     if not scope_id:
         raise SyncRequestError(

@@ -8,10 +8,9 @@ from fastapi.concurrency import run_in_threadpool
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SyncConnector
 from catchup.db.models import SyncEventStatus
-from catchup.db.sync import mark_event_retry_failed
-from catchup.db.sync import mark_event_retry_succeeded
+from catchup.db.sync import finalize_manual_retry_failed
+from catchup.db.sync import finalize_manual_retry_success
 from catchup.server.sync.schemas import (
-    SyncRecordGapResponse,
     SyncRecordRetryRequest,
     SyncRecordRetryResponse,
 )
@@ -84,29 +83,24 @@ class RecordRepairService:
     async def _load_repair_context(
         self,
         *,
-        event_id: str | None,
-    ) -> RecordRepairContext | None:
-        if event_id is None:
-            return None
+        event_id: str,
+    ) -> RecordRepairContext:
         return await run_in_threadpool(load_record_repair_context, event_id)
 
     async def _mark_retry_event_status(
         self,
         *,
-        repair_context: RecordRepairContext | None,
-        has_remaining_gap: bool,
-    ) -> SyncEventStatus | None:
-        if repair_context is None:
-            return None
-
+        repair_context: RecordRepairContext,
+        has_retry_failure: bool,
+    ) -> SyncEventStatus:
         def _update_status() -> SyncEventStatus:
             with SessionLocal() as db:
-                if has_remaining_gap:
-                    updated = mark_event_retry_failed(db, repair_context.event_id)
-                    next_status = SyncEventStatus.RETRY_FAILED
+                if has_retry_failure:
+                    updated = finalize_manual_retry_failed(db, repair_context.event_id)
+                    next_status = SyncEventStatus.FAILED
                 else:
-                    updated = mark_event_retry_succeeded(db, repair_context.event_id)
-                    next_status = SyncEventStatus.RETRY_SUCCEEDED
+                    updated = finalize_manual_retry_success(db, repair_context.event_id)
+                    next_status = SyncEventStatus.SUCCESS
 
                 if not updated:
                     raise SyncInternalError(
@@ -125,9 +119,6 @@ class RecordRepairService:
         event_id: str,
     ) -> SyncRecordGapResponse:
         repair_context = await self._load_repair_context(event_id=event_id)
-        if repair_context is None:
-            raise SyncRequestError("event_id is required", code="invalid_event_id")
-
         handler = self._resolve_handler(repair_context.connector)
         response = await handler.get_record_gaps(
             repair_context=repair_context,
@@ -136,6 +127,7 @@ class RecordRepairService:
             update={
                 "event_id": repair_context.event_id,
                 "event_status": repair_context.event_status,
+                "target_name": repair_context.target_name,
             }
         )
 
@@ -145,9 +137,6 @@ class RecordRepairService:
         request: SyncRecordRetryRequest,
     ) -> SyncRecordRetryResponse:
         repair_context = await self._load_repair_context(event_id=request.event_id)
-        if repair_context is None:
-            raise SyncRequestError("event_id is required", code="invalid_event_id")
-
         handler = self._resolve_handler(repair_context.connector)
         response = await handler.retry_records(
             request=request,
@@ -155,14 +144,16 @@ class RecordRepairService:
         )
         final_status = await self._mark_retry_event_status(
             repair_context=repair_context,
-            has_remaining_gap=any(
-                bool(item.remaining_missing_ids) for item in response.records
+            has_retry_failure=any(
+                bool(item.failed_ids) or bool(item.remaining_missing_ids)
+                for item in response.records
             ),
         )
         return response.model_copy(
             update={
                 "event_id": repair_context.event_id,
                 "event_status": final_status,
+                "target_name": repair_context.target_name,
             }
         )
 

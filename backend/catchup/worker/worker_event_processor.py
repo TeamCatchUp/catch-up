@@ -221,8 +221,6 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
         if event.status in {
             SyncEventStatus.SUCCESS,
             SyncEventStatus.FAILED,
-            SyncEventStatus.RETRY_SUCCEEDED,
-            SyncEventStatus.RETRY_FAILED,
         }:
             return ClaimResult(state=ClaimState.EVENT_ALREADY_TERMINAL)
 
