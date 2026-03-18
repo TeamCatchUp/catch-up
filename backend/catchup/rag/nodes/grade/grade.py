@@ -5,9 +5,9 @@ from langchain_core.documents import Document
 
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import (
-    get_context_text_from_documents,
     llm_semaphore,
     log_node,
+    prepare_context_text,
 )
 from catchup.rag.schemas.structures import GradeDocuments
 from catchup.rag.state import AgentState
@@ -31,7 +31,7 @@ async def grade_node(state: AgentState, llm: BaseChatModel):
             "retry_count": current_retry_count + 1
         }
 
-    context_text = get_context_text_from_documents(retrieved_docs)
+    context_text = prepare_context_text(retrieved_docs)
 
     structured_llm = llm.with_structured_output(
         GradeDocuments, method="function_calling"
