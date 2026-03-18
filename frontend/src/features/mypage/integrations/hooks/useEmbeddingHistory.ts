@@ -22,8 +22,10 @@ export const useEmbeddingHistory = () => {
     SOURCE_ORDER.forEach((source, i) => {
       const targets = historyQueries[i]?.data?.targets;
       if (targets?.length) {
-        // in_progress/pending은 진행 중 섹션(useEmbeddingJobs)에서 표시하므로 제외
-        const completed = targets.filter((t) => t.sync_status !== 'in_progress' && t.sync_status !== 'pending');
+        // in_progress/pending/retrying은 진행 중 섹션(useEmbeddingJobs)에서 표시하므로 제외
+        const completed = targets.filter(
+          (t) => t.sync_status !== 'in_progress' && t.sync_status !== 'pending' && t.sync_status !== 'retrying',
+        );
         if (completed.length) {
           result[source as SyncConnector] = completed;
         }
