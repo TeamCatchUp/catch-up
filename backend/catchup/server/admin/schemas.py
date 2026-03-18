@@ -64,6 +64,9 @@ class AdminConnectorTargetRangeResponse(BaseModel):
     scope_id: str
     target_id: str
     target_name: str
+    sync_status: str
+    last_succeeded_at: str | None
+    last_failed_at: str | None
     oldest: str | None
     latest: str | None
 
