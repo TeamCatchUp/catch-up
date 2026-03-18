@@ -2,18 +2,21 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
 
 import PermissionChangeModal from '@/features/admin/permissions/components/modals/PermissionChangeModal';
 import PermissionsListSection from '@/features/admin/permissions/components/sections/PermissionsListSection';
 import AdminOwnerInfoTag from '@/features/admin/permissions/components/shared/AdminOwnerInfoTag';
 import {
   LIST_PAGE_SIZE,
+  PROMOTE_ERROR_MESSAGES,
   ROLE_FILTER_OPTIONS,
   type RoleFilter,
 } from '@/features/admin/permissions/constants/permissionsConfig';
 import { usePromoteToAdminMutation } from '@/features/admin/permissions/queries/adminPermissions.mutations';
 import { adminPermissionsQueries } from '@/features/admin/permissions/queries/adminPermissions.queries';
 import type { PermissionMember } from '@/features/admin/permissions/types/adminPermission';
+import type { ApiErrorBody } from '@/shared/api/errors';
 
 const DEFAULT_ROLE_FILTER: RoleFilter = ROLE_FILTER_OPTIONS[0].key;
 
@@ -51,9 +54,17 @@ export default function AdminPermissionsPage() {
     return filteredMembers.slice(start, start + LIST_PAGE_SIZE);
   }, [filteredMembers, safeCurrentPage]);
 
-  const changeErrorMessage = promoteMutation.isError
-    ? ((promoteMutation.error as Error | null)?.message ?? '권한 부여 요청에 실패했습니다.')
-    : undefined;
+  const changeErrorMessage = useMemo(() => {
+    if (!promoteMutation.isError) return undefined;
+    const err = promoteMutation.error;
+    if (err instanceof AxiosError && err.response?.data) {
+      const body = err.response.data as ApiErrorBody;
+      if (body.code) {
+        return PROMOTE_ERROR_MESSAGES[body.code] ?? body.message ?? '권한 부여 요청에 실패했습니다.';
+      }
+    }
+    return '권한 부여 요청에 실패했습니다.';
+  }, [promoteMutation.isError, promoteMutation.error]);
 
   const handleOpenChangeModal = (member: PermissionMember) => {
     promoteMutation.reset();

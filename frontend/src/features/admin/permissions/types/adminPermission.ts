@@ -17,6 +17,6 @@ export interface PermissionUserListResponse {
 }
 
 export interface PromoteAdminResponse {
-  userId: number;
+  user_id: number;
   role: PermissionRole;
 }
