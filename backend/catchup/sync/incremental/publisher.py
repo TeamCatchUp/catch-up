@@ -96,9 +96,11 @@ async def publish_incremental_outbox(
                         skipped += 1
                     continue
 
+                connector_key = _connector_key(record.connector)
+
                 if not is_incremental_target_eligible(
                     db,
-                    connector=_connector_key(record.connector),
+                    connector=connector_key,
                     scope_id=record.scope_id,
                     target_type=record.parent_type,
                     target_id=record.parent_id,
@@ -120,7 +122,7 @@ async def publish_incremental_outbox(
                         blocked += 1
                         logger.info(
                             "[INCREMENTAL][PUBLISH] Skipped due to missing full sync: connector=%s, scope_id=%s, parent_type=%s, parent_id=%s, record_key=%s, generation=%s",
-                            record.connector.value,
+                            connector_key,
                             record.scope_id,
                             record.parent_type,
                             record.parent_id,
@@ -131,16 +133,15 @@ async def publish_incremental_outbox(
                         skipped += 1
                     continue
 
-                connector = _connector_key(record.connector)
                 task = SyncStreamTask.incremental(
                     event_id=build_incremental_event_id(record.record_key, record.generation),
                     job_id=build_incremental_job_id(
-                        connector=connector,
+                        connector=connector_key,
                         scope_id=record.scope_id,
                         parent_type=record.parent_type,
                         parent_id=record.parent_id,
                     ),
-                    connector=connector,
+                    connector=connector_key,
                     scope_id=record.scope_id,
                     target_type=record.parent_type,
                     target_id=record.parent_id,
