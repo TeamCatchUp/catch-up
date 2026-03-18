@@ -27,7 +27,9 @@ from langchain_cohere import CohereEmbeddings
 from langchain_core.documents import Document
 from langchain_postgres import PGVector
 
-from sqlalchemy import Engine, delete as sa_delete
+from datetime import datetime
+
+from sqlalchemy import DateTime, Engine, and_, cast, delete as sa_delete, func, select
 
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.configs.config import settings
@@ -37,8 +39,6 @@ from catchup.sync.audit import SyncAuditContext, emit_sync_ingestion_audit
 logger = logging.getLogger(__name__)
 
 _embedding_semaphore = asyncio.Semaphore(settings.EMBEDDING_MAX_CONCURRENCY)
-
-
 class PGVectorRepository:
     """
     PGVector 벡터 저장소 Repository
@@ -122,6 +122,44 @@ class PGVectorRepository:
                 "PGVectorRepository not initialized. "
                 "Call await repository.initialize() first."
             )
+        
+    def _get_embedding_table(self):
+        self.ensure_initialized()
+        return self.vector_store.EmbeddingStore.__table__
+
+    def _get_collection_table(self):
+        self.ensure_initialized()
+        return self.vector_store.CollectionStore.__table__
+
+    def _github_record_conditions(
+        self,
+        *,
+        owner: str,
+        repo: str,
+        entity_type: str,
+        since: datetime | None = None,
+    ) -> tuple[Any, Any, list[Any]]:
+        embedding_table = self._get_embedding_table()
+        collection_table = self._get_collection_table()
+
+        conditions: list[Any] = [
+            collection_table.c.name == self.collection_name,
+            embedding_table.c.cmetadata["source"].astext == "github",
+            embedding_table.c.cmetadata["owner"].astext == owner,
+            embedding_table.c.cmetadata["repo"].astext == repo,
+            embedding_table.c.cmetadata["entity_type"].astext == entity_type,
+        ]
+
+        if since is not None:
+            conditions.append(
+                cast(
+                    embedding_table.c.cmetadata["updated_at"].astext,
+                    DateTime(timezone=True),
+                ) >= since
+            )
+
+        return embedding_table, collection_table, conditions
+
 
     async def add_documents(
         self,
@@ -536,6 +574,75 @@ class PGVectorRepository:
             "embedding_dimensions": settings.PGVECTOR_EMBEDDING_DIMENSIONS,
             "initialized": self._initialized,
         }
+
+    async def count_github_records(
+        self,
+        *,
+        owner: str,
+        repo: str,
+        entity_type: str,
+        since: datetime | None = None,
+    ) -> int:
+        self.ensure_initialized()
+
+        def _count() -> int:
+            embedding_table, collection_table, conditions = self._github_record_conditions(
+                owner=owner,
+                repo=repo,
+                entity_type=entity_type,
+                since=since,
+            )
+            stmt = (
+                select(func.count())
+                .select_from(
+                    embedding_table.join(
+                        collection_table,
+                        embedding_table.c.collection_id == collection_table.c.uuid,
+                    )
+                )
+                .where(and_(*conditions))
+            )
+
+            with self.vector_store._make_sync_session() as session:
+                result = session.execute(stmt).scalar_one()
+                return int(result or 0)
+
+        return await asyncio.to_thread(_count)
+
+    async def list_github_record_ids(
+        self,
+        *,
+        owner: str,
+        repo: str,
+        entity_type: str,
+        since: datetime | None = None,
+    ) -> list[str]:
+        self.ensure_initialized()
+
+        def _list_ids() -> list[str]:
+            embedding_table, collection_table, conditions = self._github_record_conditions(
+                owner=owner,
+                repo=repo,
+                entity_type=entity_type,
+                since=since,
+            )
+            stmt = (
+                select(embedding_table.c.id)
+                .select_from(
+                    embedding_table.join(
+                        collection_table,
+                        embedding_table.c.collection_id == collection_table.c.uuid,
+                    )
+                )
+                .where(and_(*conditions))
+                .order_by(embedding_table.c.id.asc())
+            )
+
+            with self.vector_store._make_sync_session() as session:
+                rows = session.execute(stmt).all()
+                return [str(row[0]) for row in rows if row[0]]
+
+        return await asyncio.to_thread(_list_ids)
     
     async def delete_by_id_prefix(self, prefix: str) -> None:
         self.ensure_initialized()

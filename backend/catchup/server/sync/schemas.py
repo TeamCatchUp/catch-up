@@ -4,7 +4,7 @@ from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from catchup.db.models import SyncConnector, SyncEventStatus, SyncJobStatus, SyncType
 from catchup.sync.common.schemas import (
@@ -263,3 +263,107 @@ class SyncTargetsResponse(BaseModel):
     @classmethod
     def from_targets_result(cls, result: SyncTargetsResult) -> "SyncTargetsResponse":
         return cls.model_validate(asdict(result))
+
+# ==============================================================================
+
+class SyncRecordGapItem(BaseModel):
+    record_type: str
+    expected_count: int = 0
+    stored_count: int = 0
+    missing_count: int = 0
+    missing_ids: list[str] = Field(default_factory=list)
+
+
+class SyncRecordGapResponse(BaseModel):
+    connector: SyncConnector
+    scope_id: str
+    target_id: str
+    target_name: str
+    records: list[SyncRecordGapItem] = Field(default_factory=list)
+
+
+class SyncRecordRetryItemRequest(BaseModel):
+    record_type: str
+    record_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("record_type")
+    @classmethod
+    def _validate_record_type(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("record_type must not be empty")
+        return stripped
+
+    @field_validator("record_ids")
+    @classmethod
+    def _validate_record_ids(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+
+        for item in value:
+            candidate = (item or "").strip()
+            if not candidate:
+                raise ValueError("record_ids must not contain empty values")
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+
+        if not normalized:
+            raise ValueError("record_ids must not be empty")
+
+        return normalized
+
+
+class SyncRecordRetryItemResponse(BaseModel):
+    record_type: str
+    requested_ids: list[str] = Field(default_factory=list)
+    retried_count: int = 0
+    succeeded_count: int = 0
+    failed_ids: list[str] = Field(default_factory=list)
+    remaining_missing_ids: list[str] = Field(default_factory=list)
+
+
+class SyncRecordRetryRequest(BaseModel):
+    connector: SyncConnector = Field(..., description="sync connector type")
+    scope_id: str = Field(..., description="connector scope id")
+    target_id: str = Field(..., description="sync target id")
+    sync_days: int | None = Field(
+        default=None,
+        ge=1,
+        description="collection period in days; if omitted connector default is used",
+    )
+    records: list[SyncRecordRetryItemRequest] = Field(default_factory=list)
+
+    @field_validator("scope_id", "target_id")
+    @classmethod
+    def _validate_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("field must not be empty")
+        return stripped
+
+    @field_validator("records")
+    @classmethod
+    def _validate_records(cls, value: list[SyncRecordRetryItemRequest]) -> list[SyncRecordRetryItemRequest]:
+        if not value:
+            raise ValueError("records must not be empty")
+
+        seen: set[str] = set()
+        normalized: list[SyncRecordRetryItemRequest] = []
+
+        for item in value:
+            if item.record_type in seen:
+                raise ValueError(f"duplicate record_type: {item.record_type}")
+            seen.add(item.record_type)
+            normalized.append(item)
+
+        return normalized
+
+
+class SyncRecordRetryResponse(BaseModel):
+    connector: SyncConnector
+    scope_id: str
+    target_id: str
+    target_name: str
+    records: list[SyncRecordRetryItemResponse] = Field(default_factory=list)

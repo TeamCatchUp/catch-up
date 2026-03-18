@@ -26,8 +26,15 @@ from typing import Any, AsyncIterator
 
 from githubkit import GitHub
 from githubkit.exception import RequestFailed, RequestTimeout
-from catchup.connectors.github.queries import PULL_REQUESTS_QUERY, ORG_MEMBERS_QUERY, ISSUES_QUERY
-
+from catchup.connectors.github.queries import (
+    ISSUE_BY_NUMBER_QUERY,
+    ISSUE_NUMBERS_QUERY,
+    ISSUES_QUERY,
+    ORG_MEMBERS_QUERY,
+    PULL_REQUEST_BY_NUMBER_QUERY,
+    PULL_REQUEST_NUMBERS_QUERY,
+    PULL_REQUESTS_QUERY,
+)
 from catchup.configs.config import settings
 
 logger = logging.getLogger(__name__)
@@ -458,9 +465,7 @@ class GitHubApiClient:
                 "after": after_cursor,
             }
 
-            response = await self._with_rate_limit(
-                lambda: self._github.async_graphql(ORG_MEMBERS_QUERY, variables)
-            )
+            response = await self._graphql(ORG_MEMBERS_QUERY, variables)
 
             if not response:
                 break
@@ -495,6 +500,22 @@ class GitHubApiClient:
             after_cursor = page_info.get("endCursor")
 
         return all_members
+    
+    async def _graphql(
+        self,
+        query: str,
+        variables: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = await self._with_rate_limit(
+            lambda: self._github.async_graphql(query, variables)
+        )
+        return response or {}
+    
+    @staticmethod
+    def _parse_graphql_datetime(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
     # ============================================================
     # GraphQL APIs
@@ -524,9 +545,8 @@ class GitHubApiClient:
                 "after": after_cursor,
             }
 
-            response = await self._with_rate_limit(
-                lambda: self._github.async_graphql(PULL_REQUESTS_QUERY, variables)
-            )
+            response = await self._graphql(PULL_REQUESTS_QUERY, variables)
+
 
             if not response:
                 break
@@ -545,9 +565,7 @@ class GitHubApiClient:
                 if since:
                     updated_at_str = node.get("updatedAt")
                     if updated_at_str:
-                        updated_at = datetime.fromisoformat(
-                            updated_at_str.replace("Z", "+00:00")
-                        )
+                        updated_at = self._parse_graphql_datetime(updated_at_str)
                         if updated_at < since:
                             if batch:
                                 yield batch
@@ -588,9 +606,7 @@ class GitHubApiClient:
                 "after": after_cursor,
             }
 
-            response = await self._with_rate_limit(
-                lambda: self._github.async_graphql(ISSUES_QUERY, variables)
-            )
+            response = await self._graphql(ISSUES_QUERY, variables)
 
             if not response:
                 break
@@ -610,9 +626,7 @@ class GitHubApiClient:
                 if since:
                     updated_at_str = node.get("updatedAt")
                     if updated_at_str:
-                        updated_at = datetime.fromisoformat(
-                            updated_at_str.replace("Z", "+00:00")
-                        )
+                        updated_at = self._parse_graphql_datetime(updated_at_str)
                         if updated_at < since:
                             if batch:
                                 yield batch
@@ -628,3 +642,143 @@ class GitHubApiClient:
                 break
 
             after_cursor = page_info.get("endCursor")
+
+    async def list_issue_numbers_graphql(
+        self,
+        owner: str,
+        repo: str,
+        since: datetime | None = None,
+    ) -> list[str]:
+        numbers: list[str] = []
+        after_cursor = None
+        per_page = 100
+
+        while True:
+            response = await self._graphql(
+                ISSUE_NUMBERS_QUERY,
+                {
+                    "owner": owner,
+                    "repo": repo,
+                    "first": per_page,
+                    "after": after_cursor,
+                },
+            )
+
+            issue_connection = response.get("repository", {}).get("issues", {})
+            if not issue_connection:
+                break
+
+            nodes = issue_connection.get("nodes") or []
+            stop = False
+
+            for node in nodes:
+                if not node:
+                    continue
+
+                updated_at = self._parse_graphql_datetime(node.get("updatedAt"))
+                if since and updated_at and updated_at < since:
+                    stop = True
+                    break
+
+                number = node.get("number")
+                if number is None:
+                    continue
+
+                numbers.append(str(number))
+
+            if stop:
+                break
+
+            page_info = issue_connection.get("pageInfo", {})
+            if not page_info.get("hasNextPage"):
+                break
+
+            after_cursor = page_info.get("endCursor")
+
+        return numbers
+
+    async def list_pull_request_numbers_graphql(
+        self,
+        owner: str,
+        repo: str,
+        since: datetime | None = None,
+    ) -> list[str]:
+        numbers: list[str] = []
+        after_cursor = None
+        per_page = 100
+
+        while True:
+            response = await self._graphql(
+                PULL_REQUEST_NUMBERS_QUERY,
+                {
+                    "owner": owner,
+                    "repo": repo,
+                    "first": per_page,
+                    "after": after_cursor,
+                },
+            )
+
+            pr_connection = response.get("repository", {}).get("pullRequests", {})
+            if not pr_connection:
+                break
+
+            nodes = pr_connection.get("nodes") or []
+            stop = False
+
+            for node in nodes:
+                if not node:
+                    continue
+
+                updated_at = self._parse_graphql_datetime(node.get("updatedAt"))
+                if since and updated_at and updated_at < since:
+                    stop = True
+                    break
+
+                number = node.get("number")
+                if number is None:
+                    continue
+
+                numbers.append(str(number))
+
+            if stop:
+                break
+
+            page_info = pr_connection.get("pageInfo", {})
+            if not page_info.get("hasNextPage"):
+                break
+
+            after_cursor = page_info.get("endCursor")
+
+        return numbers
+
+    async def get_issue_graphql(
+        self,
+        owner: str,
+        repo: str,
+        number: int,
+    ) -> dict[str, Any] | None:
+        response = await self._graphql(
+            ISSUE_BY_NUMBER_QUERY,
+            {
+                "owner": owner,
+                "repo": repo,
+                "number": number,
+            },
+        )
+        return response.get("repository", {}).get("issue")
+
+    async def get_pull_request_graphql(
+        self,
+        owner: str,
+        repo: str,
+        number: int,
+    ) -> dict[str, Any] | None:
+        response = await self._graphql(
+            PULL_REQUEST_BY_NUMBER_QUERY,
+            {
+                "owner": owner,
+                "repo": repo,
+                "number": number,
+            },
+        )
+        return response.get("repository", {}).get("pullRequest")
