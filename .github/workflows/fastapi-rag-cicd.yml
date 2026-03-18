@@ -69,8 +69,8 @@ jobs:
           target: ${{ matrix.target }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ github.workflow }}-${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ github.workflow }}-${{ matrix.service }}
 
   # =================================
   # QA Server(EC2) Deployment
