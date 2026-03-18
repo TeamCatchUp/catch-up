@@ -5,6 +5,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import Cancel from '@/public/icons/icon/cancel.svg';
+import IconSearch from '@/public/icons/icon/search.svg';
 import { Button } from '@/shared/components/ui/button';
 import CheckboxIcon from '@/shared/components/ui/checkboxIcon';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
@@ -52,6 +53,7 @@ interface EmbeddingModalProps {
 const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }: EmbeddingModalProps) => {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('3년');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
 
   const connector = service as SyncConnector;
   const { scopeId, isLoading: isScopeLoading } = useScopeId(service);
@@ -89,9 +91,15 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
     }
   };
 
+  const filteredTargets = useMemo(
+    () => (searchQuery ? targets.filter((t) => t.display_name.toLowerCase().includes(searchQuery.toLowerCase())) : targets),
+    [targets, searchQuery],
+  );
+
   const resetFormState = () => {
     setSelectedPeriod('3년');
     setSelectedItems(new Set());
+    setSearchQuery('');
   };
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
@@ -219,6 +227,16 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
                     </button>
                   </div>
                 </div>
+                <div className="bg-fill-strong border-edge-assistive flex items-center gap-1.5 rounded-lg border px-3 py-2">
+                  <IconSearch className="text-content-assistive size-5 shrink-0" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="검색어를 입력하세요."
+                    className="text-body-small text-content-normal placeholder:text-content-assistive min-w-0 flex-1 bg-transparent outline-none"
+                  />
+                </div>
 
                 {isScopeLoading || isTargetsLoading ? (
                   <div className="border-edge-assistive overflow-clip rounded-xl border">
@@ -235,7 +253,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
                     </div>
                   </div>
                 ) : (
-                  <EmbeddingModalContent targets={targets} selectedItems={selectedItems} onToggleItem={toggleItem} />
+                  <EmbeddingModalContent targets={filteredTargets} selectedItems={selectedItems} onToggleItem={toggleItem} />
                 )}
               </div>
             </>
