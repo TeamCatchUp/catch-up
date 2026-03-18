@@ -22,11 +22,7 @@ export const useEmbeddingHistory = () => {
     SOURCE_ORDER.forEach((source, i) => {
       const targets = historyQueries[i]?.data?.targets;
       if (targets?.length) {
-        // latest가 있는 항목만 (임베딩 데이터가 존재하는 target)
-        const withData = targets.filter((t) => t.latest);
-        if (withData.length) {
-          result[source as SyncConnector] = withData;
-        }
+        result[source as SyncConnector] = targets;
       }
     });
     return result;

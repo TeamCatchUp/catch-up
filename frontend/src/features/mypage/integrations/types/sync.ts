@@ -231,6 +231,9 @@ export interface AdminConnectorTargetRangeResponse {
   scope_id: string;
   target_id: string;
   target_name: string;
+  sync_status: string;
+  last_succeeded_at: string | null;
+  last_failed_at: string | null;
   oldest: string | null;
   latest: string | null;
 }
