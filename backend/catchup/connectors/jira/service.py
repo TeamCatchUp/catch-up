@@ -20,7 +20,7 @@ import asyncio
 from dataclasses import dataclass, field
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Literal
 
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
@@ -295,6 +295,27 @@ class JiraIngestionService:
             )
             return None
 
+    async def _fetch_retry_issues(
+        self,
+        issue_keys: list[str],
+    ) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
+        if not issue_keys:
+            return [], []
+
+        results = await asyncio.gather(
+            *[self._fetch_retry_issue(issue_key) for issue_key in issue_keys]
+        )
+
+        issues: list[tuple[str, dict[str, Any]]] = []
+        failed_ids: list[str] = []
+        for issue_key, issue_data in zip(issue_keys, results):
+            if issue_data is None:
+                failed_ids.append(issue_key)
+                continue
+            issues.append((issue_key, issue_data))
+
+        return issues, failed_ids
+
     async def _build_retry_documents(
         self,
         *,
@@ -303,16 +324,9 @@ class JiraIngestionService:
         expected_record_type: str,
     ) -> tuple[list[Document], list[str]]:
         documents: list[Document] = []
-        failed_ids: list[str] = []
+        fetched_issues, failed_ids = await self._fetch_retry_issues(requested_ids)
 
-        await self._prepare_project_context(project_key)
-
-        for issue_key in requested_ids:
-            issue_data = await self._fetch_retry_issue(issue_key)
-            if issue_data is None:
-                failed_ids.append(issue_key)
-                continue
-
+        for issue_key, issue_data in fetched_issues:
             actual_record_type = self._classify_record_type(issue_data)
             if actual_record_type != expected_record_type:
                 failed_ids.append(issue_key)
@@ -336,6 +350,62 @@ class JiraIngestionService:
                 failed_ids.append(issue_key)
 
         return documents, failed_ids
+
+    async def _retry_record_batch(
+        self,
+        *,
+        project_key: str,
+        record_type: Literal["issue", "epic"],
+        requested_ids: list[str],
+    ) -> JiraRecordRetryItem:
+        documents, failed_ids = await self._build_retry_documents(
+            project_key=project_key,
+            requested_ids=requested_ids,
+            expected_record_type=record_type,
+        )
+        succeeded_count = 0
+
+        if documents:
+            try:
+                upsert_documents = documents
+                if self.summarizer:
+                    upsert_documents = await self._summarize_documents(
+                        documents,
+                        project_key=project_key,
+                        audit_context=None,
+                    )
+                await self.repository.upsert_documents(
+                    upsert_documents,
+                    [doc.id for doc in upsert_documents],
+                    audit_context=None,
+                    context=(
+                        f"entity_type={record_type},"
+                        f"project_key={project_key},"
+                        f"mode=partial_retry,"
+                        f"doc_count={len(upsert_documents)}"
+                    ),
+                )
+                succeeded_count = len(upsert_documents)
+            except Exception as exc:
+                logger.error(
+                    "[JIRA][REPAIR] Failed to upsert %s docs: cloud_id=%s, project_key=%s, error=%s",
+                    record_type,
+                    self.cloud_id,
+                    project_key,
+                    exc,
+                    exc_info=True,
+                )
+                failed_ids.extend(
+                    self._extract_record_ids_from_doc_ids([doc.id for doc in documents])
+                )
+
+        return JiraRecordRetryItem(
+            record_type=record_type,
+            requested_ids=requested_ids,
+            retried_count=len(requested_ids),
+            succeeded_count=succeeded_count,
+            failed_ids=self._sort_record_ids(set(failed_ids)),
+        )
 
     async def sync_metadata(
         self,
@@ -998,95 +1068,24 @@ class JiraIngestionService:
         requested_epic_ids = list(epic_ids or [])
         result_items: list[JiraRecordRetryItem] = []
 
+        if requested_issue_ids or requested_epic_ids:
+            await self._prepare_project_context(project_key)
+
         if requested_issue_ids:
-            issue_documents, issue_failed_ids = await self._build_retry_documents(
-                project_key=project_key,
-                requested_ids=requested_issue_ids,
-                expected_record_type="issue",
-            )
-            issue_succeeded_count = 0
-
-            if issue_documents:
-                try:
-                    documents = issue_documents
-                    if self.summarizer:
-                        documents = await self._summarize_documents(
-                            documents,
-                            project_key=project_key,
-                            audit_context=None,
-                        )
-                    await self.repository.upsert_documents(
-                        documents,
-                        [doc.id for doc in documents],
-                        audit_context=None,
-                        context=f"entity_type=issue,project_key={project_key},mode=partial_retry,doc_count={len(documents)}",
-                    )
-                    issue_succeeded_count = len(documents)
-                except Exception as exc:
-                    logger.error(
-                        "[JIRA][REPAIR] Failed to upsert issue docs: cloud_id=%s, project_key=%s, error=%s",
-                        self.cloud_id,
-                        project_key,
-                        exc,
-                        exc_info=True,
-                    )
-                    issue_failed_ids.extend(
-                        self._extract_record_ids_from_doc_ids([doc.id for doc in issue_documents])
-                    )
-
             result_items.append(
-                JiraRecordRetryItem(
+                await self._retry_record_batch(
+                    project_key=project_key,
                     record_type="issue",
                     requested_ids=requested_issue_ids,
-                    retried_count=len(requested_issue_ids),
-                    succeeded_count=issue_succeeded_count,
-                    failed_ids=self._sort_record_ids(set(issue_failed_ids)),
                 )
             )
 
         if requested_epic_ids:
-            epic_documents, epic_failed_ids = await self._build_retry_documents(
-                project_key=project_key,
-                requested_ids=requested_epic_ids,
-                expected_record_type="epic",
-            )
-            epic_succeeded_count = 0
-
-            if epic_documents:
-                try:
-                    documents = epic_documents
-                    if self.summarizer:
-                        documents = await self._summarize_documents(
-                            documents,
-                            project_key=project_key,
-                            audit_context=None,
-                        )
-                    await self.repository.upsert_documents(
-                        documents,
-                        [doc.id for doc in documents],
-                        audit_context=None,
-                        context=f"entity_type=epic,project_key={project_key},mode=partial_retry,doc_count={len(documents)}",
-                    )
-                    epic_succeeded_count = len(documents)
-                except Exception as exc:
-                    logger.error(
-                        "[JIRA][REPAIR] Failed to upsert epic docs: cloud_id=%s, project_key=%s, error=%s",
-                        self.cloud_id,
-                        project_key,
-                        exc,
-                        exc_info=True,
-                    )
-                    epic_failed_ids.extend(
-                        self._extract_record_ids_from_doc_ids([doc.id for doc in epic_documents])
-                    )
-
             result_items.append(
-                JiraRecordRetryItem(
+                await self._retry_record_batch(
+                    project_key=project_key,
                     record_type="epic",
                     requested_ids=requested_epic_ids,
-                    retried_count=len(requested_epic_ids),
-                    succeeded_count=epic_succeeded_count,
-                    failed_ids=self._sort_record_ids(set(epic_failed_ids)),
                 )
             )
 

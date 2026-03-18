@@ -18,6 +18,7 @@ from catchup.server.sync.schemas import (
     SyncRecordRetryResponse,
 )
 from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.repair.context import RecordRepairContext
 
 
 @dataclass(slots=True, frozen=True)
@@ -107,25 +108,23 @@ class SlackRecordRepairService:
     async def get_record_gaps(
         self,
         *,
-        scope_id: str,
-        target_id: str,
-        sync_days: int | None,
+        repair_context: RecordRepairContext,
     ) -> SyncRecordGapResponse:
         target = await self._get_target_ref(
-            scope_id=scope_id,
-            target_id=target_id,
+            scope_id=repair_context.scope_id,
+            target_id=repair_context.target_id,
         )
         service = await self._get_slack_service(team_id=target.team_id)
         gap_report = await service.build_record_gap_report(
             channel_id=target.channel_id,
             channel_name=target.channel_name,
-            sync_days=sync_days,
+            sync_from_ts=repair_context.sync_from_ts,
         )
 
         return SyncRecordGapResponse(
             connector=SyncConnector.SLACK,
-            scope_id=scope_id,
-            target_id=target_id,
+            scope_id=repair_context.scope_id,
+            target_id=repair_context.target_id,
             target_name=target.channel_name,
             records=[
                 SyncRecordGapItem(
@@ -143,24 +142,25 @@ class SlackRecordRepairService:
         self,
         *,
         request: SyncRecordRetryRequest,
+        repair_context: RecordRepairContext,
     ) -> SyncRecordRetryResponse:
         target = await self._get_target_ref(
-            scope_id=request.scope_id,
-            target_id=request.target_id,
+            scope_id=repair_context.scope_id,
+            target_id=repair_context.target_id,
         )
         service = await self._get_slack_service(team_id=target.team_id)
         retry_records = _index_retry_records(request.records)
         retry_result = await service.retry_missing_records(
             channel_id=target.channel_id,
             channel_name=target.channel_name,
-            sync_days=request.sync_days,
+            sync_from_ts=repair_context.sync_from_ts,
             message_ids=retry_records.message_ids,
         )
 
         return SyncRecordRetryResponse(
             connector=SyncConnector.SLACK,
-            scope_id=request.scope_id,
-            target_id=request.target_id,
+            scope_id=repair_context.scope_id,
+            target_id=repair_context.target_id,
             target_name=target.channel_name,
             records=[
                 SyncRecordRetryItemResponse(

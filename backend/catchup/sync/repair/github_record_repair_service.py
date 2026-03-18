@@ -18,6 +18,7 @@ from catchup.server.sync.schemas import (
     SyncRecordRetryResponse,
 )
 from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.repair.context import RecordRepairContext
 
 
 @dataclass(slots=True, frozen=True)
@@ -137,13 +138,11 @@ class GithubRecordRepairService:
     async def get_record_gaps(
         self,
         *,
-        scope_id: str,
-        target_id: str,
-        sync_days: int | None,
+        repair_context: RecordRepairContext,
     ) -> SyncRecordGapResponse:
         target = await self._get_target_ref(
-            scope_id=scope_id,
-            target_id=target_id,
+            scope_id=repair_context.scope_id,
+            target_id=repair_context.target_id,
         )
         service = await self._get_github_service(
             installation_id=target.installation_id,
@@ -151,13 +150,13 @@ class GithubRecordRepairService:
 
         gap_report = await service.build_record_gap_report(
             repo_id=target.repo_id,
-            sync_days=sync_days,
+            sync_from_dt=repair_context.sync_from_dt,
         )
 
         return SyncRecordGapResponse(
             connector=SyncConnector.GITHUB,
-            scope_id=scope_id,
-            target_id=target_id,
+            scope_id=repair_context.scope_id,
+            target_id=repair_context.target_id,
             target_name=target.full_name,
             records=[
                 SyncRecordGapItem(
@@ -175,10 +174,11 @@ class GithubRecordRepairService:
         self,
         *,
         request: SyncRecordRetryRequest,
+        repair_context: RecordRepairContext,
     ) -> SyncRecordRetryResponse:
         target = await self._get_target_ref(
-            scope_id=request.scope_id,
-            target_id=request.target_id,
+            scope_id=repair_context.scope_id,
+            target_id=repair_context.target_id,
         )
         service = await self._get_github_service(
             installation_id=target.installation_id,
@@ -187,15 +187,15 @@ class GithubRecordRepairService:
 
         retry_result = await service.retry_missing_records(
             repo_id=target.repo_id,
-            sync_days=request.sync_days,
+            sync_from_dt=repair_context.sync_from_dt,
             issue_ids=retry_records.issue_ids,
             pull_request_ids=retry_records.pull_request_ids,
         )
 
         return SyncRecordRetryResponse(
             connector=SyncConnector.GITHUB,
-            scope_id=request.scope_id,
-            target_id=request.target_id,
+            scope_id=repair_context.scope_id,
+            target_id=repair_context.target_id,
             target_name=target.full_name,
             records=[
                 SyncRecordRetryItemResponse(

@@ -1392,7 +1392,11 @@ class SyncEvent(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'in_progress', 'success', 'failed', 'retrying')",
+            (
+                "status IN ("
+                "'pending', 'in_progress', 'success', 'failed', 'retrying'"
+                ")"
+            ),
             name="ck_sync_events_status",
         ),
         CheckConstraint(

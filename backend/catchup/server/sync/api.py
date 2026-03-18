@@ -166,23 +166,13 @@ async def get_scope_sync_status(
     },
 )
 async def get_record_gaps(
-    connector: SyncConnector = Query(..., description="sync connector"),
-    scope_id: str = Query(..., description="connector scope id"),
-    target_id: str = Query(..., description="sync target id"),
-    sync_days: int | None = Query(
-        default=None,
-        ge=1,
-        description="collection period in days; if omitted connector default is used",
-    ),
+    event_id: str = Query(..., description="sync event id"),
 ):
     repair_service = get_record_repair_service()
 
     try:
         return await repair_service.get_record_gaps(
-            connector=connector,
-            scope_id=scope_id,
-            target_id=target_id,
-            sync_days=sync_days,
+            event_id=event_id,
         )
     except SyncRequestError as exc:
         raise HTTPException(
@@ -190,11 +180,8 @@ async def get_record_gaps(
             detail=_build_error_detail(
                 code=exc.code,
                 message=exc.message,
-                connector=connector,
-                scope_id=scope_id,
                 metadata={
-                    "target_id": target_id,
-                    "sync_days": sync_days,
+                    "event_id": event_id,
                     **exc.metadata,
                 },
             ),
@@ -202,18 +189,12 @@ async def get_record_gaps(
     except SyncAPIError as exc:
         raise HTTPException(
             status_code=exc.status_code,
-            detail=exc.to_detail(
-                connector=connector,
-                scope_id=scope_id,
-            ),
+            detail=exc.to_detail(),
         ) from exc
     except Exception as exc:
         logger.error(
-            "[SYNC][RECORDS][GAPS][API] Request failed: connector=%s, scope_id=%s, target_id=%s, sync_days=%s, error=%s",
-            connector,
-            scope_id,
-            target_id,
-            sync_days,
+            "[SYNC][RECORDS][GAPS][API] Request failed: event_id=%s, error=%s",
+            event_id,
             exc,
             exc_info=True,
         )
@@ -222,11 +203,8 @@ async def get_record_gaps(
             detail=_build_error_detail(
                 code="internal_error",
                 message="sync record gap request failed",
-                connector=connector,
-                scope_id=scope_id,
                 metadata={
-                    "target_id": target_id,
-                    "sync_days": sync_days,
+                    "event_id": event_id,
                 },
             ),
         ) from exc
@@ -255,11 +233,8 @@ async def retry_records(
             detail=_build_error_detail(
                 code=exc.code,
                 message=exc.message,
-                connector=retry_request.connector,
-                scope_id=retry_request.scope_id,
                 metadata={
-                    "target_id": retry_request.target_id,
-                    "sync_days": retry_request.sync_days,
+                    "event_id": retry_request.event_id,
                     **exc.metadata,
                 },
             ),
@@ -267,18 +242,12 @@ async def retry_records(
     except SyncAPIError as exc:
         raise HTTPException(
             status_code=exc.status_code,
-            detail=exc.to_detail(
-                connector=retry_request.connector,
-                scope_id=retry_request.scope_id,
-            ),
+            detail=exc.to_detail(),
         ) from exc
     except Exception as exc:
         logger.error(
-            "[SYNC][RECORDS][RETRY][API] Request failed: connector=%s, scope_id=%s, target_id=%s, sync_days=%s, error=%s",
-            retry_request.connector,
-            retry_request.scope_id,
-            retry_request.target_id,
-            retry_request.sync_days,
+            "[SYNC][RECORDS][RETRY][API] Request failed: event_id=%s, error=%s",
+            retry_request.event_id,
             exc,
             exc_info=True,
         )
@@ -287,11 +256,8 @@ async def retry_records(
             detail=_build_error_detail(
                 code="internal_error",
                 message="sync record retry request failed",
-                connector=retry_request.connector,
-                scope_id=retry_request.scope_id,
                 metadata={
-                    "target_id": retry_request.target_id,
-                    "sync_days": retry_request.sync_days,
+                    "event_id": retry_request.event_id,
                 },
             ),
         ) from exc

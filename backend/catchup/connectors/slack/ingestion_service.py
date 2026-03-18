@@ -248,18 +248,19 @@ class SlackIngestionService:
         resolved_sync_from_ts = sync_from_ts or self._resolve_sync_from_ts(sync_days)
         since = self._sync_ts_to_datetime(resolved_sync_from_ts)
 
-        expected_ids = await self._collect_syncable_message_ids(
-            channel_id=channel_id,
-            sync_from_ts=resolved_sync_from_ts,
-        )
-        stored_doc_ids = await self.repository.list_slack_record_ids(
-            team_id=self.team_id,
-            channel_id=channel_id,
-            entity_type="message",
-            since=since,
+        expected_ids, stored_doc_ids = await asyncio.gather(
+            self._collect_syncable_message_ids(
+                channel_id=channel_id,
+                sync_from_ts=resolved_sync_from_ts,
+            ),
+            self.repository.list_slack_record_ids(
+                team_id=self.team_id,
+                channel_id=channel_id,
+                entity_type="message",
+                since=since,
+            ),
         )
 
-        _ = channel_name
         return SlackRecordGapReport(
             records=[
                 self._build_gap_item(
@@ -674,17 +675,14 @@ class SlackIngestionService:
         documents: list[Document] = []
         failed_ids: list[str] = []
 
-        for message_id in message_ids:
+        async def _fetch_one(message_id: str) -> tuple[str, Document | None, bool]:
             try:
                 document = await self._fetch_message_document(
                     channel_id=channel_id,
                     channel_name=channel_name,
                     message_id=message_id,
                 )
-                if document is None:
-                    failed_ids.append(message_id)
-                    continue
-                documents.append(document)
+                return message_id, document, document is None
             except Exception as exc:
                 logger.warning(
                     "[SLACK][REPAIR] Failed to fetch message: team_id=%s, channel_id=%s, ts=%s, error=%s",
@@ -693,7 +691,18 @@ class SlackIngestionService:
                     message_id,
                     exc,
                 )
-                failed_ids.append(message_id)
+                return message_id, None, True
+
+        batch_size = max(1, settings.SLACK_SYNC_MAX_CONCURRENT_REQUESTS)
+        for start in range(0, len(message_ids), batch_size):
+            batch_ids = message_ids[start : start + batch_size]
+            results = await asyncio.gather(*[_fetch_one(message_id) for message_id in batch_ids])
+
+            for message_id, document, failed in results:
+                if failed or document is None:
+                    failed_ids.append(message_id)
+                    continue
+                documents.append(document)
 
         return documents, failed_ids
 

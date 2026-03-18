@@ -18,6 +18,7 @@ from catchup.server.sync.schemas import (
     SyncRecordRetryResponse,
 )
 from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.repair.context import RecordRepairContext
 
 
 @dataclass(slots=True, frozen=True)
@@ -116,24 +117,22 @@ class ConfluenceRecordRepairService:
     async def get_record_gaps(
         self,
         *,
-        scope_id: str,
-        target_id: str,
-        sync_days: int | None,
+        repair_context: RecordRepairContext,
     ) -> SyncRecordGapResponse:
         target = await self._get_target_ref(
-            scope_id=scope_id,
-            target_id=target_id,
+            scope_id=repair_context.scope_id,
+            target_id=repair_context.target_id,
         )
         service = await self._get_confluence_service(cloud_id=target.cloud_id)
         gap_report = await service.build_record_gap_report(
             space_key=target.space_key,
-            sync_days=sync_days,
+            sync_from_dt=repair_context.sync_from_dt,
         )
 
         return SyncRecordGapResponse(
             connector=SyncConnector.CONFLUENCE,
-            scope_id=scope_id,
-            target_id=target_id,
+            scope_id=repair_context.scope_id,
+            target_id=repair_context.target_id,
             target_name=target.space_name,
             records=[
                 SyncRecordGapItem(
@@ -151,24 +150,25 @@ class ConfluenceRecordRepairService:
         self,
         *,
         request: SyncRecordRetryRequest,
+        repair_context: RecordRepairContext,
     ) -> SyncRecordRetryResponse:
         target = await self._get_target_ref(
-            scope_id=request.scope_id,
-            target_id=request.target_id,
+            scope_id=repair_context.scope_id,
+            target_id=repair_context.target_id,
         )
         service = await self._get_confluence_service(cloud_id=target.cloud_id)
         retry_records = _index_retry_records(request.records)
         retry_result = await service.retry_missing_records(
             space_key=target.space_key,
-            sync_days=request.sync_days,
+            sync_from_dt=repair_context.sync_from_dt,
             page_ids=retry_records.page_ids,
             blogpost_ids=retry_records.blogpost_ids,
         )
 
         return SyncRecordRetryResponse(
             connector=SyncConnector.CONFLUENCE,
-            scope_id=request.scope_id,
-            target_id=request.target_id,
+            scope_id=repair_context.scope_id,
+            target_id=repair_context.target_id,
             target_name=target.space_name,
             records=[
                 SyncRecordRetryItemResponse(
