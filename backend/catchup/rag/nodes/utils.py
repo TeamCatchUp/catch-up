@@ -30,13 +30,36 @@ def get_latest_query(messages: Annotated[list, add_messages]):
     )
 
 
-def get_context_text_from_documents(documents: list[Document]):
-    return "\n\n".join(
-        [
-            f"[{i}] (Source: {doc.metadata.get('source_type', 'unknown')})\n{doc.metadata.get('contextual_content', '')}"
-            for i, doc in enumerate(documents, start=1)
-        ]
-    )
+def prepare_context_text(documents: list[Document]) -> str:
+    parts = []
+    for i, doc in enumerate(documents, start=1):
+        source = doc.metadata.get("source", "unknown")
+        content = doc.metadata.get("contextual_content", "")
+        temporal = resolve_temporal_context(doc.metadata) 
+        parts.append(f"[{i}] (Source: {source})\n{content} {temporal}")
+    return "\n\n".join(parts)
+
+
+def resolve_temporal_context(metadata: dict) -> str:
+    temporal_fields = [
+        "created_at", 
+        "updated_at",
+        "resolved_at",
+        "due_date",
+        "edited_at",
+        "closed_at",
+        "merged_at",
+        "committed_at",
+    ]
+    
+    parts = [
+        f"{field}: {str(metadata[field])}"
+        for field in temporal_fields
+        if metadata.get(field)
+    ]
+    
+    return " | ".join(parts) if parts else ""
+    
 
 
 def extract_anchor_ids(documents: list[Document]) -> list[str]:

@@ -7,12 +7,10 @@ from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import Runnable
-from regex import F
 
 from catchup.rag.policies import CITATION_POLICY_MESSAGE, FALLBACK_ANSWER
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
+from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node, prepare_context_text
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.state import AgentState
 
@@ -31,7 +29,7 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
             "sources": []
         }
     
-    context_text = _prepare_context_text(retrieved_docs)
+    context_text = prepare_context_text(retrieved_docs)
         
     global_context = state["global_context"].model_dump()
     query = state["rewritten_query"]
@@ -87,22 +85,6 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
         "messages": [AIMessage(content=answer_body)],
         "sources": final_sources
     }
-
-
-def _prepare_context_text(documents: list[Document]) -> str:
-    context_lines = []
-    
-    for i, document in enumerate(documents, start=1):
-        if document.metadata.get("db_origin") == "graph":
-            line = f"[{i}] [Graph Data] {document.metadata.get('contextual_content', '')}"
-            
-        else:
-            source_type = document.metadata.get("source", "Document")
-            line = f"[{i}] (Source: {source_type}\n{document.metadata.get('contextual_content', '')})"
-
-        context_lines.append(line)
-        
-    return "\n\n".join(context_lines)
 
 
 def _parse_citation(full_answer: str) -> tuple[str, dict[str, str]]:
