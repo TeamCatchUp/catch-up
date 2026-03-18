@@ -34,7 +34,6 @@ const RESOURCE_ICONS: Record<SyncConnector, React.ComponentType<React.SVGProps<S
 
 /** "2026-03-05" → "2026.03.05 (수)" 포맷. 백엔드가 날짜만 반환하므로 시간 미표시. */
 const formatHistoryDate = (dateStr: string): string => {
-  // "YYYY-MM-DD" 형태를 직접 파싱하여 타임존 변환 방지
   const parts = dateStr.split('-');
   if (parts.length !== 3) return dateStr;
   const [y, m, d] = parts.map(Number);
@@ -53,8 +52,15 @@ interface EmbeddingProgressPanelProps {
 }
 
 type ConnectorEmbeddingStatus = 'in_progress' | 'completed' | 'failed' | 'idle';
+type HistoryFilter = 'all' | 'success' | 'failed';
 
 const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence'];
+
+const FILTER_OPTIONS: { value: HistoryFilter; label: string }[] = [
+  { value: 'all', label: '전체' },
+  { value: 'success', label: '성공' },
+  { value: 'failed', label: '실패' },
+];
 
 const getConnectorStatus = (connector: SyncConnector, progresses: ConnectorProgress[]): ConnectorEmbeddingStatus => {
   const progress = progresses.find((p) => p.connector === connector);
@@ -115,6 +121,7 @@ const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading, hi
   const [selectedConnector, setSelectedConnector] = useState<SyncConnector>(
     CONNECTOR_ORDER.find((c) => progresses.some((p) => p.connector === c)) ?? CONNECTOR_ORDER[0],
   );
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
 
   // 커넥터가 in_progress로 전환되면 자동으로 펼침 + 해당 커넥터 선택
   const [lastSeenInProgress, setLastSeenInProgress] = useState('');
@@ -133,6 +140,8 @@ const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading, hi
   }
 
   const selectedProgress = progresses.find((p) => p.connector === selectedConnector);
+  const hasProgressItems = selectedProgress && selectedProgress.items.length > 0;
+  const historyItems = historyByConnector?.[selectedConnector];
 
   // 접힌 상태: 토글 바
   if (!isOpen) {
@@ -205,66 +214,101 @@ const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading, hi
             })}
           </div>
 
-          {/* 우측: 선택된 커넥터의 아이템 목록 */}
-          <div className="border-edge-assistive bg-fill-normal flex min-w-0 flex-1 overflow-hidden rounded-2xl border">
-            <div className="thin-scrollbar flex max-h-56 flex-1 flex-col overflow-y-auto">
-              {selectedProgress?.items.map((item: EmbeddingProgressItem) => {
-                const ResourceIcon = RESOURCE_ICONS[selectedConnector];
-                return (
-                  <div
-                    key={item.targetId}
-                    className="border-edge-assistive flex h-14 shrink-0 items-center gap-4 border-b px-4 last:border-b-0"
-                  >
-                    <div className="border-edge-normal bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
-                      <ResourceIcon className="size-5" />
-                    </div>
-                    <span className="text-body-small text-content-normal flex-1 truncate">{item.displayName}</span>
-                    <ItemStatusIcon status={item.status} />
-                  </div>
-                );
-              })}
-              {(!selectedProgress || selectedProgress.items.length === 0) && (
-                <div className="flex flex-1 items-center justify-center px-4">
-                  <span className="text-body-small text-content-assistive">
-                    {isInitialLoading
-                      ? '임베딩 상태를 불러오는 중...'
-                      : buttonStates[selectedConnector] === 'in_progress'
-                        ? '임베딩 정보를 불러오는 중...'
-                        : '진행 중인 항목이 없습니다.'}
-                  </span>
-                </div>
-              )}
+          {/* 우측: 필터 칩 + 아이템 목록 */}
+          <div className="flex min-w-0 flex-1 flex-col gap-5">
+            {/* 필터 칩: 전체 / 성공 / 실패 */}
+            <div className="flex gap-2">
+              {FILTER_OPTIONS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setHistoryFilter(value)}
+                  className={cn(
+                    'text-body-small h-9 cursor-pointer rounded-full px-3',
+                    historyFilter === value
+                      ? 'bg-accent-black-lighten text-content-inverse'
+                      : 'border-edge-neutral bg-fill-normal text-content-neutral border',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-              {/* 임베딩 히스토리 */}
-              {historyByConnector?.[selectedConnector]?.length ? (
-                <>
-                  <div className="flex shrink-0 items-center px-5 pt-4 pb-1">
-                    <span className="text-body-xsmall text-content-normal">임베딩 히스토리</span>
+            {/* 스크롤 영역 */}
+            <div className="border-edge-assistive bg-fill-normal flex overflow-hidden rounded-2xl border">
+              <div className="thin-scrollbar flex max-h-120 flex-1 flex-col overflow-y-auto">
+                {/* 임베딩 진행 중 섹션 */}
+                {(historyFilter === 'all' || historyFilter === 'success') && hasProgressItems && (
+                  <div className="flex flex-col gap-2.5 p-5">
+                    <div className="flex items-center gap-1">
+                      <span className="text-body-xsmall text-content-primary">임베딩 진행 중</span>
+                      <IconRotate className="text-content-primary size-4.5" />
+                    </div>
+                    <div className="flex flex-col">
+                      {selectedProgress.items.map((item: EmbeddingProgressItem) => {
+                        const ResourceIcon = RESOURCE_ICONS[selectedConnector];
+                        return (
+                          <div
+                            key={item.targetId}
+                            className="border-edge-assistive flex h-14 shrink-0 items-center gap-4 border-b pr-4 last:border-b-0"
+                          >
+                            <div className="border-edge-normal bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
+                              <ResourceIcon className="size-5" />
+                            </div>
+                            <span className="text-body-small text-content-normal flex-1 truncate">{item.displayName}</span>
+                            <ItemStatusIcon status={item.status} />
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  {historyByConnector[selectedConnector]!.map((item) => {
-                    const ResourceIcon = RESOURCE_ICONS[selectedConnector];
-                    return (
-                      <div
-                        key={`${item.scope_id}-${item.target_id}`}
-                        className="border-edge-assistive flex h-14 shrink-0 items-center gap-4 border-b px-4 last:border-b-0"
-                      >
-                        <div className="border-edge-normal bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
-                          <ResourceIcon className="size-5" />
-                        </div>
-                        <span className="text-body-small text-content-normal flex-1 truncate">
-                          {item.target_name}
-                        </span>
-                        {item.latest && (
-                          <span className="text-label-xsmall text-content-alternative shrink-0 whitespace-nowrap">
-                            {formatHistoryDate(item.latest)}
-                          </span>
-                        )}
-                        <IconCheckCircle className="text-accent-green size-6 shrink-0" />
-                      </div>
-                    );
-                  })}
-                </>
-              ) : null}
+                )}
+
+                {/* 빈 상태 (진행 중 항목 없고 히스토리도 없을 때) */}
+                {!hasProgressItems && !historyItems?.length && (
+                  <div className="flex h-14 items-center justify-center px-4">
+                    <span className="text-body-small text-content-assistive">
+                      {isInitialLoading
+                        ? '임베딩 상태를 불러오는 중...'
+                        : buttonStates[selectedConnector] === 'in_progress'
+                          ? '임베딩 정보를 불러오는 중...'
+                          : '진행 중인 항목이 없습니다.'}
+                    </span>
+                  </div>
+                )}
+
+                {/* 임베딩 히스토리 섹션 */}
+                {historyItems?.length ? (
+                  <div className="border-edge-assistive flex flex-col gap-2.5 border-t p-5">
+                    <span className="text-body-xsmall text-content-neutral">임베딩 히스토리</span>
+                    <div className="flex flex-col">
+                      {historyItems.map((item) => {
+                        const ResourceIcon = RESOURCE_ICONS[selectedConnector];
+                        return (
+                          <div
+                            key={`${item.scope_id}-${item.target_id}`}
+                            className="border-edge-assistive flex h-14 shrink-0 items-center gap-4 border-b pr-4 last:border-b-0"
+                          >
+                            <div className="border-edge-normal bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
+                              <ResourceIcon className="size-5" />
+                            </div>
+                            <span className="text-body-small text-content-normal flex-1 truncate">
+                              {item.target_name}
+                            </span>
+                            {item.latest && (
+                              <span className="text-label-xsmall text-content-alternative shrink-0 whitespace-nowrap">
+                                {formatHistoryDate(item.latest)}
+                              </span>
+                            )}
+                            <IconCheckCircle className="text-accent-green size-6 shrink-0" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
