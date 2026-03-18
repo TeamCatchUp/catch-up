@@ -1,61 +1,54 @@
 import { useCallback, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 
 import { INTEGRATION_ACCOUNTS } from '../constants/integrations';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import type { ConnectorStatusBase } from '../types/api';
-import type { AdminIntegrationViewModel, ConnectorDetail, IntegrationService } from '../types/integrations';
+import type { AdminIntegrationViewModel, ConnectorDetail, ConnectorResource, IntegrationService } from '../types/integrations';
+import type { AdminConnectorStatusResponse, ConnectorStatusSource } from '../types/sync';
+
+const SOURCE_ORDER: ConnectorStatusSource[] = ['github', 'jira', 'slack', 'confluence'];
 
 const RESOURCE_LABELS: Record<IntegrationService, string> = {
-  jira: '연동된 Jira Project',
-  github: '연동된 Repository',
-  slack: 'Catch Up Slack Bot이 추가된 채널',
-  confluence: '연동된 Confluence Space',
+  jira: '임베딩된 Jira Project',
+  github: '임베딩된 Repository',
+  slack: '임베딩된 Slack 채널',
+  confluence: '임베딩된 Confluence Space',
 };
 
-/** ISO 날짜 → "YYYY. M. D. HH:mm" */
-const formatDate = (iso: string | null): string => {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  const h = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}. ${h}:${min}`;
+/** "YYYY. M. D." 날짜 포맷 */
+const formatDate = (dateStr: string | null): string => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}.`;
 };
 
 /** oldest ~ latest 범위 문자열 */
-const formatRange = (status: ConnectorStatusBase | undefined): string => {
-  if (!status?.oldest || !status?.latest) return '-';
-  return `${formatDate(status.oldest)} ~ ${formatDate(status.latest)}`;
-};
-
-/** 커넥터 상태에서 리소스 목록 추출 */
-const getResources = (status: unknown): string[] => {
-  if (!status || typeof status !== 'object') return [];
-  if ('repositories' in status) return (status as { repositories: string[] }).repositories;
-  if ('projects' in status) return (status as { projects: string[] }).projects;
-  if ('channels' in status) return (status as { channels: string[] }).channels;
-  if ('spaces' in status) return (status as { spaces: string[] }).spaces;
-  return [];
+const formatRange = (oldest: string | null, latest: string | null): string => {
+  if (!oldest && !latest) return '-';
+  return `${formatDate(oldest)} ~ ${formatDate(latest)}`;
 };
 
 /** 관리자 연동 화면에서 필요한 데이터를 조합해 반환 */
 export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
-  const { data: github, isLoading: githubLoading } = useQuery(adminConnectorQueries.githubStatus());
-  const { data: jira, isLoading: jiraLoading } = useQuery(adminConnectorQueries.jiraStatus());
-  const { data: slack, isLoading: slackLoading } = useQuery(adminConnectorQueries.slackStatus());
-  const { data: confluence, isLoading: confluenceLoading } = useQuery(adminConnectorQueries.confluenceStatus());
+  const statusQueries = useQueries({
+    queries: SOURCE_ORDER.map((source) => adminConnectorQueries.connectorTargetStatus(source)),
+  });
 
-  const statusMap = useMemo<Record<IntegrationService, ConnectorStatusBase | undefined>>(
-    () => ({ github, jira, slack, confluence }),
-    [github, jira, slack, confluence],
-  );
+  const statusMap = useMemo<Record<IntegrationService, AdminConnectorStatusResponse | undefined>>(() => {
+    const map: Record<string, AdminConnectorStatusResponse | undefined> = {};
+    SOURCE_ORDER.forEach((source, i) => {
+      map[source] = statusQueries[i]?.data;
+    });
+    return map as Record<IntegrationService, AdminConnectorStatusResponse | undefined>;
+  }, [statusQueries]);
 
   const integrationMenu = useMemo(
     () =>
       INTEGRATION_ACCOUNTS.map((item) => ({
         ...item,
         actionText: `${item.name} 연동하기`,
-        connected: statusMap[item.service]?.connected ?? false,
+        connected: (statusMap[item.service]?.total_targets ?? 0) > 0,
       })),
     [statusMap],
   );
@@ -63,10 +56,23 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
   const getConnectorDetail = useCallback(
     (service: IntegrationService): ConnectorDetail => {
       const status = statusMap[service];
+      const targets = status?.targets ?? [];
+
+      // 전체 데이터 범위: 모든 target 중 가장 오래된 oldest ~ 가장 최신 latest
+      const allOldest = targets.map((t) => t.oldest).filter(Boolean) as string[];
+      const allLatest = targets.map((t) => t.latest).filter(Boolean) as string[];
+      const globalOldest = allOldest.length ? allOldest.sort()[0] : null;
+      const globalLatest = allLatest.length ? allLatest.sort().reverse()[0] : null;
+
+      const resources: ConnectorResource[] = targets.map((t) => ({
+        name: t.target_name,
+        dateRange: formatRange(t.oldest, t.latest),
+      }));
+
       return {
-        connected: status?.connected ?? false,
-        dataRange: formatRange(status),
-        resources: getResources(status),
+        connected: targets.length > 0,
+        dataRange: formatRange(globalOldest, globalLatest),
+        resources,
         resourceLabel: RESOURCE_LABELS[service],
       };
     },
@@ -76,6 +82,6 @@ export const useAdminIntegrationViewModel = (): AdminIntegrationViewModel => {
   return {
     integrationMenu,
     getConnectorDetail,
-    isLoading: githubLoading || jiraLoading || slackLoading || confluenceLoading,
+    isLoading: statusQueries.some((q) => q.isLoading),
   };
 };

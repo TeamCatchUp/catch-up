@@ -164,13 +164,18 @@ const IntegrationManagementSection = ({
                     const ResourceIcon = RESOURCE_ICONS[selectedService];
                     return (
                       <div
-                        key={`${row}-${index}`}
+                        key={`${row.name}-${index}`}
                         className="text-body-small text-content-neutral flex h-13 items-center gap-3 px-4 py-3"
                       >
                         <div className="border-edge-neutral bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
                           <ResourceIcon className="size-5" />
                         </div>
-                        <span className="truncate">{row}</span>
+                        <span className="flex-1 truncate">{row.name}</span>
+                        {row.dateRange && row.dateRange !== '-' && (
+                          <span className="text-label-xsmall text-content-neutral shrink-0 whitespace-nowrap">
+                            {row.dateRange}
+                          </span>
+                        )}
                       </div>
                     );
                   })}
