@@ -2,15 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-import logging
 
-from sqlalchemy import DateTime, String, cast, column, func, literal, select, table
+from sqlalchemy import DateTime, cast, column, func, literal, select, table, tuple_
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
 from catchup.db.models import SyncConnector, SyncEvent, SyncJob, SyncType
-
-logger = logging.getLogger(__name__)
 
 _pg_embedding = table(
     "langchain_pg_embedding",
@@ -36,13 +33,13 @@ class AdminConnectorTargetRangeRow:
 
 def _get_time_fields(connector: SyncConnector) -> tuple[str, ...]:
     if connector == SyncConnector.GITHUB:
-        return ("created_at", "committed_at", "merged_at", "closed_at", "synced_at")
+        return ("committed_at", "merged_at", "closed_at", "updated_at", "created_at", "synced_at")
     if connector == SyncConnector.JIRA:
-        return ("created_at", "updated_at", "resolved_at", "synced_at")
+        return ("resolved_at", "updated_at", "created_at", "synced_at")
     if connector == SyncConnector.SLACK:
-        return ("created_at", "updated_at", "synced_at")
+        return ("updated_at", "created_at", "synced_at")
     if connector == SyncConnector.CONFLUENCE:
-        return ("created_at", "updated_at", "synced_at")
+        return ("updated_at", "created_at", "synced_at")
     raise ValueError(f"unsupported connector: {connector}")
 
 
@@ -105,130 +102,181 @@ def _build_range_aggregates(
     return func.min(time_expr), func.max(time_expr)
 
 
-def _get_embedding_range_by_github_target(
+def _list_github_embedding_ranges(
     db: Session,
     *,
-    target_name: str,
-) -> tuple[datetime | None, datetime | None]:
+    target_names: list[str],
+) -> dict[str, tuple[datetime | None, datetime | None]]:
+    if not target_names:
+        return {}
+
     time_fields = _get_time_fields(SyncConnector.GITHUB)
     oldest_at, latest_at = _build_range_aggregates(time_fields)
-    embedding_full_name = func.coalesce(
-        _pg_embedding.c.cmetadata["full_name"].astext,
-        _pg_embedding.c.cmetadata["owner"].astext
-        + literal("/")
-        + _pg_embedding.c.cmetadata["repo"].astext,
+    target_key = func.lower(
+        func.coalesce(
+            _pg_embedding.c.cmetadata["full_name"].astext,
+            _pg_embedding.c.cmetadata["owner"].astext
+            + literal("/")
+            + _pg_embedding.c.cmetadata["repo"].astext,
+        )
     )
     stmt = (
         select(
+            target_key.label("target_key"),
             oldest_at.label("oldest_at"),
             latest_at.label("latest_at"),
         )
         .select_from(_pg_embedding)
         .where(
             _pg_embedding.c.cmetadata["source"].astext == SyncConnector.GITHUB.value,
-            func.lower(embedding_full_name) == func.lower(target_name),
+            target_key.in_([target_name.lower() for target_name in target_names]),
         )
+        .group_by(target_key)
     )
-    row = db.execute(stmt).first()
-    return (row.oldest_at, row.latest_at) if row else (None, None)
+    rows = db.execute(stmt).all()
+    return {
+        str(row.target_key): (row.oldest_at, row.latest_at)
+        for row in rows
+    }
 
 
-def _get_embedding_range_by_jira_target(
+def _list_jira_embedding_ranges(
     db: Session,
     *,
-    target_id: str,
-) -> tuple[datetime | None, datetime | None]:
+    target_ids: list[str],
+) -> dict[str, tuple[datetime | None, datetime | None]]:
+    if not target_ids:
+        return {}
+
     time_fields = _get_time_fields(SyncConnector.JIRA)
     oldest_at, latest_at = _build_range_aggregates(time_fields)
-    stmt = select(
-        oldest_at.label("oldest_at"),
-        latest_at.label("latest_at"),
-    ).where(
-        _pg_embedding.c.cmetadata["source"].astext == SyncConnector.JIRA.value,
-        _pg_embedding.c.cmetadata["project_key"].astext == target_id,
+    target_key = _pg_embedding.c.cmetadata["project_key"].astext
+    stmt = (
+        select(
+            target_key.label("target_key"),
+            oldest_at.label("oldest_at"),
+            latest_at.label("latest_at"),
+        )
+        .where(
+            _pg_embedding.c.cmetadata["source"].astext == SyncConnector.JIRA.value,
+            target_key.in_(target_ids),
+        )
+        .group_by(target_key)
     )
-    row = db.execute(stmt).first()
-    return (row.oldest_at, row.latest_at) if row else (None, None)
+    rows = db.execute(stmt).all()
+    return {
+        str(row.target_key): (row.oldest_at, row.latest_at)
+        for row in rows
+    }
 
 
-def _get_embedding_range_by_slack_target(
+def _list_slack_embedding_ranges(
     db: Session,
     *,
-    scope_id: str,
-    target_id: str,
-) -> tuple[datetime | None, datetime | None]:
+    scope_target_pairs: list[tuple[str, str]],
+) -> dict[tuple[str, str], tuple[datetime | None, datetime | None]]:
+    if not scope_target_pairs:
+        return {}
+
     time_fields = _get_time_fields(SyncConnector.SLACK)
     oldest_at, latest_at = _build_range_aggregates(time_fields)
-    stmt = select(
-        oldest_at.label("oldest_at"),
-        latest_at.label("latest_at"),
-    ).where(
-        _pg_embedding.c.cmetadata["source"].astext == SyncConnector.SLACK.value,
-        _pg_embedding.c.cmetadata["team_id"].astext == scope_id,
-        _pg_embedding.c.cmetadata["channel_id"].astext == target_id,
+    scope_key = _pg_embedding.c.cmetadata["team_id"].astext
+    target_key = _pg_embedding.c.cmetadata["channel_id"].astext
+    stmt = (
+        select(
+            scope_key.label("scope_key"),
+            target_key.label("target_key"),
+            oldest_at.label("oldest_at"),
+            latest_at.label("latest_at"),
+        )
+        .where(
+            _pg_embedding.c.cmetadata["source"].astext == SyncConnector.SLACK.value,
+            tuple_(scope_key, target_key).in_(scope_target_pairs),
+        )
+        .group_by(scope_key, target_key)
     )
-    row = db.execute(stmt).first()
-    return (row.oldest_at, row.latest_at) if row else (None, None)
+    rows = db.execute(stmt).all()
+    return {
+        (str(row.scope_key), str(row.target_key)): (row.oldest_at, row.latest_at)
+        for row in rows
+    }
 
 
-def _get_embedding_range_by_confluence_target(
+def _list_confluence_embedding_ranges(
     db: Session,
     *,
-    target_id: str,
-) -> tuple[datetime | None, datetime | None]:
+    target_ids: list[str],
+) -> dict[str, tuple[datetime | None, datetime | None]]:
+    if not target_ids:
+        return {}
+
     time_fields = _get_time_fields(SyncConnector.CONFLUENCE)
     oldest_at, latest_at = _build_range_aggregates(time_fields)
-    stmt = select(
-        oldest_at.label("oldest_at"),
-        latest_at.label("latest_at"),
-    ).where(
-        _pg_embedding.c.cmetadata["source"].astext == SyncConnector.CONFLUENCE.value,
-        _pg_embedding.c.cmetadata["space_key"].astext == target_id,
+    target_key = _pg_embedding.c.cmetadata["space_key"].astext
+    stmt = (
+        select(
+            target_key.label("target_key"),
+            oldest_at.label("oldest_at"),
+            latest_at.label("latest_at"),
+        )
+        .where(
+            _pg_embedding.c.cmetadata["source"].astext == SyncConnector.CONFLUENCE.value,
+            target_key.in_(target_ids),
+        )
+        .group_by(target_key)
     )
-    row = db.execute(stmt).first()
-    return (row.oldest_at, row.latest_at) if row else (None, None)
+    rows = db.execute(stmt).all()
+    return {
+        str(row.target_key): (row.oldest_at, row.latest_at)
+        for row in rows
+    }
 
 
-def _get_embedding_range_by_target(
-    db: Session,
-    *,
+def _get_target_range_key(
     connector: SyncConnector,
+    *,
     scope_id: str,
     target_id: str,
     target_name: str,
-) -> tuple[datetime | None, datetime | None]:
-    try:
-        if connector == SyncConnector.GITHUB:
-            return _get_embedding_range_by_github_target(
-                db,
-                target_name=target_name,
-            )
-        if connector == SyncConnector.JIRA:
-            return _get_embedding_range_by_jira_target(
-                db,
-                target_id=target_id,
-            )
-        if connector == SyncConnector.SLACK:
-            return _get_embedding_range_by_slack_target(
-                db,
-                scope_id=scope_id,
-                target_id=target_id,
-            )
-        if connector == SyncConnector.CONFLUENCE:
-            return _get_embedding_range_by_confluence_target(
-                db,
-                target_id=target_id,
-            )
-        raise ValueError(f"unsupported connector: {connector}")
-    except Exception as exc:
-        logger.warning(
-            "[%s][STATUS] Failed to fetch embedding range: scope_id=%s, target_id=%s, error=%s",
-            connector.value.upper(),
-            scope_id,
-            target_id,
-            exc,
+) -> str | tuple[str, str]:
+    if connector == SyncConnector.GITHUB:
+        return target_name.lower()
+    if connector == SyncConnector.JIRA:
+        return target_id
+    if connector == SyncConnector.SLACK:
+        return (scope_id, target_id)
+    if connector == SyncConnector.CONFLUENCE:
+        return target_id
+    raise ValueError(f"unsupported connector: {connector}")
+
+
+def _list_embedding_ranges_by_target(
+    db: Session,
+    *,
+    connector: SyncConnector,
+    targets: list[_SyncTargetRow],
+) -> dict[str | tuple[str, str], tuple[datetime | None, datetime | None]]:
+    if connector == SyncConnector.GITHUB:
+        return _list_github_embedding_ranges(
+            db,
+            target_names=sorted({target.target_name for target in targets}),
         )
-        return None, None
+    if connector == SyncConnector.JIRA:
+        return _list_jira_embedding_ranges(
+            db,
+            target_ids=sorted({target.target_id for target in targets}),
+        )
+    if connector == SyncConnector.SLACK:
+        return _list_slack_embedding_ranges(
+            db,
+            scope_target_pairs=sorted({(target.scope_id, target.target_id) for target in targets}),
+        )
+    if connector == SyncConnector.CONFLUENCE:
+        return _list_confluence_embedding_ranges(
+            db,
+            target_ids=sorted({target.target_id for target in targets}),
+        )
+    raise ValueError(f"unsupported connector: {connector}")
 
 
 def list_admin_connector_target_range_rows(
@@ -237,15 +285,22 @@ def list_admin_connector_target_range_rows(
     connector: SyncConnector,
 ) -> list[AdminConnectorTargetRangeRow]:
     targets = _list_sync_targets(db, connector=connector)
+    embedding_ranges = _list_embedding_ranges_by_target(
+        db,
+        connector=connector,
+        targets=targets,
+    )
     rows: list[AdminConnectorTargetRangeRow] = []
 
     for target in targets:
-        oldest_at, latest_at = _get_embedding_range_by_target(
-            db,
-            connector=connector,
-            scope_id=target.scope_id,
-            target_id=target.target_id,
-            target_name=target.target_name,
+        oldest_at, latest_at = embedding_ranges.get(
+            _get_target_range_key(
+                connector,
+                scope_id=target.scope_id,
+                target_id=target.target_id,
+                target_name=target.target_name,
+            ),
+            (None, None),
         )
         rows.append(
             AdminConnectorTargetRangeRow(
