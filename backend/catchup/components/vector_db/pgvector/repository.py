@@ -729,6 +729,79 @@ class PGVectorRepository:
                 return [str(row[0]) for row in rows if row[0]]
 
         return await asyncio.to_thread(_list_ids)
+
+    async def count_jira_records(
+        self,
+        *,
+        project_key: str,
+        entity_type: str,
+        since: datetime | None = None,
+    ) -> int:
+        self.ensure_initialized()
+
+        def _count() -> int:
+            embedding_table, collection_table, conditions = self._record_conditions(
+                source="jira",
+                entity_type=entity_type,
+                metadata_filters={
+                    "project_key": project_key,
+                },
+                timestamp_field="updated_at",
+                since=since,
+            )
+            stmt = (
+                select(func.count())
+                .select_from(
+                    embedding_table.join(
+                        collection_table,
+                        embedding_table.c.collection_id == collection_table.c.uuid,
+                    )
+                )
+                .where(and_(*conditions))
+            )
+
+            with self.vector_store._make_sync_session() as session:
+                result = session.execute(stmt).scalar_one()
+                return int(result or 0)
+
+        return await asyncio.to_thread(_count)
+
+    async def list_jira_record_ids(
+        self,
+        *,
+        project_key: str,
+        entity_type: str,
+        since: datetime | None = None,
+    ) -> list[str]:
+        self.ensure_initialized()
+
+        def _list_ids() -> list[str]:
+            embedding_table, collection_table, conditions = self._record_conditions(
+                source="jira",
+                entity_type=entity_type,
+                metadata_filters={
+                    "project_key": project_key,
+                },
+                timestamp_field="updated_at",
+                since=since,
+            )
+            stmt = (
+                select(embedding_table.c.id)
+                .select_from(
+                    embedding_table.join(
+                        collection_table,
+                        embedding_table.c.collection_id == collection_table.c.uuid,
+                    )
+                )
+                .where(and_(*conditions))
+                .order_by(embedding_table.c.id.asc())
+            )
+
+            with self.vector_store._make_sync_session() as session:
+                rows = session.execute(stmt).all()
+                return [str(row[0]) for row in rows if row[0]]
+
+        return await asyncio.to_thread(_list_ids)
     
     async def delete_by_id_prefix(self, prefix: str) -> None:
         self.ensure_initialized()

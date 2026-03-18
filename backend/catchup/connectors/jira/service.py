@@ -17,6 +17,7 @@ JiraApiClient, JiraFieldMapper, JiraTransformer, PGVectorRepository를 조합.
 """
 
 import asyncio
+from dataclasses import dataclass, field
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -33,7 +34,7 @@ from catchup.connectors.jira.client import (
     JiraRateLimitError,
 )
 from catchup.connectors.jira.field_mapper import JiraFieldMapper
-from catchup.connectors.jira.transformers import JiraTransformer
+from catchup.connectors.jira.transformers import JiraTransformer, normalize_issue_type
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
@@ -43,6 +44,35 @@ from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True, frozen=True)
+class JiraRecordGapItem:
+    record_type: str
+    expected_count: int = 0
+    stored_count: int = 0
+    missing_count: int = 0
+    missing_ids: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True, frozen=True)
+class JiraRecordGapReport:
+    records: list[JiraRecordGapItem] = field(default_factory=list)
+
+
+@dataclass(slots=True, frozen=True)
+class JiraRecordRetryItem:
+    record_type: str
+    requested_ids: list[str] = field(default_factory=list)
+    retried_count: int = 0
+    succeeded_count: int = 0
+    failed_ids: list[str] = field(default_factory=list)
+    remaining_missing_ids: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True, frozen=True)
+class JiraRecordRetryResult:
+    records: list[JiraRecordRetryItem] = field(default_factory=list)
 
 
 class JiraIngestionService:
@@ -127,6 +157,185 @@ class JiraIngestionService:
                 "JiraIngestionService not initialized. "
                 "Call await service.initialize() first."
             )
+
+    def _resolve_sync_from_dt(
+        self,
+        sync_days: int | None,
+    ) -> datetime:
+        days = sync_days if sync_days is not None else settings.DEFAULT_SYNC_DAYS
+        return datetime.now(timezone.utc) - timedelta(days=days)
+
+    @staticmethod
+    def _extract_record_ids_from_doc_ids(doc_ids: list[str]) -> list[str]:
+        record_ids: list[str] = []
+        for doc_id in doc_ids:
+            if not doc_id or ":" not in doc_id:
+                continue
+            record_ids.append(doc_id.rsplit(":", 1)[-1])
+        return record_ids
+
+    @staticmethod
+    def _sort_record_ids(record_ids: set[str]) -> list[str]:
+        return sorted(record_ids)
+
+    @staticmethod
+    def _build_gap_item(
+        *,
+        record_type: str,
+        expected_ids: list[str],
+        stored_ids: list[str],
+        stored_count: int,
+    ) -> JiraRecordGapItem:
+        missing_ids = sorted(set(expected_ids) - set(stored_ids))
+        return JiraRecordGapItem(
+            record_type=record_type,
+            expected_count=len(expected_ids),
+            stored_count=stored_count,
+            missing_count=len(missing_ids),
+            missing_ids=missing_ids,
+        )
+
+    def _load_project_context_sync(
+        self,
+        project_key: str,
+    ) -> None:
+        with SessionLocal() as db:
+            self.transformer.project_cache = jira_entities.get_projects_by_keys(
+                db,
+                self.cloud_id,
+                [project_key],
+            )
+            sprints = jira_entities.get_sprints_by_cloud_id(db, self.cloud_id)
+            self.transformer.sprint_cache = {s.sprint_id: s for s in sprints}
+
+    async def _prepare_project_context(
+        self,
+        project_key: str,
+    ) -> None:
+        await run_in_threadpool(self._load_project_context_sync, project_key)
+
+    def _classify_record_type(
+        self,
+        issue_data: dict[str, Any],
+    ) -> str:
+        issue_type = normalize_issue_type(
+            issue_data.get("fields", {}).get("issuetype", {}).get("name", ""),
+        )
+        return "epic" if issue_type.lower() == "epic" else "issue"
+
+    def _build_issue_jql(
+        self,
+        *,
+        project_key: str,
+        since: datetime | None = None,
+    ) -> str:
+        jql_parts = [f'project = "{project_key}"']
+        if since:
+            since_str = since.strftime("%Y-%m-%d %H:%M")
+            jql_parts.insert(0, f'updated >= "{since_str}"')
+
+        return " AND ".join(jql_parts) + " ORDER BY updated DESC"
+
+    async def _collect_project_record_ids(
+        self,
+        *,
+        project_key: str,
+        since: datetime | None,
+    ) -> tuple[list[str], list[str]]:
+        issue_ids: list[str] = []
+        epic_ids: list[str] = []
+        next_page_token: str | None = None
+        jql = self._build_issue_jql(project_key=project_key, since=since)
+
+        while True:
+            response = await self.client.search_issues(
+                jql=jql,
+                fields=["issuetype", "key"],
+                max_results=settings.JIRA_SYNC_BATCH_SIZE,
+                next_page_token=next_page_token,
+            )
+
+            issues = response.get("issues", [])
+            if not issues:
+                break
+
+            for issue_data in issues:
+                issue_key = issue_data.get("key")
+                if not issue_key:
+                    continue
+
+                if self._classify_record_type(issue_data) == "epic":
+                    epic_ids.append(issue_key)
+                else:
+                    issue_ids.append(issue_key)
+
+            if response.get("isLast", True):
+                break
+
+            next_page_token = response.get("nextPageToken")
+            if not next_page_token:
+                break
+
+            await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
+
+        return issue_ids, epic_ids
+
+    async def _fetch_retry_issue(
+        self,
+        issue_key: str,
+    ) -> dict[str, Any] | None:
+        try:
+            return await self.client.get_issue(issue_key)
+        except JiraApiError as exc:
+            logger.warning(
+                "[JIRA][REPAIR] Failed to fetch issue: cloud_id=%s, issue_key=%s, error=%s",
+                self.cloud_id,
+                issue_key,
+                exc,
+            )
+            return None
+
+    async def _build_retry_documents(
+        self,
+        *,
+        project_key: str,
+        requested_ids: list[str],
+        expected_record_type: str,
+    ) -> tuple[list[Document], list[str]]:
+        documents: list[Document] = []
+        failed_ids: list[str] = []
+
+        await self._prepare_project_context(project_key)
+
+        for issue_key in requested_ids:
+            issue_data = await self._fetch_retry_issue(issue_key)
+            if issue_data is None:
+                failed_ids.append(issue_key)
+                continue
+
+            actual_record_type = self._classify_record_type(issue_data)
+            if actual_record_type != expected_record_type:
+                failed_ids.append(issue_key)
+                continue
+
+            try:
+                documents.append(
+                    self.transformer.transform_issue(
+                        issue_data,
+                        self.site_url,
+                    )
+                )
+            except Exception as exc:
+                logger.warning(
+                    "[JIRA][REPAIR] Failed to transform issue: cloud_id=%s, project_key=%s, issue_key=%s, error=%s",
+                    self.cloud_id,
+                    project_key,
+                    issue_key,
+                    exc,
+                )
+                failed_ids.append(issue_key)
+
+        return documents, failed_ids
 
     async def sync_metadata(
         self,
@@ -734,6 +943,176 @@ class JiraIngestionService:
 
         logger.info(f"User sync completed: {results}")
         return results
+
+    async def build_record_gap_report(
+        self,
+        *,
+        project_key: str,
+        sync_days: int | None = None,
+        sync_from_dt: datetime | None = None,
+    ) -> JiraRecordGapReport:
+        self._ensure_initialized()
+        since = sync_from_dt or self._resolve_sync_from_dt(sync_days)
+
+        expected_issue_ids, expected_epic_ids = await self._collect_project_record_ids(
+            project_key=project_key,
+            since=since,
+        )
+        stored_issue_doc_ids = await self.repository.list_jira_record_ids(
+            project_key=project_key,
+            entity_type="issue",
+            since=since,
+        )
+        stored_epic_doc_ids = await self.repository.list_jira_record_ids(
+            project_key=project_key,
+            entity_type="epic",
+            since=since,
+        )
+
+        issue_item = self._build_gap_item(
+            record_type="issue",
+            expected_ids=expected_issue_ids,
+            stored_ids=self._extract_record_ids_from_doc_ids(stored_issue_doc_ids),
+            stored_count=len(stored_issue_doc_ids),
+        )
+        epic_item = self._build_gap_item(
+            record_type="epic",
+            expected_ids=expected_epic_ids,
+            stored_ids=self._extract_record_ids_from_doc_ids(stored_epic_doc_ids),
+            stored_count=len(stored_epic_doc_ids),
+        )
+
+        return JiraRecordGapReport(records=[issue_item, epic_item])
+
+    async def retry_missing_records(
+        self,
+        *,
+        project_key: str,
+        sync_days: int | None = None,
+        sync_from_dt: datetime | None = None,
+        issue_ids: list[str] | None = None,
+        epic_ids: list[str] | None = None,
+    ) -> JiraRecordRetryResult:
+        self._ensure_initialized()
+        requested_issue_ids = list(issue_ids or [])
+        requested_epic_ids = list(epic_ids or [])
+        result_items: list[JiraRecordRetryItem] = []
+
+        if requested_issue_ids:
+            issue_documents, issue_failed_ids = await self._build_retry_documents(
+                project_key=project_key,
+                requested_ids=requested_issue_ids,
+                expected_record_type="issue",
+            )
+            issue_succeeded_count = 0
+
+            if issue_documents:
+                try:
+                    documents = issue_documents
+                    if self.summarizer:
+                        documents = await self._summarize_documents(
+                            documents,
+                            project_key=project_key,
+                            audit_context=None,
+                        )
+                    await self.repository.upsert_documents(
+                        documents,
+                        [doc.id for doc in documents],
+                        audit_context=None,
+                        context=f"entity_type=issue,project_key={project_key},mode=partial_retry,doc_count={len(documents)}",
+                    )
+                    issue_succeeded_count = len(documents)
+                except Exception as exc:
+                    logger.error(
+                        "[JIRA][REPAIR] Failed to upsert issue docs: cloud_id=%s, project_key=%s, error=%s",
+                        self.cloud_id,
+                        project_key,
+                        exc,
+                        exc_info=True,
+                    )
+                    issue_failed_ids.extend(
+                        self._extract_record_ids_from_doc_ids([doc.id for doc in issue_documents])
+                    )
+
+            result_items.append(
+                JiraRecordRetryItem(
+                    record_type="issue",
+                    requested_ids=requested_issue_ids,
+                    retried_count=len(requested_issue_ids),
+                    succeeded_count=issue_succeeded_count,
+                    failed_ids=self._sort_record_ids(set(issue_failed_ids)),
+                )
+            )
+
+        if requested_epic_ids:
+            epic_documents, epic_failed_ids = await self._build_retry_documents(
+                project_key=project_key,
+                requested_ids=requested_epic_ids,
+                expected_record_type="epic",
+            )
+            epic_succeeded_count = 0
+
+            if epic_documents:
+                try:
+                    documents = epic_documents
+                    if self.summarizer:
+                        documents = await self._summarize_documents(
+                            documents,
+                            project_key=project_key,
+                            audit_context=None,
+                        )
+                    await self.repository.upsert_documents(
+                        documents,
+                        [doc.id for doc in documents],
+                        audit_context=None,
+                        context=f"entity_type=epic,project_key={project_key},mode=partial_retry,doc_count={len(documents)}",
+                    )
+                    epic_succeeded_count = len(documents)
+                except Exception as exc:
+                    logger.error(
+                        "[JIRA][REPAIR] Failed to upsert epic docs: cloud_id=%s, project_key=%s, error=%s",
+                        self.cloud_id,
+                        project_key,
+                        exc,
+                        exc_info=True,
+                    )
+                    epic_failed_ids.extend(
+                        self._extract_record_ids_from_doc_ids([doc.id for doc in epic_documents])
+                    )
+
+            result_items.append(
+                JiraRecordRetryItem(
+                    record_type="epic",
+                    requested_ids=requested_epic_ids,
+                    retried_count=len(requested_epic_ids),
+                    succeeded_count=epic_succeeded_count,
+                    failed_ids=self._sort_record_ids(set(epic_failed_ids)),
+                )
+            )
+
+        gap_report = await self.build_record_gap_report(
+            project_key=project_key,
+            sync_days=sync_days,
+            sync_from_dt=sync_from_dt,
+        )
+        remaining_by_type = {
+            item.record_type: item.missing_ids
+            for item in gap_report.records
+        }
+
+        return JiraRecordRetryResult(
+            records=[
+                JiraRecordRetryItem(
+                    record_type=item.record_type,
+                    requested_ids=item.requested_ids,
+                    retried_count=item.retried_count,
+                    succeeded_count=item.succeeded_count,
+                    failed_ids=item.failed_ids,
+                    remaining_missing_ids=remaining_by_type.get(item.record_type, []),
+                )
+                for item in result_items
+            ]
+        )
 
     async def delete_issue_documents(
             self,
