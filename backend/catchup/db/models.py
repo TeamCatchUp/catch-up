@@ -1638,6 +1638,11 @@ class ChatHistory(Base):
         nullable=False,
         index=True
     )
+    trace_id: Mapped[str] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="Langfuse trace에 사용자 피드백을 사후 반영하기 위한 식별자"
+    )
     
     content: Mapped[str] = mapped_column(Text, nullable=True)
     sender_type: Mapped[SenderType] = mapped_column(String(20), nullable=False)
