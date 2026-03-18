@@ -20,14 +20,13 @@ langchain-postgres 패키지를 사용하여 LangChain Document를 직접 저장
 
 import asyncio
 import logging
+from datetime import datetime
 from typing import Any, Awaitable, Callable
 
 from langchain.embeddings import Embeddings
 from langchain_cohere import CohereEmbeddings
 from langchain_core.documents import Document
 from langchain_postgres import PGVector
-
-from datetime import datetime
 
 from sqlalchemy import DateTime, Engine, and_, cast, delete as sa_delete, func, select
 
@@ -131,12 +130,13 @@ class PGVectorRepository:
         self.ensure_initialized()
         return self.vector_store.CollectionStore.__table__
 
-    def _github_record_conditions(
+    def _record_conditions(
         self,
         *,
-        owner: str,
-        repo: str,
+        source: str,
         entity_type: str,
+        metadata_filters: dict[str, str],
+        timestamp_field: str,
         since: datetime | None = None,
     ) -> tuple[Any, Any, list[Any]]:
         embedding_table = self._get_embedding_table()
@@ -144,16 +144,17 @@ class PGVectorRepository:
 
         conditions: list[Any] = [
             collection_table.c.name == self.collection_name,
-            embedding_table.c.cmetadata["source"].astext == "github",
-            embedding_table.c.cmetadata["owner"].astext == owner,
-            embedding_table.c.cmetadata["repo"].astext == repo,
+            embedding_table.c.cmetadata["source"].astext == source,
             embedding_table.c.cmetadata["entity_type"].astext == entity_type,
         ]
+
+        for key, value in metadata_filters.items():
+            conditions.append(embedding_table.c.cmetadata[key].astext == value)
 
         if since is not None:
             conditions.append(
                 cast(
-                    embedding_table.c.cmetadata["updated_at"].astext,
+                    embedding_table.c.cmetadata[timestamp_field].astext,
                     DateTime(timezone=True),
                 ) >= since
             )
@@ -586,10 +587,14 @@ class PGVectorRepository:
         self.ensure_initialized()
 
         def _count() -> int:
-            embedding_table, collection_table, conditions = self._github_record_conditions(
-                owner=owner,
-                repo=repo,
+            embedding_table, collection_table, conditions = self._record_conditions(
+                source="github",
                 entity_type=entity_type,
+                metadata_filters={
+                    "owner": owner,
+                    "repo": repo,
+                },
+                timestamp_field="updated_at",
                 since=since,
             )
             stmt = (
@@ -620,10 +625,91 @@ class PGVectorRepository:
         self.ensure_initialized()
 
         def _list_ids() -> list[str]:
-            embedding_table, collection_table, conditions = self._github_record_conditions(
-                owner=owner,
-                repo=repo,
+            embedding_table, collection_table, conditions = self._record_conditions(
+                source="github",
                 entity_type=entity_type,
+                metadata_filters={
+                    "owner": owner,
+                    "repo": repo,
+                },
+                timestamp_field="updated_at",
+                since=since,
+            )
+            stmt = (
+                select(embedding_table.c.id)
+                .select_from(
+                    embedding_table.join(
+                        collection_table,
+                        embedding_table.c.collection_id == collection_table.c.uuid,
+                    )
+                )
+                .where(and_(*conditions))
+                .order_by(embedding_table.c.id.asc())
+            )
+
+            with self.vector_store._make_sync_session() as session:
+                rows = session.execute(stmt).all()
+                return [str(row[0]) for row in rows if row[0]]
+
+        return await asyncio.to_thread(_list_ids)
+
+    async def count_slack_records(
+        self,
+        *,
+        team_id: str,
+        channel_id: str,
+        entity_type: str = "message",
+        since: datetime | None = None,
+    ) -> int:
+        self.ensure_initialized()
+
+        def _count() -> int:
+            embedding_table, collection_table, conditions = self._record_conditions(
+                source="slack",
+                entity_type=entity_type,
+                metadata_filters={
+                    "team_id": team_id,
+                    "channel_id": channel_id,
+                },
+                timestamp_field="created_at",
+                since=since,
+            )
+            stmt = (
+                select(func.count())
+                .select_from(
+                    embedding_table.join(
+                        collection_table,
+                        embedding_table.c.collection_id == collection_table.c.uuid,
+                    )
+                )
+                .where(and_(*conditions))
+            )
+
+            with self.vector_store._make_sync_session() as session:
+                result = session.execute(stmt).scalar_one()
+                return int(result or 0)
+
+        return await asyncio.to_thread(_count)
+
+    async def list_slack_record_ids(
+        self,
+        *,
+        team_id: str,
+        channel_id: str,
+        entity_type: str = "message",
+        since: datetime | None = None,
+    ) -> list[str]:
+        self.ensure_initialized()
+
+        def _list_ids() -> list[str]:
+            embedding_table, collection_table, conditions = self._record_conditions(
+                source="slack",
+                entity_type=entity_type,
+                metadata_filters={
+                    "team_id": team_id,
+                    "channel_id": channel_id,
+                },
+                timestamp_field="created_at",
                 since=since,
             )
             stmt = (
