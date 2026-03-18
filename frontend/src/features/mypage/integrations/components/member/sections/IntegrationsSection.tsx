@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 
 import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
+import { useEmbeddingHistory } from '../../../hooks/useEmbeddingHistory';
 import { useEmbeddingJobs } from '../../../hooks/useEmbeddingJobs';
 import { useMemberIntegrationViewModel } from '../../../hooks/useMemberIntegrationViewModel';
 import type { SyncFilterType } from '../../../types/api';
@@ -34,6 +35,7 @@ const IntegrationsSection = () => {
   });
 
   const { isInitialLoading, buttonStates, progresses, handleJobStart } = useEmbeddingJobs();
+  const { historyByConnector } = useEmbeddingHistory();
 
   // in_progress → completed 전환 감지 → 결과 모달 표시
   const [lastSeenStates, setLastSeenStates] = useState('');
@@ -67,7 +69,7 @@ const IntegrationsSection = () => {
     <section className="flex w-full flex-col gap-8">
       <div className="flex flex-col gap-3">
         <StatusCardsSection cards={cards} buttonStates={buttonStates} onJobStart={handleJobStart} isInitialLoading={isInitialLoading} />
-        <EmbeddingProgressPanel progresses={progresses} buttonStates={buttonStates} isInitialLoading={isInitialLoading} />
+        <EmbeddingProgressPanel progresses={progresses} buttonStates={buttonStates} isInitialLoading={isInitialLoading} historyByConnector={historyByConnector} />
       </div>
       <UsersStatusSection
         total={total}

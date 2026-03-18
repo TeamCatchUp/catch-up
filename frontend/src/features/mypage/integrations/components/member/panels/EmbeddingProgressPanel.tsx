@@ -16,6 +16,7 @@ import { cn } from '@/shared/utils/cn';
 
 import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
 import type {
+  AdminConnectorTargetRangeResponse,
   ConnectorProgress,
   EmbeddingButtonState,
   EmbeddingProgressItem,
@@ -31,10 +32,24 @@ const RESOURCE_ICONS: Record<SyncConnector, React.ComponentType<React.SVGProps<S
   confluence: IconSpace,
 };
 
+/** "2026-03-05" → "2026.03.05 (수)" 포맷. 백엔드가 날짜만 반환하므로 시간 미표시. */
+const formatHistoryDate = (dateStr: string): string => {
+  // "YYYY-MM-DD" 형태를 직접 파싱하여 타임존 변환 방지
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const [y, m, d] = parts.map(Number);
+  const date = new Date(y, m - 1, d);
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+  const month = String(m).padStart(2, '0');
+  const day = String(d).padStart(2, '0');
+  return `${y}.${month}.${day} (${dayNames[date.getDay()]})`;
+};
+
 interface EmbeddingProgressPanelProps {
   progresses: ConnectorProgress[];
   buttonStates: Record<SyncConnector, EmbeddingButtonState>;
   isInitialLoading?: boolean;
+  historyByConnector?: Partial<Record<SyncConnector, AdminConnectorTargetRangeResponse[]>>;
 }
 
 type ConnectorEmbeddingStatus = 'in_progress' | 'completed' | 'failed' | 'idle';
@@ -95,7 +110,7 @@ const ItemStatusIcon = ({ status }: { status: SyncTargetStatus }) => {
   }
 };
 
-const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading }: EmbeddingProgressPanelProps) => {
+const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading, historyByConnector }: EmbeddingProgressPanelProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedConnector, setSelectedConnector] = useState<SyncConnector>(
     CONNECTOR_ORDER.find((c) => progresses.some((p) => p.connector === c)) ?? CONNECTOR_ORDER[0],
@@ -200,13 +215,10 @@ const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading }: 
                     key={item.targetId}
                     className="border-edge-assistive flex h-14 shrink-0 items-center gap-4 border-b px-4 last:border-b-0"
                   >
-                    {/* 리소스 아이콘 */}
                     <div className="border-edge-normal bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
                       <ResourceIcon className="size-5" />
                     </div>
-                    {/* 항목명 */}
                     <span className="text-body-small text-content-normal flex-1 truncate">{item.displayName}</span>
-                    {/* 상태 아이콘 */}
                     <ItemStatusIcon status={item.status} />
                   </div>
                 );
@@ -222,6 +234,37 @@ const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading }: 
                   </span>
                 </div>
               )}
+
+              {/* 임베딩 히스토리 */}
+              {historyByConnector?.[selectedConnector]?.length ? (
+                <>
+                  <div className="flex shrink-0 items-center px-5 pt-4 pb-1">
+                    <span className="text-body-xsmall text-content-normal">임베딩 히스토리</span>
+                  </div>
+                  {historyByConnector[selectedConnector]!.map((item) => {
+                    const ResourceIcon = RESOURCE_ICONS[selectedConnector];
+                    return (
+                      <div
+                        key={`${item.scope_id}-${item.target_id}`}
+                        className="border-edge-assistive flex h-14 shrink-0 items-center gap-4 border-b px-4 last:border-b-0"
+                      >
+                        <div className="border-edge-normal bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
+                          <ResourceIcon className="size-5" />
+                        </div>
+                        <span className="text-body-small text-content-normal flex-1 truncate">
+                          {item.target_name}
+                        </span>
+                        {item.latest && (
+                          <span className="text-label-xsmall text-content-alternative shrink-0 whitespace-nowrap">
+                            {formatHistoryDate(item.latest)}
+                          </span>
+                        )}
+                        <IconCheckCircle className="text-accent-green size-6 shrink-0" />
+                      </div>
+                    );
+                  })}
+                </>
+              ) : null}
             </div>
           </div>
         </div>
