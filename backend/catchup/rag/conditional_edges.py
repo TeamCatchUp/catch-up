@@ -1,7 +1,5 @@
 import logging
 
-from langchain_core.documents import Document
-from catchup.rag.nodes.utils import extract_anchor_ids
 from catchup.rag.state import AgentState
 
 logger = logging.getLogger(__name__)

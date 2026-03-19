@@ -2,7 +2,9 @@ import asyncio
 import logging
 
 from langchain_core.documents import Document
-from catchup.components.vector_db.factory import VectorDbProvider, get_vector_db_service
+
+from catchup.components.vector_db.factory import VectorDbProvider
+from catchup.components.vector_db.factory import get_vector_db_service
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.state import AgentState
 

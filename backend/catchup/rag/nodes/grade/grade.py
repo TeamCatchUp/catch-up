@@ -1,18 +1,15 @@
-import logging
-
+import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.documents import Document
 
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.nodes.utils import (
-    llm_semaphore,
-    log_node,
-    prepare_context_text,
-)
+from catchup.rag.nodes.utils import llm_semaphore
+from catchup.rag.nodes.utils import log_node
+from catchup.rag.nodes.utils import prepare_context_text
 from catchup.rag.schemas.structures import GradeDocuments
 from catchup.rag.state import AgentState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @log_node
@@ -24,7 +21,10 @@ async def grade_node(state: AgentState, llm: BaseChatModel):
     current_retry_count = state.get("retry_count", 0)
 
     if not retrieved_docs:
-        logger.warning("검색된 문서가 없습니다. (grade_status='bad')")
+        logger.warning(
+            "no_documents_retrieved", 
+            grade_status="bad"
+        )
         return {
             "grade_status": "bad",
             "grade_comment": "검색된 문서가 없습니다.",
@@ -34,7 +34,8 @@ async def grade_node(state: AgentState, llm: BaseChatModel):
     context_text = prepare_context_text(retrieved_docs)
 
     structured_llm = llm.with_structured_output(
-        GradeDocuments, method="function_calling"
+        GradeDocuments,
+        method="function_calling"
     )
 
     prompt = prompt_loader.get_prompt(
@@ -50,7 +51,12 @@ async def grade_node(state: AgentState, llm: BaseChatModel):
             )
 
     except Exception as e:
-        logger.warning(f"Grade node failed: {e}")
+        logger.warning(
+            "grade_node_failed",
+            fallback="negative_binary_score",
+            error=str(e),
+            exc_info=True
+        )
         grade_result = GradeDocuments(
             binary_score="no",
             explanation=f"문서 유효성 검사 실패: {str(e)}"
@@ -64,7 +70,7 @@ async def grade_node(state: AgentState, llm: BaseChatModel):
     else:
         new_retry_count = current_retry_count
 
-    logger.info(f"Grade 결과: {status} (이유: {grade_result.explanation})")
+    logger.debug("grade_result", status=status, explanation=grade_result.explanation)
 
     return {
         "grade_status": status,
