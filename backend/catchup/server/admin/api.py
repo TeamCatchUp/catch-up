@@ -129,6 +129,7 @@ def _get_connector_status(
                 scope_id=row.scope_id,
                 target_id=row.target_id,
                 target_name=row.target_name,
+                event_id=row.event_id,
                 sync_status=row.sync_status,
                 last_succeeded_at=_format_datetime(row.last_succeeded_at),
                 last_failed_at=_format_datetime(row.last_failed_at),
