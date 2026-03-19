@@ -1,6 +1,6 @@
 [project]
 name = "CatchUp"
-version = "0.2.10"
+version = "0.2.11"
 description = "A backend server for CatchUp."
 readme = "README.md"
 requires-python = ">=3.12.3"
@@ -58,3 +58,9 @@ dev = [
 
 [tool.uv]
 package = false
+
+[tool.ruff.lint]
+select = ["I", "F401"]
+
+[tool.ruff.lint.isort]
+force-single-line = true

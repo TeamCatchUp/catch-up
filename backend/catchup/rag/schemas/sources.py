@@ -1,10 +1,13 @@
-from enum import StrEnum
 import logging
-from typing import Annotated, Literal, Optional, Union
+from enum import StrEnum
+from typing import Annotated
+from typing import Literal
+from typing import Optional
+from typing import Union
 
 from langchain_core.documents import Document
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel
+from pydantic import Field
 
 logger = logging.getLogger(__name__)
 

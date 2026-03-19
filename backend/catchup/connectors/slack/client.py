@@ -229,6 +229,75 @@ class SlackApiClientWrapper:
                 logger.error(f"conversations_replies failed for {channel}/{ts}: {e.response['error']}")
                 raise
 
+    async def list_message_ids(
+        self,
+        channel: str,
+        oldest: str | None = None,
+    ) -> list[str]:
+        """
+        기간 내 채널 메시지 ts 목록 조회
+
+        Args:
+            channel: 채널 ID
+            oldest: 시작 timestamp
+
+        Returns:
+            메시지 ts 리스트
+        """
+        message_ids: list[str] = []
+        cursor: str | None = None
+
+        while True:
+            response = await self.get_conversation_history(
+                channel=channel,
+                oldest=oldest,
+                cursor=cursor,
+                limit=settings.SLACK_MESSAGE_BATCH_SIZE,
+            )
+
+            for message in response.get("messages", []):
+                message_ts = message.get("ts")
+                if message_ts:
+                    message_ids.append(message_ts)
+
+            if not response.get("has_more"):
+                break
+
+            cursor = response.get("response_metadata", {}).get("next_cursor")
+            if not cursor:
+                break
+
+        return message_ids
+
+    async def get_message(
+        self,
+        channel: str,
+        ts: str,
+    ) -> dict[str, Any] | None:
+        """
+        특정 ts의 메시지 1건 조회
+
+        Args:
+            channel: 채널 ID
+            ts: 메시지 timestamp
+
+        Returns:
+            Slack 메시지 dict 또는 None
+        """
+        response = await self.get_conversation_history(
+            channel=channel,
+            oldest=ts,
+            latest=ts,
+            limit=1,
+            inclusive=True,
+        )
+
+        for message in response.get("messages", []):
+            if message.get("ts") == ts:
+                return message
+
+        return None
+
     # ================================================================
     # User APIs
     # ================================================================

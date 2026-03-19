@@ -16,11 +16,15 @@ from catchup.server.sync.schemas import (
     SyncAcceptedResponse,
     SyncErrorResponse,
     SyncJobSnapshotResponse,
+    SyncRecordGapResponse,
+    SyncRecordRetryRequest,
+    SyncRecordRetryResponse,
     SyncStatusResponse,
     SyncTargetsResponse,
 )
 from catchup.sync.common.schemas import FullSyncDispatchRequest, SyncDispatchResult
 from catchup.sync.common.exceptions import SyncAPIError, SyncRequestError
+from catchup.sync.repair.record_repair_service import get_record_repair_service
 from catchup.sync.dispatch_service import SyncDispatchService
 from catchup.sync.query_service import get_sync_query_service
 from catchup.sync.status_stream.service import get_sync_status_stream_service
@@ -151,6 +155,112 @@ async def get_scope_sync_status(
         )
 
     return SyncStatusResponse.from_scope_status_result(status_result)
+
+
+@router.get(
+    "/records/gaps",
+    response_model=SyncRecordGapResponse,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": SyncErrorResponse},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": SyncErrorResponse},
+    },
+)
+async def get_record_gaps(
+    event_id: str = Query(..., description="sync event id"),
+):
+    repair_service = get_record_repair_service()
+
+    try:
+        return await repair_service.get_record_gaps(
+            event_id=event_id,
+        )
+    except SyncRequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_build_error_detail(
+                code=exc.code,
+                message=exc.message,
+                metadata={
+                    "event_id": event_id,
+                    **exc.metadata,
+                },
+            ),
+        ) from exc
+    except SyncAPIError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.to_detail(),
+        ) from exc
+    except Exception as exc:
+        logger.error(
+            "[SYNC][RECORDS][GAPS][API] Request failed: event_id=%s, error=%s",
+            event_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_build_error_detail(
+                code="internal_error",
+                message="sync record gap request failed",
+                metadata={
+                    "event_id": event_id,
+                },
+            ),
+        ) from exc
+
+
+@router.post(
+    "/records/retry",
+    response_model=SyncRecordRetryResponse,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": SyncErrorResponse},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": SyncErrorResponse},
+    },
+)
+async def retry_records(
+    retry_request: SyncRecordRetryRequest,
+):
+    repair_service = get_record_repair_service()
+
+    try:
+        return await repair_service.retry_records(
+            request=retry_request,
+        )
+    except SyncRequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_build_error_detail(
+                code=exc.code,
+                message=exc.message,
+                metadata={
+                    "event_id": retry_request.event_id,
+                    **exc.metadata,
+                },
+            ),
+        ) from exc
+    except SyncAPIError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.to_detail(),
+        ) from exc
+    except Exception as exc:
+        logger.error(
+            "[SYNC][RECORDS][RETRY][API] Request failed: event_id=%s, error=%s",
+            retry_request.event_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_build_error_detail(
+                code="internal_error",
+                message="sync record retry request failed",
+                metadata={
+                    "event_id": retry_request.event_id,
+                },
+            ),
+        ) from exc
 
 
 @router.get(

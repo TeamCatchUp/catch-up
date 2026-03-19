@@ -1392,7 +1392,11 @@ class SyncEvent(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'in_progress', 'success', 'failed', 'retrying')",
+            (
+                "status IN ("
+                "'pending', 'in_progress', 'success', 'failed', 'retrying'"
+                ")"
+            ),
             name="ck_sync_events_status",
         ),
         CheckConstraint(
@@ -1637,6 +1641,11 @@ class ChatHistory(Base):
         ForeignKey("chat_rooms.id"), 
         nullable=False,
         index=True
+    )
+    trace_id: Mapped[str] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="Langfuse trace에 사용자 피드백을 사후 반영하기 위한 식별자"
     )
     
     content: Mapped[str] = mapped_column(Text, nullable=True)

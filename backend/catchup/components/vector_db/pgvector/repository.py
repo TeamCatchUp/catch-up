@@ -20,6 +20,7 @@ langchain-postgres 패키지를 사용하여 LangChain Document를 직접 저장
 
 import asyncio
 import logging
+from datetime import datetime
 from typing import Any, Awaitable, Callable
 
 from langchain.embeddings import Embeddings
@@ -27,7 +28,7 @@ from langchain_cohere import CohereEmbeddings
 from langchain_core.documents import Document
 from langchain_postgres import PGVector
 
-from sqlalchemy import Engine, delete as sa_delete
+from sqlalchemy import DateTime, Engine, and_, cast, delete as sa_delete, func, select
 
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.configs.config import settings
@@ -37,8 +38,6 @@ from catchup.sync.audit import SyncAuditContext, emit_sync_ingestion_audit
 logger = logging.getLogger(__name__)
 
 _embedding_semaphore = asyncio.Semaphore(settings.EMBEDDING_MAX_CONCURRENCY)
-
-
 class PGVectorRepository:
     """
     PGVector 벡터 저장소 Repository
@@ -122,6 +121,133 @@ class PGVectorRepository:
                 "PGVectorRepository not initialized. "
                 "Call await repository.initialize() first."
             )
+        
+    def _get_embedding_table(self):
+        self.ensure_initialized()
+        return self.vector_store.EmbeddingStore.__table__
+
+    def _get_collection_table(self):
+        self.ensure_initialized()
+        return self.vector_store.CollectionStore.__table__
+
+    def _record_conditions(
+        self,
+        *,
+        source: str,
+        entity_type: str,
+        metadata_filters: dict[str, str],
+        timestamp_field: str,
+        since: datetime | None = None,
+    ) -> tuple[Any, Any, list[Any]]:
+        embedding_table = self._get_embedding_table()
+        collection_table = self._get_collection_table()
+
+        conditions: list[Any] = [
+            collection_table.c.name == self.collection_name,
+            embedding_table.c.cmetadata["source"].astext == source,
+            embedding_table.c.cmetadata["entity_type"].astext == entity_type,
+        ]
+
+        for key, value in metadata_filters.items():
+            conditions.append(embedding_table.c.cmetadata[key].astext == value)
+
+        if since is not None:
+            conditions.append(
+                cast(
+                    embedding_table.c.cmetadata[timestamp_field].astext,
+                    DateTime(timezone=True),
+                ) >= since
+            )
+
+        return embedding_table, collection_table, conditions
+
+    async def _count_records(
+        self,
+        *,
+        source: str,
+        entity_type: str,
+        metadata_filters: dict[str, str],
+        timestamp_field: str,
+        since: datetime | None = None,
+        record_id_metadata_key: str | None = None,
+    ) -> int:
+        self.ensure_initialized()
+
+        def _count() -> int:
+            embedding_table, collection_table, conditions = self._record_conditions(
+                source=source,
+                entity_type=entity_type,
+                metadata_filters=metadata_filters,
+                timestamp_field=timestamp_field,
+                since=since,
+            )
+            if record_id_metadata_key:
+                record_id_expr = embedding_table.c.cmetadata[record_id_metadata_key].astext
+                count_expr = func.count(func.distinct(record_id_expr))
+            else:
+                count_expr = func.count()
+
+            stmt = (
+                select(count_expr)
+                .select_from(
+                    embedding_table.join(
+                        collection_table,
+                        embedding_table.c.collection_id == collection_table.c.uuid,
+                    )
+                )
+                .where(and_(*conditions))
+            )
+
+            with self.vector_store._make_sync_session() as session:
+                result = session.execute(stmt).scalar_one()
+                return int(result or 0)
+
+        return await asyncio.to_thread(_count)
+
+    async def _list_record_ids(
+        self,
+        *,
+        source: str,
+        entity_type: str,
+        metadata_filters: dict[str, str],
+        timestamp_field: str,
+        since: datetime | None = None,
+        record_id_metadata_key: str | None = None,
+    ) -> list[str]:
+        self.ensure_initialized()
+
+        def _list_ids() -> list[str]:
+            embedding_table, collection_table, conditions = self._record_conditions(
+                source=source,
+                entity_type=entity_type,
+                metadata_filters=metadata_filters,
+                timestamp_field=timestamp_field,
+                since=since,
+            )
+            record_id_expr = (
+                embedding_table.c.cmetadata[record_id_metadata_key].astext
+                if record_id_metadata_key
+                else embedding_table.c.id
+            )
+            select_expr = func.distinct(record_id_expr) if record_id_metadata_key else record_id_expr
+            stmt = (
+                select(select_expr)
+                .select_from(
+                    embedding_table.join(
+                        collection_table,
+                        embedding_table.c.collection_id == collection_table.c.uuid,
+                    )
+                )
+                .where(and_(*conditions))
+                .order_by(record_id_expr.asc())
+            )
+
+            with self.vector_store._make_sync_session() as session:
+                rows = session.execute(stmt).all()
+                return [str(row[0]) for row in rows if row[0]]
+
+        return await asyncio.to_thread(_list_ids)
+
 
     async def add_documents(
         self,
@@ -536,6 +662,152 @@ class PGVectorRepository:
             "embedding_dimensions": settings.PGVECTOR_EMBEDDING_DIMENSIONS,
             "initialized": self._initialized,
         }
+
+    async def count_github_records(
+        self,
+        *,
+        owner: str,
+        repo: str,
+        entity_type: str,
+        since: datetime | None = None,
+    ) -> int:
+        return await self._count_records(
+            source="github",
+            entity_type=entity_type,
+            metadata_filters={
+                "owner": owner,
+                "repo": repo,
+            },
+            timestamp_field="updated_at",
+            since=since,
+        )
+
+    async def list_github_record_ids(
+        self,
+        *,
+        owner: str,
+        repo: str,
+        entity_type: str,
+        since: datetime | None = None,
+    ) -> list[str]:
+        return await self._list_record_ids(
+            source="github",
+            entity_type=entity_type,
+            metadata_filters={
+                "owner": owner,
+                "repo": repo,
+            },
+            timestamp_field="updated_at",
+            since=since,
+        )
+
+    async def count_slack_records(
+        self,
+        *,
+        team_id: str,
+        channel_id: str,
+        entity_type: str = "message",
+        since: datetime | None = None,
+    ) -> int:
+        return await self._count_records(
+            source="slack",
+            entity_type=entity_type,
+            metadata_filters={
+                "team_id": team_id,
+                "channel_id": channel_id,
+            },
+            timestamp_field="created_at",
+            since=since,
+        )
+
+    async def list_slack_record_ids(
+        self,
+        *,
+        team_id: str,
+        channel_id: str,
+        entity_type: str = "message",
+        since: datetime | None = None,
+    ) -> list[str]:
+        return await self._list_record_ids(
+            source="slack",
+            entity_type=entity_type,
+            metadata_filters={
+                "team_id": team_id,
+                "channel_id": channel_id,
+            },
+            timestamp_field="created_at",
+            since=since,
+        )
+
+    async def count_jira_records(
+        self,
+        *,
+        project_key: str,
+        entity_type: str,
+        since: datetime | None = None,
+    ) -> int:
+        return await self._count_records(
+            source="jira",
+            entity_type=entity_type,
+            metadata_filters={
+                "project_key": project_key,
+            },
+            timestamp_field="updated_at",
+            since=since,
+        )
+
+    async def list_jira_record_ids(
+        self,
+        *,
+        project_key: str,
+        entity_type: str,
+        since: datetime | None = None,
+    ) -> list[str]:
+        return await self._list_record_ids(
+            source="jira",
+            entity_type=entity_type,
+            metadata_filters={
+                "project_key": project_key,
+            },
+            timestamp_field="updated_at",
+            since=since,
+        )
+
+    async def count_confluence_records(
+        self,
+        *,
+        space_key: str,
+        entity_type: str,
+        since: datetime | None = None,
+    ) -> int:
+        return await self._count_records(
+            source="confluence",
+            entity_type=entity_type,
+            metadata_filters={
+                "space_key": space_key,
+            },
+            timestamp_field="updated_at",
+            since=since,
+            record_id_metadata_key="id",
+        )
+
+    async def list_confluence_record_ids(
+        self,
+        *,
+        space_key: str,
+        entity_type: str,
+        since: datetime | None = None,
+    ) -> list[str]:
+        return await self._list_record_ids(
+            source="confluence",
+            entity_type=entity_type,
+            metadata_filters={
+                "space_key": space_key,
+            },
+            timestamp_field="updated_at",
+            since=since,
+            record_id_metadata_key="id",
+        )
     
     async def delete_by_id_prefix(self, prefix: str) -> None:
         self.ensure_initialized()

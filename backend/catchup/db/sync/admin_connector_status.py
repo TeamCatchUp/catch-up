@@ -20,6 +20,7 @@ class _SyncTargetRow:
     scope_id: str
     target_id: str
     target_name: str
+    event_id: str
     sync_status: str
     last_succeeded_at: datetime | None
     last_failed_at: datetime | None
@@ -30,6 +31,7 @@ class AdminConnectorTargetRangeRow:
     scope_id: str
     target_id: str
     target_name: str
+    event_id: str
     sync_status: str
     last_succeeded_at: datetime | None
     last_failed_at: datetime | None
@@ -63,6 +65,7 @@ def _list_sync_targets(
             SyncJob.scope_id.label("scope_id"),
             SyncEvent.resource_id.label("target_id"),
             target_name.label("target_name"),
+            SyncEvent.event_id.label("event_id"),
             SyncEvent.status.label("sync_status"),
             SyncEvent.succeeded_at.label("last_succeeded_at"),
             SyncEvent.failed_at.label("last_failed_at"),
@@ -85,6 +88,7 @@ def _list_sync_targets(
         ranked_targets.c.scope_id,
         ranked_targets.c.target_id,
         ranked_targets.c.target_name,
+        ranked_targets.c.event_id,
         ranked_targets.c.sync_status,
         ranked_targets.c.last_succeeded_at,
         ranked_targets.c.last_failed_at,
@@ -95,6 +99,7 @@ def _list_sync_targets(
             scope_id=str(row.scope_id),
             target_id=str(row.target_id),
             target_name=str(row.target_name),
+            event_id=str(row.event_id),
             sync_status=str(row.sync_status),
             last_succeeded_at=row.last_succeeded_at,
             last_failed_at=row.last_failed_at,
@@ -322,6 +327,7 @@ def list_admin_connector_target_range_rows(
                 scope_id=target.scope_id,
                 target_id=target.target_id,
                 target_name=target.target_name,
+                event_id=target.event_id,
                 sync_status=target.sync_status,
                 last_succeeded_at=target.last_succeeded_at,
                 last_failed_at=target.last_failed_at,

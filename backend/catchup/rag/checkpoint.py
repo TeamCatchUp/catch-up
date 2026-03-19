@@ -1,6 +1,7 @@
-from psycopg_pool import AsyncConnectionPool
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 import structlog
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg_pool import AsyncConnectionPool
+
 from catchup.configs.config import settings
 
 logger = structlog.get_logger(__name__)

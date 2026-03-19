@@ -282,6 +282,19 @@ class ConfluenceApiClient:
             params=params,
         )
 
+    async def get_blogpost_by_id(
+        self,
+        blogpost_id: str,
+        body_format: str = "atlas_doc_format",
+    ) -> dict[str, Any]:
+        """단일 BlogPost 조회"""
+        params: dict[str, Any] = {"body-format": body_format}
+        return await self._request(
+            "GET",
+            url=f"{self.base_url}/blogposts/{blogpost_id}",
+            params=params,
+        )
+
     async def get_content_footer_comments(
         self,
         content_type: str,  # "pages" | "blogposts"

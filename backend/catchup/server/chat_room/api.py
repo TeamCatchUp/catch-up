@@ -1,23 +1,43 @@
-from datetime import datetime, time, timedelta
 import logging
 from typing import Optional
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import HTTPException
+from fastapi import Query
+from fastapi import status
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import get_current_user
 from catchup.chat.chat_room import process_answer_feedback
-from catchup.chat.dependencies import get_valid_chat_room, get_valid_message, get_valid_user_query
-from catchup.chat.exceptions import FeedbackImmutableError, LikedWithNegativeFeedbackError
-from catchup.chat.schemas import ChatHistoryResponse, ChatRoomResponse, FeedbackRequest, UserQueryResponse, UserQueryWithSaveStatusResponse
-from catchup.db.chat_room import get_chat_room_messages, get_chat_rooms, get_queries_by_chat_room, get_queries_by_user, get_queries_with_save_status, get_query_answer_pair, toggle_save_status
+from catchup.chat.dependencies import get_valid_chat_room
+from catchup.chat.dependencies import get_valid_message
+from catchup.chat.dependencies import get_valid_user_query
+from catchup.chat.exceptions import FeedbackImmutableError
+from catchup.chat.exceptions import LikedWithNegativeFeedbackError
+from catchup.chat.schemas import ChatHistoryResponse
+from catchup.chat.schemas import ChatRoomResponse
+from catchup.chat.schemas import FeedbackRequest
+from catchup.chat.schemas import UserQueryResponse
+from catchup.chat.schemas import UserQueryWithSaveStatusResponse
+from catchup.db.chat_room import get_chat_room_messages
+from catchup.db.chat_room import get_chat_rooms
+from catchup.db.chat_room import get_queries_by_chat_room
+from catchup.db.chat_room import get_queries_by_user
+from catchup.db.chat_room import get_queries_with_save_status
+from catchup.db.chat_room import get_query_answer_pair
+from catchup.db.chat_room import toggle_save_status
 from catchup.db.dependencies import get_db
-from catchup.db.models import ChatHistory, ChatRoom, User, UserRole
+from catchup.db.models import ChatHistory
+from catchup.db.models import ChatRoom
+from catchup.db.models import User
+from catchup.observability.langfuse.feedback import upsert_feedback
 from catchup.server.chat_room.schemas import ChatHistoryListResponse
-from catchup.server.schemas import BasePagination, calculate_skip
-
+from catchup.server.schemas import BasePagination
+from catchup.server.schemas import calculate_skip
+from catchup.configs.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -150,16 +170,21 @@ def get_room_history(
 )
 async def update_answer_feedback(
     body: FeedbackRequest,
-    db: Session = Depends(get_db),
     message: ChatHistory = Depends(get_valid_message),
 ):
     try:
         updated_message = await run_in_threadpool(
             process_answer_feedback,
-            db=db,
-            message=message,
+            message_id=message.id,
             body=body
         )
+        
+        if settings.ENABLE_LANGFUSE:
+            trace_id = message.trace_id
+            await upsert_feedback(
+                trace_id=trace_id,
+                content=body.model_dump(exclude_none=True)
+            )
         
         return {
             "status": "success",

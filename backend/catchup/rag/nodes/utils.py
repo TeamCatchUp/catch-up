@@ -1,12 +1,15 @@
 # llm 호출 Rate Limit 방어
 import asyncio
 import functools
-import structlog
 import time
-from typing import Callable, Awaitable, Annotated
+from typing import Annotated
+from typing import Awaitable
+from typing import Callable
 
+import structlog
 from langchain_core.documents import Document
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import AIMessage
+from langchain_core.messages import HumanMessage
 from langgraph.graph.message import add_messages
 
 # Semaphores (Rate limit 방어용)
@@ -30,13 +33,36 @@ def get_latest_query(messages: Annotated[list, add_messages]):
     )
 
 
-def get_context_text_from_documents(documents: list[Document]):
-    return "\n\n".join(
-        [
-            f"[{i}] (Source: {doc.metadata.get('source_type', 'unknown')})\n{doc.metadata.get('contextual_content', '')}"
-            for i, doc in enumerate(documents, start=1)
-        ]
-    )
+def prepare_context_text(documents: list[Document]) -> str:
+    parts = []
+    for i, doc in enumerate(documents, start=1):
+        source = doc.metadata.get("source", "unknown")
+        content = doc.metadata.get("contextual_content", "")
+        temporal = resolve_temporal_context(doc.metadata) 
+        parts.append(f"[{i}] (Source: {source})\n{content} {temporal}")
+    return "\n\n".join(parts)
+
+
+def resolve_temporal_context(metadata: dict) -> str:
+    temporal_fields = [
+        "created_at", 
+        "updated_at",
+        "resolved_at",
+        "due_date",
+        "edited_at",
+        "closed_at",
+        "merged_at",
+        "committed_at",
+    ]
+    
+    parts = [
+        f"{field}: {str(metadata[field])}"
+        for field in temporal_fields
+        if metadata.get(field)
+    ]
+    
+    return " | ".join(parts) if parts else ""
+    
 
 
 def extract_anchor_ids(documents: list[Document]) -> list[str]:
@@ -57,20 +83,32 @@ def log_node(func: Callable[..., Awaitable[dict]]):
     async def wrapper(*args, **kwargs):
 
         node_name = func.__name__
-        start_time = time.time()
+        start_time = time.perf_counter()
 
-        logger.debug("node_started", node_name=node_name)
+        logger.info(
+            "node_started",
+            node_name=node_name
+        )
 
         try:
             result = await func(*args, **kwargs)
 
-            elapsed = time.time() - start_time
-            logger.info("node_completed", node_name=node_name, duration=round(elapsed, 4))
+            elapsed = time.perf_counter() - start_time
+            logger.info(
+                "node_completed",
+                node_name=node_name,
+                duration=round(elapsed, 4)
+            )
 
             return result
 
         except Exception as e:
-            logger.error("node_failed", node_name=node_name, error=str(e), exc_info=True)
+            logger.error(
+                "node_failed",
+                node_name=node_name,
+                error=str(e),
+                exc_info=True
+            )
             raise e
 
     return wrapper

@@ -69,8 +69,8 @@ jobs:
           target: ${{ matrix.target }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ env.DOCKER_USERNAME }}/${{ matrix.image_name }}:cache
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}:cache,mode=max', env.DOCKER_USERNAME, matrix.image_name) || '' }}
 
   # =================================
   # QA Server(EC2) Deployment
