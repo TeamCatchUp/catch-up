@@ -59,7 +59,12 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
     try:
         async with llm_semaphore:
             full_answer = await chain.ainvoke(input=messages)
-            logger.debug("final_answer_generated", full_answer=full_answer)
+            logger.debug(
+                "final_answer_generated",
+                original_query=state.get("original_query"),
+                rewritten_query=state.get("rewritten_query"),
+                full_answer=full_answer
+            )
 
     except Exception as e:
         logger.warning(

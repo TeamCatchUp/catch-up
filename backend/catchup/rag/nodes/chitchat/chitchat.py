@@ -40,6 +40,7 @@ async def chitchat_node(state: AgentState, llm: BaseChatModel):
             answer = await chain.ainvoke(input=messages)
             logger.debug(
                 "chitchat_answer_generated",
+                original_query=state.get("original_query"),
                 answer=answer
             )
 
