@@ -100,4 +100,5 @@ export const API = {
     signup: `${API_PREFIX}/onboarding`, // POST 일반 유저 온보딩 가입
     adminSignup: `${API_PREFIX}/onboarding/admin`, // POST 루트 어드민 온보딩 가입
   },
+  version: `${API_PREFIX}/version`, // GET 현재 앱 버전
 } as const;
