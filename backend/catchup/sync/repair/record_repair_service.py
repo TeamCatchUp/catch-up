@@ -11,6 +11,7 @@ from catchup.db.models import SyncEventStatus
 from catchup.db.sync import finalize_manual_retry_failed
 from catchup.db.sync import finalize_manual_retry_success
 from catchup.server.sync.schemas import (
+    SyncRecordGapResponse,
     SyncRecordRetryRequest,
     SyncRecordRetryResponse,
 )
@@ -126,6 +127,7 @@ class RecordRepairService:
         return response.model_copy(
             update={
                 "event_id": repair_context.event_id,
+                "attempt": repair_context.attempt,
                 "event_status": repair_context.event_status,
                 "target_name": repair_context.target_name,
             }

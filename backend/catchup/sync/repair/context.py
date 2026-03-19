@@ -25,6 +25,7 @@ ACTIVE_EVENT_STATUSES = {
 @dataclass(slots=True, frozen=True)
 class RecordRepairContext:
     event_id: str
+    attempt: int
     event_status: SyncEventStatus
     connector: SyncConnector
     scope_id: str
@@ -135,6 +136,7 @@ def load_record_repair_context(event_id: str) -> RecordRepairContext:
 
     return RecordRepairContext(
         event_id=normalized_event_id,
+        attempt=event.attempt,
         event_status=event.status,
         connector=event.connector,
         scope_id=scope_id,

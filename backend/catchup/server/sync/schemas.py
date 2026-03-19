@@ -280,6 +280,7 @@ class SyncRecordGapResponse(BaseModel):
     target_id: str
     target_name: str
     event_id: str | None = None
+    attempt: int | None = None
     event_status: SyncEventStatus | None = None
     records: list[SyncRecordGapItem] = Field(default_factory=list)
 
