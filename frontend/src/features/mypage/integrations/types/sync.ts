@@ -231,6 +231,7 @@ export interface AdminConnectorTargetRangeResponse {
   scope_id: string;
   target_id: string;
   target_name: string;
+  event_id: string;
   sync_status: string;
   last_succeeded_at: string | null;
   last_failed_at: string | null;
@@ -244,4 +245,61 @@ export interface AdminConnectorStatusResponse {
   resource_type: ConnectorResourceType;
   total_targets: number;
   targets: AdminConnectorTargetRangeResponse[];
+}
+
+// ─── Gap & Retry API 타입 (GET /sync/records/gaps, POST /sync/records/retry) ───
+
+export interface SyncRecordGapItem {
+  record_type: string;
+  expected_count: number;
+  stored_count: number;
+  missing_count: number;
+  missing_ids: string[];
+}
+
+export interface SyncRecordGapResponse {
+  connector: SyncConnector;
+  scope_id: string;
+  target_id: string;
+  target_name: string;
+  event_id: string | null;
+  event_status: SyncTargetStatus | null;
+  records: SyncRecordGapItem[];
+}
+
+export interface SyncRecordRetryRequestItem {
+  record_type: string;
+  record_ids: string[];
+}
+
+export interface SyncRecordRetryRequest {
+  event_id: string;
+  records: SyncRecordRetryRequestItem[];
+}
+
+export interface SyncRecordRetryResultItem {
+  record_type: string;
+  requested_ids: string[];
+  retried_count: number;
+  succeeded_count: number;
+  failed_ids: string[];
+  remaining_missing_ids: string[];
+}
+
+export interface SyncRecordRetryResponse {
+  connector: SyncConnector;
+  scope_id: string;
+  target_id: string;
+  target_name: string;
+  event_id: string | null;
+  event_status: SyncTargetStatus | null;
+  records: SyncRecordRetryResultItem[];
+}
+
+export interface SyncErrorResponse {
+  code: string;
+  message: string;
+  connector: SyncConnector | null;
+  scope_id: string | null;
+  metadata: Record<string, unknown>;
 }
