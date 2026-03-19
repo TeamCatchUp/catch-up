@@ -10,7 +10,7 @@ ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc g++ libpq-dev curl \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/pyproject.toml backend/uv.lock ./
@@ -26,10 +26,8 @@ FROM python:3.12-slim AS base
 
 WORKDIR /app
 
-# [최적화] 실행 시에는 컴파일된 라이브러리(libpq5)만 있어도 충분하지만, 
-# 기존 환경과의 정합성을 위해 libpq-dev 유지
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev curl \
+    libpq5 curl \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/app/.venv/bin:$PATH" \
