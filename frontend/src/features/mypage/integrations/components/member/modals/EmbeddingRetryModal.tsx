@@ -51,7 +51,7 @@ const EmbeddingRetryModal = ({
         </div>
 
         {isLoading ? (
-          <div className="border-edge-assistive flex flex-col gap-3 border-t px-6 pt-6">
+          <div className="border-edge-assistive flex flex-col gap-2 border-t px-6 pt-6">
             <h3 className="text-heading-medium text-content-normal">
               다시 임베딩을 진행하고 있어요. 잠시만 기다려 주세요:)
             </h3>
