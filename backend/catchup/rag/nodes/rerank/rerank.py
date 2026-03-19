@@ -5,7 +5,8 @@ from langchain_core.documents import Document
 
 from catchup.components.reranker.service import BaseRerankService
 from catchup.configs.config import settings
-from catchup.rag.nodes.utils import log_node, rerank_semaphore
+from catchup.rag.nodes.utils import log_node
+from catchup.rag.nodes.utils import rerank_semaphore
 from catchup.rag.state import AgentState
 
 logger = logging.getLogger(__name__)

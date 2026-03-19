@@ -1,9 +1,9 @@
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel
+from pydantic import Field
 
 from catchup.db.models import SourceType
-
 
 CREATED_AT_TOOLS = [
     SourceType.GITHUB,

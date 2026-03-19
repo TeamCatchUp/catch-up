@@ -4,11 +4,9 @@ from langchain.chat_models import BaseChatModel
 from langchain_core.documents import Document
 
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.nodes.utils import (
-    llm_semaphore,
-    log_node,
-    prepare_context_text,
-)
+from catchup.rag.nodes.utils import llm_semaphore
+from catchup.rag.nodes.utils import log_node
+from catchup.rag.nodes.utils import prepare_context_text
 from catchup.rag.schemas.structures import GradeDocuments
 from catchup.rag.state import AgentState
 

@@ -3,8 +3,10 @@ import logging
 from langchain.chat_models import BaseChatModel
 
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.nodes.utils import llm_semaphore, log_node
-from catchup.rag.schemas.structures import VectorDbSearchPlan, VectorDbSearchQuery
+from catchup.rag.nodes.utils import llm_semaphore
+from catchup.rag.nodes.utils import log_node
+from catchup.rag.schemas.structures import VectorDbSearchPlan
+from catchup.rag.schemas.structures import VectorDbSearchQuery
 from catchup.rag.state import AgentState
 
 logger = logging.getLogger(__name__)

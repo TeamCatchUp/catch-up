@@ -5,12 +5,12 @@ from typing import Any
 
 from langchain_core.documents import Document
 from langchain_neo4j import GraphCypherQAChain
+
 from catchup.components.graph_db.factory import get_graph_db_service
 from catchup.components.llm.factory import get_llm_service
 from catchup.rag.nodes.fallback_cypher_query.prompt import CYPHER_GENERATION_PROMPT
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.state import AgentState
-
 
 logger = logging.getLogger(__name__)
 

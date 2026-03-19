@@ -1,11 +1,16 @@
-from typing import Annotated, Any, Literal, TypedDict, Optional
+from typing import Annotated
+from typing import Any
+from typing import Literal
+from typing import Optional
+from typing import TypedDict
 
 from langchain_core.documents import Document
 from langgraph.graph.message import add_messages
 
 from catchup.db.models import SourceType
 from catchup.rag.schemas.context import GlobalContext
-from catchup.rag.schemas.structures import GraphDbSearchQuery, VectorDbSearchQuery
+from catchup.rag.schemas.structures import GraphDbSearchQuery
+from catchup.rag.schemas.structures import VectorDbSearchQuery
 
 
 class AgentState(TypedDict):
