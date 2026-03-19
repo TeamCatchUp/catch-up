@@ -85,18 +85,30 @@ def log_node(func: Callable[..., Awaitable[dict]]):
         node_name = func.__name__
         start_time = time.time()
 
-        logger.debug("node_started", node_name=node_name)
+        logger.debug(
+            "node_started",
+            node_name=node_name
+        )
 
         try:
             result = await func(*args, **kwargs)
 
             elapsed = time.time() - start_time
-            logger.info("node_completed", node_name=node_name, duration=round(elapsed, 4))
+            logger.info(
+                "node_completed",
+                node_name=node_name,
+                duration=round(elapsed, 4)
+            )
 
             return result
 
         except Exception as e:
-            logger.error("node_failed", node_name=node_name, error=str(e), exc_info=True)
+            logger.error(
+                "node_failed",
+                node_name=node_name,
+                error=str(e),
+                exc_info=True
+            )
             raise e
 
     return wrapper

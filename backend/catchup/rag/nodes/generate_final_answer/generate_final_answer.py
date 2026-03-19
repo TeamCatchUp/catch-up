@@ -1,8 +1,8 @@
 import json
-import logging
 import re
 from re import DOTALL
 
+import structlog
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
@@ -20,7 +20,7 @@ from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.state import AgentState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 @log_node
 async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
@@ -28,18 +28,17 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
         
     if not retrieved_docs:
-        logger.warning("검색된 문서가 없음 -> Fallback 답변 반환")
+        logger.warning("no_documents_retrieved", action="fallback_answer_generated")
         return {
             "messages": [AIMessage(content=FALLBACK_ANSWER)],
             "sources": []
         }
     
     context_text = prepare_context_text(retrieved_docs)
-        
+
     global_context = state["global_context"].model_dump()
     query = state["rewritten_query"]
     query_with_citation_policy = query + CITATION_POLICY_MESSAGE
-    
 
     prompt = prompt_loader.get_prompt(
         "rag/generate_final_answer",
@@ -60,10 +59,15 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
     try:
         async with llm_semaphore:
             full_answer = await chain.ainvoke(input=messages)
-            logger.info(f"full_answer: {full_answer}")
+            logger.debug("final_answer_generated", full_answer=full_answer)
 
     except Exception as e:
-        logger.warning(f"Generate final answer failed: {e}")
+        logger.warning(
+            "final_answer_generation_node_failed",
+            action="fallback_answer_generated",
+            error=str(e),
+            exc_info=True,
+        )
         return {
             "messages": [AIMessage(content=FALLBACK_ANSWER)],
             "sources": []
@@ -82,8 +86,10 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
     final_sources = _mark_citations(candidate_sources, citations)
 
     sorted_indices = sorted(citations.keys(), key=int)
-    logger.info(
-        f"LLM이 인용한 문서 인덱스: {sorted_indices} / 전체 소스: {len(final_sources)}개"
+    logger.debug(
+        "llm_cited_sources", 
+        cited_indices=sorted_indices,
+        total_sources=len(final_sources)
     )
 
     return {
@@ -103,11 +109,14 @@ def _parse_citation(full_answer: str) -> tuple[str, dict[str, str]]:
         try:
             citation_dict = json.loads(match.group(1).strip())
         except json.JSONDecodeError:
-            logger.warning("Citations JSON parsing failed.")
+            logger.warning("citations_parsing_failed")
     
     # 비정상 동작 태그가 열리거나 불완전함. (<citations>...)
     elif open_tag_match := re.search(r"<citations>", full_answer):
-        logger.warning("citation_block_truncated, context=token_overflow")
+        logger.warning(
+            "citations_block_truncated",
+            context="token_overflow"
+        )
         body_part = full_answer[:open_tag_match.start()].strip() # 
         if not body_part:
             body_part = FALLBACK_ANSWER

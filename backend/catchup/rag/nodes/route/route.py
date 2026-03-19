@@ -1,6 +1,6 @@
-import logging
 from typing import Literal
 
+import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 
@@ -9,7 +9,7 @@ from catchup.rag.nodes.utils import llm_semaphore
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.state import AgentState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @log_node
@@ -33,10 +33,17 @@ async def route_node(state: AgentState, llm: BaseChatModel):
         intent = _refine_response(raw_response)
 
     except Exception as e:  
-        logger.warning(f"Router node failed: {e}")
+        logger.warning(
+            "route_node_failed",
+            error=str(e),
+            exc_info=True
+        )
         return {"intent": "search_pipeline"}
 
-    logger.info(f"intent: {intent}")
+    logger.debug(
+        "intent_classified",
+        intent=intent
+    )
 
     return {
         "intent": intent,

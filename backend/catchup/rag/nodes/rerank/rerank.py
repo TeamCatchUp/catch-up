@@ -1,6 +1,6 @@
-import logging
 from collections import defaultdict
 
+import structlog
 from langchain_core.documents import Document
 
 from catchup.components.reranker.service import BaseRerankService
@@ -9,7 +9,7 @@ from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import rerank_semaphore
 from catchup.rag.state import AgentState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @log_node
@@ -17,7 +17,7 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
 
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
     if not retrieved_docs:
-        logger.warning("검색된 문서가 없습니다.")
+        logger.warning("no_documents_retrieved")
         return {"retrieved_docs": []}
 
     query = state["rewritten_query"]
@@ -37,7 +37,12 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
         )
 
     except Exception as e:
-        logger.warning(f"Rerank node failed: {e}", exc_info=True)
+        logger.warning(
+            "rerank_node_failed",
+            fallback="uncompressed_documents",
+            error=str(e),
+            exc_info=True
+        )
         final_docs = retrieved_docs
 
     return {"retrieved_docs": final_docs}

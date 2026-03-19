@@ -1,5 +1,4 @@
-import logging
-
+import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
@@ -11,7 +10,7 @@ from catchup.rag.nodes.utils import llm_semaphore
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.state import AgentState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @log_node
@@ -40,14 +39,18 @@ async def rewrite_node(state: AgentState, llm: BaseChatModel):
             answer = await chain.ainvoke(input=prompt)
 
     except Exception as e:
-        logger.warning(f"Rewrite node failed: {e}")
+        logger.warning(
+            "rewrite_node_failed",
+            error=str(e),
+            exc_info=True
+        )
         return {"rewritten_query": original_query}
 
-    logger.info(
-        f"\n[Rewrite Result]"
-        f"\n1. 원본 쿼리: {original_query}"
-        f"\n2. 피드백: {grade_comment}"
-        f"\n3. 재작성: {answer}"
+    logger.debug(
+        "query_rewrite_result",
+        original_query=original_query,
+        feedback=grade_comment,
+        rewritten_query=answer
     )
 
     return {"rewritten_query": answer}
