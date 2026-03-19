@@ -27,7 +27,7 @@ const EmbeddingRetryModal = ({
   retryingCount = 0,
   onConfirm,
 }: EmbeddingRetryModalProps) => {
-  const isFirstRetry = retryAttempt <= 3;
+  const isFirstRetry = retryAttempt <= 4;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -58,7 +58,7 @@ const EmbeddingRetryModal = ({
             {!isFirstRetry && (
               <div className="bg-fill-strong flex items-center gap-3 rounded-xl p-3">
                 <div className="bg-fill-normal flex shrink-0 items-center justify-center rounded-xl p-2">
-                  <IconRotate className="text-content-normal size-7" />
+                  <IconRotate className="text-accent-violet size-7" />
                 </div>
                 <div className="flex flex-col gap-0.5">
                   <span className="text-body-small text-content-normal">임베딩 재시도</span>
