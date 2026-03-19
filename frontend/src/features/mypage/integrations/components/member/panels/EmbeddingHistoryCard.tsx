@@ -208,13 +208,14 @@ const EmbeddingHistoryCard = ({ items, connector, isInitialLoading, gapByTargetI
       <EmbeddingRetryModal
         open={!!retryTarget}
         onOpenChange={(open) => {
-          if (!open) setRetryTarget(null);
+          if (!open && !retryMutation.isPending) setRetryTarget(null);
         }}
         targetName={retryTarget?.target_name ?? ''}
         totalCount={modalTotalCount}
         successCount={modalSuccessCount}
         failedCount={modalFailedCount}
         retryAttempt={retryGap?.attempt ?? 0}
+        isLoading={retryMutation.isPending}
         onConfirm={handleRetryConfirm}
       />
     </>
