@@ -83,9 +83,9 @@ def log_node(func: Callable[..., Awaitable[dict]]):
     async def wrapper(*args, **kwargs):
 
         node_name = func.__name__
-        start_time = time.time()
+        start_time = time.perf_counter()
 
-        logger.debug(
+        logger.info(
             "node_started",
             node_name=node_name
         )
@@ -93,7 +93,7 @@ def log_node(func: Callable[..., Awaitable[dict]]):
         try:
             result = await func(*args, **kwargs)
 
-            elapsed = time.time() - start_time
+            elapsed = time.perf_counter() - start_time
             logger.info(
                 "node_completed",
                 node_name=node_name,
