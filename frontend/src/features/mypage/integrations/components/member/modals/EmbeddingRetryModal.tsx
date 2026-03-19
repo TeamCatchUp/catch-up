@@ -38,7 +38,7 @@ const EmbeddingRetryModal = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideClose
-        className="border-edge-normal bg-fill-normal flex w-full max-w-md flex-col gap-4 rounded-3xl border p-0 py-5 shadow-modal"
+        className="border-edge-normal bg-fill-normal flex w-140 flex-col gap-4 rounded-3xl border p-0 py-5 shadow-modal"
       >
         {/* Header: h-9, px-6, gap-3 */}
         <div className="flex h-9 items-center gap-3 px-6">
