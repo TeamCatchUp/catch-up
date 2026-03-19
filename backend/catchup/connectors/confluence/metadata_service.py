@@ -73,6 +73,32 @@ class ConfluenceMetadataService:
         else:
             db.flush()
 
+    def persist_space_snapshot(
+        self,
+        db: Session,
+        cloud_id: str,
+        spaces: list[dict[str, Any]],
+        *,
+        auto_commit: bool = True,
+    ) -> None:
+        sync_result = confluence_entities.sync_spaces_snapshot(
+            db,
+            cloud_id,
+            spaces,
+            auto_commit=False,
+        )
+        logger.info(
+            "[CONFLUENCE][TARGETS][METADATA] Space snapshot synced: cloud_id=%s, upserted=%s, deleted=%s",
+            cloud_id,
+            sync_result["upserted"],
+            sync_result["deleted"],
+        )
+
+        if auto_commit:
+            db.commit()
+        else:
+            db.flush()
+
     async def collect_snapshot(
         self,
         cloud_id: str,
@@ -95,6 +121,33 @@ class ConfluenceMetadataService:
         users = await self._collect_users(client, cloud_id)
         spaces = await self._collect_spaces(client, cloud_id)
         return ConfluenceMetadataSnapshot(users=users, spaces=spaces)
+
+    async def collect_space_snapshot(
+        self,
+        cloud_id: str,
+        *,
+        granted_scopes: set[str],
+    ) -> list[dict[str, Any]] | None:
+        missing = REQUIRED_CONFLUENCE_SCOPES - granted_scopes
+        if missing:
+            logger.warning(
+                "[CONFLUENCE][TARGETS][METADATA] Missing scopes, skip: cloud_id=%s, missing=%s",
+                cloud_id,
+                sorted(missing),
+            )
+            return None
+
+        client = ConfluenceApiClient(
+            cloud_id,
+            AtlassianTokenProvider(self.token_manager),
+        )
+        spaces = await self._collect_spaces(client, cloud_id)
+        logger.info(
+            "[CONFLUENCE][TARGETS][METADATA] Spaces collected: cloud_id=%s, space_count=%s",
+            cloud_id,
+            len(spaces),
+        )
+        return spaces
 
     async def sync_all(
         self,

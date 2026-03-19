@@ -8,6 +8,7 @@ GitHub App 인증을 담당하는 서비스.
 """
 
 import base64
+from datetime import datetime, timezone
 import time
 from binascii import Error as BinasciiError
 from functools import lru_cache
@@ -35,6 +36,7 @@ class GitHubAppService:
             private_key: str):
         self.app_id = app_id
         self.private_key = private_key
+        self._installation_tokens: dict[int, tuple[str, float]] = {}
 
     def _create_jwt(self) -> str:
         """
@@ -59,6 +61,13 @@ class GitHubAppService:
         Returns:
             Access Token 문자열 (ghs_xxx...)
         """
+        now = time.time()
+        cached = self._installation_tokens.get(installation_id)
+        if cached is not None:
+            token, expires_at = cached
+            if expires_at - now > 60:
+                return token
+
         jwt_token = self._create_jwt()
 
         async with httpx.AsyncClient() as client:
@@ -72,6 +81,8 @@ class GitHubAppService:
             )
             response.raise_for_status()
             data = response.json()
+            expires_at = _parse_github_token_expiry(data.get("expires_at"))
+            self._installation_tokens[installation_id] = (data["token"], expires_at)
             return data["token"]
 
     async def get_app_info(self) -> dict:
@@ -157,6 +168,18 @@ def _validate_private_key(value: str) -> None:
             "GITHUB_APP_PRIVATE_KEY is not a valid PEM private key. "
             "Check that the key was copied completely and was not truncated in .env."
         ) from exc
+
+
+def _parse_github_token_expiry(value: object) -> float:
+    if not isinstance(value, str) or not value.strip():
+        return time.time() + 300
+
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(
+            timezone.utc
+        ).timestamp()
+    except ValueError:
+        return time.time() + 300
 
 
 @lru_cache

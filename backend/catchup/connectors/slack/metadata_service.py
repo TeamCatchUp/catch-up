@@ -105,6 +105,32 @@ class SlackMetadataService:
         else:
             db.flush()
 
+    def persist_channel_snapshot(
+        self,
+        db: Session,
+        channels: list[SlackChannel],
+        *,
+        auto_commit: bool = True,
+    ) -> None:
+        sync_result = domain_repository.sync_channels_snapshot(
+            db,
+            self.team_id,
+            channels,
+            auto_commit=False,
+        )
+        logger.info(
+            "[SLACK][TARGETS][METADATA] Channel snapshot synced: team_id=%s, upserted=%s, deleted=%s, deleted_members=%s",
+            self.team_id,
+            sync_result["upserted"],
+            sync_result["deleted"],
+            sync_result["deleted_members"],
+        )
+
+        if auto_commit:
+            db.commit()
+        else:
+            db.flush()
+
     async def collect_snapshot(
         self,
         *,
@@ -179,6 +205,17 @@ class SlackMetadataService:
             if rollback_on_error:
                 db.rollback()
             raise
+
+    async def collect_target_channels(self) -> list[SlackChannel]:
+        self._ensure_initialized()
+        channels = await self._fetch_channels()
+        self.last_channels = channels
+        logger.info(
+            "[SLACK][TARGETS][METADATA] Channels collected: team_id=%s, channel_count=%s",
+            self.team_id,
+            len(channels),
+        )
+        return channels
 
     async def _collect_workspace(self) -> SlackWorkspace:
         response = await self.client.get_team_info()
