@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 import structlog
 
+from catchup.configs.utils import get_version
 from catchup.server.error_handlers import register_exception_handlers
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import SystemAuditMetadata
@@ -588,3 +589,9 @@ app.middleware("http")(request_context_middleware)
 @app.get("/api/v1/health")
 async def health_check():
     return {"status": "ok", "message": "Catch Up backend is running."}
+
+
+# 서버 버전 체크
+@app.get("/api/v1/version")
+async def get_current_app_version():
+    return get_version()

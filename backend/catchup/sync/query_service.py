@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -8,26 +9,25 @@ from typing import Any
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 
-from catchup.connectors.atlassian.exceptions import AtlassianTokenNotFoundError
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
-from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
-from catchup.connectors.confluence.metadata_service import (
-    ConfluenceMetadataService,
-    ConfluenceMetadataSnapshot,
+from catchup.connectors.atlassian.token_manager import (
+    AtlassianTokenManager,
+    AtlassianTokenProvider,
 )
-from catchup.connectors.github.factory import create_github_ingestion_service
-from catchup.connectors.github.service import GithubIngestionService, GithubMetadataSnapshot
-from catchup.connectors.jira.factory import create_jira_ingestion_service
+from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
+from catchup.connectors.github.auth import get_github_app_service
+from catchup.connectors.github.client import GitHubApiClient
+from catchup.connectors.github.service import _convert_repos_to_dto
+from catchup.connectors.jira.client import JiraApiClient
 from catchup.connectors.slack.factory import create_slack_metadata_service
-from catchup.connectors.slack.metadata_service import (
-    SlackMetadataService,
-    SlackMetadataSnapshot,
-)
+from catchup.connectors.slack.metadata_service import SlackMetadataService
 from catchup.db.atlassian import oauth_repository as atlassian_oauth_repository
+from catchup.db.github import domain_repository as github_entities
+from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.db.engine import SessionLocal
+from catchup.db.jira import domain_repository as jira_entities
 from catchup.db.models import (
     AtlassianOAuthToken,
-    JiraProject,
     SyncConnector,
     SyncEventStatus,
     SyncJob,
@@ -35,35 +35,19 @@ from catchup.db.models import (
     SyncType,
 )
 from catchup.db.sync import SyncEventSummary, get_job, list_events_by_job, summarize_events_by_job
-from catchup.sync.common.exceptions import SyncInternalError
 from catchup.sync.common.schemas import SyncTargetType
 
 
 logger = logging.getLogger(__name__)
 
-def _load_jira_targets_sync(scope_id: str) -> list[SyncTargetResult]:
+def _load_github_installation_sync(installation_id: int):
     with SessionLocal() as session:
-        projects = (
-            session.query(JiraProject)
-            .filter(JiraProject.cloud_id == scope_id)
-            .order_by(JiraProject.project_key.asc())
-            .all()
-        )
+        return get_installation_by_installation_id(session, installation_id)
 
-    return [
-        SyncTargetResult(
-            target_id=project.project_key,
-            display_name=project.project_name or project.project_key,
-            target_type="project",
-            is_accessible=True,
-            metadata={
-                "project_key": project.project_key,
-                "project_id": str(project.project_id),
-            },
-        )
-        for project in projects
-        if project.project_key
-    ]
+
+def _load_jira_token_sync(scope_id: str) -> AtlassianOAuthToken | None:
+    with SessionLocal() as session:
+        return atlassian_oauth_repository.get_token_by_cloud_id(session, scope_id)
 
 
 def _load_confluence_token_sync(scope_id: str) -> AtlassianOAuthToken | None:
@@ -75,57 +59,55 @@ def _load_confluence_token_sync(scope_id: str) -> AtlassianOAuthToken | None:
         )
 
 
-def _persist_slack_snapshot_sync(
+def _persist_slack_channels_sync(
     service: SlackMetadataService,
-    snapshot: SlackMetadataSnapshot,
+    channels: list[Any],
 ) -> None:
-    with SessionLocal() as session:
-        try:
-            service.persist_snapshot(
-                session,
-                snapshot,
-                auto_commit=False,
-            )
-            session.commit()
-        except Exception:
-            session.rollback()
-            raise
+    with SessionLocal.begin() as session:
+        service.persist_channel_snapshot(
+            session,
+            channels,
+            auto_commit=False,
+        )
 
 
-def _persist_github_snapshot_sync(
-    service: GithubIngestionService,
-    snapshot: GithubMetadataSnapshot,
+def _persist_github_repositories_sync(
+    installation_id: int,
+    repositories: list[Any],
 ) -> None:
-    with SessionLocal() as session:
-        try:
-            service.persist_installation_snapshot(
-                session,
-                snapshot,
-                auto_commit=False,
-            )
-            session.commit()
-        except Exception:
-            session.rollback()
-            raise
+    with SessionLocal.begin() as session:
+        github_entities.sync_repositories_snapshot(
+            session,
+            installation_id,
+            repositories,
+            auto_commit=False,
+        )
 
 
-def _persist_confluence_snapshot_sync(
+def _persist_jira_projects_sync(
+    cloud_id: str,
+    projects: list[dict[str, Any]],
+) -> None:
+    with SessionLocal.begin() as session:
+        jira_entities.sync_projects_snapshot(
+            session,
+            cloud_id,
+            projects,
+        )
+
+
+def _persist_confluence_spaces_sync(
     service: ConfluenceMetadataService,
     cloud_id: str,
-    snapshot: ConfluenceMetadataSnapshot,
+    spaces: list[dict[str, Any]],
 ) -> None:
-    with SessionLocal() as session:
-        try:
-            service.persist_snapshot(
-                session,
-                cloud_id,
-                snapshot,
-                auto_commit=False,
-            )
-            session.commit()
-        except Exception:
-            session.rollback()
-            raise
+    with SessionLocal.begin() as session:
+        service.persist_space_snapshot(
+            session,
+            cloud_id,
+            spaces,
+            auto_commit=False,
+        )
 
 
 @dataclass(slots=True, frozen=True)
@@ -206,6 +188,13 @@ class SyncJobSummaryResult:
 
 
 class SyncQueryService:
+    def __init__(self) -> None:
+        self._inflight_targets: dict[
+            tuple[SyncConnector, str],
+            asyncio.Task[SyncTargetsResult],
+        ] = {}
+        self._inflight_targets_lock = asyncio.Lock()
+
     def _to_iso(self, value: datetime | None) -> str | None:
         if value is None:
             return None
@@ -412,28 +401,6 @@ class SyncQueryService:
             targets=targets,
         )
 
-    def _ensure_refresh_succeeded(
-        self,
-        *,
-        connector: SyncConnector,
-        scope_id: str,
-        result: dict[str, dict[str, int]],
-        sections: tuple[str, ...],
-    ) -> None:
-        failed_sections = [
-            section
-            for section in sections
-            if int(result.get(section, {}).get("errors", 0)) > 0
-        ]
-        if failed_sections:
-            raise SyncInternalError(
-                f"{connector.value} target refresh failed",
-                metadata={
-                    "scope_id": scope_id,
-                    "failed_sections": failed_sections,
-                },
-            )
-
     async def _list_github_targets(
         self,
         *,
@@ -444,17 +411,24 @@ class SyncQueryService:
         except ValueError as exc:
             raise ValueError(f"github installation not found: {scope_id}") from exc
 
-        service = await create_github_ingestion_service(
-            db=None,
-            installation_id=installation_id,
+        installation = await run_in_threadpool(
+            _load_github_installation_sync,
+            installation_id,
         )
-        snapshot, _ = await service.collect_installation_metadata(
-            raise_on_error=True,
+        if installation is None:
+            raise ValueError(f"github installation not found: {scope_id}")
+
+        access_token = await get_github_app_service().get_installation_access_token(
+            installation_id,
+        )
+        client = GitHubApiClient(access_token)
+        repositories = _convert_repos_to_dto(
+            await client.list_installation_repos(),
         )
         await run_in_threadpool(
-            _persist_github_snapshot_sync,
-            service,
-            snapshot,
+            _persist_github_repositories_sync,
+            installation_id,
+            repositories,
         )
 
         targets = [
@@ -468,7 +442,7 @@ class SyncQueryService:
                     "installation_id": str(installation_id),
                 },
             )
-            for repo in snapshot.repositories
+            for repo in repositories
         ]
         return self._build_targets_result(
             connector=SyncConnector.GITHUB,
@@ -481,25 +455,65 @@ class SyncQueryService:
         *,
         scope_id: str,
     ) -> SyncTargetsResult:
-        try:
-            service = await create_jira_ingestion_service(cloud_id=scope_id)
-        except SyncInternalError as exc:
-            cause = exc.__cause__
-            if isinstance(cause, AtlassianTokenNotFoundError):
-                raise ValueError(f"jira cloud is not connected: {scope_id}") from exc
-            raise
+        token = await run_in_threadpool(_load_jira_token_sync, scope_id)
+        if token is None:
+            raise ValueError(f"jira cloud is not connected: {scope_id}")
 
-        refresh_result = await service.sync_metadata(
-            raise_on_error=True,
+        token_manager = AtlassianTokenManager(
+            oauth_client=AtlassianOAuthClient(),
+            oauth_repository=atlassian_oauth_repository,
         )
-        self._ensure_refresh_succeeded(
-            connector=SyncConnector.JIRA,
-            scope_id=scope_id,
-            result=refresh_result,
-            sections=("projects",),
+        client = JiraApiClient(
+            scope_id,
+            AtlassianTokenProvider(token_manager),
         )
+        raw_projects = await client.get_all_projects()
+        site_url = (token.site_url or "").rstrip("/")
 
-        targets = await run_in_threadpool(_load_jira_targets_sync, scope_id)
+        project_rows: list[dict[str, Any]] = []
+        targets: list[SyncTargetResult] = []
+        for raw_project in raw_projects:
+            project_key = str(raw_project.get("key") or "").strip()
+            if not project_key:
+                continue
+
+            project_id = str(raw_project.get("id") or "")
+            project_name = str(raw_project.get("name") or project_key).strip() or project_key
+            lead = raw_project.get("lead")
+            lead_data = lead if isinstance(lead, dict) else {}
+
+            project_rows.append(
+                {
+                    "cloud_id": scope_id,
+                    "project_key": project_key,
+                    "project_id": project_id,
+                    "project_name": project_name,
+                    "description": raw_project.get("description"),
+                    "project_type": raw_project.get("projectTypeKey"),
+                    "lead_account_id": lead_data.get("accountId"),
+                    "lead_display_name": lead_data.get("displayName"),
+                    "url": f"{site_url}/projects/{project_key}" if site_url else None,
+                }
+            )
+            targets.append(
+                SyncTargetResult(
+                    target_id=project_key,
+                    display_name=project_name,
+                    target_type="project",
+                    is_accessible=True,
+                    metadata={
+                        "project_key": project_key,
+                        "project_id": project_id,
+                    },
+                )
+            )
+        targets.sort(key=lambda item: item.target_id)
+
+        await run_in_threadpool(
+            _persist_jira_projects_sync,
+            scope_id,
+            project_rows,
+        )
         return self._build_targets_result(
             connector=SyncConnector.JIRA,
             scope_id=scope_id,
@@ -520,16 +534,16 @@ class SyncQueryService:
             oauth_repository=atlassian_oauth_repository,
         )
         metadata_service = ConfluenceMetadataService(token_manager)
-        snapshot = await metadata_service.collect_snapshot(
+        spaces = await metadata_service.collect_space_snapshot(
             scope_id,
             granted_scopes=set((token.scopes or "").split()),
         )
-        if snapshot is not None:
+        if spaces is not None:
             await run_in_threadpool(
-                _persist_confluence_snapshot_sync,
+                _persist_confluence_spaces_sync,
                 metadata_service,
                 scope_id,
-                snapshot,
+                spaces,
             )
 
         targets = [
@@ -543,7 +557,7 @@ class SyncQueryService:
                     "space_id": str(space["space_id"]),
                 },
             )
-            for space in ([] if snapshot is None else snapshot.spaces)
+            for space in ([] if spaces is None else spaces)
             if space["space_key"]
         ]
         return self._build_targets_result(
@@ -561,25 +575,14 @@ class SyncQueryService:
             db=None,
             team_id=scope_id,
         )
-        snapshot, refresh_result = await metadata_service.collect_snapshot(
-            raise_on_error=True,
-        )
-        self._ensure_refresh_succeeded(
-            connector=SyncConnector.SLACK,
-            scope_id=scope_id,
-            result=refresh_result,
-            sections=("workspace", "users", "channels"),
-        )
+        channels = await metadata_service.collect_target_channels()
         await run_in_threadpool(
-            _persist_slack_snapshot_sync,
+            _persist_slack_channels_sync,
             metadata_service,
-            snapshot,
+            channels,
         )
 
-        channels = sorted(
-            snapshot.channels,
-            key=lambda channel: channel.name,
-        )
+        channels = sorted(channels, key=lambda channel: channel.name)
 
         targets = [
             SyncTargetResult(
@@ -603,6 +606,33 @@ class SyncQueryService:
         )
 
     async def list_targets(
+        self,
+        *,
+        connector: SyncConnector,
+        scope_id: str,
+    ) -> SyncTargetsResult:
+        key = (connector, scope_id)
+
+        async with self._inflight_targets_lock:
+            task = self._inflight_targets.get(key)
+            if task is None:
+                task = asyncio.create_task(
+                    self._list_targets_realtime(
+                        connector=connector,
+                        scope_id=scope_id,
+                    )
+                )
+                self._inflight_targets[key] = task
+
+        try:
+            return await task
+        finally:
+            if task.done():
+                async with self._inflight_targets_lock:
+                    if self._inflight_targets.get(key) is task:
+                        self._inflight_targets.pop(key, None)
+
+    async def _list_targets_realtime(
         self,
         *,
         connector: SyncConnector,
