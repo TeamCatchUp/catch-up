@@ -8,15 +8,10 @@ interface EmbeddingRetryModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   targetName: string;
-  /** 전체 레코드 수 */
   totalCount: number;
-  /** 성공 레코드 수 */
   successCount: number;
-  /** 실패 레코드 수 */
   failedCount: number;
-  /** 재시도 횟수 (0이면 첫 재시도, 1+이면 재시도 후 재시도) */
   retryAttempt: number;
-  /** 재시도 진행 중 레코드 수 (retryAttempt > 0일 때 표시) */
   retryingCount?: number;
   onConfirm: () => void;
 }
@@ -32,7 +27,7 @@ const EmbeddingRetryModal = ({
   retryingCount = 0,
   onConfirm,
 }: EmbeddingRetryModalProps) => {
-  const isFirstRetry = retryAttempt === 0;
+  const isFirstRetry = retryAttempt <= 3;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -40,7 +35,6 @@ const EmbeddingRetryModal = ({
         hideClose
         className="border-edge-normal bg-fill-normal flex w-140 flex-col gap-4 rounded-3xl border p-0 py-5 shadow-modal"
       >
-        {/* Header: h-9, px-6, gap-3 */}
         <div className="flex h-9 items-center gap-3 px-6">
           <DialogTitle className="text-heading-large text-content-normal flex-1">임베딩 재시도</DialogTitle>
           <button
@@ -52,11 +46,8 @@ const EmbeddingRetryModal = ({
           </button>
         </div>
 
-        {/* Body: border-t, pt-6, px-6, gap-6 */}
         <div className="border-edge-assistive flex flex-col gap-6 overflow-x-clip overflow-y-auto border-t px-6 pt-6">
-          {/* 임베딩 현황: gap-2.5 */}
           <div className="flex flex-col gap-2.5">
-            {/* 현황 헤더: gap-5 */}
             <div className="flex items-center gap-5">
               <h3 className="text-heading-medium text-content-normal flex-1">임베딩 현황</h3>
               <span className="text-label-small text-content-alternative max-w-100">
@@ -64,7 +55,6 @@ const EmbeddingRetryModal = ({
               </span>
             </div>
 
-            {/* 재시도 후: 재시도 카드 (full-width) */}
             {!isFirstRetry && (
               <div className="bg-fill-strong flex items-center gap-3 rounded-xl p-3">
                 <div className="bg-fill-normal flex shrink-0 items-center justify-center rounded-xl p-2">
@@ -77,7 +67,6 @@ const EmbeddingRetryModal = ({
               </div>
             )}
 
-            {/* 성공 / 실패 카드: gap-3 */}
             <div className="flex gap-3">
               <div className="bg-fill-strong flex flex-1 items-center gap-3 rounded-xl p-3">
                 <div className="bg-fill-normal flex shrink-0 items-center justify-center rounded-xl p-2">
@@ -100,7 +89,6 @@ const EmbeddingRetryModal = ({
             </div>
           </div>
 
-          {/* 임베딩 제안: gap-2 */}
           <div className="flex flex-col gap-2">
             <span className="text-label-small text-content-neutral">임베딩 제안</span>
             {isFirstRetry ? (
@@ -127,7 +115,6 @@ const EmbeddingRetryModal = ({
           </div>
         </div>
 
-        {/* Footer: h-9, px-6, gap-3, justify-end */}
         <div className="flex h-9 items-start justify-end gap-3 px-6">
           <button
             type="button"

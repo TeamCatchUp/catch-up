@@ -214,7 +214,7 @@ const EmbeddingHistoryCard = ({ items, connector, isInitialLoading, gapByTargetI
         totalCount={modalTotalCount}
         successCount={modalSuccessCount}
         failedCount={modalFailedCount}
-        retryAttempt={0}
+        retryAttempt={retryGap?.attempt ?? 0}
         onConfirm={handleRetryConfirm}
       />
     </>

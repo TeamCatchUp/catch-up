@@ -263,6 +263,7 @@ export interface SyncRecordGapResponse {
   target_id: string;
   target_name: string;
   event_id: string | null;
+  attempt: number | null;
   event_status: SyncTargetStatus | null;
   records: SyncRecordGapItem[];
 }

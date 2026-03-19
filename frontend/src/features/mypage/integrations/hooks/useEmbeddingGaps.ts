@@ -6,6 +6,7 @@ import type { AdminConnectorTargetRangeResponse, SyncRecordGapItem, SyncTargetSt
 
 export interface GapSummary {
   eventId: string;
+  attempt: number;
   eventStatus: SyncTargetStatus | null;
   totalMissing: number;
   totalExpected: number;
@@ -37,6 +38,7 @@ export const useEmbeddingGaps = (failedItems: AdminConnectorTargetRangeResponse[
         const totalStored = data.records.reduce((sum, r) => sum + r.stored_count, 0);
         map.set(item.target_id, {
           eventId: item.event_id,
+          attempt: data.attempt ?? 0,
           eventStatus: data.event_status,
           totalMissing,
           totalExpected,
