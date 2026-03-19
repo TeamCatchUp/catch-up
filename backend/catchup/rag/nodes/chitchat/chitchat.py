@@ -1,18 +1,18 @@
-import logging
-
+import structlog
 from langchain.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages import AIMessage
+from langchain_core.messages import HumanMessage
+from langchain_core.messages import SystemMessage
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import Runnable
 
-from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.nodes.utils import get_conversation_history, llm_semaphore, log_node
+from catchup.rag.nodes.utils import get_conversation_history
+from catchup.rag.nodes.utils import llm_semaphore
+from catchup.rag.nodes.utils import log_node
+from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.state import AgentState
 
-
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 @log_node
 async def chitchat_node(state: AgentState, llm: BaseChatModel):
@@ -38,10 +38,25 @@ async def chitchat_node(state: AgentState, llm: BaseChatModel):
     try:
         async with llm_semaphore:
             answer = await chain.ainvoke(input=messages)
-            logger.info(f"최종 답변: {answer}")
+            logger.debug(
+                "chitchat_answer_generated",
+                original_query=state.get("original_query"),
+                answer=answer
+            )
 
     except Exception as e:
-        logger.error(f"Chitchat node failed: {e}", exc_info=True)
-        return {"messages": [AIMessage(content=FALLBACK_ANSWER)], "sources": []}
+        logger.error(
+            "chitchat_node_failed",
+            fallback="fallback_answer_generated",
+            exc_info=True,
+            error=str(e)
+        )
+        return {
+            "messages": [AIMessage(content=FALLBACK_ANSWER)],
+            "sources": []
+        }
 
-    return {"messages": [AIMessage(content=answer)], "sources": []}
+    return {
+        "messages": [AIMessage(content=answer)],
+        "sources": []
+    }

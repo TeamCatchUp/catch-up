@@ -1,12 +1,12 @@
-from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
+from typing import Optional
 
 import pytz
+from pydantic import BaseModel
+from pydantic import ConfigDict
+from pydantic import Field
 
-from catchup.db.models import Company, User
 
-    
 class GlobalUserContext(BaseModel):
     id: int = Field(..., description="DB 조회를 위한 고유 ID")
     name: str = Field(..., description="사용자 표시 이름")

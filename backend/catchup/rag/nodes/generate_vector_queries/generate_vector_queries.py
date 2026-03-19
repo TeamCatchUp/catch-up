@@ -1,13 +1,14 @@
-import logging
-
+import structlog
 from langchain.chat_models import BaseChatModel
 
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.nodes.utils import llm_semaphore, log_node
-from catchup.rag.schemas.structures import VectorDbSearchPlan, VectorDbSearchQuery
+from catchup.rag.nodes.utils import llm_semaphore
+from catchup.rag.nodes.utils import log_node
+from catchup.rag.schemas.structures import VectorDbSearchPlan
+from catchup.rag.schemas.structures import VectorDbSearchQuery
 from catchup.rag.state import AgentState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @log_node
@@ -37,7 +38,9 @@ async def generate_vector_queries_node(state: AgentState, llm: BaseChatModel):
 
     except Exception as e:
         logger.warning(
-            f"Vector query를 생성하는 데 실패했습니다. 재작성된 쿼리를 사용합니다.: {e}"
+            "generate_vector_queries_node_failed",
+            fallback="rewritten_query",
+            error=str(e)
         )
         fallback_query = VectorDbSearchQuery(
             query=rewritten_query,
@@ -49,14 +52,17 @@ async def generate_vector_queries_node(state: AgentState, llm: BaseChatModel):
 
 
 def _print_search_plan_log(plan: VectorDbSearchPlan):
-    log_msg_lines = [f"[Vector Search Plan] Generated {len(plan.queries)} queries:"]
-    for i, q in enumerate(plan.queries, 1):
-        start_str = q.start_date.strftime('%Y-%m-%d %H:%M:%S') if q.start_date else "N/A"
-        end_str = q.end_date.strftime('%Y-%m-%d %H:%M:%S') if q.end_date else "N/A"
-
-        log_msg_lines.append(
-            f'   {i}. "{q.query}"\n'
-            f'      - Time range: {start_str} ~ {end_str}\n'
-            f'      - Rationale: {q.reasoning}'
-        )
-    logger.info("\n".join(log_msg_lines))
+    logger.debug(
+        "vector_search_plan_generated",
+        query_count=len(plan.queries),
+        queries=[
+            {
+                "index": i,
+                "query": q.query,
+                "start_date": q.start_date.strftime('%Y-%m-%d %H:%M:%S') if q.start_date else None,
+                "end_date": q.end_date.strftime('%Y-%m-%d %H:%M:%S') if q.end_date else None,
+                "reasoning": q.reasoning,
+            }
+            for i, q in enumerate(plan.queries, 1)
+        ],
+    )

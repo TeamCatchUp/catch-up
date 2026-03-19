@@ -1,11 +1,16 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
+from fastapi import HTTPException
+from fastapi import status
 from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import get_current_user
 from catchup.db.dependencies import get_db
 from catchup.db.models import User
 from catchup.db.users import get_user_with_full_context
-from catchup.rag.schemas.context import GlobalCompanyContext, GlobalContext, GlobalCurrentTimeContext, GlobalUserContext, GlobalWorkspaceContext
+from catchup.rag.schemas.context import GlobalCompanyContext
+from catchup.rag.schemas.context import GlobalContext
+from catchup.rag.schemas.context import GlobalUserContext
+from catchup.rag.schemas.context import GlobalWorkspaceContext
 
 
 async def get_rag_global_context(
