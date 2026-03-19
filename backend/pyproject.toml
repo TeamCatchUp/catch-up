@@ -60,7 +60,7 @@ dev = [
 package = false
 
 [tool.ruff.lint]
-select = ["I"]
+select = ["I", "F401"]
 
 [tool.ruff.lint.isort]
 force-single-line = true
