@@ -131,7 +131,6 @@ class GithubRecordRepairService:
         installation_id: int,
     ):
         return await create_github_ingestion_service(
-            db=None,
             installation_id=installation_id,
         )
 

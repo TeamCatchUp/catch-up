@@ -445,7 +445,6 @@ class SyncQueryService:
             raise ValueError(f"github installation not found: {scope_id}") from exc
 
         service = await create_github_ingestion_service(
-            db=None,
             installation_id=installation_id,
         )
         snapshot, _ = await service.collect_installation_metadata(

@@ -20,13 +20,9 @@ class GithubIncrementalHandler(BaseIncrementalHandler):
         if cached is not None:
             return cached
 
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            service = await create_github_ingestion_service(
-                db=db,
-                installation_id=int(normalized_scope_id),
-            )
+        service = await create_github_ingestion_service(
+            installation_id=int(normalized_scope_id),
+        )
 
         cache[cache_key] = service
         return service
@@ -42,24 +38,20 @@ class GithubIncrementalHandler(BaseIncrementalHandler):
         if not parent_id:
             raise ValueError("github repository id is empty")
 
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            result = await service.incremental_sync(
-                db=db,
-                repo_id=int(parent_id),
-                record_type=context.record_type or "",
-                record_id=context.record_id or "",
-                event_kind=context.event_kind or "updated",
-                since=self._resolve_since(context),
-                audit_context=SyncAuditContext(
-                    connector=context.connector,
-                    scope_id=context.scope_id,
-                    target_id=context.target_id,
-                    job_id=context.job_id,
-                    task_id=context.event_id,
-                ),
-            )
+        result = await service.incremental_sync(
+            repo_id=int(parent_id),
+            record_type=context.record_type or "",
+            record_id=context.record_id or "",
+            event_kind=context.event_kind or "updated",
+            since=self._resolve_since(context),
+            audit_context=SyncAuditContext(
+                connector=context.connector,
+                scope_id=context.scope_id,
+                target_id=context.target_id,
+                job_id=context.job_id,
+                task_id=context.event_id,
+            ),
+        )
 
         error_count = int(result.get("errors", 0))
         if error_count > 0:

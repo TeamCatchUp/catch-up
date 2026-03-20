@@ -76,6 +76,26 @@ def get_repository_by_id(
     return db.execute(stmt).scalar_one_or_none()
 
 
+def get_repositories_by_ids(
+    db: Session,
+    installation_id: int,
+    repo_ids: list[int],
+) -> list[GitHubRepositoryModel]:
+    if not repo_ids:
+        return []
+
+    stmt = (
+        select(GitHubRepositoryModel)
+        .where(
+            and_(
+                GitHubRepositoryModel.installation_id == installation_id,
+                GitHubRepositoryModel.repo_id.in_(repo_ids),
+            )
+        )
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
 def get_repositories_by_installation(
     db: Session,
     installation_id: int,
