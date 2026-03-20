@@ -11,7 +11,7 @@ COPY frontend/package.json frontend/package-lock.json* frontend/yarn.lock* front
 # [최적화] --mount=type=cache를 사용하여 패키지 다운로드 속도 최적화
 RUN --mount=type=cache,target=/root/.npm \
   if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
-  elif [ -f package-lock.json ]; then npm ci; \
+  elif [ -f package-lock.json ]; then npm ci --cache /root/.npm; \
   elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
   else echo "Lockfile not found." && exit 1; \
   fi

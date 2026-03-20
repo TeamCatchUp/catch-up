@@ -55,6 +55,8 @@ export const API = {
     status: `${API_PREFIX}/sync/status`, // GET Scope 기준 최신 상태 (?connector=&scope_id=)
     job: (jobId: string) => `${API_PREFIX}/sync/jobs/${jobId}`, // GET Job 스냅샷 조회
     jobStream: (jobId: string) => `${API_PREFIX}/sync/jobs/${jobId}/stream`, // GET SSE 실시간 이벤트 스트림
+    recordGaps: `${API_PREFIX}/sync/records/gaps`, // GET 누락 레코드 조회 (?event_id=)
+    retryRecords: `${API_PREFIX}/sync/records/retry`, // POST 누락 레코드 재시도
   },
 
   // 관리자 — 이용자 관리
@@ -98,4 +100,5 @@ export const API = {
     signup: `${API_PREFIX}/onboarding`, // POST 일반 유저 온보딩 가입
     adminSignup: `${API_PREFIX}/onboarding/admin`, // POST 루트 어드민 온보딩 가입
   },
+  version: `${API_PREFIX}/version`, // GET 현재 앱 버전
 } as const;
