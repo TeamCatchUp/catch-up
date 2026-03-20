@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Sequence
@@ -7,6 +8,7 @@ from uuid import uuid4
 
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SyncConnector, SyncEvent, SyncType
+from sqlalchemy.orm import Session
 from catchup.db.sync import (
     SyncEventPublishResultInput,
     claim_events_for_publish,
@@ -119,34 +121,53 @@ class SyncDispatchOrchestrator:
         if no_events is not None:
             return no_events
 
-        conflict = self._check_dispatch_conflict(
-            connector=connector,
-            sync_type=sync_type,
-            scope_id=normalized_scope_id,
-            base_url=base_url,
-        )
-        if conflict is not None:
-            return conflict
-
         context = self._build_dispatch_context(
             connector=connector,
             sync_type=sync_type,
             scope_id=normalized_scope_id,
         )
         observer = self._resolve_observer(context)
-        observer.on_dispatch_requested(
-            context=context,
-            trigger=trigger.value,
-            event_seeds=event_seeds,
-        )
 
-        # DB에 Job & Event 기록
-        persisted_event_ids, tasks = self._persist_dispatch_records(
+        conflict, persisted_event_ids, tasks = self._prepare_dispatch_records(
             context=context,
             event_seeds=event_seeds,
             trigger=trigger,
             observer=observer,
+            base_url=base_url,
         )
+        if conflict is not None:
+            return conflict
+
+        try:
+            observer.on_dispatch_requested(
+                context=context,
+                trigger=trigger.value,
+                event_seeds=event_seeds,
+            )
+        except Exception:
+            logger.warning(
+                "[%s][ORCHESTRATOR] Observer on_dispatch_requested failed: scope_id=%s, job_id=%s",
+                connector.value.upper(),
+                context.scope_id,
+                context.job_id,
+                exc_info=True,
+            )
+
+        try:
+            observer.on_db_persisted(
+                context=context,
+                trigger=trigger.value,
+                event_seeds=event_seeds,
+            )
+        except Exception:
+            logger.warning(
+                "[%s][ORCHESTRATOR] Observer on_db_persisted failed: scope_id=%s, job_id=%s",
+                connector.value.upper(),
+                context.scope_id,
+                context.job_id,
+                exc_info=True,
+            )
+
         # Event Publisher를 통해 Redis Stream에 이벤트 발행
         publish_result = await self._publish_dispatch_tasks(
             context=context,
@@ -220,6 +241,7 @@ class SyncDispatchOrchestrator:
     def _check_dispatch_conflict(
         self,
         *,
+        db,
         connector: SyncConnector,
         sync_type: SyncType,
         scope_id: str,
@@ -228,37 +250,36 @@ class SyncDispatchOrchestrator:
         if sync_type != SyncType.FULL:
             return None
 
-        with SessionLocal() as db:
-            if not try_acquire_full_sync_scope_lock(
-                db,
-                connector=connector,
-                scope_id=scope_id,
-            ):
-                logger.warning(
-                    "[%s][%s][ORCHESTRATOR] Dispatch conflict while scope lock is held: scope_id=%s",
-                    connector.value.upper(),
-                    sync_type.value.upper(),
-                    scope_id,
-                )
-                db.rollback()
-                return SyncDispatchResult(
-                    status=SyncDispatchStatus.CONFLICT,
-                    connector=connector,
-                    scope_id=scope_id,
-                    message="another full sync dispatch is already being created for this scope",
-                )
-
-            active_job = find_active_full_sync_job(
-                db,
-                connector=connector,
-                scope_id=scope_id,
+        if not try_acquire_full_sync_scope_lock(
+            db,
+            connector=connector,
+            scope_id=scope_id,
+        ):
+            logger.warning(
+                "[%s][%s][ORCHESTRATOR] Dispatch conflict while scope lock is held: scope_id=%s",
+                connector.value.upper(),
+                sync_type.value.upper(),
+                scope_id,
             )
-            if active_job is None:
-                return None
-
-            active_job_id = active_job.job_id
-            active_status = active_job.status
             db.rollback()
+            return SyncDispatchResult(
+                status=SyncDispatchStatus.CONFLICT,
+                connector=connector,
+                scope_id=scope_id,
+                message="another full sync dispatch is already being created for this scope",
+            )
+
+        active_job = find_active_full_sync_job(
+            db,
+            connector=connector,
+            scope_id=scope_id,
+        )
+        if active_job is None:
+            return None
+
+        active_job_id = active_job.job_id
+        active_status = active_job.status
+        db.rollback()
 
         logger.warning(
             "[%s][%s][ORCHESTRATOR] Dispatch conflict due to active job: scope_id=%s, active_job_id=%s, active_status=%s",
@@ -307,33 +328,44 @@ class SyncDispatchOrchestrator:
 
         return events
 
-    def _persist_dispatch_records(
+    def _prepare_dispatch_records(
         self,
         *,
         context: DispatchObserverContext,
         event_seeds: Sequence[SyncEventSeed],
         trigger: SyncTrigger,
         observer: SyncDispatchObserver,
-    ) -> tuple[list[str], list[SyncStreamTask]]:
+        base_url: str | None,
+    ) -> tuple[SyncDispatchResult | None, list[str], list[SyncStreamTask]]:
         with SessionLocal() as db:
+            conflict = self._check_dispatch_conflict(
+                db=db,
+                connector=context.connector,
+                sync_type=context.sync_type,
+                scope_id=context.scope_id,
+                base_url=base_url,
+            )
+            if conflict is not None:
+                return conflict, [], []
+
             try:
                 events = self._persist_events(
                     db=db,
                     context=context,
                     event_seeds=event_seeds,
                 )
-                db.commit()
                 tasks = self._build_stream_tasks(
                     context=context,
                     events=events,
                 )
-                event_ids = [event.event_id for event in events]
-                observer.on_db_persisted(
+                self._claim_publish_records(
+                    db=db,
                     context=context,
-                    trigger=trigger.value,
-                    event_seeds=event_seeds,
+                    tasks=tasks,
                 )
-                return event_ids, tasks
+                db.commit()
+                event_ids = [event.event_id for event in events]
+                return None, event_ids, tasks
             except Exception as exc:
                 db.rollback()
                 observer.on_db_persist_failed(
@@ -394,15 +426,10 @@ class SyncDispatchOrchestrator:
                 partial_success=False,
             )
 
-        self._claim_publish_records(
-            context=context,
-            tasks=tasks,
-        )
-
         try:
             publish_result = await self._publish_tasks(tasks=tasks)
         except Exception as exc:
-            self._record_publish_failure(
+            await self._record_publish_failure_with_retry(
                 context=context,
                 tasks=tasks,
                 error_message=str(exc),
@@ -415,7 +442,7 @@ class SyncDispatchOrchestrator:
             )
             raise
 
-        self._record_publish_outcomes(
+        await self._record_publish_outcomes_with_retry(
             context=context,
             tasks=tasks,
             publish_result=publish_result,
@@ -454,13 +481,13 @@ class SyncDispatchOrchestrator:
     def _claim_publish_records(
         self,
         *,
+        db: Session,
         context: DispatchObserverContext,
         tasks: Sequence[SyncStreamTask],
     ) -> None:
         event_ids = [task.event_id for task in tasks]
-        with SessionLocal() as db:
-            if claim_events_for_publish(db, event_ids=event_ids):
-                return
+        if claim_events_for_publish(db, event_ids=event_ids):
+            return
 
         raise SyncInternalError(
             "failed to transition events to publishing",
@@ -502,6 +529,32 @@ class SyncDispatchOrchestrator:
                 "error_message": error_message,
             },
         )
+
+    async def _record_publish_failure_with_retry(
+        self,
+        *,
+        context: DispatchObserverContext,
+        tasks: Sequence[SyncStreamTask],
+        error_message: str,
+        attempts: int = 3,
+    ) -> None:
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                self._record_publish_failure(
+                    context=context,
+                    tasks=tasks,
+                    error_message=error_message,
+                )
+                return
+            except Exception as exc:
+                last_error = exc
+                if attempt >= attempts:
+                    raise
+                await asyncio.sleep(float(attempt))
+
+        if last_error is not None:
+            raise last_error
 
     def _record_publish_outcomes(
         self,
@@ -556,6 +609,32 @@ class SyncDispatchOrchestrator:
                 "failed_event_ids": failed_event_ids,
             },
         )
+
+    async def _record_publish_outcomes_with_retry(
+        self,
+        *,
+        context: DispatchObserverContext,
+        tasks: Sequence[SyncStreamTask],
+        publish_result: PublishTasksResult,
+        attempts: int = 3,
+    ) -> None:
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                self._record_publish_outcomes(
+                    context=context,
+                    tasks=tasks,
+                    publish_result=publish_result,
+                )
+                return
+            except Exception as exc:
+                last_error = exc
+                if attempt >= attempts:
+                    raise
+                await asyncio.sleep(float(attempt))
+
+        if last_error is not None:
+            raise last_error
 
     async def _publish_queued_status(
         self,
