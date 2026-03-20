@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -7,31 +8,31 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from httpx import HTTPStatusError, RequestError
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import IntegrationAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.connectors.slack.auth import get_slack_oauth_service, SlackOAuthService
+from catchup.connectors.slack.factory import create_slack_metadata_service
 from catchup.connectors.slack.schemas import (
     SlackInstallationStatus,
     SlackWorkspaceInfo,
 )
 from catchup.configs.config import auth_settings
-from catchup.db.dependencies import get_db
 from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.models import KnowledgeSource, SourceType
 from catchup.db.slack import oauth_repository as slack_crud
 from catchup.db.workspaces import get_workspace_limit_one
 from catchup.events.enums import EventType, IntegrationEventAction
 from catchup.utils.redis import store_oauth_state, validate_oauth_state
-from catchup.connectors.slack.factory import create_slack_metadata_service
 from catchup.db.engine import SessionLocal
 
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth/slack", tags=["slack"])
+
+_SLACK_STATUS_CHECK_CONCURRENCY = 3
 
 
 @router.get("/install")
@@ -50,7 +51,6 @@ async def slack_oauth_callback(
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
-    db: Session = Depends(get_db),
     slack_service: SlackOAuthService = Depends(get_slack_oauth_service),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
@@ -150,18 +150,19 @@ async def slack_oauth_callback(
         bot_expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens.expires_in)
 
     # 3. Token 저장
-    slack_crud.create_or_update_slack_token(
-        db=db,
-        team_id=tokens.team.id,
-        team_name=tokens.team.name,
-        bot_user_id=tokens.bot_user_id,
-        bot_access_token=tokens.access_token,
-        bot_scopes=tokens.scope,
-        authed_user_id=tokens.authed_user.id if tokens.authed_user else None,
-        bot_refresh_token=tokens.refresh_token,
-        bot_token_expires_at=bot_expires_at,
-        incoming_webhook_url=tokens.incoming_webhook.url if tokens.incoming_webhook else None,
-        incoming_webhook_channel=tokens.incoming_webhook.channel if tokens.incoming_webhook else None,
+    # OAuth callback 은 request-scoped DB 를 직접 들고 있지 않고 sync helper 로 저장만 위임한다.
+    await run_in_threadpool(
+        _save_slack_token_sync,
+        tokens.team.id,
+        tokens.team.name,
+        tokens.bot_user_id,
+        tokens.access_token,
+        tokens.scope,
+        tokens.authed_user.id if tokens.authed_user else None,
+        tokens.refresh_token,
+        bot_expires_at,
+        tokens.incoming_webhook.url if tokens.incoming_webhook else None,
+        tokens.incoming_webhook.channel if tokens.incoming_webhook else None,
     )
 
     logger.info(f"[SLACK][AUTH] Installation completed: team_id={tokens.team.id}, name={tokens.team.name}")
@@ -192,48 +193,26 @@ async def slack_oauth_callback(
 
 @router.get("/status", response_model=SlackInstallationStatus)
 async def slack_installation_status(
-    db: Session = Depends(get_db),
     slack_service: SlackOAuthService = Depends(get_slack_oauth_service),
 ):
     """Slack 설치 상태 조회"""
-    tokens = slack_crud.get_all_slack_tokens(db)
+    tokens = await run_in_threadpool(_load_slack_tokens_sync)
 
     if not tokens:
         return SlackInstallationStatus(installed=False)
 
-    workspaces = []
-    for token in tokens:
-        try:
-            # 토큰 유효성 확인
-            valid_token = await slack_service.get_valid_access_token(db, token)
-            await slack_service.test_auth(valid_token)
-
-            workspaces.append(SlackWorkspaceInfo(
-                team_id=token.team_id,
-                team_name=token.team_name or "",
-                bot_user_id=token.bot_user_id,
-                scopes=token.bot_scopes.split() if token.bot_scopes else [],
-                connected_at=token.created_at,
-            ))
-        except HTTPException as e:
-            logger.warning(f"[SLACK][AUTH] Status check failed (team={token.team_id}): {e.detail}")
-            # 토큰이 유효하지 않더라도 연결된 것으로 표시
-            workspaces.append(SlackWorkspaceInfo(
-                team_id=token.team_id,
-                team_name=token.team_name or "",
-                bot_user_id=token.bot_user_id,
-                scopes=[],
-                connected_at=token.created_at,
-            ))
-        except (HTTPStatusError, RequestError) as e:
-            logger.warning(f"[SLACK][AUTH] API request failed (team={token.team_id}): {e}")
-            workspaces.append(SlackWorkspaceInfo(
-                team_id=token.team_id,
-                team_name=token.team_name or "",
-                bot_user_id=token.bot_user_id,
-                scopes=[],
-                connected_at=token.created_at,
-            ))
+    workspaces: list[SlackWorkspaceInfo] = []
+    for start in range(0, len(tokens), _SLACK_STATUS_CHECK_CONCURRENCY):
+        batch = tokens[start : start + _SLACK_STATUS_CHECK_CONCURRENCY]
+        # Status API 는 3개씩만 병렬 확인해 과도한 외부 호출 fan-out 을 제한한다.
+        workspaces.extend(
+            await asyncio.gather(
+                *[
+                    _check_slack_workspace_status(slack_service, token)
+                    for token in batch
+                ]
+            )
+        )
 
     return SlackInstallationStatus(installed=True, workspaces=workspaces)
 
@@ -242,25 +221,25 @@ async def slack_installation_status(
 async def slack_uninstall(
     team_id: str = Query(..., description="삭제할 Slack Team ID"),
     revoke_token: bool = Query(default=True, description="Token 취소 여부"),
-    db: Session = Depends(get_db),
     slack_service: SlackOAuthService = Depends(get_slack_oauth_service),
 ):
     """Slack 연결 해제"""
-    token = slack_crud.get_slack_token_by_team_id(db, team_id)
+    token = await run_in_threadpool(_load_slack_token_sync, team_id)
 
     if not token:
         return {"status": "not_found", "message": "해당 Slack 연결을 찾을 수 없습니다."}
 
     if revoke_token:
         try:
-            await slack_service.revoke_token(token.bot_access_token)
+            access_token = await slack_service.get_valid_access_token(None, token)
+            await slack_service.revoke_token(access_token)
             logger.info(f"[SLACK][AUTH] Token revoked: team_id={team_id}")
         except HTTPException as e:
             logger.warning(f"[SLACK][AUTH] Token revocation failed: {e.detail}")
         except (HTTPStatusError, RequestError) as e:
             logger.warning(f"[SLACK][AUTH] Token revocation API failed: {e}")
 
-    deleted = slack_crud.delete_slack_token(db, team_id)
+    deleted = await run_in_threadpool(_delete_slack_token_sync, team_id)
     if deleted:
         return {"status": "success", "message": "Slack 연결이 해제되었습니다."}
 
@@ -311,12 +290,77 @@ async def _sync_workspace_metadata(team_id: str) -> None:
     """
     logger.info(f"[SLACK][AUTH] Starting background metadata sync: team_id={team_id}")
 
-    db = SessionLocal()
     try:
-        service = await create_slack_metadata_service(db, team_id)
-        results = await service.sync_metadata(db)
+        # 리팩토링: background metadata sync도 factory 내부 local lookup만 사용한다.
+        service = await create_slack_metadata_service(team_id)
+        results = await service.sync_metadata()
         logger.info(f"[SLACK][AUTH] Background metadata sync completed: team_id={team_id}, results={results}")
     except Exception as e:
         logger.error(f"[SLACK][AUTH] Background metadata sync failed: team_id={team_id}, error={e}")
-    finally:
-        db.close()
+
+
+async def _check_slack_workspace_status(
+    slack_service: SlackOAuthService,
+    token,
+) -> SlackWorkspaceInfo:
+    try:
+        valid_token = await slack_service.get_valid_access_token(None, token)
+        await slack_service.test_auth(valid_token)
+        scopes = token.bot_scopes.split() if token.bot_scopes else []
+    except HTTPException as e:
+        logger.warning(f"[SLACK][AUTH] Status check failed (team={token.team_id}): {e.detail}")
+        scopes = []
+    except (HTTPStatusError, RequestError) as e:
+        logger.warning(f"[SLACK][AUTH] API request failed (team={token.team_id}): {e}")
+        scopes = []
+
+    return SlackWorkspaceInfo(
+        team_id=token.team_id,
+        team_name=token.team_name or "",
+        bot_user_id=token.bot_user_id,
+        scopes=scopes,
+        connected_at=token.created_at,
+    )
+
+
+def _save_slack_token_sync(
+    team_id: str,
+    team_name: str | None,
+    bot_user_id: str | None,
+    bot_access_token: str,
+    bot_scopes: str | None,
+    authed_user_id: str | None,
+    bot_refresh_token: str | None,
+    bot_token_expires_at: datetime | None,
+    incoming_webhook_url: str | None,
+    incoming_webhook_channel: str | None,
+) -> None:
+    with SessionLocal() as db:
+        slack_crud.create_or_update_slack_token(
+            db=db,
+            team_id=team_id,
+            team_name=team_name,
+            bot_user_id=bot_user_id,
+            bot_access_token=bot_access_token,
+            bot_scopes=bot_scopes,
+            authed_user_id=authed_user_id,
+            bot_refresh_token=bot_refresh_token,
+            bot_token_expires_at=bot_token_expires_at,
+            incoming_webhook_url=incoming_webhook_url,
+            incoming_webhook_channel=incoming_webhook_channel,
+        )
+
+
+def _load_slack_tokens_sync():
+    with SessionLocal() as db:
+        return list(slack_crud.get_all_slack_tokens(db))
+
+
+def _load_slack_token_sync(team_id: str):
+    with SessionLocal() as db:
+        return slack_crud.get_slack_token_by_team_id(db, team_id)
+
+
+def _delete_slack_token_sync(team_id: str) -> bool:
+    with SessionLocal() as db:
+        return slack_crud.delete_slack_token(db, team_id)

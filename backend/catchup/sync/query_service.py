@@ -556,10 +556,8 @@ class SyncQueryService:
         *,
         scope_id: str,
     ) -> SyncTargetsResult:
-        metadata_service = await create_slack_metadata_service(
-            db=None,
-            team_id=scope_id,
-        )
+        # 리팩토링: query path도 session-free metadata service API를 사용한다.
+        metadata_service = await create_slack_metadata_service(team_id=scope_id)
         snapshot, refresh_result = await metadata_service.collect_snapshot(
             raise_on_error=True,
         )

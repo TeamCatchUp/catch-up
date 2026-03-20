@@ -1,11 +1,15 @@
+import asyncio
 import logging
 from dataclasses import dataclass, field
 
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.connectors.slack.schemas import SlackChannel, SlackUser, SlackWorkspace
 from catchup.connectors.slack.transformers import SlackTransformer
+from catchup.configs.config import settings
+from catchup.db.engine import SessionLocal
 from catchup.db.slack import domain_repository
 
 logger = logging.getLogger(__name__)
@@ -17,6 +21,60 @@ class SlackMetadataSnapshot:
     users: list[SlackUser] = field(default_factory=list)
     channels: list[SlackChannel] = field(default_factory=list)
     channel_members: dict[str, list[str]] = field(default_factory=dict)
+
+
+def persist_metadata_snapshot(
+    db: Session,
+    team_id: str,
+    snapshot: SlackMetadataSnapshot,
+    *,
+    auto_commit: bool = True,
+) -> None:
+    domain_repository.upsert_workspace(
+        db,
+        snapshot.workspace,
+        auto_commit=False,
+    )
+    # 리팩토링: user도 full snapshot semantics로 저장해 stale row를 정리한다.
+    user_sync_result = domain_repository.sync_users_snapshot(
+        db,
+        team_id,
+        snapshot.users,
+        auto_commit=False,
+    )
+    logger.info(
+        "[SLACK][INSTALLATION][METADATA] User snapshot synced: team_id=%s, upserted=%s, deleted=%s",
+        team_id,
+        user_sync_result["upserted"],
+        user_sync_result["deleted"],
+    )
+
+    sync_result = domain_repository.sync_channels_snapshot(
+        db,
+        team_id,
+        snapshot.channels,
+        auto_commit=False,
+    )
+    logger.info(
+        "[SLACK][INSTALLATION][METADATA] Channel snapshot synced: team_id=%s, upserted=%s, deleted=%s, deleted_members=%s",
+        team_id,
+        sync_result["upserted"],
+        sync_result["deleted"],
+        sync_result["deleted_members"],
+    )
+
+    if snapshot.channels:
+        domain_repository.replace_team_channel_members_snapshot(
+            db,
+            team_id,
+            snapshot.channel_members,
+            auto_commit=False,
+        )
+
+    if auto_commit:
+        db.commit()
+    else:
+        db.flush()
 
 
 class SlackMetadataService:
@@ -58,52 +116,12 @@ class SlackMetadataService:
         *,
         auto_commit: bool = True,
     ) -> None:
-        domain_repository.upsert_workspace(
-            db,
-            snapshot.workspace,
-            auto_commit=False,
-        )
-        if snapshot.users:
-            domain_repository.upsert_users_bulk(
-                db,
-                self.team_id,
-                snapshot.users,
-                auto_commit=False,
-            )
-
-        sync_result = domain_repository.sync_channels_snapshot(
+        persist_metadata_snapshot(
             db,
             self.team_id,
-            snapshot.channels,
-            auto_commit=False,
+            snapshot,
+            auto_commit=auto_commit,
         )
-        logger.info(
-            "[SLACK][INSTALLATION][METADATA] Channel snapshot synced: team_id=%s, upserted=%s, deleted=%s, deleted_members=%s",
-            self.team_id,
-            sync_result["upserted"],
-            sync_result["deleted"],
-            sync_result["deleted_members"],
-        )
-
-        domain_repository.delete_channel_members_by_team(
-            db,
-            self.team_id,
-            auto_commit=False,
-        )
-
-        for channel in snapshot.channels:
-            domain_repository.replace_channel_members(
-                db,
-                self.team_id,
-                channel.id,
-                snapshot.channel_members.get(channel.id, []),
-                auto_commit=False,
-            )
-
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
 
     async def collect_snapshot(
         self,
@@ -153,7 +171,6 @@ class SlackMetadataService:
 
     async def sync_metadata(
         self,
-        db: Session,
         *,
         auto_commit: bool = True,
         rollback_on_error: bool = True,
@@ -163,10 +180,11 @@ class SlackMetadataService:
             snapshot, results = await self.collect_snapshot(
                 raise_on_error=raise_on_error,
             )
-            self.persist_snapshot(
-                db,
+            await run_in_threadpool(
+                self._persist_snapshot_local,
                 snapshot,
-                auto_commit=auto_commit,
+                auto_commit,
+                rollback_on_error,
             )
             return results
         except Exception as exc:
@@ -176,9 +194,25 @@ class SlackMetadataService:
                 exc,
                 exc_info=True,
             )
-            if rollback_on_error:
-                db.rollback()
             raise
+
+    def _persist_snapshot_local(
+        self,
+        snapshot: SlackMetadataSnapshot,
+        auto_commit: bool,
+        rollback_on_error: bool,
+    ) -> None:
+        with SessionLocal() as db:
+            try:
+                self.persist_snapshot(
+                    db,
+                    snapshot,
+                    auto_commit=auto_commit,
+                )
+            except Exception:
+                if rollback_on_error:
+                    db.rollback()
+                raise
 
     async def _collect_workspace(self) -> SlackWorkspace:
         response = await self.client.get_team_info()
@@ -216,11 +250,28 @@ class SlackMetadataService:
 
     async def _collect_channels(self) -> tuple[list[SlackChannel], dict[str, list[str]]]:
         channels = await self._fetch_channels()
-        members = {
-            channel.id: await self._fetch_channel_members(channel.id)
-            for channel in channels
-        }
+        members = await self._collect_channel_members_bounded(channels)
         return channels, members
+
+    async def _collect_channel_members_bounded(
+        self,
+        channels: list[SlackChannel],
+    ) -> dict[str, list[str]]:
+        if not channels:
+            return {}
+
+        members: dict[str, list[str]] = {}
+        concurrency = max(1, settings.SLACK_SYNC_MAX_CONCURRENT_REQUESTS)
+
+        for start in range(0, len(channels), concurrency):
+            batch = channels[start : start + concurrency]
+            batch_members = await asyncio.gather(
+                *[self._fetch_channel_members(channel.id) for channel in batch]
+            )
+            for channel, member_ids in zip(batch, batch_members):
+                members[channel.id] = member_ids
+
+        return members
 
     async def _fetch_channels(self) -> list[SlackChannel]:
         channels: list[SlackChannel] = []

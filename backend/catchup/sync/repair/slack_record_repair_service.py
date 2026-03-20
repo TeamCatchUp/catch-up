@@ -100,10 +100,8 @@ class SlackRecordRepairService:
         *,
         team_id: str,
     ):
-        return await create_slack_ingestion_service(
-            db=None,
-            team_id=team_id,
-        )
+        # 리팩토링: repair path도 factory에서 local lookup만으로 service를 만든다.
+        return await create_slack_ingestion_service(team_id=team_id)
 
     async def get_record_gaps(
         self,
