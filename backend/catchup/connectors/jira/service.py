@@ -24,7 +24,6 @@ from typing import Any, Literal
 
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
-from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
@@ -557,7 +556,6 @@ class JiraIngestionService:
         """
         self._ensure_initialized()
 
-        # RDBMS에서 캐시 로드
         transform_context = JiraTransformContext()
 
         try:
@@ -1127,7 +1125,6 @@ class JiraIngestionService:
 
     async def incremental_sync(
         self,
-        db: Session,
         *,
         project_key: str,
         record_id: str,
