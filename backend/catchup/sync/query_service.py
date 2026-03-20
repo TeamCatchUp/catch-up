@@ -15,15 +15,15 @@ from catchup.connectors.atlassian.token_manager import (
     AtlassianTokenProvider,
 )
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
-from catchup.connectors.github.factory import create_github_ingestion_service
-from catchup.connectors.github.service import GithubIngestionService, GithubMetadataSnapshot
+from catchup.connectors.github.auth import get_github_app_service
+from catchup.connectors.github.client import GitHubApiClient
+from catchup.connectors.github.service import _convert_repos_to_dto
 from catchup.connectors.jira.client import JiraApiClient
 from catchup.connectors.slack.factory import create_slack_metadata_service
-from catchup.connectors.slack.metadata_service import (
-    SlackMetadataService,
-    SlackMetadataSnapshot,
-)
+from catchup.connectors.slack.metadata_service import SlackMetadataService
 from catchup.db.atlassian import oauth_repository as atlassian_oauth_repository
+from catchup.db.github import domain_repository as github_entities
+from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.db.engine import SessionLocal
 from catchup.db.jira import domain_repository as jira_entities
 from catchup.db.models import (
@@ -35,11 +35,14 @@ from catchup.db.models import (
     SyncType,
 )
 from catchup.db.sync import SyncEventSummary, get_job, list_events_by_job, summarize_events_by_job
-from catchup.sync.common.exceptions import SyncInternalError
 from catchup.sync.common.schemas import SyncTargetType
 
 
 logger = logging.getLogger(__name__)
+
+def _load_github_installation_sync(installation_id: int):
+    with SessionLocal() as session:
+        return get_installation_by_installation_id(session, installation_id)
 
 
 def _load_jira_token_sync(scope_id: str) -> AtlassianOAuthToken | None:
@@ -56,26 +59,27 @@ def _load_confluence_token_sync(scope_id: str) -> AtlassianOAuthToken | None:
         )
 
 
-def _persist_slack_snapshot_sync(
+def _persist_slack_channels_sync(
     service: SlackMetadataService,
-    snapshot: SlackMetadataSnapshot,
+    channels: list[Any],
 ) -> None:
     with SessionLocal.begin() as session:
-        service.persist_snapshot(
+        service.persist_channel_snapshot(
             session,
-            snapshot,
+            channels,
             auto_commit=False,
         )
 
 
-def _persist_github_snapshot_sync(
-    service: GithubIngestionService,
-    snapshot: GithubMetadataSnapshot,
+def _persist_github_repositories_sync(
+    installation_id: int,
+    repositories: list[Any],
 ) -> None:
     with SessionLocal.begin() as session:
-        service.persist_installation_snapshot(
+        github_entities.sync_repositories_snapshot(
             session,
-            snapshot,
+            installation_id,
+            repositories,
             auto_commit=False,
         )
 
@@ -397,28 +401,6 @@ class SyncQueryService:
             targets=targets,
         )
 
-    def _ensure_refresh_succeeded(
-        self,
-        *,
-        connector: SyncConnector,
-        scope_id: str,
-        result: dict[str, dict[str, int]],
-        sections: tuple[str, ...],
-    ) -> None:
-        failed_sections = [
-            section
-            for section in sections
-            if int(result.get(section, {}).get("errors", 0)) > 0
-        ]
-        if failed_sections:
-            raise SyncInternalError(
-                f"{connector.value} target refresh failed",
-                metadata={
-                    "scope_id": scope_id,
-                    "failed_sections": failed_sections,
-                },
-            )
-
     async def _list_github_targets(
         self,
         *,
@@ -432,13 +414,14 @@ class SyncQueryService:
         service = await create_github_ingestion_service(
             installation_id=installation_id,
         )
-        snapshot, _ = await service.collect_installation_metadata(
-            raise_on_error=True,
+        client = GitHubApiClient(access_token)
+        repositories = _convert_repos_to_dto(
+            await client.list_installation_repos(),
         )
         await run_in_threadpool(
-            _persist_github_snapshot_sync,
-            service,
-            snapshot,
+            _persist_github_repositories_sync,
+            installation_id,
+            repositories,
         )
 
         targets = [
@@ -452,7 +435,7 @@ class SyncQueryService:
                     "installation_id": str(installation_id),
                 },
             )
-            for repo in snapshot.repositories
+            for repo in repositories
         ]
         return self._build_targets_result(
             connector=SyncConnector.GITHUB,
@@ -591,14 +574,13 @@ class SyncQueryService:
             result=refresh_result,
             sections=("workspace", "users", "channels"),
         )
-        # 리팩토링: Slack target refresh도 snapshot 단위 persist 경로로만 저장한다.
         await run_in_threadpool(
-            _persist_slack_snapshot_sync,
+            _persist_slack_channels_sync,
             metadata_service,
-            snapshot,
+            channels,
         )
 
-        channels = sorted(snapshot.channels, key=lambda channel: channel.name)
+        channels = sorted(channels, key=lambda channel: channel.name)
 
         targets = [
             SyncTargetResult(
