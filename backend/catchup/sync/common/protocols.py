@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 from typing import Protocol
 
-from sqlalchemy.orm import Session
-
 from catchup.db.models import SyncConnector, SyncType
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
@@ -109,7 +107,6 @@ class FullSyncTargetResolverProtocol(Protocol):
     async def resolve_full_sync_targets(
         self,
         *,
-        db: Session,
         request: FullSyncDispatchRequest,
     ) -> FullSyncResolvedTargets:
         ...

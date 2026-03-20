@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from sqlalchemy.orm import Session
-
 from catchup.configs.config import settings
 from catchup.db.models import SyncConnector, SyncType
 from catchup.sync.common.exceptions import SyncRequestError
@@ -42,7 +40,6 @@ class FullSyncDispatchOrchestrator:
     async def dispatch(
         self,
         *,
-        db: Session,
         connector: SyncConnector,
         request: FullSyncDispatchRequest,
         base_url: str | None,
@@ -55,7 +52,6 @@ class FullSyncDispatchOrchestrator:
         sync_from_ts = request.sync_from_ts
 
         resolved = await resolver.resolve_full_sync_targets(
-            db=db,
             request=request,
         )
 
@@ -65,7 +61,6 @@ class FullSyncDispatchOrchestrator:
         ]
 
         return await self._orchestrator.dispatch(
-            db=db,
             connector=connector,
             sync_type=SyncType.FULL,
             scope_id=scope_id,
