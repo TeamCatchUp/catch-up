@@ -25,7 +25,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from typing import Any, Literal
 
-from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
 from sqlalchemy.orm import Session
 
@@ -50,7 +49,7 @@ from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.domain_repository import RepositoryUpsertData, UserUpsertData
 from catchup.db.models import GithubEntityType, GithubInstallationType, SourceType
-from catchup.db.user_source_mapping import find_premapped_names_by_source_type
+from catchup.db.user_source_mapping import find_premapped_name_by_external_user_identifier, find_premapped_names_by_source_type
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
 
@@ -63,8 +62,6 @@ SKIPPABLE_ERRORS = {
     "forbidden",  # 권한 없음
     "gone",  # 더 이상 존재하지 않음
 }
-
-GITHUB_NAME_CACHE_TTL = timedelta(seconds=300)
 
 
 # ============================================================
@@ -158,7 +155,7 @@ class GithubIngestionService:
     Usage:
         service = GithubIngestionService(installation_id, access_token)
         await service.initialize()
-        result = await service.full_sync(repo_ids=[12345, 67890], sync_from_dt=datetime.now(timezone.utc))
+        result = await service.full_sync(db, repo_ids=[12345, 67890], sync_from_dt=datetime.now(timezone.utc))
     """
 
     def __init__(
@@ -188,7 +185,6 @@ class GithubIngestionService:
         self.account_type = account_type
 
         self._github_name_cache: dict[str, str | None] = {}
-        self._github_name_cache_loaded_at: datetime | None = None
 
     async def initialize(self) -> None:
         """
@@ -214,21 +210,25 @@ class GithubIngestionService:
 
     def _start_sync(
         self,
+        db: Session,
         repo_full_name: str,
         entity_type: GithubEntityType,
         operation: str,
     ) -> None:
         """동기화 시작 로그 기록."""
+        _ = db
         logger.info(f"[GITHUB][{operation}] Started: {entity_type.value} sync for {repo_full_name}")
 
     def _complete_sync(
         self,
+        db: Session,
         repo_full_name: str,
         entity_type: GithubEntityType,
         synced_count: int,
         operation: str,
     ) -> None:
         """동기화 완료 로그 기록."""
+        _ = db
         logger.info(
             f"[GITHUB][{operation}] Completed: {entity_type.value} sync for {repo_full_name} "
             f"({synced_count} synced)"
@@ -236,12 +236,14 @@ class GithubIngestionService:
 
     def _fail_sync(
         self,
+        db: Session,
         repo_full_name: str,
         entity_type: GithubEntityType,
         error: str | Exception,
         operation: str,
     ) -> None:
         """동기화 실패 로그 기록."""
+        _ = db
         error_msg = str(error)[:1000]
         logger.error(
             f"[GITHUB][{operation}] Failed: {entity_type.value} sync for {repo_full_name} - {error_msg}"
@@ -249,66 +251,49 @@ class GithubIngestionService:
 
     def _handle_rate_limit(
         self,
+        db: Session,
         repo_full_name: str,
         entity_type: GithubEntityType,
         error: GitHubRateLimitError,
         operation: str,
     ) -> None:
         """Rate limit 로그 기록."""
+        _ = db
         logger.warning(
             f"[GITHUB][{operation}] Rate limit hit: {entity_type.value} sync for {repo_full_name} "
             f"(retry after {error.retry_after}s)"
         )
 
-    @staticmethod
-    def _resolve_github_real_name(
-        name_map: dict[str, str | None],
-        login: str | None,
-    ) -> str | None:
+    def _resolve_github_real_name(self, db: Session, login: str | None) -> str | None:
         """
-        PreMappingBuffer에서 preload된 github login → 실명 매핑을 조회한다.
+        PreMappingBuffer에서 github login → 실명 매핑을 조회한다.
+        결과가 없는 경우 None을 반환하며, 조회 실패 사용자도 캐시.
         """
         if not login:
             return None
 
-        return name_map.get(login)
+        if login in self._github_name_cache:
+            return self._github_name_cache[login]
 
-    def _load_premapped_github_names_sync(self) -> dict[str, str | None]:
-        with SessionLocal() as db:
-            premapped = find_premapped_names_by_source_type(db, SourceType.GITHUB)
-        return {login: name for login, name in premapped.items() if login}
+        resolved_name = find_premapped_name_by_external_user_identifier(
+            db=db,
+            source_type=SourceType.GITHUB,
+            external_user_identifier=login,
+        )
+        self._github_name_cache[login] = resolved_name
+        return resolved_name
 
-    def _is_github_name_cache_fresh(self) -> bool:
-        if self._github_name_cache_loaded_at is None:
-            return False
-        return (
-            datetime.now(timezone.utc) - self._github_name_cache_loaded_at
-        ) < GITHUB_NAME_CACHE_TTL
-
-    def _ensure_premapped_github_names_sync(self, force: bool = False) -> int:
-        """github login → 실명 매핑 캐시를 TTL 기준으로 유지한다."""
-        # sync마다 전체 user mapping을 다시 읽지 않도록 TTL cache 기록
-        if not force and self._is_github_name_cache_fresh():
-            return len(self._github_name_cache)
-
-        self._github_name_cache = self._load_premapped_github_names_sync()
-        self._github_name_cache_loaded_at = datetime.now(timezone.utc)
+    def _preload_premapped_github_names(self, db: Session) -> int:
+        """Full Sync 시작 시점에 github login → 실명 매핑을 일괄 캐싱한다."""
+        premapped = find_premapped_names_by_source_type(db, SourceType.GITHUB)
+        self._github_name_cache = {
+            login: name
+            for login, name in premapped.items()
+            if login
+        }
         return len(self._github_name_cache)
 
-    async def _ensure_premapped_github_names_async(self, force: bool = False) -> int:
-        return await run_in_threadpool(
-            self._ensure_premapped_github_names_sync,
-            force,
-        )
-
-    def _get_github_name_map(self) -> dict[str, str | None]:
-        return dict(self._github_name_cache)
-
-    def _apply_user_display_name(
-        self,
-        name_map: dict[str, str | None],
-        user: GithubUser | None,
-    ) -> GithubUser | None:
+    def _apply_user_display_name(self, db: Session, user: GithubUser | None) -> GithubUser | None:
         """
         사용자 객체의 name을 pre-mapping 이름으로 교체한다.
         매핑이 없으면 원본 사용자 객체를 그대로 반환.
@@ -316,74 +301,41 @@ class GithubIngestionService:
         if user is None:
             return None
 
-        mapped_name = self._resolve_github_real_name(name_map, user.login)
+        mapped_name = self._resolve_github_real_name(db, user.login)
         if not mapped_name:
             return user
         return user.model_copy(update={"name": mapped_name})
 
-    def _apply_issue_user_mapping(
-        self,
-        name_map: dict[str, str | None],
-        issue: GithubIssue,
-    ) -> GithubIssue:
+    def _apply_issue_user_mapping(self, db: Session, issue: GithubIssue) -> GithubIssue:
         """Issue 하위 사용자(작성자/assignee/comment)의 name을 실명으로 보정한다."""
-        # 리팩토링: mutable service state 대신 name_map snapshot만 받아 pure helper처럼 동작한다.
-        comments = [
-            comment.model_copy(
-                update={"author": self._apply_user_display_name(name_map, comment.author)}
-            )
-            for comment in issue.comments
-        ]
+        comments = [comment.model_copy(update={"author": self._apply_user_display_name(db, comment.author)})
+                    for comment in issue.comments]
         return issue.model_copy(update={
-            "author": self._apply_user_display_name(name_map, issue.author),
-            "assignees": [
-                self._apply_user_display_name(name_map, assignee)
-                for assignee in issue.assignees
-            ],
+            "author": self._apply_user_display_name(db, issue.author),
+            "assignees": [self._apply_user_display_name(db, assignee) for assignee in issue.assignees],
             "comments": comments,
         })
 
-    def _apply_pr_user_mapping(
-        self,
-        name_map: dict[str, str | None],
-        pr: GithubPullRequest,
-    ) -> GithubPullRequest:
+    def _apply_pr_user_mapping(self, db: Session, pr: GithubPullRequest) -> GithubPullRequest:
         """PR 하위 사용자(작성자/리뷰어/review/comment/merge/commit author)의 name을 실명으로 보정한다."""
-        comments = [
-            comment.model_copy(
-                update={"author": self._apply_user_display_name(name_map, comment.author)}
-            )
-            for comment in pr.comments
-        ]
-        reviews = [
-            review.model_copy(
-                update={"author": self._apply_user_display_name(name_map, review.author)}
-            )
-            for review in pr.reviews
-        ]
+        comments = [comment.model_copy(update={"author": self._apply_user_display_name(db, comment.author)})
+                    for comment in pr.comments]
+        reviews = [review.model_copy(update={"author": self._apply_user_display_name(db, review.author)})
+                   for review in pr.reviews]
 
         commits = []
         for commit in pr.commits:
-            commit_author_name = self._resolve_github_real_name(
-                name_map,
-                commit.author_login,
-            )
+            commit_author_name = self._resolve_github_real_name(db, commit.author_login)
             if commit_author_name and commit.author_name != commit_author_name:
                 commits.append(commit.model_copy(update={"author_name": commit_author_name}))
             else:
                 commits.append(commit)
 
         return pr.model_copy(update={
-            "author": self._apply_user_display_name(name_map, pr.author),
-            "assignees": [
-                self._apply_user_display_name(name_map, assignee)
-                for assignee in pr.assignees
-            ],
-            "reviewers": [
-                self._apply_user_display_name(name_map, reviewer)
-                for reviewer in pr.reviewers
-            ],
-            "merged_by": self._apply_user_display_name(name_map, pr.merged_by),
+            "author": self._apply_user_display_name(db, pr.author),
+            "assignees": [self._apply_user_display_name(db, assignee) for assignee in pr.assignees],
+            "reviewers": [self._apply_user_display_name(db, reviewer) for reviewer in pr.reviewers],
+            "merged_by": self._apply_user_display_name(db, pr.merged_by),
             "reviews": reviews,
             "comments": comments,
             "commits": commits,
@@ -395,6 +347,7 @@ class GithubIngestionService:
 
     async def full_sync(
         self,
+        db: Session,
         repo_ids: list[int] | None = None,
         sync_from_dt: datetime | None = None,
         audit_context: SyncAuditContext | None = None,
@@ -402,10 +355,8 @@ class GithubIngestionService:
         """
         Github Full Sync
         """
-        # Handler으로 부터 Session을 받지 않도록 수정
-        preloaded_count = await self._ensure_premapped_github_names_async(force=False)
+        preloaded_count = self._preload_premapped_github_names(db)
         logger.info(f"[GITHUB][FULL SYNC] Preloaded {preloaded_count} pre-mapping user names")
-        name_map = self._get_github_name_map()
         results = {
             "repositories": {"synced": 0, "errors": 0},
             "issues": {"synced": 0, "errors": 0},
@@ -415,9 +366,9 @@ class GithubIngestionService:
         try:
             # 1. Repository 목록 조회 및 RDBMS 저장
             repos_to_sync = (
-                await self._sync_repositories()
+                await self._sync_repositories(db)
                 if repo_ids is None
-                else await self._get_repo_names_by_ids(repo_ids)
+                else self._get_repo_names_by_ids(db, repo_ids)
             )
             if repo_ids is not None and not repos_to_sync:
                 results["repositories"]["errors"] = max(1, len(repo_ids))
@@ -445,9 +396,9 @@ class GithubIngestionService:
 
                     # Issue 동기화
                     issue_result = await self._sync_issues(
+                        db,
                         owner,
                         repo,
-                        name_map=name_map,
                         since=sync_from,
                         audit_context=audit_context,
                     )
@@ -456,9 +407,9 @@ class GithubIngestionService:
 
                     # PR 동기화 (Commits 포함)
                     pr_result = await self._sync_pull_requests(
+                        db,
                         owner,
                         repo,
-                        name_map=name_map,
                         since=sync_from,
                         audit_context=audit_context,
                     )
@@ -503,7 +454,7 @@ class GithubIngestionService:
 
         try:
             # 동기화 시작
-            self._start_sync(repo_full_name, GithubEntityType.USER, SyncOperation.USER_SYNC)
+            self._start_sync(db, repo_full_name, GithubEntityType.USER, SyncOperation.USER_SYNC)
 
             logger.info(
                 f"[GITHUB][{SyncOperation.USER_SYNC}] Syncing {self.account_type} '{self.account_login}' "
@@ -537,7 +488,7 @@ class GithubIngestionService:
                         "Organization members permission may be required."
                     )
                     logger.warning(f"[GITHUB][{SyncOperation.USER_SYNC}] {error_msg}")
-                    self._fail_sync(repo_full_name, GithubEntityType.USER, str(e), SyncOperation.USER_SYNC)
+                    self._fail_sync(db, repo_full_name, GithubEntityType.USER, str(e), SyncOperation.USER_SYNC)
                     return {"synced": 0, "errors": 1}
 
             else:
@@ -556,7 +507,7 @@ class GithubIngestionService:
                         logger.info(f"[GITHUB][{SyncOperation.USER_SYNC}] Found user '{self.account_login}'")
                 except GitHubApiError as e:
                     logger.warning(f"[GITHUB][{SyncOperation.USER_SYNC}] Failed to fetch user '{self.account_login}': {e}")
-                    self._fail_sync(repo_full_name, GithubEntityType.USER, str(e), SyncOperation.USER_SYNC)
+                    self._fail_sync(db, repo_full_name, GithubEntityType.USER, str(e), SyncOperation.USER_SYNC)
                     return {"synced": 0, "errors": 1}
 
             # RDBMS에 벌크 저장
@@ -568,20 +519,21 @@ class GithubIngestionService:
                 )
 
             # 동기화 완료
-            self._complete_sync(repo_full_name, GithubEntityType.USER, len(users_data), SyncOperation.USER_SYNC)
+            self._complete_sync(db, repo_full_name, GithubEntityType.USER, len(users_data), SyncOperation.USER_SYNC)
             return {"synced": len(users_data), "errors": 0}
 
         except GitHubRateLimitError as e:
-            self._handle_rate_limit(repo_full_name, GithubEntityType.USER, e, SyncOperation.USER_SYNC)
+            self._handle_rate_limit(db, repo_full_name, GithubEntityType.USER, e, SyncOperation.USER_SYNC)
             raise
 
         except Exception as e:
             logger.error(f"[GITHUB][{SyncOperation.USER_SYNC}] Unexpected error: {e}", exc_info=True)
-            self._fail_sync(repo_full_name, GithubEntityType.USER, str(e), SyncOperation.USER_SYNC)
+            self._fail_sync(db, repo_full_name, GithubEntityType.USER, str(e), SyncOperation.USER_SYNC)
             return {"synced": 0, "errors": 1}
         
     async def sync_installation_metadata(
         self,
+        db: Session,
         *,
         auto_commit: bool = True,
         raise_on_error: bool = False,
@@ -592,8 +544,8 @@ class GithubIngestionService:
         snapshot, result = await self.collect_installation_metadata(
             raise_on_error=raise_on_error,
         )
-        await run_in_threadpool(
-            self._persist_installation_snapshot_sync,
+        self.persist_installation_snapshot(
+            db,
             snapshot,
             auto_commit=auto_commit,
         )
@@ -613,25 +565,13 @@ class GithubIngestionService:
             f"for installation {self.installation_id}"
         )
 
-        # gather() -> users/repositories metadata fetch를 병렬로 수행한다.
-        users_snapshot, repository_snapshot = await asyncio.gather(
-            self._collect_users_snapshot(),
-            self._collect_repository_snapshot(),
-            return_exceptions=True,
-        )
-
-        if isinstance(users_snapshot, Exception):
-            raise users_snapshot
-        if isinstance(repository_snapshot, Exception):
-            raise repository_snapshot
-
-        users, users_result = users_snapshot
-        repositories = repository_snapshot
+        users, users_result = await self._collect_users_snapshot()
         if raise_on_error and users_result["errors"] > 0:
             raise RuntimeError(
                 f"github user metadata refresh failed: installation_id={self.installation_id}"
             )
 
+        repositories = await self._collect_repository_snapshot()
         repo_names = [repo.full_name for repo in repositories]
 
         snapshot = GithubMetadataSnapshot(
@@ -673,22 +613,10 @@ class GithubIngestionService:
         else:
             db.flush()
 
-    def _persist_installation_snapshot_sync(
-        self,
-        snapshot: GithubMetadataSnapshot,
-        *,
-        auto_commit: bool = True,
-    ) -> None:
-        # 실제 Persist 시점에만 SessionLocal 생성
-        with SessionLocal() as db:
-            self.persist_installation_snapshot(
-                db,
-                snapshot,
-                auto_commit=auto_commit,
-            )
 
     async def _sync_repositories(
         self,
+        db: Session,
         *,
         auto_commit: bool = True,
     ) -> list[str]:
@@ -702,7 +630,7 @@ class GithubIngestionService:
 
         try:
             # 동기화 시작
-            self._start_sync(repo_full_name, GithubEntityType.REPOSITORY, SyncOperation.REPO_SYNC)
+            self._start_sync(db, repo_full_name, GithubEntityType.REPOSITORY, SyncOperation.REPO_SYNC)
 
             raw_repos = await self.client.list_installation_repos()
             logger.info(f"[GITHUB][{SyncOperation.REPO_SYNC}] Found {len(raw_repos)} accessible repositories")
@@ -710,8 +638,9 @@ class GithubIngestionService:
             # dict → DTO 변환
             repos_data = _convert_repos_to_dto(raw_repos)
 
-            sync_result = await run_in_threadpool(
-                self._sync_repositories_snapshot_sync,
+            sync_result = github_entities.sync_repositories_snapshot(
+                db,
+                self.installation_id,
                 repos_data,
                 auto_commit=auto_commit,
             )
@@ -725,6 +654,7 @@ class GithubIngestionService:
             )
 
             self._complete_sync(
+                db,
                 repo_full_name,
                 GithubEntityType.REPOSITORY,
                 len(repos_data),
@@ -734,17 +664,17 @@ class GithubIngestionService:
 
 
         except GitHubRateLimitError as e:
-            self._handle_rate_limit(repo_full_name, GithubEntityType.REPOSITORY, e, SyncOperation.REPO_SYNC)
+            self._handle_rate_limit(db, repo_full_name, GithubEntityType.REPOSITORY, e, SyncOperation.REPO_SYNC)
             raise
 
         except GitHubApiError as e:
             logger.error(f"[GITHUB][{SyncOperation.REPO_SYNC}] API error: {e}")
-            self._fail_sync(repo_full_name, GithubEntityType.REPOSITORY, str(e), SyncOperation.REPO_SYNC)
+            self._fail_sync(db, repo_full_name, GithubEntityType.REPOSITORY, str(e), SyncOperation.REPO_SYNC)
             raise
 
         except Exception as e:
             logger.error(f"[GITHUB][{SyncOperation.REPO_SYNC}] Unexpected error: {e}", exc_info=True)
-            self._fail_sync(repo_full_name, GithubEntityType.REPOSITORY, str(e), SyncOperation.REPO_SYNC)
+            self._fail_sync(db, repo_full_name, GithubEntityType.REPOSITORY, str(e), SyncOperation.REPO_SYNC)
             raise
 
     async def _collect_users_snapshot(self) -> tuple[list[UserUpsertData], dict[str, int]]:
@@ -814,45 +744,20 @@ class GithubIngestionService:
         logger.info(f"[GITHUB][{SyncOperation.REPO_SYNC}] Found {len(raw_repos)} accessible repositories")
         return _convert_repos_to_dto(raw_repos)
 
-    def _get_repo_names_by_ids_sync(self, repo_ids: list[int]) -> list[str]:
+    def _get_repo_names_by_ids(self, db: Session, repo_ids: list[int]) -> list[str]:
         """
         Repository ID 목록으로 full_name 조회
 
         Args:
+            db: SQLAlchemy Session
             repo_ids: GitHub Repository ID 목록
 
         Returns:
             Repository full_name 리스트
         """
-        with SessionLocal() as db:
-            repos = github_entities.get_repositories_by_ids(
-                db,
-                self.installation_id,
-                repo_ids,
-            )
-        repo_by_id = {repo.repo_id: repo for repo in repos}
-        return [
-            repo.full_name
-            for repo_id in repo_ids
-            if (repo := repo_by_id.get(repo_id)) is not None
-        ]
-
-    async def _get_repo_names_by_ids(self, repo_ids: list[int]) -> list[str]:
-        return await run_in_threadpool(self._get_repo_names_by_ids_sync, repo_ids)
-
-    def _sync_repositories_snapshot_sync(
-        self,
-        repos_data: list[RepositoryUpsertData],
-        *,
-        auto_commit: bool = True,
-    ) -> dict[str, int]:
-        with SessionLocal() as db:
-            return github_entities.sync_repositories_snapshot(
-                db,
-                self.installation_id,
-                repos_data,
-                auto_commit=auto_commit,
-            )
+        repos = github_entities.get_repositories_by_installation(db, self.installation_id)
+        repo_id_set = set(repo_ids)
+        return [repo.full_name for repo in repos if repo.repo_id in repo_id_set]
 
     def _resolve_sync_from_dt(
         self,
@@ -865,14 +770,13 @@ class GithubIngestionService:
         self,
         repo_id: int,
     ) -> GithubRepoRef:
-        # 리팩토링: 단건 repo ref는 전체 목록 조회 대신 get_repository_by_id로 해결한다.
         with SessionLocal() as db:
-            repo_record = github_entities.get_repository_by_id(db, repo_id)
+            repo_names = self._get_repo_names_by_ids(db, [repo_id])
 
-        if repo_record is None or repo_record.installation_id != self.installation_id:
+        if not repo_names:
             raise ValueError(f"github repository not found: repo_id={repo_id}")
 
-        full_name = repo_record.full_name
+        full_name = repo_names[0]
         owner, repo = full_name.split("/", 1)
         return GithubRepoRef(
             repo_id=repo_id,
@@ -885,7 +789,7 @@ class GithubIngestionService:
         self,
         repo_id: int,
     ) -> GithubRepoRef:
-        return await run_in_threadpool(self._load_repo_ref_sync, repo_id)
+        return await asyncio.to_thread(self._load_repo_ref_sync, repo_id)
 
     @staticmethod
     def _extract_record_ids_from_doc_ids(doc_ids: list[str]) -> list[str]:
@@ -923,118 +827,39 @@ class GithubIngestionService:
             missing_ids=missing_ids,
         )
 
-    def _build_issue_document(
-        self,
-        owner: str,
-        repo: str,
-        issue_data: dict[str, Any],
-        name_map: dict[str, str | None],
-    ) -> Document:
-        issue = self.transformer.parse_issue(issue_data)
-        issue = self._apply_issue_user_mapping(name_map, issue)
-        return self.transformer.transform_issue(
-            issue,
-            owner,
-            repo,
-            self.installation_id,
-        )
-
-    def _build_pull_request_document(
-        self,
-        owner: str,
-        repo: str,
-        pr_data: dict[str, Any],
-        name_map: dict[str, str | None],
-    ) -> Document:
-        pr = self.transformer.parse_pull_request(pr_data)
-        pr = self._apply_pr_user_mapping(name_map, pr)
-        return self.transformer.transform_pull_request(
-            pr,
-            owner,
-            repo,
-            self.installation_id,
-        )
-
-    def _build_issue_batch_sync(
-        self,
-        owner: str,
-        repo: str,
-        issue_batch: list[dict[str, Any]],
-        name_map: dict[str, str | None],
-    ) -> tuple[list[Document], list[str], int]:
-        documents: list[Document] = []
-        doc_ids: list[str] = []
-        error_count = 0
-
-        for issue_data in issue_batch:
-            try:
-                doc = self._build_issue_document(owner, repo, issue_data, name_map)
-                documents.append(doc)
-                doc_ids.append(doc.id)
-            except Exception as exc:
-                logger.warning(
-                    "[GITHUB][%s] Failed to process issue #%s: %s",
-                    SyncOperation.ISSUE_SYNC,
-                    issue_data.get("number"),
-                    exc,
-                )
-                error_count += 1
-
-        return documents, doc_ids, error_count
-
-    def _build_pull_request_batch_sync(
-        self,
-        owner: str,
-        repo: str,
-        pr_batch: list[dict[str, Any]],
-        name_map: dict[str, str | None],
-    ) -> tuple[list[Document], list[str], int]:
-        documents: list[Document] = []
-        doc_ids: list[str] = []
-        error_count = 0
-
-        for pr_data in pr_batch:
-            try:
-                doc = self._build_pull_request_document(owner, repo, pr_data, name_map)
-                documents.append(doc)
-                doc_ids.append(doc.id)
-            except Exception as exc:
-                logger.warning(
-                    "[GITHUB][%s] Failed to process PR #%s: %s",
-                    SyncOperation.PR_SYNC,
-                    pr_data.get("number"),
-                    exc,
-                )
-                logger.debug("PR processing error traceback:\n%s", traceback.format_exc())
-                error_count += 1
-
-        return documents, doc_ids, error_count
-
     def _build_issue_documents_sync(
         self,
         owner: str,
         repo: str,
         issue_items: list[tuple[str, dict[str, Any]]],
-        name_map: dict[str, str | None],
     ) -> tuple[list[Document], list[str]]:
         documents: list[Document] = []
         failed_ids: list[str] = []
 
-        for record_id, issue_data in issue_items:
-            try:
-                documents.append(
-                    self._build_issue_document(owner, repo, issue_data, name_map)
-                )
-            except Exception as exc:
-                logger.warning(
-                    "[GITHUB][REPAIR] Failed to build issue doc: installation_id=%s, repo=%s/%s, issue_id=%s, error=%s",
-                    self.installation_id,
-                    owner,
-                    repo,
-                    record_id,
-                    exc,
-                )
-                failed_ids.append(record_id)
+        with SessionLocal() as db:
+            self._preload_premapped_github_names(db)
+            for record_id, issue_data in issue_items:
+                try:
+                    issue = self.transformer.parse_issue(issue_data)
+                    issue = self._apply_issue_user_mapping(db, issue)
+                    documents.append(
+                        self.transformer.transform_issue(
+                            issue,
+                            owner,
+                            repo,
+                            self.installation_id,
+                        )
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "[GITHUB][REPAIR] Failed to build issue doc: installation_id=%s, repo=%s/%s, issue_id=%s, error=%s",
+                        self.installation_id,
+                        owner,
+                        repo,
+                        record_id,
+                        exc,
+                    )
+                    failed_ids.append(record_id)
 
         return documents, failed_ids
 
@@ -1043,26 +868,34 @@ class GithubIngestionService:
         owner: str,
         repo: str,
         pr_items: list[tuple[str, dict[str, Any]]],
-        name_map: dict[str, str | None],
     ) -> tuple[list[Document], list[str]]:
         documents: list[Document] = []
         failed_ids: list[str] = []
 
-        for record_id, pr_data in pr_items:
-            try:
-                documents.append(
-                    self._build_pull_request_document(owner, repo, pr_data, name_map)
-                )
-            except Exception as exc:
-                logger.warning(
-                    "[GITHUB][REPAIR] Failed to build pr doc: installation_id=%s, repo=%s/%s, pr_id=%s, error=%s",
-                    self.installation_id,
-                    owner,
-                    repo,
-                    record_id,
-                    exc,
-                )
-                failed_ids.append(record_id)
+        with SessionLocal() as db:
+            self._preload_premapped_github_names(db)
+            for record_id, pr_data in pr_items:
+                try:
+                    pr = self.transformer.parse_pull_request(pr_data)
+                    pr = self._apply_pr_user_mapping(db, pr)
+                    documents.append(
+                        self.transformer.transform_pull_request(
+                            pr,
+                            owner,
+                            repo,
+                            self.installation_id,
+                        )
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "[GITHUB][REPAIR] Failed to build pr doc: installation_id=%s, repo=%s/%s, pr_id=%s, error=%s",
+                        self.installation_id,
+                        owner,
+                        repo,
+                        record_id,
+                        exc,
+                    )
+                    failed_ids.append(record_id)
 
         return documents, failed_ids
     
@@ -1176,21 +1009,17 @@ class GithubIngestionService:
         record_type: Literal["issue", "pull_request"],
         requested_ids: list[str],
     ) -> GithubRecordRetryItem:
-        await self._ensure_premapped_github_names_async(force=False)
-        name_map = self._get_github_name_map()
-
         if record_type == "issue":
             nodes, failed_ids = await self._fetch_issue_nodes(
                 owner=repo_ref.owner,
                 repo=repo_ref.repo,
                 issue_ids=requested_ids,
             )
-            documents, build_failed_ids = await run_in_threadpool(
+            documents, build_failed_ids = await asyncio.to_thread(
                 self._build_issue_documents_sync,
                 repo_ref.owner,
                 repo_ref.repo,
                 nodes,
-                name_map,
             )
         else:
             nodes, failed_ids = await self._fetch_pull_request_nodes(
@@ -1198,12 +1027,11 @@ class GithubIngestionService:
                 repo=repo_ref.repo,
                 pull_request_ids=requested_ids,
             )
-            documents, build_failed_ids = await run_in_threadpool(
+            documents, build_failed_ids = await asyncio.to_thread(
                 self._build_pull_request_documents_sync,
                 repo_ref.owner,
                 repo_ref.repo,
                 nodes,
-                name_map,
             )
 
         failed_ids.extend(build_failed_ids)
@@ -1345,6 +1173,7 @@ class GithubIngestionService:
 
     async def incremental_sync(
         self,
+        db: Session,
         *,
         repo_id: int,
         record_type: str,
@@ -1353,7 +1182,7 @@ class GithubIngestionService:
         since: datetime | None,
         audit_context: SyncAuditContext | None,
     ) -> dict[str, int | bool]:
-        repo_names = await self._get_repo_names_by_ids([repo_id])
+        repo_names = self._get_repo_names_by_ids(db, [repo_id])
         if not repo_names:
             raise ValueError(f"github repository not found: repo_id={repo_id}")
 
@@ -1369,22 +1198,19 @@ class GithubIngestionService:
                 record_id=record_id,
             )
 
-        await self._ensure_premapped_github_names_async(force=False)
-        name_map = self._get_github_name_map()
-
         if normalized_record_type == "issue":
             result = await self._sync_issues(
+                db,
                 owner,
                 repo,
-                name_map=name_map,
                 since=since,
                 audit_context=audit_context,
             )
         elif normalized_record_type == "pull_request":
             result = await self._sync_pull_requests(
+                db,
                 owner,
                 repo,
-                name_map=name_map,
                 since=since,
                 audit_context=audit_context,
             )
@@ -1431,10 +1257,9 @@ class GithubIngestionService:
 
     async def _sync_issues(
         self,
+        db: Session,
         owner: str,
         repo: str,
-        *,
-        name_map: dict[str, str | None],
         since: datetime | None = None,
         audit_context: SyncAuditContext | None = None,
     ) -> dict[str, int]:
@@ -1442,6 +1267,7 @@ class GithubIngestionService:
         Repository의 Issue 동기화
 
         Args:
+            db: SQLAlchemy Session
             owner: Repository owner
             repo: Repository name
             since: 이 시간 이후 업데이트된 Issue만 동기화
@@ -1455,7 +1281,7 @@ class GithubIngestionService:
 
         try:
             # 동기화 시작
-            self._start_sync(full_name, GithubEntityType.ISSUE, SyncOperation.ISSUE_SYNC)
+            self._start_sync(db, full_name, GithubEntityType.ISSUE, SyncOperation.ISSUE_SYNC)
 
             batch_idx = 0
             async for issue_batch in self.client.list_issues_graphql(
@@ -1464,14 +1290,21 @@ class GithubIngestionService:
                 since=since,
             ):
                 batch_idx += 1
-                batch_documents, batch_doc_ids, batch_errors = await run_in_threadpool(
-                    self._build_issue_batch_sync,
-                    owner,
-                    repo,
-                    issue_batch,
-                    name_map,
-                )
-                errors += batch_errors
+                batch_documents: list[Document] = []
+                batch_doc_ids: list[str] = []
+
+                for issue_data in issue_batch:
+                    try:
+                        issue = self.transformer.parse_issue(issue_data)
+                        issue = self._apply_issue_user_mapping(db, issue)
+                        doc = self.transformer.transform_issue(
+                            issue, owner, repo, self.installation_id
+                        )
+                        batch_documents.append(doc)
+                        batch_doc_ids.append(doc.id)
+                    except Exception as e:
+                        logger.warning(f"[GITHUB][{SyncOperation.ISSUE_SYNC}] Failed to process issue #{issue_data.get('number')}: {e}")
+                        errors += 1
 
                 if not batch_documents:
                     continue
@@ -1499,16 +1332,16 @@ class GithubIngestionService:
                     f"[GITHUB][{SyncOperation.ISSUE_SYNC}] Batch {batch_idx}: upserted {len(batch_documents)} issue docs in {full_name}"
                 )
 
-            self._complete_sync(full_name, GithubEntityType.ISSUE, total_synced, SyncOperation.ISSUE_SYNC)
+            self._complete_sync(db, full_name, GithubEntityType.ISSUE, total_synced, SyncOperation.ISSUE_SYNC)
             return {"synced": total_synced, "errors": errors}
 
         except GitHubRateLimitError as e:
-            self._handle_rate_limit(full_name, GithubEntityType.ISSUE, e, SyncOperation.ISSUE_SYNC)
+            self._handle_rate_limit(db, full_name, GithubEntityType.ISSUE, e, SyncOperation.ISSUE_SYNC)
             raise
 
         except Exception as e:
             logger.error(f"[GITHUB][{SyncOperation.ISSUE_SYNC}] Sync failed for {full_name}: {e}", exc_info=True)
-            self._fail_sync(full_name, GithubEntityType.ISSUE, str(e), SyncOperation.ISSUE_SYNC)
+            self._fail_sync(db, full_name, GithubEntityType.ISSUE, str(e), SyncOperation.ISSUE_SYNC)
             return {"synced": total_synced, "errors": errors + 1}
 
     # ============================================================
@@ -1517,10 +1350,9 @@ class GithubIngestionService:
 
     async def _sync_pull_requests(
         self,
+        db: Session,
         owner: str,
         repo: str,
-        *,
-        name_map: dict[str, str | None],
         since: datetime | None = None,
         audit_context: SyncAuditContext | None = None,
     ) -> dict[str, int]:
@@ -1533,6 +1365,7 @@ class GithubIngestionService:
         Note: File Changes는 조회하지 않음 (Commits으로 대체)
 
         Args:
+            db: SQLAlchemy Session
             owner: Repository owner
             repo: Repository name
             since: 이 시간 이후 업데이트된 PR만 동기화
@@ -1546,7 +1379,7 @@ class GithubIngestionService:
 
         try:
             # 동기화 시작
-            self._start_sync(full_name, GithubEntityType.PULL_REQUEST, SyncOperation.PR_SYNC)
+            self._start_sync(db, full_name, GithubEntityType.PULL_REQUEST, SyncOperation.PR_SYNC)
 
             batch_idx = 0
             async for pr_batch in self.client.list_pull_requests_graphql(
@@ -1555,14 +1388,22 @@ class GithubIngestionService:
                 since=since,
             ):
                 batch_idx += 1
-                batch_documents, batch_doc_ids, batch_errors = await run_in_threadpool(
-                    self._build_pull_request_batch_sync,
-                    owner,
-                    repo,
-                    pr_batch,
-                    name_map,
-                )
-                errors += batch_errors
+                batch_documents: list[Document] = []
+                batch_doc_ids: list[str] = []
+
+                for pr_data in pr_batch:
+                    try:
+                        pr = self.transformer.parse_pull_request(pr_data)
+                        pr = self._apply_pr_user_mapping(db, pr)
+                        doc = self.transformer.transform_pull_request(
+                            pr, owner, repo, self.installation_id
+                        )
+                        batch_documents.append(doc)
+                        batch_doc_ids.append(doc.id)
+                    except Exception as e:
+                        logger.warning(f"[GITHUB][{SyncOperation.PR_SYNC}] Failed to process PR #{pr_data.get('number')}: {e}")
+                        logger.debug(f"PR processing error traceback:\n{traceback.format_exc()}")
+                        errors += 1
 
                 if not batch_documents:
                     continue
@@ -1590,16 +1431,16 @@ class GithubIngestionService:
                     f"[GITHUB][{SyncOperation.PR_SYNC}] Batch {batch_idx}: upserted {len(batch_documents)} PR docs in {full_name}"
                 )
 
-            self._complete_sync(full_name, GithubEntityType.PULL_REQUEST, total_synced, SyncOperation.PR_SYNC)
+            self._complete_sync(db, full_name, GithubEntityType.PULL_REQUEST, total_synced, SyncOperation.PR_SYNC)
             return {"synced": total_synced, "errors": errors}
 
         except GitHubRateLimitError as e:
-            self._handle_rate_limit(full_name, GithubEntityType.PULL_REQUEST, e, SyncOperation.PR_SYNC)
+            self._handle_rate_limit(db, full_name, GithubEntityType.PULL_REQUEST, e, SyncOperation.PR_SYNC)
             raise
 
         except Exception as e:
             logger.error(f"[GITHUB][{SyncOperation.PR_SYNC}] Sync failed for {full_name}: {e}", exc_info=True)
-            self._fail_sync(full_name, GithubEntityType.PULL_REQUEST, str(e), SyncOperation.PR_SYNC)
+            self._fail_sync(db, full_name, GithubEntityType.PULL_REQUEST, str(e), SyncOperation.PR_SYNC)
             return {"synced": total_synced, "errors": errors + 1}
 
     async def _summarize_documents(

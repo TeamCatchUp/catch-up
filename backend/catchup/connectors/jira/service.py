@@ -10,7 +10,7 @@ JiraApiClient, JiraFieldMapper, JiraTransformer, PGVectorRepository를 조합.
     await service.initialize()
 
     # 전체 동기화
-    await service.full_sync(project_keys=["CATCH", "PROJ"], sync_from_dt=datetime.now(timezone.utc))
+    await service.full_sync(db, project_keys=["CATCH", "PROJ"], sync_from_dt=datetime.now(timezone.utc))
 
     # 증분 동기화
     await service.incremental_sync()
@@ -24,6 +24,7 @@ from typing import Any, Literal
 
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
+from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
@@ -33,11 +34,7 @@ from catchup.connectors.jira.client import (
     JiraRateLimitError,
 )
 from catchup.connectors.jira.field_mapper import JiraFieldMapper
-from catchup.connectors.jira.transformers import (
-    JiraTransformContext,
-    JiraTransformer,
-    normalize_issue_type,
-)
+from catchup.connectors.jira.transformers import JiraTransformer, normalize_issue_type
 from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
 from catchup.configs.config import settings
@@ -201,30 +198,21 @@ class JiraIngestionService:
     def _load_project_context_sync(
         self,
         project_key: str,
-    ) -> tuple[dict[str, Any], dict[int, Any]]:
+    ) -> None:
         with SessionLocal() as db:
-            project_cache = jira_entities.get_projects_by_keys(
+            self.transformer.project_cache = jira_entities.get_projects_by_keys(
                 db,
                 self.cloud_id,
                 [project_key],
             )
             sprints = jira_entities.get_sprints_by_cloud_id(db, self.cloud_id)
-            sprint_cache = {s.sprint_id: s for s in sprints}
-            return project_cache, sprint_cache
+            self.transformer.sprint_cache = {s.sprint_id: s for s in sprints}
 
     async def _prepare_project_context(
         self,
         project_key: str,
-    ) -> tuple[dict[str, Any], dict[int, Any]]:
-        return await run_in_threadpool(self._load_project_context_sync, project_key)
-
-    def _load_project_keys_sync(self) -> list[str]:
-        with SessionLocal() as db:
-            projects = jira_entities.get_projects_by_cloud_id(db, self.cloud_id)
-            return [project.project_key for project in projects]
-
-    async def _load_project_keys(self) -> list[str]:
-        return await run_in_threadpool(self._load_project_keys_sync)
+    ) -> None:
+        await run_in_threadpool(self._load_project_context_sync, project_key)
 
     def _classify_record_type(
         self,
@@ -466,6 +454,7 @@ class JiraIngestionService:
 
     async def full_sync(
         self,
+        db: Session,
         project_keys: list[str] | None = None,
         sync_from_dt: datetime | None = None,
         audit_context: SyncAuditContext | None = None,
@@ -502,11 +491,13 @@ class JiraIngestionService:
                 logger.info("[JIRA][FULL SYNC] Sprint Sync Skipped : Agile API Not Available")
 
             if not project_keys:
-                project_keys = await self._load_project_keys()
+                projects = jira_entities.get_projects_by_cloud_id(db, self.cloud_id)
+                project_keys = [p.project_key for p in projects]
             
             for project_key in project_keys:
                 try:
                     project_result = await self._sync_project_issues(
+                        db,
                         project_key,
                         since=sync_from,
                         audit_context=audit_context,
@@ -541,6 +532,7 @@ class JiraIngestionService:
         
     async def _sync_project_issues(
         self,
+        db: Session,
         project_key: str,
         since: datetime | None = None,
         audit_context: SyncAuditContext | None = None,
@@ -556,35 +548,37 @@ class JiraIngestionService:
         """
         self._ensure_initialized()
 
-        transform_context = JiraTransformContext()
+        # RDBMS에서 캐시 로드
+        project_cache: dict = {}
+        sprint_cache: dict = {}
 
         try:
-            project_cache, sprint_cache = await self._prepare_project_context(project_key)
-            transform_context = JiraTransformContext(
-                project_cache=dict(project_cache),
-                sprint_cache=dict(sprint_cache),
+            project_cache = jira_entities.get_projects_by_keys(
+                db, self.cloud_id, [project_key]
             )
+            sprints = jira_entities.get_sprints_by_cloud_id(db, self.cloud_id)
+            sprint_cache = {s.sprint_id: s for s in sprints}
+
             logger.info(
                 f"[JIRA][FULL SYNC] Loaded caches: "
                 f"project_key={project_key}, {len(sprint_cache)} sprints"
             )
         except Exception as e:
+            db.rollback()
             logger.warning(
                 f"[JIRA][FULL SYNC] Failed to load caches, continuing without enrichment: "
                 f"project_key={project_key}, error={e}"
             )
 
+        # Transformer에 캐시 전달
+        self.transformer.project_cache = project_cache
+        self.transformer.sprint_cache = sprint_cache
+
         results = {"issues": 0, "epics": 0, "errors": 0}
         queue: asyncio.Queue = asyncio.Queue(maxsize=2)
 
         producer = asyncio.create_task(
-            self._fetch_and_transform(
-                project_key,
-                since,
-                queue,
-                results,
-                transform_context=transform_context,
-            )
+            self._fetch_and_transform(project_key, since, queue, results)
         )
         consumer = asyncio.create_task(
             self._summarize_and_store(queue, project_key=project_key, audit_context=audit_context)
@@ -604,8 +598,6 @@ class JiraIngestionService:
         since: datetime | None,
         queue: asyncio.Queue,
         results: dict[str, int],
-        *,
-        transform_context: JiraTransformContext,
     ) -> None:
         """Stage 1 (Producer): API 조회 + Transform → Queue에 배치 전달"""
         jql_parts = [f'project = "{project_key}"']
@@ -654,7 +646,6 @@ class JiraIngestionService:
                             doc = self.transformer.transform_issue(
                                 issue_data,
                                 self.site_url,
-                                context=transform_context,
                             )
                             documents.append(doc)
                             doc_ids.append(doc.id)
@@ -1125,6 +1116,7 @@ class JiraIngestionService:
 
     async def incremental_sync(
         self,
+        db: Session,
         *,
         project_key: str,
         record_id: str,
@@ -1142,10 +1134,11 @@ class JiraIngestionService:
             }
 
         result = await self._sync_project_issues(
-            project_key=project_key,
-            since=since,
-            audit_context=audit_context,
-        )
+            db,
+                project_key=project_key,
+                since=since,
+                audit_context=audit_context,
+            )
         return {
             "synced": int(result.get("issues", 0)) + int(result.get("epics", 0)),
             "errors": int(result.get("errors", 0)),

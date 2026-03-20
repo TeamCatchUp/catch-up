@@ -19,8 +19,11 @@ class SlackIncrementalHandler(BaseIncrementalHandler):
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
-        # 리팩토링: incremental path도 service 생성 시 외부 session을 넘기지 않는다.
-        service = await create_slack_ingestion_service(team_id)
+
+        from catchup.db.engine import SessionLocal
+
+        with SessionLocal() as db:
+            service = await create_slack_ingestion_service(db, team_id)
 
         cache[cache_key] = service
         return service
@@ -39,19 +42,24 @@ class SlackIncrementalHandler(BaseIncrementalHandler):
         sync_from = None
         since = self._resolve_since(context)
         sync_from = f"{since.timestamp():.6f}"
-        result = await service.incremental_sync(
-            channel_id=channel_id,
-            record_id=context.record_id or "",
-            event_kind=context.event_kind or "updated",
-            sync_from=sync_from,
-            audit_context=SyncAuditContext(
-                connector=context.connector,
-                scope_id=context.scope_id,
-                target_id=context.target_id,
-                job_id=context.job_id,
-                task_id=context.event_id,
-            ),
-        )
+
+        from catchup.db.engine import SessionLocal
+
+        with SessionLocal() as db:
+            result = await service.incremental_sync(
+                db=db,
+                channel_id=channel_id,
+                record_id=context.record_id or "",
+                event_kind=context.event_kind or "updated",
+                sync_from=sync_from,
+                audit_context=SyncAuditContext(
+                    connector=context.connector,
+                    scope_id=context.scope_id,
+                    target_id=context.target_id,
+                    job_id=context.job_id,
+                    task_id=context.event_id,
+                ),
+            )
 
         if result.error_count > 0:
             raise SyncInternalError(

@@ -2,13 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, TypeVar
 from uuid import uuid4
-
-from fastapi.concurrency import run_in_threadpool
 
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
@@ -34,7 +30,7 @@ from catchup.db.sync import (
     complete_job_success,
     get_event,
     get_job,
-    has_active_events_by_job,
+    list_events_by_job,
     mark_event_failed,
     mark_event_retrying,
     mark_event_success,
@@ -75,8 +71,6 @@ from catchup.sync.status_stream.schemas import (
 from catchup.worker.handlers import get_ingestion_handler
 
 logger = logging.getLogger(__name__)
-T = TypeVar("T")
-_REPUBLISH_RECORD_RETRY_DELAYS_SECONDS = (1.0, 2.0, 3.0)
 
 
 @dataclass(slots=True)
@@ -87,32 +81,8 @@ class ClaimResult:
     total_targets: int = 0
 
 
-@dataclass(slots=True, frozen=True)
-class RepublishPreparation:
-    task: SyncStreamTask
-
-
-@dataclass(slots=True, frozen=True)
-class JobFinalizeDecision:
-    status: SyncJobStatus
-    total_targets: int
-    completed_targets: int
-    failed_targets: int
-    requeued_targets: int
-
-
 def _consumer_name() -> str:
     return f"sync-worker-{uuid4().hex[:8]}"
-
-
-# Async 경로에서는 ORM 작업을 직접 await하지 않고 sync helper를 threadpool로 오프로드한다.
-async def _offload_db(
-    func: Callable[..., T],
-    /,
-    *args: Any,
-    **kwargs: Any,
-) -> T:
-    return await run_in_threadpool(func, *args, **kwargs)
 
 
 def _incremental_lease_until() -> datetime:
@@ -239,7 +209,7 @@ async def _deadletter(
     )
 
 
-def _claim_event_sync(task: SyncStreamTask) -> ClaimResult:
+def _claim_event(task: SyncStreamTask) -> ClaimResult:
     with SessionLocal() as db:
         event = get_event(db, task.event_id)
         if event is None:
@@ -310,15 +280,7 @@ def _claim_event_sync(task: SyncStreamTask) -> ClaimResult:
     )
 
 
-async def _claim_event(task: SyncStreamTask) -> ClaimResult:
-    return await _offload_db(_claim_event_sync, task)
-
-
-def _claim_incremental_task_sync(
-    task: SyncStreamTask,
-    *,
-    lease_owner: str,
-) -> ClaimResult:
+def _claim_incremental_task(task: SyncStreamTask, *, lease_owner: str) -> ClaimResult:
     record_key = (task.record_key or "").strip()
     if not record_key or task.generation is None:
         return ClaimResult(state=ClaimState.INVALID_INCREMENTAL_TASK)
@@ -389,25 +351,9 @@ def _claim_incremental_task_sync(
     return ClaimResult(state=ClaimState.CLAIMED, context=context)
 
 
-async def _claim_incremental_task(
-    task: SyncStreamTask,
-    *,
-    lease_owner: str,
-) -> ClaimResult:
-    return await _offload_db(
-        _claim_incremental_task_sync,
-        task,
-        lease_owner=lease_owner,
-    )
-
-
-def _mark_event_success_sync(context: FullSyncContext) -> bool:
+async def _mark_event_success(context: FullSyncContext) -> bool:
     with SessionLocal() as db:
         return mark_event_success(db, event_id=context.event_id)
-
-
-async def _mark_event_success(context: FullSyncContext) -> bool:
-    return await _offload_db(_mark_event_success_sync, context)
 
 
 def _incremental_retry_delay(attempt: int) -> timedelta:
@@ -417,7 +363,7 @@ def _incremental_retry_delay(attempt: int) -> timedelta:
     return timedelta(seconds=seconds)
 
 
-def _mark_incremental_success_sync(context: IncrementalSyncContext) -> bool:
+async def _mark_incremental_success(context: IncrementalSyncContext) -> bool:
     if context.record_key is None or context.generation is None:
         return False
 
@@ -449,35 +395,6 @@ def _mark_incremental_success_sync(context: IncrementalSyncContext) -> bool:
             last_synced_at=synced_at,
         )
 
-
-async def _mark_incremental_success(context: IncrementalSyncContext) -> bool:
-    return await _offload_db(_mark_incremental_success_sync, context)
-
-
-def _transition_incremental_failure_state_sync(
-    *,
-    context: IncrementalSyncContext,
-    to_status: IncrementalRecordStatus,
-    attempt: int,
-    last_error: str,
-    next_retry_at: datetime | None = None,
-) -> bool:
-    if context.record_key is None or context.generation is None:
-        return False
-
-    with SessionLocal() as db:
-        return transition_record_status(
-            db,
-            record_key=context.record_key,
-            from_statuses=[IncrementalRecordStatus.PROCESSING],
-            to_status=to_status,
-            expected_generation=context.generation,
-            attempt=attempt,
-            next_retry_at=next_retry_at,
-            last_error=last_error,
-        )
-
-
 async def _transition_incremental_failure_state(
     *,
     context: IncrementalSyncContext,
@@ -487,17 +404,24 @@ async def _transition_incremental_failure_state(
     last_error: str,
     next_retry_at: datetime | None = None,
 ) -> bool:
-    transitioned = await _offload_db(
-        _transition_incremental_failure_state_sync,
-        context=context,
-        to_status=to_status,
-        attempt=attempt,
-        last_error=last_error,
-        next_retry_at=next_retry_at,
-    )
+    if context.record_key is None or context.generation is None:
+        return False
+    
+    with SessionLocal() as db:
+        transitioned = transition_record_status(
+            db,
+            record_key=context.record_key,
+            from_statuses=[IncrementalRecordStatus.PROCESSING],
+            to_status=to_status,
+            expected_generation=context.generation,
+            attempt=attempt,
+            next_retry_at=next_retry_at,
+            last_error=last_error,
+        )
+    
     if transitioned:
         return True
-
+    
     await _deadletter(
         message=message,
         reason=SyncStreamFailureReason.RECORD_STATE_CONFLICT,
@@ -518,183 +442,6 @@ async def _transition_incremental_failure_state(
     )
     return False
 
-
-def _mark_event_failed_sync(event_id: str) -> bool:
-    with SessionLocal() as db:
-        return mark_event_failed(db, event_id)
-
-
-async def _mark_event_failed(event_id: str) -> bool:
-    return await _offload_db(_mark_event_failed_sync, event_id)
-
-
-def _compensate_republish_preparation_failure_sync(
-    event_id: str,
-    error_message: str,
-) -> bool:
-    return _record_republish_failure_sync(event_id, error_message)
-
-
-def _prepare_republish_sync(context: FullSyncContext) -> RepublishPreparation:
-    with SessionLocal() as db:
-        if not mark_event_retrying(db, context.event_id):
-            raise RuntimeError("failed to transition IN_PROGRESS -> RETRYING")
-
-        if not requeue_retrying_event(db, context.event_id):
-            raise RuntimeError("failed to transition RETRYING -> PENDING")
-
-    claimed_for_republish = False
-    try:
-        with SessionLocal() as db:
-            if not claim_events_for_republish(db, event_ids=[context.event_id]):
-                raise RuntimeError("failed to transition publish state to PUBLISHING")
-            claimed_for_republish = True
-
-            event = get_event(db, context.event_id)
-            if event is None:
-                raise RuntimeError(f"event not found for republish: {context.event_id}")
-
-            task = build_stream_task_from_persisted_event(
-                event=event,
-                fallback_scope_id=context.scope_id,
-            )
-    except Exception as exc:
-        if claimed_for_republish:
-            try:
-                compensated = _compensate_republish_preparation_failure_sync(
-                    context.event_id,
-                    str(exc),
-                )
-                if not compensated:
-                    logger.error(
-                        "[%s][%s][WORKER] Failed to compensate republish preparation: event_id=%s",
-                        context.connector.upper(),
-                        context.sync_type.upper(),
-                        context.event_id,
-                    )
-            except Exception:
-                logger.exception(
-                    "[%s][%s][WORKER] Republish preparation compensation failed: event_id=%s",
-                    context.connector.upper(),
-                    context.sync_type.upper(),
-                    context.event_id,
-                )
-        raise
-
-    return RepublishPreparation(task=task)
-
-
-async def _prepare_republish(context: FullSyncContext) -> RepublishPreparation:
-    return await _offload_db(_prepare_republish_sync, context)
-
-
-def _record_republish_failure_sync(event_id: str, publish_error: str) -> bool:
-    with SessionLocal() as db:
-        return record_event_publish_outcomes(
-            db,
-            published=[],
-            failed_event_ids=[event_id],
-            publish_error=publish_error,
-        )
-
-
-async def _record_republish_failure(event_id: str, publish_error: str) -> bool:
-    return await _offload_db(_record_republish_failure_sync, event_id, publish_error)
-
-
-def _record_republish_success_sync(event_id: str, message_id: str) -> bool:
-    with SessionLocal() as db:
-        return record_event_publish_outcomes(
-            db,
-            published=[
-                SyncEventPublishResultInput(
-                    event_id=event_id,
-                    stream_message_id=message_id,
-                )
-            ],
-            failed_event_ids=[],
-            publish_error=None,
-        )
-
-
-async def _record_republish_success(event_id: str, message_id: str) -> bool:
-    return await _offload_db(_record_republish_success_sync, event_id, message_id)
-
-
-async def _retry_republish_record(
-    *,
-    error_message: str,
-    operation: Callable[[], Awaitable[bool]],
-) -> None:
-    last_error: Exception | None = None
-    for delay_seconds in (0.0, *_REPUBLISH_RECORD_RETRY_DELAYS_SECONDS):
-        if delay_seconds > 0:
-            await asyncio.sleep(delay_seconds)
-        try:
-            if await operation():
-                return
-            last_error = RuntimeError(error_message)
-        except Exception as exc:
-            last_error = exc
-
-    raise RuntimeError(error_message) from last_error
-
-
-async def _record_republish_failure_with_retry(
-    event_id: str,
-    publish_error: str,
-) -> None:
-    await _retry_republish_record(
-        error_message="failed to persist republish failure state",
-        operation=lambda: _record_republish_failure(event_id, publish_error),
-    )
-
-
-async def _record_republish_success_with_retry(
-    event_id: str,
-    message_id: str,
-) -> None:
-    await _retry_republish_record(
-        error_message="failed to persist republish success state",
-        operation=lambda: _record_republish_success(event_id, message_id),
-    )
-
-
-def _finalize_job_if_done_sync(job_id: str) -> JobFinalizeDecision | None:
-    with SessionLocal() as db:
-        job = get_job(db, job_id)
-        if job is None:
-            return None
-
-        if job.status in {SyncJobStatus.SUCCESS, SyncJobStatus.FAILED}:
-            return None
-
-        if has_active_events_by_job(db, job_id=job_id):
-            return None
-
-        summary = summarize_events_by_job(db, job_id=job_id)
-        if summary.total_targets == 0:
-            return None
-
-        decision = JobFinalizeDecision(
-            status=(
-                SyncJobStatus.SUCCESS
-                if summary.failed_targets == 0
-                else SyncJobStatus.FAILED
-            ),
-            total_targets=summary.total_targets,
-            completed_targets=summary.completed_targets,
-            failed_targets=summary.failed_targets,
-            requeued_targets=summary.requeued_targets,
-        )
-
-        if decision.status == SyncJobStatus.SUCCESS:
-            if not complete_job_success(db, job_id):
-                return None
-        elif not complete_job_failed(db, job_id):
-            return None
-
-    return decision
 
 
 async def _handle_incremental_failure(
@@ -781,18 +528,19 @@ async def _handle_event_failure(
     message: SyncStreamMessage,
     exc: Exception,
     handler: IngestionHandlerProtocol,
-) -> bool:
+) -> None:
     error_summary = str(exc)
     next_attempt = context.attempt + 1
 
     if next_attempt >= context.max_attempts:
-        if not await _mark_event_failed(context.event_id):
-            await _deadletter(
-                message=message,
-                reason=SyncStreamFailureReason.EVENT_CAS_CONFLICT,
-                error_message="failed to transition event to FAILED",
-            )
-            return False
+        with SessionLocal() as db:
+            if not mark_event_failed(db, context.event_id):
+                await _deadletter(
+                    message=message,
+                    reason=SyncStreamFailureReason.EVENT_CAS_CONFLICT,
+                    error_message="failed to transition event to FAILED",
+                )
+                return
 
         await _publish_status_event(
             _build_target_status_event(
@@ -825,7 +573,7 @@ async def _handle_event_failure(
             context.max_attempts,
             error_summary,
         )
-        return True
+        return
 
     try:
         await _republish_full_sync_event(context=context)
@@ -861,27 +609,60 @@ async def _handle_event_failure(
         next_attempt,
         error_summary,
     )
-    return False
 
 
 async def _republish_full_sync_event(
     *,
     context: FullSyncContext,
 ) -> None:
-    preparation = await _prepare_republish(context)
+    with SessionLocal() as db:
+        if not mark_event_retrying(db, context.event_id):
+            raise RuntimeError("failed to transition IN_PROGRESS -> RETRYING")
+
+        if not requeue_retrying_event(db, context.event_id):
+            raise RuntimeError("failed to transition RETRYING -> PENDING")
+
+    with SessionLocal() as db:
+        if not claim_events_for_republish(db, event_ids=[context.event_id]):
+            raise RuntimeError("failed to transition publish state to PUBLISHING")
+
+        event = get_event(db, context.event_id)
+        if event is None:
+            raise RuntimeError(f"event not found for republish: {context.event_id}")
+
+        task = build_stream_task_from_persisted_event(
+            event=event,
+            fallback_scope_id=context.scope_id,
+        )
 
     try:
-        message_id = await publish_task(preparation.task)
+        message_id = await publish_task(task)
     except Exception as exc:
-        try:
-            # Publish 실패 후에도 failure outcome 기록을 재시도해 publish 상태 유실을 줄임
-            await _record_republish_failure_with_retry(context.event_id, str(exc))
-        except Exception as persist_exc:
-            raise RuntimeError("failed to persist republish failure state") from persist_exc
+        with SessionLocal() as db:
+            if not record_event_publish_outcomes(
+                db,
+                published=[],
+                failed_event_ids=[context.event_id],
+                publish_error=str(exc),
+            ):
+                raise RuntimeError(
+                    "failed to persist republish failure state"
+                ) from exc
         raise
 
-    # Publish 성공 후에도 success outcome 기록을 재시도해 PUBLISHING 잔류를 줄인다.
-    await _record_republish_success_with_retry(context.event_id, message_id)
+    with SessionLocal() as db:
+        if not record_event_publish_outcomes(
+            db,
+            published=[
+                SyncEventPublishResultInput(
+                    event_id=context.event_id,
+                    stream_message_id=message_id,
+                )
+            ],
+            failed_event_ids=[],
+            publish_error=None,
+        ):
+            raise RuntimeError("failed to persist republish success state")
 
 
 async def _finalize_job_if_done(
@@ -891,49 +672,72 @@ async def _finalize_job_if_done(
     if context.sync_type != SyncType.FULL:
         return
 
-    decision = await _offload_db(_finalize_job_if_done_sync, context.job_id)
-    if decision is None:
-        return
+    job_id = context.job_id
 
-    if decision.status == SyncJobStatus.SUCCESS:
-        # 모든 target 처리 이후에 최종 집계를 포함한 job 완료 이벤트를 발행
+    with SessionLocal() as db:
+        job = get_job(db, job_id)
+        if job is None:
+            return
+
+        if job.status in {SyncJobStatus.SUCCESS, SyncJobStatus.FAILED}:
+            return
+
+        summary = summarize_events_by_job(db, job_id=job_id)
+        if summary.total_targets == 0:
+            return
+
+        if summary.queued_targets > 0 or summary.processing_targets > 0:
+            return
+
+        total_targets = summary.total_targets
+        completed_targets = summary.completed_targets
+        failed_targets = summary.failed_targets
+        requeued_targets = summary.requeued_targets
+
+        if failed_targets == 0:
+            if not complete_job_success(db, job_id):
+                return
+            # 모든 target 처리 이후에 최종 집계를 포함한 job 완료 이벤트를 발행
+            await _publish_status_event(
+                _build_job_status_event(
+                    context=context,
+                    event_type=SyncStatusEventType.JOB_COMPLETED,
+                    status=SyncJobStatus.SUCCESS.value,
+                    total_targets=total_targets,
+                    completed_targets=completed_targets,
+                    failed_targets=failed_targets,
+                    requeued_targets=requeued_targets,
+                )
+            )
+            await handler.on_job_completed(
+                context=context,
+                total_targets=total_targets,
+                completed_targets=completed_targets,
+                failed_targets=failed_targets,
+                requeued_targets=requeued_targets,
+            )
+
+            return
+
+        if not complete_job_failed(db, job_id):
+            return
+        # 실패가 남은 채 완료된 경우 Job 실패 이벤트를 발행한다
         await _publish_status_event(
             _build_job_status_event(
                 context=context,
-                event_type=SyncStatusEventType.JOB_COMPLETED,
-                status=SyncJobStatus.SUCCESS.value,
-                total_targets=decision.total_targets,
-                completed_targets=decision.completed_targets,
-                failed_targets=decision.failed_targets,
-                requeued_targets=decision.requeued_targets,
+                event_type=SyncStatusEventType.JOB_FAILED,
+                status=SyncJobStatus.FAILED.value,
+                total_targets=total_targets,
+                completed_targets=completed_targets,
+                failed_targets=failed_targets,
+                requeued_targets=requeued_targets,
             )
         )
-        await handler.on_job_completed(
+        await handler.on_job_failed(
             context=context,
-            total_targets=decision.total_targets,
-            completed_targets=decision.completed_targets,
-            failed_targets=decision.failed_targets,
-            requeued_targets=decision.requeued_targets,
+            total_targets=total_targets,
+            failed_targets=failed_targets,
         )
-        return
-
-    # 실패가 남은 채 완료된 경우 Job 실패 이벤트를 발행한다
-    await _publish_status_event(
-        _build_job_status_event(
-            context=context,
-            event_type=SyncStatusEventType.JOB_FAILED,
-            status=SyncJobStatus.FAILED.value,
-            total_targets=decision.total_targets,
-            completed_targets=decision.completed_targets,
-            failed_targets=decision.failed_targets,
-            requeued_targets=decision.requeued_targets,
-        )
-    )
-    await handler.on_job_failed(
-        context=context,
-        total_targets=decision.total_targets,
-        failed_targets=decision.failed_targets,
-    )
 
 
 async def _process_incremental_message(
@@ -947,7 +751,7 @@ async def _process_incremental_message(
     handler: IngestionHandlerProtocol | None = None
 
     try:
-        claim = await _claim_incremental_task(task, lease_owner=lease_owner)
+        claim = _claim_incremental_task(task, lease_owner=lease_owner)
         if claim.state == ClaimState.INVALID_INCREMENTAL_TASK:
             await _deadletter(
                 message=message,
@@ -1082,10 +886,9 @@ async def _process_message(
 
     context: FullSyncContext | None = None
     handler: IngestionHandlerProtocol | None = None
-    should_finalize_job = False
 
     try:
-        claim = await _claim_event(task)
+        claim = _claim_event(task)
 
         if claim.state == ClaimState.EVENT_NOT_FOUND:
             await _deadletter(
@@ -1207,7 +1010,6 @@ async def _process_message(
             )
             return
 
-        should_finalize_job = True
         await _publish_status_event(
             _build_target_status_event(
                 context=context,
@@ -1242,18 +1044,12 @@ async def _process_message(
             )
             return
 
-        terminal_failure_candidate = context.attempt + 1 >= context.max_attempts
-        if terminal_failure_candidate:
-            should_finalize_job = True
-
-        failure_finalized = await _handle_event_failure(
+        await _handle_event_failure(
             context=context,
             message=message,
             exc=exc,
             handler=handler,
         )
-        if terminal_failure_candidate and not failure_finalized:
-            should_finalize_job = False
 
     finally:
         try:
@@ -1266,7 +1062,7 @@ async def _process_message(
                 message.message_id,
             )
 
-        if should_finalize_job and context is not None and handler is not None:
+        if context is not None and handler is not None:
             await _finalize_job_if_done(context, handler)
 
 
@@ -1281,24 +1077,13 @@ class SyncWorker(WorkerProtocol):
     async def process(self, message: SyncStreamMessage) -> None:
         lock_key = _task_lock_key(message.task)
         lock = self._target_locks.setdefault(lock_key, asyncio.Lock())
-        try:
-            async with lock:
-                async with self._semaphore:
-                    await _process_message(
-                        message,
-                        self._service_cache,
-                        lease_owner=self._consumer,
-                    )
-        finally:
-            # 같은 key의 유휴 lock만 정리해 lock dict가 불필요하게 커지는 것을 막는다
-            waiters = getattr(lock, "_waiters", None)
-            has_waiters = any(not waiter.done() for waiter in waiters or ())
-            if (
-                not lock.locked()
-                and not has_waiters
-                and self._target_locks.get(lock_key) is lock
-            ):
-                self._target_locks.pop(lock_key, None)
+        async with lock:
+            async with self._semaphore:
+                await _process_message(
+                    message,
+                    self._service_cache,
+                    lease_owner=self._consumer,
+                )
 
     async def run_forever(self, stop_event: asyncio.Event) -> None:
         consumer = _consumer_name()

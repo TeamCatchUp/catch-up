@@ -31,7 +31,6 @@ from catchup.sync.incremental import (
     publish_incremental_outbox,
 )
 from catchup.db.incremental import recover_stale_processing_records
-from catchup.db.sync import recover_stale_event_publish_claims
 
 logger = logging.getLogger(__name__)
 
@@ -47,22 +46,24 @@ async def refresh_jira_dynamic_webhooks():
     dynamic_webhook_service = get_jira_dynamic_webhook_service()
 
     with SessionLocal() as db:
-        cloud_ids = [token.cloud_id for token in get_all_atlassian_tokens(db)]
+        tokens = get_all_atlassian_tokens(db)
 
-    for cloud_id in cloud_ids:
-        try:
-            result = await dynamic_webhook_service.ensure_registered(
-                cloud_id=cloud_id,
-            )
-            logger.info(
-                f"[JIRA][WEBHOOK][DYNAMIC] Processed cloud: cloud_id={cloud_id}, result={result}"
-            )
-        except Exception as e:
-            logger.error(
-                f"[JIRA][WEBHOOK][DYNAMIC] Failed to process cloud: "
-                f"cloud_id={cloud_id}, error={e}",
-                exc_info=True,
-            )
+        for token in tokens:
+            cloud_id = token.cloud_id
+            try:
+                result = await dynamic_webhook_service.ensure_registered(
+                    db=db,
+                    cloud_id=cloud_id,
+                )
+                logger.info(
+                    f"[JIRA][WEBHOOK][DYNAMIC] Processed cloud: cloud_id={cloud_id}, result={result}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"[JIRA][WEBHOOK][DYNAMIC] Failed to process cloud: "
+                    f"cloud_id={cloud_id}, error={e}",
+                    exc_info=True,
+                )
 
     logger.info("[JIRA][WEBHOOK][DYNAMIC] Webhook refresh job completed")
 
@@ -151,16 +152,11 @@ async def run_incremental_runtime_jobs():
             db,
             stale_seconds=max(1, int(settings.SYNC_LOCK_CHANNEL_TTL_SECONDS)),
         )
-        recovered_publish = recover_stale_event_publish_claims(
-            db,
-            stale_seconds=max(1, int(settings.SYNC_EVENT_PUBLISHING_STALE_SECONDS)),
-        )
     promote_result = promote_incremental_records()
     publish_result = await publish_incremental_outbox()
     logger.info(
-        "[INCREMENTAL][SCHEDULER] Runtime cycle completed: recovered_processing=%s recovered_publish=%s promote=%s publish=%s",
+        "[INCREMENTAL][SCHEDULER] Runtime cycle completed: recovered_processing=%s promote=%s publish=%s",
         recovered_processing,
-        recovered_publish,
         promote_result,
         publish_result,
     )

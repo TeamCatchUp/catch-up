@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 
 
 async def create_confluence_ingestion_service(
+    db: Session | None,
     cloud_id: str,
-    db: Session | None = None,
 ) -> ConfluenceIngestionService:
     token_manager = AtlassianTokenManager(
         oauth_client=AtlassianOAuthClient(),
@@ -42,19 +42,16 @@ async def create_confluence_ingestion_service(
     try:
         token_provider = AtlassianTokenProvider(token_manager)
         if db is None:
-            def _load_site_url_sync() -> str:
+            def _load_context_sync():
                 with SessionLocal() as session:
-                    token_record = oauth_repository.get_token_by_cloud_id(session, cloud_id)
-                    if token_record is None:
-                        raise AtlassianTokenNotFoundError(cloud_id)
-                    return token_record.site_url or ""
+                    return oauth_repository.get_token_by_cloud_id(session, cloud_id)
 
-            site_url = await run_in_threadpool(_load_site_url_sync)
+            token_record = await run_in_threadpool(_load_context_sync)
         else:
             token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
-            if token_record is None:
-                raise AtlassianTokenNotFoundError(cloud_id)
-            site_url = token_record.site_url or ""
+
+        if token_record is None:
+            raise AtlassianTokenNotFoundError(cloud_id)
     except AtlassianTokenNotFoundError as exc:
         raise SyncConnectorError(
             f"Confluence 연결을 찾을 수 없습니다: {cloud_id}",
@@ -78,6 +75,7 @@ async def create_confluence_ingestion_service(
         ) from exc
 
     try:
+        site_url = token_record.site_url if token_record else ""
         embedding_service = get_embedding_service(EmbeddingProvider.AWS_BEDROCK)
         repository = get_pgvector_repository(
             embeddings=embedding_service.get_embedder()

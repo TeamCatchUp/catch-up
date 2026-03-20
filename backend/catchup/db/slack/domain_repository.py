@@ -18,8 +18,6 @@ from catchup.connectors.slack.schemas import (
 )
 from catchup.db.models import SlackChannelMember, SlackWorkspace, SlackChannel, SlackChannelType, SlackUser
 
-_CHANNEL_MEMBER_BULK_CHUNK_SIZE = 1000
-
 
 def _user_email_update_value(stmt):
     return func.coalesce(stmt.excluded.email, SlackUser.email)
@@ -402,93 +400,6 @@ def upsert_users_bulk(
     return len(users)
 
 
-def sync_users_snapshot(
-    db: Session,
-    team_id: str,
-    users: list[SlackUserProfileSchema],
-    *,
-    auto_commit: bool = True,
-) -> dict[str, int]:
-    now = datetime.now(timezone.utc)
-
-    if not users:
-        deleted_users = delete(SlackUser).where(SlackUser.team_id == team_id)
-        deleted_result = db.execute(deleted_users)
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
-        return {
-            "upserted": 0,
-            "deleted": deleted_result.rowcount or 0,
-        }
-
-    users_data = [
-        {
-            "team_id": team_id,
-            "user_id": user.id,
-            "name": user.name,
-            "real_name": user.real_name or user.name,
-            "display_name": user.display_name or user.name,
-            "deleted": user.deleted,
-            "email": user.email,
-            "avatar_url": user.avatar_url,
-            "title": user.title,
-            "phone": user.phone,
-            "tz": user.tz,
-            "tz_label": user.tz_label,
-            "is_bot": user.is_bot,
-            "is_admin": user.is_admin,
-            "is_owner": user.is_owner,
-            "is_restricted": user.is_restricted,
-            "updated_at": user.updated_at,
-            "synced_at": now,
-        }
-        for user in users
-    ]
-    fetched_user_ids = [user.id for user in users]
-
-    stmt = insert(SlackUser).values(users_data)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["team_id", "user_id"],
-        set_={
-            "name": stmt.excluded.name,
-            "real_name": stmt.excluded.real_name,
-            "display_name": stmt.excluded.display_name,
-            "deleted": stmt.excluded.deleted,
-            "email": _user_email_update_value(stmt),
-            "avatar_url": stmt.excluded.avatar_url,
-            "title": stmt.excluded.title,
-            "phone": stmt.excluded.phone,
-            "tz": stmt.excluded.tz,
-            "tz_label": stmt.excluded.tz_label,
-            "is_bot": stmt.excluded.is_bot,
-            "is_admin": stmt.excluded.is_admin,
-            "is_owner": stmt.excluded.is_owner,
-            "is_restricted": stmt.excluded.is_restricted,
-            "updated_at": stmt.excluded.updated_at,
-            "synced_at": stmt.excluded.synced_at,
-        },
-    )
-    db.execute(stmt)
-
-    stale_users_stmt = delete(SlackUser).where(
-        SlackUser.team_id == team_id,
-        ~SlackUser.user_id.in_(fetched_user_ids),
-    )
-    stale_users_result = db.execute(stale_users_stmt)
-
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
-
-    return {
-        "upserted": len(users),
-        "deleted": stale_users_result.rowcount or 0,
-    }
-
-
 def get_user(db: Session, team_id: str, user_id: str) -> SlackUser | None:
     """사용자 조회"""
     stmt = select(SlackUser).where(
@@ -590,42 +501,6 @@ def replace_channel_members(
         db.flush()
     
     return len(user_ids)
-
-
-def replace_team_channel_members_snapshot(
-    db: Session,
-    team_id: str,
-    channel_members: dict[str, list[str]],
-    *,
-    auto_commit: bool = True,
-) -> int:
-    delete_stmt = delete(SlackChannelMember).where(SlackChannelMember.team_id == team_id)
-    db.execute(delete_stmt)
-
-    now = datetime.now(timezone.utc)
-    members_data = [
-        {
-            "team_id": team_id,
-            "channel_id": channel_id,
-            "user_id": user_id,
-            "synced_at": now,
-        }
-        for channel_id, user_ids in channel_members.items()
-        for user_id in user_ids
-    ]
-
-    for start in range(0, len(members_data), _CHANNEL_MEMBER_BULK_CHUNK_SIZE):
-        batch = members_data[start : start + _CHANNEL_MEMBER_BULK_CHUNK_SIZE]
-        if not batch:
-            continue
-        db.execute(insert(SlackChannelMember).values(batch))
-
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
-
-    return len(members_data)
 
 def delete_channel_members_by_team(
     db: Session,
