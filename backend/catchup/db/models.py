@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Optional
-from sqlalchemy import CheckConstraint, ForeignKey, Index, UniqueConstraint, func, inspect, text
+from sqlalchemy import CheckConstraint, Float, ForeignKey, Index, UniqueConstraint, func, inspect, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -1692,10 +1692,7 @@ class ChatHistory(Base):
         index=True,
         comment="사용자가 저장한 답변"
     )
-    
-    input_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
-    output_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
-    
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
     chat_room: Mapped["ChatRoom"] = relationship(back_populates="chat_histories")
@@ -1717,4 +1714,37 @@ class ChatHistory(Base):
             postgresql_using="gin",
             postgresql_ops={"content": "gin_bigm_ops"}
         ),
+    )
+
+
+class TokenPurpose(StrEnum):
+    SUMMARIZE = "summarize"
+    EMBEDDING = "embedding"
+    CHAT = "chat"
+
+
+class ChatTokenUsage(Base):
+    __tablename__ = "chat_token_usages"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), nullable=False)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    message_id: Mapped[int] = mapped_column(ForeignKey("chat_histories.id"), nullable=False)
+    
+    purpose: Mapped[TokenPurpose] = mapped_column(String(50), nullable=False)
+    
+    token_breakdown: Mapped[dict[str, int]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb")
+    )
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_chat_token_usages_user_time", "user_id", "created_at"),
+        Index("idx_chat_token_usages_workspace_time", "workspace_id", "created_at"),
+        Index("idx_chat_token_usages_company_time", "company_id", "created_at"),
     )
