@@ -411,15 +411,8 @@ class SyncQueryService:
         except ValueError as exc:
             raise ValueError(f"github installation not found: {scope_id}") from exc
 
-        installation = await run_in_threadpool(
-            _load_github_installation_sync,
-            installation_id,
-        )
-        if installation is None:
-            raise ValueError(f"github installation not found: {scope_id}")
-
-        access_token = await get_github_app_service().get_installation_access_token(
-            installation_id,
+        service = await create_github_ingestion_service(
+            installation_id=installation_id,
         )
         client = GitHubApiClient(access_token)
         repositories = _convert_repos_to_dto(
@@ -571,11 +564,16 @@ class SyncQueryService:
         *,
         scope_id: str,
     ) -> SyncTargetsResult:
-        metadata_service = await create_slack_metadata_service(
-            db=None,
-            team_id=scope_id,
+        metadata_service = await create_slack_metadata_service(team_id=scope_id)
+        snapshot, refresh_result = await metadata_service.collect_snapshot(
+            raise_on_error=True,
         )
-        channels = await metadata_service.collect_target_channels()
+        self._ensure_refresh_succeeded(
+            connector=SyncConnector.SLACK,
+            scope_id=scope_id,
+            result=refresh_result,
+            sections=("workspace", "users", "channels"),
+        )
         await run_in_threadpool(
             _persist_slack_channels_sync,
             metadata_service,

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from types import ModuleType
@@ -18,6 +19,13 @@ from catchup.db.models import AtlassianOAuthToken
 logger = logging.getLogger(__name__)
 
 TOKEN_REFRESH_BUFFER = timedelta(minutes=5)
+
+@dataclass(frozen=True, slots=True)
+class AtlassianTokenSnapshot:
+    cloud_id: str
+    access_token: str
+    refresh_token: str
+    expires_at: datetime
 
 
 class AtlassianTokenManager:
@@ -40,85 +48,14 @@ class AtlassianTokenManager:
                 self._refresh_locks[cloud_id] = lock
             return lock
 
-    def _reload_token(self, db: Session, cloud_id: str) -> AtlassianOAuthToken:
-        db.expire_all()
-        token = self.oauth_repository.get_token_by_cloud_id(db, cloud_id)
-        if token is None:
-            raise AtlassianTokenNotFoundError(cloud_id)
-        db.refresh(token)
-        return token
-
     def _normalize_expires_at(self, expires_at: datetime) -> datetime:
         if expires_at.tzinfo is None:
             return expires_at.replace(tzinfo=timezone.utc)
         return expires_at.astimezone(timezone.utc)
 
-    def _needs_refresh(self, token: AtlassianOAuthToken) -> bool:
-        return self._normalize_expires_at(token.expires_at) <= (
+    def _needs_refresh(self, expires_at: datetime) -> bool:
+        return self._normalize_expires_at(expires_at) <= (
             datetime.now(timezone.utc) + TOKEN_REFRESH_BUFFER
-        )
-
-    async def _refresh_token(
-        self,
-        db: Session,
-        token: AtlassianOAuthToken,
-    ) -> AtlassianOAuthToken:
-        new_tokens = await self.oauth_client.refresh_access_token(token.refresh_token)
-        refreshed = self.oauth_repository.update_refreshed_token(
-            db=db,
-            cloud_id=token.cloud_id,
-            access_token=new_tokens.access_token,
-            refresh_token=new_tokens.refresh_token,
-            expires_at=(
-                datetime.now(timezone.utc) + timedelta(seconds=new_tokens.expires_in)
-            ),
-        )
-        if refreshed is None:
-            raise AtlassianTokenNotFoundError(token.cloud_id)
-        logger.info("[ATLASSIAN][TOKEN] Refreshed access token: cloud_id=%s", token.cloud_id)
-        return refreshed
-
-    async def resolve_access_token(
-        self,
-        db: Session,
-        token: AtlassianOAuthToken,
-        *,
-        force_refresh: bool = False,
-    ) -> str:
-        cloud_id = token.cloud_id
-        snapshot_access_token = token.access_token
-        snapshot_expires_at = token.expires_at
-
-        latest = self._reload_token(db, cloud_id)
-        if not force_refresh and not self._needs_refresh(latest):
-            return latest.access_token
-
-        lock = self._get_refresh_lock(cloud_id)
-        async with lock:
-            latest = self._reload_token(db, cloud_id)
-            if force_refresh:
-                token_changed = latest.access_token != snapshot_access_token
-                expires_changed = latest.expires_at != snapshot_expires_at
-                if token_changed or expires_changed:
-                    return latest.access_token
-            elif not self._needs_refresh(latest):
-                return latest.access_token
-
-            refreshed = await self._refresh_token(db, latest)
-            return refreshed.access_token
-
-    async def resolve_access_token_by_cloud_id(
-        self,
-        db: Session,
-        cloud_id: str,
-        *,
-        force_refresh: bool = False,
-    ) -> str:
-        token = self._reload_token(db, cloud_id)
-        return await self.resolve_access_token(
-            db,
-            token,
-            force_refresh=force_refresh,
         )
 
 
@@ -131,7 +68,7 @@ class AtlassianTokenProvider:
         self.token_manager = token_manager
         self.session_factory = session_factory
 
-    def _load_token_snapshot_sync(self, cloud_id: str) -> tuple[str, datetime]:
+    def _load_token_snapshot_sync(self, cloud_id: str) -> AtlassianTokenSnapshot:
         with self.session_factory() as db:
             token = self.token_manager.oauth_repository.get_token_by_cloud_id(
                 db,
@@ -139,7 +76,36 @@ class AtlassianTokenProvider:
             )
             if token is None:
                 raise AtlassianTokenNotFoundError(cloud_id)
-            return token.access_token, token.expires_at
+            return AtlassianTokenSnapshot(
+                cloud_id=token.cloud_id,
+                access_token=token.access_token,
+                refresh_token=token.refresh_token,
+                expires_at=token.expires_at,
+            )
+
+    def _persist_refreshed_token_sync(
+        self,
+        cloud_id: str,
+        access_token: str,
+        refresh_token: str,
+        expires_at: datetime,
+    ) -> AtlassianTokenSnapshot:
+        with self.session_factory() as db:
+            refreshed = self.token_manager.oauth_repository.update_refreshed_token(
+                db=db,
+                cloud_id=cloud_id,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                expires_at=expires_at,
+            )
+            if refreshed is None:
+                raise AtlassianTokenNotFoundError(cloud_id)
+            return AtlassianTokenSnapshot(
+                cloud_id=refreshed.cloud_id,
+                access_token=refreshed.access_token,
+                refresh_token=refreshed.refresh_token,
+                expires_at=refreshed.expires_at,
+            )
 
     async def get_access_token(
         self,
@@ -147,19 +113,36 @@ class AtlassianTokenProvider:
         *,
         force_refresh: bool = False,
     ) -> str:
-        if not force_refresh:
-            access_token, expires_at = await run_in_threadpool(
-                self._load_token_snapshot_sync,
-                cloud_id,
-            )
-            if self.token_manager._normalize_expires_at(expires_at) > (
-                datetime.now(timezone.utc) + TOKEN_REFRESH_BUFFER
-            ):
-                return access_token
+        snapshot = await run_in_threadpool(self._load_token_snapshot_sync, cloud_id)
+        if not force_refresh and not self.token_manager._needs_refresh(snapshot.expires_at):
+            return snapshot.access_token
 
-        with self.session_factory() as db:
-            return await self.token_manager.resolve_access_token_by_cloud_id(
-                db,
-                cloud_id,
-                force_refresh=force_refresh,
+        lock = self.token_manager._get_refresh_lock(cloud_id)
+        async with lock:
+            latest = await run_in_threadpool(self._load_token_snapshot_sync, cloud_id)
+            if force_refresh:
+                token_changed = latest.access_token != snapshot.access_token
+                expires_changed = latest.expires_at != snapshot.expires_at
+                if token_changed or expires_changed:
+                    return latest.access_token
+            elif not self.token_manager._needs_refresh(latest.expires_at):
+                return latest.access_token
+
+            new_tokens = await self.token_manager.oauth_client.refresh_access_token(
+                latest.refresh_token
             )
+            expires_at = datetime.now(timezone.utc) + timedelta(
+                seconds=new_tokens.expires_in
+            )
+            refreshed = await run_in_threadpool(
+                self._persist_refreshed_token_sync,
+                latest.cloud_id,
+                new_tokens.access_token,
+                new_tokens.refresh_token,
+                expires_at,
+            )
+            logger.info(
+                "[ATLASSIAN][TOKEN] Refreshed access token: cloud_id=%s",
+                latest.cloud_id,
+            )
+            return refreshed.access_token

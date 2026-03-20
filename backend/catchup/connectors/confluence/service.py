@@ -4,7 +4,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
-from sqlalchemy.orm import Session
+from fastapi.concurrency import run_in_threadpool
+from sqlalchemy import select
 
 from catchup.components.embedder.service import AwsBedrockEmbeddingService
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
@@ -25,6 +26,7 @@ from catchup.components.vector_db.pgvector import PGVectorRepository
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.db.confluence import domain_repository
 from catchup.db.engine import SessionLocal
+from catchup.db.models import ConfluenceSpace
 from catchup.configs.config import settings
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
@@ -62,6 +64,22 @@ class ConfluenceRecordRetryItem:
 class ConfluenceRecordRetryResult:
     records: list[ConfluenceRecordRetryItem] = field(default_factory=list)
 
+
+@dataclass(slots=True, frozen=True)
+class ConfluenceSpaceContext:
+    space_id: str
+    space_key: str
+    space_name: str | None
+    user_name_map: dict[str, str | None] = field(default_factory=dict)
+
+
+@dataclass(slots=True, frozen=True)
+class ConfluenceFullSyncContext:
+    space_keys: list[str] = field(default_factory=list)
+    space_context_map: dict[str, ConfluenceSpaceContext] = field(default_factory=dict)
+    user_name_map: dict[str, str | None] = field(default_factory=dict)
+
+
 class ConfluenceIngestionService:
     def __init__(
         self,
@@ -78,6 +96,7 @@ class ConfluenceIngestionService:
         self.transformer = ConfluenceTransformer()
         self.repository = repository
         self.embedding_service = embedding_service
+        self._space_context_cache: dict[str, ConfluenceSpaceContext] = {}
 
     async def initialize(self) -> None:
         logger.info(f"[CONFLUENCE][SERVICE] Ensuring initialization: cloud_id={self.cloud_id}")
@@ -123,21 +142,118 @@ class ConfluenceIngestionService:
     def _load_space_context_sync(
         self,
         space_key: str,
-    ) -> tuple[str, str | None, dict[str, str | None]]:
+    ) -> ConfluenceSpaceContext:
         with SessionLocal() as db:
-            space_id_map = domain_repository.get_space_id_map(db, self.cloud_id, [space_key])
-            space_name_map = domain_repository.get_space_name_map(db, self.cloud_id, [space_key])
-            space_id = space_id_map.get(space_key)
-            if not space_id:
-                raise ValueError(f"confluence space not found: space_key={space_key}")
-            user_name_map = self._load_user_name_map(db)
-            return space_id, space_name_map.get(space_key), user_name_map
+            return self._load_single_space_context(db, space_key)
 
     async def _load_space_context(
         self,
         space_key: str,
-    ) -> tuple[str, str | None, dict[str, str | None]]:
-        return await asyncio.to_thread(self._load_space_context_sync, space_key)
+    ) -> ConfluenceSpaceContext:
+        cached = self._space_context_cache.get(space_key)
+        if cached is not None:
+            return cached
+
+        context = await run_in_threadpool(self._load_space_context_sync, space_key)
+        self._space_context_cache[space_key] = context
+        return context
+
+    def _load_single_space_context(
+        self,
+        db,
+        space_key: str,
+    ) -> ConfluenceSpaceContext:
+        rows = self._load_space_rows(
+            db,
+            [space_key],
+        )
+        row = rows.get(space_key)
+        if row is None:
+            raise ValueError(f"confluence space not found: space_key={space_key}")
+        return self._build_space_context(
+            row,
+            user_name_map=self._build_user_name_map(db),
+        )
+
+    def _load_space_rows(
+        self,
+        db,
+        space_keys: list[str],
+    ) -> dict[str, ConfluenceSpace]:
+        normalized_space_keys = [space_key for space_key in space_keys if space_key]
+        if not normalized_space_keys:
+            return {}
+
+        stmt = (
+            select(ConfluenceSpace)
+            .where(
+                ConfluenceSpace.cloud_id == self.cloud_id,
+                ConfluenceSpace.space_key.in_(normalized_space_keys),
+            )
+            .order_by(ConfluenceSpace.space_key)
+        )
+        spaces = db.execute(stmt).scalars().all()
+        return {
+            (space.space_key or "").strip(): space
+            for space in spaces
+            if (space.space_key or "").strip()
+        }
+
+    @staticmethod
+    def _build_space_context(
+        space: ConfluenceSpace,
+        *,
+        user_name_map: dict[str, str | None],
+    ) -> ConfluenceSpaceContext:
+        return ConfluenceSpaceContext(
+            space_id=(space.space_id or "").strip(),
+            space_key=(space.space_key or "").strip(),
+            space_name=space.space_name,
+            user_name_map=user_name_map,
+        )
+
+    def _load_full_sync_context_sync(
+        self,
+        space_keys: list[str] | None,
+    ) -> ConfluenceFullSyncContext:
+        with SessionLocal() as db:
+            if space_keys is None:
+                normalized_space_keys = [
+                    (space.space_key or "").strip()
+                    for space in domain_repository.get_spaces_by_cloud_id(db, self.cloud_id)
+                    if (space.space_key or "").strip()
+                ]
+            else:
+                normalized_space_keys = [
+                    key.strip()
+                    for key in space_keys
+                    if key and key.strip()
+                ]
+                normalized_space_keys = list(dict.fromkeys(normalized_space_keys))
+
+            if not normalized_space_keys:
+                return ConfluenceFullSyncContext(space_keys=normalized_space_keys)
+
+            user_name_map = self._build_user_name_map(db)
+            space_rows = self._load_space_rows(db, normalized_space_keys)
+            space_context_map = {
+                space_key: self._build_space_context(
+                    space,
+                    user_name_map=user_name_map,
+                )
+                for space_key, space in space_rows.items()
+            }
+            return ConfluenceFullSyncContext(
+                space_keys=normalized_space_keys,
+                space_context_map=space_context_map,
+                user_name_map=user_name_map,
+            )
+
+    async def _load_full_sync_context(
+        self,
+        space_keys: list[str] | None,
+    ) -> ConfluenceFullSyncContext:
+        return await run_in_threadpool(self._load_full_sync_context_sync, space_keys)
 
     async def _collect_page_ids(
         self,
@@ -233,7 +349,6 @@ class ConfluenceIngestionService:
     # ================================================================
     async def full_sync(
             self,
-            db: Session,
             space_keys: list[str] | None = None,
             sync_from_dt: datetime | None = None,
             audit_context: SyncAuditContext | None = None,
@@ -241,20 +356,8 @@ class ConfluenceIngestionService:
         sync_from = sync_from_dt or (
             datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
         )
-
-        if space_keys is None:
-            normalized_space_keys = [
-                (space.space_key or "").strip()
-                for space in domain_repository.get_spaces_by_cloud_id(db, self.cloud_id)
-                if (space.space_key or "").strip()
-            ]
-        else:
-            normalized_space_keys = [
-                key.strip()
-                for key in space_keys
-                if key and key.strip()
-            ]
-            normalized_space_keys = list(dict.fromkeys(normalized_space_keys))
+        sync_context = await self._load_full_sync_context(space_keys)
+        normalized_space_keys = sync_context.space_keys
 
         logger.info(
             f"[CONFLUENCE][FULL SYNC] Started: "
@@ -271,13 +374,8 @@ class ConfluenceIngestionService:
                 logger.warning(f"[CONFLUENCE][FULL SYNC] No spaces to sync: cloud_id={self.cloud_id}")
                 return TargetSyncResult(skipped=True)
 
-            space_id_map = domain_repository.get_space_id_map(
-                db, self.cloud_id, normalized_space_keys,
-            )
-            space_name_map = domain_repository.get_space_name_map(
-                db, self.cloud_id, normalized_space_keys,
-            )
-            if not space_id_map:
+            space_context_map = sync_context.space_context_map
+            if not space_context_map:
                 logger.error(
                     "[CONFLUENCE][FULL SYNC] No spaces found from requested keys: cloud_id=%s, requested_space_keys=%s",
                     self.cloud_id,
@@ -294,7 +392,7 @@ class ConfluenceIngestionService:
             missing_space_keys = [
                 space_key
                 for space_key in normalized_space_keys
-                if space_key not in space_id_map
+                if space_key not in space_context_map
             ]
             if missing_space_keys:
                 logger.error(
@@ -305,26 +403,33 @@ class ConfluenceIngestionService:
                 results["pages"]["errors"] += len(missing_space_keys)
                 results["blogposts"]["errors"] += len(missing_space_keys)
 
-            user_name_map = self._load_user_name_map(db)
-            
-            for space_key, space_id in space_id_map.items():
+            for space_key in normalized_space_keys:
+                space_context = space_context_map.get(space_key)
+                if space_context is None:
+                    continue
+                self._space_context_cache[space_key] = space_context
+
                 page_result = await self._sync_space_pages(
-                    db, space_id = space_id, space_key = space_key, since = sync_from,
-                    user_name_map=user_name_map, space_name=space_name_map.get(space_key),
+                    space_id=space_context.space_id,
+                    space_key=space_key,
+                    since=sync_from,
+                    user_name_map=space_context.user_name_map,
+                    space_name=space_context.space_name,
                     audit_context=audit_context,
                 )
                 results["pages"]["synced"] += page_result["synced"]
                 results["pages"]["errors"] += page_result["errors"]
 
                 blog_result = await self._sync_space_blogposts(
-                    db, space_id = space_id, space_key = space_key, since = sync_from,
-                    user_name_map=user_name_map, space_name=space_name_map.get(space_key),
+                    space_id=space_context.space_id,
+                    space_key=space_key,
+                    since=sync_from,
+                    user_name_map=space_context.user_name_map,
+                    space_name=space_context.space_name,
                     audit_context=audit_context,
                 )
                 results["blogposts"]["synced"] += blog_result["synced"]
                 results["blogposts"]["errors"] += blog_result["errors"]
-            
-            db.commit()
 
             logger.info(
                 f"[CONFLUENCE][FULL SYNC] Completed : cloud_id = {self.cloud_id}, results = {results}"
@@ -339,13 +444,11 @@ class ConfluenceIngestionService:
             )
 
         except Exception as e:
-            db.rollback()
             logger.error(f"[CONFLUENCE][FULL SYNC] Failed: cloud_id={self.cloud_id}, error={e}")
             raise
         
     async def _sync_space_pages(
             self,
-            db: Session,
             space_id: str,
             space_key: str,
             since: datetime | None = None,
@@ -355,7 +458,6 @@ class ConfluenceIngestionService:
     ) -> dict[str, int]:
 
         results = {"synced": 0, "errors": 0}
-        _ = db
 
         try:
             should_stop = False
@@ -410,7 +512,6 @@ class ConfluenceIngestionService:
     
     async def _sync_space_blogposts(
             self,
-            db: Session,
             space_id: str,
             space_key: str,
             since: datetime | None = None,
@@ -418,9 +519,8 @@ class ConfluenceIngestionService:
             space_name: str | None = None,
             audit_context: SyncAuditContext | None = None,
     ) -> dict[str, int]:
-        
+                
         results = {"synced": 0, "errors": 0}
-        _ = db
 
         try:
             should_stop = False
@@ -706,7 +806,6 @@ class ConfluenceIngestionService:
 
     async def incremental_sync(
         self,
-        db: Session,
         *,
         space_key: str,
         record_type: str,
@@ -727,31 +826,23 @@ class ConfluenceIngestionService:
                 "skipped": False,
             }
 
-        space_id_map = domain_repository.get_space_id_map(db, self.cloud_id, [space_key])
-        space_name_map = domain_repository.get_space_name_map(db, self.cloud_id, [space_key])
-        space_id = space_id_map.get(space_key)
-        if not space_id:
-            raise ValueError(f"confluence space not found: space_key={space_key}")
-
-        user_name_map = self._load_user_name_map(db)
+        space_context = await self._load_space_context(space_key)
         if normalized_record_type == "page":
             result = await self._sync_space_pages(
-                db,
-                space_id=space_id,
+                space_id=space_context.space_id,
                 space_key=space_key,
                 since=since,
-                user_name_map=user_name_map,
-                space_name=space_name_map.get(space_key),
+                user_name_map=space_context.user_name_map,
+                space_name=space_context.space_name,
                 audit_context=audit_context,
             )
         elif normalized_record_type == "blogpost":
             result = await self._sync_space_blogposts(
-                db,
-                space_id=space_id,
+                space_id=space_context.space_id,
                 space_key=space_key,
                 since=since,
-                user_name_map=user_name_map,
-                space_name=space_name_map.get(space_key),
+                user_name_map=space_context.user_name_map,
+                space_name=space_context.space_name,
                 audit_context=audit_context,
             )
         else:
@@ -763,7 +854,7 @@ class ConfluenceIngestionService:
             "skipped": False,
         }
     
-    def _load_user_name_map(self, db: Session) -> dict[str, str | None]:
+    def _build_user_name_map(self, db) -> dict[str, str | None]:
         """
         ConfluenceUsers 테이블에서 account_type이 'atlassian'인 사용자만 로드해
         account_id → display_name 매핑을 만든다. Full Sync에서 작성자 이름 주입용으로 사용.

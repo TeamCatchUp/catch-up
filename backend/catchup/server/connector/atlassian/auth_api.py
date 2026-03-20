@@ -27,7 +27,7 @@ from catchup.connectors.atlassian.callback_service import (
     AtlassianCallbackService,
     CallbackError,
 )
-from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import AtlassianTokenManager, AtlassianTokenProvider
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
 from catchup.connectors.atlassian.schemas import AtlassianInstallationStatus
 from catchup.connectors.jira.factory import create_jira_ingestion_service
@@ -186,7 +186,8 @@ async def atlassian_installation_status(
             oauth_client=atlassian_service,
             oauth_repository=atlassian_crud,
         )
-        valid_token = await token_manager.resolve_access_token(db, tokens[0])
+        token_provider = AtlassianTokenProvider(token_manager)
+        valid_token = await token_provider.get_access_token(tokens[0].cloud_id)
         resources = await atlassian_service.get_accessible_resources(valid_token)
         return AtlassianInstallationStatus(installed=True, resources=resources)
     except HTTPException as e:
@@ -281,12 +282,9 @@ async def _ensure_jira_dynamic_webhook(cloud_id: str) -> None:
         f"[ATLASSIAN][AUTH] Ensuring Jira dynamic webhook: cloud_id={cloud_id}"
     )
 
-    db = SessionLocal()
     try:
         dynamic_webhook_service = get_jira_dynamic_webhook_service()
-        result = await dynamic_webhook_service.ensure_registered(
-            db=db, cloud_id=cloud_id
-        )
+        result = await dynamic_webhook_service.ensure_registered(cloud_id=cloud_id)
         logger.info(
             f"[ATLASSIAN][AUTH] Jira dynamic webhook ensured: "
             f"cloud_id={cloud_id}, result={result}"
@@ -297,8 +295,6 @@ async def _ensure_jira_dynamic_webhook(cloud_id: str) -> None:
             f"cloud_id={cloud_id}, error={e}",
             exc_info=True,
         )
-    finally:
-        db.close()
 
 
 async def _sync_confluence_metadata(cloud_id: str) -> None:

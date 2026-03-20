@@ -6,13 +6,13 @@ import logging
 from _collections_abc import AsyncGenerator
 from typing import Any
 
+from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
 from slack_sdk.errors import SlackApiError
 from sqlalchemy.orm import Session
 
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.connectors.slack.schemas import (
-    SlackThreadReply,
     SlackUser,
 )
 from catchup.connectors.slack.transformers import SlackTransformer
@@ -33,6 +33,7 @@ class SlackSyncContext:
     channel_name: str
     sync_from_ts: str | None
     skip_delete: bool
+    context_snapshot: "SlackContextSnapshot"
     audit_context: SyncAuditContext | None = None
 
 
@@ -65,6 +66,20 @@ class SlackRecordRetryResult:
     records: list[SlackRecordRetryItem] = field(default_factory=list)
 
 
+@dataclass(slots=True, frozen=True)
+class SlackContextSnapshot:
+    users_by_id: dict[str, SlackUser] = field(default_factory=dict)
+    workspace_domain: str | None = None
+    loaded_at: datetime | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class SlackFetchedMessage:
+    message_id: str
+    message_data: dict[str, Any]
+    reply_payloads: list[dict[str, Any]] = field(default_factory=list)
+
+
 class SlackIngestionService:
     """
     Redis Event 단위 Slack 수집/요약/임베딩/저장 서비스.
@@ -80,11 +95,12 @@ class SlackIngestionService:
         self.team_id = team_id
         self.enable_summarization = enable_summarization
         self.client = SlackApiClientWrapper(access_token, team_id)
-        self.transformer: SlackTransformer | None = None
         self.repository = repository
         self.summarizer: SummarizerService | None = None
         self.user_cache: dict[str, SlackUser] = {}
         self.workspace_domain: str | None = None
+        self._context_loaded_at: datetime | None = None
+        self._context_ttl = timedelta(minutes=5)
         self._initialized = False
 
     async def initialize(self) -> None:
@@ -93,7 +109,6 @@ class SlackIngestionService:
 
         logger.info("[SLACK][INGESTION] Initializing service: team_id=%s", self.team_id)
 
-        self.transformer = SlackTransformer(self.user_cache)
         if self.enable_summarization:
             self.summarizer = get_summarizer_service()
             logger.info("[SLACK][INGESTION] Summarization enabled")
@@ -104,47 +119,38 @@ class SlackIngestionService:
         logger.info("[SLACK][INGESTION] Service initialized: team_id=%s", self.team_id)
 
     def _ensure_initialized(self) -> None:
-        if not self._initialized or self.transformer is None:
+        if not self._initialized:
             raise RuntimeError(
                 "SlackIngestionService not initialized. "
                 "Call await service.initialize() first."
             )
 
-    def _load_context_from_db(self, db: Session) -> None:
-        """메시지 변환에 필요한 user cache/workspace domain을 DB에서 로드한다."""
-        try:
-            users = domain_repository.get_users_by_team(db, self.team_id, include_deleted=True)
-            self.user_cache.clear()
-            self.user_cache.update(
-                {
-                    user.user_id: SlackUser(
-                        id=user.user_id,
-                        name=user.name,
-                        real_name=user.real_name,
-                        display_name=user.display_name,
-                    )
-                    for user in users
-                }
-            )
-
-            if not self.workspace_domain:
-                workspace = domain_repository.get_workspace(db, self.team_id)
-                if workspace:
-                    self.workspace_domain = workspace.domain
-
-            logger.info(
-                "[SLACK][INGESTION] Context loaded: team_id=%s, users=%s, domain=%s",
-                self.team_id,
-                len(self.user_cache),
-                self.workspace_domain,
-            )
-        except Exception as exc:
-            logger.error(
-                "[SLACK][INGESTION] Failed to load context: team_id=%s, error=%s",
-                self.team_id,
-                exc,
-                exc_info=True,
-            )
+    def _load_context_from_db_sync(self, db: Session) -> SlackContextSnapshot:
+        """메시지 변환에 필요한 context snapshot을 DB에서 읽는다."""
+        # 리팩토링: context load 실패는 삼키지 않고 상위 sync 경로로 그대로 전파한다.
+        users = domain_repository.get_users_by_team(db, self.team_id, include_deleted=True)
+        workspace = domain_repository.get_workspace(db, self.team_id)
+        loaded_at = datetime.now(timezone.utc)
+        snapshot = SlackContextSnapshot(
+            users_by_id={
+                user.user_id: SlackUser(
+                    id=user.user_id,
+                    name=user.name,
+                    real_name=user.real_name,
+                    display_name=user.display_name,
+                )
+                for user in users
+            },
+            workspace_domain=workspace.domain if workspace else None,
+            loaded_at=loaded_at,
+        )
+        logger.info(
+            "[SLACK][INGESTION] Context snapshot loaded: team_id=%s, users=%s, domain=%s",
+            self.team_id,
+            len(snapshot.users_by_id),
+            snapshot.workspace_domain,
+        )
+        return snapshot
 
     _SKIP_SUBTYPES = frozenset(
         {
@@ -161,10 +167,11 @@ class SlackIngestionService:
         text = msg_data.get("text", "")
         return len(text) <= 10
 
-    def _build_permalink(self, channel_id: str, ts: str) -> str | None:
-        if not self.workspace_domain:
+    @staticmethod
+    def _build_permalink(workspace_domain: str | None, channel_id: str, ts: str) -> str | None:
+        if not workspace_domain:
             return None
-        return f"https://{self.workspace_domain}.slack.com/archives/{channel_id}/p{ts.replace('.', '')}"
+        return f"https://{workspace_domain}.slack.com/archives/{channel_id}/p{ts.replace('.', '')}"
 
     def _pick_latest_ts(self, current: str | None, candidate: str | None) -> str | None:
         if not candidate:
@@ -228,9 +235,40 @@ class SlackIngestionService:
             missing_ids=missing_ids,
         )
 
-    def _load_context_from_local_db(self) -> None:
+    def _load_context_from_local_db_sync(self) -> SlackContextSnapshot:
         with SessionLocal() as db:
-            self._load_context_from_db(db)
+            return self._load_context_from_db_sync(db)
+
+    def _apply_context_snapshot(self, snapshot: SlackContextSnapshot) -> None:
+        self.user_cache = dict(snapshot.users_by_id)
+        self.workspace_domain = snapshot.workspace_domain
+        self._context_loaded_at = snapshot.loaded_at
+
+    def _get_context_snapshot(self) -> SlackContextSnapshot:
+        return SlackContextSnapshot(
+            users_by_id=dict(self.user_cache),
+            workspace_domain=self.workspace_domain,
+            loaded_at=self._context_loaded_at,
+        )
+
+    def _should_refresh_context(self) -> bool:
+        if not self.user_cache or not self.workspace_domain:
+            return True
+        if self._context_loaded_at is None:
+            return True
+        return datetime.now(timezone.utc) - self._context_loaded_at > self._context_ttl
+
+    async def _ensure_context_snapshot_loaded_async(self) -> SlackContextSnapshot:
+        # 리팩토링: sync 시작 시 shared mutable cache 대신 snapshot 복사본을 사용한다.
+        if self._should_refresh_context():
+            snapshot = await run_in_threadpool(self._load_context_from_local_db_sync)
+            self._apply_context_snapshot(snapshot)
+        return self._get_context_snapshot()
+
+    def _load_channel_name_from_local_db(self, channel_id: str) -> str:
+        with SessionLocal() as db:
+            channel = domain_repository.get_channel(db, channel_id)
+        return channel.name if channel is not None else channel_id
 
     async def list_syncable_channels(self) -> list[dict[str, str]]:
         self._ensure_initialized()
@@ -285,11 +323,12 @@ class SlackIngestionService:
         if not requested_ids:
             return SlackRecordRetryResult(records=[])
 
-        await asyncio.to_thread(self._load_context_from_local_db)
+        context_snapshot = await self._ensure_context_snapshot_loaded_async()
         documents, failed_ids = await self._fetch_message_documents(
             channel_id=channel_id,
             channel_name=channel_name,
             message_ids=requested_ids,
+            context_snapshot=context_snapshot,
         )
 
         succeeded_count = 0
@@ -339,23 +378,126 @@ class SlackIngestionService:
         channel_id: str,
         channel_name: str,
         sync_from_ts: str | None,
-        db: Session | None = None,
         skip_delete: bool = False,
         audit_context: SyncAuditContext | None = None,
     ) -> TargetSyncResult:
         self._ensure_initialized()
-        if db is not None:
-            self._load_context_from_db(db)
+        context_snapshot = await self._ensure_context_snapshot_loaded_async()
         sync_ctx = SlackSyncContext(
             channel_id=channel_id,
             channel_name=channel_name,
             sync_from_ts=sync_from_ts,
             skip_delete=skip_delete,
+            context_snapshot=context_snapshot,
             audit_context=audit_context,
         )
         return await self._sync_channel_messages(
             sync_ctx=sync_ctx,
         )
+
+    def _build_message_document(
+        self,
+        transformer: SlackTransformer,
+        *,
+        channel_id: str,
+        channel_name: str,
+        msg_data: dict[str, Any],
+        reply_payloads: list[dict[str, Any]],
+        context_snapshot: SlackContextSnapshot,
+    ) -> Document:
+        message_ts = msg_data.get("ts", "")
+        permalink = self._build_permalink(
+            context_snapshot.workspace_domain,
+            channel_id,
+            message_ts,
+        )
+        replies = [transformer.parse_reply(reply) for reply in reply_payloads]
+        message = transformer.parse_message(
+            msg_data,
+            channel_id,
+            channel_name,
+            permalink,
+            replies,
+        )
+        return transformer.transform_message(message, self.team_id)
+
+    def _build_message_batch_sync(
+        self,
+        channel_id: str,
+        channel_name: str,
+        message_batch: list[dict[str, Any]],
+        reply_map: dict[str, list[dict[str, Any]]],
+        context_snapshot: SlackContextSnapshot,
+    ) -> tuple[list[Document], list[str], int, str | None]:
+        transformer = SlackTransformer(context_snapshot.users_by_id)
+        documents: list[Document] = []
+        doc_ids: list[str] = []
+        error_count = 0
+        latest_synced_ts: str | None = None
+
+        for msg_data in message_batch:
+            if self._should_skip_message(msg_data):
+                continue
+
+            try:
+                message_ts = msg_data.get("ts")
+                document = self._build_message_document(
+                    transformer,
+                    channel_id=channel_id,
+                    channel_name=channel_name,
+                    msg_data=msg_data,
+                    reply_payloads=reply_map.get(message_ts, []),
+                    context_snapshot=context_snapshot,
+                )
+                documents.append(document)
+                doc_ids.append(document.id)
+                latest_synced_ts = self._pick_latest_ts(latest_synced_ts, message_ts)
+            except Exception as exc:
+                logger.warning(
+                    "[SLACK][INGESTION] Failed to build message doc: team_id=%s, channel_id=%s, ts=%s, error=%s",
+                    self.team_id,
+                    channel_id,
+                    msg_data.get("ts"),
+                    exc,
+                )
+                error_count += 1
+
+        return documents, doc_ids, error_count, latest_synced_ts
+
+    def _build_message_documents_sync(
+        self,
+        channel_id: str,
+        channel_name: str,
+        message_items: list[SlackFetchedMessage],
+        context_snapshot: SlackContextSnapshot,
+    ) -> tuple[list[Document], list[str]]:
+        transformer = SlackTransformer(context_snapshot.users_by_id)
+        documents: list[Document] = []
+        failed_ids: list[str] = []
+
+        for item in message_items:
+            try:
+                documents.append(
+                    self._build_message_document(
+                        transformer,
+                        channel_id=channel_id,
+                        channel_name=channel_name,
+                        msg_data=item.message_data,
+                        reply_payloads=item.reply_payloads,
+                        context_snapshot=context_snapshot,
+                    )
+                )
+            except Exception as exc:
+                logger.warning(
+                    "[SLACK][REPAIR] Failed to build message doc: team_id=%s, channel_id=%s, ts=%s, error=%s",
+                    self.team_id,
+                    channel_id,
+                    item.message_id,
+                    exc,
+                )
+                failed_ids.append(item.message_id)
+
+        return documents, failed_ids
 
     async def _get_syncable_channels(self) -> list[dict[str, str]]:
         channels: list[dict[str, str]] = []
@@ -398,6 +540,7 @@ class SlackIngestionService:
                 channel_id=sync_ctx.channel_id,
                 channel_name=sync_ctx.channel_name,
                 sync_from_ts=sync_ctx.sync_from_ts,
+                context_snapshot=sync_ctx.context_snapshot,
             ):
                 await fetch_q.put(batch)
             await fetch_q.put(None)
@@ -513,7 +656,6 @@ class SlackIngestionService:
     async def incremental_sync(
         self,
         *,
-        db: Session,
         channel_id: str,
         record_id: str,
         event_kind: str,
@@ -526,13 +668,14 @@ class SlackIngestionService:
             await self.repository.delete_documents([doc_id])
             return TargetSyncResult(synced_count=1)
 
-        channel = domain_repository.get_channel(db, channel_id)
-        channel_name = channel.name if channel is not None else channel_id
+        channel_name = await run_in_threadpool(
+            self._load_channel_name_from_local_db,
+            channel_id,
+        )
         return await self.sync_channel_messages(
             channel_id=channel_id,
             channel_name=channel_name,
             sync_from_ts=sync_from,
-            db=db,
             skip_delete=False,
             audit_context=audit_context,
         )
@@ -543,6 +686,7 @@ class SlackIngestionService:
         channel_id: str,
         channel_name: str,
         sync_from_ts: str | None,
+        context_snapshot: SlackContextSnapshot,
     ) -> AsyncGenerator[tuple[list[Document], list[str], int, str | None], None]:
         cursor = None
 
@@ -562,57 +706,31 @@ class SlackIngestionService:
             ]
 
             if thread_messages:
-                thread_replies_list = await asyncio.gather(
+                thread_reply_payloads = await asyncio.gather(
                     *[
-                        self._fetch_thread_replies(channel_id=channel_id, thread_ts=msg.get("ts"))
+                        self._fetch_thread_reply_payloads(
+                            channel_id=channel_id,
+                            thread_ts=msg.get("ts"),
+                        )
                         for msg in thread_messages
                     ]
                 )
                 reply_map = {
                     msg.get("ts"): replies
-                    for msg, replies in zip(thread_messages, thread_replies_list)
+                    for msg, replies in zip(thread_messages, thread_reply_payloads)
                 }
             else:
                 reply_map = {}
 
-            batch_documents = []
-            batch_doc_ids = []
-            errors = 0
-            batch_latest_synced_ts: str | None = None
-
-            for msg_data in messages:
-                if self._should_skip_message(msg_data):
-                    continue
-
-                try:
-                    message_ts = msg_data.get("ts")
-                    replies = reply_map.get(msg_data.get("ts"), [])
-                    permalink = self._build_permalink(channel_id, msg_data.get("ts"))
-                    message = self.transformer.parse_message(
-                        msg_data,
-                        channel_id,
-                        channel_name,
-                        permalink,
-                        replies,
-                    )
-                    doc = self.transformer.transform_message(message, self.team_id)
-                    batch_documents.append(doc)
-                    batch_doc_ids.append(doc.id)
-
-                    if message_ts:
-                        batch_latest_synced_ts = self._pick_latest_ts(
-                            batch_latest_synced_ts,
-                            message_ts,
-                        )
-                except Exception as exc:
-                    logger.warning(
-                        "[SLACK][INGESTION] Failed to transform message: team_id=%s, channel_id=%s, ts=%s, error=%s",
-                        self.team_id,
-                        channel_id,
-                        msg_data.get("ts"),
-                        exc,
-                    )
-                    errors += 1
+            # 리팩토링: message parse/transform은 batch helper를 통해 event loop 밖으로 내린다.
+            batch_documents, batch_doc_ids, errors, batch_latest_synced_ts = await run_in_threadpool(
+                self._build_message_batch_sync,
+                channel_id,
+                channel_name,
+                messages,
+                reply_map,
+                context_snapshot,
+            )
 
             if batch_documents:
                 yield batch_documents, batch_doc_ids, errors, batch_latest_synced_ts
@@ -662,18 +780,18 @@ class SlackIngestionService:
         channel_id: str,
         channel_name: str,
         message_ids: list[str],
+        context_snapshot: SlackContextSnapshot,
     ) -> tuple[list[Document], list[str]]:
-        documents: list[Document] = []
+        fetched_messages: list[SlackFetchedMessage] = []
         failed_ids: list[str] = []
 
-        async def _fetch_one(message_id: str) -> tuple[str, Document | None, bool]:
+        async def _fetch_one(message_id: str) -> tuple[str, SlackFetchedMessage | None, bool]:
             try:
-                document = await self._fetch_message_document(
+                message_item = await self._fetch_message_item(
                     channel_id=channel_id,
-                    channel_name=channel_name,
                     message_id=message_id,
                 )
-                return message_id, document, document is None
+                return message_id, message_item, message_item is None
             except Exception as exc:
                 logger.warning(
                     "[SLACK][REPAIR] Failed to fetch message: team_id=%s, channel_id=%s, ts=%s, error=%s",
@@ -689,21 +807,29 @@ class SlackIngestionService:
             batch_ids = message_ids[start : start + batch_size]
             results = await asyncio.gather(*[_fetch_one(message_id) for message_id in batch_ids])
 
-            for message_id, document, failed in results:
-                if failed or document is None:
+            for message_id, message_item, failed in results:
+                if failed or message_item is None:
                     failed_ids.append(message_id)
                     continue
-                documents.append(document)
+                fetched_messages.append(message_item)
 
-        return documents, failed_ids
+        # 리팩토링: retry도 main sync와 같은 message builder 계층을 재사용한다.
+        documents, build_failed_ids = await run_in_threadpool(
+            self._build_message_documents_sync,
+            channel_id,
+            channel_name,
+            fetched_messages,
+            context_snapshot,
+        )
+        failed_ids.extend(build_failed_ids)
+        return documents, self._sort_record_ids(set(failed_ids))
 
-    async def _fetch_message_document(
+    async def _fetch_message_item(
         self,
         *,
         channel_id: str,
-        channel_name: str,
         message_id: str,
-    ) -> Document | None:
+    ) -> SlackFetchedMessage | None:
         message_data = await self.client.get_message(
             channel=channel_id,
             ts=message_id,
@@ -711,30 +837,26 @@ class SlackIngestionService:
         if not message_data or self._should_skip_message(message_data):
             return None
 
-        replies: list[SlackThreadReply] = []
+        reply_payloads: list[dict[str, Any]] = []
         if message_data.get("reply_count", 0) > 0:
-            replies = await self._fetch_thread_replies(
+            reply_payloads = await self._fetch_thread_reply_payloads(
                 channel_id=channel_id,
                 thread_ts=message_id,
             )
 
-        permalink = self._build_permalink(channel_id, message_id)
-        message = self.transformer.parse_message(
-            message_data,
-            channel_id,
-            channel_name,
-            permalink,
-            replies,
+        return SlackFetchedMessage(
+            message_id=message_id,
+            message_data=message_data,
+            reply_payloads=reply_payloads,
         )
-        return self.transformer.transform_message(message, self.team_id)
 
-    async def _fetch_thread_replies(
+    async def _fetch_thread_reply_payloads(
         self,
         *,
         channel_id: str,
         thread_ts: str,
-    ) -> list[SlackThreadReply]:
-        replies: list[SlackThreadReply] = []
+    ) -> list[dict[str, Any]]:
+        reply_payloads: list[dict[str, Any]] = []
         cursor = None
 
         while True:
@@ -749,13 +871,13 @@ class SlackIngestionService:
             for msg in messages[1:]:
                 if self._should_skip_message(msg):
                     continue
-                replies.append(self.transformer.parse_reply(msg))
+                reply_payloads.append(msg)
 
             cursor = response.get("response_metadata", {}).get("next_cursor")
             if not cursor:
                 break
 
-        return replies
+        return reply_payloads
 
     async def _summarize_documents(
         self,

@@ -20,10 +20,7 @@ class ConfluenceIncrementalHandler(BaseIncrementalHandler):
         if cached is not None:
             return cached
 
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            service = await create_confluence_ingestion_service(db=db, cloud_id=cloud_id)
+        service = await create_confluence_ingestion_service(cloud_id=cloud_id)
 
         cache[cache_key] = service
         return service
@@ -39,24 +36,20 @@ class ConfluenceIncrementalHandler(BaseIncrementalHandler):
         if not space_key:
             raise ValueError("confluence space key is empty")
 
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            result = await service.incremental_sync(
-                db=db,
-                space_key=space_key,
-                record_type=context.record_type or "",
-                record_id=context.record_id or "",
-                event_kind=context.event_kind or "updated",
-                since=self._resolve_since(context),
-                audit_context=SyncAuditContext(
-                    connector=context.connector,
-                    scope_id=context.scope_id,
-                    target_id=context.target_id,
-                    job_id=context.job_id,
-                    task_id=context.event_id,
-                ),
-            )
+        result = await service.incremental_sync(
+            space_key=space_key,
+            record_type=context.record_type or "",
+            record_id=context.record_id or "",
+            event_kind=context.event_kind or "updated",
+            since=self._resolve_since(context),
+            audit_context=SyncAuditContext(
+                connector=context.connector,
+                scope_id=context.scope_id,
+                target_id=context.target_id,
+                job_id=context.job_id,
+                task_id=context.event_id,
+            ),
+        )
 
         error_count = int(result.get("errors", 0))
         if error_count > 0:

@@ -29,13 +29,10 @@ class GithubFullSyncHandler(BaseFullSyncHandler):
         except (TypeError, ValueError) as exc:
             raise ValueError(f"invalid github installation_id: {scope_id}") from exc
 
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            service = await create_github_ingestion_service(
-                db=db,
-                installation_id=installation_id,
-            )
+        # Session 전달 삭제
+        service = await create_github_ingestion_service(
+            installation_id=installation_id,
+        )
         cache[cache_key] = service
         return service
 
@@ -61,21 +58,18 @@ class GithubFullSyncHandler(BaseFullSyncHandler):
         except (TypeError, ValueError) as exc:
             raise ValueError(f"invalid github repository_id: {context.target_id}") from exc
 
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            result = await service.full_sync(
-                db=db,
-                repo_ids=[repo_id],
-                sync_from_dt=sync_from_dt,
-                audit_context=SyncAuditContext(
-                    connector=context.connector,
-                    scope_id=context.scope_id,
-                    target_id=context.target_id,
-                    job_id=context.job_id,
-                    task_id=context.event_id,
-                ),
-            )
+        # Session 전달 삭제
+        result = await service.full_sync(
+            repo_ids=[repo_id],
+            sync_from_dt=sync_from_dt,
+            audit_context=SyncAuditContext(
+                connector=context.connector,
+                scope_id=context.scope_id,
+                target_id=context.target_id,
+                job_id=context.job_id,
+                task_id=context.event_id,
+            ),
+        )
 
         if result.error_count > 0:
             raise RuntimeError(

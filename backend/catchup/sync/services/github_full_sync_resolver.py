@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy.orm import Session
-
+from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.sync.common.exceptions import SyncRequestError
@@ -24,7 +23,6 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
     async def resolve_full_sync_targets(
         self,
         *,
-        db: Session,
         request: FullSyncDispatchRequest,
     ) -> FullSyncResolvedTargets:
         scope_id = request.scope_id.strip()
@@ -38,18 +36,19 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 "scope_id must be a github installation_id",
                 metadata={"scope_id": request.scope_id},
             ) from exc
-    
-        installation = get_installation_by_installation_id(db, installation_id)
-        if installation is None:
-            raise SyncRequestError(
-                "github installation not found",
-                metadata={"installation_id": installation_id},
-            )
 
-        repositories = github_entities.get_repositories_by_installation(
-            db,
-            installation_id,
-        )
+        with SessionLocal() as db:
+            installation = get_installation_by_installation_id(db, installation_id)
+            if installation is None:
+                raise SyncRequestError(
+                    "github installation not found",
+                    metadata={"installation_id": installation_id},
+                )
+
+            repositories = github_entities.get_repositories_by_installation(
+                db,
+                installation_id,
+            )
         requested_repo_ids, resolved_targets = resolve_full_sync_targets_from_rows(
             request_target_ids=request.target_ids,
             rows=repositories,

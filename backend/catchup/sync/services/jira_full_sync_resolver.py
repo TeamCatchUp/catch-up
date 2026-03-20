@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
-
-from sqlalchemy.orm import Session
+from fastapi.concurrency import run_in_threadpool
 
 from catchup.db.atlassian.oauth_repository import get_token_by_cloud_id
+from catchup.db.engine import SessionLocal
 from catchup.db.jira import domain_repository as jira_entities
 from catchup.sync.common.exceptions import SyncRequestError
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
@@ -20,30 +20,40 @@ logger = logging.getLogger(__name__)
 
 
 class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
+    def _load_target_rows_sync(self, cloud_id: str) -> list[dict[str, str | None]]:
+        with SessionLocal() as db:
+            token = get_token_by_cloud_id(db, cloud_id)
+            if token is None:
+                raise SyncRequestError(
+                    "jira cloud is not connected",
+                    metadata={"cloud_id": cloud_id},
+                )
+
+            projects = jira_entities.get_projects_by_cloud_id(db, cloud_id)
+            return [
+                {
+                    "project_key": project.project_key,
+                    "project_name": project.project_name,
+                }
+                for project in projects
+            ]
+
     async def resolve_full_sync_targets(
         self,
         *,
-        db: Session,
         request: FullSyncDispatchRequest,
     ) -> FullSyncResolvedTargets:
         cloud_id = request.scope_id.strip()
         if not cloud_id:
             raise SyncRequestError("scope_id is required")
 
-        token = get_token_by_cloud_id(db, cloud_id)
-        if token is None:
-            raise SyncRequestError(
-                "jira cloud is not connected",
-                metadata={"cloud_id": cloud_id},
-            )
-
-        projects = jira_entities.get_projects_by_cloud_id(db, cloud_id)
+        projects = await run_in_threadpool(self._load_target_rows_sync, cloud_id)
         requested_project_keys, resolved_targets = resolve_full_sync_targets_from_rows(
             request_target_ids=request.target_ids,
             rows=projects,
             target_type="project",
-            key_getter=lambda project: project.project_key,
-            name_getter=lambda project: project.project_name or project.project_key,
+            key_getter=lambda project: project["project_key"],
+            name_getter=lambda project: project["project_name"] or project["project_key"],
             error_message="requested target_ids contain unknown projects",
             error_metadata={"cloud_id": cloud_id},
             log_context={
