@@ -9,6 +9,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from catchup.audit.schemas import AuditActor
 from catchup.auth.jwt import verify_token
+from catchup.costs.contexts.chat import ChatTokenUsageContext
 from catchup.db.engine import SessionLocal
 from catchup.db.users import get_user_by_sub
 from catchup.observability.logging.context import (
@@ -94,6 +95,7 @@ def _resolve_actor_from_access_token(access_token: str | None) -> AuditActor:
         logger.error("unexpected_error_resolving_actor", error=str(e))
         return AuditActor()
 
+
 async def request_context_middleware(
     request: Request,
     call_next: CallNext
@@ -127,6 +129,9 @@ async def request_context_middleware(
     # BackgroundTasks를 ContextVars로 설정
     bg_tasks = BackgroundTasks()
     token = current_bg_tasks.set(bg_tasks)
+    
+    # 채팅 토큰 사용량 컨텍스트 초기화
+    ChatTokenUsageContext.init()
     
     try:
         # 비즈니스 로직 수행
