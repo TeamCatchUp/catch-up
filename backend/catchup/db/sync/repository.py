@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Sequence
 
 from sqlalchemy import case, exists, func, literal, select, update
@@ -506,54 +506,6 @@ def record_event_publish_outcomes(
         raise
 
 
-# Scheduler가 멈춘 publish 흐름을 회수할 수 있게 stale PUBLISHING 이벤트를 FAILED로 되돌린다.
-def recover_stale_event_publish_claims(
-    db: Session,
-    *,
-    stale_seconds: int,
-    limit: int = 100,
-) -> int:
-    stale_before = _utc_now() - timedelta(seconds=max(1, stale_seconds))
-    event_ids_stmt = (
-        select(SyncEvent.event_id)
-        .where(
-            SyncEvent.publish_status == SyncEventPublishStatus.PUBLISHING,
-            SyncEvent.updated_at <= stale_before,
-        )
-        .order_by(
-            SyncEvent.updated_at.asc(),
-            SyncEvent.requested_at.asc(),
-            SyncEvent.event_id.asc(),
-        )
-        .limit(limit)
-    )
-    event_ids = list(db.execute(event_ids_stmt).scalars().all())
-    if not event_ids:
-        return 0
-
-    stmt = (
-        update(SyncEvent)
-        .where(
-            SyncEvent.event_id.in_(event_ids),
-            SyncEvent.publish_status == SyncEventPublishStatus.PUBLISHING,
-        )
-        .values(
-            publish_status=SyncEventPublishStatus.FAILED,
-            stream_message_id=None,
-            published_at=None,
-            publish_error="stale_publishing_timeout",
-            updated_at=_utc_now(),
-        )
-    )
-    try:
-        result = db.execute(stmt)
-        db.commit()
-        return int(result.rowcount or 0)
-    except Exception:
-        db.rollback()
-        raise
-
-
 def list_events_by_job(
     db: Session,
     *,
@@ -576,25 +528,6 @@ def list_events_by_job(
 def count_events_by_job(db: Session, *, job_id: str) -> int:
     stmt = select(func.count(SyncEvent.event_id)).where(SyncEvent.job_id == job_id)
     return int(db.execute(stmt).scalar_one())
-
-
-# Finalize 전에 active event 존재 여부만 빠르게 확인해 summary 집계를 아낀다.
-def has_active_events_by_job(db: Session, *, job_id: str) -> bool:
-    stmt = (
-        select(SyncEvent.event_id)
-        .where(
-            SyncEvent.job_id == job_id,
-            SyncEvent.status.in_(
-                [
-                    SyncEventStatus.PENDING,
-                    SyncEventStatus.IN_PROGRESS,
-                    SyncEventStatus.RETRYING,
-                ]
-            ),
-        )
-        .limit(1)
-    )
-    return db.execute(stmt).scalar_one_or_none() is not None
 
 
 def summarize_events_by_job(db: Session, *, job_id: str) -> SyncEventSummary:

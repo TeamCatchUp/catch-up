@@ -3,6 +3,8 @@ from __future__ import annotations
 from functools import lru_cache
 import logging
 
+from sqlalchemy.orm import Session
+
 from catchup.db.models import SyncConnector
 from catchup.sync.common.exceptions import SyncInternalError
 from catchup.sync.common.protocols import EventPublisherProtocol
@@ -25,6 +27,7 @@ class SyncDispatchService:
     async def dispatch_full_sync(
         self,
         *,
+        db: Session,
         connector: SyncConnector,
         request: FullSyncDispatchRequest,
         base_url: str | None,
@@ -54,6 +57,7 @@ class SyncDispatchService:
         resolver = get_full_sync_target_resolver(connector)
 
         return await self._full_sync_orchestrator.dispatch(
+            db=db,
             connector=connector,
             request=request,
             base_url=normalized_base_url,

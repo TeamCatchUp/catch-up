@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy.orm import Session
+
 from catchup.db.atlassian.oauth_repository import get_token_by_cloud_id
-from catchup.db.engine import SessionLocal
 from catchup.db.confluence import domain_repository as confluence_entities
 from catchup.sync.common.exceptions import SyncRequestError
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
@@ -22,21 +23,21 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
     async def resolve_full_sync_targets(
         self,
         *,
+        db: Session,
         request: FullSyncDispatchRequest,
     ) -> FullSyncResolvedTargets:
         cloud_id = request.scope_id.strip()
         if not cloud_id:
             raise SyncRequestError("scope_id is required")
 
-        with SessionLocal() as db:
-            token = get_token_by_cloud_id(db, cloud_id)
-            if token is None:
-                raise SyncRequestError(
-                    "confluence cloud is not connected",
-                    metadata={"cloud_id": cloud_id},
-                )
+        token = get_token_by_cloud_id(db, cloud_id)
+        if token is None:
+            raise SyncRequestError(
+                "confluence cloud is not connected",
+                metadata={"cloud_id": cloud_id},
+            )
 
-            spaces = confluence_entities.get_spaces_by_cloud_id(db, cloud_id)
+        spaces = confluence_entities.get_spaces_by_cloud_id(db, cloud_id)
         requested_space_keys, resolved_targets = resolve_full_sync_targets_from_rows(
             request_target_ids=request.target_ids,
             rows=spaces,

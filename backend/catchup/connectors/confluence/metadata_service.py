@@ -7,7 +7,6 @@ Confluence 메타데이터 동기화 서비스
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -27,7 +26,6 @@ from catchup.connectors.confluence.schemas import (
 )
 from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.confluence import domain_repository as confluence_entities
-from catchup.db.engine import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +34,6 @@ logger = logging.getLogger(__name__)
 class ConfluenceMetadataSnapshot:
     users: list[dict[str, Any]] = field(default_factory=list)
     spaces: list[dict[str, Any]] = field(default_factory=list)
-
-
-@dataclass(slots=True, frozen=True)
-class ConfluenceMetadataContext:
-    granted_scopes: set[str] = field(default_factory=set)
 
 
 class ConfluenceMetadataService:
@@ -125,10 +118,8 @@ class ConfluenceMetadataService:
             cloud_id,
             AtlassianTokenProvider(self.token_manager),
         )
-        users, spaces = await asyncio.gather(
-            self._collect_users(client, cloud_id),
-            self._collect_spaces(client, cloud_id),
-        )
+        users = await self._collect_users(client, cloud_id)
+        spaces = await self._collect_spaces(client, cloud_id)
         return ConfluenceMetadataSnapshot(users=users, spaces=spaces)
 
     async def collect_space_snapshot(
@@ -165,63 +156,27 @@ class ConfluenceMetadataService:
         *,
         auto_commit: bool = True,
     ) -> dict[str, Any]:
-        context = self._load_context(db, cloud_id)
-        if context is None:
+        token = atlassian_crud.get_token_by_cloud_id(db, cloud_id)
+        if not token:
             logger.warning(
                 "[CONFLUENCE][METADATA] No token found: cloud_id=%s",
                 cloud_id,
             )
             return {"users": 0, "spaces": 0}
 
-        if auto_commit:
-            db.close()
-
         snapshot = await self.collect_snapshot(
             cloud_id,
-            granted_scopes=context.granted_scopes,
+            granted_scopes=set((token.scopes or "").split()),
         )
         if snapshot is None:
             return {"users": 0, "spaces": 0}
-        if auto_commit:
-            self._persist_snapshot_with_short_session(cloud_id, snapshot)
-        else:
-            self.persist_snapshot(
-                db,
-                cloud_id,
-                snapshot,
-                auto_commit=False,
-            )
-        return {"users": len(snapshot.users), "spaces": len(snapshot.spaces)}
-
-    def _load_context(
-        self,
-        db: Session,
-        cloud_id: str,
-    ) -> ConfluenceMetadataContext | None:
-        token = atlassian_crud.get_token_by_cloud_id(db, cloud_id)
-        if token is None:
-            return None
-        return ConfluenceMetadataContext(
-            granted_scopes=set((token.scopes or "").split()),
+        self.persist_snapshot(
+            db,
+            cloud_id,
+            snapshot,
+            auto_commit=auto_commit,
         )
-
-    def _persist_snapshot_with_short_session(
-        self,
-        cloud_id: str,
-        snapshot: ConfluenceMetadataSnapshot,
-    ) -> None:
-        with SessionLocal() as session:
-            try:
-                self.persist_snapshot(
-                    session,
-                    cloud_id,
-                    snapshot,
-                    auto_commit=False,
-                )
-                session.commit()
-            except Exception:
-                session.rollback()
-                raise
+        return {"users": len(snapshot.users), "spaces": len(snapshot.spaces)}
 
     async def _collect_users(
         self,

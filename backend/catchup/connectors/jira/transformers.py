@@ -16,7 +16,6 @@ PGVector 저장을 위한 LangChain Document로 변환.
     doc = transformer.transform_issue(issue_data, site_url)
 """
 
-from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -62,22 +61,21 @@ def normalize_issue_type(issue_type: str) -> str:
     return ISSUE_TYPE_MAPPING.get(issue_type, issue_type)
 
 
-@dataclass(slots=True, frozen=True)
-class JiraTransformContext:
-    project_cache: dict[str, Any] = field(default_factory=dict)
-    sprint_cache: dict[int, Any] = field(default_factory=dict)
-
-
 class JiraTransformer:
     """
     Jira 엔티티 → LangChain Document 변환기
 
     Attributes:
         field_mapper: 커스텀 필드 ID → 이름 변환용 매퍼
+        project_cache: RDBMS에서 로드한 프로젝트 정보 캐시 (project_key → JiraProject)
+        sprint_cache: RDBMS에서 로드한 스프린트 정보 캐시 (sprint_id → JiraSprint)
     """
 
     def __init__(self, field_mapper: JiraFieldMapper):
         self.field_mapper = field_mapper
+        # RDBMS 캐시 (service에서 주입)
+        self.project_cache: dict[str, Any] = {}
+        self.sprint_cache: dict[int, Any] = {}
 
     # ================================================================
     # Issue 변환
@@ -88,7 +86,6 @@ class JiraTransformer:
         issue_data: dict[str, Any],
         site_url: str,
         comments: list[dict] | None = None,
-        context: JiraTransformContext | None = None,
     ) -> Document:
         """
         Jira Issue API 응답 → LangChain Document
@@ -97,19 +94,17 @@ class JiraTransformer:
             issue_data: GET /issue/{key} 응답
             site_url: Jira 사이트 URL (예: "https://catchup.atlassian.net")
             comments: 코멘트 목록 (별도 조회한 경우)
-            context: 프로젝트 실행 단위 enrichment 컨텍스트
 
         Returns:
             LangChain Document with page_content and metadata
         """
-        transform_context = context or JiraTransformContext()
         issue = self._parse_issue(issue_data, site_url, comments)
 
         # Epic인 경우 별도 처리
         if issue.issue_type.lower() == "epic":
             return self._issue_to_epic_document(issue)
 
-        return self._issue_to_document(issue, transform_context)
+        return self._issue_to_document(issue)
 
     def _parse_issue(
         self,
@@ -244,18 +239,14 @@ class JiraTransformer:
             custom_fields=custom_fields,
         )
 
-    def _issue_to_document(
-        self,
-        issue: JiraIssue,
-        context: JiraTransformContext,
-    ) -> Document:
+    def _issue_to_document(self, issue: JiraIssue) -> Document:
         """JiraIssue → LangChain Document"""
 
         # semantic_content: 임베딩용 (의미 중심 텍스트)
         semantic_content = self._build_issue_semantic_content(issue)
 
         # contextual_content: LLM 답변 생성용 (기존 포맷)
-        contextual_content = self._build_issue_contextual_content(issue, context)
+        contextual_content = self._build_issue_contextual_content(issue)
 
         # metadata 생성 (엔티티 접근용 필드만 유지)
         metadata = {
@@ -350,11 +341,7 @@ class JiraTransformer:
 
         return "\n\n".join(parts)
 
-    def _build_issue_contextual_content(
-        self,
-        issue: JiraIssue,
-        context: JiraTransformContext,
-    ) -> str:
+    def _build_issue_contextual_content(self, issue: JiraIssue) -> str:
         """Issue용 contextual_content 생성 - LLM 답변 생성용 (RDBMS 캐시 활용)"""
         # Parent 정보 포맷팅
         if issue.parent_key and issue.parent_name:
@@ -369,8 +356,8 @@ class JiraTransformer:
         if issue.sprint:
             sprint_str = issue.sprint.name
             # 캐시에서 추가 정보 조회
-            if issue.sprint.id and issue.sprint.id in context.sprint_cache:
-                cached_sprint = context.sprint_cache[issue.sprint.id]
+            if issue.sprint.id and issue.sprint.id in self.sprint_cache:
+                cached_sprint = self.sprint_cache[issue.sprint.id]
                 state = getattr(cached_sprint, 'state', None)
                 goal = getattr(cached_sprint, 'goal', None)
                 if state:

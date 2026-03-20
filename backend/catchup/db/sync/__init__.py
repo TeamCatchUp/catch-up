@@ -16,13 +16,11 @@ from catchup.db.sync.repository import (
     find_active_full_sync_job,
     get_event,
     get_job,
-    has_active_events_by_job,
     has_successful_full_sync_event,
     list_events_by_job,
     list_jobs,
     mark_event_failed,
     record_event_publish_outcomes,
-    recover_stale_event_publish_claims,
     mark_event_retrying,
     mark_event_success,
     refresh_job_token_usage,
@@ -34,7 +32,6 @@ from catchup.db.sync.repository import (
     update_job_status_cas,
 )
 
-# Worker/Scheduler가 새 recovery/finalize helper를 동일한 sync db entrypoint로 import할 수 있게 export한다.
 __all__ = [
     "SyncJobCreateInput",
     "SyncEventCreateInput",
@@ -53,14 +50,12 @@ __all__ = [
     "get_event",
     "list_events_by_job",
     "count_events_by_job",
-    "has_active_events_by_job",
     "summarize_events_by_job",
     "finalize_manual_retry_failed",
     "finalize_manual_retry_success",
     "claim_events_for_publish",
     "claim_events_for_republish",
     "record_event_publish_outcomes",
-    "recover_stale_event_publish_claims",
     "has_successful_full_sync_event",
     "update_event_status_cas",
     "claim_event_for_processing",
