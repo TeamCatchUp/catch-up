@@ -126,6 +126,7 @@ async def request_context_middleware(
         actor_=request.state.actor.model_dump(mode="json")
     )
     
+    # TODO: Contextvar 컨벤션 통일(module->class)
     # BackgroundTasks를 ContextVars로 설정
     bg_tasks = BackgroundTasks()
     token = current_bg_tasks.set(bg_tasks)
