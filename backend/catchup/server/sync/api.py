@@ -134,7 +134,7 @@ async def get_scope_sync_status(
     scope_id: str = Query(..., description="connector scope id"),
 ):
     query_service = get_sync_query_service()
-    status_result = query_service.get_scope_latest_full_status(
+    status_result = await query_service.get_scope_latest_full_status_async(
         connector=connector,
         scope_id=scope_id,
     )
@@ -268,7 +268,7 @@ async def get_job_snapshot(
     job_id: str,
 ):
     query_service = get_sync_query_service()
-    snapshot = query_service.get_job_snapshot(job_id)
+    snapshot = await query_service.get_job_snapshot_async(job_id)
 
     if snapshot is None:
         raise HTTPException(
@@ -291,7 +291,7 @@ async def stream_job_events(
 ):
     query_service = get_sync_query_service()
     stream_service = get_sync_status_stream_service()
-    first_snapshot = query_service.get_job_snapshot(job_id)
+    first_snapshot = await query_service.get_job_snapshot_async(job_id)
 
     if first_snapshot is None:
         raise HTTPException(
