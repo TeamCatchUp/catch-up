@@ -9,8 +9,8 @@ from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 from langchain_core.messages import SystemMessage
 
+from catchup.costs.utils import extract_token_usages
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.nodes.utils import extract_token_usages
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import llm_semaphore
 from catchup.rag.nodes.utils import log_node

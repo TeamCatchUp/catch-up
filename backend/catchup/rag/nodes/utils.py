@@ -69,34 +69,6 @@ def extract_anchor_ids(documents: list[Document]) -> list[str]:
     return list(dict.fromkeys(anchors))  # 중복 제거 & 순서 유지
 
 
-def extract_token_usages(
-    response: AIMessage
-) -> dict[str, dict[str, dict[str, int]]]:
-    """
-    AIMessage로부터 추론 모델과 토큰 사용량 (input/output)을 추출하는 유틸 함수.
-    """
-    
-    usage = response.usage_metadata
-    if not usage:
-        return {"token_breakdown": {}}
-    
-    metadata = response.response_metadata
-    model = (
-        metadata.get("model_id")
-        or metadata.get("model_name")
-        or "unknown"
-    )
-        
-    return {
-        "token_breakdown": {
-            model: {
-                "input_tokens": usage.get("input_tokens", 0),
-                "output_tokens": usage.get("output_tokens", 0),
-            }
-        }
-    }
-
-
 # node 로깅 데코레이터
 logger = structlog.get_logger("catchup.graph")
 
