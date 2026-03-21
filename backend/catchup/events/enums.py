@@ -3,6 +3,7 @@ from enum import StrEnum
 
 class EventTopic(StrEnum):
     AUDIT = "audit"
+    COST = "cost"
 
 
 class EventType(StrEnum):

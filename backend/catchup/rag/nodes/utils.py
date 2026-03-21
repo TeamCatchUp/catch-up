@@ -64,7 +64,6 @@ def resolve_temporal_context(metadata: dict) -> str:
     return " | ".join(parts) if parts else ""
     
 
-
 def extract_anchor_ids(documents: list[Document]) -> list[str]:
     anchors = [doc.id for doc in documents if doc.id]
     return list(dict.fromkeys(anchors))  # 중복 제거 & 순서 유지
