@@ -108,10 +108,7 @@ class JiraRecordRepairService:
         *,
         cloud_id: str,
     ):
-        return await create_jira_ingestion_service(
-            cloud_id=cloud_id,
-            db=None,
-        )
+        return await create_jira_ingestion_service(cloud_id=cloud_id)
 
     async def get_record_gaps(
         self,

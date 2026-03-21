@@ -8,7 +8,6 @@ import logging
 
 from fastapi.concurrency import run_in_threadpool
 from httpx import HTTPStatusError, RequestError
-from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
@@ -48,13 +47,9 @@ def _load_installation_sync(installation_id: int):
 
 
 async def create_github_ingestion_service(
-    db: Session | None,
     installation_id: int,
 ) -> GithubIngestionService:
-    if db is None:
-        installation = await run_in_threadpool(_load_installation_sync, installation_id)
-    else:
-        installation = get_installation_by_installation_id(db, installation_id)
+    installation = await run_in_threadpool(_load_installation_sync, installation_id)
 
     if not installation:
         raise SyncConnectorError(

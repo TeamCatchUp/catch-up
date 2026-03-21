@@ -155,7 +155,7 @@ class GithubIngestionService:
     Usage:
         service = GithubIngestionService(installation_id, access_token)
         await service.initialize()
-        result = await service.full_sync(db, repo_ids=[12345, 67890], sync_from_dt=datetime.now(timezone.utc))
+        result = await service.full_sync(repo_ids=[12345, 67890], sync_from_dt=datetime.now(timezone.utc))
     """
 
     def __init__(
@@ -346,6 +346,20 @@ class GithubIngestionService:
     # ============================================================
 
     async def full_sync(
+        self,
+        repo_ids: list[int] | None = None,
+        sync_from_dt: datetime | None = None,
+        audit_context: SyncAuditContext | None = None,
+    ) -> TargetSyncResult:
+        with SessionLocal() as db:
+            return await self._full_sync_with_db(
+                db,
+                repo_ids=repo_ids,
+                sync_from_dt=sync_from_dt,
+                audit_context=audit_context,
+            )
+
+    async def _full_sync_with_db(
         self,
         db: Session,
         repo_ids: list[int] | None = None,
@@ -1172,6 +1186,27 @@ class GithubIngestionService:
         return GithubRecordRetryResult(records=result_items)
 
     async def incremental_sync(
+        self,
+        *,
+        repo_id: int,
+        record_type: str,
+        record_id: str,
+        event_kind: str,
+        since: datetime | None,
+        audit_context: SyncAuditContext | None,
+    ) -> dict[str, int | bool]:
+        with SessionLocal() as db:
+            return await self._incremental_sync_with_db(
+                db,
+                repo_id=repo_id,
+                record_type=record_type,
+                record_id=record_id,
+                event_kind=event_kind,
+                since=since,
+                audit_context=audit_context,
+            )
+
+    async def _incremental_sync_with_db(
         self,
         db: Session,
         *,

@@ -233,6 +233,20 @@ class ConfluenceIngestionService:
     # ================================================================
     async def full_sync(
             self,
+            space_keys: list[str] | None = None,
+            sync_from_dt: datetime | None = None,
+            audit_context: SyncAuditContext | None = None,
+    ) -> TargetSyncResult:
+        with SessionLocal() as db:
+            return await self._full_sync_with_db(
+                db,
+                space_keys=space_keys,
+                sync_from_dt=sync_from_dt,
+                audit_context=audit_context,
+            )
+
+    async def _full_sync_with_db(
+            self,
             db: Session,
             space_keys: list[str] | None = None,
             sync_from_dt: datetime | None = None,
@@ -705,6 +719,27 @@ class ConfluenceIngestionService:
         return ConfluenceRecordRetryResult(records=result_items)
 
     async def incremental_sync(
+        self,
+        *,
+        space_key: str,
+        record_type: str,
+        record_id: str,
+        event_kind: str,
+        since: datetime | None,
+        audit_context: SyncAuditContext | None = None,
+    ) -> dict[str, int | bool]:
+        with SessionLocal() as db:
+            return await self._incremental_sync_with_db(
+                db,
+                space_key=space_key,
+                record_type=record_type,
+                record_id=record_id,
+                event_kind=event_kind,
+                since=since,
+                audit_context=audit_context,
+            )
+
+    async def _incremental_sync_with_db(
         self,
         db: Session,
         *,

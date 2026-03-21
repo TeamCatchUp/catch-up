@@ -313,7 +313,7 @@ async def _sync_workspace_metadata(team_id: str) -> None:
 
     db = SessionLocal()
     try:
-        service = await create_slack_metadata_service(db, team_id)
+        service = await create_slack_metadata_service(team_id)
         results = await service.sync_metadata(db)
         logger.info(f"[SLACK][AUTH] Background metadata sync completed: team_id={team_id}, results={results}")
     except Exception as e:

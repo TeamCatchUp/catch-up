@@ -573,7 +573,7 @@ def _handle_installation_repositories_event(
 async def _sync_installation_metadata(installation_id: int) -> None:
     try:
         with SessionLocal() as db:
-            service = await create_github_ingestion_service(db, installation_id)
+            service = await create_github_ingestion_service(installation_id)
             await service.sync_installation_metadata(db)
     except SyncAPIError as exc:
         logger.warning(

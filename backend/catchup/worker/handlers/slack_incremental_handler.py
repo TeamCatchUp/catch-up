@@ -20,11 +20,7 @@ class SlackIncrementalHandler(BaseIncrementalHandler):
         if cached is not None:
             return cached
 
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            service = await create_slack_ingestion_service(db, team_id)
-
+        service = await create_slack_ingestion_service(team_id)
         cache[cache_key] = service
         return service
 
@@ -39,27 +35,21 @@ class SlackIncrementalHandler(BaseIncrementalHandler):
         if not channel_id:
             raise ValueError("slack channel id is empty")
 
-        sync_from = None
         since = self._resolve_since(context)
         sync_from = f"{since.timestamp():.6f}"
-
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            result = await service.incremental_sync(
-                db=db,
-                channel_id=channel_id,
-                record_id=context.record_id or "",
-                event_kind=context.event_kind or "updated",
-                sync_from=sync_from,
-                audit_context=SyncAuditContext(
-                    connector=context.connector,
-                    scope_id=context.scope_id,
-                    target_id=context.target_id,
-                    job_id=context.job_id,
-                    task_id=context.event_id,
-                ),
-            )
+        result = await service.incremental_sync(
+            channel_id=channel_id,
+            record_id=context.record_id or "",
+            event_kind=context.event_kind or "updated",
+            sync_from=sync_from,
+            audit_context=SyncAuditContext(
+                connector=context.connector,
+                scope_id=context.scope_id,
+                target_id=context.target_id,
+                job_id=context.job_id,
+                task_id=context.event_id,
+            ),
+        )
 
         if result.error_count > 0:
             raise SyncInternalError(
