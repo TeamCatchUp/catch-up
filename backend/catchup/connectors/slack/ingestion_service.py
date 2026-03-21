@@ -339,13 +339,31 @@ class SlackIngestionService:
         channel_id: str,
         channel_name: str,
         sync_from_ts: str | None,
-        db: Session | None = None,
         skip_delete: bool = False,
         audit_context: SyncAuditContext | None = None,
     ) -> TargetSyncResult:
         self._ensure_initialized()
-        if db is not None:
-            self._load_context_from_db(db)
+        with SessionLocal() as db:
+            return await self._sync_channel_messages_with_db(
+                db=db,
+                channel_id=channel_id,
+                channel_name=channel_name,
+                sync_from_ts=sync_from_ts,
+                skip_delete=skip_delete,
+                audit_context=audit_context,
+            )
+
+    async def _sync_channel_messages_with_db(
+        self,
+        *,
+        db: Session,
+        channel_id: str,
+        channel_name: str,
+        sync_from_ts: str | None,
+        skip_delete: bool,
+        audit_context: SyncAuditContext | None,
+    ) -> TargetSyncResult:
+        self._load_context_from_db(db)
         sync_ctx = SlackSyncContext(
             channel_id=channel_id,
             channel_name=channel_name,
@@ -513,7 +531,6 @@ class SlackIngestionService:
     async def incremental_sync(
         self,
         *,
-        db: Session,
         channel_id: str,
         record_id: str,
         event_kind: str,
@@ -526,16 +543,17 @@ class SlackIngestionService:
             await self.repository.delete_documents([doc_id])
             return TargetSyncResult(synced_count=1)
 
-        channel = domain_repository.get_channel(db, channel_id)
-        channel_name = channel.name if channel is not None else channel_id
-        return await self.sync_channel_messages(
-            channel_id=channel_id,
-            channel_name=channel_name,
-            sync_from_ts=sync_from,
-            db=db,
-            skip_delete=False,
-            audit_context=audit_context,
-        )
+        with SessionLocal() as db:
+            channel = domain_repository.get_channel(db, channel_id)
+            channel_name = channel.name if channel is not None else channel_id
+            return await self._sync_channel_messages_with_db(
+                db=db,
+                channel_id=channel_id,
+                channel_name=channel_name,
+                sync_from_ts=sync_from,
+                skip_delete=False,
+                audit_context=audit_context,
+            )
 
     async def _fetch_channel_pages(
         self,

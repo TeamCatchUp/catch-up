@@ -130,10 +130,7 @@ class GithubRecordRepairService:
         *,
         installation_id: int,
     ):
-        return await create_github_ingestion_service(
-            db=None,
-            installation_id=installation_id,
-        )
+        return await create_github_ingestion_service(installation_id=installation_id)
 
     async def get_record_gaps(
         self,

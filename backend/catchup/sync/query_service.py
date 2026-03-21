@@ -337,6 +337,12 @@ class SyncQueryService:
                 last_error=summary.last_error,
             )
 
+    async def get_job_snapshot_async(
+        self,
+        job_id: str,
+    ) -> SyncJobSnapshotResult | None:
+        return await run_in_threadpool(self.get_job_snapshot, job_id)
+
     def get_scope_latest_full_status(
         self,
         *,
@@ -380,6 +386,18 @@ class SyncQueryService:
                 metrics=summary.metrics,
                 last_error=summary.last_error,
             )
+
+    async def get_scope_latest_full_status_async(
+        self,
+        *,
+        connector: SyncConnector,
+        scope_id: str,
+    ) -> SyncScopeStatusResult | None:
+        return await run_in_threadpool(
+            self.get_scope_latest_full_status,
+            connector=connector,
+            scope_id=scope_id,
+        )
 
     def _build_targets_result(
         self,
@@ -571,10 +589,7 @@ class SyncQueryService:
         *,
         scope_id: str,
     ) -> SyncTargetsResult:
-        metadata_service = await create_slack_metadata_service(
-            db=None,
-            team_id=scope_id,
-        )
+        metadata_service = await create_slack_metadata_service(team_id=scope_id)
         channels = await metadata_service.collect_target_channels()
         await run_in_threadpool(
             _persist_slack_channels_sync,

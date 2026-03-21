@@ -10,10 +10,10 @@ JiraApiClient, JiraFieldMapper, JiraTransformer, PGVectorRepository를 조합.
     await service.initialize()
 
     # 전체 동기화
-    await service.full_sync(db, project_keys=["CATCH", "PROJ"], sync_from_dt=datetime.now(timezone.utc))
+    await service.full_sync(project_keys=["CATCH", "PROJ"], sync_from_dt=datetime.now(timezone.utc))
 
     # 증분 동기화
-    await service.incremental_sync()
+    await service.incremental_sync(project_key="CATCH", record_id="CATCH-1", event_kind="updated", since=None)
 """
 
 import asyncio
@@ -453,6 +453,20 @@ class JiraIngestionService:
     # ================================================================
 
     async def full_sync(
+        self,
+        project_keys: list[str] | None = None,
+        sync_from_dt: datetime | None = None,
+        audit_context: SyncAuditContext | None = None,
+    ) -> TargetSyncResult:
+        with SessionLocal() as db:
+            return await self._full_sync_with_db(
+                db,
+                project_keys=project_keys,
+                sync_from_dt=sync_from_dt,
+                audit_context=audit_context,
+            )
+
+    async def _full_sync_with_db(
         self,
         db: Session,
         project_keys: list[str] | None = None,
@@ -1115,6 +1129,25 @@ class JiraIngestionService:
         return len(doc_ids)
 
     async def incremental_sync(
+        self,
+        *,
+        project_key: str,
+        record_id: str,
+        event_kind: str,
+        since: datetime | None,
+        audit_context: SyncAuditContext | None = None,
+    ) -> dict[str, int | bool]:
+        with SessionLocal() as db:
+            return await self._incremental_sync_with_db(
+                db,
+                project_key=project_key,
+                record_id=record_id,
+                event_kind=event_kind,
+                since=since,
+                audit_context=audit_context,
+            )
+
+    async def _incremental_sync_with_db(
         self,
         db: Session,
         *,

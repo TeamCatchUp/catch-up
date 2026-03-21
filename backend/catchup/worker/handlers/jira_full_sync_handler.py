@@ -24,13 +24,7 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
         if not cloud_id:
             raise ValueError("jira cloud_id(scope_id) is empty")
 
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            service = await create_jira_ingestion_service(
-                db=db,
-                cloud_id=cloud_id,
-            )
+        service = await create_jira_ingestion_service(cloud_id=cloud_id)
         cache[cache_key] = service
         return service
 
@@ -51,21 +45,17 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
         if not project_key:
             raise ValueError("jira project_key(target_id) is empty")
 
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            result = await service.full_sync(
-                db=db,
-                project_keys=[project_key],
-                sync_from_dt=sync_from_dt,
-                audit_context=SyncAuditContext(
-                    connector=context.connector,
-                    scope_id=context.scope_id,
-                    target_id=context.target_id,
-                    job_id=context.job_id,
-                    task_id=context.event_id,
-                ),
-            )
+        result = await service.full_sync(
+            project_keys=[project_key],
+            sync_from_dt=sync_from_dt,
+            audit_context=SyncAuditContext(
+                connector=context.connector,
+                scope_id=context.scope_id,
+                target_id=context.target_id,
+                job_id=context.job_id,
+                task_id=context.event_id,
+            ),
+        )
 
         if result.error_count > 0:
             raise RuntimeError(

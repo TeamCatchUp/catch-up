@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
-from sqlalchemy.orm import Session
+from fastapi.concurrency import run_in_threadpool
 
+from catchup.db.engine import SessionLocal
 from catchup.db.slack import domain_repository as slack_entities
 from catchup.db.slack import oauth_repository as slack_oauth_repository
 from catchup.sync.common.exceptions import SyncRequestError
@@ -20,24 +22,33 @@ logger = logging.getLogger(__name__)
 
 
 class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
+    def _load_token_sync(self, team_id: str):
+        with SessionLocal() as db:
+            return slack_oauth_repository.get_slack_token_by_team_id(db, team_id)
+
+    def _load_channels_sync(self, team_id: str):
+        with SessionLocal() as db:
+            return slack_entities.get_channels_by_team(db, team_id)
+
     async def resolve_full_sync_targets(
         self,
         *,
-        db: Session,
         request: FullSyncDispatchRequest,
     ) -> FullSyncResolvedTargets:
         team_id = request.scope_id.strip()
         if not team_id:
             raise SyncRequestError("scope_id is required")
 
-        token = slack_oauth_repository.get_slack_token_by_team_id(db, team_id)
+        token, channels = await asyncio.gather(
+            run_in_threadpool(self._load_token_sync, team_id),
+            run_in_threadpool(self._load_channels_sync, team_id),
+        )
         if token is None:
             raise SyncRequestError(
                 "slack team is not connected",
                 metadata={"team_id": team_id},
             )
 
-        channels = slack_entities.get_channels_by_team(db, team_id)
         requested_target_ids, resolved_targets = resolve_full_sync_targets_from_rows(
             request_target_ids=request.target_ids,
             rows=channels,

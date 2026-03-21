@@ -8,7 +8,6 @@ AtlassianTokenManager로 OAuth Token을 조회하여 서비스 인스턴스를 �
 import logging
 
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
@@ -30,8 +29,15 @@ from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
 logger = logging.getLogger(__name__)
 
 
+def _load_token_record_sync(cloud_id: str):
+    with SessionLocal() as session:
+        token_record = oauth_repository.get_token_by_cloud_id(session, cloud_id)
+        if token_record is None:
+            raise AtlassianTokenNotFoundError(cloud_id)
+        return token_record
+
+
 async def create_confluence_ingestion_service(
-    db: Session | None,
     cloud_id: str,
 ) -> ConfluenceIngestionService:
     token_manager = AtlassianTokenManager(
@@ -41,17 +47,7 @@ async def create_confluence_ingestion_service(
 
     try:
         token_provider = AtlassianTokenProvider(token_manager)
-        if db is None:
-            def _load_context_sync():
-                with SessionLocal() as session:
-                    return oauth_repository.get_token_by_cloud_id(session, cloud_id)
-
-            token_record = await run_in_threadpool(_load_context_sync)
-        else:
-            token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
-
-        if token_record is None:
-            raise AtlassianTokenNotFoundError(cloud_id)
+        token_record = await run_in_threadpool(_load_token_record_sync, cloud_id)
     except AtlassianTokenNotFoundError as exc:
         raise SyncConnectorError(
             f"Confluence 연결을 찾을 수 없습니다: {cloud_id}",

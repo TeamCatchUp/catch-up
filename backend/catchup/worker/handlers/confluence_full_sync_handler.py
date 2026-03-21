@@ -24,13 +24,7 @@ class ConfluenceFullSyncHandler(BaseFullSyncHandler):
         if not cloud_id:
             raise ValueError("confluence cloud_id(scope_id) is empty")
 
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            service = await create_confluence_ingestion_service(
-                db=db,
-                cloud_id=cloud_id,
-            )
+        service = await create_confluence_ingestion_service(cloud_id=cloud_id)
         cache[cache_key] = service
         return service
 
@@ -51,21 +45,17 @@ class ConfluenceFullSyncHandler(BaseFullSyncHandler):
         if not space_key:
             raise ValueError("confluence space_key(target_id) is empty")
 
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            result = await service.full_sync(
-                db=db,
-                space_keys=[space_key],
-                sync_from_dt=sync_from_dt,
-                audit_context=SyncAuditContext(
-                    connector=context.connector,
-                    scope_id=context.scope_id,
-                    target_id=context.target_id,
-                    job_id=context.job_id,
-                    task_id=context.event_id,
-                ),
-            )
+        result = await service.full_sync(
+            space_keys=[space_key],
+            sync_from_dt=sync_from_dt,
+            audit_context=SyncAuditContext(
+                connector=context.connector,
+                scope_id=context.scope_id,
+                target_id=context.target_id,
+                job_id=context.job_id,
+                task_id=context.event_id,
+            ),
+        )
 
         if result.error_count > 0:
             raise RuntimeError(

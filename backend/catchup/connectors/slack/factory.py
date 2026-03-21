@@ -9,7 +9,6 @@ import logging
 
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
@@ -30,14 +29,9 @@ def _load_token_sync(team_id: str):
 
 
 async def _resolve_access_token(
-    db: Session | None,
     team_id: str,
 ) -> str:
-    if db is None:
-        token_record = await run_in_threadpool(_load_token_sync, team_id)
-    else:
-        token_record = slack_crud.get_slack_token_by_team_id(db, team_id)
-
+    token_record = await run_in_threadpool(_load_token_sync, team_id)
     if not token_record:
         raise SyncConnectorError(
             f"Slack 연결을 찾을 수 없습니다: {team_id}",
@@ -46,7 +40,7 @@ async def _resolve_access_token(
 
     slack_service = get_slack_oauth_service()
     try:
-        return await slack_service.get_valid_access_token(db, token_record)
+        return await slack_service.get_valid_access_token(None, token_record)
     except HTTPException as exc:
         message = (
             exc.detail
@@ -72,10 +66,9 @@ async def _resolve_access_token(
 
 
 async def create_slack_ingestion_service(
-    db: Session | None,
     team_id: str,
 ) -> SlackIngestionService:
-    access_token = await _resolve_access_token(db, team_id)
+    access_token = await _resolve_access_token(team_id)
 
     try:
         repository = get_pgvector_repository(
@@ -104,10 +97,9 @@ async def create_slack_ingestion_service(
 
 
 async def create_slack_metadata_service(
-    db: Session | None,
     team_id: str,
 ) -> SlackMetadataService:
-    access_token = await _resolve_access_token(db, team_id)
+    access_token = await _resolve_access_token(team_id)
 
     try:
         service = SlackMetadataService(

@@ -100,10 +100,7 @@ class SlackRecordRepairService:
         *,
         team_id: str,
     ):
-        return await create_slack_ingestion_service(
-            db=None,
-            team_id=team_id,
-        )
+        return await create_slack_ingestion_service(team_id=team_id)
 
     async def get_record_gaps(
         self,
