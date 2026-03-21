@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
-from sqlalchemy.orm import Session
+from fastapi.concurrency import run_in_threadpool
 
 from catchup.db.atlassian.oauth_repository import get_token_by_cloud_id
+from catchup.db.engine import SessionLocal
 from catchup.db.jira import domain_repository as jira_entities
 from catchup.sync.common.exceptions import SyncRequestError
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
@@ -20,24 +22,33 @@ logger = logging.getLogger(__name__)
 
 
 class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
+    def _load_token_sync(self, cloud_id: str):
+        with SessionLocal() as db:
+            return get_token_by_cloud_id(db, cloud_id)
+
+    def _load_projects_sync(self, cloud_id: str):
+        with SessionLocal() as db:
+            return jira_entities.get_projects_by_cloud_id(db, cloud_id)
+
     async def resolve_full_sync_targets(
         self,
         *,
-        db: Session,
         request: FullSyncDispatchRequest,
     ) -> FullSyncResolvedTargets:
         cloud_id = request.scope_id.strip()
         if not cloud_id:
             raise SyncRequestError("scope_id is required")
 
-        token = get_token_by_cloud_id(db, cloud_id)
+        token, projects = await asyncio.gather(
+            run_in_threadpool(self._load_token_sync, cloud_id),
+            run_in_threadpool(self._load_projects_sync, cloud_id),
+        )
         if token is None:
             raise SyncRequestError(
                 "jira cloud is not connected",
                 metadata={"cloud_id": cloud_id},
             )
 
-        projects = jira_entities.get_projects_by_cloud_id(db, cloud_id)
         requested_project_keys, resolved_targets = resolve_full_sync_targets_from_rows(
             request_target_ids=request.target_ids,
             rows=projects,

@@ -298,7 +298,7 @@ def update_job_status_cas(
         .values(**values)
     )
     result = db.execute(stmt)
-    db.commit()
+    db.flush()
     return result.rowcount == 1
 
 
@@ -413,29 +413,24 @@ def claim_events_for_publish(
     *,
     event_ids: Sequence[str],
 ) -> bool:
-    try:
-        for event_id in event_ids:
-            updated = _update_event_publish_status(
-                db,
-                event_id=event_id,
-                from_statuses=[
-                    SyncEventPublishStatus.PENDING,
-                    SyncEventPublishStatus.FAILED,
-                ],
-                to_status=SyncEventPublishStatus.PUBLISHING,
-                stream_message_id=None,
-                publish_error=None,
-                increment_attempt=True,
-            )
-            if updated != 1:
-                db.rollback()
-                return False
+    for event_id in event_ids:
+        updated = _update_event_publish_status(
+            db,
+            event_id=event_id,
+            from_statuses=[
+                SyncEventPublishStatus.PENDING,
+                SyncEventPublishStatus.FAILED,
+            ],
+            to_status=SyncEventPublishStatus.PUBLISHING,
+            stream_message_id=None,
+            publish_error=None,
+            increment_attempt=True,
+        )
+        if updated != 1:
+            return False
 
-        db.commit()
-        return True
-    except Exception:
-        db.rollback()
-        raise
+    db.flush()
+    return True
 
 
 def claim_events_for_republish(
@@ -443,26 +438,21 @@ def claim_events_for_republish(
     *,
     event_ids: Sequence[str],
 ) -> bool:
-    try:
-        for event_id in event_ids:
-            updated = _update_event_publish_status(
-                db,
-                event_id=event_id,
-                from_statuses=[SyncEventPublishStatus.PUBLISHED],
-                to_status=SyncEventPublishStatus.PUBLISHING,
-                stream_message_id=None,
-                publish_error=None,
-                increment_attempt=True,
-            )
-            if updated != 1:
-                db.rollback()
-                return False
+    for event_id in event_ids:
+        updated = _update_event_publish_status(
+            db,
+            event_id=event_id,
+            from_statuses=[SyncEventPublishStatus.PUBLISHED],
+            to_status=SyncEventPublishStatus.PUBLISHING,
+            stream_message_id=None,
+            publish_error=None,
+            increment_attempt=True,
+        )
+        if updated != 1:
+            return False
 
-        db.commit()
-        return True
-    except Exception:
-        db.rollback()
-        raise
+    db.flush()
+    return True
 
 
 def record_event_publish_outcomes(
@@ -472,38 +462,32 @@ def record_event_publish_outcomes(
     failed_event_ids: Sequence[str],
     publish_error: str | None,
 ) -> bool:
-    try:
-        for item in published:
-            updated = _update_event_publish_status(
-                db,
-                event_id=item.event_id,
-                from_statuses=[SyncEventPublishStatus.PUBLISHING],
-                to_status=SyncEventPublishStatus.PUBLISHED,
-                stream_message_id=item.stream_message_id,
-                publish_error=None,
-            )
-            if updated != 1:
-                db.rollback()
-                return False
+    for item in published:
+        updated = _update_event_publish_status(
+            db,
+            event_id=item.event_id,
+            from_statuses=[SyncEventPublishStatus.PUBLISHING],
+            to_status=SyncEventPublishStatus.PUBLISHED,
+            stream_message_id=item.stream_message_id,
+            publish_error=None,
+        )
+        if updated != 1:
+            return False
 
-        for event_id in failed_event_ids:
-            updated = _update_event_publish_status(
-                db,
-                event_id=event_id,
-                from_statuses=[SyncEventPublishStatus.PUBLISHING],
-                to_status=SyncEventPublishStatus.FAILED,
-                stream_message_id=None,
-                publish_error=publish_error,
-            )
-            if updated != 1:
-                db.rollback()
-                return False
+    for event_id in failed_event_ids:
+        updated = _update_event_publish_status(
+            db,
+            event_id=event_id,
+            from_statuses=[SyncEventPublishStatus.PUBLISHING],
+            to_status=SyncEventPublishStatus.FAILED,
+            stream_message_id=None,
+            publish_error=publish_error,
+        )
+        if updated != 1:
+            return False
 
-        db.commit()
-        return True
-    except Exception:
-        db.rollback()
-        raise
+    db.flush()
+    return True
 
 
 def list_events_by_job(
@@ -681,7 +665,7 @@ def update_event_status_cas(
         .values(**values)
     )
     result = db.execute(stmt)
-    db.commit()
+    db.flush()
     return result.rowcount == 1
 
 
@@ -782,6 +766,6 @@ def refresh_job_token_usage(db: Session, job_id: str) -> tuple[int, int]:
             updated_at=_utc_now(),
         )
     )
-    db.commit()
+    db.flush()
 
     return int(embedding_total), int(summary_total)

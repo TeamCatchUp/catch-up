@@ -5,11 +5,9 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
 
 from catchup.auth.dependencies import require_admin_user
 from catchup.configs.config import settings
-from catchup.db.dependencies import get_db
 from catchup.db.models import SyncConnector
 from catchup.server.sync.schemas import (
     FullSyncRequest,
@@ -51,18 +49,16 @@ router = APIRouter(
 async def dispatch_full_sync(
     sync_request: FullSyncRequest,
     request: Request,
-    db: Session = Depends(get_db),
     dispatch_service: SyncDispatchService = Depends(get_sync_dispatch_service_dependency),
 ):
     dispatch_request = sync_request.to_dispatch_request(
         default_sync_days=settings.DEFAULT_SYNC_DAYS,
     )
 
-    return await _execute_full_sync_dispatch(
+    return await _resolve_full_sync_dispatch_response(
         connector=sync_request.connector,
         dispatch_request=dispatch_request,
         dispatch_call=dispatch_service.dispatch_full_sync(
-            db=db,
             connector=sync_request.connector,
             request=dispatch_request,
             base_url=str(request.base_url),
@@ -354,7 +350,7 @@ def _build_dispatch_metadata(
     }
 
 
-async def _execute_full_sync_dispatch(
+async def _resolve_full_sync_dispatch_response(
     *,
     connector: SyncConnector,
     dispatch_request: FullSyncDispatchRequest,

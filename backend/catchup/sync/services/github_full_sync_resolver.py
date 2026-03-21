@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
-from sqlalchemy.orm import Session
+from fastapi.concurrency import run_in_threadpool
 
+from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.sync.common.exceptions import SyncRequestError
@@ -20,11 +22,17 @@ logger = logging.getLogger(__name__)
 
 
 class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
+    def _load_installation_sync(self, installation_id: int):
+        with SessionLocal() as db:
+            return get_installation_by_installation_id(db, installation_id)
+
+    def _load_repositories_sync(self, installation_id: int):
+        with SessionLocal() as db:
+            return github_entities.get_repositories_by_installation(db, installation_id)
 
     async def resolve_full_sync_targets(
         self,
         *,
-        db: Session,
         request: FullSyncDispatchRequest,
     ) -> FullSyncResolvedTargets:
         scope_id = request.scope_id.strip()
@@ -38,18 +46,17 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
                 "scope_id must be a github installation_id",
                 metadata={"scope_id": request.scope_id},
             ) from exc
-    
-        installation = get_installation_by_installation_id(db, installation_id)
+
+        installation, repositories = await asyncio.gather(
+            run_in_threadpool(self._load_installation_sync, installation_id),
+            run_in_threadpool(self._load_repositories_sync, installation_id),
+        )
         if installation is None:
             raise SyncRequestError(
                 "github installation not found",
                 metadata={"installation_id": installation_id},
             )
 
-        repositories = github_entities.get_repositories_by_installation(
-            db,
-            installation_id,
-        )
         requested_repo_ids, resolved_targets = resolve_full_sync_targets_from_rows(
             request_target_ids=request.target_ids,
             rows=repositories,
