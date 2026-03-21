@@ -24,8 +24,8 @@ def add_tokens(
     for model, usage in b.items():
         if model not in result:
             result[model] = {"input_tokens": 0, "output_tokens": 0}
-        result[model]["input_tokens"] += usage["input_tokens"]
-        result[model]["output_tokens"] += usage["output_tokens"]
+        result[model]["input_tokens"] += usage.get("input_tokens", 0)
+        result[model]["output_tokens"] += usage.get("output_tokens", 0)
     return result
 
 
