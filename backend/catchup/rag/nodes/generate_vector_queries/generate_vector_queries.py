@@ -2,6 +2,7 @@ import structlog
 from langchain.chat_models import BaseChatModel
 
 from catchup.prompts.loader import prompt_loader
+from catchup.rag.nodes.utils import extract_token_usages
 from catchup.rag.nodes.utils import llm_semaphore
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.structures import VectorDbSearchPlan
@@ -13,29 +14,26 @@ logger = structlog.get_logger()
 
 @log_node
 async def generate_vector_queries_node(state: AgentState, llm: BaseChatModel):
-    structured_llm = llm.with_structured_output(
-        VectorDbSearchPlan,
-        method="function_calling"
-    )
-        
     rewritten_query = state["rewritten_query"]
-    
     global_context = state["global_context"].model_dump()
-    
     prompt = prompt_loader.get_prompt(
         "rag/generate_vector_queries",
         query=rewritten_query,
         **global_context
     )
+    token_usages = {"token_breakdown": {}}
+    structured_llm = llm.with_structured_output(
+        VectorDbSearchPlan,
+        method="function_calling",
+        include_raw=True
+    )
 
     try:
         async with llm_semaphore:
-            plan: VectorDbSearchPlan = await structured_llm.ainvoke(
-                input=prompt
-            )
-
-        _print_search_plan_log(plan)
-
+            raw_response = await structured_llm.ainvoke(input=prompt)
+            token_usages = extract_token_usages(raw_response.get("raw"))
+            plan: VectorDbSearchPlan = raw_response.get("parsed")
+    
     except Exception as e:
         logger.warning(
             "generate_vector_queries_node_failed",
@@ -46,9 +44,17 @@ async def generate_vector_queries_node(state: AgentState, llm: BaseChatModel):
             query=rewritten_query,
             reasoning="Generation failed: using rewritten query as fallback."
         )
-        return {"vector_search_queries": [fallback_query]}
+        return {
+            "vector_search_queries": [fallback_query],
+            "token_breakdown": {}
+        }
+    
+    _print_search_plan_log(plan)
 
-    return {"vector_search_queries": plan.queries}
+    return {
+        "vector_search_queries": plan.queries,
+        **token_usages,
+    }
 
 
 def _print_search_plan_log(plan: VectorDbSearchPlan):

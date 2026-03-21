@@ -3,9 +3,9 @@ from langchain.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 from langchain_core.messages import SystemMessage
-from langchain_core.output_parsers import StrOutputParser
 
 from catchup.prompts.loader import prompt_loader
+from catchup.rag.nodes.utils import extract_token_usages
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import llm_semaphore
 from catchup.rag.nodes.utils import log_node
@@ -17,31 +17,28 @@ logger = structlog.get_logger()
 @log_node
 async def chitchat_node(state: AgentState, llm: BaseChatModel):
     query = state["original_query"]
-
     conversation_history = get_conversation_history(state["messages"])
-    
     global_context = state["global_context"].model_dump()
-
     prompt = prompt_loader.get_prompt(
         "rag/chitchat",
         **global_context
     )
-        
     messages = (
         [SystemMessage(content=prompt)]
         + conversation_history 
         + [HumanMessage(content=query)]
     )
+    token_usages = {"token_breakdown": {}}
     
-    chain = llm | StrOutputParser()
-
     try:
         async with llm_semaphore:
-            answer = await chain.ainvoke(input=messages)
+            raw_response = await llm.ainvoke(input=messages)
+            token_usages = extract_token_usages(raw_response)
+            chitchat = raw_response.content
             logger.debug(
                 "chitchat_answer_generated",
                 original_query=state.get("original_query"),
-                answer=answer
+                answer=chitchat
             )
 
     except Exception as e:
@@ -53,10 +50,12 @@ async def chitchat_node(state: AgentState, llm: BaseChatModel):
         )
         return {
             "messages": [AIMessage(content=FALLBACK_ANSWER)],
-            "sources": []
+            "sources": [],
+            **token_usages,
         }
 
     return {
-        "messages": [AIMessage(content=answer)],
-        "sources": []
+        "messages": [raw_response],
+        "sources": [],
+        **token_usages,
     }
