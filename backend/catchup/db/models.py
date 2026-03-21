@@ -1735,7 +1735,7 @@ class ChatTokenUsage(Base):
     
     purpose: Mapped[TokenPurpose] = mapped_column(String(50), nullable=False)
     
-    token_breakdown: Mapped[dict[str, int]] = mapped_column(
+    token_breakdown: Mapped[dict[str, dict[str, int]]] = mapped_column(
         JSONB,
         nullable=False,
         server_default=text("'{}'::jsonb")

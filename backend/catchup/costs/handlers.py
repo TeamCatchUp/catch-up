@@ -47,5 +47,6 @@ def chat_token_usage_handler(**kwargs) -> None:
     logger.error(
         "chat_token_usage_dead_letter",
         event=raw_event.model_dump(),
-        error=str(last_error)
+        error=str(last_error),
+        exc_info=True
     )
