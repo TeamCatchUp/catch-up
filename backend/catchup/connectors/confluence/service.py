@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.components.embedder.service import AwsBedrockEmbeddingService
@@ -485,6 +486,52 @@ class ConfluenceIngestionService:
         
         return results
            
+    def _transform_page_blocking(
+        self,
+        page: ConfluencePageResponse,
+        *,
+        space_key: str,
+        space_name: str | None = None,
+        labels: list[str] | None = None,
+        footer_comments: list[ConfluenceCommentResponse] | None = None,
+        inline_comments: list[ConfluenceCommentResponse] | None = None,
+        attachment_images: dict[str, ConfluenceAttachmentAsset] | None = None,
+        user_name_map: dict[str, str | None] | None = None,
+    ) -> ConfluenceTransformResult:
+        return self.transformer.transform_page(
+            page,
+            space_key=space_key,
+            space_name=space_name,
+            labels=labels,
+            footer_comments=footer_comments,
+            inline_comments=inline_comments,
+            attachment_images=attachment_images,
+            site_url=self.site_url,
+            user_name_map=user_name_map,
+        )
+
+    def _transform_blogpost_blocking(
+        self,
+        blogpost: ConfluenceBlogPostResponse,
+        *,
+        space_key: str,
+        space_name: str | None = None,
+        labels: list[str] | None = None,
+        footer_comments: list[ConfluenceCommentResponse] | None = None,
+        attachment_images: dict[str, ConfluenceAttachmentAsset] | None = None,
+        user_name_map: dict[str, str | None] | None = None,
+    ) -> ConfluenceTransformResult:
+        return self.transformer.transform_blogpost(
+            blogpost,
+            space_key=space_key,
+            space_name=space_name,
+            labels=labels,
+            footer_comments=footer_comments,
+            attachment_images=attachment_images,
+            site_url=self.site_url,
+            user_name_map=user_name_map,
+        )
+
 
     async def _process_page(
             self,
@@ -500,15 +547,15 @@ class ConfluenceIngestionService:
 
         attachment_images = await self._download_images(page.id, attachments)
 
-        return self.transformer.transform_page(
+        return await run_in_threadpool(
+            self._transform_page_blocking,
             page,
-            space_key = space_key,
-            space_name = space_name,
+            space_key=space_key,
+            space_name=space_name,
             labels=labels,
             footer_comments=footer_comments,
             inline_comments=inline_comments,
             attachment_images=attachment_images,
-            site_url = self.site_url,
             user_name_map=user_name_map,
         )
     
@@ -526,14 +573,14 @@ class ConfluenceIngestionService:
 
         attachment_images = await self._download_images(blogpost.id, attachments)
 
-        return self.transformer.transform_blogpost(
+        return await run_in_threadpool(
+            self._transform_blogpost_blocking,
             blogpost,
             space_key=space_key,
             space_name=space_name,
             labels=labels,
             footer_comments=footer_comments,
             attachment_images=attachment_images,
-            site_url=self.site_url,
             user_name_map=user_name_map,
         )
 
