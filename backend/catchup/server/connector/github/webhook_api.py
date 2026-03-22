@@ -1,12 +1,10 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
 
 from catchup.configs.config import settings
-from catchup.connectors.github.webhook_ingress import handle_webhook as handle_github_webhook_ingress
-from catchup.db.dependencies import get_db
+from catchup.connectors.github.webhook import handle_webhook as handle_github_webhook_ingress
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 
 logger = logging.getLogger(__name__)
@@ -18,7 +16,6 @@ router = APIRouter(prefix="/api/v1/github", tags=["github-webhook"])
 async def handle_github_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
     x_hub_signature_256: Optional[str] = Header(None),
     x_github_event: Optional[str] = Header(None),
 ):
@@ -60,7 +57,6 @@ async def handle_github_webhook(
 
     try:
         return await handle_github_webhook_ingress(
-            db=db,
             event_name=x_github_event,
             payload=payload,
             schedule_task=background_tasks.add_task,
