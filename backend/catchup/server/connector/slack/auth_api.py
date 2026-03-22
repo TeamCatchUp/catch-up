@@ -167,7 +167,7 @@ async def slack_oauth_callback(
     await _register_knowledge_source(tokens.team.id)
     
     # 4. 메타데이터 동기화 (BackgroundTask)
-    background_tasks.add_task(_sync_workspace_metadata, tokens.team.id)
+    background_tasks.add_task(_refresh_workspace_metadata, tokens.team.id)
 
     emit_audit_event(
         event_type=EventType.INTEGRATION,
@@ -298,7 +298,7 @@ async def _register_knowledge_source(team_id: str):
     await run_in_threadpool(_sync_task)
 
 
-async def _sync_workspace_metadata(team_id: str) -> None:
+async def _refresh_workspace_metadata(team_id: str) -> None:
     """
     OAuth 설치 직후 메타데이터 동기화 (BackgroundTask)
 

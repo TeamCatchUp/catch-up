@@ -111,7 +111,7 @@ class SlackIngestionService:
                 "Call await service.initialize() first."
             )
 
-    def _load_context_from_db(self, db: Session) -> None:
+    def _load_ingestion_context(self, db: Session) -> None:
         """메시지 변환에 필요한 user cache/workspace domain을 DB에서 로드한다."""
         try:
             users = domain_repository.get_users_by_team(db, self.team_id, include_deleted=True)
@@ -231,14 +231,14 @@ class SlackIngestionService:
 
     def _load_ingestion_context_db(self) -> None:
         with SessionLocal() as db:
-            self._load_context_from_db(db)
+            self._load_ingestion_context(db)
 
-    def _load_channel_sync_context_db(
+    def _load_channel_context_db(
         self,
         channel_id: str,
     ) -> str:
         with SessionLocal() as db:
-            self._load_context_from_db(db)
+            self._load_ingestion_context(db)
             channel = domain_repository.get_channel(db, channel_id)
             return channel.name if channel is not None else channel_id
 
@@ -598,7 +598,7 @@ class SlackIngestionService:
             return TargetSyncResult(synced_count=1)
 
         channel_name = await run_in_threadpool(
-            self._load_channel_sync_context_db,
+            self._load_channel_context_db,
             channel_id,
         )
         sync_ctx = SlackSyncContext(
