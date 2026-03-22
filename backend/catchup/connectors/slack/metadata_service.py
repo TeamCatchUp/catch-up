@@ -55,27 +55,22 @@ class SlackMetadataService:
         self,
         db: Session,
         snapshot: SlackMetadataSnapshot,
-        *,
-        auto_commit: bool = True,
     ) -> None:
         domain_repository.upsert_workspace(
             db,
             snapshot.workspace,
-            auto_commit=False,
         )
         if snapshot.users:
             domain_repository.upsert_users_bulk(
                 db,
                 self.team_id,
                 snapshot.users,
-                auto_commit=False,
             )
 
         sync_result = domain_repository.sync_channels_snapshot(
             db,
             self.team_id,
             snapshot.channels,
-            auto_commit=False,
         )
         logger.info(
             "[SLACK][INSTALLATION][METADATA] Channel snapshot synced: team_id=%s, upserted=%s, deleted=%s, deleted_members=%s",
@@ -88,7 +83,6 @@ class SlackMetadataService:
         domain_repository.delete_channel_members_by_team(
             db,
             self.team_id,
-            auto_commit=False,
         )
 
         for channel in snapshot.channels:
@@ -97,24 +91,17 @@ class SlackMetadataService:
                 self.team_id,
                 channel.id,
                 snapshot.channel_members.get(channel.id, []),
-                auto_commit=False,
             )
-
-        if auto_commit:
-            db.commit()
 
     def persist_channel_snapshot(
         self,
         db: Session,
         channels: list[SlackChannel],
-        *,
-        auto_commit: bool = True,
     ) -> None:
         sync_result = domain_repository.sync_channels_snapshot(
             db,
             self.team_id,
             channels,
-            auto_commit=False,
         )
         logger.info(
             "[SLACK][TARGETS][METADATA] Channel snapshot synced: team_id=%s, upserted=%s, deleted=%s, deleted_members=%s",
@@ -123,9 +110,6 @@ class SlackMetadataService:
             sync_result["deleted"],
             sync_result["deleted_members"],
         )
-
-        if auto_commit:
-            db.commit()
 
     async def collect_snapshot(
         self,
@@ -176,8 +160,6 @@ class SlackMetadataService:
     async def sync_metadata(
         self,
         db: Session,
-        *,
-        auto_commit: bool = True,
         rollback_on_error: bool = True,
         raise_on_error: bool = False,
     ) -> dict[str, dict[str, int]]:
@@ -188,8 +170,8 @@ class SlackMetadataService:
             self.persist_snapshot(
                 db,
                 snapshot,
-                auto_commit=auto_commit,
             )
+            db.commit()
             return results
         except Exception as exc:
             logger.error(

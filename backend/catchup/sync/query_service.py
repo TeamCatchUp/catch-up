@@ -41,19 +41,19 @@ from catchup.sync.common.schemas import SyncTargetType
 logger = logging.getLogger(__name__)
 
 def _load_github_installation_db(installation_id: int):
-    with SessionLocal() as session:
-        return get_installation_by_installation_id(session, installation_id)
+    with SessionLocal() as db:
+        return get_installation_by_installation_id(db, installation_id)
 
 
 def _load_jira_token_db(scope_id: str) -> AtlassianOAuthToken | None:
-    with SessionLocal() as session:
-        return atlassian_oauth_repository.get_token_by_cloud_id(session, scope_id)
+    with SessionLocal() as db:
+        return atlassian_oauth_repository.get_token_by_cloud_id(db, scope_id)
 
 
 def _load_confluence_token_db(scope_id: str) -> AtlassianOAuthToken | None:
-    with SessionLocal() as session:
+    with SessionLocal() as db:
         return (
-            session.query(AtlassianOAuthToken)
+            db.query(AtlassianOAuthToken)
             .filter(AtlassianOAuthToken.cloud_id == scope_id)
             .first()
         )
@@ -63,37 +63,50 @@ def _persist_slack_channels_db(
     service: SlackMetadataService,
     channels: list[Any],
 ) -> None:
-    with SessionLocal.begin() as session:
-        service.persist_channel_snapshot(
-            session,
-            channels,
-            auto_commit=False,
-        )
+    with SessionLocal() as db:
+        try:
+            service.persist_channel_snapshot(
+                db,
+                channels,
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
 
 
 def _persist_github_repositories_db(
     installation_id: int,
     repositories: list[Any],
 ) -> None:
-    with SessionLocal.begin() as session:
-        github_entities.sync_repositories_snapshot(
-            session,
-            installation_id,
-            repositories,
-            auto_commit=False,
-        )
+    with SessionLocal() as db:
+        try:
+            github_entities.sync_repositories_snapshot(
+                db,
+                installation_id,
+                repositories,
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
 
 
 def _persist_jira_projects_db(
     cloud_id: str,
     projects: list[dict[str, Any]],
 ) -> None:
-    with SessionLocal.begin() as session:
-        jira_entities.sync_projects_snapshot(
-            session,
-            cloud_id,
-            projects,
-        )
+    with SessionLocal() as db:
+        try:
+            jira_entities.sync_projects_snapshot(
+                db,
+                cloud_id,
+                projects,
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
 
 
 @dataclass(slots=True, frozen=True)

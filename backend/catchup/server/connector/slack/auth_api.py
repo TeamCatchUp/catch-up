@@ -387,7 +387,12 @@ def _delete_slack_token_db(team_id: str) -> bool:
 
 def _persist_workspace_metadata_db(service, snapshot) -> None:
     with SessionLocal() as db:
-        service.persist_snapshot(
-            db,
-            snapshot,
-        )
+        try:
+            service.persist_snapshot(
+                db,
+                snapshot,
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise

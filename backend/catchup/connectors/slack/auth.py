@@ -217,10 +217,10 @@ class SlackOAuthService:
             await asyncio.sleep(retry_after)
 
     def _persist_refreshed_token_db(self, slack_token: SlackOAuthToken) -> None:
-        with SessionLocal() as session:
+        with SessionLocal() as db:
             try:
                 token_record = slack_oauth_repository.get_slack_token_by_team_id(
-                    session,
+                    db,
                     slack_token.team_id,
                 )
                 if token_record is None:
@@ -233,9 +233,9 @@ class SlackOAuthService:
                 token_record.bot_scopes = slack_token.bot_scopes
                 token_record.bot_refresh_token = slack_token.bot_refresh_token
                 token_record.bot_token_expires_at = slack_token.bot_token_expires_at
-                session.commit()
+                db.commit()
             except Exception:
-                session.rollback()
+                db.rollback()
                 raise
 
     async def get_valid_access_token(

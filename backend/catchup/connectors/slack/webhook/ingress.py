@@ -3,8 +3,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy.orm import Session
-
 from catchup.connectors.slack.schemas import SlackEventWrapper
 from catchup.db.engine import SessionLocal
 
@@ -21,18 +19,6 @@ logger = logging.getLogger(__name__)
 
 def handle_webhook(
     *,
-    payload: dict[str, Any],
-) -> dict[str, Any]:
-    with SessionLocal() as db:
-        return _handle_webhook_db(
-            db=db,
-            payload=payload,
-        )
-
-
-def _handle_webhook_db(
-    *,
-    db: Session,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
     event_wrapper = SlackEventWrapper(**payload)
@@ -70,19 +56,19 @@ def _handle_webhook_db(
 
     if event_type in SUPPORTED_METADATA_EVENTS:
         return handle_metadata_event(
-            db=db,
             team_id=team_id,
             event_type=event_type,
             event=event,
         )
 
     if event_type == "message":
-        return handle_incremental_event(
-            db=db,
-            team_id=team_id,
-            event_type=event_type,
-            event=event,
-        )
+        with SessionLocal() as db:
+            return handle_incremental_event(
+                db=db,
+                team_id=team_id,
+                event_type=event_type,
+                event=event,
+            )
 
     logger.debug(
         "[SLACK][WEBHOOK][INGRESS] Ignored unsupported event: team_id=%s, type=%s, subtype=%s",

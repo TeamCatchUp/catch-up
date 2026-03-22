@@ -30,8 +30,6 @@ def _user_email_update_value(stmt):
 def upsert_workspace(
     db: Session,
     workspace: SlackWorkspaceSchema,
-    *,
-    auto_commit: bool = True,
 ) -> SlackWorkspace:
     """
     워크스페이스 Upsert (Insert or Update)
@@ -64,10 +62,7 @@ def upsert_workspace(
         }
     )
     db.execute(stmt)
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
+    db.flush()
 
     return get_workspace(db, workspace.id)
 
@@ -82,7 +77,7 @@ def delete_workspace(db: Session, workspace_id: str) -> int:
     """워크스페이스 삭제"""
     stmt = delete(SlackWorkspace).where(SlackWorkspace.id == workspace_id)
     result = db.execute(stmt)
-    db.commit()
+    db.flush()
     return result.rowcount
 
 
@@ -143,7 +138,7 @@ def upsert_channels_bulk(
         }
     )
     db.execute(stmt)
-    db.commit()
+    db.flush()
 
     return len(channels)
 
@@ -152,26 +147,12 @@ def sync_channels_snapshot(
     db: Session,
     team_id: str,
     channels: list[SlackChannelSchema],
-    *,
-    auto_commit: bool = True,
 ) -> dict[str, int]:
     now = datetime.now(timezone.utc)
 
     if not channels:
-        deleted_members = delete_channel_members_by_team(
-            db,
-            team_id,
-            auto_commit=False,
-        )
-        deleted_channels = delete_channels_by_team(
-            db,
-            team_id,
-            auto_commit=False,
-        )
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
+        deleted_members = delete_channel_members_by_team(db, team_id)
+        deleted_channels = delete_channels_by_team(db, team_id)
         return {
             "upserted": 0,
             "deleted": deleted_channels,
@@ -224,10 +205,7 @@ def sync_channels_snapshot(
         ~SlackChannel.id.in_(fetched_channel_ids),
     )
     stale_channels_result = db.execute(stale_channels_stmt)
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
+    db.flush()
 
     return {
         "upserted": len(channels),
@@ -252,27 +230,25 @@ def get_channels_by_team(db: Session, team_id: str) -> list[SlackChannel]:
     return list(db.execute(stmt).scalars().all())
 
 
-def delete_channel(db: Session, channel_id: str) -> int:
+def delete_channel(
+    db: Session,
+    channel_id: str,
+) -> int:
     """채널 삭제"""
     stmt = delete(SlackChannel).where(SlackChannel.id == channel_id)
     result = db.execute(stmt)
-    db.commit()
+    db.flush()
     return result.rowcount
 
 
 def delete_channels_by_team(
     db: Session,
     team_id: str,
-    *,
-    auto_commit: bool = True,
 ) -> int:
     """팀의 모든 채널 삭제"""
     stmt = delete(SlackChannel).where(SlackChannel.team_id == team_id)
     result = db.execute(stmt)
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
+    db.flush()
     return result.rowcount
 
 def upsert_channel_from_event(
@@ -307,9 +283,13 @@ def upsert_channel_from_event(
         }
     )
     db.execute(stmt)
-    db.commit()
+    db.flush()
 
-def update_channel_archive(db:Session, channel_id:str, is_archived: bool)->None:
+def update_channel_archive(
+    db: Session,
+    channel_id: str,
+    is_archived: bool,
+) -> None:
     """채널 Archive 상태 업데이트"""
     stmt = (
         update(SlackChannel)
@@ -317,7 +297,7 @@ def update_channel_archive(db:Session, channel_id:str, is_archived: bool)->None:
         .values(is_archived=is_archived, synced_at=datetime.now(timezone.utc))
     )
     db.execute(stmt)
-    db.commit()
+    db.flush()
 
 # ============================================================
 # User CRUD
@@ -327,8 +307,6 @@ def upsert_users_bulk(
     db: Session,
     team_id: str,
     users: list[SlackUserProfileSchema],
-    *,
-    auto_commit: bool = True,
 ) -> int:
     """
     사용자 벌크 Upsert
@@ -392,10 +370,7 @@ def upsert_users_bulk(
         }
     )
     db.execute(stmt)
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
+    db.flush()
 
     return len(users)
 
@@ -447,7 +422,7 @@ def delete_user(db: Session, team_id: str, user_id: str) -> int:
         SlackUser.user_id == user_id,
     )
     result = db.execute(stmt)
-    db.commit()
+    db.flush()
     return result.rowcount
 
 
@@ -455,7 +430,7 @@ def delete_users_by_team(db: Session, team_id: str) -> int:
     """팀의 모든 사용자 삭제"""
     stmt = delete(SlackUser).where(SlackUser.team_id == team_id)
     result = db.execute(stmt)
-    db.commit()
+    db.flush()
     return result.rowcount
 
 # ============================================================
@@ -466,8 +441,6 @@ def replace_channel_members(
     team_id: str,
     channel_id: str,
     user_ids: list[str],
-    *,
-    auto_commit: bool = True,
 ) -> int:
     db.execute(
         delete(SlackChannelMember).where(
@@ -477,10 +450,7 @@ def replace_channel_members(
     )
 
     if not user_ids:
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
+        db.flush()
         return 0
     
     now = datetime.now(timezone.utc)
@@ -495,28 +465,25 @@ def replace_channel_members(
     ]
 
     db.execute(insert(SlackChannelMember).values(members_data))
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
+    db.flush()
     
     return len(user_ids)
 
 def delete_channel_members_by_team(
     db: Session,
     team_id: str,
-    *,
-    auto_commit: bool = True,
 ) -> int:
     stmt = delete(SlackChannelMember).where(SlackChannelMember.team_id == team_id)
     result = db.execute(stmt)
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
+    db.flush()
     return result.rowcount
 
-def add_channel_member(db:Session, team_id:str, channel_id:str, user_id:str)->None:
+def add_channel_member(
+    db: Session,
+    team_id: str,
+    channel_id: str,
+    user_id: str,
+) -> None:
     stmt = insert(SlackChannelMember).values(
         team_id=team_id,
         channel_id=channel_id,
@@ -524,13 +491,18 @@ def add_channel_member(db:Session, team_id:str, channel_id:str, user_id:str)->No
         synced_at=datetime.now(timezone.utc),
     ).on_conflict_do_nothing()
     db.execute(stmt)
-    db.commit()
+    db.flush()
 
-def remove_channel_member(db:Session, team_id:str, channel_id:str, user_id:str)->None:
+def remove_channel_member(
+    db: Session,
+    team_id: str,
+    channel_id: str,
+    user_id: str,
+) -> None:
     stmt = delete(SlackChannelMember).where(
         SlackChannelMember.team_id == team_id,
         SlackChannelMember.channel_id == channel_id,
         SlackChannelMember.user_id == user_id,
     )
     db.execute(stmt)
-    db.commit()
+    db.flush()

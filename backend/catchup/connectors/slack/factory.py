@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 def _load_token_db(team_id: str):
-    with SessionLocal() as session:
-        return slack_crud.get_slack_token_by_team_id(session, team_id)
+    with SessionLocal() as db:
+        return slack_crud.get_slack_token_by_team_id(db, team_id)
 
 
 async def _resolve_access_token(

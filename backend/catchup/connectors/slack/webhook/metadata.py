@@ -6,6 +6,7 @@ from typing import Any, Callable
 from sqlalchemy.orm import Session
 
 from catchup.connectors.slack import webhook_service
+from catchup.db.engine import SessionLocal
 
 from .responses import (
     ignored_event_response,
@@ -45,89 +46,72 @@ def is_supported_channel_membership_event(event: dict[str, Any]) -> bool:
 
 def handle_metadata_event(
     *,
-    db: Session,
     team_id: str,
     event_type: str,
     event: dict[str, Any],
 ) -> dict[str, Any]:
-    if event_type in CHANNEL_UPSERT_EVENTS:
-        return _run_metadata_handler(
-            db=db,
-            team_id=team_id,
-            event_type=event_type,
-            event=event,
-            handler=webhook_service.handle_channel_upsert,
-            label="Channel upsert",
-        )
-
-    if event_type in CHANNEL_DELETE_EVENTS:
-        return _run_metadata_handler(
-            db=db,
-            team_id=team_id,
-            event_type=event_type,
-            event=event,
-            handler=webhook_service.handle_channel_delete,
-            label="Channel delete",
-        )
-
-    if event_type in CHANNEL_ARCHIVE_EVENTS:
-        return _run_metadata_handler(
-            db=db,
-            team_id=team_id,
-            event_type=event_type,
-            event=event,
-            handler=webhook_service.handle_channel_archive,
-            label="Channel archive",
-        )
-
     if event_type in MEMBER_EVENTS:
         if not is_supported_channel_membership_event(event):
             return ignored_event_response(
                 event_type=event_type,
                 reason="unsupported_channel",
             )
-        return _run_metadata_handler(
-            db=db,
-            team_id=team_id,
+
+    resolved = _resolve_metadata_handler(event_type)
+    if resolved is None:
+        return ignored_event_response(
             event_type=event_type,
-            event=event,
-            handler=webhook_service.handle_member_event,
-            label="Member event",
+            reason="unsupported_event",
         )
+
+    handler, label = resolved
+    with SessionLocal() as db:
+        try:
+            _run_metadata_handler(
+                db=db,
+                team_id=team_id,
+                event=event,
+                handler=handler,
+            )
+            db.commit()
+            return processed_metadata_response(event_type=event_type)
+        except Exception as exc:
+            db.rollback()
+            logger.error(
+                "[SLACK][WEBHOOK][METADATA] %s failed: team_id=%s, error=%s",
+                label,
+                team_id,
+                exc,
+            )
+            return metadata_error_response()
+
+
+def _resolve_metadata_handler(
+    event_type: str,
+) -> tuple[Callable[[Session, str, dict[str, Any]], None], str] | None:
+    if event_type in CHANNEL_UPSERT_EVENTS:
+        return webhook_service.handle_channel_upsert, "Channel upsert"
+
+    if event_type in CHANNEL_DELETE_EVENTS:
+        return webhook_service.handle_channel_delete, "Channel delete"
+
+    if event_type in CHANNEL_ARCHIVE_EVENTS:
+        return webhook_service.handle_channel_archive, "Channel archive"
+
+    if event_type in MEMBER_EVENTS:
+        return webhook_service.handle_member_event, "Member event"
 
     if event_type in USER_EVENTS:
-        return _run_metadata_handler(
-            db=db,
-            team_id=team_id,
-            event_type=event_type,
-            event=event,
-            handler=webhook_service.handle_user_event,
-            label="User event",
-        )
+        return webhook_service.handle_user_event, "User event"
 
-    return ignored_event_response(
-        event_type=event_type,
-        reason="unsupported_event",
-    )
+    return None
 
 
 def _run_metadata_handler(
     *,
     db: Session,
     team_id: str,
-    event_type: str,
     event: dict[str, Any],
     handler: Callable[[Session, str, dict[str, Any]], None],
-    label: str,
-) -> dict[str, Any]:
-    try:
-        handler(db, team_id, event)
-        return processed_metadata_response(event_type=event_type)
-    except Exception as exc:
-        logger.error(
-            "[SLACK][WEBHOOK][METADATA] %s failed: team_id=%s, error=%s",
-            label,
-            team_id,
-            exc,
-        )
-        return metadata_error_response()
+) -> None:
+    handler(db, team_id, event)

@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 
 
 def _load_token_record_db(cloud_id: str):
-    with SessionLocal() as session:
-        token_record = oauth_repository.get_token_by_cloud_id(session, cloud_id)
+    with SessionLocal() as db:
+        token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
         if token_record is None:
             raise AtlassianTokenNotFoundError(cloud_id)
         return token_record
