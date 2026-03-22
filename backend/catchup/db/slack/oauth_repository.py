@@ -3,11 +3,7 @@ from datetime import datetime
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel
-from catchup.audit.metadata import IntegrationAuditMetadata
-from catchup.audit.service import emit_audit_event
 from catchup.db.models import SlackOAuthToken
-from catchup.events.enums import EventType, IntegrationEventAction
 
 
 def get_slack_token_by_team_id(
@@ -56,41 +52,16 @@ def create_or_update_slack_token(
         for key, value in token_data.items():
             if key != "team_id":
                 setattr(existing, key, value)
-        db.commit()
-        db.refresh(existing)
-        emit_audit_event(
-            event_type=EventType.INTEGRATION,
-            event_action=IntegrationEventAction.OAUTH_TOKEN_PERSISTED,
-            event_status=AuditEventStatus.SUCCESS,
-            level=AuditLevel.INFO,
-            metadata=IntegrationAuditMetadata(
-                context=f"slack_oauth_token_persisted:team_id={team_id}",
-                provider="slack",
-            ),
-            immediate=True,
-        )
+        db.flush()
         return existing
 
     new_token = SlackOAuthToken(**token_data)
     db.add(new_token)
-    db.commit()
-    db.refresh(new_token)
-    emit_audit_event(
-        event_type=EventType.INTEGRATION,
-        event_action=IntegrationEventAction.OAUTH_TOKEN_PERSISTED,
-        event_status=AuditEventStatus.SUCCESS,
-        level=AuditLevel.INFO,
-        metadata=IntegrationAuditMetadata(
-            context=f"slack_oauth_token_persisted:team_id={team_id}",
-            provider="slack",
-        ),
-        immediate=True,
-    )
+    db.flush()
     return new_token
 
 
 def delete_slack_token(db: Session, team_id: str) -> bool:
     stmt = delete(SlackOAuthToken).where(SlackOAuthToken.team_id == team_id)
     result = db.execute(stmt)
-    db.commit()
     return result.rowcount > 0

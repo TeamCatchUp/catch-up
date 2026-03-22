@@ -23,7 +23,7 @@ from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
 logger = logging.getLogger(__name__)
 
 
-def _load_token_sync(team_id: str):
+def _load_token_db(team_id: str):
     with SessionLocal() as session:
         return slack_crud.get_slack_token_by_team_id(session, team_id)
 
@@ -31,7 +31,7 @@ def _load_token_sync(team_id: str):
 async def _resolve_access_token(
     team_id: str,
 ) -> str:
-    token_record = await run_in_threadpool(_load_token_sync, team_id)
+    token_record = await run_in_threadpool(_load_token_db, team_id)
     if not token_record:
         raise SyncConnectorError(
             f"Slack 연결을 찾을 수 없습니다: {team_id}",
@@ -40,7 +40,7 @@ async def _resolve_access_token(
 
     slack_service = get_slack_oauth_service()
     try:
-        return await slack_service.get_valid_access_token(None, token_record)
+        return await slack_service.get_valid_access_token(token_record)
     except HTTPException as exc:
         message = (
             exc.detail

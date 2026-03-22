@@ -102,8 +102,6 @@ class SlackMetadataService:
 
         if auto_commit:
             db.commit()
-        else:
-            db.flush()
 
     def persist_channel_snapshot(
         self,
@@ -128,8 +126,6 @@ class SlackMetadataService:
 
         if auto_commit:
             db.commit()
-        else:
-            db.flush()
 
     async def collect_snapshot(
         self,

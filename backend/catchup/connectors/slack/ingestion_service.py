@@ -9,6 +9,7 @@ from typing import Any
 from langchain_core.documents import Document
 from slack_sdk.errors import SlackApiError
 from sqlalchemy.orm import Session
+from fastapi.concurrency import run_in_threadpool
 
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.connectors.slack.schemas import (
@@ -285,7 +286,7 @@ class SlackIngestionService:
         if not requested_ids:
             return SlackRecordRetryResult(records=[])
 
-        await asyncio.to_thread(self._load_context_from_local_db)
+        await run_in_threadpool(self._load_context_from_local_db)
         documents, failed_ids = await self._fetch_message_documents(
             channel_id=channel_id,
             channel_name=channel_name,

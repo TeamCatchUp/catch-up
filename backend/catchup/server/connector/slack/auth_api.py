@@ -201,7 +201,7 @@ async def slack_installation_status(
     for token in tokens:
         try:
             # 토큰 유효성 확인
-            valid_token = await slack_service.get_valid_access_token(None, token)
+            valid_token = await slack_service.get_valid_access_token(token)
             await slack_service.test_auth(valid_token)
 
             workspaces.append(SlackWorkspaceInfo(
@@ -333,19 +333,35 @@ def _persist_slack_token_db(
     incoming_webhook_channel: str | None = None,
 ):
     with SessionLocal() as db:
-        slack_crud.create_or_update_slack_token(
-            db=db,
-            team_id=team_id,
-            team_name=team_name,
-            bot_user_id=bot_user_id,
-            bot_access_token=bot_access_token,
-            bot_scopes=bot_scopes,
-            authed_user_id=authed_user_id,
-            bot_refresh_token=bot_refresh_token,
-            bot_token_expires_at=bot_token_expires_at,
-            incoming_webhook_url=incoming_webhook_url,
-            incoming_webhook_channel=incoming_webhook_channel,
-        )
+        try:
+            slack_crud.create_or_update_slack_token(
+                db=db,
+                team_id=team_id,
+                team_name=team_name,
+                bot_user_id=bot_user_id,
+                bot_access_token=bot_access_token,
+                bot_scopes=bot_scopes,
+                authed_user_id=authed_user_id,
+                bot_refresh_token=bot_refresh_token,
+                bot_token_expires_at=bot_token_expires_at,
+                incoming_webhook_url=incoming_webhook_url,
+                incoming_webhook_channel=incoming_webhook_channel,
+            )
+            db.commit()
+            emit_audit_event(
+                event_type=EventType.INTEGRATION,
+                event_action=IntegrationEventAction.OAUTH_TOKEN_PERSISTED,
+                event_status=AuditEventStatus.SUCCESS,
+                level=AuditLevel.INFO,
+                metadata=IntegrationAuditMetadata(
+                    context=f"slack_oauth_token_persisted:team_id={team_id}",
+                    provider="slack",
+                ),
+                immediate=True,
+            )
+        except Exception:
+            db.rollback()
+            raise
 
 
 def _load_all_slack_tokens_db():
@@ -360,7 +376,13 @@ def _load_slack_token_db(team_id: str):
 
 def _delete_slack_token_db(team_id: str) -> bool:
     with SessionLocal() as db:
-        return slack_crud.delete_slack_token(db, team_id)
+        try:
+            deleted = slack_crud.delete_slack_token(db, team_id)
+            db.commit()
+            return deleted
+        except Exception:
+            db.rollback()
+            raise
 
 
 def _persist_workspace_metadata_db(service, snapshot) -> None:
