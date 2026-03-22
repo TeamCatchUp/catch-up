@@ -4,11 +4,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel
-from catchup.audit.metadata import IntegrationAuditMetadata
-from catchup.audit.service import emit_audit_event
 from catchup.db.models import GithubInstallation, GithubInstallationType, GithubRepositorySelection
-from catchup.events.enums import EventType, IntegrationEventAction
 
 
 def get_installation_info_by_id(db: Session, id: int) -> Optional[GithubInstallation]:
@@ -47,19 +43,6 @@ def create_installation(
         suspended_at = suspended_at,
     )
     db.add(installation)
-    db.commit()
-    db.refresh(installation)
-    emit_audit_event(
-        event_type=EventType.INTEGRATION,
-        event_action=IntegrationEventAction.OAUTH_TOKEN_PERSISTED,
-        event_status=AuditEventStatus.SUCCESS,
-        level=AuditLevel.INFO,
-        metadata=IntegrationAuditMetadata(
-            context=f"github_installation_persisted:installation_id={installation_id}",
-            provider="github",
-        ),
-        immediate=True,
-    )
     return installation
 
 def update_installation_suspended(
@@ -72,8 +55,6 @@ def update_installation_suspended(
     installation = get_installation_by_installation_id(db, installation_id)
     if installation:
         installation.suspended_at = suspended_at
-        db.commit()
-        db.refresh(installation)
     return installation
 
 
@@ -86,7 +67,6 @@ def delete_installation(
     installation = get_installation_info_by_id(db, id)
     if installation:
         db.delete(installation)
-        db.commit()
         return True
     return False
 
@@ -100,6 +80,5 @@ def delete_installation_by_installation_id(
     installation = get_installation_by_installation_id(db, installation_id)
     if installation:
         db.delete(installation)
-        db.commit()
         return True
     return False
