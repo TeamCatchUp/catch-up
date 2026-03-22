@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.constants import REQUIRED_CONFLUENCE_SCOPES
@@ -26,6 +27,7 @@ from catchup.connectors.confluence.schemas import (
 )
 from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.confluence import domain_repository as confluence_entities
+from catchup.db.engine import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,31 @@ class ConfluenceMetadataSnapshot:
 class ConfluenceMetadataService:
     def __init__(self, token_manager: AtlassianTokenManager):
         self.token_manager = token_manager
+
+    def _load_granted_scopes_db(self, cloud_id: str) -> set[str] | None:
+        with SessionLocal() as db:
+            token = atlassian_crud.get_token_by_cloud_id(db, cloud_id)
+            if not token:
+                return None
+            return set((token.scopes or "").split())
+
+    def _persist_snapshot_db(
+        self,
+        cloud_id: str,
+        snapshot: ConfluenceMetadataSnapshot,
+    ) -> None:
+        with SessionLocal() as db:
+            try:
+                self.persist_snapshot(
+                    db,
+                    cloud_id,
+                    snapshot,
+                    auto_commit=False,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
 
     def persist_snapshot(
         self,
@@ -151,13 +178,13 @@ class ConfluenceMetadataService:
 
     async def sync_all(
         self,
-        db: Session,
         cloud_id: str,
-        *,
-        auto_commit: bool = True,
     ) -> dict[str, Any]:
-        token = atlassian_crud.get_token_by_cloud_id(db, cloud_id)
-        if not token:
+        granted_scopes = await run_in_threadpool(
+            self._load_granted_scopes_db,
+            cloud_id,
+        )
+        if granted_scopes is None:
             logger.warning(
                 "[CONFLUENCE][METADATA] No token found: cloud_id=%s",
                 cloud_id,
@@ -166,15 +193,15 @@ class ConfluenceMetadataService:
 
         snapshot = await self.collect_snapshot(
             cloud_id,
-            granted_scopes=set((token.scopes or "").split()),
+            granted_scopes=granted_scopes,
         )
         if snapshot is None:
             return {"users": 0, "spaces": 0}
-        self.persist_snapshot(
-            db,
+
+        await run_in_threadpool(
+            self._persist_snapshot_db,
             cloud_id,
             snapshot,
-            auto_commit=auto_commit,
         )
         return {"users": len(snapshot.users), "spaces": len(snapshot.spaces)}
 
