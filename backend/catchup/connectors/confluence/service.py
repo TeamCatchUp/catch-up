@@ -139,6 +139,35 @@ class ConfluenceIngestionService:
     ) -> tuple[str, str | None, dict[str, str | None]]:
         return await asyncio.to_thread(self._load_space_context_sync, space_key)
 
+    def _load_space_keys_db(self) -> list[str]:
+        with SessionLocal() as db:
+            spaces = domain_repository.get_spaces_by_cloud_id(db, self.cloud_id)
+            return [
+                (space.space_key or "").strip()
+                for space in spaces
+                if (space.space_key or "").strip()
+            ]
+
+    async def _load_space_keys(self) -> list[str]:
+        return await asyncio.to_thread(self._load_space_keys_db)
+
+    def _load_space_sync_context_db(
+        self,
+        space_keys: list[str],
+    ) -> tuple[dict[str, str], dict[str, str | None], dict[str, str | None]]:
+        with SessionLocal() as db:
+            return (
+                domain_repository.get_space_id_map(db, self.cloud_id, space_keys),
+                domain_repository.get_space_name_map(db, self.cloud_id, space_keys),
+                self._load_user_name_map(db),
+            )
+
+    async def _load_space_sync_context(
+        self,
+        space_keys: list[str],
+    ) -> tuple[dict[str, str], dict[str, str | None], dict[str, str | None]]:
+        return await asyncio.to_thread(self._load_space_sync_context_db, space_keys)
+
     async def _collect_page_ids(
         self,
         *,
@@ -237,31 +266,12 @@ class ConfluenceIngestionService:
             sync_from_dt: datetime | None = None,
             audit_context: SyncAuditContext | None = None,
     ) -> TargetSyncResult:
-        with SessionLocal() as db:
-            return await self._full_sync_with_db(
-                db,
-                space_keys=space_keys,
-                sync_from_dt=sync_from_dt,
-                audit_context=audit_context,
-            )
-
-    async def _full_sync_with_db(
-            self,
-            db: Session,
-            space_keys: list[str] | None = None,
-            sync_from_dt: datetime | None = None,
-            audit_context: SyncAuditContext | None = None,
-    ) -> TargetSyncResult:
         sync_from = sync_from_dt or (
             datetime.now(timezone.utc) - timedelta(days=settings.DEFAULT_SYNC_DAYS)
         )
 
         if space_keys is None:
-            normalized_space_keys = [
-                (space.space_key or "").strip()
-                for space in domain_repository.get_spaces_by_cloud_id(db, self.cloud_id)
-                if (space.space_key or "").strip()
-            ]
+            normalized_space_keys = await self._load_space_keys()
         else:
             normalized_space_keys = [
                 key.strip()
@@ -285,11 +295,8 @@ class ConfluenceIngestionService:
                 logger.warning(f"[CONFLUENCE][FULL SYNC] No spaces to sync: cloud_id={self.cloud_id}")
                 return TargetSyncResult(skipped=True)
 
-            space_id_map = domain_repository.get_space_id_map(
-                db, self.cloud_id, normalized_space_keys,
-            )
-            space_name_map = domain_repository.get_space_name_map(
-                db, self.cloud_id, normalized_space_keys,
+            space_id_map, space_name_map, user_name_map = await self._load_space_sync_context(
+                normalized_space_keys,
             )
             if not space_id_map:
                 logger.error(
@@ -319,11 +326,9 @@ class ConfluenceIngestionService:
                 results["pages"]["errors"] += len(missing_space_keys)
                 results["blogposts"]["errors"] += len(missing_space_keys)
 
-            user_name_map = self._load_user_name_map(db)
-            
             for space_key, space_id in space_id_map.items():
                 page_result = await self._sync_space_pages(
-                    db, space_id = space_id, space_key = space_key, since = sync_from,
+                    space_id=space_id, space_key=space_key, since=sync_from,
                     user_name_map=user_name_map, space_name=space_name_map.get(space_key),
                     audit_context=audit_context,
                 )
@@ -331,14 +336,12 @@ class ConfluenceIngestionService:
                 results["pages"]["errors"] += page_result["errors"]
 
                 blog_result = await self._sync_space_blogposts(
-                    db, space_id = space_id, space_key = space_key, since = sync_from,
+                    space_id=space_id, space_key=space_key, since=sync_from,
                     user_name_map=user_name_map, space_name=space_name_map.get(space_key),
                     audit_context=audit_context,
                 )
                 results["blogposts"]["synced"] += blog_result["synced"]
                 results["blogposts"]["errors"] += blog_result["errors"]
-            
-            db.commit()
 
             logger.info(
                 f"[CONFLUENCE][FULL SYNC] Completed : cloud_id = {self.cloud_id}, results = {results}"
@@ -353,13 +356,11 @@ class ConfluenceIngestionService:
             )
 
         except Exception as e:
-            db.rollback()
             logger.error(f"[CONFLUENCE][FULL SYNC] Failed: cloud_id={self.cloud_id}, error={e}")
             raise
         
     async def _sync_space_pages(
             self,
-            db: Session,
             space_id: str,
             space_key: str,
             since: datetime | None = None,
@@ -369,7 +370,6 @@ class ConfluenceIngestionService:
     ) -> dict[str, int]:
 
         results = {"synced": 0, "errors": 0}
-        _ = db
 
         try:
             should_stop = False
@@ -424,7 +424,6 @@ class ConfluenceIngestionService:
     
     async def _sync_space_blogposts(
             self,
-            db: Session,
             space_id: str,
             space_key: str,
             since: datetime | None = None,
@@ -434,7 +433,6 @@ class ConfluenceIngestionService:
     ) -> dict[str, int]:
         
         results = {"synced": 0, "errors": 0}
-        _ = db
 
         try:
             should_stop = False
