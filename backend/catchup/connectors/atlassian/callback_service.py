@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Sequence
 
-from sqlalchemy.orm import Session
+from fastapi.concurrency import run_in_threadpool
 
 from catchup.connectors.atlassian.constants import (
     REQUIRED_CONFLUENCE_SCOPES,
@@ -26,6 +26,7 @@ from catchup.connectors.atlassian.constants import (
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.configs.config import settings
 from catchup.db.atlassian import oauth_repository as atlassian_crud
+from catchup.db.engine import SessionLocal
 from catchup.utils.redis import validate_oauth_state
 
 logger = logging.getLogger(__name__)
@@ -144,10 +145,54 @@ class AtlassianCallbackService:
     def __init__(self, oauth_client: AtlassianOAuthClient):
         self.oauth_client = oauth_client
 
+    def _persist_tokens_sync(
+        self,
+        *,
+        atlassian_account_id: str,
+        resources: Sequence[Any],
+        aggregated_scopes: dict[str, set[str]],
+        access_token: str,
+        refresh_token: str,
+        expires_at: datetime,
+    ) -> CallbackResult:
+        confluence_targets: list[str] = []
+        jira_targets: list[str] = []
+
+        with SessionLocal() as db:
+            for cloud_id, granted in aggregated_scopes.items():
+                has_confluence = REQUIRED_CONFLUENCE_SCOPES.issubset(granted)
+                has_jira = REQUIRED_JIRA_SCOPES.issubset(granted)
+
+                if has_confluence:
+                    confluence_targets.append(cloud_id)
+                if has_jira:
+                    jira_targets.append(cloud_id)
+
+                resource = next((r for r in resources if r.id == cloud_id), None)
+                site_name = resource.name if resource else None
+                site_url = resource.url if resource else None
+
+                atlassian_crud.create_or_update_token(
+                    db=db,
+                    atlassian_account_id=atlassian_account_id,
+                    cloud_id=cloud_id,
+                    site_name=site_name,
+                    site_url=site_url,
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    expires_at=expires_at,
+                    scopes=" ".join(sorted(granted)),
+                )
+
+        return CallbackResult(
+            resources=resources,
+            confluence_targets=confluence_targets,
+            jira_targets=jira_targets,
+        )
+
     async def handle_callback(
         self,
         *,
-        db: Session,
         code: str,
         state: str | None,
     ) -> CallbackResult:
@@ -174,38 +219,12 @@ class AtlassianCallbackService:
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens.expires_in)
 
         aggregated_scopes = _aggregate_scope(resources, tokens.scope)
-        confluence_targets: list[str] = []
-        jira_targets: list[str] = []
-
-        # 4) cloud_id별 토큰 저장 + 동기화 대상 결정
-        for cloud_id, granted in aggregated_scopes.items():
-            has_confluence = REQUIRED_CONFLUENCE_SCOPES.issubset(granted)
-            has_jira = REQUIRED_JIRA_SCOPES.issubset(granted)
-
-            if has_confluence:
-                confluence_targets.append(cloud_id)
-            if has_jira:
-                jira_targets.append(cloud_id)
-
-            # 리소스 메타는 accessible-resources에서 바로 찾는다
-            resource = next((r for r in resources if r.id == cloud_id), None)
-            site_name = resource.name if resource else None
-            site_url = resource.url if resource else None
-
-            atlassian_crud.create_or_update_token(
-                db=db,
-                atlassian_account_id=user_info.account_id,
-                cloud_id=cloud_id,
-                site_name=site_name,
-                site_url=site_url,
-                access_token=tokens.access_token,
-                refresh_token=tokens.refresh_token,
-                expires_at=expires_at,
-                scopes=" ".join(sorted(granted)),
-            )
-
-        return CallbackResult(
+        return await run_in_threadpool(
+            self._persist_tokens_sync,
+            atlassian_account_id=user_info.account_id,
             resources=resources,
-            confluence_targets=confluence_targets,
-            jira_targets=jira_targets,
+            aggregated_scopes=aggregated_scopes,
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
+            expires_at=expires_at,
         )

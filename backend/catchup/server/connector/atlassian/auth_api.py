@@ -13,7 +13,6 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from httpx import HTTPStatusError, RequestError
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import IntegrationAuditMetadata
@@ -27,7 +26,10 @@ from catchup.connectors.atlassian.callback_service import (
     AtlassianCallbackService,
     CallbackError,
 )
-from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import (
+    AtlassianTokenManager,
+    AtlassianTokenProvider,
+)
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
 from catchup.connectors.atlassian.schemas import AtlassianInstallationStatus
 from catchup.connectors.jira.factory import create_jira_ingestion_service
@@ -35,7 +37,6 @@ from catchup.connectors.jira.dynamic_webhook_service import (
     get_jira_dynamic_webhook_service,
 )
 from catchup.configs.config import auth_settings
-from catchup.db.dependencies import get_db
 from catchup.db.engine import SessionLocal
 from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.knowledge_source import add_knowledge_source
@@ -73,7 +74,6 @@ async def atlassian_oauth_callback(
     code: str,
     background_tasks: BackgroundTasks,
     state: str | None = None,
-    db: Session = Depends(get_db),
     atlassian_service: AtlassianOAuthClient = Depends(get_atlassian_oauth_client),
 ):
     """
@@ -99,7 +99,6 @@ async def atlassian_oauth_callback(
 
     try:
         result = await callback_service.handle_callback(
-            db=db,
             code=code,
             state=state,
         )
@@ -170,15 +169,13 @@ async def atlassian_oauth_callback(
 
 @router.get("/status", response_model=AtlassianInstallationStatus)
 async def atlassian_installation_status(
-    db: Session = Depends(get_db),
     atlassian_service: AtlassianOAuthClient = Depends(get_atlassian_oauth_client),
 ):
     """
     Atlassian 설치 상태 조회
     """
-    tokens = atlassian_crud.get_all_tokens(db)
-
-    if not tokens:
+    cloud_id = await run_in_threadpool(_load_latest_cloud_id)
+    if cloud_id is None:
         return AtlassianInstallationStatus(installed=False)
 
     try:
@@ -186,7 +183,8 @@ async def atlassian_installation_status(
             oauth_client=atlassian_service,
             oauth_repository=atlassian_crud,
         )
-        valid_token = await token_manager.resolve_access_token(db, tokens[0])
+        token_provider = AtlassianTokenProvider(token_manager)
+        valid_token = await token_provider.get_access_token(cloud_id)
         resources = await atlassian_service.get_accessible_resources(valid_token)
         return AtlassianInstallationStatus(installed=True, resources=resources)
     except HTTPException as e:
@@ -203,12 +201,11 @@ async def atlassian_installation_status(
 @router.delete("/uninstall")
 async def atlassian_uninstall(
     cloud_id: str = Query(..., description="삭제할 Atlassian Cloud ID"),
-    db: Session = Depends(get_db),
 ):
     """
     Atlassian 연결 해제
     """
-    deleted = atlassian_crud.delete_token(db, cloud_id)
+    deleted = await run_in_threadpool(_delete_token_db, cloud_id)
     if deleted:
         return {"status": "success", "message": "Atlassian 연결이 해제되었습니다."}
     return {"status": "not_found", "message": "해당 Atlassian 연결을 찾을 수 없습니다."}
@@ -217,8 +214,21 @@ async def atlassian_uninstall(
 # =============================================================================
 # Private Helper Functions
 # =============================================================================
+def _load_latest_cloud_id() -> str | None:
+    with SessionLocal() as db:
+        tokens = atlassian_crud.get_all_tokens(db)
+        if not tokens:
+            return None
+        return tokens[0].cloud_id
+
+
+def _delete_token_db(cloud_id: str) -> bool:
+    with SessionLocal() as db:
+        return atlassian_crud.delete_token(db, cloud_id)
+
+
 async def _register_knowledge_source(cloud_id: str, source_type: SourceType):
-    def _sync_task():
+    def _register_knowledge_source_db():
         with SessionLocal() as db:
             workspace = get_workspace_limit_one(db)
             
@@ -248,7 +258,7 @@ async def _register_knowledge_source(cloud_id: str, source_type: SourceType):
             )
             add_knowledge_source(db, new_source)
             db.commit()
-    await run_in_threadpool(_sync_task)
+    await run_in_threadpool(_register_knowledge_source_db)
 
 
 async def _sync_jira_metadata(cloud_id: str) -> None:
@@ -281,12 +291,9 @@ async def _ensure_jira_dynamic_webhook(cloud_id: str) -> None:
         f"[ATLASSIAN][AUTH] Ensuring Jira dynamic webhook: cloud_id={cloud_id}"
     )
 
-    db = SessionLocal()
     try:
         dynamic_webhook_service = get_jira_dynamic_webhook_service()
-        result = await dynamic_webhook_service.ensure_registered(
-            db=db, cloud_id=cloud_id
-        )
+        result = await dynamic_webhook_service.ensure_registered(cloud_id=cloud_id)
         logger.info(
             f"[ATLASSIAN][AUTH] Jira dynamic webhook ensured: "
             f"cloud_id={cloud_id}, result={result}"
@@ -297,8 +304,6 @@ async def _ensure_jira_dynamic_webhook(cloud_id: str) -> None:
             f"cloud_id={cloud_id}, error={e}",
             exc_info=True,
         )
-    finally:
-        db.close()
 
 
 async def _sync_confluence_metadata(cloud_id: str) -> None:

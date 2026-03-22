@@ -24,7 +24,6 @@ from typing import Any, Literal
 
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
-from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
@@ -195,7 +194,7 @@ class JiraIngestionService:
             missing_ids=missing_ids,
         )
 
-    def _load_project_context_sync(
+    def _load_project_context_db(
         self,
         project_key: str,
     ) -> None:
@@ -212,7 +211,38 @@ class JiraIngestionService:
         self,
         project_key: str,
     ) -> None:
-        await run_in_threadpool(self._load_project_context_sync, project_key)
+        await run_in_threadpool(self._load_project_context_db, project_key)
+
+    def _load_project_keys_db(self) -> list[str]:
+        with SessionLocal() as db:
+            projects = jira_entities.get_projects_by_cloud_id(db, self.cloud_id)
+            return [project.project_key for project in projects]
+
+    async def _load_project_keys(self) -> list[str]:
+        return await run_in_threadpool(self._load_project_keys_db)
+
+    def _load_project_sync_context_db(
+        self,
+        project_key: str,
+    ) -> tuple[dict[str, Any], dict[int, Any]]:
+        with SessionLocal() as db:
+            project_cache = jira_entities.get_projects_by_keys(
+                db,
+                self.cloud_id,
+                [project_key],
+            )
+            sprints = jira_entities.get_sprints_by_cloud_id(db, self.cloud_id)
+            sprint_cache = {sprint.sprint_id: sprint for sprint in sprints}
+            return project_cache, sprint_cache
+
+    async def _load_project_sync_context(
+        self,
+        project_key: str,
+    ) -> tuple[dict[str, Any], dict[int, Any]]:
+        return await run_in_threadpool(
+            self._load_project_sync_context_db,
+            project_key,
+        )
 
     def _classify_record_type(
         self,
@@ -458,21 +488,6 @@ class JiraIngestionService:
         sync_from_dt: datetime | None = None,
         audit_context: SyncAuditContext | None = None,
     ) -> TargetSyncResult:
-        with SessionLocal() as db:
-            return await self._full_sync_with_db(
-                db,
-                project_keys=project_keys,
-                sync_from_dt=sync_from_dt,
-                audit_context=audit_context,
-            )
-
-    async def _full_sync_with_db(
-        self,
-        db: Session,
-        project_keys: list[str] | None = None,
-        sync_from_dt: datetime | None = None,
-        audit_context: SyncAuditContext | None = None,
-    ) -> TargetSyncResult:
         """
         전체 동기화
 
@@ -505,13 +520,11 @@ class JiraIngestionService:
                 logger.info("[JIRA][FULL SYNC] Sprint Sync Skipped : Agile API Not Available")
 
             if not project_keys:
-                projects = jira_entities.get_projects_by_cloud_id(db, self.cloud_id)
-                project_keys = [p.project_key for p in projects]
+                project_keys = await self._load_project_keys()
             
             for project_key in project_keys:
                 try:
                     project_result = await self._sync_project_issues(
-                        db,
                         project_key,
                         since=sync_from,
                         audit_context=audit_context,
@@ -546,7 +559,6 @@ class JiraIngestionService:
         
     async def _sync_project_issues(
         self,
-        db: Session,
         project_key: str,
         since: datetime | None = None,
         audit_context: SyncAuditContext | None = None,
@@ -567,18 +579,15 @@ class JiraIngestionService:
         sprint_cache: dict = {}
 
         try:
-            project_cache = jira_entities.get_projects_by_keys(
-                db, self.cloud_id, [project_key]
+            project_cache, sprint_cache = await self._load_project_sync_context(
+                project_key,
             )
-            sprints = jira_entities.get_sprints_by_cloud_id(db, self.cloud_id)
-            sprint_cache = {s.sprint_id: s for s in sprints}
 
             logger.info(
                 f"[JIRA][FULL SYNC] Loaded caches: "
                 f"project_key={project_key}, {len(sprint_cache)} sprints"
             )
         except Exception as e:
-            db.rollback()
             logger.warning(
                 f"[JIRA][FULL SYNC] Failed to load caches, continuing without enrichment: "
                 f"project_key={project_key}, error={e}"
@@ -785,7 +794,6 @@ class JiraIngestionService:
         프로젝트 동기화 (RDBMS 저장)
 
         Args:
-            db: SQLAlchemy Session
             project_keys: 동기화할 프로젝트 키 목록 (None이면 접근 가능한 모든 프로젝트)
 
         Returns:
@@ -796,7 +804,7 @@ class JiraIngestionService:
         results = {"synced": 0, "errors": 0}
         projects_data: list[dict] = []
 
-        def _sync_projects_snapshot_sync() -> dict[str, int]:
+        def _persist_projects_db() -> dict[str, int]:
             with SessionLocal() as db:
                 try:
                     result = jira_entities.sync_projects_snapshot(
@@ -852,7 +860,7 @@ class JiraIngestionService:
                 await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
 
             sync_result = await run_in_threadpool(
-                _sync_projects_snapshot_sync,
+                _persist_projects_db,
             )
             logger.info(
                 "[JIRA][METADATA] Project snapshot synced: cloud_id=%s, upserted=%s, deleted=%s",
@@ -885,7 +893,7 @@ class JiraIngestionService:
         results = {"synced": 0, "errors": 0}
         sprints_data: list[dict] = []
 
-        def _upsert_sprints_sync() -> int:
+        def _persist_sprints_db() -> int:
             with SessionLocal() as db:
                 try:
                     result = jira_entities.upsert_sprints_bulk(
@@ -943,7 +951,7 @@ class JiraIngestionService:
             # RDBMS 벌크 저장
             if sprints_data:
                 await run_in_threadpool(
-                    _upsert_sprints_sync,
+                    _persist_sprints_db,
                 )
                 logger.info(f"Saved {len(sprints_data)} sprints to RDBMS")
 
@@ -973,7 +981,7 @@ class JiraIngestionService:
         results = {"synced": 0, "errors": 0}
         users_data: list[dict] = []
 
-        def _upsert_users_sync() -> int:
+        def _persist_users_db() -> int:
             with SessionLocal() as db:
                 try:
                     result = jira_entities.upsert_users_bulk(
@@ -1011,7 +1019,7 @@ class JiraIngestionService:
             # RDBMS 벌크 저장 (저장 후 카운트)
             if users_data:
                 saved_count = await run_in_threadpool(
-                    _upsert_users_sync,
+                    _persist_users_db,
                 )
                 results["synced"] = saved_count
                 logger.info(f"Saved {saved_count} users to RDBMS")
@@ -1137,26 +1145,6 @@ class JiraIngestionService:
         since: datetime | None,
         audit_context: SyncAuditContext | None = None,
     ) -> dict[str, int | bool]:
-        with SessionLocal() as db:
-            return await self._incremental_sync_with_db(
-                db,
-                project_key=project_key,
-                record_id=record_id,
-                event_kind=event_kind,
-                since=since,
-                audit_context=audit_context,
-            )
-
-    async def _incremental_sync_with_db(
-        self,
-        db: Session,
-        *,
-        project_key: str,
-        record_id: str,
-        event_kind: str,
-        since: datetime | None,
-        audit_context: SyncAuditContext | None = None,
-    ) -> dict[str, int | bool]:
         normalized_event_kind = event_kind.strip().lower()
         if normalized_event_kind == "deleted":
             deleted = await self.delete_issue_documents([record_id])
@@ -1167,11 +1155,10 @@ class JiraIngestionService:
             }
 
         result = await self._sync_project_issues(
-            db,
-                project_key=project_key,
-                since=since,
-                audit_context=audit_context,
-            )
+            project_key=project_key,
+            since=since,
+            audit_context=audit_context,
+        )
         return {
             "synced": int(result.get("issues", 0)) + int(result.get("epics", 0)),
             "errors": int(result.get("errors", 0)),

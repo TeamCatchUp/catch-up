@@ -7,7 +7,6 @@ JiraProject, JiraSprint, JiraUser 테이블에 대한 CRUD 작업 수행.
 
 from datetime import datetime, timezone
 
-from regex import P
 from sqlalchemy import select, delete, func
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
@@ -77,7 +76,7 @@ def upsert_project(
         }
     )
     db.execute(stmt)
-    db.commit()
+    db.flush()
 
     return get_project(db, cloud_id, project_key)
 
@@ -115,7 +114,6 @@ def upsert_projects_bulk(db: Session, projects: list[dict]) -> int:
         }
     )
     db.execute(stmt)
-    db.commit()
 
     return len(projects)
 
@@ -243,7 +241,6 @@ def delete_project(db: Session, cloud_id: str, project_key: str) -> int:
         JiraProject.project_key == project_key,
     )
     result = db.execute(stmt)
-    db.commit()
     return result.rowcount
 
 
@@ -251,7 +248,6 @@ def delete_projects_by_cloud_id(db: Session, cloud_id: str) -> int:
     """Cloud의 모든 프로젝트 삭제"""
     stmt = delete(JiraProject).where(JiraProject.cloud_id == cloud_id)
     result = db.execute(stmt)
-    db.commit()
     return result.rowcount
 
 
@@ -304,7 +300,7 @@ def upsert_sprint(
         }
     )
     db.execute(stmt)
-    db.commit()
+    db.flush()
 
     return get_sprint(db, cloud_id, sprint_id)
 
@@ -430,7 +426,6 @@ def delete_sprint(db: Session, cloud_id: str, sprint_id: int) -> int:
         JiraSprint.sprint_id == sprint_id,
     )
     result = db.execute(stmt)
-    db.commit()
     return result.rowcount
 
 
@@ -438,7 +433,6 @@ def delete_sprints_by_cloud_id(db: Session, cloud_id: str) -> int:
     """Cloud의 모든 스프린트 삭제"""
     stmt = delete(JiraSprint).where(JiraSprint.cloud_id == cloud_id)
     result = db.execute(stmt)
-    db.commit()
     return result.rowcount
 
 
@@ -478,7 +472,7 @@ def upsert_user(
         set_=_user_upsert_set(stmt),
     )
     db.execute(stmt)
-    db.commit()
+    db.flush()
 
     return get_user(db, cloud_id, account_id)
 
@@ -568,7 +562,6 @@ def delete_user(db: Session, cloud_id: str, account_id: str) -> int:
         JiraUser.account_id == account_id,
     )
     result = db.execute(stmt)
-    db.commit()
     return result.rowcount
 
 
@@ -576,5 +569,4 @@ def delete_users_by_cloud_id(db: Session, cloud_id: str) -> int:
     """Cloud의 모든 사용자 삭제"""
     stmt = delete(JiraUser).where(JiraUser.cloud_id == cloud_id)
     result = db.execute(stmt)
-    db.commit()
     return result.rowcount
