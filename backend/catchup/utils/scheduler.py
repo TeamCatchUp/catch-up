@@ -46,24 +46,20 @@ async def refresh_jira_dynamic_webhooks():
     dynamic_webhook_service = get_jira_dynamic_webhook_service()
 
     with SessionLocal() as db:
-        tokens = get_all_atlassian_tokens(db)
+        cloud_ids = [token.cloud_id for token in get_all_atlassian_tokens(db)]
 
-        for token in tokens:
-            cloud_id = token.cloud_id
-            try:
-                result = await dynamic_webhook_service.ensure_registered(
-                    db=db,
-                    cloud_id=cloud_id,
-                )
-                logger.info(
-                    f"[JIRA][WEBHOOK][DYNAMIC] Processed cloud: cloud_id={cloud_id}, result={result}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"[JIRA][WEBHOOK][DYNAMIC] Failed to process cloud: "
-                    f"cloud_id={cloud_id}, error={e}",
-                    exc_info=True,
-                )
+    for cloud_id in cloud_ids:
+        try:
+            result = await dynamic_webhook_service.ensure_registered(cloud_id=cloud_id)
+            logger.info(
+                f"[JIRA][WEBHOOK][DYNAMIC] Processed cloud: cloud_id={cloud_id}, result={result}"
+            )
+        except Exception as e:
+            logger.error(
+                f"[JIRA][WEBHOOK][DYNAMIC] Failed to process cloud: "
+                f"cloud_id={cloud_id}, error={e}",
+                exc_info=True,
+            )
 
     logger.info("[JIRA][WEBHOOK][DYNAMIC] Webhook refresh job completed")
 
