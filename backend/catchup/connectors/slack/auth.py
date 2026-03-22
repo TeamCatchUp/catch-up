@@ -17,9 +17,8 @@ from functools import lru_cache
 from urllib.parse import urlencode
 
 import httpx
-from fastapi.concurrency import run_in_threadpool
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi.concurrency import run_in_threadpool
 
 from catchup.connectors.slack.schemas import SlackOAuthTokenResponse
 from catchup.configs.config import settings
@@ -217,27 +216,30 @@ class SlackOAuthService:
             )
             await asyncio.sleep(retry_after)
 
-    def _persist_refreshed_token_sync(self, slack_token: SlackOAuthToken) -> None:
-        with SessionLocal() as session:
-            token_record = slack_oauth_repository.get_slack_token_by_team_id(
-                session,
-                slack_token.team_id,
-            )
-            if token_record is None:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Slack token not found",
+    def _persist_refreshed_token_db(self, slack_token: SlackOAuthToken) -> None:
+        with SessionLocal() as db:
+            try:
+                token_record = slack_oauth_repository.get_slack_token_by_team_id(
+                    db,
+                    slack_token.team_id,
                 )
+                if token_record is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Slack token not found",
+                    )
 
-            token_record.bot_access_token = slack_token.bot_access_token
-            token_record.bot_scopes = slack_token.bot_scopes
-            token_record.bot_refresh_token = slack_token.bot_refresh_token
-            token_record.bot_token_expires_at = slack_token.bot_token_expires_at
-            session.commit()
+                token_record.bot_access_token = slack_token.bot_access_token
+                token_record.bot_scopes = slack_token.bot_scopes
+                token_record.bot_refresh_token = slack_token.bot_refresh_token
+                token_record.bot_token_expires_at = slack_token.bot_token_expires_at
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
 
     async def get_valid_access_token(
         self,
-        db: Session | None,
         slack_token: SlackOAuthToken,
     ) -> str:
         """
@@ -272,14 +274,10 @@ class SlackOAuthService:
                     seconds=new_tokens.expires_in
                 )
 
-            if db is None:
-                await run_in_threadpool(
-                    self._persist_refreshed_token_sync,
-                    slack_token,
-                )
-            else:
-                db.commit()
-                db.refresh(slack_token)
+            await run_in_threadpool(
+                self._persist_refreshed_token_db,
+                slack_token,
+            )
 
         return slack_token.bot_access_token
 

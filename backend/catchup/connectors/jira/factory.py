@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 
 
 def _load_site_url_db(cloud_id: str) -> str:
-    with SessionLocal() as session:
+    with SessionLocal() as db:
         token_record = oauth_repository.get_token_by_cloud_id(
-            session,
+            db,
             cloud_id,
         )
         if token_record is None:

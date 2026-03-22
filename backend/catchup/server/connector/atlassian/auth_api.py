@@ -310,14 +310,13 @@ async def _sync_confluence_metadata(cloud_id: str) -> None:
     """Confluence Space 메타데이터 동기화 (BackgroundTask)."""
     logger.info(f"[CONFLUENCE][METADATA] Starting Space Sync : cloud_id={cloud_id}")
 
-    db = SessionLocal()
     try:
         token_manager = AtlassianTokenManager(
             oauth_client=AtlassianOAuthClient(),
             oauth_repository=atlassian_crud,
         )
         service = ConfluenceMetadataService(token_manager)
-        result = await service.sync_all(db, cloud_id)
+        result = await service.sync_all(cloud_id)
         logger.info(
             f"[CONFLUENCE][METADATA] Completed sync: cloud_id={cloud_id}, result={result}"
         )
@@ -326,5 +325,3 @@ async def _sync_confluence_metadata(cloud_id: str) -> None:
             f"[CONFLUENCE][METADATA] Sync failed: cloud_id={cloud_id}, error={e}",
             exc_info=True,
         )
-    finally:
-        db.close()

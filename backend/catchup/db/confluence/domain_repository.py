@@ -32,7 +32,7 @@ def upsert_spaces_bulk(db:Session, spaces: list[dict]) -> int:
         }
     )
     db.execute(stmt)
-    db.commit()
+    db.flush()
 
     return len(spaces)
 
@@ -40,8 +40,6 @@ def sync_spaces_snapshot(
     db: Session,
     cloud_id: str,
     spaces: list[dict],
-    *,
-    auto_commit: bool = True,
 ) -> dict[str, int]:
     """
     Cloud 단위 Space 스냅샷 동기화
@@ -51,10 +49,7 @@ def sync_spaces_snapshot(
     if not spaces:
         delete_stmt = delete(ConfluenceSpace).where(ConfluenceSpace.cloud_id == cloud_id)
         delete_result = db.execute(delete_stmt)
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
+        db.flush()
         return {
             "upserted": 0,
             "deleted": delete_result.rowcount or 0,
@@ -86,10 +81,7 @@ def sync_spaces_snapshot(
     if not normalized_spaces:
         delete_stmt = delete(ConfluenceSpace).where(ConfluenceSpace.cloud_id == cloud_id)
         delete_result = db.execute(delete_stmt)
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
+        db.flush()
         return {
             "upserted": 0,
             "deleted": delete_result.rowcount or 0,
@@ -116,10 +108,7 @@ def sync_spaces_snapshot(
     )
     stale_delete_result = db.execute(stale_delete_stmt)
 
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
+    db.flush()
 
     return {
         "upserted": len(normalized_spaces),
@@ -151,13 +140,13 @@ def delete_space(db:Session, cloud_id: str, space_id: str) -> int:
 
     )
     result = db.execute(stmt)
-    db.commit()
+    db.flush()
     return result.rowcount
 
 def delete_spaces_by_cloud_id(db: Session, cloud_id: str) -> int:
     stmt = delete(ConfluenceSpace).where(ConfluenceSpace.cloud_id == cloud_id)
     result = db.execute(stmt)
-    db.commit()
+    db.flush()
     return result.rowcount
 
 def get_space_id_map(
@@ -192,8 +181,6 @@ def get_space_name_map(
 def upsert_users_bulk(
     db: Session,
     users: list[dict],
-    *,
-    auto_commit: bool = True,
 ) -> int:
     if not users:
         return 0
@@ -218,10 +205,7 @@ def upsert_users_bulk(
         },
     )
     db.execute(stmt)
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
+    db.flush()
     return len(users)
 
 
@@ -237,5 +221,5 @@ def get_users_by_cloud_id(db: Session, cloud_id: str) -> list[ConfluenceUser]:
 def delete_users_by_cloud_id(db: Session, cloud_id: str) -> int:
     stmt = delete(ConfluenceUser).where(ConfluenceUser.cloud_id == cloud_id)
     result = db.execute(stmt)
-    db.commit()
+    db.flush()
     return result.rowcount

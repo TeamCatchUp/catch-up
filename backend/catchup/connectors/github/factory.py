@@ -42,8 +42,8 @@ def _extract_http_error_message(exc: HTTPStatusError) -> str:
 
 
 def _load_installation_sync(installation_id: int):
-    with SessionLocal() as session:
-        return get_installation_by_installation_id(session, installation_id)
+    with SessionLocal() as db:
+        return get_installation_by_installation_id(db, installation_id)
 
 
 async def create_github_ingestion_service(

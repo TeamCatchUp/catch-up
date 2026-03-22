@@ -83,7 +83,11 @@ def handle_channel_archive(db: Session, team_id: str, event: dict) -> None:
         raise ValueError("Missing channel_id in channel_archive event")
 
     is_archived = event_type in ("channel_archive", "group_archive")
-    domain_repository.update_channel_archive(db, channel_id, is_archived)
+    domain_repository.update_channel_archive(
+        db,
+        channel_id,
+        is_archived,
+    )
 
     logger.info(
         f"[SLACK][EVENT] Channel {'archived' if is_archived else 'unarchived'}: "
@@ -104,13 +108,23 @@ def handle_member_event(db: Session, team_id: str, event: dict) -> None:
     data = SlackMemberEvent(**event)
 
     if data.type == "member_joined_channel":
-        domain_repository.add_channel_member(db, team_id, data.channel, data.user)
+        domain_repository.add_channel_member(
+            db,
+            team_id,
+            data.channel,
+            data.user,
+        )
         logger.info(
             f"[SLACK][EVENT] Member joined: team={team_id}, "
             f"channel={data.channel}, user={data.user}"
         )
     elif data.type == "member_left_channel":
-        domain_repository.remove_channel_member(db, team_id, data.channel, data.user)
+        domain_repository.remove_channel_member(
+            db,
+            team_id,
+            data.channel,
+            data.user,
+        )
         logger.info(
             f"[SLACK][EVENT] Member left: team={team_id}, "
             f"channel={data.channel}, user={data.user}"
@@ -153,7 +167,11 @@ def handle_user_event(db: Session, team_id: str, event: dict) -> None:
         ),
     )
 
-    domain_repository.upsert_users_bulk(db, team_id, [user_schema])
+    domain_repository.upsert_users_bulk(
+        db,
+        team_id,
+        [user_schema],
+    )
 
     logger.info(
         f"[SLACK][EVENT] User upserted: team={team_id}, "

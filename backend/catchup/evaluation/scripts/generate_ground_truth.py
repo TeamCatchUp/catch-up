@@ -85,8 +85,8 @@ async def main():
     semaphore = asyncio.Semaphore(1)
     
     print(f"Starting Ground Truth generation (Serial mode for low TPM)...")
-    with SessionLocal() as session:
-        tasks = [process_case(item, session, semaphore) for item in dataset]
+    with SessionLocal() as db:
+        tasks = [process_case(item, db, semaphore) for item in dataset]
         updated_dataset = await tqdm.gather(*tasks)
 
     with open(output_path, "w", encoding="utf-8") as f:
