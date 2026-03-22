@@ -96,20 +96,6 @@ def _persist_jira_projects_sync(
         )
 
 
-def _persist_confluence_spaces_sync(
-    service: ConfluenceMetadataService,
-    cloud_id: str,
-    spaces: list[dict[str, Any]],
-) -> None:
-    with SessionLocal.begin() as session:
-        service.persist_space_snapshot(
-            session,
-            cloud_id,
-            spaces,
-            auto_commit=False,
-        )
-
-
 @dataclass(slots=True, frozen=True)
 class SyncJobTargetSnapshotResult:
     target_id: str
@@ -552,17 +538,10 @@ class SyncQueryService:
             oauth_repository=atlassian_oauth_repository,
         )
         metadata_service = ConfluenceMetadataService(token_manager)
-        spaces = await metadata_service.collect_space_snapshot(
+        spaces = await metadata_service.sync_space_snapshot(
             scope_id,
             granted_scopes=set((token.scopes or "").split()),
         )
-        if spaces is not None:
-            await run_in_threadpool(
-                _persist_confluence_spaces_sync,
-                metadata_service,
-                scope_id,
-                spaces,
-            )
 
         targets = [
             SyncTargetResult(

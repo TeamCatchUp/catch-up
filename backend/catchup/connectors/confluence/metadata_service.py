@@ -56,37 +56,49 @@ class ConfluenceMetadataService:
     ) -> None:
         with SessionLocal() as db:
             try:
-                self.persist_snapshot(
+                self._persist_snapshot(
                     db,
                     cloud_id,
                     snapshot,
-                    auto_commit=False,
                 )
                 db.commit()
             except Exception:
                 db.rollback()
                 raise
 
-    def persist_snapshot(
+    def _persist_space_snapshot_db(
+        self,
+        cloud_id: str,
+        spaces: list[dict[str, Any]],
+    ) -> None:
+        with SessionLocal() as db:
+            try:
+                self._persist_space_snapshot(
+                    db,
+                    cloud_id,
+                    spaces,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+
+    def _persist_snapshot(
         self,
         db: Session,
         cloud_id: str,
         snapshot: ConfluenceMetadataSnapshot,
-        *,
-        auto_commit: bool = True,
     ) -> None:
         if snapshot.users:
             confluence_entities.upsert_users_bulk(
                 db,
                 snapshot.users,
-                auto_commit=False,
             )
 
         sync_result = confluence_entities.sync_spaces_snapshot(
             db,
             cloud_id,
             snapshot.spaces,
-            auto_commit=False,
         )
         logger.info(
             "[CONFLUENCE][METADATA] Space snapshot synced: cloud_id=%s, upserted=%s, deleted=%s",
@@ -94,25 +106,18 @@ class ConfluenceMetadataService:
             sync_result["upserted"],
             sync_result["deleted"],
         )
+        db.flush()
 
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
-
-    def persist_space_snapshot(
+    def _persist_space_snapshot(
         self,
         db: Session,
         cloud_id: str,
         spaces: list[dict[str, Any]],
-        *,
-        auto_commit: bool = True,
     ) -> None:
         sync_result = confluence_entities.sync_spaces_snapshot(
             db,
             cloud_id,
             spaces,
-            auto_commit=False,
         )
         logger.info(
             "[CONFLUENCE][TARGETS][METADATA] Space snapshot synced: cloud_id=%s, upserted=%s, deleted=%s",
@@ -120,11 +125,7 @@ class ConfluenceMetadataService:
             sync_result["upserted"],
             sync_result["deleted"],
         )
-
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
+        db.flush()
 
     async def collect_snapshot(
         self,
@@ -173,6 +174,26 @@ class ConfluenceMetadataService:
             "[CONFLUENCE][TARGETS][METADATA] Spaces collected: cloud_id=%s, space_count=%s",
             cloud_id,
             len(spaces),
+        )
+        return spaces
+
+    async def sync_space_snapshot(
+        self,
+        cloud_id: str,
+        *,
+        granted_scopes: set[str],
+    ) -> list[dict[str, Any]] | None:
+        spaces = await self.collect_space_snapshot(
+            cloud_id,
+            granted_scopes=granted_scopes,
+        )
+        if spaces is None:
+            return None
+
+        await run_in_threadpool(
+            self._persist_space_snapshot_db,
+            cloud_id,
+            spaces,
         )
         return spaces
 
