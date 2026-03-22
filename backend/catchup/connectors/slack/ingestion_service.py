@@ -233,6 +233,15 @@ class SlackIngestionService:
         with SessionLocal() as db:
             self._load_context_from_db(db)
 
+    def _load_channel_sync_context_db(
+        self,
+        channel_id: str,
+    ) -> str:
+        with SessionLocal() as db:
+            self._load_context_from_db(db)
+            channel = domain_repository.get_channel(db, channel_id)
+            return channel.name if channel is not None else channel_id
+
     async def list_syncable_channels(self) -> list[dict[str, str]]:
         self._ensure_initialized()
         return await self._get_syncable_channels()
@@ -345,28 +354,6 @@ class SlackIngestionService:
     ) -> TargetSyncResult:
         self._ensure_initialized()
         await run_in_threadpool(self._load_ingestion_context_db)
-        sync_ctx = SlackSyncContext(
-            channel_id=channel_id,
-            channel_name=channel_name,
-            sync_from_ts=sync_from_ts,
-            skip_delete=skip_delete,
-            audit_context=audit_context,
-        )
-        return await self._sync_channel_messages(
-            sync_ctx=sync_ctx,
-        )
-
-    async def _sync_channel_messages_with_db(
-        self,
-        *,
-        db: Session,
-        channel_id: str,
-        channel_name: str,
-        sync_from_ts: str | None,
-        skip_delete: bool,
-        audit_context: SyncAuditContext | None,
-    ) -> TargetSyncResult:
-        self._load_context_from_db(db)
         sync_ctx = SlackSyncContext(
             channel_id=channel_id,
             channel_name=channel_name,
@@ -546,17 +533,20 @@ class SlackIngestionService:
             await self.repository.delete_documents([doc_id])
             return TargetSyncResult(synced_count=1)
 
-        with SessionLocal() as db:
-            channel = domain_repository.get_channel(db, channel_id)
-            channel_name = channel.name if channel is not None else channel_id
-            return await self._sync_channel_messages_with_db(
-                db=db,
-                channel_id=channel_id,
-                channel_name=channel_name,
-                sync_from_ts=sync_from,
-                skip_delete=False,
-                audit_context=audit_context,
-            )
+        channel_name = await run_in_threadpool(
+            self._load_channel_sync_context_db,
+            channel_id,
+        )
+        sync_ctx = SlackSyncContext(
+            channel_id=channel_id,
+            channel_name=channel_name,
+            sync_from_ts=sync_from,
+            skip_delete=False,
+            audit_context=audit_context,
+        )
+        return await self._sync_channel_messages(
+            sync_ctx=sync_ctx,
+        )
 
     async def _fetch_channel_pages(
         self,
