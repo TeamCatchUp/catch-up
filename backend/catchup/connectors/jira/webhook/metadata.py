@@ -47,12 +47,18 @@ def _handle_metadata_event_db(
     payload: dict[str, Any],
 ) -> dict[str, Any]:
     with SessionLocal() as db:
-        return _process_metadata_event(
-            db=db,
-            cloud_id=cloud_id,
-            event_type=event_type,
-            payload=payload,
-        )
+        try:
+            response = _process_metadata_event(
+                db=db,
+                cloud_id=cloud_id,
+                event_type=event_type,
+                payload=payload,
+            )
+            db.commit()
+            return response
+        except Exception:
+            db.rollback()
+            raise
 
 
 def _process_metadata_event(

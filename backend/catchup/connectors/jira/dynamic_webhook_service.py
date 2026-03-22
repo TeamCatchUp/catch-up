@@ -177,30 +177,35 @@ class JiraDynamicWebhookService:
         observed_at: datetime,
     ) -> list[dict]:
         with SessionLocal() as db:
-            observed_webhook_ids: list[int] = []
+            try:
+                observed_webhook_ids: list[int] = []
 
-            for webhook in own_webhooks:
-                webhook_id = webhook.get("id")
-                if webhook_id is None:
-                    continue
+                for webhook in own_webhooks:
+                    webhook_id = webhook.get("id")
+                    if webhook_id is None:
+                        continue
 
-                webhook_id = int(webhook_id)
-                observed_webhook_ids.append(webhook_id)
+                    webhook_id = int(webhook_id)
+                    observed_webhook_ids.append(webhook_id)
 
-                jira_webhook.upsert_webhook(
-                    db=db,
-                    cloud_id=cloud_id,
-                    webhook_id=webhook_id,
-                    callback_url=callback_url,
-                    jql_filter=webhook.get("jqlFilter"),
-                    events=webhook.get("events") or [],
-                    expires_at=parse_atlassian_datetime(webhook.get("expirationDate")),
-                    last_synced_at=observed_at,
-                )
+                    jira_webhook.upsert_webhook(
+                        db=db,
+                        cloud_id=cloud_id,
+                        webhook_id=webhook_id,
+                        callback_url=callback_url,
+                        jql_filter=webhook.get("jqlFilter"),
+                        events=webhook.get("events") or [],
+                        expires_at=parse_atlassian_datetime(webhook.get("expirationDate")),
+                        last_synced_at=observed_at,
+                    )
 
-            jira_webhook.delete_webhooks_not_in_ids(db, cloud_id, observed_webhook_ids)
-            subscriptions = jira_webhook.get_webhooks_by_cloud_id(db, cloud_id)
-            return [self._serialize_webhook(subscription) for subscription in subscriptions]
+                jira_webhook.delete_webhooks_not_in_ids(db, cloud_id, observed_webhook_ids)
+                db.commit()
+                subscriptions = jira_webhook.get_webhooks_by_cloud_id(db, cloud_id)
+                return [self._serialize_webhook(subscription) for subscription in subscriptions]
+            except Exception:
+                db.rollback()
+                raise
 
     def _resolve_refresh_target_ids_sync(
         self,
@@ -228,12 +233,18 @@ class JiraDynamicWebhookService:
         expires_at: datetime | None,
     ) -> int:
         with SessionLocal() as db:
-            return jira_webhook.update_webhook_expiration(
-                db,
-                cloud_id=cloud_id,
-                webhook_ids=webhook_ids,
-                expires_at=expires_at,
-            )
+            try:
+                updated_count = jira_webhook.update_webhook_expiration(
+                    db,
+                    cloud_id=cloud_id,
+                    webhook_ids=webhook_ids,
+                    expires_at=expires_at,
+                )
+                db.commit()
+                return updated_count
+            except Exception:
+                db.rollback()
+                raise
 
     async def sync_webhook_state(self, cloud_id: str) -> list[dict]:
         """
