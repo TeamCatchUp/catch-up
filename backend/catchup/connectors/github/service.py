@@ -304,16 +304,43 @@ class GithubIngestionService:
         since: datetime | None,
         audit_context: SyncAuditContext | None,
     ) -> dict[str, int | bool]:
-        with SessionLocal() as db:
-            return await self._incremental_sync_with_db(
-                db,
-                repo_id=repo_id,
-                record_type=record_type,
+        repo_ref = await self._get_repo_ref(repo_id)
+
+        normalized_record_type = record_type.strip().lower()
+        normalized_event_kind = event_kind.strip().lower()
+
+        if normalized_event_kind == "deleted":
+            return await self._delete_incremental_record(
+                owner=repo_ref.owner,
+                repo=repo_ref.repo,
+                record_type=normalized_record_type,
                 record_id=record_id,
-                event_kind=event_kind,
+            )
+
+        if normalized_record_type == "issue":
+            result = await self._sync_issues(
+                repo_ref.owner,
+                repo_ref.repo,
                 since=since,
                 audit_context=audit_context,
             )
+        elif normalized_record_type == "pull_request":
+            result = await self._sync_pull_requests(
+                repo_ref.owner,
+                repo_ref.repo,
+                since=since,
+                audit_context=audit_context,
+            )
+        else:
+            raise ValueError(f"unsupported github record_type: {record_type}")
+
+        return {
+            "synced": int(result.get("synced", 0)),
+            "errors": int(result.get("errors", 0)),
+            "skipped": False,
+        }
+
+
 
     async def sync_installation_metadata(
         self,
@@ -828,57 +855,6 @@ class GithubIngestionService:
     # ============================================================
     # Incremental Sync Internals
     # ============================================================
-
-    async def _incremental_sync_with_db(
-        self,
-        db: Session,
-        *,
-        repo_id: int,
-        record_type: str,
-        record_id: str,
-        event_kind: str,
-        since: datetime | None,
-        audit_context: SyncAuditContext | None,
-    ) -> dict[str, int | bool]:
-        repo_names = self._get_repo_names_by_ids(db, [repo_id])
-        if not repo_names:
-            raise ValueError(f"github repository not found: repo_id={repo_id}")
-
-        owner, repo = repo_names[0].split("/", 1)
-        normalized_record_type = record_type.strip().lower()
-        normalized_event_kind = event_kind.strip().lower()
-
-        if normalized_event_kind == "deleted":
-            return await self._delete_incremental_record(
-                owner=owner,
-                repo=repo,
-                record_type=normalized_record_type,
-                record_id=record_id,
-            )
-
-        if normalized_record_type == "issue":
-            result = await self._sync_issues(
-                owner,
-                repo,
-                since=since,
-                audit_context=audit_context,
-            )
-        elif normalized_record_type == "pull_request":
-            result = await self._sync_pull_requests(
-                owner,
-                repo,
-                since=since,
-                audit_context=audit_context,
-            )
-        else:
-            raise ValueError(f"unsupported github record_type: {record_type}")
-
-        return {
-            "synced": int(result.get("synced", 0)),
-            "errors": int(result.get("errors", 0)),
-            "skipped": False,
-        }
-
     async def _delete_incremental_record(
         self,
         *,
