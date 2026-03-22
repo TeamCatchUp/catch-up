@@ -572,9 +572,8 @@ def _handle_installation_repositories_event(
 
 async def _sync_installation_metadata(installation_id: int) -> None:
     try:
-        with SessionLocal() as db:
-            service = await create_github_ingestion_service(installation_id)
-            await service.sync_installation_metadata(db)
+        service = await create_github_ingestion_service(installation_id)
+        await service.sync_installation_metadata()
     except SyncAPIError as exc:
         logger.warning(
             "[GITHUB][WEBHOOK][INGRESS] Installation metadata sync failed: installation_id=%s, code=%s, message=%s, metadata=%s",

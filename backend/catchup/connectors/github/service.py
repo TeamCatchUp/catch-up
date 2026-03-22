@@ -344,21 +344,18 @@ class GithubIngestionService:
 
     async def sync_installation_metadata(
         self,
-        db: Session,
         *,
-        auto_commit: bool = True,
         raise_on_error: bool = False,
     ) -> dict[str, Any]:
         """
-        Installtion 메타데이터 동기화 (Users + Repository)
+        User + Repository 동기화
         """
         snapshot, result = await self.collect_installation_metadata(
             raise_on_error=raise_on_error,
         )
-        self.persist_installation_snapshot(
-            db,
+        await run_in_threadpool(
+            self._persist_installation_snapshot,
             snapshot,
-            auto_commit=auto_commit,
         )
         logger.info(
             f"[GITHUB][INSTALLATION] Completed User + Repository Sync "
@@ -912,25 +909,23 @@ class GithubIngestionService:
         )
         return snapshot, {"users": users_result, "repositories": repo_names}
 
-    def persist_installation_snapshot(
+    def _persist_installation_snapshot(
         self,
-        db: Session,
         snapshot: GithubMetadataSnapshot,
-        *,
-        auto_commit: bool = True,
     ) -> None:
-        if snapshot.users:
-            github_entities.upsert_users_bulk(
+        with SessionLocal() as db:
+            if snapshot.users:
+                github_entities.upsert_users_bulk(
+                    db,
+                    snapshot.users,
+                )
+            sync_result = github_entities.sync_repositories_snapshot(
                 db,
-                snapshot.users,
-                auto_commit=False,
+                self.installation_id,
+                snapshot.repositories,
             )
+            db.commit()
 
-        sync_result = github_entities.sync_repositories_snapshot(
-            db,
-            self.installation_id,
-            snapshot.repositories,
-        )
         logger.info(
             "[GITHUB][%s] Repository snapshot synced: installation_id=%s, upserted=%s, deleted=%s",
             SyncOperation.REPO_SYNC,
@@ -938,11 +933,6 @@ class GithubIngestionService:
             sync_result["upserted"],
             sync_result["deleted"],
         )
-
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
 
     async def _sync_users(
         self,
