@@ -142,8 +142,6 @@ def upsert_repositories_bulk(
     )
 
     db.execute(stmt)
-    db.commit()
-
     return len(values_list)
 
 def sync_repositories_snapshot(
@@ -229,7 +227,6 @@ def delete_repository(
         )
     )
     result = db.execute(stmt)
-    db.commit()
     return result.rowcount > 0
 
 
@@ -242,7 +239,6 @@ def delete_installation_repositories(
         GitHubRepositoryModel.installation_id == installation_id
     )
     result = db.execute(stmt)
-    db.commit()
     return result.rowcount
 
 
@@ -318,8 +314,6 @@ def get_user_by_login(
 def upsert_users_bulk(
     db: Session,
     users_data: list[UserUpsertData],
-    *,
-    auto_commit: bool = True,
 ) -> int:
     """
     User 정보 벌크 Upsert
@@ -352,11 +346,6 @@ def upsert_users_bulk(
     )
 
     db.execute(stmt)
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
-
     return len(values_list)
 
 

@@ -338,6 +338,8 @@ def _handle_installation_repositories_event(
             if full_name:
                 github_entities.delete_repository(db, installation_id, full_name)
 
+        db.commit()
+
     return installation_repositories_response(
         installation_id=installation_id,
         added=len(data.repositories_added),

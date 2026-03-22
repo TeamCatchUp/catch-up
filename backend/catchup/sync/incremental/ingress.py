@@ -19,6 +19,8 @@ def ingest_record_changes(
     for change in changes:
         state = upsert_record_change(db, change.to_input())
         record_keys.append(state.record_key)
+    if changes:
+        db.commit()
     return record_keys
 
 

@@ -186,7 +186,6 @@ def upsert_record_change(
         },
     )
     db.execute(stmt)
-    db.commit()
     state = get_record_state(db, payload.record_key)
     if state is None:
         raise RuntimeError("failed to upsert incremental record state")
