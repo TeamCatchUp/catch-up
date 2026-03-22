@@ -1,11 +1,13 @@
 import logging
 from dataclasses import dataclass, field
 
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.connectors.slack.schemas import SlackChannel, SlackUser, SlackWorkspace
 from catchup.connectors.slack.transformers import SlackTransformer
+from catchup.db.engine import SessionLocal
 from catchup.db.slack import domain_repository
 
 logger = logging.getLogger(__name__)
@@ -51,7 +53,37 @@ class SlackMetadataService:
                 "Call await service.initialize() first."
             )
 
-    def persist_snapshot(
+    def _persist_snapshot_db(
+        self,
+        snapshot: SlackMetadataSnapshot,
+    ) -> None:
+        with SessionLocal() as db:
+            try:
+                self._persist_snapshot(
+                    db,
+                    snapshot,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+
+    def _persist_channel_snapshot_db(
+        self,
+        channels: list[SlackChannel],
+    ) -> None:
+        with SessionLocal() as db:
+            try:
+                self._persist_channel_snapshot(
+                    db,
+                    channels,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+
+    def _persist_snapshot(
         self,
         db: Session,
         snapshot: SlackMetadataSnapshot,
@@ -93,7 +125,7 @@ class SlackMetadataService:
                 snapshot.channel_members.get(channel.id, []),
             )
 
-    def persist_channel_snapshot(
+    def _persist_channel_snapshot(
         self,
         db: Session,
         channels: list[SlackChannel],
@@ -111,7 +143,7 @@ class SlackMetadataService:
             sync_result["deleted_members"],
         )
 
-    async def collect_snapshot(
+    async def _collect_snapshot(
         self,
         *,
         raise_on_error: bool = False,
@@ -159,19 +191,16 @@ class SlackMetadataService:
 
     async def sync_metadata(
         self,
-        db: Session,
-        rollback_on_error: bool = True,
         raise_on_error: bool = False,
     ) -> dict[str, dict[str, int]]:
         try:
-            snapshot, results = await self.collect_snapshot(
+            snapshot, results = await self._collect_snapshot(
                 raise_on_error=raise_on_error,
             )
-            self.persist_snapshot(
-                db,
+            await run_in_threadpool(
+                self._persist_snapshot_db,
                 snapshot,
             )
-            db.commit()
             return results
         except Exception as exc:
             logger.error(
@@ -180,11 +209,9 @@ class SlackMetadataService:
                 exc,
                 exc_info=True,
             )
-            if rollback_on_error:
-                db.rollback()
             raise
 
-    async def collect_target_channels(self) -> list[SlackChannel]:
+    async def _collect_target_channels(self) -> list[SlackChannel]:
         self._ensure_initialized()
         channels = await self._fetch_channels()
         self.last_channels = channels
@@ -192,6 +219,14 @@ class SlackMetadataService:
             "[SLACK][TARGETS][METADATA] Channels collected: team_id=%s, channel_count=%s",
             self.team_id,
             len(channels),
+        )
+        return channels
+
+    async def sync_target_channels(self) -> list[SlackChannel]:
+        channels = await self._collect_target_channels()
+        await run_in_threadpool(
+            self._persist_channel_snapshot_db,
+            channels,
         )
         return channels
 

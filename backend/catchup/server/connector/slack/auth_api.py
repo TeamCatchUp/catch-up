@@ -308,12 +308,7 @@ async def _sync_workspace_metadata(team_id: str) -> None:
 
     try:
         service = await create_slack_metadata_service(team_id)
-        snapshot, results = await service.collect_snapshot()
-        await run_in_threadpool(
-            _persist_workspace_metadata_db,
-            service,
-            snapshot,
-        )
+        results = await service.sync_metadata()
         logger.info(f"[SLACK][AUTH] Background metadata sync completed: team_id={team_id}, results={results}")
     except Exception as e:
         logger.error(f"[SLACK][AUTH] Background metadata sync failed: team_id={team_id}, error={e}")
@@ -380,19 +375,6 @@ def _delete_slack_token_db(team_id: str) -> bool:
             deleted = slack_crud.delete_slack_token(db, team_id)
             db.commit()
             return deleted
-        except Exception:
-            db.rollback()
-            raise
-
-
-def _persist_workspace_metadata_db(service, snapshot) -> None:
-    with SessionLocal() as db:
-        try:
-            service.persist_snapshot(
-                db,
-                snapshot,
-            )
-            db.commit()
         except Exception:
             db.rollback()
             raise

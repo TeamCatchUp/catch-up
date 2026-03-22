@@ -20,7 +20,6 @@ from catchup.connectors.github.client import GitHubApiClient
 from catchup.connectors.github.service import _convert_repos_to_dto
 from catchup.connectors.jira.client import JiraApiClient
 from catchup.connectors.slack.factory import create_slack_metadata_service
-from catchup.connectors.slack.metadata_service import SlackMetadataService
 from catchup.db.atlassian import oauth_repository as atlassian_oauth_repository
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.installation_repository import get_installation_by_installation_id
@@ -57,23 +56,6 @@ def _load_confluence_token_db(scope_id: str) -> AtlassianOAuthToken | None:
             .filter(AtlassianOAuthToken.cloud_id == scope_id)
             .first()
         )
-
-
-def _persist_slack_channels_db(
-    service: SlackMetadataService,
-    channels: list[Any],
-) -> None:
-    with SessionLocal() as db:
-        try:
-            service.persist_channel_snapshot(
-                db,
-                channels,
-            )
-            db.commit()
-        except Exception:
-            db.rollback()
-            raise
-
 
 def _persist_github_repositories_db(
     installation_id: int,
@@ -582,12 +564,7 @@ class SyncQueryService:
         scope_id: str,
     ) -> SyncTargetsResult:
         metadata_service = await create_slack_metadata_service(team_id=scope_id)
-        channels = await metadata_service.collect_target_channels()
-        await run_in_threadpool(
-            _persist_slack_channels_db,
-            metadata_service,
-            channels,
-        )
+        channels = await metadata_service.sync_target_channels()
 
         channels = sorted(channels, key=lambda channel: channel.name)
 
