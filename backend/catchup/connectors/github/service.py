@@ -33,14 +33,11 @@ from catchup.connectors.github.client import (
     GitHubApiClient,
     GitHubApiError,
     GitHubRateLimitError,
-    GitHubAuthError,
-    GitHubNotFoundError,
 )
 from catchup.connectors.github.schemas import (
     GithubUser,
     GithubIssue,
     GithubPullRequest,
-    GithubCommit,
 )
 from catchup.connectors.github.transformers import GithubTransformer
 from catchup.components.vector_db.pgvector import PGVectorRepository
@@ -55,14 +52,6 @@ from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
 
 logger = logging.getLogger(__name__)
-
-
-# Skip 가능한 에러 (로깅만 하고 진행)
-SKIPPABLE_ERRORS = {
-    "not_found",  # 삭제된 리소스
-    "forbidden",  # 권한 없음
-    "gone",  # 더 이상 존재하지 않음
-}
 
 
 # ============================================================
@@ -422,8 +411,6 @@ class GithubIngestionService:
         self,
         *,
         repo_id: int,
-        sync_days: int | None = None,
-        sync_from_dt: datetime | None = None,
         issue_ids: list[str] | None = None,
         pull_request_ids: list[str] | None = None,
     ) -> GithubRecordRetryResult:
@@ -933,97 +920,6 @@ class GithubIngestionService:
             sync_result["upserted"],
             sync_result["deleted"],
         )
-
-    async def _sync_users(
-        self,
-        db: Session,
-        *,
-        auto_commit: bool = True,
-    ) -> dict[str, int]:
-        """
-        Organization 멤버 동기화 (RDBMS 저장)
-
-        Installation이 Organization에 설치된 경우 멤버를 동기화.
-        User 계정에 설치된 경우 해당 User만 저장.
-
-        Returns:
-            동기화 결과 {"synced": N, "errors": N}
-        """
-        repo_full_name = "_installation_"
-
-        try:
-            self._start_sync(repo_full_name, GithubEntityType.USER, SyncOperation.USER_SYNC)
-
-            logger.info(
-                f"[GITHUB][{SyncOperation.USER_SYNC}] Syncing {self.account_type} '{self.account_login}' "
-                f"(installation_id={self.installation_id})"
-            )
-
-            users_data = []
-
-            if self.account_type == GithubInstallationType.ORGANIZATION:
-                try:
-                    members = await self.client.list_org_members_graphql(self.account_login)
-                    logger.info(
-                        f"[GITHUB][{SyncOperation.USER_SYNC}] Found {len(members)} members "
-                        f"in organization '{self.account_login}'"
-                    )
-                    users_data.extend([
-                        UserUpsertData(
-                            database_id=m.get("database_id"),
-                            login=m.get("login", ""),
-                            name=m.get("name"),
-                            email=m.get("email"),
-                            avatar_url=m.get("avatar_url"),
-                            org_role=m.get("org_role"),
-                        )
-                        for m in members
-                    ])
-                except GitHubApiError as e:
-                    error_msg = (
-                        f"Failed to fetch org members for '{self.account_login}': {e}. "
-                        "Organization members permission may be required."
-                    )
-                    logger.warning(f"[GITHUB][{SyncOperation.USER_SYNC}] {error_msg}")
-                    self._fail_sync(repo_full_name, GithubEntityType.USER, str(e), SyncOperation.USER_SYNC)
-                    return {"synced": 0, "errors": 1}
-
-            else:
-                try:
-                    user_info = await self.client.get_user(self.account_login)
-                    if user_info:
-                        users_data.append(UserUpsertData(
-                            database_id=user_info.get("id"),
-                            login=user_info.get("login", ""),
-                            name=user_info.get("name"),
-                            email=user_info.get("email"),
-                            avatar_url=user_info.get("avatar_url"),
-                            org_role=None,
-                        ))
-                        logger.info(f"[GITHUB][{SyncOperation.USER_SYNC}] Found user '{self.account_login}'")
-                except GitHubApiError as e:
-                    logger.warning(f"[GITHUB][{SyncOperation.USER_SYNC}] Failed to fetch user '{self.account_login}': {e}")
-                    self._fail_sync(repo_full_name, GithubEntityType.USER, str(e), SyncOperation.USER_SYNC)
-                    return {"synced": 0, "errors": 1}
-
-            if users_data:
-                github_entities.upsert_users_bulk(
-                    db,
-                    users_data,
-                    auto_commit=auto_commit,
-                )
-
-            self._complete_sync(repo_full_name, GithubEntityType.USER, len(users_data), SyncOperation.USER_SYNC)
-            return {"synced": len(users_data), "errors": 0}
-
-        except GitHubRateLimitError as e:
-            self._handle_rate_limit(repo_full_name, GithubEntityType.USER, e, SyncOperation.USER_SYNC)
-            raise
-
-        except Exception as e:
-            logger.error(f"[GITHUB][{SyncOperation.USER_SYNC}] Unexpected error: {e}", exc_info=True)
-            self._fail_sync(repo_full_name, GithubEntityType.USER, str(e), SyncOperation.USER_SYNC)
-            return {"synced": 0, "errors": 1}
 
     async def _collect_users_snapshot(self) -> tuple[list[UserUpsertData], dict[str, int]]:
         try:

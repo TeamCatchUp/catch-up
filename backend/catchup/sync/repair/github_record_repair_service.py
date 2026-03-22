@@ -184,7 +184,6 @@ class GithubRecordRepairService:
 
         retry_result = await service.retry_missing_records(
             repo_id=target.repo_id,
-            sync_from_dt=repair_context.sync_from_dt,
             issue_ids=retry_records.issue_ids,
             pull_request_ids=retry_records.pull_request_ids,
         )
