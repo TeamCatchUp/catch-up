@@ -229,7 +229,7 @@ class SlackIngestionService:
             missing_ids=missing_ids,
         )
 
-    def _load_context_from_local_db(self) -> None:
+    def _load_ingestion_context_db(self) -> None:
         with SessionLocal() as db:
             self._load_context_from_db(db)
 
@@ -286,7 +286,7 @@ class SlackIngestionService:
         if not requested_ids:
             return SlackRecordRetryResult(records=[])
 
-        await run_in_threadpool(self._load_context_from_local_db)
+        await run_in_threadpool(self._load_ingestion_context_db)
         documents, failed_ids = await self._fetch_message_documents(
             channel_id=channel_id,
             channel_name=channel_name,
@@ -344,15 +344,17 @@ class SlackIngestionService:
         audit_context: SyncAuditContext | None = None,
     ) -> TargetSyncResult:
         self._ensure_initialized()
-        with SessionLocal() as db:
-            return await self._sync_channel_messages_with_db(
-                db=db,
-                channel_id=channel_id,
-                channel_name=channel_name,
-                sync_from_ts=sync_from_ts,
-                skip_delete=skip_delete,
-                audit_context=audit_context,
-            )
+        await run_in_threadpool(self._load_ingestion_context_db)
+        sync_ctx = SlackSyncContext(
+            channel_id=channel_id,
+            channel_name=channel_name,
+            sync_from_ts=sync_from_ts,
+            skip_delete=skip_delete,
+            audit_context=audit_context,
+        )
+        return await self._sync_channel_messages(
+            sync_ctx=sync_ctx,
+        )
 
     async def _sync_channel_messages_with_db(
         self,
