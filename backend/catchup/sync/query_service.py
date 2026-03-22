@@ -40,17 +40,17 @@ from catchup.sync.common.schemas import SyncTargetType
 
 logger = logging.getLogger(__name__)
 
-def _load_github_installation_sync(installation_id: int):
+def _load_github_installation_db(installation_id: int):
     with SessionLocal() as session:
         return get_installation_by_installation_id(session, installation_id)
 
 
-def _load_jira_token_sync(scope_id: str) -> AtlassianOAuthToken | None:
+def _load_jira_token_db(scope_id: str) -> AtlassianOAuthToken | None:
     with SessionLocal() as session:
         return atlassian_oauth_repository.get_token_by_cloud_id(session, scope_id)
 
 
-def _load_confluence_token_sync(scope_id: str) -> AtlassianOAuthToken | None:
+def _load_confluence_token_db(scope_id: str) -> AtlassianOAuthToken | None:
     with SessionLocal() as session:
         return (
             session.query(AtlassianOAuthToken)
@@ -59,7 +59,7 @@ def _load_confluence_token_sync(scope_id: str) -> AtlassianOAuthToken | None:
         )
 
 
-def _persist_slack_channels_sync(
+def _persist_slack_channels_db(
     service: SlackMetadataService,
     channels: list[Any],
 ) -> None:
@@ -71,7 +71,7 @@ def _persist_slack_channels_sync(
         )
 
 
-def _persist_github_repositories_sync(
+def _persist_github_repositories_db(
     installation_id: int,
     repositories: list[Any],
 ) -> None:
@@ -84,7 +84,7 @@ def _persist_github_repositories_sync(
         )
 
 
-def _persist_jira_projects_sync(
+def _persist_jira_projects_db(
     cloud_id: str,
     projects: list[dict[str, Any]],
 ) -> None:
@@ -416,7 +416,7 @@ class SyncQueryService:
             raise ValueError(f"github installation not found: {scope_id}") from exc
 
         installation = await run_in_threadpool(
-            _load_github_installation_sync,
+            _load_github_installation_db,
             installation_id,
         )
         if installation is None:
@@ -430,7 +430,7 @@ class SyncQueryService:
             await client.list_installation_repos(),
         )
         await run_in_threadpool(
-            _persist_github_repositories_sync,
+            _persist_github_repositories_db,
             installation_id,
             repositories,
         )
@@ -459,7 +459,7 @@ class SyncQueryService:
         *,
         scope_id: str,
     ) -> SyncTargetsResult:
-        token = await run_in_threadpool(_load_jira_token_sync, scope_id)
+        token = await run_in_threadpool(_load_jira_token_db, scope_id)
         if token is None:
             raise ValueError(f"jira cloud is not connected: {scope_id}")
 
@@ -514,7 +514,7 @@ class SyncQueryService:
         targets.sort(key=lambda item: item.target_id)
 
         await run_in_threadpool(
-            _persist_jira_projects_sync,
+            _persist_jira_projects_db,
             scope_id,
             project_rows,
         )
@@ -529,7 +529,7 @@ class SyncQueryService:
         *,
         scope_id: str,
     ) -> SyncTargetsResult:
-        token = await run_in_threadpool(_load_confluence_token_sync, scope_id)
+        token = await run_in_threadpool(_load_confluence_token_db, scope_id)
         if token is None:
             raise ValueError(f"confluence cloud is not connected: {scope_id}")
 
@@ -571,7 +571,7 @@ class SyncQueryService:
         metadata_service = await create_slack_metadata_service(team_id=scope_id)
         channels = await metadata_service.collect_target_channels()
         await run_in_threadpool(
-            _persist_slack_channels_sync,
+            _persist_slack_channels_db,
             metadata_service,
             channels,
         )

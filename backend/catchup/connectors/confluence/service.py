@@ -120,7 +120,7 @@ class ConfluenceIngestionService:
             missing_ids=missing_ids,
         )
 
-    def _load_space_context_sync(
+    def _load_space_context_db(
         self,
         space_key: str,
     ) -> tuple[str, str | None, dict[str, str | None]]:
@@ -137,7 +137,7 @@ class ConfluenceIngestionService:
         self,
         space_key: str,
     ) -> tuple[str, str | None, dict[str, str | None]]:
-        return await asyncio.to_thread(self._load_space_context_sync, space_key)
+        return await asyncio.to_thread(self._load_space_context_db, space_key)
 
     def _load_space_keys_db(self) -> list[str]:
         with SessionLocal() as db:
@@ -726,28 +726,6 @@ class ConfluenceIngestionService:
         since: datetime | None,
         audit_context: SyncAuditContext | None = None,
     ) -> dict[str, int | bool]:
-        with SessionLocal() as db:
-            return await self._incremental_sync_with_db(
-                db,
-                space_key=space_key,
-                record_type=record_type,
-                record_id=record_id,
-                event_kind=event_kind,
-                since=since,
-                audit_context=audit_context,
-            )
-
-    async def _incremental_sync_with_db(
-        self,
-        db: Session,
-        *,
-        space_key: str,
-        record_type: str,
-        record_id: str,
-        event_kind: str,
-        since: datetime | None,
-        audit_context: SyncAuditContext | None = None,
-    ) -> dict[str, int | bool]:
         normalized_record_type = record_type.strip().lower()
         normalized_event_kind = event_kind.strip().lower()
 
@@ -760,31 +738,23 @@ class ConfluenceIngestionService:
                 "skipped": False,
             }
 
-        space_id_map = domain_repository.get_space_id_map(db, self.cloud_id, [space_key])
-        space_name_map = domain_repository.get_space_name_map(db, self.cloud_id, [space_key])
-        space_id = space_id_map.get(space_key)
-        if not space_id:
-            raise ValueError(f"confluence space not found: space_key={space_key}")
-
-        user_name_map = self._load_user_name_map(db)
+        space_id, space_name, user_name_map = await self._load_space_context(space_key)
         if normalized_record_type == "page":
             result = await self._sync_space_pages(
-                db,
                 space_id=space_id,
                 space_key=space_key,
                 since=since,
                 user_name_map=user_name_map,
-                space_name=space_name_map.get(space_key),
+                space_name=space_name,
                 audit_context=audit_context,
             )
         elif normalized_record_type == "blogpost":
             result = await self._sync_space_blogposts(
-                db,
                 space_id=space_id,
                 space_key=space_key,
                 since=since,
                 user_name_map=user_name_map,
-                space_name=space_name_map.get(space_key),
+                space_name=space_name,
                 audit_context=audit_context,
             )
         else:

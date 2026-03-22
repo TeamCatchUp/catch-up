@@ -127,7 +127,7 @@ class ConfluenceMetadataService:
         )
         db.flush()
 
-    async def collect_snapshot(
+    async def _collect_snapshot(
         self,
         cloud_id: str,
         *,
@@ -150,7 +150,7 @@ class ConfluenceMetadataService:
         spaces = await self._collect_spaces(client, cloud_id)
         return ConfluenceMetadataSnapshot(users=users, spaces=spaces)
 
-    async def collect_space_snapshot(
+    async def _collect_space_snapshot(
         self,
         cloud_id: str,
         *,
@@ -183,7 +183,7 @@ class ConfluenceMetadataService:
         *,
         granted_scopes: set[str],
     ) -> list[dict[str, Any]] | None:
-        spaces = await self.collect_space_snapshot(
+        spaces = await self._collect_space_snapshot(
             cloud_id,
             granted_scopes=granted_scopes,
         )
@@ -212,7 +212,7 @@ class ConfluenceMetadataService:
             )
             return {"users": 0, "spaces": 0}
 
-        snapshot = await self.collect_snapshot(
+        snapshot = await self._collect_snapshot(
             cloud_id,
             granted_scopes=granted_scopes,
         )
