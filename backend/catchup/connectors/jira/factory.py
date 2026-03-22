@@ -29,7 +29,7 @@ from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
 logger = logging.getLogger(__name__)
 
 
-def _load_site_url_sync(cloud_id: str) -> str:
+def _load_site_url_db(cloud_id: str) -> str:
     with SessionLocal() as session:
         token_record = oauth_repository.get_token_by_cloud_id(
             session,
@@ -50,7 +50,7 @@ async def create_jira_ingestion_service(
 
     try:
         token_provider = AtlassianTokenProvider(token_manager)
-        site_url = await run_in_threadpool(_load_site_url_sync, cloud_id)
+        site_url = await run_in_threadpool(_load_site_url_db, cloud_id)
     except AtlassianTokenNotFoundError as exc:
         raise SyncConnectorError(
             f"Jira 연결을 찾을 수 없습니다: {cloud_id}",

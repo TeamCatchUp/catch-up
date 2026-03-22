@@ -205,7 +205,7 @@ async def atlassian_uninstall(
     """
     Atlassian 연결 해제
     """
-    deleted = await run_in_threadpool(_delete_token_sync, cloud_id)
+    deleted = await run_in_threadpool(_delete_token_db, cloud_id)
     if deleted:
         return {"status": "success", "message": "Atlassian 연결이 해제되었습니다."}
     return {"status": "not_found", "message": "해당 Atlassian 연결을 찾을 수 없습니다."}
@@ -222,13 +222,13 @@ def _load_latest_cloud_id() -> str | None:
         return tokens[0].cloud_id
 
 
-def _delete_token_sync(cloud_id: str) -> bool:
+def _delete_token_db(cloud_id: str) -> bool:
     with SessionLocal() as db:
         return atlassian_crud.delete_token(db, cloud_id)
 
 
 async def _register_knowledge_source(cloud_id: str, source_type: SourceType):
-    def _sync_task():
+    def _register_knowledge_source_db():
         with SessionLocal() as db:
             workspace = get_workspace_limit_one(db)
             
@@ -258,7 +258,7 @@ async def _register_knowledge_source(cloud_id: str, source_type: SourceType):
             )
             add_knowledge_source(db, new_source)
             db.commit()
-    await run_in_threadpool(_sync_task)
+    await run_in_threadpool(_register_knowledge_source_db)
 
 
 async def _sync_jira_metadata(cloud_id: str) -> None:

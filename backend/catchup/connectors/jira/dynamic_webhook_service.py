@@ -46,7 +46,7 @@ DEFAULT_JIRA_WEBHOOK_EVENTS = [
 
 
 class JiraDynamicWebhookService:
-    def _ensure_token_exists_sync(self, cloud_id: str) -> None:
+    def _ensure_token_exists_db(self, cloud_id: str) -> None:
         with SessionLocal() as db:
             token = atlassian_oauth.get_token_by_cloud_id(db, cloud_id)
             if token is None:
@@ -58,7 +58,7 @@ class JiraDynamicWebhookService:
             oauth_repository=atlassian_oauth,
         )
         try:
-            await run_in_threadpool(self._ensure_token_exists_sync, cloud_id)
+            await run_in_threadpool(self._ensure_token_exists_db, cloud_id)
         except AtlassianTokenNotFoundError:
             raise HTTPException(status_code=404, detail=f"Jira token not found: {cloud_id}")
         return JiraApiClient(
@@ -81,7 +81,7 @@ class JiraDynamicWebhookService:
 
         return f"{base_url}/api/v1/jira/webhooks/{cloud_id}"
 
-    def _resolve_project_keys_sync(
+    def _resolve_project_keys_db(
         self,
         cloud_id: str,
         project_keys: list[str] | None,
@@ -143,7 +143,7 @@ class JiraDynamicWebhookService:
         project_keys: list[str] | None,
     ) -> list[str]:
         return await run_in_threadpool(
-            self._resolve_project_keys_sync,
+            self._resolve_project_keys_db,
             cloud_id,
             project_keys,
         )
@@ -169,7 +169,7 @@ class JiraDynamicWebhookService:
             ),
         }
 
-    def _sync_webhook_state_sync(
+    def _store_webhook_state_db(
         self,
         cloud_id: str,
         callback_url: str,
@@ -207,7 +207,7 @@ class JiraDynamicWebhookService:
                 db.rollback()
                 raise
 
-    def _resolve_refresh_target_ids_sync(
+    def _load_refresh_target_ids_db(
         self,
         cloud_id: str,
         force: bool,
@@ -226,7 +226,7 @@ class JiraDynamicWebhookService:
             expiring = jira_webhook.get_expiring_webhooks(db, cloud_id, threshold_at)
             return [subscription.webhook_id for subscription in expiring]
 
-    def _update_webhook_expiration_sync(
+    def _update_webhook_expiration_db(
         self,
         cloud_id: str,
         webhook_ids: list[int],
@@ -260,7 +260,7 @@ class JiraDynamicWebhookService:
         ]
 
         return await run_in_threadpool(
-            self._sync_webhook_state_sync,
+            self._store_webhook_state_db,
             cloud_id,
             callback_url,
             own_webhooks,
@@ -359,7 +359,7 @@ class JiraDynamicWebhookService:
             return {"status": "skipped", "reason": "no_registered_webhooks", "cloud_id": cloud_id}
 
         target_ids = await run_in_threadpool(
-            self._resolve_refresh_target_ids_sync,
+            self._load_refresh_target_ids_db,
             cloud_id,
             force,
         )
@@ -370,7 +370,7 @@ class JiraDynamicWebhookService:
         response = await client.refresh_dynamic_webhook_life(target_ids)
         expiration_date = parse_atlassian_datetime(response.get("expirationDate"))
         updated_count = await run_in_threadpool(
-            self._update_webhook_expiration_sync,
+            self._update_webhook_expiration_db,
             cloud_id,
             target_ids,
             expiration_date,

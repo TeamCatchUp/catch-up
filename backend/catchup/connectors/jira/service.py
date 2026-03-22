@@ -194,7 +194,7 @@ class JiraIngestionService:
             missing_ids=missing_ids,
         )
 
-    def _load_project_context_sync(
+    def _load_project_context_db(
         self,
         project_key: str,
     ) -> None:
@@ -211,7 +211,7 @@ class JiraIngestionService:
         self,
         project_key: str,
     ) -> None:
-        await run_in_threadpool(self._load_project_context_sync, project_key)
+        await run_in_threadpool(self._load_project_context_db, project_key)
 
     def _load_project_keys_db(self) -> list[str]:
         with SessionLocal() as db:
@@ -794,7 +794,6 @@ class JiraIngestionService:
         프로젝트 동기화 (RDBMS 저장)
 
         Args:
-            db: SQLAlchemy Session
             project_keys: 동기화할 프로젝트 키 목록 (None이면 접근 가능한 모든 프로젝트)
 
         Returns:
@@ -805,7 +804,7 @@ class JiraIngestionService:
         results = {"synced": 0, "errors": 0}
         projects_data: list[dict] = []
 
-        def _sync_projects_snapshot_sync() -> dict[str, int]:
+        def _persist_projects_db() -> dict[str, int]:
             with SessionLocal() as db:
                 try:
                     result = jira_entities.sync_projects_snapshot(
@@ -861,7 +860,7 @@ class JiraIngestionService:
                 await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
 
             sync_result = await run_in_threadpool(
-                _sync_projects_snapshot_sync,
+                _persist_projects_db,
             )
             logger.info(
                 "[JIRA][METADATA] Project snapshot synced: cloud_id=%s, upserted=%s, deleted=%s",
@@ -894,7 +893,7 @@ class JiraIngestionService:
         results = {"synced": 0, "errors": 0}
         sprints_data: list[dict] = []
 
-        def _upsert_sprints_sync() -> int:
+        def _persist_sprints_db() -> int:
             with SessionLocal() as db:
                 try:
                     result = jira_entities.upsert_sprints_bulk(
@@ -952,7 +951,7 @@ class JiraIngestionService:
             # RDBMS 벌크 저장
             if sprints_data:
                 await run_in_threadpool(
-                    _upsert_sprints_sync,
+                    _persist_sprints_db,
                 )
                 logger.info(f"Saved {len(sprints_data)} sprints to RDBMS")
 
@@ -982,7 +981,7 @@ class JiraIngestionService:
         results = {"synced": 0, "errors": 0}
         users_data: list[dict] = []
 
-        def _upsert_users_sync() -> int:
+        def _persist_users_db() -> int:
             with SessionLocal() as db:
                 try:
                     result = jira_entities.upsert_users_bulk(
@@ -1020,7 +1019,7 @@ class JiraIngestionService:
             # RDBMS 벌크 저장 (저장 후 카운트)
             if users_data:
                 saved_count = await run_in_threadpool(
-                    _upsert_users_sync,
+                    _persist_users_db,
                 )
                 results["synced"] = saved_count
                 logger.info(f"Saved {saved_count} users to RDBMS")
