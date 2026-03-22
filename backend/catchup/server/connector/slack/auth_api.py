@@ -7,7 +7,6 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from httpx import HTTPStatusError, RequestError
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import IntegrationAuditMetadata
@@ -18,7 +17,6 @@ from catchup.connectors.slack.schemas import (
     SlackWorkspaceInfo,
 )
 from catchup.configs.config import auth_settings
-from catchup.db.dependencies import get_db
 from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.models import KnowledgeSource, SourceType
 from catchup.db.slack import oauth_repository as slack_crud
@@ -50,7 +48,6 @@ async def slack_oauth_callback(
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
-    db: Session = Depends(get_db),
     slack_service: SlackOAuthService = Depends(get_slack_oauth_service),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
@@ -150,8 +147,8 @@ async def slack_oauth_callback(
         bot_expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens.expires_in)
 
     # 3. Token 저장
-    slack_crud.create_or_update_slack_token(
-        db=db,
+    await run_in_threadpool(
+        _persist_slack_token_db,
         team_id=tokens.team.id,
         team_name=tokens.team.name,
         bot_user_id=tokens.bot_user_id,
@@ -192,11 +189,10 @@ async def slack_oauth_callback(
 
 @router.get("/status", response_model=SlackInstallationStatus)
 async def slack_installation_status(
-    db: Session = Depends(get_db),
     slack_service: SlackOAuthService = Depends(get_slack_oauth_service),
 ):
     """Slack 설치 상태 조회"""
-    tokens = slack_crud.get_all_slack_tokens(db)
+    tokens = await run_in_threadpool(_load_all_slack_tokens_db)
 
     if not tokens:
         return SlackInstallationStatus(installed=False)
@@ -205,7 +201,7 @@ async def slack_installation_status(
     for token in tokens:
         try:
             # 토큰 유효성 확인
-            valid_token = await slack_service.get_valid_access_token(db, token)
+            valid_token = await slack_service.get_valid_access_token(None, token)
             await slack_service.test_auth(valid_token)
 
             workspaces.append(SlackWorkspaceInfo(
@@ -242,11 +238,10 @@ async def slack_installation_status(
 async def slack_uninstall(
     team_id: str = Query(..., description="삭제할 Slack Team ID"),
     revoke_token: bool = Query(default=True, description="Token 취소 여부"),
-    db: Session = Depends(get_db),
     slack_service: SlackOAuthService = Depends(get_slack_oauth_service),
 ):
     """Slack 연결 해제"""
-    token = slack_crud.get_slack_token_by_team_id(db, team_id)
+    token = await run_in_threadpool(_load_slack_token_db, team_id)
 
     if not token:
         return {"status": "not_found", "message": "해당 Slack 연결을 찾을 수 없습니다."}
@@ -260,7 +255,7 @@ async def slack_uninstall(
         except (HTTPStatusError, RequestError) as e:
             logger.warning(f"[SLACK][AUTH] Token revocation API failed: {e}")
 
-    deleted = slack_crud.delete_slack_token(db, team_id)
+    deleted = await run_in_threadpool(_delete_slack_token_db, team_id)
     if deleted:
         return {"status": "success", "message": "Slack 연결이 해제되었습니다."}
 
@@ -311,12 +306,66 @@ async def _sync_workspace_metadata(team_id: str) -> None:
     """
     logger.info(f"[SLACK][AUTH] Starting background metadata sync: team_id={team_id}")
 
-    db = SessionLocal()
     try:
         service = await create_slack_metadata_service(team_id)
-        results = await service.sync_metadata(db)
+        snapshot, results = await service.collect_snapshot()
+        await run_in_threadpool(
+            _persist_workspace_metadata_db,
+            service,
+            snapshot,
+        )
         logger.info(f"[SLACK][AUTH] Background metadata sync completed: team_id={team_id}, results={results}")
     except Exception as e:
         logger.error(f"[SLACK][AUTH] Background metadata sync failed: team_id={team_id}, error={e}")
-    finally:
-        db.close()
+
+
+def _persist_slack_token_db(
+    *,
+    team_id: str,
+    team_name: str | None,
+    bot_user_id: str,
+    bot_access_token: str,
+    bot_scopes: str,
+    authed_user_id: str | None = None,
+    bot_refresh_token: str | None = None,
+    bot_token_expires_at: datetime | None = None,
+    incoming_webhook_url: str | None = None,
+    incoming_webhook_channel: str | None = None,
+):
+    with SessionLocal() as db:
+        slack_crud.create_or_update_slack_token(
+            db=db,
+            team_id=team_id,
+            team_name=team_name,
+            bot_user_id=bot_user_id,
+            bot_access_token=bot_access_token,
+            bot_scopes=bot_scopes,
+            authed_user_id=authed_user_id,
+            bot_refresh_token=bot_refresh_token,
+            bot_token_expires_at=bot_token_expires_at,
+            incoming_webhook_url=incoming_webhook_url,
+            incoming_webhook_channel=incoming_webhook_channel,
+        )
+
+
+def _load_all_slack_tokens_db():
+    with SessionLocal() as db:
+        return slack_crud.get_all_slack_tokens(db)
+
+
+def _load_slack_token_db(team_id: str):
+    with SessionLocal() as db:
+        return slack_crud.get_slack_token_by_team_id(db, team_id)
+
+
+def _delete_slack_token_db(team_id: str) -> bool:
+    with SessionLocal() as db:
+        return slack_crud.delete_slack_token(db, team_id)
+
+
+def _persist_workspace_metadata_db(service, snapshot) -> None:
+    with SessionLocal() as db:
+        service.persist_snapshot(
+            db,
+            snapshot,
+        )

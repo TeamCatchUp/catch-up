@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from catchup.connectors.slack import webhook_service
 from catchup.connectors.slack.schemas import SlackEventWrapper
 from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.db.engine import SessionLocal
 from catchup.events.enums import SyncTriggerEventAction
 from catchup.sync.audit import SyncAuditContext, emit_sync_trigger_audit
 from catchup.sync.incremental import ingest_record_changes, normalize_slack_event
@@ -47,6 +48,17 @@ _INCREMENTAL_MESSAGE_SUBTYPES = frozenset(
 
 
 def handle_webhook(
+    *,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    with SessionLocal() as db:
+        return _handle_webhook_db(
+            db=db,
+            payload=payload,
+        )
+
+
+def _handle_webhook_db(
     *,
     db: Session,
     payload: dict[str, Any],
