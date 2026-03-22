@@ -2,14 +2,13 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
-from fastapi.concurrency import run_in_threadpool
 
 from catchup.configs.config import settings
 from catchup.connectors.jira.dynamic_webhook_service import (
     JiraDynamicWebhookService,
     get_jira_dynamic_webhook_service,
 )
-from catchup.connectors.jira.webhook_ingress import handle_webhook as handle_jira_webhook_ingress
+from catchup.connectors.jira.webhook import handle_webhook as handle_jira_webhook_ingress
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 
 logger = logging.getLogger(__name__)
@@ -51,8 +50,7 @@ async def handle_jira_webhook(
         )
     
     try:
-        return await run_in_threadpool(
-            handle_jira_webhook_ingress,
+        return await handle_jira_webhook_ingress(
             cloud_id=cloud_id,
             payload=payload,
         )
