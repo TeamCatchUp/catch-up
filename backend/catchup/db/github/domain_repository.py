@@ -150,8 +150,6 @@ def sync_repositories_snapshot(
     db: Session,
     installation_id: int,
     repos_data: list[RepositoryUpsertData],
-    *,
-    auto_commit: bool = True,
 ) -> dict[str, int]:
     """
     Installation 단위 Repository 스냅샷 동기화
@@ -163,10 +161,6 @@ def sync_repositories_snapshot(
             GitHubRepositoryModel.installation_id == installation_id
         )
         delete_result = db.execute(delete_stmt)
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
         return {
             "upserted": 0,
             "deleted": delete_result.rowcount or 0,
@@ -216,11 +210,6 @@ def sync_repositories_snapshot(
         )
     )
     stale_delete_result = db.execute(stale_delete_stmt)
-
-    if auto_commit:
-        db.commit()
-    else:
-        db.flush()
 
     return {
         "upserted": len(values_list),
