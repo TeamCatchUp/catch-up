@@ -14,6 +14,7 @@ from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.connectors.slack.auth import get_slack_oauth_service
+from catchup.connectors.slack.client import SlackConnectorApiError, SlackRateLimitError
 from catchup.connectors.slack.ingestion_service import SlackIngestionService
 from catchup.connectors.slack.metadata_service import SlackMetadataService
 from catchup.db.engine import SessionLocal
@@ -41,6 +42,18 @@ async def _resolve_access_token(
     slack_service = get_slack_oauth_service()
     try:
         return await slack_service.get_valid_access_token(token_record)
+    except SlackRateLimitError:
+        raise
+    except SlackConnectorApiError as exc:
+        error_cls = (
+            SyncInternalError
+            if exc.status_code is not None and exc.status_code >= 500
+            else SyncConnectorError
+        )
+        raise error_cls(
+            exc.message,
+            metadata={"team_id": team_id, **exc.metadata},
+        ) from exc
     except HTTPException as exc:
         message = (
             exc.detail
