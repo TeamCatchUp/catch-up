@@ -25,8 +25,8 @@ from catchup.db.sync import requeue_retrying_event
 from catchup.db.sync import start_job
 from catchup.db.sync import summarize_events_by_job
 from catchup.sync.common.protocols import IngestionHandlerProtocol
-from catchup.sync.common.retry_policy import calculate_retry_delay
 from catchup.sync.common.retry_policy import is_retryable_sync_error
+from catchup.sync.common.retry_policy import resolve_retry_delay
 from catchup.sync.common.schemas import ClaimState
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import SyncStreamMessage
@@ -45,8 +45,9 @@ from catchup.worker.schemas import JobFinalizeResult
 logger = logging.getLogger(__name__)
 
 
-def _full_sync_retry_delay(attempt: int) -> timedelta:
-    return calculate_retry_delay(
+def _full_sync_retry_delay(exc: Exception, attempt: int) -> timedelta:
+    return resolve_retry_delay(
+        exc=exc,
         attempt=attempt,
         base_delay_seconds=settings.SYNC_JOB_RETRY_BASE_DELAY_SECONDS,
         max_delay_seconds=settings.SYNC_JOB_RETRY_MAX_DELAY_SECONDS,
@@ -239,7 +240,7 @@ async def _handle_event_failure(
     should_retry = retryable and next_attempt < context.max_attempts
 
     if should_retry:
-        retry_delay = _full_sync_retry_delay(next_attempt)
+        retry_delay = _full_sync_retry_delay(exc, next_attempt)
         next_retry_at = datetime.now(timezone.utc) + retry_delay
         scheduled = await run_in_threadpool(
             _schedule_event_retry_sync,

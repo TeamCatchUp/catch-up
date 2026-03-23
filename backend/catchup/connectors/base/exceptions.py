@@ -17,10 +17,16 @@ class ConnectorApiError(Exception):
 
     service: str = "unknown"
 
-    def __init__(self, message: str, status_code: int | None = None):
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        retry_after: int | float | None = None,
+    ):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+        self.retry_after = retry_after
 
 
 class RateLimitError(ConnectorApiError):
@@ -39,8 +45,7 @@ class RateLimitError(ConnectorApiError):
         remaining: int = 0,
     ):
         msg = message or f"Rate limit exceeded. Retry after {retry_after}s"
-        super().__init__(msg, 429)
-        self.retry_after = retry_after
+        super().__init__(msg, 429, retry_after=retry_after)
         self.remaining = remaining
 
 

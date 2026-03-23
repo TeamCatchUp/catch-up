@@ -52,6 +52,20 @@ def is_retryable_sync_error(exc: Exception) -> bool:
 
     return False
 
+def extract_retry_after_seconds(exc: Exception) -> bool:
+    if not isinstance(exc, ConnectorApiError):
+        return None
+    
+    retry_after = exc.retry_after
+    if retry_after is None:
+        return None
+    
+    try:
+        seconds = int(retry_after)
+    except (TypeError, ValueError):
+        return None
+    
+    return max(1, seconds)
 
 def calculate_retry_delay(
     *,
@@ -63,7 +77,6 @@ def calculate_retry_delay(
 ) -> timedelta:
     base_delay = max(1.0, float(base_delay_seconds))
     max_delay = max(base_delay, float(max_delay_seconds))
-    # Exponential Backoff
     exp_delay = min(max_delay, base_delay * (2 ** max(0, attempt - 1)))
 
     # Jitter 추가
@@ -74,3 +87,29 @@ def calculate_retry_delay(
     jitter_unit = random.random() if random_value is None else float(random_value)
     jitter_unit = min(1.0, max(0.0, jitter_unit))
     return timedelta(seconds=exp_delay + (jitter_ceiling * jitter_unit))
+
+
+def resolve_retry_delay(
+    *,
+    exc: Exception,
+    attempt: int,
+    base_delay_seconds: float,
+    max_delay_seconds: float,
+    jitter_ratio: float = 0.2,
+    random_value: float | None = None,
+) -> timedelta:
+    retry_after_seconds = extract_retry_after_seconds(exc)
+    if retry_after_seconds is not None:
+        capped_seconds = min(
+            max(1, retry_after_seconds),
+            max(1, int(max_delay_seconds)),
+        )
+        return timedelta(seconds=capped_seconds)
+
+    return calculate_retry_delay(
+        attempt=attempt,
+        base_delay_seconds=base_delay_seconds,
+        max_delay_seconds=max_delay_seconds,
+        jitter_ratio=jitter_ratio,
+        random_value=random_value,
+    )

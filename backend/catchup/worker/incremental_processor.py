@@ -16,7 +16,7 @@ from catchup.db.incremental import transition_record_status
 from catchup.db.models import IncrementalRecordStatus
 from catchup.db.models import SyncConnector
 from catchup.sync.common.protocols import IngestionHandlerProtocol
-from catchup.sync.common.retry_policy import calculate_retry_delay
+from catchup.sync.common.retry_policy import resolve_retry_delay
 from catchup.sync.common.schemas import ClaimState
 from catchup.sync.common.schemas import IncrementalSyncContext
 from catchup.sync.common.schemas import SyncStreamMessage
@@ -36,8 +36,9 @@ def _incremental_lease_until() -> datetime:
     )
 
 
-def _incremental_retry_delay(attempt: int) -> timedelta:
-    return calculate_retry_delay(
+def _incremental_retry_delay(exc: Exception, attempt: int) -> timedelta:
+    return resolve_retry_delay(
+        exc=exc,
         attempt=attempt,
         base_delay_seconds=settings.INCREMENTAL_RETRY_BASE_DELAY_SECONDS,
         max_delay_seconds=settings.INCREMENTAL_RETRY_MAX_DELAY_SECONDS,
@@ -247,7 +248,7 @@ async def _handle_incremental_failure(
         )
         return
 
-    next_retry_at = datetime.now(timezone.utc) + _incremental_retry_delay(next_attempt)
+    next_retry_at = datetime.now(timezone.utc) + _incremental_retry_delay(exc, next_attempt)
     transitioned = await run_in_threadpool(
         _transition_incremental_failure_state_sync,
         context=context,
