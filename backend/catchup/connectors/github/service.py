@@ -264,6 +264,15 @@ class GithubIngestionService:
                     results["pull_requests"]["synced"] += pr_result.get("synced", 0)
                     results["pull_requests"]["errors"] += pr_result.get("errors", 0)
 
+                except GitHubRateLimitError as exc:
+                    logger.warning(
+                        "[GITHUB][%s] Repository sync rate limited: repo=%s, retry_after=%ss, metadata=%s",
+                        SyncOperation.FULL_SYNC,
+                        repo_full_name,
+                        exc.retry_after,
+                        exc.metadata,
+                    )
+                    raise
                 except Exception as e:
                     logger.error(f"[GITHUB][{SyncOperation.FULL_SYNC}] Failed to sync repository {repo_full_name}: {e}")
                     results["repositories"]["errors"] += 1
@@ -883,8 +892,9 @@ class GithubIngestionService:
 
         users, users_result = await self._collect_users_snapshot()
         if raise_on_error and users_result["errors"] > 0:
-            raise RuntimeError(
-                f"github user metadata refresh failed: installation_id={self.installation_id}"
+            raise GitHubApiError(
+                f"github user metadata refresh failed: installation_id={self.installation_id}",
+                metadata={"installation_id": self.installation_id},
             )
 
         repositories = await self._collect_repository_snapshot()
@@ -948,6 +958,8 @@ class GithubIngestionService:
                         )
                         for member in members
                     ])
+                except GitHubRateLimitError:
+                    raise
                 except GitHubApiError as exc:
                     error_msg = (
                         f"Failed to fetch org members for '{self.account_login}': {exc}. "
@@ -970,6 +982,8 @@ class GithubIngestionService:
                             )
                         )
                         logger.info(f"[GITHUB][{SyncOperation.USER_SYNC}] Found user '{self.account_login}'")
+                except GitHubRateLimitError:
+                    raise
                 except GitHubApiError as exc:
                     logger.warning(
                         f"[GITHUB][{SyncOperation.USER_SYNC}] Failed to fetch user '{self.account_login}': {exc}"
@@ -1101,6 +1115,8 @@ class GithubIngestionService:
                     return record_id, None, True
 
                 return record_id, data, False
+            except GitHubRateLimitError:
+                raise
             except Exception as exc:
                 logger.warning(
                     "[GITHUB][REPAIR] Failed to fetch %s: installation_id=%s, repo=%s/%s, %s=%s, error=%s",
@@ -1358,7 +1374,7 @@ class GithubIngestionService:
     ) -> None:
         logger.warning(
             f"[GITHUB][{operation}] Rate limit hit: {entity_type.value} sync for {repo_full_name} "
-            f"(retry after {error.retry_after}s)"
+            f"(retry after {error.retry_after}s, metadata={error.metadata})"
         )
 
     def _get_repo_names_by_ids(self, db: Session, repo_ids: list[int]) -> list[str]:

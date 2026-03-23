@@ -11,7 +11,11 @@ from slack_sdk.errors import SlackApiError
 from sqlalchemy.orm import Session
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.connectors.slack.client import SlackApiClientWrapper
+from catchup.connectors.slack.client import (
+    SlackApiClientWrapper,
+    SlackConnectorApiError,
+    SlackRateLimitError,
+)
 from catchup.connectors.slack.schemas import (
     SlackThreadReply,
     SlackUser,
@@ -241,6 +245,47 @@ class SlackIngestionService:
             self._load_ingestion_context(db)
             channel = domain_repository.get_channel(db, channel_id)
             return channel.name if channel is not None else channel_id
+
+    @staticmethod
+    def _extract_slack_error_code(exc: Exception) -> str | None:
+        if isinstance(exc, SlackConnectorApiError):
+            error_code = exc.metadata.get("error")
+            return str(error_code) if error_code else None
+
+        if isinstance(exc, SlackApiError):
+            error_code = exc.response.get("error")
+            return str(error_code) if error_code else None
+
+        return None
+
+    def _handle_pipeline_exception_group(
+        self,
+        exc_group: ExceptionGroup,
+        *,
+        sync_ctx: SlackSyncContext,
+        skippable_errors: set[str],
+    ) -> TargetSyncResult:
+        for exc in exc_group.exceptions:
+            if isinstance(exc, SlackRateLimitError):
+                raise exc
+
+        for exc in exc_group.exceptions:
+            error_code = self._extract_slack_error_code(exc)
+            if error_code in skippable_errors:
+                logger.info(
+                    "[SLACK][INGESTION] Skipped channel: team_id=%s, channel=%s(%s), reason=%s",
+                    self.team_id,
+                    sync_ctx.channel_name,
+                    sync_ctx.channel_id,
+                    error_code,
+                )
+                return TargetSyncResult(skipped=True)
+
+        for exc in exc_group.exceptions:
+            if isinstance(exc, SlackConnectorApiError):
+                raise exc
+
+        raise exc_group.exceptions[0] from None
 
     def _transform_message_document_blocking(
         self,
@@ -555,19 +600,11 @@ class SlackIngestionService:
             synced_count, errors, _latest_synced_ts = store_task.result()
 
         except ExceptionGroup as eg:
-            for exc in eg.exceptions:
-                if isinstance(exc, SlackApiError):
-                    if exc.response.get("error", "") in skippable_errors:
-                        logger.info(
-                            "[SLACK][INGESTION] Skipped channel: team_id=%s, channel=%s(%s), reason=%s",
-                            self.team_id,
-                            sync_ctx.channel_name,
-                            sync_ctx.channel_id,
-                            exc.response.get("error"),
-                        )
-                        return TargetSyncResult(skipped=True)
-
-            raise eg.exceptions[0] from None
+            return self._handle_pipeline_exception_group(
+                eg,
+                sync_ctx=sync_ctx,
+                skippable_errors=skippable_errors,
+            )
 
         logger.debug(
             "[SLACK][INGESTION] Channel synced: team_id=%s, channel=%s(%s), synced=%s, errors=%s",

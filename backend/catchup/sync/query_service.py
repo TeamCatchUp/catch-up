@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timezone
 from typing import Any
 
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
-from catchup.connectors.atlassian.token_manager import (
-    AtlassianTokenManager,
-    AtlassianTokenProvider,
-)
+from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.client import GitHubApiClient
@@ -21,21 +21,23 @@ from catchup.connectors.github.service import _convert_repos_to_dto
 from catchup.connectors.jira.client import JiraApiClient
 from catchup.connectors.slack.factory import create_slack_metadata_service
 from catchup.db.atlassian import oauth_repository as atlassian_oauth_repository
-from catchup.db.github import domain_repository as github_entities
-from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.db.engine import SessionLocal
-from catchup.db.jira import domain_repository as jira_entities
-from catchup.db.models import (
-    AtlassianOAuthToken,
-    SyncConnector,
-    SyncEventStatus,
-    SyncJob,
-    SyncJobStatus,
-    SyncType,
+from catchup.db.github import domain_repository as github_entities
+from catchup.db.github.installation_repository import (
+    get_installation_by_installation_id,
 )
-from catchup.db.sync import SyncEventSummary, get_job, list_events_by_job, summarize_events_by_job
+from catchup.db.jira import domain_repository as jira_entities
+from catchup.db.models import AtlassianOAuthToken
+from catchup.db.models import SyncConnector
+from catchup.db.models import SyncEventStatus
+from catchup.db.models import SyncJob
+from catchup.db.models import SyncJobStatus
+from catchup.db.models import SyncType
+from catchup.db.sync import SyncEventSummary
+from catchup.db.sync import get_job
+from catchup.db.sync import list_events_by_job
+from catchup.db.sync import summarize_events_by_job
 from catchup.sync.common.schemas import SyncTargetType
-
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +228,7 @@ class SyncQueryService:
         candidates = [
             event
             for event in events
-            if event.status == SyncEventStatus.FAILED and event.publish_error
+            if event.status == SyncEventStatus.FAILED and (event.last_error or event.publish_error)
         ]
         if not candidates:
             return None
@@ -235,7 +237,7 @@ class SyncQueryService:
             key=lambda event: event.failed_at or event.updated_at or event.requested_at,
             reverse=True,
         )
-        return str(candidates[0].publish_error)
+        return str(candidates[0].last_error or candidates[0].publish_error)
 
     def _build_job_summary(self, events) -> SyncJobSummaryResult:
         counts = self._summarize_events(events)

@@ -2,6 +2,10 @@
 Base Connector Exceptions
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 
 class ConnectorApiError(Exception):
     """
@@ -17,10 +21,18 @@ class ConnectorApiError(Exception):
 
     service: str = "unknown"
 
-    def __init__(self, message: str, status_code: int | None = None):
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        retry_after: int | float | None = None,
+        metadata: dict[str, Any] | None = None,
+    ):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+        self.retry_after = retry_after
+        self.metadata = dict(metadata or {})
 
 
 class RateLimitError(ConnectorApiError):
@@ -37,10 +49,10 @@ class RateLimitError(ConnectorApiError):
         message: str | None = None,
         retry_after: int = 60,
         remaining: int = 0,
+        metadata: dict[str, Any] | None = None,
     ):
         msg = message or f"Rate limit exceeded. Retry after {retry_after}s"
-        super().__init__(msg, 429)
-        self.retry_after = retry_after
+        super().__init__(msg, 429, retry_after=retry_after, metadata=metadata)
         self.remaining = remaining
 
 

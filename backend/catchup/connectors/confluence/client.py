@@ -15,6 +15,7 @@ from catchup.connectors.base import (
     ConnectorApiError,
     RateLimitError,
 )
+from catchup.connectors.base.retry import parse_retry_after_header
 
 logger = logging.getLogger(__name__)
 
@@ -73,16 +74,47 @@ class ConfluenceApiClient:
                             )
 
                             if response.status_code == 429:
-                                retry_after = int(response.headers.get("Retry-After", 5))
+                                retry_after, retry_after_source = self._resolve_retry_after(
+                                    response,
+                                    default=5,
+                                )
                                 logger.warning(
                                     f"[CONFLUENCE][API] Rate limited, retry after {retry_after}s"
                                 )
                                 if attempt < max_retries - 1:
                                     await asyncio.sleep(retry_after)
                                     break
-                                raise ConfluenceRateLimitError(
-                                    "Rate limit exceeded",
+                                raise self._build_retryable_error(
+                                    response,
                                     retry_after=retry_after,
+                                    retry_after_source=retry_after_source,
+                                    default_message="Rate limit exceeded",
+                                )
+
+                            if (
+                                response.status_code in {502, 503, 504}
+                                and self._has_retry_after_header(response)
+                            ):
+                                retry_after, retry_after_source = self._resolve_retry_after(
+                                    response,
+                                    default=5,
+                                )
+                                logger.warning(
+                                    "[CONFLUENCE][API] Retryable server error, retry after %ss: status=%s url=%s",
+                                    retry_after,
+                                    response.status_code,
+                                    url,
+                                )
+                                if attempt < max_retries - 1:
+                                    await asyncio.sleep(retry_after)
+                                    break
+                                raise self._build_retryable_error(
+                                    response,
+                                    retry_after=retry_after,
+                                    retry_after_source=retry_after_source,
+                                    default_message=(
+                                        f"Confluence API temporary failure [{response.status_code}]"
+                                    ),
                                 )
 
                             if response.status_code == 401:
@@ -133,15 +165,88 @@ class ConfluenceApiClient:
         query_params = parse_qs(parsed.query)
         return query_params.get("cursor", [None])[0]
 
-    def _get_retry_after(self, response: httpx.Response, default: int = 5) -> int:
-        retry_after = response.headers.get("Retry-After")
-        if retry_after is None:
-            return default
+    @staticmethod
+    def _extract_rate_limit_headers(response: httpx.Response) -> dict[str, str]:
+        allowed_exact = {"retry-after", "beta-retry-after"}
+        allowed_prefixes = ("x-ratelimit-", "ratelimit-", "x-beta-ratelimit-")
+        return {
+            key: value
+            for key, value in response.headers.items()
+            if key.lower() in allowed_exact
+            or key.lower().startswith(allowed_prefixes)
+        }
 
-        try:
-            return max(1, int(retry_after))
-        except ValueError:
-            return default
+    def _resolve_retry_after(
+        self,
+        response: httpx.Response,
+        *,
+        default: int = 5,
+    ) -> tuple[int, str]:
+        headers = {key.lower(): value for key, value in response.headers.items()}
+        if "beta-retry-after" in headers:
+            return (
+                parse_retry_after_header(headers["beta-retry-after"], default=default),
+                "beta-retry-after",
+            )
+        if "retry-after" in headers:
+            return (
+                parse_retry_after_header(headers["retry-after"], default=default),
+                "retry-after",
+            )
+        return max(1, int(default)), "default"
+
+    def _has_retry_after_header(self, response: httpx.Response) -> bool:
+        headers = {key.lower(): value for key, value in response.headers.items()}
+        return "beta-retry-after" in headers or "retry-after" in headers
+
+    def _build_retry_metadata(
+        self,
+        response: httpx.Response,
+        *,
+        retry_after: int,
+        retry_after_source: str,
+    ) -> dict[str, Any]:
+        return {
+            "status_code": response.status_code,
+            "retry_after": retry_after,
+            "retry_after_source": retry_after_source,
+            "headers": self._extract_rate_limit_headers(response),
+        }
+
+    def _build_retryable_error(
+        self,
+        response: httpx.Response,
+        *,
+        retry_after: int,
+        retry_after_source: str,
+        default_message: str,
+    ) -> ConnectorApiError:
+        body = (response.text or "").strip()
+        metadata = self._build_retry_metadata(
+            response,
+            retry_after=retry_after,
+            retry_after_source=retry_after_source,
+        )
+        if response.status_code == 429:
+            return ConfluenceRateLimitError(
+                default_message,
+                retry_after=retry_after,
+                metadata=metadata,
+            )
+
+        return ConfluenceApiError(
+            f"{default_message}. body={body[:300]}",
+            status_code=response.status_code,
+            retry_after=retry_after,
+            metadata=metadata,
+        )
+
+    def _get_retry_after(self, response: httpx.Response, default: int = 5) -> int:
+        retry_after, _source = self._resolve_retry_after(
+            response,
+            default=default,
+        )
+        return retry_after
 
     async def _paginate_cursor(
         self,
@@ -391,25 +496,45 @@ class ConfluenceApiClient:
                     ) as client:
                         response = await client.get(url)
 
-                        if response.status_code == 429:
-                            retry_after = self._get_retry_after(response)
+                        if response.status_code == 429 or (
+                            response.status_code in {502, 503, 504}
+                            and self._has_retry_after_header(response)
+                        ):
+                            retry_after, retry_after_source = self._resolve_retry_after(
+                                response,
+                                default=5,
+                            )
                             if retry_count >= self._attachment_max_retries:
                                 logger.warning(
-                                    "[CONFLUENCE][ATTACHMENT] Rate limit retry exhausted: "
-                                    "content_id=%s, attachment_id=%s, retry_after=%ss",
+                                    "[CONFLUENCE][ATTACHMENT] Retryable download exhausted: "
+                                    "status=%s, content_id=%s, attachment_id=%s, retry_after=%ss",
+                                    response.status_code,
                                     content_id,
                                     attachment_id,
                                     retry_after,
                                 )
-                                return None
+                                raise self._build_retryable_error(
+                                    response,
+                                    retry_after=retry_after,
+                                    retry_after_source=retry_after_source,
+                                    default_message=(
+                                        "Confluence attachment download rate limited"
+                                        if response.status_code == 429
+                                        else (
+                                            "Confluence attachment download temporary failure "
+                                            f"[{response.status_code}]"
+                                        )
+                                    ),
+                                )
 
                             retry_count += 1
                             logger.warning(
-                                "[CONFLUENCE][ATTACHMENT] Rate limited. Waiting %ss before retry "
-                                "(attempt %s/%s): content_id=%s, attachment_id=%s",
+                                "[CONFLUENCE][ATTACHMENT] Waiting %ss before retry "
+                                "(attempt %s/%s): status=%s, content_id=%s, attachment_id=%s",
                                 retry_after,
                                 retry_count,
                                 self._attachment_max_retries,
+                                response.status_code,
                                 content_id,
                                 attachment_id,
                             )
@@ -457,6 +582,8 @@ class ConfluenceApiClient:
                 )
                 return None
             except Exception as e:
+                if isinstance(e, ConnectorApiError) and e.retry_after is not None:
+                    raise
                 logger.warning(
                     f"[CONFLUENCE][ATTACHMENT] Download error: {e}, content_id={content_id}, "
                     f"attachment_id={attachment_id}"

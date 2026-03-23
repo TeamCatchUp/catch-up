@@ -12,6 +12,7 @@ from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import IntegrationAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.connectors.slack.auth import get_slack_oauth_service, SlackOAuthService
+from catchup.connectors.slack.client import SlackRateLimitError
 from catchup.connectors.slack.schemas import (
     SlackInstallationStatus,
     SlackWorkspaceInfo,
@@ -211,8 +212,9 @@ async def slack_installation_status(
                 scopes=token.bot_scopes.split() if token.bot_scopes else [],
                 connected_at=token.created_at,
             ))
-        except HTTPException as e:
-            logger.warning(f"[SLACK][AUTH] Status check failed (team={token.team_id}): {e.detail}")
+        except (HTTPException, SlackRateLimitError) as e:
+            detail = e.detail if isinstance(e, HTTPException) else e.message
+            logger.warning(f"[SLACK][AUTH] Status check failed (team={token.team_id}): {detail}")
             # 토큰이 유효하지 않더라도 연결된 것으로 표시
             workspaces.append(SlackWorkspaceInfo(
                 team_id=token.team_id,

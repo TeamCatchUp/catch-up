@@ -1,29 +1,30 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 
 from fastapi.concurrency import run_in_threadpool
 
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
-from catchup.db.incremental import (
-    get_record_state,
-    list_parent_cohort_records,
-    mark_parent_cohort_synced,
-    transition_record_status,
-)
-from catchup.db.models import IncrementalRecordStatus, SyncConnector
+from catchup.db.incremental import get_record_state
+from catchup.db.incremental import list_parent_cohort_records
+from catchup.db.incremental import mark_parent_cohort_synced
+from catchup.db.incremental import transition_record_status
+from catchup.db.models import IncrementalRecordStatus
+from catchup.db.models import SyncConnector
 from catchup.sync.common.protocols import IngestionHandlerProtocol
-from catchup.sync.common.schemas import (
-    ClaimState,
-    IncrementalSyncContext,
-    SyncStreamMessage,
-    SyncStreamTask,
-)
+from catchup.sync.common.retry_policy import resolve_retry_delay
+from catchup.sync.common.schemas import ClaimState
+from catchup.sync.common.schemas import IncrementalSyncContext
+from catchup.sync.common.schemas import SyncStreamMessage
+from catchup.sync.common.schemas import SyncStreamTask
 from catchup.sync.incremental.error_policy import is_retryable_incremental_error
 from catchup.sync.stream_runtime.stream_constants import SyncStreamFailureReason
-from catchup.worker.common import deadletter, select_handler
+from catchup.worker.common import deadletter
+from catchup.worker.common import select_handler
 from catchup.worker.schemas import ClaimResult
 
 logger = logging.getLogger(__name__)
@@ -35,11 +36,13 @@ def _incremental_lease_until() -> datetime:
     )
 
 
-def _incremental_retry_delay(attempt: int) -> timedelta:
-    base = max(1.0, float(settings.INCREMENTAL_RETRY_BASE_DELAY_SECONDS))
-    max_delay = max(base, float(settings.INCREMENTAL_RETRY_MAX_DELAY_SECONDS))
-    seconds = min(max_delay, base * (2 ** max(0, attempt - 1)))
-    return timedelta(seconds=seconds)
+def _incremental_retry_delay(exc: Exception, attempt: int) -> timedelta:
+    return resolve_retry_delay(
+        exc=exc,
+        attempt=attempt,
+        base_delay_seconds=settings.INCREMENTAL_RETRY_BASE_DELAY_SECONDS,
+        max_delay_seconds=settings.INCREMENTAL_RETRY_MAX_DELAY_SECONDS,
+    )
 
 
 def _claim_incremental_task(
@@ -245,7 +248,7 @@ async def _handle_incremental_failure(
         )
         return
 
-    next_retry_at = datetime.now(timezone.utc) + _incremental_retry_delay(next_attempt)
+    next_retry_at = datetime.now(timezone.utc) + _incremental_retry_delay(exc, next_attempt)
     transitioned = await run_in_threadpool(
         _transition_incremental_failure_state_sync,
         context=context,

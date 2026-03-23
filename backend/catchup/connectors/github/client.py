@@ -26,6 +26,8 @@ from typing import Any, AsyncIterator
 
 from githubkit import GitHub
 from githubkit.exception import RequestFailed, RequestTimeout
+from catchup.connectors.base.retry import parse_reset_timestamp_header
+from catchup.connectors.base.retry import parse_retry_after_header
 from catchup.connectors.github.queries import (
     ISSUE_BY_NUMBER_QUERY,
     ISSUE_NUMBERS_QUERY,
@@ -62,6 +64,20 @@ class GitHubApiError(ConnectorApiError):
 
     service = "github"
 
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        retry_after: int | float | None = None,
+        metadata: dict[str, Any] | None = None,
+    ):
+        super().__init__(
+            message,
+            status_code=status_code,
+            retry_after=retry_after,
+            metadata=metadata,
+        )
+
 
 class GitHubRateLimitError(RateLimitError, GitHubApiError):
     """
@@ -78,6 +94,20 @@ class GitHubRateLimitError(RateLimitError, GitHubApiError):
     """
 
     service = "github"
+
+    def __init__(
+        self,
+        message: str | None = None,
+        retry_after: int = 60,
+        remaining: int = 0,
+        metadata: dict[str, Any] | None = None,
+    ):
+        super().__init__(
+            message=message,
+            retry_after=retry_after,
+            remaining=remaining,
+            metadata=metadata,
+        )
 
 
 class GitHubAuthError(AuthenticationError, GitHubApiError):
@@ -138,12 +168,160 @@ class GitHubApiClient:
         # 요청 간 딜레이 (초)
         self._rate_limit_delay = float(settings.GITHUB_API_RATE_LIMIT_DELAY)
         self._max_rate_limit_retries = 3
+        self._max_client_retry_after_seconds = 30
+
+    @staticmethod
+    def _extract_header_subset(headers: Any) -> dict[str, str]:
+        if not headers:
+            return {}
+
+        keys = (
+            "retry-after",
+            "x-ratelimit-limit",
+            "x-ratelimit-remaining",
+            "x-ratelimit-reset",
+            "x-ratelimit-resource",
+        )
+        return {
+            key: str(headers.get(key))
+            for key in keys
+            if headers.get(key) is not None
+        }
+
+    @staticmethod
+    def _extract_error_message(payload: Any) -> str | None:
+        if isinstance(payload, dict):
+            message = payload.get("message")
+            if isinstance(message, str) and message.strip():
+                return message.strip()
+
+        if isinstance(payload, str) and payload.strip():
+            return payload.strip()
+
+        return None
+
+    @staticmethod
+    def _extract_graphql_error_messages(errors: Any) -> list[str]:
+        if not isinstance(errors, list):
+            return []
+
+        messages: list[str] = []
+        for error in errors:
+            if not isinstance(error, dict):
+                continue
+
+            message = error.get("message")
+            if isinstance(message, str) and message.strip():
+                messages.append(message.strip())
+
+        return messages
+
+    @staticmethod
+    def _is_secondary_rate_limit_message(message: str | None) -> bool:
+        if not message:
+            return False
+
+        normalized = message.lower()
+        return any(
+            phrase in normalized
+            for phrase in (
+                "secondary rate limit",
+                "secondary rate limits",
+                "abuse detection",
+                "temporarily blocked from content creation",
+            )
+        )
+
+    def _build_rate_limit_metadata(
+        self,
+        *,
+        source: str,
+        reason: str,
+        status_code: int | None,
+        headers: Any,
+        retry_after: int,
+        reset_timestamp: int | None = None,
+        body_message: str | None = None,
+        graphql_errors: list[str] | None = None,
+    ) -> dict[str, Any]:
+        metadata: dict[str, Any] = {
+            "source": source,
+            "reason": reason,
+            "status_code": status_code,
+            "retry_after": retry_after,
+            "headers": self._extract_header_subset(headers),
+        }
+
+        if reset_timestamp is not None:
+            metadata["reset_timestamp"] = reset_timestamp
+        if body_message:
+            metadata["body_message"] = body_message
+        if graphql_errors:
+            metadata["graphql_errors"] = graphql_errors
+
+        return metadata
+
+    def _build_rate_limit_error(
+        self,
+        *,
+        source: str,
+        reason: str,
+        status_code: int | None,
+        headers: Any,
+        retry_after: int,
+        remaining: int = 0,
+        reset_timestamp: int | None = None,
+        body_message: str | None = None,
+        graphql_errors: list[str] | None = None,
+    ) -> GitHubRateLimitError:
+        metadata = self._build_rate_limit_metadata(
+            source=source,
+            reason=reason,
+            status_code=status_code,
+            headers=headers,
+            retry_after=retry_after,
+            reset_timestamp=reset_timestamp,
+            body_message=body_message,
+            graphql_errors=graphql_errors,
+        )
+
+        return GitHubRateLimitError(
+            retry_after=retry_after,
+            remaining=remaining,
+            metadata=metadata,
+        )
+
+    def _raise_graphql_rate_limit_error(
+        self,
+        errors: list[str],
+    ) -> None:
+        joined = " | ".join(errors)
+        raise self._build_rate_limit_error(
+            source="graphql",
+            reason="graphql_errors",
+            status_code=200,
+            headers={},
+            retry_after=60,
+            body_message=joined,
+            graphql_errors=errors,
+        )
 
     def _handle_error(self, e: RequestFailed) -> None:
         """
         GitHub API 에러를 적절한 예외로 변환
         """
         status_code = e.response.status_code if e.response else None
+        headers = e.response.headers if e.response else {}
+        body_message = self._extract_error_message(str(e))
+
+        if e.response is not None:
+            try:
+                payload = e.response.json()
+            except ValueError:
+                payload = None
+            extracted_message = self._extract_error_message(payload)
+            if extracted_message:
+                body_message = extracted_message
 
         if status_code == 401:
             raise GitHubAuthError("Invalid or expired access token")
@@ -152,22 +330,74 @@ class GitHubApiClient:
             raise GitHubNotFoundError("Resource not found")
 
         if status_code == 403:
-            # Rate limit 확인
-            headers = e.response.headers if e.response else {}
             remaining = int(headers.get("x-ratelimit-remaining", 1))
+            retry_after_header = headers.get("retry-after")
+
+            if retry_after_header is not None:
+                retry_after = parse_retry_after_header(
+                    retry_after_header,
+                    default=60,
+                )
+                reason = (
+                    "secondary_rate_limit"
+                    if self._is_secondary_rate_limit_message(body_message)
+                    else "retry_after_header"
+                )
+                raise self._build_rate_limit_error(
+                    source="rest",
+                    reason=reason,
+                    status_code=status_code,
+                    headers=headers,
+                    retry_after=retry_after,
+                    remaining=remaining,
+                    body_message=body_message,
+                )
 
             if remaining == 0:
-                reset_timestamp = int(headers.get("x-ratelimit-reset", 0))
+                reset_timestamp = int(float(headers.get("x-ratelimit-reset", 0) or 0))
                 now = int(datetime.now(timezone.utc).timestamp())
-                retry_after = max(reset_timestamp - now, 60)
-                raise GitHubRateLimitError(retry_after=retry_after, remaining=0)
+                retry_after = parse_reset_timestamp_header(
+                    headers.get("x-ratelimit-reset"),
+                    now_ts=now,
+                    default=60,
+                )
+                raise self._build_rate_limit_error(
+                    source="rest",
+                    reason="primary_rate_limit_reset",
+                    status_code=status_code,
+                    headers=headers,
+                    retry_after=retry_after,
+                    remaining=0,
+                    reset_timestamp=reset_timestamp,
+                    body_message=body_message,
+                )
+
+            if self._is_secondary_rate_limit_message(body_message):
+                raise self._build_rate_limit_error(
+                    source="rest",
+                    reason="secondary_rate_limit",
+                    status_code=status_code,
+                    headers=headers,
+                    retry_after=60,
+                    remaining=remaining,
+                    body_message=body_message,
+                )
 
         if status_code == 429:
-            headers = e.response.headers if e.response else {}
-            retry_after = int(headers.get("retry-after", 60))
-            raise GitHubRateLimitError(retry_after=retry_after)
+            retry_after = parse_retry_after_header(
+                headers.get("retry-after"),
+                default=60,
+            )
+            raise self._build_rate_limit_error(
+                source="rest",
+                reason="http_429",
+                status_code=status_code,
+                headers=headers,
+                retry_after=retry_after,
+                body_message=body_message,
+            )
 
-        raise GitHubApiError(str(e), status_code)
+        raise GitHubApiError(str(e), status_code, metadata={"body_message": body_message})
 
     async def _with_rate_limit(
         self,
@@ -189,6 +419,12 @@ class GitHubApiClient:
                         self._handle_error(e)
                     except GitHubRateLimitError as rate_limit_error:
                         if retry_count >= self._max_rate_limit_retries:
+                            raise
+
+                        if (
+                            rate_limit_error.retry_after is not None
+                            and rate_limit_error.retry_after > self._max_client_retry_after_seconds
+                        ):
                             raise
 
                         retry_count += 1
@@ -515,6 +751,14 @@ class GitHubApiClient:
         if isinstance(response, dict):
             errors = response.get("errors")
             if errors:
+                error_messages = self._extract_graphql_error_messages(errors)
+                if any(
+                    self._is_secondary_rate_limit_message(message)
+                    or "rate limit" in message.lower()
+                    for message in error_messages
+                ):
+                    self._raise_graphql_rate_limit_error(error_messages)
+
                 logger.error(
                     "[GITHUB][GRAPHQL] Query returned errors: variables=%s, errors=%s",
                     variables,

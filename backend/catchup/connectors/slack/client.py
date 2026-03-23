@@ -22,9 +22,19 @@ from slack_sdk.web.async_base_client import async_default_handlers
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
 
+from catchup.connectors.base.exceptions import ConnectorApiError, RateLimitError
+from catchup.connectors.base.retry import parse_retry_after_header
 from catchup.configs.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class SlackConnectorApiError(ConnectorApiError):
+    service = "slack"
+
+
+class SlackRateLimitError(RateLimitError, SlackConnectorApiError):
+    service = "slack"
 
 
 class SlackApiClientWrapper:
@@ -48,13 +58,101 @@ class SlackApiClientWrapper:
         self.team_id = team_id
         retry_handlers = [
             *async_default_handlers(),
-            AsyncRateLimitErrorRetryHandler(max_retry_count=3),
+            AsyncRateLimitErrorRetryHandler(max_retry_count=1),
         ]
         self.client = AsyncWebClient(
             token=access_token,
             retry_handlers=retry_handlers,
         )
         self._semaphore = asyncio.Semaphore(settings.SLACK_SYNC_MAX_CONCURRENT_REQUESTS)
+
+    @staticmethod
+    def _response_get(response: Any, key: str, default: Any = None) -> Any:
+        if response is None:
+            return default
+
+        getter = getattr(response, "get", None)
+        if callable(getter):
+            return getter(key, default)
+
+        try:
+            return response[key]
+        except (KeyError, TypeError):
+            return default
+
+    @staticmethod
+    def _extract_headers(response: Any) -> dict[str, str]:
+        headers = getattr(response, "headers", None)
+        if headers is None or not hasattr(headers, "items"):
+            return {}
+        return {str(key): str(value) for key, value in headers.items()}
+
+    def _build_api_error(
+        self,
+        api_name: str,
+        exc: SlackApiError,
+    ) -> SlackConnectorApiError:
+        response = exc.response
+        status_code = getattr(response, "status_code", None)
+        headers = self._extract_headers(response)
+        header_lookup = {key.lower(): value for key, value in headers.items()}
+        error_code = self._response_get(response, "error")
+        has_retry_after = "retry-after" in header_lookup
+        retry_after = (
+            parse_retry_after_header(header_lookup.get("retry-after"), default=1)
+            if has_retry_after
+            else None
+        )
+        metadata = {
+            "team_id": self.team_id,
+            "api_name": api_name,
+            "error": error_code,
+            "headers": {
+                key: value
+                for key, value in headers.items()
+                if key.lower() in {"retry-after", "x-slack-req-id"}
+            },
+        }
+        if status_code is not None:
+            metadata["status_code"] = status_code
+        if retry_after is not None:
+            metadata["retry_after"] = retry_after
+
+        if status_code == 429 or error_code == "ratelimited" or retry_after is not None:
+            delay = retry_after or 1
+            return SlackRateLimitError(
+                message=f"Slack API rate limited during {api_name}",
+                retry_after=delay,
+                metadata=metadata,
+            )
+
+        return SlackConnectorApiError(
+            message=f"Slack API error during {api_name}: {error_code or exc}",
+            status_code=status_code,
+            metadata=metadata,
+        )
+
+    async def _call_api(
+        self,
+        api_name: str,
+        client_method: str,
+        **kwargs,
+    ) -> dict[str, Any]:
+        async with self._semaphore:
+            try:
+                response = await getattr(self.client, client_method)(**kwargs)
+                return response.data
+            except SlackApiError as exc:
+                error = self._build_api_error(api_name, exc)
+                logger.error(
+                    "[SLACK][API] %s failed: team_id=%s, status=%s, error=%s, retry_after=%s",
+                    api_name,
+                    self.team_id,
+                    error.status_code,
+                    error.metadata.get("error"),
+                    error.retry_after,
+                )
+                raise error from exc
 
     # ================================================================
     # Channel APIs
@@ -79,18 +177,14 @@ class SlackApiClientWrapper:
         Returns:
             channels, response_metadata 포함된 응답
         """
-        async with self._semaphore:
-            try:
-                response = await self.client.conversations_list(
-                    types=types,
-                    exclude_archived=exclude_archived,
-                    cursor=cursor,
-                    limit=limit,
-                )
-                return response.data
-            except SlackApiError as e:
-                logger.error(f"conversations_list failed: {e.response['error']}")
-                raise
+        return await self._call_api(
+            "conversations_list",
+            "conversations_list",
+            types=types,
+            exclude_archived=exclude_archived,
+            cursor=cursor,
+            limit=limit,
+        )
 
     async def get_conversation_info(
         self,
@@ -107,16 +201,12 @@ class SlackApiClientWrapper:
         Returns:
             channel 정보 포함된 응답
         """
-        async with self._semaphore:
-            try:
-                response = await self.client.conversations_info(
-                    channel=channel,
-                    include_num_members=include_num_members,
-                )
-                return response.data
-            except SlackApiError as e:
-                logger.error(f"conversations_info failed for {channel}: {e.response['error']}")
-                raise
+        return await self._call_api(
+            "conversations_info",
+            "conversations_info",
+            channel=channel,
+            include_num_members=include_num_members,
+        )
 
     async def get_conversation_members(
         self,
@@ -135,17 +225,13 @@ class SlackApiClientWrapper:
         Returns:
             members (user_id 리스트), response_metadata 포함된 응답
         """
-        async with self._semaphore:
-            try:
-                response = await self.client.conversations_members(
-                    channel=channel,
-                    cursor=cursor,
-                    limit=limit,
-                )
-                return response.data
-            except SlackApiError as e:
-                logger.error(f"conversations_members failed for {channel}: {e.response['error']}")
-                raise
+        return await self._call_api(
+            "conversations_members",
+            "conversations_members",
+            channel=channel,
+            cursor=cursor,
+            limit=limit,
+        )
 
     # ================================================================
     # Message APIs
@@ -174,20 +260,16 @@ class SlackApiClientWrapper:
         Returns:
             messages, has_more, response_metadata 포함된 응답
         """
-        async with self._semaphore:
-            try:
-                response = await self.client.conversations_history(
-                    channel=channel,
-                    oldest=oldest,
-                    latest=latest,
-                    cursor=cursor,
-                    limit=limit,
-                    inclusive=inclusive,
-                )
-                return response.data
-            except SlackApiError as e:
-                logger.error(f"conversations_history failed for {channel}: {e.response['error']}")
-                raise
+        return await self._call_api(
+            "conversations_history",
+            "conversations_history",
+            channel=channel,
+            oldest=oldest,
+            latest=latest,
+            cursor=cursor,
+            limit=limit,
+            inclusive=inclusive,
+        )
 
     async def get_conversation_replies(
         self,
@@ -213,21 +295,17 @@ class SlackApiClientWrapper:
         Returns:
             messages (첫 번째는 parent), has_more 포함된 응답
         """
-        async with self._semaphore:
-            try:
-                response = await self.client.conversations_replies(
-                    channel=channel,
-                    ts=ts,
-                    oldest=oldest,
-                    latest=latest,
-                    cursor=cursor,
-                    limit=limit,
-                    inclusive=inclusive,
-                )
-                return response.data
-            except SlackApiError as e:
-                logger.error(f"conversations_replies failed for {channel}/{ts}: {e.response['error']}")
-                raise
+        return await self._call_api(
+            "conversations_replies",
+            "conversations_replies",
+            channel=channel,
+            ts=ts,
+            oldest=oldest,
+            latest=latest,
+            cursor=cursor,
+            limit=limit,
+            inclusive=inclusive,
+        )
 
     async def list_message_ids(
         self,
@@ -317,16 +395,12 @@ class SlackApiClientWrapper:
         Returns:
             members (user 리스트), response_metadata 포함된 응답
         """
-        async with self._semaphore:
-            try:
-                response = await self.client.users_list(
-                    cursor=cursor,
-                    limit=limit,
-                )
-                return response.data
-            except SlackApiError as e:
-                logger.error(f"users_list failed: {e.response['error']}")
-                raise
+        return await self._call_api(
+            "users_list",
+            "users_list",
+            cursor=cursor,
+            limit=limit,
+        )
 
     # ================================================================
     # Team API
@@ -339,13 +413,10 @@ class SlackApiClientWrapper:
         Returns:
             team 정보 포함된 응답
         """
-        async with self._semaphore:
-            try:
-                response = await self.client.team_info()
-                return response.data
-            except SlackApiError as e:
-                logger.error(f"team_info failed: {e.response['error']}")
-                raise
+        return await self._call_api(
+            "team_info",
+            "team_info",
+        )
 
     # ================================================================
     # Utility APIs
@@ -358,10 +429,7 @@ class SlackApiClientWrapper:
         Returns:
             user_id, team_id, bot_id 등 포함된 응답
         """
-        async with self._semaphore:
-            try:
-                response = await self.client.auth_test()
-                return response.data
-            except SlackApiError as e:
-                logger.error(f"auth_test failed: {e.response['error']}")
-                raise
+        return await self._call_api(
+            "auth_test",
+            "auth_test",
+        )
