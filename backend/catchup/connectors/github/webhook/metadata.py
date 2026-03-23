@@ -205,7 +205,7 @@ def _create_installation(
                 installation.repository_selection
             )
 
-        created = installation_crud.create_installation(
+        installation_crud.create_installation(
             db=db,
             installation_id=installation.id,
             account_type=GithubInstallationType(account.type.lower()),
@@ -230,7 +230,7 @@ def _create_installation(
     )
     return installation_status_response(
         status="created",
-        installation_id=created.installation_id,
+        installation_id=installation.id,
     )
 
 
