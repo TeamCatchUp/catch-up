@@ -25,6 +25,8 @@ from catchup.chat.schemas import ChatStreamingTokenResponse
 from catchup.chat.schemas import StreamEvent
 from catchup.chat.utils import restore_conversation_context
 from catchup.configs.config import settings
+from catchup.costs.contexts.chat import ChatTokenUsageContext
+from catchup.costs.emitters import emit_chat_token_usage_event
 from catchup.db.chat_room import add_message
 from catchup.db.chat_room import create_chat_room
 from catchup.db.chat_room import get_chat_room
@@ -107,6 +109,7 @@ class ChatService:
                 "original_query": query,
                 "global_context": global_context,
                 "tool_filters": tool_filters,
+                "token_breakdown": {},
             }
             
             stream_state = {
@@ -180,6 +183,25 @@ class ChatService:
                 session_id=str(session_id),
                 duration=round(elapsed, 4)
             )
+            
+            token_usage_ctx = ChatTokenUsageContext.get()
+            lg_current_state = await self._app.aget_state(base_config)
+            values = lg_current_state.values
+
+            if token_usage_ctx and values:
+                token_breakdown = values.get("token_breakdown", {})
+                token_usage_ctx.add_tokens(token_breakdown)
+            
+            if (
+                token_usage_ctx
+                and token_usage_ctx.token_breakdown
+                and token_usage_ctx.message_id
+            ):
+                emit_chat_token_usage_event(
+                    user_id=global_context.user.id,
+                    workspace_id=global_context.workspace.id,
+                    company_id=global_context.company.id,
+                )
             
             if settings.ENABLE_LANGFUSE:
                 client = get_langfuse_client()
@@ -376,7 +398,7 @@ class ChatService:
         trace_id = stream_state.get("langfuse_trace_id")
         
         if final_content:
-            await self._save_message_content(
+            message_id = await self._save_message_content(
                 db,
                 room_id,
                 "assistant",
@@ -384,6 +406,11 @@ class ChatService:
                 final_sources_data,
                 trace_id
             )
+            
+            token_usage_ctx = ChatTokenUsageContext.get()
+            if token_usage_ctx and message_id:
+                token_usage_ctx.message_id = message_id
+            
             logger.info(
                 "final_contents_saved", 
                 session_id=str(session_id)
@@ -477,7 +504,7 @@ class ChatService:
     ):
         
         def _save_sync():
-            add_message(
+            message = add_message(
                 db=db,
                 room_id=room_id,
                 role=role,
@@ -486,8 +513,10 @@ class ChatService:
                 trace_id=trace_id
             )
             db.commit()
+            db.refresh(message)
+            return message.id
             
-        await run_in_threadpool(_save_sync)
+        return await run_in_threadpool(_save_sync)
         
     async def reset_last_turn(
         self,

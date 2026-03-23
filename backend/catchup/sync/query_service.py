@@ -2,112 +2,95 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timezone
 from typing import Any
 
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
-from catchup.connectors.atlassian.token_manager import (
-    AtlassianTokenManager,
-    AtlassianTokenProvider,
-)
+from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.client import GitHubApiClient
 from catchup.connectors.github.service import _convert_repos_to_dto
 from catchup.connectors.jira.client import JiraApiClient
 from catchup.connectors.slack.factory import create_slack_metadata_service
-from catchup.connectors.slack.metadata_service import SlackMetadataService
 from catchup.db.atlassian import oauth_repository as atlassian_oauth_repository
-from catchup.db.github import domain_repository as github_entities
-from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.db.engine import SessionLocal
-from catchup.db.jira import domain_repository as jira_entities
-from catchup.db.models import (
-    AtlassianOAuthToken,
-    SyncConnector,
-    SyncEventStatus,
-    SyncJob,
-    SyncJobStatus,
-    SyncType,
+from catchup.db.github import domain_repository as github_entities
+from catchup.db.github.installation_repository import (
+    get_installation_by_installation_id,
 )
-from catchup.db.sync import SyncEventSummary, get_job, list_events_by_job, summarize_events_by_job
+from catchup.db.jira import domain_repository as jira_entities
+from catchup.db.models import AtlassianOAuthToken
+from catchup.db.models import SyncConnector
+from catchup.db.models import SyncEventStatus
+from catchup.db.models import SyncJob
+from catchup.db.models import SyncJobStatus
+from catchup.db.models import SyncType
+from catchup.db.sync import SyncEventSummary
+from catchup.db.sync import get_job
+from catchup.db.sync import list_events_by_job
+from catchup.db.sync import summarize_events_by_job
 from catchup.sync.common.schemas import SyncTargetType
-
 
 logger = logging.getLogger(__name__)
 
-def _load_github_installation_sync(installation_id: int):
-    with SessionLocal() as session:
-        return get_installation_by_installation_id(session, installation_id)
+def _load_github_installation_db(installation_id: int):
+    with SessionLocal() as db:
+        return get_installation_by_installation_id(db, installation_id)
 
 
-def _load_jira_token_sync(scope_id: str) -> AtlassianOAuthToken | None:
-    with SessionLocal() as session:
-        return atlassian_oauth_repository.get_token_by_cloud_id(session, scope_id)
+def _load_jira_token_db(scope_id: str) -> AtlassianOAuthToken | None:
+    with SessionLocal() as db:
+        return atlassian_oauth_repository.get_token_by_cloud_id(db, scope_id)
 
 
-def _load_confluence_token_sync(scope_id: str) -> AtlassianOAuthToken | None:
-    with SessionLocal() as session:
+def _load_confluence_token_db(scope_id: str) -> AtlassianOAuthToken | None:
+    with SessionLocal() as db:
         return (
-            session.query(AtlassianOAuthToken)
+            db.query(AtlassianOAuthToken)
             .filter(AtlassianOAuthToken.cloud_id == scope_id)
             .first()
         )
 
-
-def _persist_slack_channels_sync(
-    service: SlackMetadataService,
-    channels: list[Any],
-) -> None:
-    with SessionLocal.begin() as session:
-        service.persist_channel_snapshot(
-            session,
-            channels,
-            auto_commit=False,
-        )
-
-
-def _persist_github_repositories_sync(
+def _persist_github_repositories_db(
     installation_id: int,
     repositories: list[Any],
 ) -> None:
-    with SessionLocal.begin() as session:
-        github_entities.sync_repositories_snapshot(
-            session,
-            installation_id,
-            repositories,
-            auto_commit=False,
-        )
+    with SessionLocal() as db:
+        try:
+            github_entities.sync_repositories_snapshot(
+                db,
+                installation_id,
+                repositories,
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
 
 
-def _persist_jira_projects_sync(
+def _persist_jira_projects_db(
     cloud_id: str,
     projects: list[dict[str, Any]],
 ) -> None:
-    with SessionLocal.begin() as session:
-        jira_entities.sync_projects_snapshot(
-            session,
-            cloud_id,
-            projects,
-        )
-
-
-def _persist_confluence_spaces_sync(
-    service: ConfluenceMetadataService,
-    cloud_id: str,
-    spaces: list[dict[str, Any]],
-) -> None:
-    with SessionLocal.begin() as session:
-        service.persist_space_snapshot(
-            session,
-            cloud_id,
-            spaces,
-            auto_commit=False,
-        )
+    with SessionLocal() as db:
+        try:
+            jira_entities.sync_projects_snapshot(
+                db,
+                cloud_id,
+                projects,
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
 
 
 @dataclass(slots=True, frozen=True)
@@ -245,7 +228,7 @@ class SyncQueryService:
         candidates = [
             event
             for event in events
-            if event.status == SyncEventStatus.FAILED and event.publish_error
+            if event.status == SyncEventStatus.FAILED and (event.last_error or event.publish_error)
         ]
         if not candidates:
             return None
@@ -254,7 +237,7 @@ class SyncQueryService:
             key=lambda event: event.failed_at or event.updated_at or event.requested_at,
             reverse=True,
         )
-        return str(candidates[0].publish_error)
+        return str(candidates[0].last_error or candidates[0].publish_error)
 
     def _build_job_summary(self, events) -> SyncJobSummaryResult:
         counts = self._summarize_events(events)
@@ -337,6 +320,12 @@ class SyncQueryService:
                 last_error=summary.last_error,
             )
 
+    async def get_job_snapshot_async(
+        self,
+        job_id: str,
+    ) -> SyncJobSnapshotResult | None:
+        return await run_in_threadpool(self.get_job_snapshot, job_id)
+
     def get_scope_latest_full_status(
         self,
         *,
@@ -381,6 +370,18 @@ class SyncQueryService:
                 last_error=summary.last_error,
             )
 
+    async def get_scope_latest_full_status_async(
+        self,
+        *,
+        connector: SyncConnector,
+        scope_id: str,
+    ) -> SyncScopeStatusResult | None:
+        return await run_in_threadpool(
+            self.get_scope_latest_full_status,
+            connector=connector,
+            scope_id=scope_id,
+        )
+
     def _build_targets_result(
         self,
         *,
@@ -412,7 +413,7 @@ class SyncQueryService:
             raise ValueError(f"github installation not found: {scope_id}") from exc
 
         installation = await run_in_threadpool(
-            _load_github_installation_sync,
+            _load_github_installation_db,
             installation_id,
         )
         if installation is None:
@@ -426,7 +427,7 @@ class SyncQueryService:
             await client.list_installation_repos(),
         )
         await run_in_threadpool(
-            _persist_github_repositories_sync,
+            _persist_github_repositories_db,
             installation_id,
             repositories,
         )
@@ -455,7 +456,7 @@ class SyncQueryService:
         *,
         scope_id: str,
     ) -> SyncTargetsResult:
-        token = await run_in_threadpool(_load_jira_token_sync, scope_id)
+        token = await run_in_threadpool(_load_jira_token_db, scope_id)
         if token is None:
             raise ValueError(f"jira cloud is not connected: {scope_id}")
 
@@ -510,7 +511,7 @@ class SyncQueryService:
         targets.sort(key=lambda item: item.target_id)
 
         await run_in_threadpool(
-            _persist_jira_projects_sync,
+            _persist_jira_projects_db,
             scope_id,
             project_rows,
         )
@@ -525,7 +526,7 @@ class SyncQueryService:
         *,
         scope_id: str,
     ) -> SyncTargetsResult:
-        token = await run_in_threadpool(_load_confluence_token_sync, scope_id)
+        token = await run_in_threadpool(_load_confluence_token_db, scope_id)
         if token is None:
             raise ValueError(f"confluence cloud is not connected: {scope_id}")
 
@@ -534,17 +535,10 @@ class SyncQueryService:
             oauth_repository=atlassian_oauth_repository,
         )
         metadata_service = ConfluenceMetadataService(token_manager)
-        spaces = await metadata_service.collect_space_snapshot(
+        spaces = await metadata_service.sync_space_snapshot(
             scope_id,
             granted_scopes=set((token.scopes or "").split()),
         )
-        if spaces is not None:
-            await run_in_threadpool(
-                _persist_confluence_spaces_sync,
-                metadata_service,
-                scope_id,
-                spaces,
-            )
 
         targets = [
             SyncTargetResult(
@@ -571,16 +565,8 @@ class SyncQueryService:
         *,
         scope_id: str,
     ) -> SyncTargetsResult:
-        metadata_service = await create_slack_metadata_service(
-            db=None,
-            team_id=scope_id,
-        )
-        channels = await metadata_service.collect_target_channels()
-        await run_in_threadpool(
-            _persist_slack_channels_sync,
-            metadata_service,
-            channels,
-        )
+        metadata_service = await create_slack_metadata_service(team_id=scope_id)
+        channels = await metadata_service.sync_target_channels()
 
         channels = sorted(channels, key=lambda channel: channel.name)
 

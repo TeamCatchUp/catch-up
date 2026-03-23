@@ -19,12 +19,7 @@ class SlackFullSyncHandler(BaseFullSyncHandler):
         if cached is not None:
             return cached
 
-        # 순환 import 방지를 위해 런타임 시점에 SessionLocal을 로드한다.
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            service = await create_slack_ingestion_service(db, normalized_scope_id)
-
+        service = await create_slack_ingestion_service(normalized_scope_id)
         cache[cache_key] = service
         return service
 
@@ -35,21 +30,16 @@ class SlackFullSyncHandler(BaseFullSyncHandler):
         service_cache: dict[str, object],
     ) -> TargetSyncResult:
         service = await self._get_service(context.scope_id, service_cache)
-
-        from catchup.db.engine import SessionLocal
-
-        with SessionLocal() as db:
-            return await service.sync_channel_messages(
-                channel_id=context.target_id,
-                channel_name=context.target_name,
-                sync_from_ts=context.sync_from_ts,
-                db=db,
-                skip_delete=True,
-                audit_context=SyncAuditContext(
-                    connector=context.connector,
-                    scope_id=context.scope_id,
-                    target_id=context.target_id,
-                    job_id=context.job_id,
-                    task_id=context.event_id,
-                ),
-            )
+        return await service.sync_channel_messages(
+            channel_id=context.target_id,
+            channel_name=context.target_name,
+            sync_from_ts=context.sync_from_ts,
+            skip_delete=True,
+            audit_context=SyncAuditContext(
+                connector=context.connector,
+                scope_id=context.scope_id,
+                target_id=context.target_id,
+                job_id=context.job_id,
+                task_id=context.event_id,
+            ),
+        )

@@ -10,10 +10,10 @@ JiraApiClient, JiraFieldMapper, JiraTransformer, PGVectorRepository를 조합.
     await service.initialize()
 
     # 전체 동기화
-    await service.full_sync(db, project_keys=["CATCH", "PROJ"], sync_from_dt=datetime.now(timezone.utc))
+    await service.full_sync(project_keys=["CATCH", "PROJ"], sync_from_dt=datetime.now(timezone.utc))
 
     # 증분 동기화
-    await service.incremental_sync()
+    await service.incremental_sync(project_key="CATCH", record_id="CATCH-1", event_kind="updated", since=None)
 """
 
 import asyncio
@@ -24,7 +24,6 @@ from typing import Any, Literal
 
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
-from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
@@ -195,7 +194,7 @@ class JiraIngestionService:
             missing_ids=missing_ids,
         )
 
-    def _load_project_context_sync(
+    def _load_project_context_db(
         self,
         project_key: str,
     ) -> None:
@@ -212,7 +211,38 @@ class JiraIngestionService:
         self,
         project_key: str,
     ) -> None:
-        await run_in_threadpool(self._load_project_context_sync, project_key)
+        await run_in_threadpool(self._load_project_context_db, project_key)
+
+    def _load_project_keys_db(self) -> list[str]:
+        with SessionLocal() as db:
+            projects = jira_entities.get_projects_by_cloud_id(db, self.cloud_id)
+            return [project.project_key for project in projects]
+
+    async def _load_project_keys(self) -> list[str]:
+        return await run_in_threadpool(self._load_project_keys_db)
+
+    def _load_project_sync_context_db(
+        self,
+        project_key: str,
+    ) -> tuple[dict[str, Any], dict[int, Any]]:
+        with SessionLocal() as db:
+            project_cache = jira_entities.get_projects_by_keys(
+                db,
+                self.cloud_id,
+                [project_key],
+            )
+            sprints = jira_entities.get_sprints_by_cloud_id(db, self.cloud_id)
+            sprint_cache = {sprint.sprint_id: sprint for sprint in sprints}
+            return project_cache, sprint_cache
+
+    async def _load_project_sync_context(
+        self,
+        project_key: str,
+    ) -> tuple[dict[str, Any], dict[int, Any]]:
+        return await run_in_threadpool(
+            self._load_project_sync_context_db,
+            project_key,
+        )
 
     def _classify_record_type(
         self,
@@ -286,6 +316,8 @@ class JiraIngestionService:
     ) -> dict[str, Any] | None:
         try:
             return await self.client.get_issue(issue_key)
+        except JiraRateLimitError:
+            raise
         except JiraApiError as exc:
             logger.warning(
                 "[JIRA][REPAIR] Failed to fetch issue: cloud_id=%s, issue_key=%s, error=%s",
@@ -454,7 +486,6 @@ class JiraIngestionService:
 
     async def full_sync(
         self,
-        db: Session,
         project_keys: list[str] | None = None,
         sync_from_dt: datetime | None = None,
         audit_context: SyncAuditContext | None = None,
@@ -491,13 +522,11 @@ class JiraIngestionService:
                 logger.info("[JIRA][FULL SYNC] Sprint Sync Skipped : Agile API Not Available")
 
             if not project_keys:
-                projects = jira_entities.get_projects_by_cloud_id(db, self.cloud_id)
-                project_keys = [p.project_key for p in projects]
+                project_keys = await self._load_project_keys()
             
             for project_key in project_keys:
                 try:
                     project_result = await self._sync_project_issues(
-                        db,
                         project_key,
                         since=sync_from,
                         audit_context=audit_context,
@@ -505,6 +534,15 @@ class JiraIngestionService:
                     results["issues"]["synced"] += project_result["issues"]
                     results["epics"]["synced"] += project_result["epics"]
                     results["issues"]["errors"] += project_result["errors"]
+                except JiraRateLimitError as exc:
+                    logger.warning(
+                        "[JIRA][FULL SYNC] Project sync rate limited: "
+                        "cloud_id=%s, project_key=%s, retry_after=%ss",
+                        self.cloud_id,
+                        project_key,
+                        exc.retry_after,
+                    )
+                    raise
                 except Exception as e:
                     logger.error(
                         f"[JIRA][FULL SYNC] Project sync failed: "
@@ -532,7 +570,6 @@ class JiraIngestionService:
         
     async def _sync_project_issues(
         self,
-        db: Session,
         project_key: str,
         since: datetime | None = None,
         audit_context: SyncAuditContext | None = None,
@@ -553,18 +590,15 @@ class JiraIngestionService:
         sprint_cache: dict = {}
 
         try:
-            project_cache = jira_entities.get_projects_by_keys(
-                db, self.cloud_id, [project_key]
+            project_cache, sprint_cache = await self._load_project_sync_context(
+                project_key,
             )
-            sprints = jira_entities.get_sprints_by_cloud_id(db, self.cloud_id)
-            sprint_cache = {s.sprint_id: s for s in sprints}
 
             logger.info(
                 f"[JIRA][FULL SYNC] Loaded caches: "
                 f"project_key={project_key}, {len(sprint_cache)} sprints"
             )
         except Exception as e:
-            db.rollback()
             logger.warning(
                 f"[JIRA][FULL SYNC] Failed to load caches, continuing without enrichment: "
                 f"project_key={project_key}, error={e}"
@@ -674,13 +708,14 @@ class JiraIngestionService:
 
                     await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
 
-                except JiraRateLimitError as e:
+                except JiraRateLimitError as exc:
                     logger.warning(
-                        f"[JIRA][FULL SYNC] Rate limited: "
-                        f"project_key={project_key}, retry_after={e.retry_after}s"
+                        "[JIRA][FULL SYNC] Fetch rate limited: "
+                        "project_key=%s, retry_after=%ss",
+                        project_key,
+                        exc.retry_after,
                     )
-                    await asyncio.sleep(e.retry_after)
-                    continue
+                    raise
         finally:
             await queue.put(None)
 
@@ -771,7 +806,6 @@ class JiraIngestionService:
         프로젝트 동기화 (RDBMS 저장)
 
         Args:
-            db: SQLAlchemy Session
             project_keys: 동기화할 프로젝트 키 목록 (None이면 접근 가능한 모든 프로젝트)
 
         Returns:
@@ -782,7 +816,7 @@ class JiraIngestionService:
         results = {"synced": 0, "errors": 0}
         projects_data: list[dict] = []
 
-        def _sync_projects_snapshot_sync() -> dict[str, int]:
+        def _persist_projects_db() -> dict[str, int]:
             with SessionLocal() as db:
                 try:
                     result = jira_entities.sync_projects_snapshot(
@@ -831,6 +865,8 @@ class JiraIngestionService:
 
                     results["synced"] += 1
 
+                except JiraRateLimitError:
+                    raise
                 except JiraApiError as e:
                     logger.error(f"Failed to sync project {project_key}: {e}")
                     results["errors"] += 1
@@ -838,7 +874,7 @@ class JiraIngestionService:
                 await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
 
             sync_result = await run_in_threadpool(
-                _sync_projects_snapshot_sync,
+                _persist_projects_db,
             )
             logger.info(
                 "[JIRA][METADATA] Project snapshot synced: cloud_id=%s, upserted=%s, deleted=%s",
@@ -847,6 +883,8 @@ class JiraIngestionService:
                 sync_result["deleted"],
             )
 
+        except JiraRateLimitError:
+            raise
         except JiraApiError as e:
             logger.error(f"Failed to get project list (API error): {e}")
             results["errors"] += 1
@@ -871,7 +909,7 @@ class JiraIngestionService:
         results = {"synced": 0, "errors": 0}
         sprints_data: list[dict] = []
 
-        def _upsert_sprints_sync() -> int:
+        def _persist_sprints_db() -> int:
             with SessionLocal() as db:
                 try:
                     result = jira_entities.upsert_sprints_bulk(
@@ -920,6 +958,8 @@ class JiraIngestionService:
 
                         results["synced"] += 1
 
+                except JiraRateLimitError:
+                    raise
                 except JiraApiError as e:
                     logger.error(f"Failed to sync sprints for board {board_id}: {e}")
                     results["errors"] += 1
@@ -929,10 +969,12 @@ class JiraIngestionService:
             # RDBMS 벌크 저장
             if sprints_data:
                 await run_in_threadpool(
-                    _upsert_sprints_sync,
+                    _persist_sprints_db,
                 )
                 logger.info(f"Saved {len(sprints_data)} sprints to RDBMS")
 
+        except JiraRateLimitError:
+            raise
         except JiraApiError as e:
             logger.error(f"Failed to get boards (API error): {e}")
             results["errors"] += 1
@@ -959,7 +1001,7 @@ class JiraIngestionService:
         results = {"synced": 0, "errors": 0}
         users_data: list[dict] = []
 
-        def _upsert_users_sync() -> int:
+        def _persist_users_db() -> int:
             with SessionLocal() as db:
                 try:
                     result = jira_entities.upsert_users_bulk(
@@ -997,13 +1039,15 @@ class JiraIngestionService:
             # RDBMS 벌크 저장 (저장 후 카운트)
             if users_data:
                 saved_count = await run_in_threadpool(
-                    _upsert_users_sync,
+                    _persist_users_db,
                 )
                 results["synced"] = saved_count
                 logger.info(f"Saved {saved_count} users to RDBMS")
             else:
                 logger.warning("No valid users to save (all missing accountId)")
 
+        except JiraRateLimitError:
+            raise
         except JiraApiError as e:
             logger.error(f"Failed to sync users (API error): {e}")
             results["errors"] += 1
@@ -1116,7 +1160,6 @@ class JiraIngestionService:
 
     async def incremental_sync(
         self,
-        db: Session,
         *,
         project_key: str,
         record_id: str,
@@ -1134,11 +1177,10 @@ class JiraIngestionService:
             }
 
         result = await self._sync_project_issues(
-            db,
-                project_key=project_key,
-                since=since,
-                audit_context=audit_context,
-            )
+            project_key=project_key,
+            since=since,
+            audit_context=audit_context,
+        )
         return {
             "synced": int(result.get("issues", 0)) + int(result.get("epics", 0)),
             "errors": int(result.get("errors", 0)),

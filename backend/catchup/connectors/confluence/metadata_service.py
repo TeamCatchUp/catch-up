@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.constants import REQUIRED_CONFLUENCE_SCOPES
@@ -26,6 +27,7 @@ from catchup.connectors.confluence.schemas import (
 )
 from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.confluence import domain_repository as confluence_entities
+from catchup.db.engine import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -40,26 +42,63 @@ class ConfluenceMetadataService:
     def __init__(self, token_manager: AtlassianTokenManager):
         self.token_manager = token_manager
 
-    def persist_snapshot(
+    def _load_granted_scopes_db(self, cloud_id: str) -> set[str] | None:
+        with SessionLocal() as db:
+            token = atlassian_crud.get_token_by_cloud_id(db, cloud_id)
+            if not token:
+                return None
+            return set((token.scopes or "").split())
+
+    def _persist_snapshot_db(
+        self,
+        cloud_id: str,
+        snapshot: ConfluenceMetadataSnapshot,
+    ) -> None:
+        with SessionLocal() as db:
+            try:
+                self._persist_snapshot(
+                    db,
+                    cloud_id,
+                    snapshot,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+
+    def _persist_space_snapshot_db(
+        self,
+        cloud_id: str,
+        spaces: list[dict[str, Any]],
+    ) -> None:
+        with SessionLocal() as db:
+            try:
+                self._persist_space_snapshot(
+                    db,
+                    cloud_id,
+                    spaces,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+
+    def _persist_snapshot(
         self,
         db: Session,
         cloud_id: str,
         snapshot: ConfluenceMetadataSnapshot,
-        *,
-        auto_commit: bool = True,
     ) -> None:
         if snapshot.users:
             confluence_entities.upsert_users_bulk(
                 db,
                 snapshot.users,
-                auto_commit=False,
             )
 
         sync_result = confluence_entities.sync_spaces_snapshot(
             db,
             cloud_id,
             snapshot.spaces,
-            auto_commit=False,
         )
         logger.info(
             "[CONFLUENCE][METADATA] Space snapshot synced: cloud_id=%s, upserted=%s, deleted=%s",
@@ -67,25 +106,18 @@ class ConfluenceMetadataService:
             sync_result["upserted"],
             sync_result["deleted"],
         )
+        db.flush()
 
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
-
-    def persist_space_snapshot(
+    def _persist_space_snapshot(
         self,
         db: Session,
         cloud_id: str,
         spaces: list[dict[str, Any]],
-        *,
-        auto_commit: bool = True,
     ) -> None:
         sync_result = confluence_entities.sync_spaces_snapshot(
             db,
             cloud_id,
             spaces,
-            auto_commit=False,
         )
         logger.info(
             "[CONFLUENCE][TARGETS][METADATA] Space snapshot synced: cloud_id=%s, upserted=%s, deleted=%s",
@@ -93,13 +125,9 @@ class ConfluenceMetadataService:
             sync_result["upserted"],
             sync_result["deleted"],
         )
+        db.flush()
 
-        if auto_commit:
-            db.commit()
-        else:
-            db.flush()
-
-    async def collect_snapshot(
+    async def _collect_snapshot(
         self,
         cloud_id: str,
         *,
@@ -122,7 +150,7 @@ class ConfluenceMetadataService:
         spaces = await self._collect_spaces(client, cloud_id)
         return ConfluenceMetadataSnapshot(users=users, spaces=spaces)
 
-    async def collect_space_snapshot(
+    async def _collect_space_snapshot(
         self,
         cloud_id: str,
         *,
@@ -149,32 +177,52 @@ class ConfluenceMetadataService:
         )
         return spaces
 
-    async def sync_all(
+    async def sync_space_snapshot(
         self,
-        db: Session,
         cloud_id: str,
         *,
-        auto_commit: bool = True,
+        granted_scopes: set[str],
+    ) -> list[dict[str, Any]] | None:
+        spaces = await self._collect_space_snapshot(
+            cloud_id,
+            granted_scopes=granted_scopes,
+        )
+        if spaces is None:
+            return None
+
+        await run_in_threadpool(
+            self._persist_space_snapshot_db,
+            cloud_id,
+            spaces,
+        )
+        return spaces
+
+    async def sync_all(
+        self,
+        cloud_id: str,
     ) -> dict[str, Any]:
-        token = atlassian_crud.get_token_by_cloud_id(db, cloud_id)
-        if not token:
+        granted_scopes = await run_in_threadpool(
+            self._load_granted_scopes_db,
+            cloud_id,
+        )
+        if granted_scopes is None:
             logger.warning(
                 "[CONFLUENCE][METADATA] No token found: cloud_id=%s",
                 cloud_id,
             )
             return {"users": 0, "spaces": 0}
 
-        snapshot = await self.collect_snapshot(
+        snapshot = await self._collect_snapshot(
             cloud_id,
-            granted_scopes=set((token.scopes or "").split()),
+            granted_scopes=granted_scopes,
         )
         if snapshot is None:
             return {"users": 0, "spaces": 0}
-        self.persist_snapshot(
-            db,
+
+        await run_in_threadpool(
+            self._persist_snapshot_db,
             cloud_id,
             snapshot,
-            auto_commit=auto_commit,
         )
         return {"users": len(snapshot.users), "spaces": len(snapshot.spaces)}
 

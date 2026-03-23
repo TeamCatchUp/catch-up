@@ -1,12 +1,29 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, Optional
-from sqlalchemy import CheckConstraint, ForeignKey, Index, UniqueConstraint, func, inspect, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from typing import Any
+from typing import Optional
+
+from sqlalchemy import CheckConstraint
+from sqlalchemy import ForeignKey
+from sqlalchemy import Index
+from sqlalchemy import UniqueConstraint
+from sqlalchemy import func
+from sqlalchemy import inspect
+from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.associationproxy import association_proxy
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.types import String, Boolean, Integer, BigInteger, DateTime, Text
+from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
+from sqlalchemy.types import BigInteger
+from sqlalchemy.types import Boolean
+from sqlalchemy.types import DateTime
+from sqlalchemy.types import Integer
+from sqlalchemy.types import String
+from sqlalchemy.types import Text
 
 
 class Base(DeclarativeBase):
@@ -1370,6 +1387,7 @@ class SyncEvent(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     succeeded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     embedding_tokens_used: Mapped[int] = mapped_column(
@@ -1378,6 +1396,7 @@ class SyncEvent(Base):
     summary_tokens_used: Mapped[int] = mapped_column(
         BigInteger, nullable=False, default=0, server_default=text("0")
     )
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     stream_message_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     publish_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -1415,6 +1434,12 @@ class SyncEvent(Base):
             "requested_at",
         ),
         Index("idx_sync_events_job_id_requested_at", "job_id", "requested_at"),
+        Index(
+            "idx_sync_events_connector_status_next_retry_at",
+            "connector",
+            "status",
+            "next_retry_at",
+        ),
         Index(
             "idx_sync_events_publish_status_requested_at",
             "publish_status",
@@ -1692,10 +1717,7 @@ class ChatHistory(Base):
         index=True,
         comment="사용자가 저장한 답변"
     )
-    
-    input_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
-    output_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
-    
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
     chat_room: Mapped["ChatRoom"] = relationship(back_populates="chat_histories")
@@ -1717,4 +1739,37 @@ class ChatHistory(Base):
             postgresql_using="gin",
             postgresql_ops={"content": "gin_bigm_ops"}
         ),
+    )
+
+
+class TokenPurpose(StrEnum):
+    SUMMARIZE = "summarize"
+    EMBEDDING = "embedding"
+    CHAT = "chat"
+
+
+class ChatTokenUsage(Base):
+    __tablename__ = "chat_token_usages"
+    
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), nullable=False)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    message_id: Mapped[int] = mapped_column(ForeignKey("chat_histories.id"), nullable=False)
+    
+    purpose: Mapped[TokenPurpose] = mapped_column(String(50), nullable=False)
+    
+    token_breakdown: Mapped[dict[str, dict[str, int]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb")
+    )
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_chat_token_usages_user_time", "user_id", "created_at"),
+        Index("idx_chat_token_usages_workspace_time", "workspace_id", "created_at"),
+        Index("idx_chat_token_usages_company_time", "company_id", "created_at"),
     )

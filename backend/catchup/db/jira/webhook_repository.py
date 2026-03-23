@@ -66,8 +66,7 @@ def upsert_webhook(
         existing.events_csv = encoded_events
         existing.expires_at = expires_at
         existing.last_synced_at = last_synced_at
-        db.commit()
-        db.refresh(existing)
+        db.flush()
         return existing
 
     created = JiraWebhookSubscription(
@@ -80,8 +79,7 @@ def upsert_webhook(
         last_synced_at=last_synced_at,
     )
     db.add(created)
-    db.commit()
-    db.refresh(created)
+    db.flush()
     return created
 
 
@@ -110,7 +108,6 @@ def update_webhook_expiration(
         subscription.expires_at = expires_at
         subscription.last_synced_at = now
 
-    db.commit()
     return len(subscriptions)
 
 
@@ -141,7 +138,6 @@ def delete_webhooks_not_in_ids(
         stmt = stmt.where(~JiraWebhookSubscription.webhook_id.in_(webhook_ids))
 
     result = db.execute(stmt)
-    db.commit()
     return result.rowcount
 
 

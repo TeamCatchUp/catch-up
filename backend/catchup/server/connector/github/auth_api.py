@@ -1,12 +1,12 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
-from sqlalchemy.orm import Session
 
 from catchup.configs.config import auth_settings
-from catchup.db.dependencies import get_db
+from catchup.db.engine import SessionLocal
 from catchup.db.github import installation_repository as installation_crud
 
 logger = logging.getLogger(__name__)
@@ -14,12 +14,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/github", tags=["GitHub Connector"])
 
 
-@router.get("/installations")
-async def list_installations(db: Session = Depends(get_db)):
-    """
-    등록된 모든 Installation 목록 조회
-    """
-    installations = installation_crud.get_all_installations(db)
+def _load_installations() -> list[dict[str, object]]:
+    with SessionLocal() as db:
+        installations = installation_crud.get_all_installations(db)
+
     return [
         {
             "installation_id": inst.installation_id,
@@ -34,11 +32,29 @@ async def list_installations(db: Session = Depends(get_db)):
     ]
 
 
+def _load_installation_account(installation_id: int) -> str | None:
+    with SessionLocal() as db:
+        installation = installation_crud.get_installation_by_installation_id(
+            db,
+            installation_id,
+        )
+        if installation is None:
+            return None
+        return installation.account_login
+
+
+@router.get("/installations")
+async def list_installations():
+    """
+    등록된 모든 Installation 목록 조회
+    """
+    return await run_in_threadpool(_load_installations)
+
+
 @router.get("/install")
 async def github_app_install_callback(
     installation_id: Optional[int] = Query(None),
     setup_action: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
 ):
     """
     GitHub App 설치 완료 후 Callback 엔드포인트
@@ -60,18 +76,21 @@ async def github_app_install_callback(
         redirect_url = f"{auth_settings.FRONTEND_REDIRECT_URI}?github_install=error&reason=missing_installation_id"
         return RedirectResponse(url=redirect_url)
 
-    installation = installation_crud.get_installation_by_installation_id(db, installation_id)
+    account_login = await run_in_threadpool(
+        _load_installation_account,
+        installation_id,
+    )
 
-    if installation:
+    if account_login:
         logger.info(
             f"GitHub App installation found: "
-            f"installation_id={installation_id}, account={installation.account_login}"
+            f"installation_id={installation_id}, account={account_login}"
         )
         redirect_url = (
             f"{auth_settings.FRONTEND_REDIRECT_URI}"
             f"?github_install=success"
             f"&installation_id={installation_id}"
-            f"&account={installation.account_login}"
+            f"&account={account_login}"
         )
     else:
         logger.info(

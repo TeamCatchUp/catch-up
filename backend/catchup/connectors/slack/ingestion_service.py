@@ -9,8 +9,13 @@ from typing import Any
 from langchain_core.documents import Document
 from slack_sdk.errors import SlackApiError
 from sqlalchemy.orm import Session
+from fastapi.concurrency import run_in_threadpool
 
-from catchup.connectors.slack.client import SlackApiClientWrapper
+from catchup.connectors.slack.client import (
+    SlackApiClientWrapper,
+    SlackConnectorApiError,
+    SlackRateLimitError,
+)
 from catchup.connectors.slack.schemas import (
     SlackThreadReply,
     SlackUser,
@@ -110,7 +115,7 @@ class SlackIngestionService:
                 "Call await service.initialize() first."
             )
 
-    def _load_context_from_db(self, db: Session) -> None:
+    def _load_ingestion_context(self, db: Session) -> None:
         """메시지 변환에 필요한 user cache/workspace domain을 DB에서 로드한다."""
         try:
             users = domain_repository.get_users_by_team(db, self.team_id, include_deleted=True)
@@ -228,9 +233,123 @@ class SlackIngestionService:
             missing_ids=missing_ids,
         )
 
-    def _load_context_from_local_db(self) -> None:
+    def _load_ingestion_context_db(self) -> None:
         with SessionLocal() as db:
-            self._load_context_from_db(db)
+            self._load_ingestion_context(db)
+
+    def _load_channel_context_db(
+        self,
+        channel_id: str,
+    ) -> str:
+        with SessionLocal() as db:
+            self._load_ingestion_context(db)
+            channel = domain_repository.get_channel(db, channel_id)
+            return channel.name if channel is not None else channel_id
+
+    @staticmethod
+    def _extract_slack_error_code(exc: Exception) -> str | None:
+        if isinstance(exc, SlackConnectorApiError):
+            error_code = exc.metadata.get("error")
+            return str(error_code) if error_code else None
+
+        if isinstance(exc, SlackApiError):
+            error_code = exc.response.get("error")
+            return str(error_code) if error_code else None
+
+        return None
+
+    def _handle_pipeline_exception_group(
+        self,
+        exc_group: ExceptionGroup,
+        *,
+        sync_ctx: SlackSyncContext,
+        skippable_errors: set[str],
+    ) -> TargetSyncResult:
+        for exc in exc_group.exceptions:
+            if isinstance(exc, SlackRateLimitError):
+                raise exc
+
+        for exc in exc_group.exceptions:
+            error_code = self._extract_slack_error_code(exc)
+            if error_code in skippable_errors:
+                logger.info(
+                    "[SLACK][INGESTION] Skipped channel: team_id=%s, channel=%s(%s), reason=%s",
+                    self.team_id,
+                    sync_ctx.channel_name,
+                    sync_ctx.channel_id,
+                    error_code,
+                )
+                return TargetSyncResult(skipped=True)
+
+        for exc in exc_group.exceptions:
+            if isinstance(exc, SlackConnectorApiError):
+                raise exc
+
+        raise exc_group.exceptions[0] from None
+
+    def _transform_message_document_blocking(
+        self,
+        message_data: dict[str, Any],
+        channel_id: str,
+        channel_name: str,
+        permalink: str | None,
+        replies: list[SlackThreadReply],
+    ) -> Document:
+        message = self.transformer.parse_message(
+            message_data,
+            channel_id,
+            channel_name,
+            permalink,
+            replies,
+        )
+        return self.transformer.transform_message(message, self.team_id)
+
+    def _transform_message_batch_blocking(
+        self,
+        messages: list[dict[str, Any]],
+        channel_id: str,
+        channel_name: str,
+        reply_map: dict[str, list[SlackThreadReply]],
+    ) -> tuple[list[Document], list[str], int, str | None]:
+        batch_documents: list[Document] = []
+        batch_doc_ids: list[str] = []
+        errors = 0
+        batch_latest_synced_ts: str | None = None
+
+        for msg_data in messages:
+            if self._should_skip_message(msg_data):
+                continue
+
+            try:
+                message_ts = msg_data.get("ts")
+                replies = reply_map.get(msg_data.get("ts"), [])
+                permalink = self._build_permalink(channel_id, msg_data.get("ts"))
+                doc = self._transform_message_document_blocking(
+                    msg_data,
+                    channel_id,
+                    channel_name,
+                    permalink,
+                    replies,
+                )
+                batch_documents.append(doc)
+                batch_doc_ids.append(doc.id)
+
+                if message_ts:
+                    batch_latest_synced_ts = self._pick_latest_ts(
+                        batch_latest_synced_ts,
+                        message_ts,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "[SLACK][INGESTION] Failed to transform message: team_id=%s, channel_id=%s, ts=%s, error=%s",
+                    self.team_id,
+                    channel_id,
+                    msg_data.get("ts"),
+                    exc,
+                )
+                errors += 1
+
+        return batch_documents, batch_doc_ids, errors, batch_latest_synced_ts
 
     async def list_syncable_channels(self) -> list[dict[str, str]]:
         self._ensure_initialized()
@@ -285,7 +404,7 @@ class SlackIngestionService:
         if not requested_ids:
             return SlackRecordRetryResult(records=[])
 
-        await asyncio.to_thread(self._load_context_from_local_db)
+        await run_in_threadpool(self._load_ingestion_context_db)
         documents, failed_ids = await self._fetch_message_documents(
             channel_id=channel_id,
             channel_name=channel_name,
@@ -339,13 +458,11 @@ class SlackIngestionService:
         channel_id: str,
         channel_name: str,
         sync_from_ts: str | None,
-        db: Session | None = None,
         skip_delete: bool = False,
         audit_context: SyncAuditContext | None = None,
     ) -> TargetSyncResult:
         self._ensure_initialized()
-        if db is not None:
-            self._load_context_from_db(db)
+        await run_in_threadpool(self._load_ingestion_context_db)
         sync_ctx = SlackSyncContext(
             channel_id=channel_id,
             channel_name=channel_name,
@@ -483,19 +600,11 @@ class SlackIngestionService:
             synced_count, errors, _latest_synced_ts = store_task.result()
 
         except ExceptionGroup as eg:
-            for exc in eg.exceptions:
-                if isinstance(exc, SlackApiError):
-                    if exc.response.get("error", "") in skippable_errors:
-                        logger.info(
-                            "[SLACK][INGESTION] Skipped channel: team_id=%s, channel=%s(%s), reason=%s",
-                            self.team_id,
-                            sync_ctx.channel_name,
-                            sync_ctx.channel_id,
-                            exc.response.get("error"),
-                        )
-                        return TargetSyncResult(skipped=True)
-
-            raise eg.exceptions[0] from None
+            return self._handle_pipeline_exception_group(
+                eg,
+                sync_ctx=sync_ctx,
+                skippable_errors=skippable_errors,
+            )
 
         logger.debug(
             "[SLACK][INGESTION] Channel synced: team_id=%s, channel=%s(%s), synced=%s, errors=%s",
@@ -513,7 +622,6 @@ class SlackIngestionService:
     async def incremental_sync(
         self,
         *,
-        db: Session,
         channel_id: str,
         record_id: str,
         event_kind: str,
@@ -526,15 +634,19 @@ class SlackIngestionService:
             await self.repository.delete_documents([doc_id])
             return TargetSyncResult(synced_count=1)
 
-        channel = domain_repository.get_channel(db, channel_id)
-        channel_name = channel.name if channel is not None else channel_id
-        return await self.sync_channel_messages(
+        channel_name = await run_in_threadpool(
+            self._load_channel_context_db,
+            channel_id,
+        )
+        sync_ctx = SlackSyncContext(
             channel_id=channel_id,
             channel_name=channel_name,
             sync_from_ts=sync_from,
-            db=db,
             skip_delete=False,
             audit_context=audit_context,
+        )
+        return await self._sync_channel_messages(
+            sync_ctx=sync_ctx,
         )
 
     async def _fetch_channel_pages(
@@ -575,44 +687,18 @@ class SlackIngestionService:
             else:
                 reply_map = {}
 
-            batch_documents = []
-            batch_doc_ids = []
-            errors = 0
-            batch_latest_synced_ts: str | None = None
-
-            for msg_data in messages:
-                if self._should_skip_message(msg_data):
-                    continue
-
-                try:
-                    message_ts = msg_data.get("ts")
-                    replies = reply_map.get(msg_data.get("ts"), [])
-                    permalink = self._build_permalink(channel_id, msg_data.get("ts"))
-                    message = self.transformer.parse_message(
-                        msg_data,
-                        channel_id,
-                        channel_name,
-                        permalink,
-                        replies,
-                    )
-                    doc = self.transformer.transform_message(message, self.team_id)
-                    batch_documents.append(doc)
-                    batch_doc_ids.append(doc.id)
-
-                    if message_ts:
-                        batch_latest_synced_ts = self._pick_latest_ts(
-                            batch_latest_synced_ts,
-                            message_ts,
-                        )
-                except Exception as exc:
-                    logger.warning(
-                        "[SLACK][INGESTION] Failed to transform message: team_id=%s, channel_id=%s, ts=%s, error=%s",
-                        self.team_id,
-                        channel_id,
-                        msg_data.get("ts"),
-                        exc,
-                    )
-                    errors += 1
+            (
+                batch_documents,
+                batch_doc_ids,
+                errors,
+                batch_latest_synced_ts,
+            ) = await run_in_threadpool(
+                self._transform_message_batch_blocking,
+                messages,
+                channel_id,
+                channel_name,
+                reply_map,
+            )
 
             if batch_documents:
                 yield batch_documents, batch_doc_ids, errors, batch_latest_synced_ts
@@ -718,15 +804,14 @@ class SlackIngestionService:
                 thread_ts=message_id,
             )
 
-        permalink = self._build_permalink(channel_id, message_id)
-        message = self.transformer.parse_message(
+        return await run_in_threadpool(
+            self._transform_message_document_blocking,
             message_data,
             channel_id,
             channel_name,
-            permalink,
+            self._build_permalink(channel_id, message_id),
             replies,
         )
-        return self.transformer.transform_message(message, self.team_id)
 
     async def _fetch_thread_replies(
         self,

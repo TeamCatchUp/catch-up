@@ -1,12 +1,11 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi.concurrency import run_in_threadpool
 
 from catchup.configs.config import settings
-from catchup.connectors.slack.webhook_ingress import handle_webhook as handle_slack_webhook_ingress
-from catchup.db.dependencies import get_db
+from catchup.connectors.slack.webhook import handle_webhook as handle_slack_webhook_ingress
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 
 logger = logging.getLogger(__name__)
@@ -17,7 +16,6 @@ router = APIRouter(prefix="/api/v1/slack", tags=["slack-webhook"])
 @router.post("/webhooks", status_code=status.HTTP_200_OK)
 async def handle_slack_webhook(
     request: Request,
-    db: Session = Depends(get_db),
     x_slack_signature: Optional[str] = Header(None),
     x_slack_request_timestamp: Optional[str] = Header(None),
 ):
@@ -45,8 +43,8 @@ async def handle_slack_webhook(
 
     payload = await request.json()
     try:
-        return handle_slack_webhook_ingress(
-            db=db,
+        return await run_in_threadpool(
+            handle_slack_webhook_ingress,
             payload=payload,
         )
     except Exception as exc:

@@ -8,8 +8,8 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 from langchain_core.messages import SystemMessage
-from langchain_core.output_parsers import StrOutputParser
 
+from catchup.costs.utils import extract_token_usages
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import llm_semaphore
@@ -25,40 +25,38 @@ logger = structlog.get_logger()
 @log_node
 async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
 
+    token_usages = {"token_breakdown": {}}
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
-        
     if not retrieved_docs:
         logger.warning("no_documents_retrieved", action="fallback_answer_generated")
         return {
             "messages": [AIMessage(content=FALLBACK_ANSWER)],
-            "sources": []
+            "sources": [],
+            **token_usages
         }
     
     context_text = prepare_context_text(retrieved_docs)
-
     global_context = state["global_context"].model_dump()
     query = state["rewritten_query"]
     query_with_citation_policy = query + CITATION_POLICY_MESSAGE
-
     prompt = prompt_loader.get_prompt(
         "rag/generate_final_answer",
         context=context_text,
         **global_context
     )
-    
     conversation_history = get_conversation_history(state["messages"])
-    
     messages = (
         [SystemMessage(content=prompt)]
         + conversation_history
         + [HumanMessage(content=query_with_citation_policy)]
     )
 
-    chain = llm | StrOutputParser()
-
     try:
         async with llm_semaphore:
-            full_answer = await chain.ainvoke(input=messages)
+            raw_response = await llm.ainvoke(input=messages)
+            token_usages = extract_token_usages(raw_response)
+            full_answer = raw_response.content
+            
             logger.debug(
                 "final_answer_generated",
                 original_query=state.get("original_query"),
@@ -75,7 +73,8 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
         )
         return {
             "messages": [AIMessage(content=FALLBACK_ANSWER)],
-            "sources": []
+            "sources": [],
+            **token_usages,
         }
     
     answer_body, citations = _parse_citation(full_answer)
@@ -87,7 +86,6 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
         ) 
         for i, document in enumerate(retrieved_docs, start=1)
     ]
-        
     final_sources = _mark_citations(candidate_sources, citations)
 
     sorted_indices = sorted(citations.keys(), key=int)
@@ -99,7 +97,8 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
 
     return {
         "messages": [AIMessage(content=answer_body)],
-        "sources": final_sources
+        "sources": final_sources,
+        **token_usages,
     }
 
 

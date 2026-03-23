@@ -1,3 +1,4 @@
+import IconClockPending from '@/public/icons/icon/clock_pending.svg';
 import IconRotate from '@/public/icons/icon/rotate.svg';
 
 import type { EmbeddingProgressItem, SyncConnector } from '../../../types/sync';
@@ -27,7 +28,11 @@ const EmbeddingActiveCard = ({ items, connector }: EmbeddingActiveCardProps) => 
               <ResourceIcon className="size-5" />
             </div>
             <span className="text-body-small text-content-normal flex-1 truncate">{item.displayName}</span>
-            <IconRotate className="text-content-primary size-6 animate-spin" />
+            {item.status === 'pending' ? (
+              <IconClockPending className="text-status-cautionary size-6" />
+            ) : (
+              <IconRotate className="text-content-primary size-6 animate-spin" />
+            )}
           </div>
         ))}
       </div>

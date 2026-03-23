@@ -109,10 +109,7 @@ class ConfluenceRecordRepairService:
         *,
         cloud_id: str,
     ):
-        return await create_confluence_ingestion_service(
-            db=None,
-            cloud_id=cloud_id,
-        )
+        return await create_confluence_ingestion_service(cloud_id=cloud_id)
 
     async def get_record_gaps(
         self,

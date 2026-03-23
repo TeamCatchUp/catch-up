@@ -8,7 +8,6 @@ OAuth Token을 조회하여 서비스 인스턴스를 생성.
 import logging
 
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
@@ -30,9 +29,19 @@ from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
 logger = logging.getLogger(__name__)
 
 
+def _load_site_url_db(cloud_id: str) -> str:
+    with SessionLocal() as db:
+        token_record = oauth_repository.get_token_by_cloud_id(
+            db,
+            cloud_id,
+        )
+        if token_record is None:
+            raise AtlassianTokenNotFoundError(cloud_id)
+        return token_record.site_url or ""
+
+
 async def create_jira_ingestion_service(
     cloud_id: str,
-    db: Session | None = None,
 ) -> JiraIngestionService:
     token_manager = AtlassianTokenManager(
         oauth_client=AtlassianOAuthClient(),
@@ -41,23 +50,7 @@ async def create_jira_ingestion_service(
 
     try:
         token_provider = AtlassianTokenProvider(token_manager)
-        if db is None:
-            def _load_context_sync() -> str:
-                with SessionLocal() as session:
-                    token_record = oauth_repository.get_token_by_cloud_id(
-                        session,
-                        cloud_id,
-                    )
-                    if token_record is None:
-                        raise AtlassianTokenNotFoundError(cloud_id)
-                    return token_record.site_url or ""
-
-            site_url = await run_in_threadpool(_load_context_sync)
-        else:
-            token_record = oauth_repository.get_token_by_cloud_id(db, cloud_id)
-            if token_record is None:
-                raise AtlassianTokenNotFoundError(cloud_id)
-            site_url = token_record.site_url if token_record else ""
+        site_url = await run_in_threadpool(_load_site_url_db, cloud_id)
     except AtlassianTokenNotFoundError as exc:
         raise SyncConnectorError(
             f"Jira 연결을 찾을 수 없습니다: {cloud_id}",

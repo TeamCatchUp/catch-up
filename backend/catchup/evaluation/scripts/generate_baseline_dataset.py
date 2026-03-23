@@ -187,13 +187,13 @@ async def main():
         final_dataset.append({"question": seed["q2"], "ground_truth_doc_id": seed["doc_id"], "source": seed["source"], "type": "manual"})
 
     # DB에서 새로운 데이터 Fetch
-    with SessionLocal() as session:
+    with SessionLocal() as db:
         coll_query = text("SELECT uuid FROM langchain_pg_collection WHERE name = :name")
-        coll_result = session.execute(coll_query, {"name": COLLECTION_NAME}).fetchone()
+        coll_result = db.execute(coll_query, {"name": COLLECTION_NAME}).fetchone()
         coll_uuid = coll_result[0]
         
         # 소스당 32개씩 Fetch (총 ~96개)
-        new_samples = fetch_new_samples(session, coll_uuid, limit_per_source=32)
+        new_samples = fetch_new_samples(db, coll_uuid, limit_per_source=32)
         print(f"Fetched {len(new_samples)} new documents for generation.")
 
     # LLM 생성 (Async)

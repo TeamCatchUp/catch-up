@@ -1,3 +1,4 @@
+import os
 from enum import StrEnum
 
 from dotenv import load_dotenv
@@ -68,6 +69,8 @@ class Settings(BaseSettings):
     DB_HOST: str
     DB_PORT: int
     DB_DATABASE: str
+    DB_HOST_LOCAL: str = "localhost"
+    DB_PORT_LOCAL: int = 5433
     
     # AWS S3
     AWS_S3_AUDIT_ENABLED: bool = False
@@ -247,14 +250,33 @@ class Settings(BaseSettings):
     )
 
     @property
+    def resolved_db_host(self) -> str:
+        if os.path.exists("/.dockerenv"):
+            return self.DB_HOST
+
+        if self.DB_HOST == "vector_db":
+            return self.DB_HOST_LOCAL
+
+        return self.DB_HOST
+
+    @property
+    def resolved_db_port(self) -> int:
+        if os.path.exists("/.dockerenv"):
+            return self.DB_PORT
+
+        if self.DB_HOST == "vector_db" and self.DB_PORT == 5432:
+            return self.DB_PORT_LOCAL
+
+        return self.DB_PORT
+
+    @property
     def sqlalchemy_database_url(self) -> str:
-        
         return URL.create(
             drivername=f"{self.DB_DIALECT}+{self.DB_DRIVER}",
             username=self.DB_USERNAME,
             password=self.DB_PASSWORD,
-            host=self.DB_HOST,
-            port=self.DB_PORT,
+            host=self.resolved_db_host,
+            port=self.resolved_db_port,
             database=self.DB_DATABASE
         ).render_as_string(hide_password=False)
     

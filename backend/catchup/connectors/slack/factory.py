@@ -9,12 +9,12 @@ import logging
 
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy.orm import Session
 
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.connectors.slack.auth import get_slack_oauth_service
+from catchup.connectors.slack.client import SlackConnectorApiError, SlackRateLimitError
 from catchup.connectors.slack.ingestion_service import SlackIngestionService
 from catchup.connectors.slack.metadata_service import SlackMetadataService
 from catchup.db.engine import SessionLocal
@@ -24,20 +24,15 @@ from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
 logger = logging.getLogger(__name__)
 
 
-def _load_token_sync(team_id: str):
-    with SessionLocal() as session:
-        return slack_crud.get_slack_token_by_team_id(session, team_id)
+def _load_token_db(team_id: str):
+    with SessionLocal() as db:
+        return slack_crud.get_slack_token_by_team_id(db, team_id)
 
 
 async def _resolve_access_token(
-    db: Session | None,
     team_id: str,
 ) -> str:
-    if db is None:
-        token_record = await run_in_threadpool(_load_token_sync, team_id)
-    else:
-        token_record = slack_crud.get_slack_token_by_team_id(db, team_id)
-
+    token_record = await run_in_threadpool(_load_token_db, team_id)
     if not token_record:
         raise SyncConnectorError(
             f"Slack 연결을 찾을 수 없습니다: {team_id}",
@@ -46,7 +41,19 @@ async def _resolve_access_token(
 
     slack_service = get_slack_oauth_service()
     try:
-        return await slack_service.get_valid_access_token(db, token_record)
+        return await slack_service.get_valid_access_token(token_record)
+    except SlackRateLimitError:
+        raise
+    except SlackConnectorApiError as exc:
+        error_cls = (
+            SyncInternalError
+            if exc.status_code is not None and exc.status_code >= 500
+            else SyncConnectorError
+        )
+        raise error_cls(
+            exc.message,
+            metadata={"team_id": team_id, **exc.metadata},
+        ) from exc
     except HTTPException as exc:
         message = (
             exc.detail
@@ -72,10 +79,9 @@ async def _resolve_access_token(
 
 
 async def create_slack_ingestion_service(
-    db: Session | None,
     team_id: str,
 ) -> SlackIngestionService:
-    access_token = await _resolve_access_token(db, team_id)
+    access_token = await _resolve_access_token(team_id)
 
     try:
         repository = get_pgvector_repository(
@@ -104,10 +110,9 @@ async def create_slack_ingestion_service(
 
 
 async def create_slack_metadata_service(
-    db: Session | None,
     team_id: str,
 ) -> SlackMetadataService:
-    access_token = await _resolve_access_token(db, team_id)
+    access_token = await _resolve_access_token(team_id)
 
     try:
         service = SlackMetadataService(

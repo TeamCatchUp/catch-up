@@ -5,63 +5,73 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from catchup.connectors.jira import webhook_service
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.events.enums import SyncTriggerEventAction
 from catchup.sync.audit import SyncAuditContext, emit_sync_trigger_audit
-from catchup.sync.incremental import ingest_record_changes, normalize_jira_event
+from catchup.sync.incremental import ingest_record_changes, normalize_slack_event
 from catchup.sync.incremental.full_sync_guard import filter_record_changes_by_full_sync
+
+from .responses import accepted_incremental_response, ignored_event_response
 
 logger = logging.getLogger(__name__)
 
-_INCREMENTAL_EVENTS = frozenset(
+IGNORED_MESSAGE_SUBTYPES = frozenset(
     {
-        "jira:issue_created",
-        "jira:issue_updated",
-        "jira:issue_deleted",
-        "comment_created",
-        "comment_updated",
-        "comment_deleted",
+        "channel_join",
+        "channel_leave",
+        "group_join",
+        "group_leave",
+        "channel_topic",
+        "channel_purpose",
+        "channel_name",
+        "group_topic",
+        "group_purpose",
+        "group_name",
+    }
+)
+INCREMENTAL_MESSAGE_SUBTYPES = frozenset(
+    {
+        "",
+        "bot_message",
+        "file_share",
+        "message_changed",
+        "message_deleted",
+        "thread_broadcast",
     }
 )
 
 
-def handle_webhook(
+def handle_incremental_event(
     *,
     db: Session,
-    cloud_id: str,
-    payload: dict[str, Any],
+    team_id: str,
+    event_type: str,
+    event: dict[str, Any],
 ) -> dict[str, Any]:
-    event_type = str(payload.get("webhookEvent") or "").strip().lower()
-
-    if event_type in webhook_service.SUPPORTED_METADATA_EVENTS:
-        return webhook_service.handle_metadata_event(
-            db=db,
-            cloud_id=cloud_id,
+    if not is_supported_channel_message(event):
+        return ignored_event_response(
             event_type=event_type,
-            payload=payload,
+            reason="unsupported_channel",
         )
 
-    if event_type not in _INCREMENTAL_EVENTS:
-        logger.info(
-            "[JIRA][WEBHOOK][INGRESS] Ignored payload: cloud_id=%s, event_type=%s",
-            cloud_id,
-            event_type,
+    subtype_policy = classify_message_subtype(event)
+    if subtype_policy == "ignore":
+        return ignored_event_response(
+            event_type=event_type,
+            reason="ignored_subtype",
         )
-        return {"status": "ignored", "event_type": event_type, "reason": "unsupported_event"}
+    if subtype_policy == "unsupported":
+        return ignored_event_response(
+            event_type=event_type,
+            reason="unsupported_subtype",
+        )
 
-    # comment_* 이벤트도 별도 comment record를 만들지 않고 부모 Jira Issue를 다시 sync한다.
-    changes = normalize_jira_event(
-        cloud_id=cloud_id,
-        payload=payload,
-    )
+    changes = normalize_slack_event(team_id=team_id, event=event)
     if not changes:
-        logger.info(
-            "[JIRA][WEBHOOK][INGRESS] Ignored payload: cloud_id=%s, event_type=%s",
-            cloud_id,
-            event_type,
+        return ignored_event_response(
+            event_type=event_type,
+            reason="unsupported_message_payload",
         )
-        return {"status": "ignored", "event_type": event_type, "reason": "unsupported_payload"}
 
     guard_result = filter_record_changes_by_full_sync(db, changes)
     blocked_count = len(guard_result.blocked_changes)
@@ -69,24 +79,23 @@ def handle_webhook(
         blocked_targets = guard_result.blocked_targets
         if not guard_result.allowed_changes:
             logger.info(
-                "[JIRA][WEBHOOK][INGRESS] Incremental blocked before ingest: cloud_id=%s, source=webhook, blocked_count=%s, blocked_targets=%s",
-                cloud_id,
+                "[SLACK][WEBHOOK][INGRESS] Incremental blocked before ingest: team_id=%s, source=webhook, blocked_count=%s, blocked_targets=%s",
+                team_id,
                 blocked_count,
                 [
                     f"{target.target_type}:{target.target_id}"
                     for target in blocked_targets
                 ],
             )
-            return {
-                "status": "ignored",
-                "event_type": event_type,
-                "reason": "full_sync_required",
-                "blocked_count": blocked_count,
-            }
+            return ignored_event_response(
+                event_type=event_type,
+                reason="full_sync_required",
+                blocked_count=blocked_count,
+            )
 
         logger.info(
-            "[JIRA][WEBHOOK][INGRESS] Incremental partially blocked before ingest: cloud_id=%s, source=webhook, allowed_count=%s, blocked_count=%s, blocked_targets=%s",
-            cloud_id,
+            "[SLACK][WEBHOOK][INGRESS] Incremental partially blocked before ingest: team_id=%s, source=webhook, allowed_count=%s, blocked_count=%s, blocked_targets=%s",
+            team_id,
             len(guard_result.allowed_changes),
             blocked_count,
             [
@@ -135,11 +144,23 @@ def handle_webhook(
                 f"record_key_count={len(record_keys)},blocked_count={blocked_count}"
             ),
         )
-    response = {
-        "status": "accepted",
-        "event_type": event_type,
-        "record_keys": record_keys,
-    }
-    if blocked_count > 0:
-        response["blocked_count"] = blocked_count
-    return response
+
+    return accepted_incremental_response(
+        event_type=event_type,
+        record_keys=record_keys,
+        blocked_count=blocked_count,
+    )
+
+
+def classify_message_subtype(event: dict[str, Any]) -> str:
+    subtype = str(event.get("subtype") or "").strip().lower()
+    if subtype in IGNORED_MESSAGE_SUBTYPES:
+        return "ignore"
+    if subtype in INCREMENTAL_MESSAGE_SUBTYPES:
+        return "incremental"
+    return "unsupported"
+
+
+def is_supported_channel_message(event: dict[str, Any]) -> bool:
+    channel_id = str(event.get("channel") or "").strip()
+    return channel_id.startswith(("C", "G"))

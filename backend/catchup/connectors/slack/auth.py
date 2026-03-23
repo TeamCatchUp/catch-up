@@ -17,10 +17,11 @@ from functools import lru_cache
 from urllib.parse import urlencode
 
 import httpx
-from fastapi.concurrency import run_in_threadpool
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi.concurrency import run_in_threadpool
 
+from catchup.connectors.base.retry import parse_retry_after_header
+from catchup.connectors.slack.client import SlackRateLimitError
 from catchup.connectors.slack.schemas import SlackOAuthTokenResponse
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
@@ -63,30 +64,36 @@ class SlackOAuthService:
 
     async def exchange_code_for_tokens(self, code: str) -> SlackOAuthTokenResponse:
         """Authorization Code를 Token으로 교환"""
-        async with httpx.AsyncClient() as client:
-            response = await self._request_with_retry(
-                client,
-                "POST",
-                self.token_url,
-                data={
-                    "code": code,
-                    "redirect_uri": self.redirect_uri,
-                },
-                auth=(self.client_id, self.client_secret),
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-
-            data = response.json()
-
-            if not data.get("ok"):
-                error = data.get("error", "unknown_error")
-                logger.error(f"Slack OAuth Token 교환 실패: {error}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Slack OAuth 실패: {error}",
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await self._request_with_retry(
+                    client,
+                    "POST",
+                    self.token_url,
+                    data={
+                        "code": code,
+                        "redirect_uri": self.redirect_uri,
+                    },
+                    auth=(self.client_id, self.client_secret),
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
                 )
 
-            return self._parse_token_response(data)
+                data = response.json()
+
+                if not data.get("ok"):
+                    error = data.get("error", "unknown_error")
+                    logger.error(f"Slack OAuth Token 교환 실패: {error}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Slack OAuth 실패: {error}",
+                    )
+
+                return self._parse_token_response(data)
+        except SlackRateLimitError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=exc.message,
+            ) from exc
 
     async def refresh_access_token(
         self, refresh_token: str
@@ -119,67 +126,81 @@ class SlackOAuthService:
 
     async def get_team_info(self, access_token: str) -> dict:
         """Team(Workspace) 정보 조회"""
-        async with httpx.AsyncClient() as client:
-            response = await self._request_with_retry(
-                client,
-                "GET",
-                f"{self.api_url}/team.info",
-                headers={"Authorization": f"Bearer {access_token}"},
-            )
-
-            data = response.json()
-
-            if not data.get("ok"):
-                logger.error(f"Slack Team 정보 조회 실패: {data.get('error')}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Team 정보 조회 실패: {data.get('error')}",
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await self._request_with_retry(
+                    client,
+                    "GET",
+                    f"{self.api_url}/team.info",
+                    headers={"Authorization": f"Bearer {access_token}"},
                 )
 
-            return data.get("team", {})
+                data = response.json()
+
+                if not data.get("ok"):
+                    logger.error(f"Slack Team 정보 조회 실패: {data.get('error')}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Team 정보 조회 실패: {data.get('error')}",
+                    )
+
+                return data.get("team", {})
+        except SlackRateLimitError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=exc.message,
+            ) from exc
 
     async def test_auth(self, access_token: str) -> dict:
         """인증 상태 확인 (auth.test)"""
-        async with httpx.AsyncClient() as client:
-            response = await self._request_with_retry(
-                client,
-                "POST",
-                f"{self.api_url}/auth.test",
-                headers={"Authorization": f"Bearer {access_token}"},
-            )
-
-            data = response.json()
-
-            if not data.get("ok"):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=f"인증 실패: {data.get('error')}",
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await self._request_with_retry(
+                    client,
+                    "POST",
+                    f"{self.api_url}/auth.test",
+                    headers={"Authorization": f"Bearer {access_token}"},
                 )
 
-            return data
+                data = response.json()
+
+                if not data.get("ok"):
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail=f"인증 실패: {data.get('error')}",
+                    )
+
+                return data
+        except SlackRateLimitError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=exc.message,
+            ) from exc
 
     async def revoke_token(self, access_token: str) -> bool:
         """Token 취소 (연결 해제 시)"""
-        async with httpx.AsyncClient() as client:
-            response = await self._request_with_retry(
-                client,
-                "POST",
-                f"{self.api_url}/auth.revoke",
-                headers={"Authorization": f"Bearer {access_token}"},
-            )
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await self._request_with_retry(
+                    client,
+                    "POST",
+                    f"{self.api_url}/auth.revoke",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
 
-            data = response.json()
-            return data.get("ok", False)
+                data = response.json()
+                return data.get("ok", False)
+        except SlackRateLimitError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=exc.message,
+            ) from exc
 
     def _get_retry_after(self, response: httpx.Response) -> int:
-        retry_after = response.headers.get("Retry-After")
-        if retry_after is None:
-            return 1
-
-        try:
-            return max(1, int(retry_after))
-        except ValueError:
-            return 1
+        return parse_retry_after_header(
+            response.headers.get("Retry-After"),
+            default=1,
+        )
 
     async def _request_with_retry(
         self,
@@ -202,9 +223,14 @@ class SlackOAuthService:
                     url,
                     retry_after,
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Slack API rate limit exceeded",
+                raise SlackRateLimitError(
+                    message="Slack API rate limit exceeded",
+                    retry_after=retry_after,
+                    metadata={
+                        "url": url,
+                        "method": method,
+                        "status_code": status.HTTP_429_TOO_MANY_REQUESTS,
+                    },
                 )
 
             retry_count += 1
@@ -217,27 +243,30 @@ class SlackOAuthService:
             )
             await asyncio.sleep(retry_after)
 
-    def _persist_refreshed_token_sync(self, slack_token: SlackOAuthToken) -> None:
-        with SessionLocal() as session:
-            token_record = slack_oauth_repository.get_slack_token_by_team_id(
-                session,
-                slack_token.team_id,
-            )
-            if token_record is None:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Slack token not found",
+    def _persist_refreshed_token_db(self, slack_token: SlackOAuthToken) -> None:
+        with SessionLocal() as db:
+            try:
+                token_record = slack_oauth_repository.get_slack_token_by_team_id(
+                    db,
+                    slack_token.team_id,
                 )
+                if token_record is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Slack token not found",
+                    )
 
-            token_record.bot_access_token = slack_token.bot_access_token
-            token_record.bot_scopes = slack_token.bot_scopes
-            token_record.bot_refresh_token = slack_token.bot_refresh_token
-            token_record.bot_token_expires_at = slack_token.bot_token_expires_at
-            session.commit()
+                token_record.bot_access_token = slack_token.bot_access_token
+                token_record.bot_scopes = slack_token.bot_scopes
+                token_record.bot_refresh_token = slack_token.bot_refresh_token
+                token_record.bot_token_expires_at = slack_token.bot_token_expires_at
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
 
     async def get_valid_access_token(
         self,
-        db: Session | None,
         slack_token: SlackOAuthToken,
     ) -> str:
         """
@@ -272,14 +301,10 @@ class SlackOAuthService:
                     seconds=new_tokens.expires_in
                 )
 
-            if db is None:
-                await run_in_threadpool(
-                    self._persist_refreshed_token_sync,
-                    slack_token,
-                )
-            else:
-                db.commit()
-                db.refresh(slack_token)
+            await run_in_threadpool(
+                self._persist_refreshed_token_db,
+                slack_token,
+            )
 
         return slack_token.bot_access_token
 
