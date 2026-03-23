@@ -1,12 +1,29 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, Optional
-from sqlalchemy import CheckConstraint, Float, ForeignKey, Index, UniqueConstraint, func, inspect, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from typing import Any
+from typing import Optional
+
+from sqlalchemy import CheckConstraint
+from sqlalchemy import ForeignKey
+from sqlalchemy import Index
+from sqlalchemy import UniqueConstraint
+from sqlalchemy import func
+from sqlalchemy import inspect
+from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.associationproxy import association_proxy
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.types import String, Boolean, Integer, BigInteger, DateTime, Text
+from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
+from sqlalchemy.types import BigInteger
+from sqlalchemy.types import Boolean
+from sqlalchemy.types import DateTime
+from sqlalchemy.types import Integer
+from sqlalchemy.types import String
+from sqlalchemy.types import Text
 
 
 class Base(DeclarativeBase):
@@ -1370,6 +1387,7 @@ class SyncEvent(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     succeeded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     embedding_tokens_used: Mapped[int] = mapped_column(
@@ -1378,6 +1396,7 @@ class SyncEvent(Base):
     summary_tokens_used: Mapped[int] = mapped_column(
         BigInteger, nullable=False, default=0, server_default=text("0")
     )
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     stream_message_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     publish_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -1415,6 +1434,12 @@ class SyncEvent(Base):
             "requested_at",
         ),
         Index("idx_sync_events_job_id_requested_at", "job_id", "requested_at"),
+        Index(
+            "idx_sync_events_connector_status_next_retry_at",
+            "connector",
+            "status",
+            "next_retry_at",
+        ),
         Index(
             "idx_sync_events_publish_status_requested_at",
             "publish_status",

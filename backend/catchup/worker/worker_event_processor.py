@@ -7,17 +7,27 @@ from catchup.configs.config import settings
 from catchup.db.models import SyncType
 from catchup.sync.common.protocols import WorkerProtocol
 from catchup.sync.common.schemas import SyncStreamMessage
+from catchup.sync.full_retry import publish_retry_ready_full_sync_events
 from catchup.sync.stream_runtime.stream_constants import STREAM_CLAIM_START_ID
-from catchup.sync.stream_runtime.sync_runtime import (
-    ack_consumed_messages,
-    initialize_stream_runtime,
-    read_ready_messages,
-)
-from catchup.worker.common import consumer_name, task_lock_key
+from catchup.sync.stream_runtime.sync_runtime import ack_consumed_messages
+from catchup.sync.stream_runtime.sync_runtime import initialize_stream_runtime
+from catchup.sync.stream_runtime.sync_runtime import read_ready_messages
+from catchup.worker.common import consumer_name
+from catchup.worker.common import task_lock_key
 from catchup.worker.full_sync_processor import process_full_sync_message
 from catchup.worker.incremental_processor import process_incremental_message
 
 logger = logging.getLogger(__name__)
+
+
+async def _publish_retry_ready_full_sync_events() -> None:
+    result = await publish_retry_ready_full_sync_events(
+        limit=max(1, settings.SYNC_WORKER_CHANNEL_CONCURRENCY * 10),
+    )
+    if result["published"] == 0 and result["errors"] == 0:
+        return
+
+    logger.info("[FULL][RETRY] Runtime publish cycle completed: result=%s", result)
 
 
 # Sync Type에 따라서 분기
@@ -84,6 +94,8 @@ class SyncWorker(WorkerProtocol):
 
         while not stop_event.is_set():
             try:
+                await _publish_retry_ready_full_sync_events()
+
                 messages, reclaim_start_id = await read_ready_messages(
                     consumer_name=consumer,
                     reclaim_min_idle_ms=max(

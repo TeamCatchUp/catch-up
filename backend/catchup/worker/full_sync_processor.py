@@ -1,51 +1,56 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 
 from fastapi.concurrency import run_in_threadpool
 
+from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
-from catchup.db.models import SyncEventStatus, SyncJobStatus, SyncType
-from catchup.db.sync import (
-    SyncEventPublishResultInput,
-    claim_events_for_republish,
-    claim_event_for_processing,
-    count_events_by_job,
-    complete_job_failed,
-    complete_job_success,
-    get_event,
-    get_job,
-    mark_event_failed,
-    mark_event_retrying,
-    mark_event_success,
-    record_event_publish_outcomes,
-    requeue_retrying_event,
-    start_job,
-    summarize_events_by_job,
-)
+from catchup.db.models import SyncEventStatus
+from catchup.db.models import SyncJobStatus
+from catchup.db.models import SyncType
+from catchup.db.sync import claim_event_for_processing
+from catchup.db.sync import complete_job_failed
+from catchup.db.sync import complete_job_success
+from catchup.db.sync import count_events_by_job
+from catchup.db.sync import get_event
+from catchup.db.sync import get_job
+from catchup.db.sync import mark_event_failed
+from catchup.db.sync import mark_event_retrying
+from catchup.db.sync import mark_event_success
+from catchup.db.sync import requeue_retrying_event
+from catchup.db.sync import start_job
+from catchup.db.sync import summarize_events_by_job
 from catchup.sync.common.protocols import IngestionHandlerProtocol
-from catchup.sync.common.schemas import (
-    ClaimState,
-    FullSyncContext,
-    SyncStreamMessage,
-    SyncStreamTask,
-)
+from catchup.sync.common.retry_policy import calculate_retry_delay
+from catchup.sync.common.retry_policy import is_retryable_sync_error
+from catchup.sync.common.schemas import ClaimState
+from catchup.sync.common.schemas import FullSyncContext
+from catchup.sync.common.schemas import SyncStreamMessage
+from catchup.sync.common.schemas import SyncStreamTask
 from catchup.sync.status_stream.schemas import SyncStatusEventType
 from catchup.sync.stream_runtime.stream_constants import SyncStreamFailureReason
-from catchup.sync.stream_runtime.stream_queue import publish_task
-from catchup.sync.event_publisher.stream_task_builder import (
-    build_stream_task_from_persisted_event,
-)
-from catchup.worker.common import (
-    build_job_status_event,
-    build_target_status_event,
-    deadletter,
-    publish_status_event,
-    select_handler,
-)
-from catchup.worker.schemas import ClaimResult, FailureResult, JobFinalizeResult
+from catchup.worker.common import build_job_status_event
+from catchup.worker.common import build_target_status_event
+from catchup.worker.common import deadletter
+from catchup.worker.common import publish_status_event
+from catchup.worker.common import select_handler
+from catchup.worker.schemas import ClaimResult
+from catchup.worker.schemas import FailureResult
+from catchup.worker.schemas import JobFinalizeResult
 
 logger = logging.getLogger(__name__)
+
+
+def _full_sync_retry_delay(attempt: int) -> timedelta:
+    return calculate_retry_delay(
+        attempt=attempt,
+        base_delay_seconds=settings.SYNC_JOB_RETRY_BASE_DELAY_SECONDS,
+        max_delay_seconds=settings.SYNC_JOB_RETRY_MAX_DELAY_SECONDS,
+    )
 
 
 # PersistedSyncEvent + JobID = FullSyncContext
@@ -167,10 +172,15 @@ def _mark_event_failed_sync(
     context: FullSyncContext,
     *,
     should_retry: bool,
+    error_summary: str,
 ) -> FailureResult:
     with SessionLocal() as db:
         try:
-            marked = mark_event_failed(db, context.event_id)
+            marked = mark_event_failed(
+                db,
+                context.event_id,
+                last_error=error_summary,
+            )
             if not marked:
                 db.rollback()
                 return FailureResult(
@@ -188,112 +198,31 @@ def _mark_event_failed_sync(
             raise
 
 
-# Republish 이전에 Event 상태를 RETRYING / PENDING으로 변경
-def _prepare_republish_sync(context: FullSyncContext) -> None:
-    with SessionLocal() as db:
-        try:
-            event = get_event(db, context.event_id)
-            if event is None:
-                raise RuntimeError(f"event not found for republish: {context.event_id}")
-
-            if not mark_event_retrying(db, context.event_id):
-                raise RuntimeError("failed to transition IN_PROGRESS -> RETRYING")
-
-            if not requeue_retrying_event(db, context.event_id):
-                raise RuntimeError("failed to transition RETRYING -> PENDING")
-
-            db.commit()
-        except Exception:
-            db.rollback()
-            raise
-
-
-# Republish 직전에 Publish 상태를 확인하고, Stream Task 조립
-def _claim_republish_task_sync(context: FullSyncContext) -> SyncStreamTask:
-    with SessionLocal() as db:
-        try:
-            if not claim_events_for_republish(db, event_ids=[context.event_id]):
-                raise RuntimeError("failed to transition publish state to PUBLISHING")
-
-            event = get_event(db, context.event_id)
-            if event is None:
-                raise RuntimeError(f"event not found for republish: {context.event_id}")
-
-            task = build_stream_task_from_persisted_event(
-                event=event,
-                fallback_scope_id=context.scope_id,
-            )
-
-            db.commit()
-            return task
-        except Exception:
-            db.rollback()
-            raise
-
-
-# Republish 결과를 published/failed 으로 기록
-def _record_republish_outcome_sync(
+# Full Sync retry를 RETRYING 상태로 예약
+def _schedule_event_retry_sync(
     context: FullSyncContext,
     *,
-    message_id: str | None = None,
-    error_message: str | None = None,
-) -> None:
-    if message_id is None and error_message is None:
-        raise ValueError("republish outcome requires message_id or error_message")
-
-    published: list[SyncEventPublishResultInput] = []
-    failed_event_ids: list[str] = []
-
-    if message_id is not None:
-        published = [
-            SyncEventPublishResultInput(
-                event_id=context.event_id,
-                stream_message_id=message_id,
-            )
-        ]
-    else:
-        failed_event_ids = [context.event_id]
-
+    next_retry_at: datetime,
+    error_summary: str,
+) -> bool:
     with SessionLocal() as db:
         try:
-            if not record_event_publish_outcomes(
+            scheduled = mark_event_retrying(
                 db,
-                published=published,
-                failed_event_ids=failed_event_ids,
-                publish_error=error_message,
-            ):
+                context.event_id,
+                next_retry_at=next_retry_at,
+                last_error=error_summary,
+                increment_attempt=True,
+            )
+            if not scheduled:
                 db.rollback()
-                raise RuntimeError("failed to persist republish outcome state")
+                return False
 
             db.commit()
+            return True
         except Exception:
             db.rollback()
             raise
-
-
-# Full Sync 실패 Event를 다시 Stream으로 Publishing
-async def _republish_full_sync_event(
-    *,
-    context: FullSyncContext,
-) -> None:
-    await run_in_threadpool(_prepare_republish_sync, context)
-    task = await run_in_threadpool(_claim_republish_task_sync, context)
-
-    try:
-        message_id = await publish_task(task)
-    except Exception as exc:
-        await run_in_threadpool(
-            _record_republish_outcome_sync,
-            context,
-            error_message=str(exc),
-        )
-        raise
-
-    await run_in_threadpool(
-        _record_republish_outcome_sync,
-        context,
-        message_id=message_id,
-    )
 
 
 # Full Sync 예외를 retry / termainal failed 으로 분기
@@ -306,46 +235,60 @@ async def _handle_event_failure(
 ) -> None:
     error_summary = str(exc)
     next_attempt = context.attempt + 1
-    should_retry = next_attempt < context.max_attempts
+    retryable = is_retryable_sync_error(exc)
+    should_retry = retryable and next_attempt < context.max_attempts
 
     if should_retry:
-        try:
-            await _republish_full_sync_event(context=context)
-        except Exception:
-            logger.exception(
-                "[%s][FULL][WORKER] Event republish failed: event_id=%s, next_attempt=%s",
+        retry_delay = _full_sync_retry_delay(next_attempt)
+        next_retry_at = datetime.now(timezone.utc) + retry_delay
+        scheduled = await run_in_threadpool(
+            _schedule_event_retry_sync,
+            context,
+            next_retry_at=next_retry_at,
+            error_summary=error_summary,
+        )
+        if not scheduled:
+            await deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.EVENT_CAS_CONFLICT,
+                error_message="failed to transition event to RETRYING",
+            )
+            logger.error(
+                "[%s][FULL][WORKER] Retry schedule transition skipped: event_id=%s, next_attempt=%s",
                 context.connector.upper(),
                 context.event_id,
                 next_attempt,
             )
             return
-        else:
-            await publish_status_event(
-                build_target_status_event(
-                    context=context,
-                    event_type=SyncStatusEventType.TARGET_REQUEUED,
-                    status=SyncEventStatus.RETRYING.value,
-                    attempt=next_attempt,
-                )
-            )
-            await handler.on_target_requeued(
+
+        await publish_status_event(
+            build_target_status_event(
                 context=context,
-                next_attempt=next_attempt,
-                error_summary=error_summary,
+                event_type=SyncStatusEventType.TARGET_REQUEUED,
+                status=SyncEventStatus.RETRYING.value,
+                attempt=next_attempt,
             )
-            logger.warning(
-                "[%s][FULL][WORKER] Target requeued: event_id=%s, next_attempt=%s, error=%s",
-                context.connector.upper(),
-                context.event_id,
-                next_attempt,
-                error_summary,
-            )
-            return
+        )
+        await handler.on_target_requeued(
+            context=context,
+            next_attempt=next_attempt,
+            error_summary=error_summary,
+        )
+        logger.warning(
+            "[%s][FULL][WORKER] Target scheduled for retry: event_id=%s, next_attempt=%s, retry_at=%s, error=%s",
+            context.connector.upper(),
+            context.event_id,
+            next_attempt,
+            next_retry_at.isoformat(),
+            error_summary,
+        )
+        return
 
     failure = await run_in_threadpool(
         _mark_event_failed_sync,
         context,
         should_retry=should_retry,
+        error_summary=error_summary,
     )
     if not failure.marked:
         await deadletter(
@@ -372,14 +315,14 @@ async def _handle_event_failure(
         context=context,
         next_attempt=next_attempt,
         error_summary=error_summary,
-        retryable=failure.should_retry,
+        retryable=retryable,
     )
     logger.error(
         "[%s][FULL][WORKER] Target failed: event_id=%s, attempt=%s, retryable=%s, error=%s",
         context.connector.upper(),
         context.event_id,
         next_attempt,
-        failure.should_retry,
+        retryable,
         error_summary,
     )
 
