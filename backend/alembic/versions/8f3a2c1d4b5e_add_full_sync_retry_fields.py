@@ -19,17 +19,53 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("sync_events", sa.Column("next_retry_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("sync_events", sa.Column("last_error", sa.Text(), nullable=True))
-    op.create_index(
-        "idx_sync_events_connector_status_next_retry_at",
-        "sync_events",
-        ["connector", "status", "next_retry_at"],
-        unique=False,
+    op.execute(
+        sa.text(
+            """
+            ALTER TABLE sync_events
+            ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ NULL
+            """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+            ALTER TABLE sync_events
+            ADD COLUMN IF NOT EXISTS last_error TEXT NULL
+            """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+            CREATE INDEX IF NOT EXISTS idx_sync_events_connector_status_next_retry_at
+            ON sync_events (connector, status, next_retry_at)
+            """
+        )
     )
 
 
 def downgrade() -> None:
-    op.drop_index("idx_sync_events_connector_status_next_retry_at", table_name="sync_events")
-    op.drop_column("sync_events", "last_error")
-    op.drop_column("sync_events", "next_retry_at")
+    op.execute(
+        sa.text(
+            """
+            DROP INDEX IF EXISTS idx_sync_events_connector_status_next_retry_at
+            """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+            ALTER TABLE sync_events
+            DROP COLUMN IF EXISTS last_error
+            """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+            ALTER TABLE sync_events
+            DROP COLUMN IF EXISTS next_retry_at
+            """
+        )
+    )
