@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 from catchup.components.embedder.service import AwsBedrockEmbeddingService
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
-from catchup.connectors.confluence.client import ConfluenceApiClient
+from catchup.connectors.confluence.client import (
+    ConfluenceApiClient,
+    ConfluenceApiError,
+    ConfluenceRateLimitError,
+)
 from catchup.connectors.confluence.schemas import (
     ConfluenceAttachmentResponse,
     ConfluenceBlogPostResponse,
@@ -79,6 +83,12 @@ class ConfluenceIngestionService:
         self.transformer = ConfluenceTransformer()
         self.repository = repository
         self.embedding_service = embedding_service
+
+    @staticmethod
+    def _is_retryable_connector_error(exc: Exception) -> bool:
+        return isinstance(exc, ConfluenceRateLimitError) or (
+            isinstance(exc, ConfluenceApiError) and exc.retry_after is not None
+        )
 
     async def initialize(self) -> None:
         logger.info(f"[CONFLUENCE][SERVICE] Ensuring initialization: cloud_id={self.cloud_id}")
@@ -402,6 +412,8 @@ class ConfluenceIngestionService:
                         results["synced"] += 1
 
                     except Exception as e:
+                        if self._is_retryable_connector_error(e):
+                            raise
                         logger.error(
                             f"[CONFLUENCE][SYNC] Failed to process page: "
                             f"space_key={space_key}, page_id={raw_page.get('id')}, error={e}"
@@ -416,6 +428,8 @@ class ConfluenceIngestionService:
             )
 
         except Exception as e:
+            if self._is_retryable_connector_error(e):
+                raise
             logger.error(
                 f"[CONFLUENCE][SYNC] Page sync failed: space_key={space_key}, error={e}"
             )
@@ -465,6 +479,8 @@ class ConfluenceIngestionService:
                         results["synced"] += 1
 
                     except Exception as e:
+                        if self._is_retryable_connector_error(e):
+                            raise
                         logger.error(
                             f"[CONFLUENCE][SYNC] Failed to process blogpost: "
                             f"space_key = {space_key}, blogpost_id = {raw_blogpost.get('id')}, error = {e}"
@@ -479,6 +495,8 @@ class ConfluenceIngestionService:
             )
 
         except Exception as e:
+            if self._is_retryable_connector_error(e):
+                raise
             logger.error(
                 f"[CONFLUENCE][SYNC] Blogpost sync failed: space_key={space_key}, error={e}"
             )
@@ -639,6 +657,8 @@ class ConfluenceIngestionService:
                 )
                 return content_id, True
             except Exception as exc:
+                if self._is_retryable_connector_error(exc):
+                    raise
                 logger.warning(
                     "[CONFLUENCE][REPAIR] Failed to retry %s: cloud_id=%s, space_key=%s, content_id=%s, error=%s",
                     record_type,
@@ -849,6 +869,20 @@ class ConfluenceIngestionService:
             tasks.append(self.client.get_content_inline_comments(content_type, content_id))
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for result in results:
+            if isinstance(result, Exception) and self._is_retryable_connector_error(result):
+                raise result
+
+        for result in results:
+            if isinstance(result, Exception):
+                logger.warning(
+                    "[CONFLUENCE][SUPPLEMENTARY] Failed to fetch supplementary data: cloud_id=%s, content_type=%s, content_id=%s, error=%s",
+                    self.cloud_id,
+                    content_type,
+                    content_id,
+                    result,
+                )
 
         footer_comments = []
         if isinstance(results[0], list):
