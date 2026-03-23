@@ -37,6 +37,7 @@ from typing import Any
 import httpx
 
 from catchup.configs.config import settings
+from catchup.connectors.base.retry import parse_retry_after_header
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 
 logger = logging.getLogger(__name__)
@@ -260,8 +261,9 @@ class JiraApiClient:
                             # Rate limit 초과 (429 Too Many Requests)
                             # Retry-After 헤더 값만큼 대기 후 재시도
                             if response.status_code == 429:
-                                retry_after = int(
-                                    response.headers.get("Retry-After", 60)
+                                retry_after = parse_retry_after_header(
+                                    response.headers.get("Retry-After"),
+                                    default=60,
                                 )
                                 if attempt < max_retries - 1:
                                     logger.warning(
@@ -269,7 +271,7 @@ class JiraApiClient:
                                     )
                                     await asyncio.sleep(retry_after)
                                     break
-                                raise JiraRateLimitError(retry_after)
+                                raise JiraRateLimitError(retry_after=retry_after)
 
                             # 인증 실패 (401 Unauthorized)
                             # 1회에 한해 강제 refresh 후 동일 요청 재시도

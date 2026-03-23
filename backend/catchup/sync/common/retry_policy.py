@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import random
 from datetime import timedelta
 
@@ -52,20 +53,22 @@ def is_retryable_sync_error(exc: Exception) -> bool:
 
     return False
 
-def extract_retry_after_seconds(exc: Exception) -> bool:
+
+def extract_retry_after_seconds(exc: Exception) -> int | None:
     if not isinstance(exc, ConnectorApiError):
         return None
-    
+
     retry_after = exc.retry_after
     if retry_after is None:
         return None
-    
+
     try:
-        seconds = int(retry_after)
+        seconds = math.ceil(float(retry_after))
     except (TypeError, ValueError):
         return None
-    
+
     return max(1, seconds)
+
 
 def calculate_retry_delay(
     *,
@@ -100,8 +103,11 @@ def resolve_retry_delay(
 ) -> timedelta:
     retry_after_seconds = extract_retry_after_seconds(exc)
     if retry_after_seconds is not None:
+        if isinstance(exc, RateLimitError):
+            return timedelta(seconds=retry_after_seconds)
+
         capped_seconds = min(
-            max(1, retry_after_seconds),
+            retry_after_seconds,
             max(1, int(max_delay_seconds)),
         )
         return timedelta(seconds=capped_seconds)

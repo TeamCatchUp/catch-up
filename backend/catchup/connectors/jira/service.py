@@ -316,6 +316,8 @@ class JiraIngestionService:
     ) -> dict[str, Any] | None:
         try:
             return await self.client.get_issue(issue_key)
+        except JiraRateLimitError:
+            raise
         except JiraApiError as exc:
             logger.warning(
                 "[JIRA][REPAIR] Failed to fetch issue: cloud_id=%s, issue_key=%s, error=%s",
@@ -532,6 +534,15 @@ class JiraIngestionService:
                     results["issues"]["synced"] += project_result["issues"]
                     results["epics"]["synced"] += project_result["epics"]
                     results["issues"]["errors"] += project_result["errors"]
+                except JiraRateLimitError as exc:
+                    logger.warning(
+                        "[JIRA][FULL SYNC] Project sync rate limited: "
+                        "cloud_id=%s, project_key=%s, retry_after=%ss",
+                        self.cloud_id,
+                        project_key,
+                        exc.retry_after,
+                    )
+                    raise
                 except Exception as e:
                     logger.error(
                         f"[JIRA][FULL SYNC] Project sync failed: "
@@ -697,13 +708,14 @@ class JiraIngestionService:
 
                     await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
 
-                except JiraRateLimitError as e:
+                except JiraRateLimitError as exc:
                     logger.warning(
-                        f"[JIRA][FULL SYNC] Rate limited: "
-                        f"project_key={project_key}, retry_after={e.retry_after}s"
+                        "[JIRA][FULL SYNC] Fetch rate limited: "
+                        "project_key=%s, retry_after=%ss",
+                        project_key,
+                        exc.retry_after,
                     )
-                    await asyncio.sleep(e.retry_after)
-                    continue
+                    raise
         finally:
             await queue.put(None)
 
@@ -853,6 +865,8 @@ class JiraIngestionService:
 
                     results["synced"] += 1
 
+                except JiraRateLimitError:
+                    raise
                 except JiraApiError as e:
                     logger.error(f"Failed to sync project {project_key}: {e}")
                     results["errors"] += 1
@@ -869,6 +883,8 @@ class JiraIngestionService:
                 sync_result["deleted"],
             )
 
+        except JiraRateLimitError:
+            raise
         except JiraApiError as e:
             logger.error(f"Failed to get project list (API error): {e}")
             results["errors"] += 1
@@ -942,6 +958,8 @@ class JiraIngestionService:
 
                         results["synced"] += 1
 
+                except JiraRateLimitError:
+                    raise
                 except JiraApiError as e:
                     logger.error(f"Failed to sync sprints for board {board_id}: {e}")
                     results["errors"] += 1
@@ -955,6 +973,8 @@ class JiraIngestionService:
                 )
                 logger.info(f"Saved {len(sprints_data)} sprints to RDBMS")
 
+        except JiraRateLimitError:
+            raise
         except JiraApiError as e:
             logger.error(f"Failed to get boards (API error): {e}")
             results["errors"] += 1
@@ -1026,6 +1046,8 @@ class JiraIngestionService:
             else:
                 logger.warning("No valid users to save (all missing accountId)")
 
+        except JiraRateLimitError:
+            raise
         except JiraApiError as e:
             logger.error(f"Failed to sync users (API error): {e}")
             results["errors"] += 1
