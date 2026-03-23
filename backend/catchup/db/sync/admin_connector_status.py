@@ -7,7 +7,17 @@ from sqlalchemy import DateTime, cast, column, func, literal, select, table, tup
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
-from catchup.db.models import SyncConnector, SyncEvent, SyncJob, SyncType
+from catchup.db.models import (
+    ConfluenceSpace,
+    GithubRepository,
+    JiraProject,
+    SlackChannel,
+    SyncConnector,
+    SyncEvent,
+    SyncEventStatus,
+    SyncJob,
+    SyncType,
+)
 
 _pg_embedding = table(
     "langchain_pg_embedding",
@@ -37,6 +47,32 @@ class AdminConnectorTargetRangeRow:
     last_failed_at: datetime | None
     oldest_at: datetime | None
     latest_at: datetime | None
+
+
+def _sort_targets(targets: list[_SyncTargetRow]) -> list[_SyncTargetRow]:
+    return sorted(
+        targets,
+        key=lambda item: (item.target_name.lower(), item.scope_id, item.target_id),
+    )
+
+
+def _build_pending_target(
+    *,
+    scope_id: object,
+    target_id: object,
+    target_name: object,
+) -> _SyncTargetRow:
+    normalized_target_id = str(target_id)
+    normalized_target_name = str(target_name or normalized_target_id)
+    return _SyncTargetRow(
+        scope_id=str(scope_id),
+        target_id=normalized_target_id,
+        target_name=normalized_target_name,
+        event_id="",
+        sync_status=SyncEventStatus.PENDING.value,
+        last_succeeded_at=None,
+        last_failed_at=None,
+    )
 
 
 def _get_time_fields(connector: SyncConnector) -> tuple[str, ...]:
@@ -99,17 +135,114 @@ def _list_sync_targets(
             scope_id=str(row.scope_id),
             target_id=str(row.target_id),
             target_name=str(row.target_name),
-            event_id=str(row.event_id),
+            event_id=str(row.event_id or ""),
             sync_status=str(row.sync_status),
             last_succeeded_at=row.last_succeeded_at,
             last_failed_at=row.last_failed_at,
         )
         for row in rows
     ]
-    return sorted(
-        targets,
-        key=lambda item: (item.target_name.lower(), item.scope_id, item.target_id),
+    return _sort_targets(targets)
+
+
+def _list_github_connected_targets(db: Session) -> list[_SyncTargetRow]:
+    rows = db.execute(
+        select(
+            GithubRepository.installation_id.label("scope_id"),
+            GithubRepository.repo_id.label("target_id"),
+            GithubRepository.full_name.label("target_name"),
+        ).order_by(GithubRepository.full_name, GithubRepository.installation_id)
+    ).all()
+    return _sort_targets(
+        [
+            _build_pending_target(
+                scope_id=row.scope_id,
+                target_id=row.target_id,
+                target_name=row.target_name,
+            )
+            for row in rows
+        ]
     )
+
+
+def _list_jira_connected_targets(db: Session) -> list[_SyncTargetRow]:
+    rows = db.execute(
+        select(
+            JiraProject.cloud_id.label("scope_id"),
+            JiraProject.project_key.label("target_id"),
+            JiraProject.project_name.label("target_name"),
+        ).order_by(JiraProject.project_name, JiraProject.cloud_id, JiraProject.project_key)
+    ).all()
+    return _sort_targets(
+        [
+            _build_pending_target(
+                scope_id=row.scope_id,
+                target_id=row.target_id,
+                target_name=row.target_name,
+            )
+            for row in rows
+        ]
+    )
+
+
+def _list_slack_connected_targets(db: Session) -> list[_SyncTargetRow]:
+    rows = db.execute(
+        select(
+            SlackChannel.team_id.label("scope_id"),
+            SlackChannel.id.label("target_id"),
+            SlackChannel.name.label("target_name"),
+        ).order_by(SlackChannel.name, SlackChannel.team_id, SlackChannel.id)
+    ).all()
+    return _sort_targets(
+        [
+            _build_pending_target(
+                scope_id=row.scope_id,
+                target_id=row.target_id,
+                target_name=row.target_name,
+            )
+            for row in rows
+        ]
+    )
+
+
+def _list_confluence_connected_targets(db: Session) -> list[_SyncTargetRow]:
+    rows = db.execute(
+        select(
+            ConfluenceSpace.cloud_id.label("scope_id"),
+            ConfluenceSpace.space_key.label("target_id"),
+            ConfluenceSpace.space_name.label("target_name"),
+        ).order_by(
+            ConfluenceSpace.space_name,
+            ConfluenceSpace.cloud_id,
+            ConfluenceSpace.space_key,
+        )
+    ).all()
+    return _sort_targets(
+        [
+            _build_pending_target(
+                scope_id=row.scope_id,
+                target_id=row.target_id,
+                target_name=row.target_name,
+            )
+            for row in rows
+        ]
+    )
+
+
+def _list_connected_targets(
+    db: Session,
+    *,
+    connector: SyncConnector,
+) -> list[_SyncTargetRow]:
+    if connector == SyncConnector.GITHUB:
+        return _list_github_connected_targets(db)
+    if connector == SyncConnector.JIRA:
+        return _list_jira_connected_targets(db)
+    if connector == SyncConnector.SLACK:
+        return _list_slack_connected_targets(db)
+    if connector == SyncConnector.CONFLUENCE:
+        return _list_confluence_connected_targets(db)
+    raise ValueError(f"unsupported connector: {connector}")
 
 
 def _build_range_aggregates(
@@ -270,6 +403,42 @@ def _get_target_range_key(
     raise ValueError(f"unsupported connector: {connector}")
 
 
+def _get_target_identity_key(target: _SyncTargetRow) -> tuple[str, str]:
+    return (target.scope_id, target.target_id)
+
+
+def _merge_targets(
+    history_targets: list[_SyncTargetRow],
+    connected_targets: list[_SyncTargetRow],
+) -> list[_SyncTargetRow]:
+    merged = {
+        _get_target_identity_key(target): target
+        for target in history_targets
+    }
+
+    for target in connected_targets:
+        key = _get_target_identity_key(target)
+        current = merged.get(key)
+        if current is None:
+            merged[key] = target
+            continue
+
+        if current.target_name == target.target_name or not target.target_name:
+            continue
+
+        merged[key] = _SyncTargetRow(
+            scope_id=current.scope_id,
+            target_id=current.target_id,
+            target_name=target.target_name,
+            event_id=current.event_id,
+            sync_status=current.sync_status,
+            last_succeeded_at=current.last_succeeded_at,
+            last_failed_at=current.last_failed_at,
+        )
+
+    return _sort_targets(list(merged.values()))
+
+
 def _list_embedding_ranges_by_target(
     db: Session,
     *,
@@ -304,7 +473,9 @@ def list_admin_connector_target_range_rows(
     *,
     connector: SyncConnector,
 ) -> list[AdminConnectorTargetRangeRow]:
-    targets = _list_sync_targets(db, connector=connector)
+    history_targets = _list_sync_targets(db, connector=connector)
+    connected_targets = _list_connected_targets(db, connector=connector)
+    targets = _merge_targets(history_targets, connected_targets)
     embedding_ranges = _list_embedding_ranges_by_target(
         db,
         connector=connector,
