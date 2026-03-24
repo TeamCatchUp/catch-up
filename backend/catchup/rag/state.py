@@ -54,3 +54,5 @@ class AgentState(TypedDict):
     tool_filters: Optional[list[SourceType]]
     
     token_breakdown: Annotated[dict[str, dict[str, int]], add_tokens]
+    
+    rerank_count: int

@@ -14,3 +14,4 @@ class ChatTokenUsageContext(BaseTokenUsageContext):
     def __init__(self):
         super().__init__()
         self.message_id: int | None = None
+        self.rerank_count: int = 0

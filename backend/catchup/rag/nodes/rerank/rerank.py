@@ -15,13 +15,18 @@ logger = structlog.get_logger()
 @log_node
 async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
 
-    retrieved_docs: list[Document] = state.get("retrieved_docs", [])
+    retrieved_docs: list[Document] = state.get("retrieved_docs", [])    
     if not retrieved_docs:
         logger.warning("no_documents_retrieved")
-        return {"retrieved_docs": []}
+        return {
+            "retrieved_docs": [],
+            "rerank_count": 0,
+        }
 
+    rerank_count: int = state.get("rerank_count", 0)
     query = state["rewritten_query"]
-
+    
+    final_docs = retrieved_docs
     try:
         async with rerank_semaphore:
             reranked_docs = await rerank_service.rerank(
@@ -29,13 +34,6 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
                 documents=retrieved_docs,
                 top_n=settings.RERANK_TOP_N
             )
-
-        final_docs = select_diverse_top_k(
-            reranked_docs=reranked_docs,
-            total_k=settings.RERANK_TOTAL_K,  # LLM에게 최종적으로 제공되는 문서 개수
-            min_guarantee=2,  # 최소 2개 보장
-        )
-
     except Exception as e:
         logger.warning(
             "rerank_node_failed",
@@ -43,9 +41,20 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
             error=str(e),
             exc_info=True
         )
-        final_docs = retrieved_docs
-
-    return {"retrieved_docs": final_docs}
+        return {
+            "retrieved_docs": final_docs,
+            "rerank_count": 0,
+        }
+    else: 
+        final_docs = select_diverse_top_k(
+            reranked_docs=reranked_docs,
+            total_k=settings.RERANK_TOTAL_K,  # LLM에게 최종적으로 제공되는 문서 개수
+            min_guarantee=2,  # 최소 2개 보장
+        )
+        return {
+            "retrieved_docs": final_docs,
+            "rerank_count": rerank_count + 1,
+        }
 
 
 def select_diverse_top_k(

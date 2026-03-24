@@ -102,14 +102,26 @@ class ChatService:
                 query,
                 lg_current_state
             )
-                        
+
             # 초기 AgentState
             inputs = {
+                # 사용자 변수
                 "messages": input_messages,
                 "original_query": query,
                 "global_context": global_context,
                 "tool_filters": tool_filters,
+                
+                # RAG 파이프라인 상태 변수
+                "retry_count": 0,
+                "grade_comment": None,
+                "grade_status": None,
+                "vector_search_queries": [],
+                "graph_search_queries": [],
+                "retrieved_docs": [],
+                
+                # 비용 변수
                 "token_breakdown": {},
+                "rerank_count": 0,
             }
             
             stream_state = {
@@ -189,8 +201,12 @@ class ChatService:
             values = lg_current_state.values
 
             if token_usage_ctx and values:
+                # langgraph state로부터 토큰 사용량 및 rerank 횟수 추출
                 token_breakdown = values.get("token_breakdown", {})
+                rerank_count = values.get("rerank_count", 0)
+                
                 token_usage_ctx.add_tokens(token_breakdown)
+                token_usage_ctx.rerank_count = rerank_count
             
             if (
                 token_usage_ctx

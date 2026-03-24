@@ -29,5 +29,6 @@ def emit_chat_token_usage_event(
             company_id=company_id,
             message_id=token_usage.message_id,
             token_breakdown=token_usage.token_breakdown,
+            rerank_count=token_usage.rerank_count,
         )
     )
