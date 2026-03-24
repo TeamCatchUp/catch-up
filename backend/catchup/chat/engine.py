@@ -10,7 +10,6 @@ from fastapi.concurrency import run_in_threadpool
 from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
 from langgraph.pregel.types import StateSnapshot
-from sqlalchemy.orm import Session
 
 from catchup.audit.enums import AuditEventStatus
 from catchup.audit.enums import AuditLevel
@@ -31,7 +30,7 @@ from catchup.db.chat_room import add_message
 from catchup.db.chat_room import create_chat_room
 from catchup.db.chat_room import get_chat_room
 from catchup.db.chat_room import soft_delete_last_conversation_turn
-from catchup.db.models import ChatRoom
+from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
 from catchup.events.enums import ChatEventAction
 from catchup.events.enums import EventType
@@ -67,7 +66,6 @@ class ChatService:
     @observe(name="chat-stream")
     async def chat_stream(
         self,
-        db: Session,
         global_context: GlobalContext,
         session_id: uuid.UUID,
         tool_filters: Optional[list[SourceType]] = None,
@@ -80,7 +78,6 @@ class ChatService:
         try:            
             # 채팅 세션 획득
             room_id: int = await self._setup_chat_room(
-                db,
                 global_context,
                 session_id,
                 query
@@ -97,7 +94,6 @@ class ChatService:
             
             input_messages = await run_in_threadpool(
                 self._resolve_input_messages,
-                db,
                 session_id,
                 query,
                 lg_current_state
@@ -132,7 +128,7 @@ class ChatService:
             }
 
             async for event in app.astream_events(inputs, invoke_config, version="v2"):
-                async for parsed_event in self._parse_stream_event(event, session_id, room_id, stream_state, db):
+                async for parsed_event in self._parse_stream_event(event, session_id, room_id, stream_state):
                     yield parsed_event
 
         except asyncio.CancelledError:
@@ -149,17 +145,20 @@ class ChatService:
         except Exception as e:
             logger.exception("streaming_error")
             
-            room = await run_in_threadpool(
-                get_chat_room,
-                db,
-                session_id,
-                global_context.user.id
-            )
+            def _get_chat_room_sync():
+                with SessionLocal() as db:
+                    room = get_chat_room(
+                        db=db,
+                        session_id=session_id,
+                        user_id=global_context.user.id
+                    )
+                    return room.id if room else None
+            room_id = await run_in_threadpool(_get_chat_room_sync)
             
-            if room:
+            if room_id:
                 await self.reset_last_turn(
-                    db,
-                    room
+                    room_id=room_id,
+                    session_id=session_id,
                 )
             else:
                 logger.warning(
@@ -226,7 +225,6 @@ class ChatService:
                     
     def _resolve_input_messages(
         self,
-        db: Session,
         session_id: uuid.UUID,
         query: str,
         lg_current_state: StateSnapshot
@@ -253,12 +251,14 @@ class ChatService:
                 context="state_empty",
                 session_id=str(session_id)
             )
-            past_messages = restore_conversation_context(
-                db=db,
-                session_id=session_id
-            )
-            input_messages = past_messages + [HumanMessage(content=query)]
             
+            with SessionLocal() as db:
+                past_messages = restore_conversation_context(
+                    db=db,
+                    session_id=session_id
+                )
+                input_messages = past_messages + [HumanMessage(content=query)]
+
         return input_messages
 
     async def _parse_stream_event(
@@ -267,7 +267,6 @@ class ChatService:
         session_id: uuid.UUID,
         room_id: int,
         stream_state: dict[str, Any],
-        db: Session
     ) -> AsyncGenerator[StreamEvent, None]:
         kind = event["event"]  # 이벤트 종류
         name = event["name"]  # 이벤트 이름
@@ -290,7 +289,7 @@ class ChatService:
 
         # 3. 노드 종료 (현재는 최종 답변 생성 노드만 관여)
         elif kind == "on_chain_end":
-            async for res in self._handle_node_end(event, session_id, room_id, stream_state, db):
+            async for res in self._handle_node_end(event, session_id, room_id, stream_state):
                 yield res
     
     async def _handle_node_start(
@@ -384,7 +383,6 @@ class ChatService:
             session_id: uuid.UUID,
             room_id: int,
             stream_state: dict,
-            db: Session
         ):
         """
             그래프 종료 시점.
@@ -415,7 +413,6 @@ class ChatService:
         
         if final_content:
             message_id = await self._save_message_content(
-                db,
                 room_id,
                 "assistant",
                 final_content,
@@ -463,7 +460,6 @@ class ChatService:
                         
     async def _setup_chat_room(
         self,
-        db: Session,
         global_context: GlobalContext,
         session_id: uuid.UUID,
         query: str
@@ -473,71 +469,71 @@ class ChatService:
             사용자 쿼리를 저장한다.
             채팅방 ID를 반환한다.
         """
-
-        room = await run_in_threadpool(
-            get_chat_room, 
-            db, 
-            session_id, 
-            global_context.user.id
-        )
         
-        if not room:
+        def _get_chat_room_sync():
+            with SessionLocal() as db:
+                room = get_chat_room(
+                    db=db,
+                    session_id=session_id,
+                    user_id=global_context.user.id
+                )
+                return room.id if room else None
+        room_id = await run_in_threadpool(_get_chat_room_sync)
+
+        if not room_id:
             initial_title = await generate_chat_room_title(query)
                
             # 새로운 채팅 세션일 경우
             def _create_room_sync():
-                new_room = create_chat_room(
-                    db=db,
-                    session_id=session_id,
-                    user_id=global_context.user.id,
-                    workspace_id=global_context.workspace.id,
-                    title=initial_title
-                )
-                db.commit()
-                db.refresh(new_room)
-                return new_room
-        
-            room = await run_in_threadpool(_create_room_sync)     
+                with SessionLocal() as db:
+                    new_room = create_chat_room(
+                        db=db,
+                        session_id=session_id,
+                        user_id=global_context.user.id,
+                        workspace_id=global_context.workspace.id,
+                        title=initial_title
+                    )
+                    db.commit()
+                    db.refresh(new_room)
+                    return new_room.id
+            room_id = await run_in_threadpool(_create_room_sync)     
                
         # 사용자 쿼리 저장
         await self._save_message_content(
-            db,
-            room.id,
+            room_id,
             "user",
             query
         )
         
-        return room.id
+        return room_id
     
     async def _save_message_content(
         self,
-        db: Session,
         room_id: int,
         role: str,
         content: str,
         sources: Optional[list[dict[str, Any]]] = None,
         trace_id: str | None = None
     ):
-        
         def _save_sync():
-            message = add_message(
-                db=db,
-                room_id=room_id,
-                role=role,
-                content=content,
-                sources=sources,
-                trace_id=trace_id
-            )
-            db.commit()
-            db.refresh(message)
-            return message.id
-            
+            with SessionLocal() as db:
+                message = add_message(
+                    db=db,
+                    room_id=room_id,
+                    role=role,
+                    content=content,
+                    sources=sources,
+                    trace_id=trace_id
+                )
+                db.commit()
+                db.refresh(message)
+                return message.id
         return await run_in_threadpool(_save_sync)
         
     async def reset_last_turn(
         self,
-        db: Session,
-        room: ChatRoom,
+        room_id: int,
+        session_id: uuid.UUID,
     ) -> Optional[str]:
         """
         마지막 대화 턴을 soft-delete 하고, 해당 세션 id에 대한 Redis Checkpointer를 초기화 한다.
@@ -545,25 +541,26 @@ class ChatService:
         """
         
         def _soft_delete_last_turn_sync():
-            deleted_message = soft_delete_last_conversation_turn(
-                db=db,
-                room_id=room.id
-            )
-            db.commit()
-            return deleted_message
-        
+            with SessionLocal() as db:
+                deleted_message: str = soft_delete_last_conversation_turn(
+                    db=db,
+                    room_id=room_id
+                )
+                db.commit()
+                return deleted_message
+            
         deleted_query = await run_in_threadpool(_soft_delete_last_turn_sync)
         
         if deleted_query:
             checkpointer = get_langgraph_checkpointer()
             
             await checkpointer.adelete_thread(
-                thread_id=str(room.session_id)
+                thread_id=str(session_id)
             )
             
             logger.info(
                 "langgraph_checkpointer_flushed",
-                session_id=str(room.session_id)
+                session_id=str(session_id)
             )
 
         return deleted_query

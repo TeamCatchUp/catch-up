@@ -76,7 +76,7 @@ class KeycloakAdminClient:
         
         response.raise_for_status()
         token = response.json().get("access_token")
-        logger.debug(f"토큰 발급 완료: {token}")
+        logger.debug(f"토큰 발급 완료: {token[:10]}...(truncated)")
         return token
 
     def _parse_users(

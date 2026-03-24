@@ -53,6 +53,7 @@ dev = [
     "debugpy>=1.8.20",
     "pip-licenses",
     "pydeps>=3.0.2",
+    "pyinstrument>=5.1.2",
     "ruff",
 ]
 
