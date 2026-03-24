@@ -79,9 +79,10 @@ const ConnectedAccountsSectionBase = ({
     [accountInfoMap],
   );
 
-  const { data: syncStatus } = useQuery(
-    adminConnectorQueries.userSyncStatus({ filterType: 'all', page: 1, size: 100 }),
-  );
+  const { data: syncStatus } = useQuery({
+    ...adminConnectorQueries.userSyncStatus({ filterType: 'all', page: 1, size: 100 }),
+    enabled: variant === 'admin',
+  });
 
   const allRows = useMemo<MemberIntegrationRow[]>(() => {
     if (!syncStatus?.items) return [];
