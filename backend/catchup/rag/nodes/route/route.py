@@ -55,6 +55,7 @@ async def route_node(state: AgentState, llm: BaseChatModel):
         "graph_search_queries": [],
         "retrieved_docs": [],
         **token_usages,
+        "rerank_count": 0,
     }
 
 
