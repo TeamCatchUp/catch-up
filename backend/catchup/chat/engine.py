@@ -102,14 +102,26 @@ class ChatService:
                 query,
                 lg_current_state
             )
-                        
+
             # 초기 AgentState
             inputs = {
+                # 사용자 변수
                 "messages": input_messages,
                 "original_query": query,
                 "global_context": global_context,
                 "tool_filters": tool_filters,
+                
+                # RAG 파이프라인 상태 변수
+                "retry_count": 0,
+                "grade_comment": None,
+                "grade_status": None,
+                "vector_search_queries": [],
+                "graph_search_queries": [],
+                "retrieved_docs": [],
+                
+                # 비용 변수
                 "token_breakdown": {},
+                "rerank_count": 0,
             }
             
             stream_state = {
