@@ -92,3 +92,4 @@ class SyncIngestionEventAction(StrEnum):
 
 class UserEventAction(StrEnum):
     USER_PROMOTED = "user_promoted"
+    ADMIN_REVOKED = "admin_revoked"
