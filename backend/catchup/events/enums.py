@@ -11,23 +11,24 @@ class EventType(StrEnum):
     INTEGRATION = "INTEGRATION"
     SYNC = "SYNC"
     CHAT = "CHAT"
-    AUDIT = "AUDIT"
     SYSTEM = "SYSTEM"
     USER = "USER"
     OAUTH = "OAUTH"
+    USER_SETTINGS = "USER_SETTINGS"
 
+
+# Event Actions
 class AdminOAuthAction(StrEnum):
     SYNC_USERS = "sync_users"
-    
 
 
 class AuthEventAction(StrEnum):
     # 로그인
     LOGIN = "login"
-    
+
     # 토큰 재발급
     TOKEN_REFRESH = "token_refresh"
-    
+
     # 로그아웃
     LOGOUT = "logout"
 
@@ -35,13 +36,13 @@ class AuthEventAction(StrEnum):
 class ChatEventAction(StrEnum):
     # 사용자 질문 생성
     USER_QUERY_SENT = "user_query_sent"
-    
+
     # 답변 생성
     ASSISTANT_RESPONSE_GENERATED = "assistant_response_generated"
-    
+
     # 출처 목록 노출
     SOURCES_PROVIDED = "sources_provided"
-    
+
 
 class AwsS3EventAction(StrEnum):
     AUDIT_FILE_UPLOADED = "audit_file_uploaded"
@@ -63,10 +64,10 @@ class SystemEventAction(StrEnum):
 class IntegrationEventAction(StrEnum):
     # Callback 수신
     OAUTH_CALLBACK = "oauth_callback"
-    
+
     # Github Installation Event 수신
     INSTALLATION_EVENT_RECEIVED = "installation_event_received"
-    
+
     # OAuth Token 저장 완료
     OAUTH_TOKEN_PERSISTED = "oauth_persisted"
 
@@ -85,11 +86,19 @@ class SyncTriggerEventAction(StrEnum):
     WEBHOOK_EVENT_RECEIVED = "webhook_event_received"
     CONFLUENCE_POLLING_STARTED = "confluence_polling_started"
 
+
 class SyncIngestionEventAction(StrEnum):
     SUMMARIZE = "summarize"
     EMBED = "embed"
     DOCUMENT_PERSISTED = "document_persisted"
 
+
 class UserEventAction(StrEnum):
     USER_PROMOTED = "user_promoted"
     ADMIN_REVOKED = "admin_revoked"
+
+
+class UserCustomPromptEventAction(StrEnum):
+    CREATED = "custom_prompt_created"
+    EDITED = "custom_prompt_edited"
+    DELETED = "custom_prompt_deleted"
