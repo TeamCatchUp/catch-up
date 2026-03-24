@@ -21,10 +21,11 @@ class Environment(StrEnum):
 class Settings(BaseSettings):
     
     #===========================#
-    #     Degubber Settings     #
+    #     Debug Settings     #
     #===========================#
     DEBUGGER_ENABLED: bool = False
     DEBUGGER_PORT: int = 5678
+    PYINSTRUMENT_ENABLED: bool = False
     
     #=============================#
     #     System Base Settings    #

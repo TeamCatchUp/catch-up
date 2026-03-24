@@ -37,6 +37,7 @@ from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.webhook_api import router as slack_webhook_router
 from catchup.server.initialization import ensure_pg_indices
 from catchup.server.mapping.api import router as github_mapping_csv_router
+from catchup.server.middleware.pyinstrument import profile_middleware
 from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.settings.api import router as settings_router
@@ -585,6 +586,8 @@ app.add_middleware(
 )
 
 # 미들웨어 등록
+if settings.PYINSTRUMENT_ENABLED:
+    app.middleware("http")(profile_middleware)
 app.middleware("http")(request_context_middleware)
 
 
