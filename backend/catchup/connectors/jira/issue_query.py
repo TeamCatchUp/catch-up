@@ -79,7 +79,7 @@ def classify_record_type(issue_data: dict[str, Any]) -> str:
 
 
 def format_issue_jql_datetime(value: datetime) -> str:
-    return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    return value.astimezone(timezone.utc).strftime("%Y-%m-%d")
 
 
 def build_issue_since_jql(
