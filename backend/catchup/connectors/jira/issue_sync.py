@@ -16,6 +16,8 @@ from catchup.connectors.jira.client import JiraRateLimitError
 from catchup.connectors.jira.context_store import JiraContextStore
 from catchup.connectors.jira.issue_query import build_issue_range_jql
 from catchup.connectors.jira.issue_query import build_issue_sync_jql
+from catchup.connectors.jira.issue_query import build_canonical_epic_id
+from catchup.connectors.jira.issue_query import build_canonical_issue_id
 from catchup.connectors.jira.issue_query import classify_record_type
 from catchup.connectors.jira.runtime import JiraRuntime
 from catchup.sync.audit import SyncAuditContext
@@ -102,17 +104,28 @@ class JiraIssueSyncService:
 
                 record_type = classify_record_type(issue_data)
                 if record_type == "epic":
-                    identifiers.append(f"jira:epic:{issue_key}")
+                    identifiers.append(build_canonical_epic_id(issue_key))
                     continue
 
-                identifiers.append(f"jira:issue:{issue_key}")
+                identifiers.append(build_canonical_issue_id(issue_key))
 
             if is_last:
                 break
 
             next_page_token = response.get("nextPageToken")
             if not next_page_token:
-                break
+                logger.warning(
+                    "jira_issue_identifier_collection_stopped_without_next_page_token",
+                    cloud_id=self.runtime.cloud_id,
+                    project_key=project_key,
+                    range_start=range_start.isoformat(),
+                    range_end=range_end.isoformat(),
+                    batch_count=len(issues),
+                    identifier_count=len(identifiers),
+                )
+                raise RuntimeError(
+                    "jira issue identifier collection stopped without next_page_token"
+                )
 
             await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
 
@@ -220,7 +233,14 @@ class JiraIssueSyncService:
             )
         )
 
-        await asyncio.gather(producer, consumer)
+        try:
+            await asyncio.gather(producer, consumer)
+        except Exception:
+            for task in (producer, consumer):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(producer, consumer, return_exceptions=True)
+            raise
 
         logger.info(
             "jira_project_sync_completed",
@@ -271,133 +291,152 @@ class JiraIssueSyncService:
         batch_size = settings.JIRA_SYNC_BATCH_SIZE
         processed_count = 0
 
-        try:
-            while True:
-                try:
-                    response = await self.runtime.client.search_issues(
-                        jql=jql,
-                        fields=None,
-                        max_results=batch_size,
-                        next_page_token=next_page_token,
-                    )
+        while True:
+            try:
+                response = await self.runtime.client.search_issues(
+                    jql=jql,
+                    fields=None,
+                    max_results=batch_size,
+                    next_page_token=next_page_token,
+                )
 
-                    issues = response.get("issues", [])
-                    is_last = response.get("isLast", True)
+                issues = response.get("issues", [])
+                is_last = response.get("isLast", True)
 
-                    if not issues:
-                        if processed_count == 0:
-                            logger.info(
-                                "jira_issue_fetch_empty",
-                                cloud_id=self.runtime.cloud_id,
-                                project_key=project_key,
-                                sync_mode=sync_mode,
-                                jql_mode=jql_mode,
-                                since=since.isoformat() if since else None,
-                                range_start=range_start.isoformat() if range_start else None,
-                                range_end=range_end.isoformat() if range_end else None,
-                            )
-                        break
+                if not issues:
+                    if processed_count == 0:
+                        logger.info(
+                            "jira_issue_fetch_empty",
+                            cloud_id=self.runtime.cloud_id,
+                            project_key=project_key,
+                            sync_mode=sync_mode,
+                            jql_mode=jql_mode,
+                            since=since.isoformat() if since else None,
+                            range_start=range_start.isoformat() if range_start else None,
+                            range_end=range_end.isoformat() if range_end else None,
+                        )
+                    break
 
-                    processed_count += len(issues)
+                processed_count += len(issues)
+                logger.info(
+                    "jira_issue_batch_loaded",
+                    cloud_id=self.runtime.cloud_id,
+                    project_key=project_key,
+                    sync_mode=sync_mode,
+                    jql_mode=jql_mode,
+                    batch_count=len(issues),
+                    processed_count=processed_count,
+                    is_last=is_last,
+                )
+
+                documents: list[Document] = []
+                doc_ids: list[str] = []
+
+                for issue_data in issues:
+                    try:
+                        doc = self.runtime.transformer.transform_issue(
+                            issue_data,
+                            self.runtime.site_url,
+                        )
+                        documents.append(doc)
+                        doc_ids.append(doc.id)
+
+                        if doc.metadata.get("entity_type") == "epic":
+                            results["epics"] += 1
+                        else:
+                            results["issues"] += 1
+                    except Exception as exc:
+                        logger.error(
+                            "jira_issue_transform_failed",
+                            cloud_id=self.runtime.cloud_id,
+                            project_key=project_key,
+                            sync_mode=sync_mode,
+                            jql_mode=jql_mode,
+                            issue_key=issue_data.get("key"),
+                            error=str(exc),
+                        )
+                        results["errors"] += 1
+
+                if documents:
+                    await queue.put((documents, doc_ids))
                     logger.info(
-                        "jira_issue_batch_loaded",
+                        "jira_issue_batch_enqueued",
+                        cloud_id=self.runtime.cloud_id,
+                        project_key=project_key,
+                        sync_mode=sync_mode,
+                        jql_mode=jql_mode,
+                        document_count=len(documents),
+                    )
+                else:
+                    logger.warning(
+                        "jira_issue_batch_produced_no_documents",
                         cloud_id=self.runtime.cloud_id,
                         project_key=project_key,
                         sync_mode=sync_mode,
                         jql_mode=jql_mode,
                         batch_count=len(issues),
-                        processed_count=processed_count,
-                        is_last=is_last,
                     )
 
-                    documents: list[Document] = []
-                    doc_ids: list[str] = []
+                if is_last:
+                    break
 
-                    for issue_data in issues:
-                        try:
-                            doc = self.runtime.transformer.transform_issue(
-                                issue_data,
-                                self.runtime.site_url,
-                            )
-                            documents.append(doc)
-                            doc_ids.append(doc.id)
-
-                            if doc.metadata.get("entity_type") == "epic":
-                                results["epics"] += 1
-                            else:
-                                results["issues"] += 1
-                        except Exception as exc:
-                            logger.error(
-                                "jira_issue_transform_failed",
-                                cloud_id=self.runtime.cloud_id,
-                                project_key=project_key,
-                                sync_mode=sync_mode,
-                                jql_mode=jql_mode,
-                                issue_key=issue_data.get("key"),
-                                error=str(exc),
-                            )
-                            results["errors"] += 1
-
-                    if documents:
-                        await queue.put((documents, doc_ids))
-                        logger.info(
-                            "jira_issue_batch_enqueued",
-                            cloud_id=self.runtime.cloud_id,
-                            project_key=project_key,
-                            sync_mode=sync_mode,
-                            jql_mode=jql_mode,
-                            document_count=len(documents),
-                        )
-                    else:
-                        logger.warning(
-                            "jira_issue_batch_produced_no_documents",
-                            cloud_id=self.runtime.cloud_id,
-                            project_key=project_key,
-                            sync_mode=sync_mode,
-                            jql_mode=jql_mode,
-                            batch_count=len(issues),
-                        )
-
-                    if is_last:
-                        break
-
-                    next_page_token = response.get("nextPageToken")
-                    if not next_page_token:
-                        logger.warning(
-                            "jira_issue_fetch_stopped_without_next_page_token",
-                            cloud_id=self.runtime.cloud_id,
-                            project_key=project_key,
-                            sync_mode=sync_mode,
-                            jql_mode=jql_mode,
-                            processed_count=processed_count,
-                        )
-                        break
-
-                    await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
-                except JiraRateLimitError as exc:
+                next_page_token = response.get("nextPageToken")
+                if not next_page_token:
                     logger.warning(
-                        "jira_issue_fetch_rate_limited",
+                        "jira_issue_fetch_stopped_without_next_page_token",
                         cloud_id=self.runtime.cloud_id,
                         project_key=project_key,
                         sync_mode=sync_mode,
                         jql_mode=jql_mode,
-                        retry_after=exc.retry_after,
                         processed_count=processed_count,
                     )
-                    raise
-        finally:
-            logger.info(
-                "jira_issue_fetch_completed",
-                cloud_id=self.runtime.cloud_id,
-                project_key=project_key,
-                sync_mode=sync_mode,
-                jql_mode=jql_mode,
-                processed_count=processed_count,
-                issue_count=results["issues"],
-                epic_count=results["epics"],
-                error_count=results["errors"],
-            )
-            await queue.put(None)
+                    break
+
+                await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
+            except JiraRateLimitError as exc:
+                logger.warning(
+                    "jira_issue_fetch_rate_limited",
+                    cloud_id=self.runtime.cloud_id,
+                    project_key=project_key,
+                    sync_mode=sync_mode,
+                    jql_mode=jql_mode,
+                    retry_after=exc.retry_after,
+                    processed_count=processed_count,
+                )
+                raise
+
+        logger.info(
+            "jira_issue_fetch_completed",
+            cloud_id=self.runtime.cloud_id,
+            project_key=project_key,
+            sync_mode=sync_mode,
+            jql_mode=jql_mode,
+            processed_count=processed_count,
+            issue_count=results["issues"],
+            epic_count=results["epics"],
+            error_count=results["errors"],
+        )
+        await queue.put(None)
+
+    def _build_batch_context(
+        self,
+        *,
+        documents: list[Document],
+        project_key: str,
+    ) -> str:
+        entity_types = sorted(
+            {
+                str(doc.metadata.get("entity_type") or "issue")
+                for doc in documents
+            }
+        )
+        entity_types_value = "|".join(entity_types) if entity_types else "issue"
+        return (
+            "entity_type=mixed,"
+            f"entity_types={entity_types_value},"
+            f"project_key={project_key},"
+            f"doc_count={len(documents)}"
+        )
 
     async def _summarize_and_store(
         self,
@@ -425,9 +464,9 @@ class JiraIssueSyncService:
                 documents,
                 doc_ids,
                 audit_context=audit_context,
-                context=(
-                    f"entity_type=issue,project_key={project_key},"
-                    f"doc_count={len(documents)}"
+                context=self._build_batch_context(
+                    documents=documents,
+                    project_key=project_key,
                 ),
             )
 
@@ -451,9 +490,9 @@ class JiraIssueSyncService:
         summarized = await self.runtime.summarizer.summarize_batch(
             requests,
             audit_context=audit_context,
-            context=(
-                f"entity_type=issue,project_key={project_key},"
-                f"doc_count={len(documents)}"
+            context=self._build_batch_context(
+                documents=documents,
+                project_key=project_key,
             ),
         )
 

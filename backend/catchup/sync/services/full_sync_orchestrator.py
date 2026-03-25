@@ -69,6 +69,9 @@ def _build_month_ranges(
     range_start: datetime,
     range_end: datetime,
 ) -> list[tuple[datetime, datetime]]:
+    """
+    range_start + range_end을 월 단위의 구간 리스트로 나눔
+    """
     normalized_start = range_start.astimezone(timezone.utc)
     normalized_end = range_end.astimezone(timezone.utc)
 
@@ -170,6 +173,9 @@ class FullSyncDispatchOrchestrator:
         base_url: str | None,
         resolver: FullSyncTargetResolverProtocol,
     ) -> SyncDispatchResult:
+        """
+        Target Resolve & Event Seed 생성 -> SyncDispatchOrchestrator에게 위임
+        """
         scope_id = request.scope_id.strip()
         if not scope_id:
             raise SyncRequestError("scope_id is required")
