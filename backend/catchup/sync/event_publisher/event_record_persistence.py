@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import structlog
 from sqlalchemy.orm import Session
 
 from catchup.db.models import SyncConnector, SyncEvent, SyncType
@@ -12,6 +13,8 @@ from catchup.db.sync import (
     create_job as create_db_sync_job,
 )
 from catchup.sync.common.schemas import SyncEventSeed
+
+logger = structlog.get_logger()
 
 
 def _build_resource_metadata(
@@ -25,6 +28,12 @@ def _build_resource_metadata(
     resource_metadata["target_id"] = seed.target_id
     resource_metadata["target_name"] = seed.target_name
     resource_metadata["sync_type"] = sync_type.value
+    resource_metadata["stage"] = seed.stage
+    resource_metadata["range_start"] = seed.range_start.isoformat()
+    resource_metadata["range_end"] = seed.range_end.isoformat()
+    resource_metadata["chunk_index"] = seed.chunk_index
+    resource_metadata["chunk_total"] = seed.chunk_total
+    resource_metadata["range_watermark"] = seed.range_watermark.isoformat()
     if seed.sync_from_ts is not None:
         resource_metadata["sync_from_ts"] = seed.sync_from_ts
     return resource_metadata
@@ -61,6 +70,12 @@ def persist_sync_job_and_events(
                 connector=connector,
                 resource_type=seed.target_type,
                 resource_id=seed.target_id,
+                stage=seed.stage,
+                range_start=seed.range_start,
+                range_end=seed.range_end,
+                chunk_index=seed.chunk_index,
+                chunk_total=seed.chunk_total,
+                range_watermark=seed.range_watermark,
                 requested_at=requested_at,
                 resource_metadata=_build_resource_metadata(
                     scope_id=scope_id,
@@ -71,4 +86,14 @@ def persist_sync_job_and_events(
             )
         )
 
-    return create_db_sync_events(db, payloads)
+    events = create_db_sync_events(db, payloads)
+
+    logger.info(
+        "sync_job_events_persist_completed",
+        connector=connector.value,
+        sync_type=sync_type.value,
+        job_id=job_id,
+        persisted_event_count=len(events),
+    )
+
+    return events

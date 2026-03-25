@@ -1362,6 +1362,13 @@ class SyncEvent(Base):
         server_default=text("'{}'::jsonb"),
     )
 
+    stage: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    range_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    range_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    chunk_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    chunk_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    range_watermark: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    
     status: Mapped[SyncEventStatus] = mapped_column(
         String(20),
         nullable=False,
@@ -1444,6 +1451,39 @@ class SyncEvent(Base):
             "idx_sync_events_publish_status_requested_at",
             "publish_status",
             "requested_at",
+        ),
+    )
+
+
+class SyncEventMissingRecord(Base):
+    __tablename__ = "sync_event_missing_records"
+
+    event_id: Mapped[str] = mapped_column(
+        ForeignKey("sync_events.event_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    record_type: Mapped[str] = mapped_column(String(32), primary_key=True)
+    record_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    event: Mapped["SyncEvent"] = relationship()
+
+    __table_args__ = (
+        Index("idx_sync_event_missing_records_event_id", "event_id"),
+        Index(
+            "idx_sync_event_missing_records_record_type",
+            "record_type",
+            "record_id",
         ),
     )
 

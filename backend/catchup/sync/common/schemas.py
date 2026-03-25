@@ -1,12 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timezone
 from enum import StrEnum
-from typing import Any, Mapping, TypeAlias
+from typing import Any
+from typing import Mapping
+from typing import TypeAlias
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel
+from pydantic import Field
+from pydantic import field_validator
+from pydantic import model_validator
 
-from catchup.db.models import SyncConnector, SyncType
+from catchup.db.models import SyncConnector
+from catchup.db.models import SyncType
 
 
 def _validate_epoch_ts(value: str | None, *, field_name: str) -> str | None:
@@ -24,6 +33,12 @@ def _validate_epoch_ts(value: str | None, *, field_name: str) -> str | None:
     if parsed < 0:
         raise ValueError(f"{field_name} must be non-negative")
     return stripped
+
+
+def _validate_utc_datetime(value: datetime, *, field_name: str) -> datetime:
+    if value.tzinfo is None:
+        raise ValueError(f"{field_name} must be timezone-aware")
+    return value.astimezone(timezone.utc)
 
 
 class SyncDispatchStatus(StrEnum):
@@ -64,6 +79,15 @@ class ClaimState(StrEnum):
     RECORD_NOT_FOUND = "record_not_found"
     STALE_TASK = "stale_task"
     RECORD_CAS_CONFLICT = "record_cas_conflict"
+
+
+class FullSyncRepairStatus(StrEnum):
+    NOT_NEEDED = "not_needed"
+    PENDING = "pending"
+    REPAIRING = "repairing"
+    RESOLVED = "resolved"
+    FAILED = "failed"
+    RETRYING = "retrying"
 
 
 @dataclass(slots=True, frozen=True)
@@ -146,6 +170,12 @@ class SyncEventSeed:
     target_type: SyncTargetType
     target_id: str
     target_name: str
+    stage: str
+    range_start: datetime
+    range_end: datetime
+    chunk_index: int
+    chunk_total: int
+    range_watermark: datetime
     sync_from_ts: str | None = None
     metadata: dict[str, object] = field(default_factory=dict)
     max_attempts: int = 3
@@ -154,9 +184,35 @@ class SyncEventSeed:
         object.__setattr__(self, "target_type", SyncTargetType(self.target_type))
         object.__setattr__(
             self,
+            "range_start",
+            _validate_utc_datetime(self.range_start, field_name="range_start"),
+        )
+        object.__setattr__(
+            self,
+            "range_end",
+            _validate_utc_datetime(self.range_end, field_name="range_end"),
+        )
+        object.__setattr__(
+            self,
+            "range_watermark",
+            _validate_utc_datetime(self.range_watermark, field_name="range_watermark"),
+        )
+        object.__setattr__(
+            self,
             "sync_from_ts",
             _validate_epoch_ts(self.sync_from_ts, field_name="sync_from_ts"),
         )
+
+        if self.chunk_index < 1:
+            raise ValueError("chunk_index must be greater than or equal to 1")
+        if self.chunk_total < 1:
+            raise ValueError("chunk_total must be greater than or equal to 1")
+        if self.chunk_index > self.chunk_total:
+            raise ValueError("chunk_index must be less than or equal to chunk_total")
+        if self.range_start >= self.range_end:
+            raise ValueError("range_start must be earlier than range_end")
+        if self.range_end > self.range_watermark:
+            raise ValueError("range_end must be earlier than or equal to range_watermark")
 
 
 @dataclass(slots=True, frozen=True)
@@ -166,22 +222,46 @@ class TargetSyncResult:
     skipped: bool = False
 
 
+@dataclass(slots=True, frozen=True)
+class FullSyncValidationResult:
+    """
+    Full Sync validation 결과
+    collect 단계에서 기대한 canonical id와 실제 저장된 canonical id를 비교한 결과
+    """
+    expected_count: int = 0
+    stored_count: int = 0
+    missing_count: int = 0
+    missing_ids: list[str] = field(default_factory=list)
+    repair_status: FullSyncRepairStatus = FullSyncRepairStatus.NOT_NEEDED
+
+
+@dataclass(slots=True, frozen=True)
+class FullSyncRepairResult:
+    """Full Sync auto-repair 실행 결과"""
+    attempted_count: int = 0
+    repaired_count: int = 0
+    skipped_count: int = 0
+    failed_ids: list[str] = field(default_factory=list)
+    repair_status: FullSyncRepairStatus = FullSyncRepairStatus.NOT_NEEDED
+
+
 class FullSyncTaskPayload(BaseModel):
     target_type: SyncTargetType = Field(default=SyncTargetType.RESOURCE)
     target_id: str = Field(..., description="target identifier")
+    stage: str = Field(..., description="full sync stage/entity_type")
     sync_from_ts: str | None = Field(
         default=None,
         description="absolute full sync start timestamp in UTC epoch seconds string",
     )
 
-    @field_validator("target_id")
+    @field_validator("target_id", "stage")
     @classmethod
-    def _validate_target_id(cls, value: str) -> str:
+    def _validate_required_text(cls, value: str) -> str:
         stripped = value.strip()
         if not stripped:
-            raise ValueError("target_id is empty")
+            raise ValueError("required full sync field is empty")
         if stripped != value:
-            raise ValueError("target_id must not include leading/trailing spaces")
+            raise ValueError("required full sync field must not include surrounding spaces")
         return value
 
     @field_validator("sync_from_ts")
@@ -193,6 +273,7 @@ class FullSyncTaskPayload(BaseModel):
         fields = {
             "target_type": self.target_type.value,
             "target_id": self.target_id,
+            "stage": self.stage,
         }
         if self.sync_from_ts is not None:
             fields["sync_from_ts"] = self.sync_from_ts
@@ -294,6 +375,7 @@ class SyncStreamTask(BaseModel):
         scope_id: str,
         target_type: SyncTargetType | str,
         target_id: str,
+        stage: str,
         sync_from_ts: str | None,
         attempt: int = 0,
         max_attempts: int = 3,
@@ -307,6 +389,7 @@ class SyncStreamTask(BaseModel):
             payload=FullSyncTaskPayload(
                 target_type=target_type,
                 target_id=target_id,
+                stage=stage,
                 sync_from_ts=sync_from_ts,
             ),
             attempt=attempt,
@@ -363,6 +446,12 @@ class SyncStreamTask(BaseModel):
     @property
     def target_id(self) -> str:
         return self.payload.target_id
+    
+    @property
+    def stage(self) -> str | None:
+        if isinstance(self.payload, FullSyncTaskPayload):
+            return self.payload.stage
+        return None
 
     @property
     def record_key(self) -> str | None:
@@ -453,6 +542,7 @@ class SyncStreamTask(BaseModel):
             payload: SyncTaskPayload = FullSyncTaskPayload(
                 target_type=str(fields.get("target_type") or SyncTargetType.RESOURCE.value),
                 target_id=str(fields.get("target_id") or ""),
+                stage=str(fields.get("stage") or ""),
                 sync_from_ts=(
                     str(fields.get("sync_from_ts"))
                     if fields.get("sync_from_ts") is not None

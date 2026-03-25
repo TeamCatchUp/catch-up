@@ -67,14 +67,12 @@ class JiraTransformer:
 
     Attributes:
         field_mapper: 커스텀 필드 ID → 이름 변환용 매퍼
-        project_cache: RDBMS에서 로드한 프로젝트 정보 캐시 (project_key → JiraProject)
         sprint_cache: RDBMS에서 로드한 스프린트 정보 캐시 (sprint_id → JiraSprint)
     """
 
     def __init__(self, field_mapper: JiraFieldMapper):
         self.field_mapper = field_mapper
         # RDBMS 캐시 (service에서 주입)
-        self.project_cache: dict[str, Any] = {}
         self.sprint_cache: dict[int, Any] = {}
 
     # ================================================================

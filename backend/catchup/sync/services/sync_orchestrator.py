@@ -618,17 +618,22 @@ class SyncDispatchOrchestrator:
             return
 
         try:
-            await publish_job_status_event(
-                _build_job_queued_event(
-                    connector=context.connector,
-                    sync_type=context.sync_type,
-                    job_id=context.job_id,
-                    scope_id=context.scope_id,
-                    total_targets=total_targets,
-                    queued_targets=queued_targets,
-                    sync_from_ts=sync_from_ts,
-                )
-            )
+            # NOTE:
+            # Sync status SSE stream is currently unused, so Redis Pub/Sub
+            # publish is intentionally disabled while keeping the implementation
+            # reusable.
+            # await publish_job_status_event(
+            #     _build_job_queued_event(
+            #         connector=context.connector,
+            #         sync_type=context.sync_type,
+            #         job_id=context.job_id,
+            #         scope_id=context.scope_id,
+            #         total_targets=total_targets,
+            #         queued_targets=queued_targets,
+            #         sync_from_ts=sync_from_ts,
+            #     )
+            # )
+            return
         except Exception as exc:
             logger.warning(
                 "[%s][%s][ORCHESTRATOR] Failed to publish job queued status: scope_id=%s, job_id=%s, error=%s",

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
@@ -9,6 +8,7 @@ from datetime import timezone
 from typing import Any
 
 from fastapi.concurrency import run_in_threadpool
+import structlog
 from sqlalchemy import select
 
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
@@ -39,7 +39,7 @@ from catchup.db.sync import list_events_by_job
 from catchup.db.sync import summarize_events_by_job
 from catchup.sync.common.schemas import SyncTargetType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 def _load_github_installation_db(installation_id: int):
     with SessionLocal() as db:
@@ -98,6 +98,7 @@ class SyncJobTargetSnapshotResult:
     target_id: str
     target_name: str
     status: SyncEventStatus
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True, frozen=True)
@@ -279,11 +280,33 @@ class SyncQueryService:
             )
             target_id = str(event.resource_id)
             target_name = str(metadata.get("target_name") or target_id).strip() or target_id
+            target_metadata = {
+                key: metadata[key]
+                for key in (
+                    "stage",
+                    "chunk_index",
+                    "chunk_total",
+                    "range_start",
+                    "range_end",
+                    "execution_phase",
+                    "expected_count",
+                    "synced_count",
+                    "error_count",
+                    "stored_count",
+                    "missing_count",
+                    "repair_status",
+                    "last_validation_at",
+                    "last_repair_at",
+                    "skipped_count",
+                )
+                if key in metadata
+            }
             targets.append(
                 SyncJobTargetSnapshotResult(
                     target_id=target_id,
                     target_name=target_name,
                     status=event.status,
+                    metadata=target_metadata,
                 )
             )
 
@@ -390,10 +413,10 @@ class SyncQueryService:
         targets: list[SyncTargetResult],
     ) -> SyncTargetsResult:
         logger.info(
-            "[SYNC][TARGETS][QUERY] Loaded targets: connector=%s, scope_id=%s, total_targets=%s",
-            connector,
-            scope_id,
-            len(targets),
+            "sync_targets_loaded",
+            connector=connector.value,
+            scope_id=scope_id,
+            total_targets=len(targets),
         )
         return SyncTargetsResult(
             connector=connector,
