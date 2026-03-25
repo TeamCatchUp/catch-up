@@ -22,6 +22,8 @@ class JiraRecordRetryItem:
     requested_ids: list[str] = field(default_factory=list)
     retried_count: int = 0
     succeeded_count: int = 0
+    skipped_count: int = 0
+    skipped_ids: list[str] = field(default_factory=list)
     failed_ids: list[str] = field(default_factory=list)
     remaining_missing_ids: list[str] = field(default_factory=list)
 

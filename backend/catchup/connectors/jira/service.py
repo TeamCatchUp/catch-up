@@ -11,8 +11,6 @@ from datetime import timezone
 
 import structlog
 
-from catchup.audit.enums import AuditEventStatus
-from catchup.audit.enums import AuditLevel
 from catchup.components.summarizer import SummarizerService
 from catchup.components.summarizer import get_summarizer_service
 from catchup.components.vector_db.pgvector import PGVectorRepository
@@ -22,7 +20,6 @@ from catchup.connectors.jira.client import JiraApiClient
 from catchup.connectors.jira.client import JiraRateLimitError
 from catchup.connectors.jira.context_store import JiraContextStore
 from catchup.connectors.jira.field_mapper import JiraFieldMapper
-from catchup.connectors.jira.issue_query import build_full_sync_audit_context
 from catchup.connectors.jira.issue_query import to_target_sync_result
 from catchup.connectors.jira.issue_sync import JiraIssueSyncService
 from catchup.connectors.jira.metadata_sync import JiraMetadataSyncService
@@ -31,9 +28,10 @@ from catchup.connectors.jira.results import JiraRecordRetryResult
 from catchup.connectors.jira.repair import JiraRepairService
 from catchup.connectors.jira.runtime import JiraRuntime
 from catchup.connectors.jira.transformers import JiraTransformer
-from catchup.events.enums import SyncIngestionEventAction
 from catchup.sync.audit import SyncAuditContext
-from catchup.sync.audit import emit_sync_ingestion_audit
+from catchup.sync.common.schemas import FullSyncRepairStatus
+from catchup.sync.common.schemas import FullSyncRepairResult
+from catchup.sync.common.schemas import FullSyncValidationResult
 from catchup.sync.common.schemas import TargetSyncResult
 
 logger = structlog.get_logger()
@@ -153,7 +151,7 @@ class JiraIngestionService:
         시간 분할 기반 Full Sync 진입점.
 
         실제 fetch/store는 issue_sync가 수행하고,
-        여기서는 Full Sync audit emit과 최종 결과 변환만 담당한다.
+        여기서는 최종 결과 변환만 담당한다.
         """
 
         self._ensure_initialized()
@@ -178,75 +176,23 @@ class JiraIngestionService:
                 range_end=range_end,
                 audit_context=audit_context,
             )
-        except JiraRateLimitError as exc:
-            if audit_context is not None:
-                emit_sync_ingestion_audit(
-                    action=SyncIngestionEventAction.FULL_SYNC,
-                    status=AuditEventStatus.FAIL,
-                    audit_context=audit_context,
-                    context=build_full_sync_audit_context(
-                        project_key=project_key,
-                        range_start=range_start,
-                        range_end=range_end,
-                        error=str(exc),
-                    ),
-                    level=AuditLevel.WARNING,
-                )
+        except JiraRateLimitError:
             raise
-        except Exception as exc:
-            if audit_context is not None:
-                emit_sync_ingestion_audit(
-                    action=SyncIngestionEventAction.FULL_SYNC,
-                    status=AuditEventStatus.FAIL,
-                    audit_context=audit_context,
-                    context=build_full_sync_audit_context(
-                        project_key=project_key,
-                        range_start=range_start,
-                        range_end=range_end,
-                        error=str(exc),
-                    ),
-                    level=AuditLevel.ERROR,
-                )
+        except Exception:
             raise
 
         result = to_target_sync_result(project_result)
-        if result.error_count > 0:
-            if audit_context is not None:
-                emit_sync_ingestion_audit(
-                    action=SyncIngestionEventAction.FULL_SYNC,
-                    status=AuditEventStatus.FAIL,
-                    audit_context=audit_context,
-                    context=build_full_sync_audit_context(
-                        project_key=project_key,
-                        range_start=range_start,
-                        range_end=range_end,
-                        synced_count=result.synced_count,
-                        error_count=result.error_count,
-                        error="jira_issue_range_sync_error_count_detected",
-                    ),
-                    level=AuditLevel.ERROR,
-                )
-            raise RuntimeError(
-                "jira_issue_range_sync_failed:"
-                f" project_key={project_key},"
-                f" range_start={range_start.isoformat()},"
-                f" range_end={range_end.isoformat()},"
-                f" error_count={result.error_count}"
-            )
-
-        if audit_context is not None:
-            emit_sync_ingestion_audit(
-                action=SyncIngestionEventAction.FULL_SYNC,
-                status=AuditEventStatus.SUCCESS,
-                audit_context=audit_context,
-                context=build_full_sync_audit_context(
-                    project_key=project_key,
-                    range_start=range_start,
-                    range_end=range_end,
-                    synced_count=result.synced_count,
-                    error_count=result.error_count,
-                ),
-            )
+        logger.info(
+            "jira_issue_range_sync_completed",
+            cloud_id=self.cloud_id,
+            project_key=project_key,
+            range_start=range_start.isoformat(),
+            range_end=range_end.isoformat(),
+            synced_count=result.synced_count,
+            error_count=result.error_count,
+            job_id=audit_context.job_id if audit_context else None,
+            task_id=audit_context.task_id if audit_context else None,
+        )
         return result
 
     async def collect_issue_identifiers(
@@ -283,8 +229,6 @@ class JiraIngestionService:
         self,
         *,
         project_key: str,
-        sync_days: int | None = None,
-        sync_from_dt: datetime | None = None,
         issue_ids: list[str] | None = None,
         epic_ids: list[str] | None = None,
     ) -> JiraRecordRetryResult:
@@ -295,6 +239,114 @@ class JiraIngestionService:
             issue_ids=issue_ids,
             epic_ids=epic_ids,
         )
+
+    async def validate_issue_range(
+        self,
+        *,
+        project_key: str,
+        range_start: datetime,
+        range_end: datetime,
+        expected_ids: list[str],
+    ) -> FullSyncValidationResult:
+        """Full Sync chunk range의 stored/missing 상태를 검증한다."""
+        self._ensure_initialized()
+        logger.info(
+            "jira_issue_range_validation_started",
+            cloud_id=self.cloud_id,
+            project_key=project_key,
+            range_start=range_start.isoformat(),
+            range_end=range_end.isoformat(),
+            expected_count=len(expected_ids),
+        )
+
+        report = await self.repair.build_record_gap_report_in_range(
+            project_key=project_key,
+            range_start=range_start,
+            range_end=range_end,
+            expected_ids=expected_ids,
+        )
+
+        stored_count = sum(item.stored_count for item in report.records)
+        missing_ids: list[str] = []
+        for item in report.records:
+            if item.record_type == "epic":
+                missing_ids.extend([f"jira:epic:{record_id}" for record_id in item.missing_ids])
+                continue
+            missing_ids.extend([f"jira:issue:{record_id}" for record_id in item.missing_ids])
+
+        validation_result = FullSyncValidationResult(
+            expected_count=len(expected_ids),
+            stored_count=stored_count,
+            missing_count=len(missing_ids),
+            missing_ids=sorted(set(missing_ids)),
+            repair_status=(
+                FullSyncRepairStatus.NOT_NEEDED
+                if not missing_ids
+                else FullSyncRepairStatus.PENDING
+            ),
+        )
+        logger.info(
+            "jira_issue_range_validation_completed",
+            cloud_id=self.cloud_id,
+            project_key=project_key,
+            range_start=range_start.isoformat(),
+            range_end=range_end.isoformat(),
+            expected_count=validation_result.expected_count,
+            stored_count=validation_result.stored_count,
+            missing_count=validation_result.missing_count,
+        )
+        return validation_result
+
+    async def repair_issue_range_missing_records(
+        self,
+        *,
+        project_key: str,
+        missing_ids: list[str],
+    ) -> FullSyncRepairResult:
+        """Full Sync validation에서 식별된 missing canonical id를 by-id로 복구한다."""
+        self._ensure_initialized()
+        logger.info(
+            "jira_issue_range_repair_started",
+            cloud_id=self.cloud_id,
+            project_key=project_key,
+            missing_count=len(missing_ids),
+        )
+
+        retry_result = await self.repair.retry_missing_canonical_ids(
+            project_key=project_key,
+            missing_ids=missing_ids,
+        )
+
+        attempted_count = 0
+        repaired_count = 0
+        skipped_count = 0
+        failed_ids: list[str] = []
+        for item in retry_result.records:
+            attempted_count += item.retried_count
+            repaired_count += item.succeeded_count
+            skipped_count += item.skipped_count
+            if item.record_type == "epic":
+                failed_ids.extend([f"jira:epic:{record_id}" for record_id in item.failed_ids])
+                continue
+            failed_ids.extend([f"jira:issue:{record_id}" for record_id in item.failed_ids])
+
+        repair_result = FullSyncRepairResult(
+            attempted_count=attempted_count,
+            repaired_count=repaired_count,
+            skipped_count=skipped_count,
+            failed_ids=sorted(set(failed_ids)),
+            repair_status=FullSyncRepairStatus.REPAIRING,
+        )
+        logger.info(
+            "jira_issue_range_repair_completed",
+            cloud_id=self.cloud_id,
+            project_key=project_key,
+            attempted_count=repair_result.attempted_count,
+            repaired_count=repair_result.repaired_count,
+            skipped_count=repair_result.skipped_count,
+            failed_count=len(repair_result.failed_ids),
+        )
+        return repair_result
 
     async def delete_issue_documents(self, issue_keys: list[str]) -> int:
         """삭제 이벤트나 수동 복구에서 issue/epic 문서를 함께 제거한다."""

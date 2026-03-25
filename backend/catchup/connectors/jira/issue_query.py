@@ -6,6 +6,7 @@ from typing import Any
 
 from catchup.connectors.jira.results import JiraRecordGapItem
 from catchup.connectors.jira.transformers import normalize_issue_type
+from catchup.sync.common.canonical_ids import split_canonical_id as split_generic_canonical_id
 from catchup.sync.common.schemas import TargetSyncResult
 
 
@@ -21,6 +22,36 @@ def extract_record_ids_from_doc_ids(doc_ids: list[str]) -> list[str]:
 
 def sort_record_ids(record_ids: set[str]) -> list[str]:
     return sorted(record_ids)
+
+
+def build_canonical_issue_id(issue_key: str) -> str:
+    return f"jira:issue:{issue_key}"
+
+
+def build_canonical_epic_id(issue_key: str) -> str:
+    return f"jira:epic:{issue_key}"
+
+
+def split_canonical_id(canonical_id: str) -> tuple[str, str]:
+    source, record_type, record_id = split_generic_canonical_id(canonical_id)
+    if source != "jira":
+        raise ValueError(f"invalid jira canonical id: {canonical_id}")
+    return record_type, record_id
+
+
+def split_canonical_ids(canonical_ids: list[str]) -> tuple[list[str], list[str]]:
+    issue_ids: list[str] = []
+    epic_ids: list[str] = []
+    for canonical_id in canonical_ids:
+        record_type, record_id = split_canonical_id(canonical_id)
+        if record_type == "epic":
+            epic_ids.append(record_id)
+            continue
+        if record_type == "issue":
+            issue_ids.append(record_id)
+            continue
+        raise ValueError(f"unsupported jira record_type in canonical id: {canonical_id}")
+    return issue_ids, epic_ids
 
 
 def build_gap_item(
@@ -123,6 +154,8 @@ def build_full_sync_audit_context(
     range_end: datetime,
     synced_count: int | None = None,
     error_count: int | None = None,
+    missing_count: int | None = None,
+    repair_status: str | None = None,
     error: str | None = None,
 ) -> str:
     parts = [
@@ -134,6 +167,10 @@ def build_full_sync_audit_context(
         parts.append(f"synced_count={synced_count}")
     if error_count is not None:
         parts.append(f"error_count={error_count}")
+    if missing_count is not None:
+        parts.append(f"missing_count={missing_count}")
+    if repair_status:
+        parts.append(f"repair_status={repair_status}")
     if error:
         parts.append(f"error={error}")
     return ",".join(parts)

@@ -1,19 +1,30 @@
+"""Jira Full Sync validation/repair와 수동 복구를 담당하는 모듈."""
+
 import asyncio
 from datetime import datetime
-from typing import Literal
 from typing import Any
+from typing import Literal
 
 import structlog
 from catchup.components.summarizer import SummarizeRequest
 from langchain_core.documents import Document
+from sqlalchemy import DateTime
+from sqlalchemy import and_
+from sqlalchemy import cast
+from sqlalchemy import func
+from sqlalchemy import select
 
 from catchup.connectors.jira.client import JiraApiError
 from catchup.connectors.jira.client import JiraRateLimitError
 from catchup.connectors.jira.context_store import JiraContextStore
+from catchup.connectors.jira.issue_query import build_canonical_epic_id
+from catchup.connectors.jira.issue_query import build_canonical_issue_id
 from catchup.connectors.jira.issue_query import build_gap_item
+from catchup.connectors.jira.issue_query import build_issue_range_jql
 from catchup.connectors.jira.issue_query import build_issue_since_jql
 from catchup.connectors.jira.issue_query import classify_record_type
 from catchup.connectors.jira.issue_query import extract_record_ids_from_doc_ids
+from catchup.connectors.jira.issue_query import split_canonical_ids
 from catchup.connectors.jira.issue_query import sort_record_ids
 from catchup.connectors.jira.results import JiraRecordGapReport
 from catchup.connectors.jira.results import JiraRecordRetryItem
@@ -80,27 +91,135 @@ class JiraRepairService:
 
         return issue_ids, epic_ids
 
-    async def _fetch_retry_issue(self, issue_key: str) -> dict[str, Any] | None:
+    async def collect_project_record_ids_in_range(
+        self,
+        *,
+        project_key: str,
+        range_start: datetime,
+        range_end: datetime,
+    ) -> tuple[list[str], list[str]]:
+        """Full Sync chunk range의 Jira 원본 식별자 목록을 수집한다."""
+        issue_ids: list[str] = []
+        epic_ids: list[str] = []
+        next_page_token: str | None = None
+        jql = build_issue_range_jql(
+            project_key=project_key,
+            range_start=range_start,
+            range_end=range_end,
+        )
+
+        while True:
+            response = await self.runtime.client.search_issues(
+                jql=jql,
+                fields=["issuetype", "key"],
+                max_results=settings.JIRA_SYNC_BATCH_SIZE,
+                next_page_token=next_page_token,
+            )
+
+            issues = response.get("issues", [])
+            if not issues:
+                break
+
+            for issue_data in issues:
+                issue_key = str(issue_data.get("key") or "").strip()
+                if not issue_key:
+                    continue
+
+                if classify_record_type(issue_data) == "epic":
+                    epic_ids.append(issue_key)
+                    continue
+                issue_ids.append(issue_key)
+
+            if response.get("isLast", True):
+                break
+
+            next_page_token = response.get("nextPageToken")
+            if not next_page_token:
+                break
+
+            await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
+
+        return issue_ids, epic_ids
+
+    async def _list_stored_record_ids_in_range(
+        self,
+        *,
+        project_key: str,
+        entity_type: Literal["issue", "epic"],
+        range_start: datetime,
+        range_end: datetime,
+    ) -> list[str]:
+        """Chunk range에 저장된 Jira canonical doc id를 조회한다."""
+        self.runtime.repository.ensure_initialized()
+        vector_store = self.runtime.repository.vector_store
+        if vector_store is None:
+            raise RuntimeError("PGVectorRepository not initialized")
+
+        def _list_ids() -> list[str]:
+            embedding_table = vector_store.EmbeddingStore.__table__
+            collection_table = vector_store.CollectionStore.__table__
+            updated_at_expr = cast(
+                embedding_table.c.cmetadata["updated_at"].astext,
+                DateTime(timezone=True),
+            )
+            stmt = (
+                select(func.distinct(embedding_table.c.id))
+                .select_from(
+                    embedding_table.join(
+                        collection_table,
+                        embedding_table.c.collection_id == collection_table.c.uuid,
+                    )
+                )
+                .where(
+                    and_(
+                        collection_table.c.name == self.runtime.repository.collection_name,
+                        embedding_table.c.cmetadata["source"].astext == "jira",
+                        embedding_table.c.cmetadata["entity_type"].astext == entity_type,
+                        embedding_table.c.cmetadata["project_key"].astext == project_key,
+                        updated_at_expr >= range_start,
+                        updated_at_expr < range_end,
+                    )
+                )
+                .order_by(embedding_table.c.id.asc())
+            )
+
+            with vector_store._make_sync_session() as session:
+                rows = session.execute(stmt).all()
+                return [str(row[0]) for row in rows if row[0]]
+
+        return await asyncio.to_thread(_list_ids)
+
+    async def _fetch_retry_issue(
+        self,
+        issue_key: str,
+    ) -> tuple[Literal["ok", "skipped", "failed"], dict[str, Any] | None]:
         """단일 missing issue를 by-id로 다시 조회한다."""
         try:
-            return await self.runtime.client.get_issue(issue_key)
+            return "ok", await self.runtime.client.get_issue(issue_key)
         except JiraRateLimitError:
             raise
         except JiraApiError as exc:
+            if exc.status_code == 404:
+                logger.info(
+                    "jira_repair_issue_not_found",
+                    cloud_id=self.runtime.cloud_id,
+                    issue_key=issue_key,
+                )
+                return "skipped", None
             logger.warning(
                 "jira_repair_issue_fetch_failed",
                 cloud_id=self.runtime.cloud_id,
                 issue_key=issue_key,
                 error=str(exc),
             )
-            return None
+            return "failed", None
 
     async def _fetch_retry_issues(
         self,
         issue_keys: list[str],
-    ) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
+    ) -> tuple[list[tuple[str, dict[str, Any]]], list[str], list[str]]:
         if not issue_keys:
-            return [], []
+            return [], [], []
 
         results = await asyncio.gather(
             *[self._fetch_retry_issue(issue_key) for issue_key in issue_keys]
@@ -108,13 +227,18 @@ class JiraRepairService:
 
         issues: list[tuple[str, dict[str, Any]]] = []
         failed_ids: list[str] = []
-        for issue_key, issue_data in zip(issue_keys, results):
-            if issue_data is None:
+        skipped_ids: list[str] = []
+        for issue_key, result in zip(issue_keys, results):
+            status, issue_data = result
+            if status == "skipped":
+                skipped_ids.append(issue_key)
+                continue
+            if status == "failed" or issue_data is None:
                 failed_ids.append(issue_key)
                 continue
             issues.append((issue_key, issue_data))
 
-        return issues, failed_ids
+        return issues, failed_ids, skipped_ids
 
     async def _build_retry_documents(
         self,
@@ -122,10 +246,10 @@ class JiraRepairService:
         project_key: str,
         requested_ids: list[str],
         expected_record_type: str,
-    ) -> tuple[list[Document], list[str]]:
+    ) -> tuple[list[Document], list[str], list[str]]:
         """retry 대상 issue를 document로 재구성하고 실패한 id를 분리한다."""
         documents: list[Document] = []
-        fetched_issues, failed_ids = await self._fetch_retry_issues(requested_ids)
+        fetched_issues, failed_ids, skipped_ids = await self._fetch_retry_issues(requested_ids)
 
         for issue_key, issue_data in fetched_issues:
             actual_record_type = classify_record_type(issue_data)
@@ -150,7 +274,7 @@ class JiraRepairService:
                 )
                 failed_ids.append(issue_key)
 
-        return documents, failed_ids
+        return documents, failed_ids, skipped_ids
 
     async def _retry_record_batch(
         self,
@@ -160,7 +284,7 @@ class JiraRepairService:
         requested_ids: list[str],
     ) -> JiraRecordRetryItem:
         """동일 record_type의 missing id 묶음을 한 번에 재저장한다."""
-        documents, failed_ids = await self._build_retry_documents(
+        documents, failed_ids, skipped_ids = await self._build_retry_documents(
             project_key=project_key,
             requested_ids=requested_ids,
             expected_record_type=record_type,
@@ -201,7 +325,10 @@ class JiraRepairService:
             requested_ids=requested_ids,
             retried_count=len(requested_ids),
             succeeded_count=succeeded_count,
+            skipped_count=len(skipped_ids),
+            skipped_ids=sort_record_ids(set(skipped_ids)),
             failed_ids=sort_record_ids(set(failed_ids)),
+            remaining_missing_ids=sort_record_ids(set(failed_ids)),
         )
 
     async def _summarize_documents(
@@ -271,6 +398,76 @@ class JiraRepairService:
 
         return JiraRecordGapReport(records=[issue_item, epic_item])
 
+    async def build_record_gap_report_in_range(
+        self,
+        *,
+        project_key: str,
+        range_start: datetime,
+        range_end: datetime,
+        expected_ids: list[str] | None = None,
+    ) -> JiraRecordGapReport:
+        """Full Sync chunk range 기준으로 canonical id gap report를 계산한다."""
+        if expected_ids is None:
+            expected_issue_ids, expected_epic_ids = await self.collect_project_record_ids_in_range(
+                project_key=project_key,
+                range_start=range_start,
+                range_end=range_end,
+            )
+        else:
+            expected_issue_ids, expected_epic_ids = split_canonical_ids(expected_ids)
+
+        stored_issue_doc_ids = await self._list_stored_record_ids_in_range(
+            project_key=project_key,
+            entity_type="issue",
+            range_start=range_start,
+            range_end=range_end,
+        )
+        stored_epic_doc_ids = await self._list_stored_record_ids_in_range(
+            project_key=project_key,
+            entity_type="epic",
+            range_start=range_start,
+            range_end=range_end,
+        )
+
+        issue_item = build_gap_item(
+            record_type="issue",
+            expected_ids=expected_issue_ids,
+            stored_ids=extract_record_ids_from_doc_ids(stored_issue_doc_ids),
+            stored_count=len(stored_issue_doc_ids),
+        )
+        epic_item = build_gap_item(
+            record_type="epic",
+            expected_ids=expected_epic_ids,
+            stored_ids=extract_record_ids_from_doc_ids(stored_epic_doc_ids),
+            stored_count=len(stored_epic_doc_ids),
+        )
+
+        logger.info(
+            "jira_record_gap_report_built_in_range",
+            cloud_id=self.runtime.cloud_id,
+            project_key=project_key,
+            range_start=range_start.isoformat(),
+            range_end=range_end.isoformat(),
+            issue_missing_count=issue_item.missing_count,
+            epic_missing_count=epic_item.missing_count,
+        )
+
+        return JiraRecordGapReport(records=[issue_item, epic_item])
+
+    async def retry_missing_canonical_ids(
+        self,
+        *,
+        project_key: str,
+        missing_ids: list[str],
+    ) -> JiraRecordRetryResult:
+        """Full Sync auto-repair에서 canonical missing id를 by-id로 재저장한다."""
+        issue_ids, epic_ids = split_canonical_ids(missing_ids)
+        return await self.retry_missing_records(
+            project_key=project_key,
+            issue_ids=issue_ids,
+            epic_ids=epic_ids,
+        )
+
     async def retry_missing_records(
         self,
         *,
@@ -310,6 +507,7 @@ class JiraRepairService:
             project_key=project_key,
             issue_retry_count=len(requested_issue_ids),
             epic_retry_count=len(requested_epic_ids),
+            skipped_count=sum(item.skipped_count for item in result_items),
         )
 
         return JiraRecordRetryResult(records=result_items)
@@ -322,8 +520,8 @@ class JiraRepairService:
 
         doc_ids: list[str] = []
         for issue_key in unique_issue_keys:
-            doc_ids.append(f"jira:issue:{issue_key}")
-            doc_ids.append(f"jira:epic:{issue_key}")
+            doc_ids.append(build_canonical_issue_id(issue_key))
+            doc_ids.append(build_canonical_epic_id(issue_key))
 
         await self.runtime.repository.delete_documents(doc_ids)
 
