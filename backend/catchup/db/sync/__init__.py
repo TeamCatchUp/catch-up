@@ -24,10 +24,13 @@ from catchup.db.sync.repository import mark_event_retrying
 from catchup.db.sync.repository import mark_event_success
 from catchup.db.sync.repository import record_event_publish_outcomes
 from catchup.db.sync.repository import refresh_job_token_usage
+from catchup.db.sync.repository import release_claimed_event_to_pending
 from catchup.db.sync.repository import requeue_retrying_event
+from catchup.db.sync.repository import set_event_execution_phase
 from catchup.db.sync.repository import start_job
 from catchup.db.sync.repository import summarize_events_by_job
 from catchup.db.sync.repository import try_acquire_full_sync_scope_lock
+from catchup.db.sync.repository import update_event_resource_metadata
 from catchup.db.sync.repository import update_event_status_cas
 from catchup.db.sync.repository import update_job_status_cas
 
@@ -58,10 +61,13 @@ __all__ = [
     "record_event_publish_outcomes",
     "has_successful_full_sync_event",
     "update_event_status_cas",
+    "update_event_resource_metadata",
     "claim_event_for_processing",
     "mark_event_success",
     "mark_event_retrying",
     "requeue_retrying_event",
+    "release_claimed_event_to_pending",
     "mark_event_failed",
+    "set_event_execution_phase",
     "refresh_job_token_usage",
 ]

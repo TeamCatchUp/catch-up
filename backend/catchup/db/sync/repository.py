@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
+from typing import Any
 from typing import Sequence
 
 from sqlalchemy import case
@@ -382,6 +383,46 @@ def create_events(db: Session, payloads: Sequence[SyncEventCreateInput]) -> list
 def get_event(db: Session, event_id: str) -> SyncEvent | None:
     stmt = select(SyncEvent).where(SyncEvent.event_id == event_id)
     return db.execute(stmt).scalar_one_or_none()
+
+def update_event_resource_metadata(
+    db: Session,
+    *,
+    event_id: str,
+    values: dict[str, Any],
+    from_statuses: Sequence[SyncEventStatus] | None = None,
+) -> bool:
+    event = get_event(db, event_id)
+    if event is None:
+        return False
+
+    if from_statuses and event.status not in set(from_statuses):
+        return False
+    
+    current_metadata = (
+        dict(event.resource_metadata)
+        if isinstance(event.resource_metadata, dict)
+        else {}
+    )
+    current_metadata.update(values)
+
+    event.resource_metadata = current_metadata
+    event.updated_at = _utc_now()
+    db.flush()
+    return True
+
+def set_event_execution_phase(
+    db: Session,
+    *,
+    event_id: str,
+    execution_phase: str,
+    from_statuses: Sequence[SyncEventStatus] | None = None,
+) -> bool:
+    return update_event_resource_metadata(
+        db,
+        event_id=event_id,
+        values={"execution_phase": execution_phase},
+        from_statuses=from_statuses,
+    )
 
 
 def list_retry_ready_events(
@@ -801,6 +842,15 @@ def requeue_retrying_event(
         from_statuses=[SyncEventStatus.RETRYING],
         to_status=SyncEventStatus.PENDING,
         retry_ready_at=ready_at if require_due else None,
+    )
+
+def release_claimed_event_to_pending(db: Session, event_id: str) -> bool:
+    return update_event_status_cas(
+        db,
+        event_id=event_id,
+        from_statuses=[SyncEventStatus.IN_PROGRESS],
+        to_status=SyncEventStatus.PENDING,
+        last_error=None,
     )
 
 

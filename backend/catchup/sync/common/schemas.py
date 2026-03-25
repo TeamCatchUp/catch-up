@@ -1,13 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timezone
 from enum import StrEnum
-from typing import Any, Mapping, TypeAlias
+from typing import Any
+from typing import Mapping
+from typing import TypeAlias
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel
+from pydantic import Field
+from pydantic import field_validator
+from pydantic import model_validator
 
-from catchup.db.models import SyncConnector, SyncType
+from catchup.db.models import SyncConnector
+from catchup.db.models import SyncType
 
 
 def _validate_epoch_ts(value: str | None, *, field_name: str) -> str | None:
@@ -208,19 +216,20 @@ class TargetSyncResult:
 class FullSyncTaskPayload(BaseModel):
     target_type: SyncTargetType = Field(default=SyncTargetType.RESOURCE)
     target_id: str = Field(..., description="target identifier")
+    stage: str = Field(..., description="full sync stage/entity_type")
     sync_from_ts: str | None = Field(
         default=None,
         description="absolute full sync start timestamp in UTC epoch seconds string",
     )
 
-    @field_validator("target_id")
+    @field_validator("target_id", "stage")
     @classmethod
-    def _validate_target_id(cls, value: str) -> str:
+    def _validate_required_text(cls, value: str) -> str:
         stripped = value.strip()
         if not stripped:
-            raise ValueError("target_id is empty")
+            raise ValueError("required full sync field is empty")
         if stripped != value:
-            raise ValueError("target_id must not include leading/trailing spaces")
+            raise ValueError("required full sync field must not include surrounding spaces")
         return value
 
     @field_validator("sync_from_ts")
@@ -232,6 +241,7 @@ class FullSyncTaskPayload(BaseModel):
         fields = {
             "target_type": self.target_type.value,
             "target_id": self.target_id,
+            "stage": self.stage,
         }
         if self.sync_from_ts is not None:
             fields["sync_from_ts"] = self.sync_from_ts
@@ -333,6 +343,7 @@ class SyncStreamTask(BaseModel):
         scope_id: str,
         target_type: SyncTargetType | str,
         target_id: str,
+        stage: str,
         sync_from_ts: str | None,
         attempt: int = 0,
         max_attempts: int = 3,
@@ -346,6 +357,7 @@ class SyncStreamTask(BaseModel):
             payload=FullSyncTaskPayload(
                 target_type=target_type,
                 target_id=target_id,
+                stage=stage,
                 sync_from_ts=sync_from_ts,
             ),
             attempt=attempt,
@@ -402,6 +414,12 @@ class SyncStreamTask(BaseModel):
     @property
     def target_id(self) -> str:
         return self.payload.target_id
+    
+    @property
+    def stage(self) -> str | None:
+        if isinstance(self.payload, FullSyncTaskPayload):
+            return self.payload.stage
+        return None
 
     @property
     def record_key(self) -> str | None:
@@ -492,6 +510,7 @@ class SyncStreamTask(BaseModel):
             payload: SyncTaskPayload = FullSyncTaskPayload(
                 target_type=str(fields.get("target_type") or SyncTargetType.RESOURCE.value),
                 target_id=str(fields.get("target_id") or ""),
+                stage=str(fields.get("stage") or ""),
                 sync_from_ts=(
                     str(fields.get("sync_from_ts"))
                     if fields.get("sync_from_ts") is not None

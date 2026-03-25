@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 
+import structlog
 from fastapi.concurrency import run_in_threadpool
 
 from catchup.configs.config import settings
+from catchup.configs.constants import FULL_SYNC_EVENT_SCHEMA_VERSION
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SyncEventStatus
 from catchup.db.models import SyncJobStatus
@@ -22,6 +23,7 @@ from catchup.db.sync import mark_event_failed
 from catchup.db.sync import mark_event_retrying
 from catchup.db.sync import mark_event_success
 from catchup.db.sync import requeue_retrying_event
+from catchup.db.sync import set_event_execution_phase
 from catchup.db.sync import start_job
 from catchup.db.sync import summarize_events_by_job
 from catchup.sync.common.protocols import IngestionHandlerProtocol
@@ -42,7 +44,7 @@ from catchup.worker.schemas import ClaimResult
 from catchup.worker.schemas import FailureResult
 from catchup.worker.schemas import JobFinalizeResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _full_sync_retry_delay(exc: Exception, attempt: int) -> timedelta:
@@ -62,12 +64,25 @@ def _build_full_sync_context(
     job,
 ) -> FullSyncContext:
     metadata = (
-        claimed.resource_metadata
+        dict(claimed.resource_metadata)
         if isinstance(claimed.resource_metadata, dict)
         else {}
     )
     scope_id = str(metadata.get("scope_id") or job.scope_id)
     target_id = str(claimed.resource_id)
+
+    if claimed.stage is not None and "stage" not in metadata:
+        metadata["stage"] = claimed.stage
+    if claimed.range_start is not None and "range_start" not in metadata:
+        metadata["range_start"] = claimed.range_start.isoformat()
+    if claimed.range_end is not None and "range_end" not in metadata:
+        metadata["range_end"] = claimed.range_end.isoformat()
+    if claimed.chunk_index is not None and "chunk_index" not in metadata:
+        metadata["chunk_index"] = claimed.chunk_index
+    if claimed.chunk_total is not None and "chunk_total" not in metadata:
+        metadata["chunk_total"] = claimed.chunk_total
+    if claimed.range_watermark is not None and "range_watermark" not in metadata:
+        metadata["range_watermark"] = claimed.range_watermark.isoformat()
 
     sync_from_ts = task.sync_from_ts
     if sync_from_ts is None:
@@ -104,6 +119,19 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
                 db.rollback()
                 return ClaimResult(state=ClaimState.EVENT_JOB_MISMATCH)
 
+            event_metadata = (
+                event.resource_metadata
+                if isinstance(event.resource_metadata, dict)
+                else {}
+            )
+            event_schema_version = event_metadata.get("event_schema_version")
+            if event_schema_version not in (
+                FULL_SYNC_EVENT_SCHEMA_VERSION,
+                str(FULL_SYNC_EVENT_SCHEMA_VERSION),
+            ):
+                db.rollback()
+                return ClaimResult(state=ClaimState.EVENT_ALREADY_TERMINAL)
+
             if event.status in {
                 SyncEventStatus.SUCCESS,
                 SyncEventStatus.FAILED,
@@ -135,6 +163,15 @@ def _claim_event(task: SyncStreamTask) -> ClaimResult:
                 claimed=claimed,
                 job=job,
             )
+
+            if not set_event_execution_phase(
+                db,
+                event_id=task.event_id,
+                execution_phase="collecting_ids",
+                from_statuses=[SyncEventStatus.IN_PROGRESS],
+            ):
+                db.rollback()
+                return ClaimResult(state=ClaimState.EVENT_CAS_CONFLICT)
 
             job_started = start_job(db, task.job_id)
             total_targets = 0
@@ -255,10 +292,10 @@ async def _handle_event_failure(
                 error_message="failed to transition event to RETRYING",
             )
             logger.error(
-                "[%s][FULL][WORKER] Retry schedule transition skipped: event_id=%s, next_attempt=%s",
-                context.connector.upper(),
-                context.event_id,
-                next_attempt,
+                "full_sync_retry_schedule_transition_skipped",
+                connector=context.connector.value,
+                event_id=context.event_id,
+                next_attempt=next_attempt,
             )
             return
 
@@ -276,12 +313,12 @@ async def _handle_event_failure(
             error_summary=error_summary,
         )
         logger.warning(
-            "[%s][FULL][WORKER] Target scheduled for retry: event_id=%s, next_attempt=%s, retry_at=%s, error=%s",
-            context.connector.upper(),
-            context.event_id,
-            next_attempt,
-            next_retry_at.isoformat(),
-            error_summary,
+            "full_sync_target_retry_scheduled",
+            connector=context.connector.value,
+            event_id=context.event_id,
+            next_attempt=next_attempt,
+            retry_at=next_retry_at.isoformat(),
+            error=error_summary,
         )
         return
 
@@ -298,9 +335,9 @@ async def _handle_event_failure(
             error_message="failed to transition event to FAILED",
         )
         logger.error(
-            "[%s][FULL][WORKER] Event failure transition skipped: event_id=%s",
-            context.connector.upper(),
-            context.event_id,
+            "full_sync_event_failure_transition_skipped",
+            connector=context.connector.value,
+            event_id=context.event_id,
         )
         return
 
@@ -319,12 +356,12 @@ async def _handle_event_failure(
         retryable=retryable,
     )
     logger.error(
-        "[%s][FULL][WORKER] Target failed: event_id=%s, attempt=%s, retryable=%s, error=%s",
-        context.connector.upper(),
-        context.event_id,
-        next_attempt,
-        retryable,
-        error_summary,
+        "full_sync_target_failed",
+        connector=context.connector.value,
+        event_id=context.event_id,
+        attempt=next_attempt,
+        retryable=retryable,
+        error=error_summary,
     )
 
 
@@ -460,9 +497,9 @@ async def process_full_sync_message(
 
         if claim.state == ClaimState.EVENT_JOB_MISMATCH:
             logger.error(
-                "[SYNC][WORKER] Event/Job mismatch: event_id=%s, stream_job_id=%s",
-                task.event_id,
-                task.job_id,
+                "full_sync_event_job_mismatch",
+                event_id=task.event_id,
+                stream_job_id=task.job_id,
             )
             await deadletter(
                 message=message,
@@ -473,22 +510,22 @@ async def process_full_sync_message(
 
         if claim.state == ClaimState.EVENT_ALREADY_TERMINAL:
             logger.warning(
-                "[SYNC][WORKER] Duplicate event skipped: job_id=%s, event_id=%s",
-                task.job_id,
-                task.event_id,
+                "full_sync_terminal_or_unsupported_event_skipped",
+                job_id=task.job_id,
+                event_id=task.event_id,
             )
             await deadletter(
                 message=message,
                 reason=SyncStreamFailureReason.EVENT_ALREADY_TERMINAL,
-                error_message="event already terminal",
+                error_message="event already terminal or unsupported",
             )
             return
 
         if claim.state == ClaimState.EVENT_CAS_CONFLICT:
             logger.warning(
-                "[SYNC][WORKER] Event CAS conflict: job_id=%s, event_id=%s",
-                task.job_id,
-                task.event_id,
+                "full_sync_event_cas_conflict",
+                job_id=task.job_id,
+                event_id=task.event_id,
             )
             await deadletter(
                 message=message,
@@ -571,9 +608,9 @@ async def process_full_sync_message(
     except Exception as exc:
         if context is None:
             logger.exception(
-                "[SYNC][WORKER] Message processing failed before claim: job_id=%s, event_id=%s",
-                task.job_id,
-                task.event_id,
+                "full_sync_message_processing_failed_before_claim",
+                job_id=task.job_id,
+                event_id=task.event_id,
             )
             await deadletter(
                 message=message,
