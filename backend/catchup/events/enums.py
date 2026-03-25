@@ -88,6 +88,7 @@ class SyncTriggerEventAction(StrEnum):
 
 
 class SyncIngestionEventAction(StrEnum):
+    FULL_SYNC = "full_sync"
     SUMMARIZE = "summarize"
     EMBED = "embed"
     DOCUMENT_PERSISTED = "document_persisted"

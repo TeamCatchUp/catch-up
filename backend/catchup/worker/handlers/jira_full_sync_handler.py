@@ -3,18 +3,15 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import timezone
 
-import structlog
-
 from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
-logger = structlog.get_logger()
-
 
 class JiraFullSyncHandler(BaseFullSyncHandler):
+
     connector = "jira"
 
     async def _get_service(self, scope_id: str, cache: dict[str, object]):
@@ -78,18 +75,6 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
             range_start=range_start,
             range_end=range_end,
         )
-
-        logger.info(
-            "jira_full_sync_identifiers_collected",
-            scope_id=context.scope_id,
-            project_key=project_key,
-            event_id=context.event_id,
-            stage="issue",
-            range_start=range_start.isoformat(),
-            range_end=range_end.isoformat(),
-            expected_count=len(identifiers),
-        )
-
         return identifiers
 
 
@@ -100,19 +85,23 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
         service_cache: dict[str, object],
     ) -> TargetSyncResult:
         service = await self._get_service(context.scope_id, service_cache)
-        sync_from_dt = (
-            datetime.fromtimestamp(float(context.sync_from_ts), tz=timezone.utc)
-            if context.sync_from_ts is not None
-            else None
-        )
 
         project_key = context.target_id.strip()
         if not project_key:
             raise ValueError("jira project_key(target_id) is empty")
 
-        result = await service.full_sync(
-            project_keys=[project_key],
-            sync_from_dt=sync_from_dt,
+        if context.metadata.get("stage") != "issue":
+            raise ValueError(
+                f"jira full sync handle does not support stage={context.metadata.get('stage')}"
+            )
+
+        range_start = self._get_range_start(context)
+        range_end = self._get_range_end(context)
+
+        return await service.sync_issue_range(
+            project_key=project_key,
+            range_start=range_start,
+            range_end=range_end,
             audit_context=SyncAuditContext(
                 connector=context.connector,
                 scope_id=context.scope_id,
@@ -121,20 +110,3 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
                 task_id=context.event_id,
             ),
         )
-
-        if result.error_count > 0:
-            raise RuntimeError(
-                "jira_full_sync_target_failed: "
-                f"scope_id={context.scope_id}, project_key={project_key}, "
-                f"errors={result.error_count}"
-            )
-
-        logger.info(
-            "jira_full_sync_target_synced",
-            scope_id=context.scope_id,
-            project_key=project_key,
-            event_id=context.event_id,
-            synced_count=result.synced_count,
-            sync_from_ts=context.sync_from_ts,
-        )
-        return result

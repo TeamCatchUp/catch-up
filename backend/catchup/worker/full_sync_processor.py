@@ -382,14 +382,6 @@ async def _handle_event_failure(
         error_summary=error_summary,
         retryable=retryable,
     )
-    logger.error(
-        "full_sync_target_failed",
-        connector=context.connector.value,
-        event_id=context.event_id,
-        attempt=next_attempt,
-        retryable=retryable,
-        error=error_summary,
-    )
 
 
 # 특정 Job ID에 대해서 모든 Event가 완료되었는지 검증
