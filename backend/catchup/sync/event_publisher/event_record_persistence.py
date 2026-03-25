@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import structlog
 from sqlalchemy.orm import Session
 
 from catchup.db.models import SyncConnector, SyncEvent, SyncType
@@ -12,6 +13,8 @@ from catchup.db.sync import (
     create_job as create_db_sync_job,
 )
 from catchup.sync.common.schemas import SyncEventSeed
+
+logger = structlog.get_logger()
 
 
 def _build_resource_metadata(
@@ -83,4 +86,14 @@ def persist_sync_job_and_events(
             )
         )
 
-    return create_db_sync_events(db, payloads)
+    events = create_db_sync_events(db, payloads)
+
+    logger.info(
+        "sync_job_events_persist_completed",
+        connector=connector.value,
+        sync_type=sync_type.value,
+        job_id=job_id,
+        persisted_event_count=len(events),
+    )
+
+    return events

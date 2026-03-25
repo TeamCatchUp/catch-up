@@ -5,6 +5,8 @@ from datetime import timedelta
 from datetime import timezone
 from uuid import uuid4
 
+import structlog
+
 from catchup.configs.config import settings
 from catchup.configs.constants import FULL_SYNC_EVENT_SCHEMA_VERSION
 from catchup.db.models import SyncConnector, SyncType
@@ -17,6 +19,8 @@ from catchup.sync.common.schemas import (
     SyncEventSeed,
 )
 from catchup.sync.services.sync_orchestrator import SyncDispatchOrchestrator
+
+logger = structlog.get_logger()
 
 def _format_epoch_ts(dt: datetime) -> str:
     normalized = dt.astimezone(timezone.utc)
@@ -139,6 +143,16 @@ def _build_chunk_event_seeds(
                 )
             )
 
+        logger.info(
+            "full_sync_chunk_seeds_planned",
+            connector=connector.value,
+            target_id=target.target_id,
+            stage=stage,
+            chunk_total=chunk_total,
+            sync_from_ts=sync_from_ts,
+            range_watermark=range_watermark.isoformat(),
+        )
+
     return seeds
 
 
@@ -172,7 +186,7 @@ class FullSyncDispatchOrchestrator:
                     "range_watermark": range_watermark.isoformat(),
                 },
             )
-
+        
         resolved = await resolver.resolve_full_sync_targets(request=request)
 
         event_seeds: list[SyncEventSeed] = []
@@ -186,6 +200,14 @@ class FullSyncDispatchOrchestrator:
                     range_watermark=range_watermark,
                 )
             )
+
+        logger.info(
+            "full_sync_dispatch_planning_completed",
+            connector=connector.value,
+            scope_id=scope_id,
+            target_count=len(resolved.targets),
+            event_seed_count=len(event_seeds),
+        )
 
         return await self._orchestrator.dispatch(
             connector=connector,
