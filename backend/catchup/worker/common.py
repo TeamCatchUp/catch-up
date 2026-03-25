@@ -122,16 +122,20 @@ def build_job_status_event(
 
 # Status Streaming이 Sync 흐름을 막지 않도록 로그만 남김
 async def publish_status_event(event: SyncStatusStreamEvent) -> None:
-    try:
-        await publish_job_status_event(event)
-    except Exception as exc:
-        logger.warning(
-            "[SYNC][STATUS][WORKER] Failed to publish status event: job_id=%s, event_type=%s, error=%s",
-            event.job_id,
-            event.event_type.value,
-            exc,
-            exc_info=True,
-        )
+    # NOTE:
+    # Sync status SSE stream is currently unused, so Redis Pub/Sub publish is
+    # intentionally disabled while keeping the implementation reusable.
+    # try:
+    #     await publish_job_status_event(event)
+    # except Exception as exc:
+    #     logger.warning(
+    #         "[SYNC][STATUS][WORKER] Failed to publish status event: job_id=%s, event_type=%s, error=%s",
+    #         event.job_id,
+    #         event.event_type.value,
+    #         exc,
+    #         exc_info=True,
+    #     )
+    return None
 
 
 # 최종 실패 event를 DLQ 처리함
