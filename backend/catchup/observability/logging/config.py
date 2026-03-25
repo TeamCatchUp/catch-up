@@ -45,7 +45,7 @@ def _setup_third_party_loggers(log_level: int) -> None:
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("botocore").setLevel(logging.WARNING)
     logging.getLogger("botocore.parsers").setLevel(logging.WARNING)
-    logging.getLogger("langchain_aws").setLevel(logging.WARNING)
+    logging.getLogger("langchain_aws").setLevel(logging.INFO)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     
