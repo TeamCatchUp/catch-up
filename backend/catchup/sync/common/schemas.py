@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any, Mapping, TypeAlias
 
@@ -24,6 +25,12 @@ def _validate_epoch_ts(value: str | None, *, field_name: str) -> str | None:
     if parsed < 0:
         raise ValueError(f"{field_name} must be non-negative")
     return stripped
+
+
+def _validate_utc_datetime(value: datetime, *, field_name: str) -> datetime:
+    if value.tzinfo is None:
+        raise ValueError(f"{field_name} must be timezone-aware")
+    return value.astimezone(timezone.utc)
 
 
 class SyncDispatchStatus(StrEnum):
@@ -146,6 +153,12 @@ class SyncEventSeed:
     target_type: SyncTargetType
     target_id: str
     target_name: str
+    stage: str
+    range_start: datetime
+    range_end: datetime
+    chunk_index: int
+    chunk_total: int
+    range_watermark: datetime
     sync_from_ts: str | None = None
     metadata: dict[str, object] = field(default_factory=dict)
     max_attempts: int = 3
@@ -154,9 +167,35 @@ class SyncEventSeed:
         object.__setattr__(self, "target_type", SyncTargetType(self.target_type))
         object.__setattr__(
             self,
+            "range_start",
+            _validate_utc_datetime(self.range_start, field_name="range_start"),
+        )
+        object.__setattr__(
+            self,
+            "range_end",
+            _validate_utc_datetime(self.range_end, field_name="range_end"),
+        )
+        object.__setattr__(
+            self,
+            "range_watermark",
+            _validate_utc_datetime(self.range_watermark, field_name="range_watermark"),
+        )
+        object.__setattr__(
+            self,
             "sync_from_ts",
             _validate_epoch_ts(self.sync_from_ts, field_name="sync_from_ts"),
         )
+
+        if self.chunk_index < 1:
+            raise ValueError("chunk_index must be greater than or equal to 1")
+        if self.chunk_total < 1:
+            raise ValueError("chunk_total must be greater than or equal to 1")
+        if self.chunk_index > self.chunk_total:
+            raise ValueError("chunk_index must be less than or equal to chunk_total")
+        if self.range_start >= self.range_end:
+            raise ValueError("range_start must be earlier than range_end")
+        if self.range_end > self.range_watermark:
+            raise ValueError("range_end must be earlier than or equal to range_watermark")
 
 
 @dataclass(slots=True, frozen=True)
