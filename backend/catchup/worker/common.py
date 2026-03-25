@@ -27,17 +27,29 @@ def task_fields(task: SyncStreamTask) -> dict[str, str]:
     return task.to_stream_fields()
 
 
-# 같은 대상에 대한 중복처리를 방지하기 위한 Lock Key 생성 
-def task_lock_key(task: SyncStreamTask) -> tuple[str, str, str, str]:
+# 같은 대상에 대한 중복처리를 방지하기 위한 Lock Key 생성
+def task_lock_key(task: SyncStreamTask) -> tuple[str, ...]:
     if task.sync_type == SyncType.FULL:
         stage = (task.stage or "").strip()
         target_id = (task.target_id or "").strip() or task.event_id
-        return (
+        base_key = (
             task.connector.strip(),
             (task.scope_id or "").strip(),
             target_id,
             stage,
         )
+
+        range_start = (task.range_start or "").strip()
+        range_end = (task.range_end or "").strip()
+        if range_start and range_end:
+            return base_key + (range_start, range_end)
+
+        chunk_index = task.chunk_index
+        chunk_total = task.chunk_total
+        if chunk_index is not None and chunk_total is not None:
+            return base_key + (str(chunk_index), str(chunk_total))
+
+        return base_key
 
     target_type = (
         (task.target_type or "").strip()

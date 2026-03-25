@@ -14,6 +14,18 @@ def _normalize_sync_from_ts(metadata: dict[str, object]) -> str | None:
     value = str(raw).strip()
     return value or None
 
+
+def _normalize_iso_datetime(value: object) -> str | None:
+    if value is None:
+        return None
+    return str(value).strip() or None
+
+
+def _normalize_chunk_int(value: object) -> int | None:
+    if value is None:
+        return None
+    return int(value)
+
 def _resolve_stage(
     *,
     event: SyncEvent,
@@ -59,6 +71,10 @@ def build_stream_task_from_persisted_event(
         target_id=target_id,
         stage=stage,
         sync_from_ts=_normalize_sync_from_ts(metadata),
+        range_start=_normalize_iso_datetime(event.range_start or metadata.get("range_start")),
+        range_end=_normalize_iso_datetime(event.range_end or metadata.get("range_end")),
+        chunk_index=_normalize_chunk_int(event.chunk_index or metadata.get("chunk_index")),
+        chunk_total=_normalize_chunk_int(event.chunk_total or metadata.get("chunk_total")),
         attempt=max(0, int(event.attempt)),
         max_attempts=max(1, int(event.max_attempts)),
     )
