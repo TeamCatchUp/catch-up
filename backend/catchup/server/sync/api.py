@@ -22,7 +22,7 @@ from catchup.server.sync.schemas import (
 )
 from catchup.sync.common.schemas import FullSyncDispatchRequest, SyncDispatchResult
 from catchup.sync.common.exceptions import SyncAPIError, SyncRequestError
-from catchup.sync.repair.record_repair_service import get_record_repair_service
+from catchup.sync.repair import get_record_repair_service
 from catchup.sync.dispatch_service import SyncDispatchService
 from catchup.sync.query_service import get_sync_query_service
 from catchup.sync.status_stream.service import get_sync_status_stream_service

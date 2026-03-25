@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from catchup.db.sync import has_successful_full_sync_event
-from catchup.sync.incremental.schemas import RecordChange
+from catchup.sync.incremental.ingest.schemas import RecordChange
 
 
 @dataclass(slots=True, frozen=True)

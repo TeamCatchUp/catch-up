@@ -5,9 +5,9 @@ from functools import lru_cache
 
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.connectors.jira.factory import create_jira_ingestion_service
+from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.db.engine import SessionLocal
-from catchup.db.jira import domain_repository as jira_entities
+from catchup.db.github import domain_repository as github_entities
 from catchup.db.models import SyncConnector
 from catchup.server.sync.schemas import (
     SyncRecordGapItem,
@@ -18,97 +18,119 @@ from catchup.server.sync.schemas import (
     SyncRecordRetryResponse,
 )
 from catchup.sync.common.exceptions import SyncRequestError
-from catchup.sync.repair.context import RecordRepairContext
+from catchup.sync.repair.core.context import RecordRepairContext
 
 
 @dataclass(slots=True, frozen=True)
-class JiraTargetRef:
-    cloud_id: str
-    project_key: str
-    project_name: str
+class GithubTargetRef:
+    installation_id: int
+    repo_id: int
+    full_name: str
 
 
 @dataclass(slots=True, frozen=True)
-class JiraRetryRecords:
+class GithubRetryRecords:
     issue_ids: list[str] = field(default_factory=list)
-    epic_ids: list[str] = field(default_factory=list)
+    pull_request_ids: list[str] = field(default_factory=list)
 
 
-def _load_jira_target_ref(
+def _load_github_target_ref(
     scope_id: str,
     target_id: str,
-) -> JiraTargetRef:
-    cloud_id = scope_id.strip()
-    project_key = target_id.strip()
+) -> GithubTargetRef:
+    normalized_scope_id = scope_id.strip()
+    normalized_target_id = target_id.strip()
 
-    if not cloud_id:
+    if not normalized_scope_id:
         raise SyncRequestError("scope_id is required", code="invalid_scope_id")
-    if not project_key:
+    if not normalized_target_id:
         raise SyncRequestError("target_id is required", code="invalid_target_id")
 
-    with SessionLocal() as db:
-        project = jira_entities.get_project(db, cloud_id, project_key)
-
-    if project is None:
+    try:
+        installation_id = int(normalized_scope_id)
+    except ValueError as exc:
         raise SyncRequestError(
-            "jira project not found in cloud",
-            code="target_not_found",
-            metadata={
-                "scope_id": scope_id,
-                "target_id": target_id,
-            },
+            "scope_id must be a github installation_id",
+            code="invalid_scope_id",
+            metadata={"scope_id": scope_id},
+        ) from exc
+
+    try:
+        repo_id = int(normalized_target_id)
+    except ValueError as exc:
+        raise SyncRequestError(
+            "target_id must be a github repository_id",
+            code="invalid_target_id",
+            metadata={"target_id": target_id},
+        ) from exc
+
+    with SessionLocal() as db:
+        repositories = github_entities.get_repositories_by_installation(
+            db,
+            installation_id,
         )
 
-    return JiraTargetRef(
-        cloud_id=cloud_id,
-        project_key=project_key,
-        project_name=project.project_name or project_key,
+    for repo in repositories:
+        if repo.repo_id == repo_id:
+            return GithubTargetRef(
+                installation_id=installation_id,
+                repo_id=repo_id,
+                full_name=repo.full_name,
+            )
+
+    raise SyncRequestError(
+        "github repository not found in installation",
+        code="target_not_found",
+        metadata={
+            "scope_id": scope_id,
+            "target_id": target_id,
+        },
     )
 
 
 def _index_retry_records(
     records: list[SyncRecordRetryItemRequest],
-) -> JiraRetryRecords:
+) -> GithubRetryRecords:
     issue_ids: list[str] = []
-    epic_ids: list[str] = []
+    pull_request_ids: list[str] = []
 
     for item in records:
         if item.record_type == "issue":
             issue_ids = list(item.record_ids)
-        elif item.record_type == "epic":
-            epic_ids = list(item.record_ids)
+        elif item.record_type == "pull_request":
+            pull_request_ids = list(item.record_ids)
         else:
             raise SyncRequestError(
-                "unsupported jira record_type",
+                "unsupported github record_type",
                 code="unsupported_record_type",
                 metadata={"record_type": item.record_type},
             )
 
-    return JiraRetryRecords(
+    return GithubRetryRecords(
         issue_ids=issue_ids,
-        epic_ids=epic_ids,
+        pull_request_ids=pull_request_ids,
     )
 
 
-class JiraRecordRepairService:
+class GithubRecordRepairService:
     async def _get_target_ref(
         self,
         *,
         scope_id: str,
         target_id: str,
-    ) -> JiraTargetRef:
+    ) -> GithubTargetRef:
         return await run_in_threadpool(
-            _load_jira_target_ref,
+            _load_github_target_ref,
             scope_id,
             target_id,
         )
 
-    async def _get_jira_service(
+    async def _get_github_service(
         self,
         *,
-        cloud_id: str,
+        installation_id: int,
     ):
-        return await create_jira_ingestion_service(cloud_id=cloud_id)
+        return await create_github_ingestion_service(installation_id=installation_id)
 
     async def get_record_gaps(
         self,
@@ -119,17 +141,20 @@ class JiraRecordRepairService:
             scope_id=repair_context.scope_id,
             target_id=repair_context.target_id,
         )
-        service = await self._get_jira_service(cloud_id=target.cloud_id)
+        service = await self._get_github_service(
+            installation_id=target.installation_id,
+        )
+
         gap_report = await service.build_record_gap_report(
-            project_key=target.project_key,
+            repo_id=target.repo_id,
             sync_from_dt=repair_context.sync_from_dt,
         )
 
         return SyncRecordGapResponse(
-            connector=SyncConnector.JIRA,
+            connector=SyncConnector.GITHUB,
             scope_id=repair_context.scope_id,
             target_id=repair_context.target_id,
-            target_name=target.project_name,
+            target_name=target.full_name,
             records=[
                 SyncRecordGapItem(
                     record_type=item.record_type,
@@ -152,19 +177,22 @@ class JiraRecordRepairService:
             scope_id=repair_context.scope_id,
             target_id=repair_context.target_id,
         )
-        service = await self._get_jira_service(cloud_id=target.cloud_id)
+        service = await self._get_github_service(
+            installation_id=target.installation_id,
+        )
         retry_records = _index_retry_records(request.records)
+
         retry_result = await service.retry_missing_records(
-            project_key=target.project_key,
+            repo_id=target.repo_id,
             issue_ids=retry_records.issue_ids,
-            epic_ids=retry_records.epic_ids,
+            pull_request_ids=retry_records.pull_request_ids,
         )
 
         return SyncRecordRetryResponse(
-            connector=SyncConnector.JIRA,
+            connector=SyncConnector.GITHUB,
             scope_id=repair_context.scope_id,
             target_id=repair_context.target_id,
-            target_name=target.project_name,
+            target_name=target.full_name,
             records=[
                 SyncRecordRetryItemResponse(
                     record_type=item.record_type,
@@ -180,5 +208,5 @@ class JiraRecordRepairService:
 
 
 @lru_cache(maxsize=1)
-def get_jira_record_repair_service() -> JiraRecordRepairService:
-    return JiraRecordRepairService()
+def get_github_record_repair_service() -> GithubRecordRepairService:
+    return GithubRecordRepairService()

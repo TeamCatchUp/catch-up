@@ -12,8 +12,10 @@ from catchup.db.models import SyncConnector
 from catchup.events.enums import SyncTriggerEventAction
 from catchup.sync.audit import SyncAuditContext, emit_sync_trigger_audit
 from catchup.sync.incremental import ingest_record_changes
-from catchup.sync.incremental.full_sync_guard import filter_record_changes_by_full_sync
-from catchup.sync.incremental.schemas import RecordChange
+from catchup.sync.incremental.ingest.schemas import RecordChange
+from catchup.sync.incremental.policy.full_sync_guard import (
+    filter_record_changes_by_full_sync,
+)
 
 from .responses import accepted_incremental_response, ignored_event_response
 

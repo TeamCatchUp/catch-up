@@ -3,7 +3,7 @@ from __future__ import annotations
 from catchup.db.models import SyncConnector
 from catchup.sync.common.exceptions import SyncRequestError
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
-from catchup.sync.services import (
+from catchup.sync.full_sync import (
     get_confluence_full_sync_target_resolver,
     get_github_full_sync_target_resolver,
     get_jira_full_sync_target_resolver,
