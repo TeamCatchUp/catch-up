@@ -42,6 +42,13 @@ class SyncEventCreateInput:
     resource_metadata: dict[str, object] | None = None
     max_attempts: int = 3
 
+    stage: str | None = None
+    range_start: datetime | None = None
+    range_end: datetime | None = None
+    chunk_index: int | None = None
+    chunk_total: int | None = None
+    range_watermark: datetime | None = None
+
 
 @dataclass(slots=True, frozen=True)
 class SyncEventPublishResultInput:
@@ -349,6 +356,12 @@ def create_events(db: Session, payloads: Sequence[SyncEventCreateInput]) -> list
             resource_type=item.resource_type,
             resource_id=item.resource_id,
             resource_metadata=item.resource_metadata or {},
+            stage=item.stage,
+            range_start=_to_utc(item.range_start) if item.range_start else None,
+            range_end=_to_utc(item.range_end) if item.range_end else None,
+            chunk_index=item.chunk_index,
+            chunk_total=item.chunk_total,
+            range_watermark=_to_utc(item.range_watermark) if item.range_watermark else None,
             status=SyncEventStatus.PENDING,
             attempt=0,
             max_attempts=item.max_attempts,

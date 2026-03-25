@@ -1362,6 +1362,13 @@ class SyncEvent(Base):
         server_default=text("'{}'::jsonb"),
     )
 
+    stage: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    range_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    range_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    chunk_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    chunk_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    range_watermark: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    
     status: Mapped[SyncEventStatus] = mapped_column(
         String(20),
         nullable=False,
