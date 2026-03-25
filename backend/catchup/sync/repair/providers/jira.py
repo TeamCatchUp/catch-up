@@ -5,10 +5,10 @@ from functools import lru_cache
 
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.connectors.slack.factory import create_slack_ingestion_service
+from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.db.engine import SessionLocal
+from catchup.db.jira import domain_repository as jira_entities
 from catchup.db.models import SyncConnector
-from catchup.db.slack import domain_repository as slack_entities
 from catchup.server.sync.schemas import (
     SyncRecordGapItem,
     SyncRecordGapResponse,
@@ -18,39 +18,40 @@ from catchup.server.sync.schemas import (
     SyncRecordRetryResponse,
 )
 from catchup.sync.common.exceptions import SyncRequestError
-from catchup.sync.repair.context import RecordRepairContext
+from catchup.sync.repair.core.context import RecordRepairContext
 
 
 @dataclass(slots=True, frozen=True)
-class SlackTargetRef:
-    team_id: str
-    channel_id: str
-    channel_name: str
+class JiraTargetRef:
+    cloud_id: str
+    project_key: str
+    project_name: str
 
 
 @dataclass(slots=True, frozen=True)
-class SlackRetryRecords:
-    message_ids: list[str] = field(default_factory=list)
+class JiraRetryRecords:
+    issue_ids: list[str] = field(default_factory=list)
+    epic_ids: list[str] = field(default_factory=list)
 
 
-def _load_slack_target_ref(
+def _load_jira_target_ref(
     scope_id: str,
     target_id: str,
-) -> SlackTargetRef:
-    team_id = scope_id.strip()
-    channel_id = target_id.strip()
+) -> JiraTargetRef:
+    cloud_id = scope_id.strip()
+    project_key = target_id.strip()
 
-    if not team_id:
+    if not cloud_id:
         raise SyncRequestError("scope_id is required", code="invalid_scope_id")
-    if not channel_id:
+    if not project_key:
         raise SyncRequestError("target_id is required", code="invalid_target_id")
 
     with SessionLocal() as db:
-        channel = slack_entities.get_channel(db, channel_id)
+        project = jira_entities.get_project(db, cloud_id, project_key)
 
-    if channel is None or channel.team_id != team_id:
+    if project is None:
         raise SyncRequestError(
-            "slack channel not found in workspace",
+            "jira project not found in cloud",
             code="target_not_found",
             metadata={
                 "scope_id": scope_id,
@@ -58,49 +59,56 @@ def _load_slack_target_ref(
             },
         )
 
-    return SlackTargetRef(
-        team_id=team_id,
-        channel_id=channel_id,
-        channel_name=channel.name,
+    return JiraTargetRef(
+        cloud_id=cloud_id,
+        project_key=project_key,
+        project_name=project.project_name or project_key,
     )
 
 
 def _index_retry_records(
     records: list[SyncRecordRetryItemRequest],
-) -> SlackRetryRecords:
-    message_ids: list[str] = []
+) -> JiraRetryRecords:
+    issue_ids: list[str] = []
+    epic_ids: list[str] = []
 
     for item in records:
-        if item.record_type != "message":
+        if item.record_type == "issue":
+            issue_ids = list(item.record_ids)
+        elif item.record_type == "epic":
+            epic_ids = list(item.record_ids)
+        else:
             raise SyncRequestError(
-                "unsupported slack record_type",
+                "unsupported jira record_type",
                 code="unsupported_record_type",
                 metadata={"record_type": item.record_type},
             )
-        message_ids = list(item.record_ids)
 
-    return SlackRetryRecords(message_ids=message_ids)
+    return JiraRetryRecords(
+        issue_ids=issue_ids,
+        epic_ids=epic_ids,
+    )
 
 
-class SlackRecordRepairService:
+class JiraRecordRepairService:
     async def _get_target_ref(
         self,
         *,
         scope_id: str,
         target_id: str,
-    ) -> SlackTargetRef:
+    ) -> JiraTargetRef:
         return await run_in_threadpool(
-            _load_slack_target_ref,
+            _load_jira_target_ref,
             scope_id,
             target_id,
         )
 
-    async def _get_slack_service(
+    async def _get_jira_service(
         self,
         *,
-        team_id: str,
+        cloud_id: str,
     ):
-        return await create_slack_ingestion_service(team_id=team_id)
+        return await create_jira_ingestion_service(cloud_id=cloud_id)
 
     async def get_record_gaps(
         self,
@@ -111,18 +119,17 @@ class SlackRecordRepairService:
             scope_id=repair_context.scope_id,
             target_id=repair_context.target_id,
         )
-        service = await self._get_slack_service(team_id=target.team_id)
+        service = await self._get_jira_service(cloud_id=target.cloud_id)
         gap_report = await service.build_record_gap_report(
-            channel_id=target.channel_id,
-            channel_name=target.channel_name,
-            sync_from_ts=repair_context.sync_from_ts,
+            project_key=target.project_key,
+            sync_from_dt=repair_context.sync_from_dt,
         )
 
         return SyncRecordGapResponse(
-            connector=SyncConnector.SLACK,
+            connector=SyncConnector.JIRA,
             scope_id=repair_context.scope_id,
             target_id=repair_context.target_id,
-            target_name=target.channel_name,
+            target_name=target.project_name,
             records=[
                 SyncRecordGapItem(
                     record_type=item.record_type,
@@ -145,20 +152,19 @@ class SlackRecordRepairService:
             scope_id=repair_context.scope_id,
             target_id=repair_context.target_id,
         )
-        service = await self._get_slack_service(team_id=target.team_id)
+        service = await self._get_jira_service(cloud_id=target.cloud_id)
         retry_records = _index_retry_records(request.records)
         retry_result = await service.retry_missing_records(
-            channel_id=target.channel_id,
-            channel_name=target.channel_name,
-            sync_from_ts=repair_context.sync_from_ts,
-            message_ids=retry_records.message_ids,
+            project_key=target.project_key,
+            issue_ids=retry_records.issue_ids,
+            epic_ids=retry_records.epic_ids,
         )
 
         return SyncRecordRetryResponse(
-            connector=SyncConnector.SLACK,
+            connector=SyncConnector.JIRA,
             scope_id=repair_context.scope_id,
             target_id=repair_context.target_id,
-            target_name=target.channel_name,
+            target_name=target.project_name,
             records=[
                 SyncRecordRetryItemResponse(
                     record_type=item.record_type,
@@ -174,5 +180,5 @@ class SlackRecordRepairService:
 
 
 @lru_cache(maxsize=1)
-def get_slack_record_repair_service() -> SlackRecordRepairService:
-    return SlackRecordRepairService()
+def get_jira_record_repair_service() -> JiraRecordRepairService:
+    return JiraRecordRepairService()

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.db.incremental import upsert_record_change
 from catchup.db.models import SyncConnector
-from catchup.sync.incremental.schemas import RecordChange
+from catchup.sync.incremental.ingest.schemas import RecordChange
 
 
 def ingest_record_changes(
