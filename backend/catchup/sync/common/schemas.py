@@ -81,6 +81,15 @@ class ClaimState(StrEnum):
     RECORD_CAS_CONFLICT = "record_cas_conflict"
 
 
+class FullSyncRepairStatus(StrEnum):
+    NOT_NEEDED = "not_needed"
+    PENDING = "pending"
+    REPAIRING = "repairing"
+    RESOLVED = "resolved"
+    FAILED = "failed"
+    RETRYING = "retrying"
+
+
 @dataclass(slots=True, frozen=True)
 class HandlerKey:
     connector: SyncConnector
@@ -211,6 +220,29 @@ class TargetSyncResult:
     synced_count: int = 0
     error_count: int = 0
     skipped: bool = False
+
+
+@dataclass(slots=True, frozen=True)
+class FullSyncValidationResult:
+    """
+    Full Sync validation 결과
+    collect 단계에서 기대한 canonical id와 실제 저장된 canonical id를 비교한 결과
+    """
+    expected_count: int = 0
+    stored_count: int = 0
+    missing_count: int = 0
+    missing_ids: list[str] = field(default_factory=list)
+    repair_status: FullSyncRepairStatus = FullSyncRepairStatus.NOT_NEEDED
+
+
+@dataclass(slots=True, frozen=True)
+class FullSyncRepairResult:
+    """Full Sync auto-repair 실행 결과"""
+    attempted_count: int = 0
+    repaired_count: int = 0
+    skipped_count: int = 0
+    failed_ids: list[str] = field(default_factory=list)
+    repair_status: FullSyncRepairStatus = FullSyncRepairStatus.NOT_NEEDED
 
 
 class FullSyncTaskPayload(BaseModel):

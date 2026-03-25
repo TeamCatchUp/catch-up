@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from catchup.db.models import SyncConnector
 from catchup.db.models import SyncEvent
+from catchup.db.models import SyncEventMissingRecord
 from catchup.db.models import SyncEventPublishStatus
 from catchup.db.models import SyncEventStatus
 from catchup.db.models import SyncJob
@@ -55,6 +56,13 @@ class SyncEventCreateInput:
 class SyncEventPublishResultInput:
     event_id: str
     stream_message_id: str
+
+
+@dataclass(slots=True, frozen=True)
+class SyncEventMissingRecordInput:
+    event_id: str
+    record_type: str
+    record_id: str
 
 
 @dataclass(slots=True, frozen=True)
@@ -409,6 +417,81 @@ def update_event_resource_metadata(
     event.updated_at = _utc_now()
     db.flush()
     return True
+
+
+def replace_event_missing_records(
+    db: Session,
+    *,
+    event_id: str,
+    items: Sequence[SyncEventMissingRecordInput],
+) -> int:
+    db.query(SyncEventMissingRecord).filter(
+        SyncEventMissingRecord.event_id == event_id
+    ).delete(synchronize_session=False)
+
+    normalized_items: list[SyncEventMissingRecordInput] = []
+    seen: set[tuple[str, str]] = set()
+    for item in items:
+        record_type = str(item.record_type).strip()
+        record_id = str(item.record_id).strip()
+        if not record_type or not record_id:
+            continue
+        dedupe_key = (record_type, record_id)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        normalized_items.append(
+            SyncEventMissingRecordInput(
+                event_id=event_id,
+                record_type=record_type,
+                record_id=record_id,
+            )
+        )
+
+    if not normalized_items:
+        db.flush()
+        return 0
+
+    db.add_all(
+        [
+            SyncEventMissingRecord(
+                event_id=item.event_id,
+                record_type=item.record_type,
+                record_id=item.record_id,
+            )
+            for item in normalized_items
+        ]
+    )
+    db.flush()
+    return len(normalized_items)
+
+
+def list_event_missing_records(
+    db: Session,
+    *,
+    event_id: str,
+) -> list[SyncEventMissingRecord]:
+    stmt = (
+        select(SyncEventMissingRecord)
+        .where(SyncEventMissingRecord.event_id == event_id)
+        .order_by(
+            SyncEventMissingRecord.record_type.asc(),
+            SyncEventMissingRecord.record_id.asc(),
+        )
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
+def clear_event_missing_records(
+    db: Session,
+    *,
+    event_id: str,
+) -> int:
+    deleted = db.query(SyncEventMissingRecord).filter(
+        SyncEventMissingRecord.event_id == event_id
+    ).delete(synchronize_session=False)
+    db.flush()
+    return int(deleted or 0)
 
 def set_event_execution_phase(
     db: Session,

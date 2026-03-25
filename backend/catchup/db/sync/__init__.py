@@ -1,6 +1,8 @@
 from catchup.db.sync.repository import SyncEventCreateInput
+from catchup.db.sync.repository import SyncEventMissingRecordInput
 from catchup.db.sync.repository import SyncEventPublishResultInput
 from catchup.db.sync.repository import SyncEventSummary
+from catchup.db.sync.repository import clear_event_missing_records
 from catchup.db.sync.repository import SyncJobCreateInput
 from catchup.db.sync.repository import claim_event_for_processing
 from catchup.db.sync.repository import claim_events_for_publish
@@ -17,6 +19,7 @@ from catchup.db.sync.repository import get_event
 from catchup.db.sync.repository import get_job
 from catchup.db.sync.repository import has_successful_full_sync_event
 from catchup.db.sync.repository import list_events_by_job
+from catchup.db.sync.repository import list_event_missing_records
 from catchup.db.sync.repository import list_jobs
 from catchup.db.sync.repository import list_retry_ready_events
 from catchup.db.sync.repository import mark_event_failed
@@ -25,6 +28,7 @@ from catchup.db.sync.repository import mark_event_success
 from catchup.db.sync.repository import record_event_publish_outcomes
 from catchup.db.sync.repository import refresh_job_token_usage
 from catchup.db.sync.repository import release_claimed_event_to_pending
+from catchup.db.sync.repository import replace_event_missing_records
 from catchup.db.sync.repository import requeue_retrying_event
 from catchup.db.sync.repository import set_event_execution_phase
 from catchup.db.sync.repository import start_job
@@ -37,6 +41,7 @@ from catchup.db.sync.repository import update_job_status_cas
 __all__ = [
     "SyncJobCreateInput",
     "SyncEventCreateInput",
+    "SyncEventMissingRecordInput",
     "SyncEventPublishResultInput",
     "SyncEventSummary",
     "create_job",
@@ -51,6 +56,7 @@ __all__ = [
     "create_events",
     "get_event",
     "list_events_by_job",
+    "list_event_missing_records",
     "list_retry_ready_events",
     "count_events_by_job",
     "summarize_events_by_job",
@@ -59,6 +65,8 @@ __all__ = [
     "claim_events_for_publish",
     "claim_events_for_republish",
     "record_event_publish_outcomes",
+    "replace_event_missing_records",
+    "clear_event_missing_records",
     "has_successful_full_sync_event",
     "update_event_status_cas",
     "update_event_resource_metadata",
