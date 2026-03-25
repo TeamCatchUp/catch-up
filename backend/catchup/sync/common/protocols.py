@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import asyncio
 from typing import Protocol
+from typing import runtime_checkable
 
-from catchup.db.models import SyncConnector, SyncType
-from catchup.sync.common.schemas import (
-    FullSyncDispatchRequest,
-    FullSyncContext,
-    FullSyncResolvedTargets,
-    PublishTasksResult,
-    SyncContext,
-    SyncStreamMessage,
-    SyncStreamTask,
-    TargetSyncResult,
-)
+from catchup.db.models import SyncConnector
+from catchup.db.models import SyncType
+from catchup.sync.common.schemas import FullSyncContext
+from catchup.sync.common.schemas import FullSyncDispatchRequest
+from catchup.sync.common.schemas import FullSyncResolvedTargets
+from catchup.sync.common.schemas import PublishTasksResult
+from catchup.sync.common.schemas import SyncContext
+from catchup.sync.common.schemas import SyncStreamMessage
+from catchup.sync.common.schemas import SyncStreamTask
+from catchup.sync.common.schemas import TargetSyncResult
 
 
 class EventPublisherProtocol(Protocol):
@@ -102,6 +102,17 @@ class IngestionHandlerProtocol(Protocol):
         total_targets: int,
         failed_targets: int,
     ) -> None:
+        ...
+
+@runtime_checkable
+class FullSyncCollectingHandlerProtocol(Protocol):
+    async def collect_identifiers(
+        self,
+        *,
+        context: FullSyncContext,
+        service_cache: dict[str, object],
+    ) -> list[str]:
+        """Full Sync chunk event 범위의 canonical identifier 목록을 수집."""
         ...
 
 class FullSyncTargetResolverProtocol(Protocol):

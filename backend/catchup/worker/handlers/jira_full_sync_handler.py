@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-import logging
+from datetime import datetime
+from datetime import timezone
+
+import structlog
 
 from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.sync.audit import SyncAuditContext
-from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
+from catchup.sync.common.schemas import FullSyncContext
+from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class JiraFullSyncHandler(BaseFullSyncHandler):
@@ -27,6 +30,68 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
         service = await create_jira_ingestion_service(cloud_id=cloud_id)
         cache[cache_key] = service
         return service
+    
+    def _get_range_start(self, context: FullSyncContext) -> datetime:
+        raw = context.metadata.get("range_start")
+        if raw is None:
+            raise ValueError("jira full sync range_start is missing")
+
+        value = str(raw).strip()
+        if not value:
+            raise ValueError("jira full sync range_start is empty")
+
+        return datetime.fromisoformat(value).astimezone(timezone.utc)
+
+    def _get_range_end(self, context: FullSyncContext) -> datetime:
+        raw = context.metadata.get("range_end")
+        if raw is None:
+            raise ValueError("jira full sync range_end is missing")
+
+        value = str(raw).strip()
+        if not value:
+            raise ValueError("jira full sync range_end is empty")
+
+        return datetime.fromisoformat(value).astimezone(timezone.utc)
+    
+    async def collect_identifiers(
+        self,
+        *,
+        context: FullSyncContext,
+        service_cache: dict[str, object],
+    ) -> list[str]:
+        service = await self._get_service(context.scope_id, service_cache)
+
+        project_key = context.target_id.strip()
+        if not project_key:
+            raise ValueError("jira project key is empty")
+
+        if context.metadata.get("stage") != "issue":
+            raise ValueError(
+                f"jira full sync collect does not support stage={context.metadata.get('stage')}"
+            )
+
+        range_start = self._get_range_start(context)
+        range_end = self._get_range_end(context)
+
+        identifiers = await service.collect_issue_identifiers(
+            project_key=project_key,
+            range_start=range_start,
+            range_end=range_end,
+        )
+
+        logger.info(
+            "jira_full_sync_identifiers_collected",
+            scope_id=context.scope_id,
+            project_key=project_key,
+            event_id=context.event_id,
+            stage="issue",
+            range_start=range_start.isoformat(),
+            range_end=range_end.isoformat(),
+            expected_count=len(identifiers),
+        )
+
+        return identifiers
+
 
     async def handle(
         self,
@@ -59,15 +124,17 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
 
         if result.error_count > 0:
             raise RuntimeError(
-                "[JIRA][FULL SYNC][WORKER] Target sync failed: "
-                f"scope_id={context.scope_id}, project_key={project_key}, errors={result.error_count}"
+                "jira_full_sync_target_failed: "
+                f"scope_id={context.scope_id}, project_key={project_key}, "
+                f"errors={result.error_count}"
             )
 
         logger.info(
-            "[JIRA][FULL SYNC][WORKER] Target synced: scope_id=%s, project_key=%s, synced=%s, sync_from_ts=%s",
-            context.scope_id,
-            project_key,
-            result.synced_count,
-            context.sync_from_ts,
+            "jira_full_sync_target_synced",
+            scope_id=context.scope_id,
+            project_key=project_key,
+            event_id=context.event_id,
+            synced_count=result.synced_count,
+            sync_from_ts=context.sync_from_ts,
         )
         return result

@@ -26,6 +26,8 @@ from catchup.db.sync import requeue_retrying_event
 from catchup.db.sync import set_event_execution_phase
 from catchup.db.sync import start_job
 from catchup.db.sync import summarize_events_by_job
+from catchup.db.sync import update_event_resource_metadata
+from catchup.sync.common.protocols import FullSyncCollectingHandlerProtocol
 from catchup.sync.common.protocols import IngestionHandlerProtocol
 from catchup.sync.common.retry_policy import is_retryable_sync_error
 from catchup.sync.common.retry_policy import resolve_retry_delay
@@ -262,6 +264,31 @@ def _schedule_event_retry_sync(
             db.rollback()
             raise
 
+def _mark_collect_completed_sync(
+    *,
+    event_id: str,
+    expected_count: int,
+) -> bool:
+    with SessionLocal() as db:
+        try:
+            updated = update_event_resource_metadata(
+                db,
+                event_id=event_id,
+                values={
+                    "expected_count": expected_count,
+                    "execution_phase": "syncing",
+                },
+                from_statuses=[SyncEventStatus.IN_PROGRESS],
+            )
+            if not updated:
+                db.rollback()
+                return False
+
+            db.commit()
+            return True
+        except Exception:
+            db.rollback()
+            raise
 
 # Full Sync 예외를 retry / termainal failed 으로 분기
 async def _handle_event_failure(
@@ -561,6 +588,17 @@ async def process_full_sync_message(
                 ),
             )
             return
+        
+        if not isinstance(handler, FullSyncCollectingHandlerProtocol):
+            await deadletter(
+                message=message,
+                reason=SyncStreamFailureReason.UNSUPPORTED_HANDLER,
+                error_message=(
+                    f"full sync collect is not supported: connector={context.connector}, "
+                    f"sync_type={context.sync_type}"
+                ),
+            )
+            return
 
         if claim.job_started:
             await publish_status_event(
@@ -584,6 +622,31 @@ async def process_full_sync_message(
             )
         )
         await handler.on_target_started(context=context)
+        
+        identifiers = await handler.collect_identifiers(
+            context=context,
+            service_cache=service_cache,
+        )
+
+        if not await run_in_threadpool(
+            _mark_collect_completed_sync,
+            event_id=context.event_id,
+            expected_count=len(identifiers),
+        ):
+            raise RuntimeError("failed to persist collect phase result")
+
+        context.metadata["expected_count"] = len(identifiers)
+        context.metadata["execution_phase"] = "syncing"
+
+        logger.info(
+            "full_sync_identifier_collection_completed",
+            connector=context.connector.value,
+            event_id=context.event_id,
+            expected_count=len(identifiers),
+            stage=context.metadata.get("stage"),
+            range_start=context.metadata.get("range_start"),
+            range_end=context.metadata.get("range_end"),
+        )
 
         result = await handler.handle(
             context=context,

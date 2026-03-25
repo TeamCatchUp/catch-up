@@ -17,32 +17,37 @@ JiraApiClient, JiraFieldMapper, JiraTransformer, PGVectorRepository를 조합.
 """
 
 import asyncio
-from dataclasses import dataclass, field
-import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, Literal
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+from typing import Any
+from typing import Literal
 
+import structlog
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
 
+from catchup.components.summarizer import SummarizeRequest
+from catchup.components.summarizer import SummarizerService
+from catchup.components.summarizer import get_summarizer_service
+from catchup.components.vector_db.pgvector import PGVectorRepository
+from catchup.configs.config import settings
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
-from catchup.connectors.jira.client import (
-    JiraApiClient,
-    JiraApiError,
-    JiraRateLimitError,
-)
+from catchup.connectors.jira.client import JiraApiClient
+from catchup.connectors.jira.client import JiraApiError
+from catchup.connectors.jira.client import JiraRateLimitError
 from catchup.connectors.jira.field_mapper import JiraFieldMapper
-from catchup.connectors.jira.transformers import JiraTransformer, normalize_issue_type
-from catchup.components.vector_db.pgvector import PGVectorRepository
-from catchup.components.summarizer import SummarizerService, SummarizeRequest, get_summarizer_service
-from catchup.configs.config import settings
+from catchup.connectors.jira.transformers import JiraTransformer
+from catchup.connectors.jira.transformers import normalize_issue_type
 from catchup.db.engine import SessionLocal
 from catchup.db.jira import domain_repository as jira_entities
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass(slots=True, frozen=True)
@@ -130,7 +135,10 @@ class JiraIngestionService:
         if self._initialized:
             return
 
-        logger.info(f"Initializing JiraIngestionService for cloud_id={self.cloud_id}")
+        logger.info(
+            "jira_ingestion_service_initializing",
+            cloud_id=self.cloud_id,
+        )
 
         # Field Mapper 초기화 (Jira 필드 목록 조회)
         await self.field_mapper.initialize()
@@ -141,20 +149,25 @@ class JiraIngestionService:
         # Summarizer 초기화 (요약 활성화 시)
         if self.enable_summarization:
             self.summarizer = get_summarizer_service()
-            logger.info("Summarization enabled for embedding optimization")
+            logger.info(
+                "jira_ingestion_service_summarization_enabled",
+                cloud_id=self.cloud_id,
+            )
 
         # PGVector 초기화
         self.repository.ensure_initialized()
 
         self._initialized = True
-        logger.info("JiraIngestionService initialized successfully")
+        logger.info(
+            "jira_ingestion_service_initialized",
+            cloud_id=self.cloud_id,
+        )
 
     def _ensure_initialized(self) -> None:
         """초기화 확인"""
         if not self._initialized or self.transformer is None:
             raise RuntimeError(
-                "JiraIngestionService not initialized. "
-                "Call await service.initialize() first."
+                "JiraIngestionService not initialized."
             )
 
     def _resolve_sync_from_dt(
@@ -320,10 +333,10 @@ class JiraIngestionService:
             raise
         except JiraApiError as exc:
             logger.warning(
-                "[JIRA][REPAIR] Failed to fetch issue: cloud_id=%s, issue_key=%s, error=%s",
-                self.cloud_id,
-                issue_key,
-                exc,
+                "jira_repair_issue_fetch_failed",
+                cloud_id=self.cloud_id,
+                issue_key=issue_key,
+                error=str(exc),
             )
             return None
 
@@ -373,11 +386,11 @@ class JiraIngestionService:
                 )
             except Exception as exc:
                 logger.warning(
-                    "[JIRA][REPAIR] Failed to transform issue: cloud_id=%s, project_key=%s, issue_key=%s, error=%s",
-                    self.cloud_id,
-                    project_key,
-                    issue_key,
-                    exc,
+                    "jira_repair_issue_transform_failed",
+                    cloud_id=self.cloud_id,
+                    project_key=project_key,
+                    issue_key=issue_key,
+                    error=str(exc),
                 )
                 failed_ids.append(issue_key)
 
@@ -420,12 +433,11 @@ class JiraIngestionService:
                 succeeded_count = len(upsert_documents)
             except Exception as exc:
                 logger.error(
-                    "[JIRA][REPAIR] Failed to upsert %s docs: cloud_id=%s, project_key=%s, error=%s",
-                    record_type,
-                    self.cloud_id,
-                    project_key,
-                    exc,
-                    exc_info=True,
+                    "jira_repair_upsert_failed",
+                    cloud_id=self.cloud_id,
+                    project_key=project_key,
+                    record_type=record_type,
+                    error=str(exc),
                 )
                 failed_ids.extend(
                     self._extract_record_ids_from_doc_ids([doc.id for doc in documents])
@@ -479,6 +491,102 @@ class JiraIngestionService:
                 )
 
         return results
+    
+    def _build_issue_range_jql(
+        self,
+        *,
+        project_key: str,
+        range_start: datetime,
+        range_end: datetime,
+    ) -> str:
+        start_str = range_start.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
+        end_str = range_end.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
+
+        jql_parts = [
+            f'project = "{project_key}"',
+            f'updated >= "{start_str}"',
+            f'updated < "{end_str}"',
+        ]
+        return " AND ".join(jql_parts) + " ORDER BY updated DESC"
+
+    async def _iter_issue_identifiers_in_range(
+        self,
+        *,
+        project_key: str,
+        range_start: datetime,
+        range_end: datetime,
+    ):
+        jql = self._build_issue_range_jql(
+            project_key=project_key,
+            range_start=range_start,
+            range_end=range_end,
+        )
+        next_page_token: str | None = None
+        batch_size = settings.JIRA_SYNC_BATCH_SIZE
+
+        logger.info(
+            "jira_full_sync_identifier_collection_started",
+            cloud_id=self.cloud_id,
+            project_key=project_key,
+            range_start=range_start.isoformat(),
+            range_end=range_end.isoformat(),
+            batch_size=batch_size,
+        )
+
+        while True:
+            try:
+                response = await self.client.search_issues(
+                    jql=jql,
+                    fields=["issuetype", "key"],
+                    max_results=batch_size,
+                    next_page_token=next_page_token,
+                )
+            except JiraRateLimitError as exc:
+                logger.warning(
+                    "jira_full_sync_identifier_collection_rate_limited",
+                    cloud_id=self.cloud_id,
+                    project_key=project_key,
+                    retry_after=exc.retry_after,
+                    range_start=range_start.isoformat(),
+                    range_end=range_end.isoformat(),
+                )
+                raise
+
+            issues = response.get("issues", [])
+            is_last = response.get("isLast", True)
+
+            if not issues:
+                break
+
+            logger.info(
+                "jira_full_sync_identifier_batch_loaded",
+                cloud_id=self.cloud_id,
+                project_key=project_key,
+                batch_count=len(issues),
+                is_last=is_last,
+            )
+
+            for issue_data in issues:
+                issue_key = str(issue_data.get("key") or "").strip()
+                if not issue_key:
+                    continue
+
+                record_type = self._classify_record_type(issue_data)
+                if record_type == "epic":
+                    yield f"jira:epic:{issue_key}"
+                    continue
+
+                yield f"jira:issue:{issue_key}"
+
+            if is_last:
+                break
+
+            next_page_token = response.get("nextPageToken")
+            if not next_page_token:
+                break
+
+            await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
+
 
     # ================================================================
     # 전체 동기화 (Full Sync)
@@ -503,9 +611,10 @@ class JiraIngestionService:
         )
 
         logger.info(
-            f"[JIRA][FULL SYNC] Started for cloud_id={self.cloud_id}"
-            f" projects={project_keys or 'all'}"
-            f" since={sync_from.isoformat()}"
+            "jira_full_sync_ingestion_started",
+            cloud_id=self.cloud_id,
+            project_keys=project_keys or ["all"],
+            sync_from=sync_from.isoformat(),
         )
 
         results = {
@@ -519,7 +628,11 @@ class JiraIngestionService:
                 sprint_results = await self._sync_all_sprints()
                 results["sprints"] = sprint_results
             else:
-                logger.info("[JIRA][FULL SYNC] Sprint Sync Skipped : Agile API Not Available")
+                logger.info(
+                    "jira_full_sync_sprint_sync_skipped",
+                    cloud_id=self.cloud_id,
+                    reason="agile_api_not_available",
+                )
 
             if not project_keys:
                 project_keys = await self._load_project_keys()
@@ -536,21 +649,26 @@ class JiraIngestionService:
                     results["issues"]["errors"] += project_result["errors"]
                 except JiraRateLimitError as exc:
                     logger.warning(
-                        "[JIRA][FULL SYNC] Project sync rate limited: "
-                        "cloud_id=%s, project_key=%s, retry_after=%ss",
-                        self.cloud_id,
-                        project_key,
-                        exc.retry_after,
+                        "jira_full_sync_project_rate_limited",
+                        cloud_id=self.cloud_id,
+                        project_key=project_key,
+                        retry_after=exc.retry_after,
                     )
                     raise
                 except Exception as e:
                     logger.error(
-                        f"[JIRA][FULL SYNC] Project sync failed: "
-                        f"cloud_id={self.cloud_id}, project_key={project_key}, error={e}"
+                        "jira_full_sync_project_failed",
+                        cloud_id=self.cloud_id,
+                        project_key=project_key,
+                        error=str(e),
                     )
                     results["issues"]["errors"] += 1
                     results["epics"]["errors"] += 1
-            logger.info(f"[JIRA][FULL SYNC] Completed : {results}")
+            logger.info(
+                "jira_full_sync_completed",
+                cloud_id=self.cloud_id,
+                results=results,
+            )
             return TargetSyncResult(
                 synced_count=(
                     int(results["issues"]["synced"])
@@ -565,14 +683,46 @@ class JiraIngestionService:
             )
 
         except Exception as e:
-            logger.error(f"[JIRA][FULL SYNC] Failed : {e}")
+            logger.error(
+                "jira_full_sync_failed",
+                cloud_id=self.cloud_id,
+                error=str(e),
+            )
             raise
+
+    async def collect_issue_identifiers(
+        self,
+        *,
+        project_key: str,
+        range_start: datetime,
+        range_end: datetime,
+    ) -> list[str]:
+        self._ensure_initialized()
+
+        identifiers: list[str] = []
+        async for identifier in self._iter_issue_identifiers_in_range(
+            project_key=project_key,
+            range_start=range_start,
+            range_end=range_end,
+        ):
+            identifiers.append(identifier)
+
+        logger.info(
+            "jira_full_sync_identifiers_collected",
+            cloud_id=self.cloud_id,
+            project_key=project_key,
+            count=len(identifiers),
+            range_start=range_start.isoformat(),
+            range_end=range_end.isoformat(),
+        )
+        return identifiers
         
     async def _sync_project_issues(
         self,
         project_key: str,
         since: datetime | None = None,
         audit_context: SyncAuditContext | None = None,
+        sync_mode: Literal["full", "incremental"] = "full",
     ) -> dict[str, int]:
         """
         단일 프로젝트의 이슈 동기화 (Pipeline 방식)
@@ -595,13 +745,19 @@ class JiraIngestionService:
             )
 
             logger.info(
-                f"[JIRA][FULL SYNC] Loaded caches: "
-                f"project_key={project_key}, {len(sprint_cache)} sprints"
+                "jira_project_context_loaded",
+                cloud_id=self.cloud_id,
+                project_key=project_key,
+                sync_mode=sync_mode,
+                sprint_count=len(sprint_cache),
             )
         except Exception as e:
             logger.warning(
-                f"[JIRA][FULL SYNC] Failed to load caches, continuing without enrichment: "
-                f"project_key={project_key}, error={e}"
+                "jira_project_context_load_failed",
+                cloud_id=self.cloud_id,
+                project_key=project_key,
+                sync_mode=sync_mode,
+                error=str(e),
             )
 
         # Transformer에 캐시 전달
@@ -612,7 +768,13 @@ class JiraIngestionService:
         queue: asyncio.Queue = asyncio.Queue(maxsize=2)
 
         producer = asyncio.create_task(
-            self._fetch_and_transform(project_key, since, queue, results)
+            self._fetch_and_transform(
+                project_key,
+                since,
+                queue,
+                results,
+                sync_mode=sync_mode,
+            )
         )
         consumer = asyncio.create_task(
             self._summarize_and_store(queue, project_key=project_key, audit_context=audit_context)
@@ -621,8 +783,11 @@ class JiraIngestionService:
         await asyncio.gather(producer, consumer)
 
         logger.info(
-            f"[JIRA][FULL SYNC] Project issue sync completed: "
-            f"project_key={project_key}, results={results}"
+            "jira_project_sync_completed",
+            cloud_id=self.cloud_id,
+            project_key=project_key,
+            sync_mode=sync_mode,
+            results=results,
         )
         return results
 
@@ -632,6 +797,8 @@ class JiraIngestionService:
         since: datetime | None,
         queue: asyncio.Queue,
         results: dict[str, int],
+        *,
+        sync_mode: Literal["full", "incremental"] = "full",
     ) -> None:
         """Stage 1 (Producer): API 조회 + Transform → Queue에 배치 전달"""
         jql_parts = [f'project = "{project_key}"']
@@ -642,8 +809,10 @@ class JiraIngestionService:
         jql = " AND ".join(jql_parts) + " ORDER BY updated DESC"
 
         logger.info(
-            f"[JIRA][FULL SYNC] Fetching issues: "
-            f"project_key={project_key}, jql={jql}"
+            "jira_issue_fetch_started",
+            cloud_id=self.cloud_id,
+            project_key=project_key,
+            sync_mode=sync_mode,
         )
 
         next_page_token: str | None = None
@@ -668,8 +837,12 @@ class JiraIngestionService:
 
                     processed_count += len(issues)
                     logger.info(
-                        f"[JIRA][FULL SYNC] Processing batch: "
-                        f"project_key={project_key}, batch={len(issues)}, total={processed_count}"
+                        "jira_issue_batch_processing",
+                        cloud_id=self.cloud_id,
+                        project_key=project_key,
+                        sync_mode=sync_mode,
+                        batch_count=len(issues),
+                        processed_count=processed_count,
                     )
 
                     documents: list[Document] = []
@@ -691,8 +864,12 @@ class JiraIngestionService:
 
                         except Exception as e:
                             logger.error(
-                                f"[JIRA][FULL SYNC] Transform failed: "
-                                f"project_key={project_key}, issue_key={issue_data.get('key')}, error={e}"
+                                "jira_issue_transform_failed",
+                                cloud_id=self.cloud_id,
+                                project_key=project_key,
+                                sync_mode=sync_mode,
+                                issue_key=issue_data.get("key"),
+                                error=str(e),
                             )
                             results["errors"] += 1
 
@@ -710,10 +887,11 @@ class JiraIngestionService:
 
                 except JiraRateLimitError as exc:
                     logger.warning(
-                        "[JIRA][FULL SYNC] Fetch rate limited: "
-                        "project_key=%s, retry_after=%ss",
-                        project_key,
-                        exc.retry_after,
+                        "jira_issue_fetch_rate_limited",
+                        cloud_id=self.cloud_id,
+                        project_key=project_key,
+                        sync_mode=sync_mode,
+                        retry_after=exc.retry_after,
                     )
                     raise
         finally:
@@ -795,7 +973,11 @@ class JiraIngestionService:
         for doc, summary in zip(documents, summarized):
             doc.page_content = summary
 
-        logger.debug(f"Summarized {len(documents)} documents for embedding")
+        logger.debug(
+            "jira_documents_summarized",
+            cloud_id=self.cloud_id,
+            document_count=len(documents),
+        )
         return documents
 
     async def _sync_all_projects(
@@ -837,7 +1019,11 @@ class JiraIngestionService:
             else:
                 all_projects = await self.client.get_all_projects()
                 keys_to_sync = [p.get("key") for p in all_projects if p.get("key")]
-                logger.info(f"Found {len(keys_to_sync)} accessible projects")
+                logger.info(
+                    "jira_metadata_projects_discovered",
+                    cloud_id=self.cloud_id,
+                    project_count=len(keys_to_sync),
+                )
 
             # 각 프로젝트 조회 및 데이터 수집
             for project_key in keys_to_sync:
@@ -868,7 +1054,12 @@ class JiraIngestionService:
                 except JiraRateLimitError:
                     raise
                 except JiraApiError as e:
-                    logger.error(f"Failed to sync project {project_key}: {e}")
+                    logger.error(
+                        "jira_metadata_project_sync_failed",
+                        cloud_id=self.cloud_id,
+                        project_key=project_key,
+                        error=str(e),
+                    )
                     results["errors"] += 1
 
                 await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
@@ -877,22 +1068,34 @@ class JiraIngestionService:
                 _persist_projects_db,
             )
             logger.info(
-                "[JIRA][METADATA] Project snapshot synced: cloud_id=%s, upserted=%s, deleted=%s",
-                self.cloud_id,
-                sync_result["upserted"],
-                sync_result["deleted"],
+                "jira_metadata_project_snapshot_synced",
+                cloud_id=self.cloud_id,
+                upserted=sync_result["upserted"],
+                deleted=sync_result["deleted"],
             )
 
         except JiraRateLimitError:
             raise
         except JiraApiError as e:
-            logger.error(f"Failed to get project list (API error): {e}")
+            logger.error(
+                "jira_metadata_project_list_failed",
+                cloud_id=self.cloud_id,
+                error=str(e),
+            )
             results["errors"] += 1
         except Exception as e:
-            logger.error(f"Failed to sync projects (DB error): {e}")
+            logger.error(
+                "jira_metadata_project_sync_db_failed",
+                cloud_id=self.cloud_id,
+                error=str(e),
+            )
             results["errors"] += 1
 
-        logger.info(f"Project sync completed: {results}")
+        logger.info(
+            "jira_metadata_project_sync_completed",
+            cloud_id=self.cloud_id,
+            results=results,
+        )
         return results
 
     async def _sync_all_sprints(
@@ -961,7 +1164,12 @@ class JiraIngestionService:
                 except JiraRateLimitError:
                     raise
                 except JiraApiError as e:
-                    logger.error(f"Failed to sync sprints for board {board_id}: {e}")
+                    logger.error(
+                        "jira_metadata_sprint_sync_failed",
+                        cloud_id=self.cloud_id,
+                        board_id=board_id,
+                        error=str(e),
+                    )
                     results["errors"] += 1
 
                 await asyncio.sleep(settings.JIRA_API_RATE_LIMIT_DELAY)
@@ -971,18 +1179,34 @@ class JiraIngestionService:
                 await run_in_threadpool(
                     _persist_sprints_db,
                 )
-                logger.info(f"Saved {len(sprints_data)} sprints to RDBMS")
+                logger.info(
+                    "jira_metadata_sprints_saved",
+                    cloud_id=self.cloud_id,
+                    sprint_count=len(sprints_data),
+                )
 
         except JiraRateLimitError:
             raise
         except JiraApiError as e:
-            logger.error(f"Failed to get boards (API error): {e}")
+            logger.error(
+                "jira_metadata_board_fetch_failed",
+                cloud_id=self.cloud_id,
+                error=str(e),
+            )
             results["errors"] += 1
         except Exception as e:
-            logger.error(f"Failed to sync sprints (DB error): {e}")
+            logger.error(
+                "jira_metadata_sprint_sync_db_failed",
+                cloud_id=self.cloud_id,
+                error=str(e),
+            )
             results["errors"] += 1
 
-        logger.info(f"Sprint sync completed: {results}")
+        logger.info(
+            "jira_metadata_sprint_sync_completed",
+            cloud_id=self.cloud_id,
+            results=results,
+        )
         return results
 
     async def _sync_all_users(
@@ -1017,7 +1241,11 @@ class JiraIngestionService:
         try:
             # 모든 사용자 조회
             all_users = await self.client.get_all_users()
-            logger.info(f"Fetched {len(all_users)} users from Jira API")
+            logger.info(
+                "jira_metadata_users_fetched",
+                cloud_id=self.cloud_id,
+                user_count=len(all_users),
+            )
 
             for user_data in all_users:
                 account_id = user_data.get("accountId")
@@ -1042,20 +1270,40 @@ class JiraIngestionService:
                     _persist_users_db,
                 )
                 results["synced"] = saved_count
-                logger.info(f"Saved {saved_count} users to RDBMS")
+                logger.info(
+                    "jira_metadata_users_saved",
+                    cloud_id=self.cloud_id,
+                    saved_count=saved_count,
+                )
             else:
-                logger.warning("No valid users to save (all missing accountId)")
+                logger.warning(
+                    "jira_metadata_users_save_skipped",
+                    cloud_id=self.cloud_id,
+                    reason="no_valid_users",
+                )
 
         except JiraRateLimitError:
             raise
         except JiraApiError as e:
-            logger.error(f"Failed to sync users (API error): {e}")
+            logger.error(
+                "jira_metadata_user_sync_api_failed",
+                cloud_id=self.cloud_id,
+                error=str(e),
+            )
             results["errors"] += 1
         except Exception as e:
-            logger.error(f"Failed to sync users (DB error): {e}", exc_info=True)
+            logger.error(
+                "jira_metadata_user_sync_db_failed",
+                cloud_id=self.cloud_id,
+                error=str(e),
+            )
             results["errors"] += 1
 
-        logger.info(f"User sync completed: {results}")
+        logger.info(
+            "jira_metadata_user_sync_completed",
+            cloud_id=self.cloud_id,
+            results=results,
+        )
         return results
 
     async def build_record_gap_report(
@@ -1096,6 +1344,15 @@ class JiraIngestionService:
             stored_count=len(stored_epic_doc_ids),
         )
 
+        logger.info(
+            "jira_record_gap_report_built",
+            cloud_id=self.cloud_id,
+            project_key=project_key,
+            sync_from=since.isoformat(),
+            issue_missing_count=issue_item.missing_count,
+            epic_missing_count=epic_item.missing_count,
+        )
+
         return JiraRecordGapReport(records=[issue_item, epic_item])
 
     async def retry_missing_records(
@@ -1133,6 +1390,14 @@ class JiraIngestionService:
                 )
             )
 
+        logger.info(
+            "jira_missing_records_retry_completed",
+            cloud_id=self.cloud_id,
+            project_key=project_key,
+            issue_retry_count=len(requested_issue_ids),
+            epic_retry_count=len(requested_epic_ids),
+        )
+
         return JiraRecordRetryResult(records=result_items)
 
     async def delete_issue_documents(
@@ -1153,8 +1418,10 @@ class JiraIngestionService:
         await self.repository.delete_documents(doc_ids)
 
         logger.info(
-            f"[JIRA][FLUSH] Deleted documents from issue_deleted events: "
-            f"cloud_id={self.cloud_id}, issue_count={len(unique_issue_keys)}, doc_count={len(doc_ids)}"
+            "jira_issue_documents_deleted",
+            cloud_id=self.cloud_id,
+            issue_count=len(unique_issue_keys),
+            doc_count=len(doc_ids),
         )
         return len(doc_ids)
 
@@ -1180,6 +1447,7 @@ class JiraIngestionService:
             project_key=project_key,
             since=since,
             audit_context=audit_context,
+            sync_mode="incremental",
         )
         return {
             "synced": int(result.get("issues", 0)) + int(result.get("epics", 0)),
