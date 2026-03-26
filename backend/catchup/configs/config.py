@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     DB_DATABASE: str
     DB_HOST_LOCAL: str = "localhost"
     DB_PORT_LOCAL: int = 5433
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 20
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE_SECONDS: int = 1800
+    DB_POOL_PRE_PING: bool = True
     
     # AWS S3
     AWS_S3_AUDIT_ENABLED: bool = False
