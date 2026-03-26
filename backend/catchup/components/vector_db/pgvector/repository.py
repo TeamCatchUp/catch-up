@@ -122,6 +122,259 @@ class PGVectorRepository:
                 "PGVectorRepository not initialized. "
                 "Call await repository.initialize() first."
             )
+
+    def _sanitize_text(self, value: str) -> tuple[str, bool]:
+        if not value:
+            return value, False
+
+        chars: list[str] = []
+        changed = False
+        idx = 0
+
+        while idx < len(value):
+            char = value[idx]
+            code_point = ord(char)
+
+            if code_point == 0:
+                changed = True
+                idx += 1
+                continue
+
+            if 0xD800 <= code_point <= 0xDBFF:
+                if idx + 1 < len(value):
+                    next_char = value[idx + 1]
+                    next_code_point = ord(next_char)
+                    if 0xDC00 <= next_code_point <= 0xDFFF:
+                        chars.append(char)
+                        chars.append(next_char)
+                        idx += 2
+                        continue
+
+                changed = True
+                idx += 1
+                continue
+
+            if 0xDC00 <= code_point <= 0xDFFF:
+                changed = True
+                idx += 1
+                continue
+
+            chars.append(char)
+            idx += 1
+
+        if not changed:
+            return value, False
+
+        return "".join(chars), True
+
+    def _sanitize_value(self, value: Any) -> tuple[Any, int]:
+        if isinstance(value, str):
+            sanitized, changed = self._sanitize_text(value)
+            return sanitized, int(changed)
+
+        if isinstance(value, dict):
+            sanitized_dict: dict[Any, Any] = {}
+            changed_fields = 0
+            changed = False
+            for key, item in value.items():
+                sanitized_item, item_changed_fields = self._sanitize_value(item)
+                sanitized_dict[key] = sanitized_item
+                changed_fields += item_changed_fields
+                changed = changed or item_changed_fields > 0
+
+            return (sanitized_dict if changed else value), changed_fields
+
+        if isinstance(value, list):
+            sanitized_list: list[Any] = []
+            changed_fields = 0
+            changed = False
+            for item in value:
+                sanitized_item, item_changed_fields = self._sanitize_value(item)
+                sanitized_list.append(sanitized_item)
+                changed_fields += item_changed_fields
+                changed = changed or item_changed_fields > 0
+
+            return (sanitized_list if changed else value), changed_fields
+
+        if isinstance(value, tuple):
+            sanitized_items: list[Any] = []
+            changed_fields = 0
+            changed = False
+            for item in value:
+                sanitized_item, item_changed_fields = self._sanitize_value(item)
+                sanitized_items.append(sanitized_item)
+                changed_fields += item_changed_fields
+                changed = changed or item_changed_fields > 0
+
+            return (tuple(sanitized_items) if changed else value), changed_fields
+
+        return value, 0
+
+    def _sanitize_document(
+        self,
+        document: Document,
+    ) -> tuple[Document, dict[str, int]]:
+        sanitized_page_content, page_content_changed = self._sanitize_text(
+            document.page_content
+        )
+        sanitized_metadata, metadata_changed_fields = self._sanitize_value(
+            document.metadata
+        )
+
+        changes = {
+            "page_content": int(page_content_changed),
+            "metadata": metadata_changed_fields,
+        }
+
+        if changes["page_content"] == 0 and changes["metadata"] == 0:
+            return document, changes
+
+        return document.model_copy(
+            update={
+                "page_content": sanitized_page_content,
+                "metadata": sanitized_metadata,
+            }
+        ), changes
+
+    def _log_sanitized_document(
+        self,
+        *,
+        operation: str,
+        document: Document,
+        changes: dict[str, int],
+    ) -> None:
+        targets: list[str] = []
+        if changes["page_content"] > 0:
+            targets.append("page_content")
+        if changes["metadata"] > 0:
+            targets.append("metadata")
+
+        logger.warning(
+            "[PGVECTOR][SANITIZE] Sanitized document before %s: doc_id=%s, targets=%s, field_count=%s",
+            operation,
+            document.id or "unknown",
+            ",".join(targets),
+            changes["page_content"] + changes["metadata"],
+        )
+
+    def _sanitize_documents(
+        self,
+        documents: list[Document],
+        *,
+        operation: str,
+    ) -> list[Document]:
+        sanitized_documents: list[Document] = []
+
+        for document in documents:
+            sanitized_document, changes = self._sanitize_document(document)
+            if changes["page_content"] > 0 or changes["metadata"] > 0:
+                self._log_sanitized_document(
+                    operation=operation,
+                    document=sanitized_document,
+                    changes=changes,
+                )
+            sanitized_documents.append(sanitized_document)
+
+        return sanitized_documents
+
+    async def _generate_embeddings_from_documents(
+        self,
+        documents: list[Document],
+        audit_context: SyncAuditContext | None = None,
+        context: str | None = None,
+    ) -> list[list[float]]:
+        texts = [doc.page_content for doc in documents]
+        batch_size = settings.EMBEDDING_BATCH_SIZE
+
+        logger.info(f"Generating embeddings for {len(documents)} documents (batch_size={batch_size})")
+
+        try:
+            async def _embed_sub_batch(sub_texts: list[str]) -> list[list[float]]:
+                async with _embedding_semaphore:
+                    return await asyncio.to_thread(
+                        self.embeddings.embed_documents, sub_texts
+                    )
+
+            tasks = [
+                _embed_sub_batch(texts[i : i + batch_size])
+                for i in range(0, len(texts), batch_size)
+            ]
+            sub_results = await asyncio.gather(*tasks)
+            embeddings = [emb for sub in sub_results for emb in sub]
+
+            logger.info(f"Successfully generated {len(embeddings)} embeddings")
+            if audit_context is not None:
+                emit_sync_ingestion_audit(
+                    action=SyncIngestionEventAction.EMBED,
+                    status=AuditEventStatus.SUCCESS,
+                    audit_context=audit_context,
+                    context=context,
+                )
+            return embeddings
+
+        except Exception as e:
+            logger.error(f"Failed to generate embeddings: {e}")
+            if audit_context is not None:
+                emit_sync_ingestion_audit(
+                    action=SyncIngestionEventAction.EMBED,
+                    status=AuditEventStatus.FAIL,
+                    audit_context=audit_context,
+                    context=(
+                        f"{context},error={_truncate_error(e)}"
+                        if context
+                        else f"error={_truncate_error(e)}"
+                    ),
+                    level=AuditLevel.ERROR,
+                )
+            raise
+
+    async def _store_sanitized_documents_with_embeddings(
+        self,
+        documents: list[Document],
+        embeddings: list[list[float]],
+        ids: list[str],
+        audit_context: SyncAuditContext | None = None,
+        context: str | None = None,
+    ) -> list[str]:
+        texts = [doc.page_content for doc in documents]
+        metadatas = [doc.metadata for doc in documents]
+
+        logger.info(f"Storing {len(documents)} documents with pre-computed embeddings")
+
+        try:
+            result_ids = await asyncio.to_thread(
+                self.vector_store.add_embeddings,
+                texts=texts,
+                embeddings=embeddings,
+                metadatas=metadatas,
+                ids=ids,
+            )
+
+            logger.info(f"Successfully stored {len(result_ids)} documents")
+            if audit_context is not None:
+                emit_sync_ingestion_audit(
+                    action=SyncIngestionEventAction.DOCUMENT_PERSISTED,
+                    status=AuditEventStatus.SUCCESS,
+                    audit_context=audit_context,
+                    context=context,
+                )
+            return result_ids
+
+        except Exception as e:
+            logger.error(f"Failed to store documents with embeddings: {e}")
+            if audit_context is not None:
+                emit_sync_ingestion_audit(
+                    action=SyncIngestionEventAction.DOCUMENT_PERSISTED,
+                    status=AuditEventStatus.FAIL,
+                    audit_context=audit_context,
+                    context=(
+                        f"{context},error={_truncate_error(e)}"
+                        if context
+                        else f"error={_truncate_error(e)}"
+                    ),
+                    level=AuditLevel.ERROR,
+                )
+            raise
         
     def _get_embedding_table(self):
         self.ensure_initialized()
@@ -277,6 +530,10 @@ class PGVectorRepository:
             logger.warning("No documents to add")
             return []
 
+        sanitized_documents = self._sanitize_documents(
+            documents,
+            operation="add_documents",
+        )
         logger.info(f"Adding {len(documents)} documents to PGVector")
 
         try:
@@ -286,7 +543,7 @@ class PGVectorRepository:
                 # asyncio.to_thread로 비동기 실행
                 result_ids = await asyncio.to_thread(
                     self.vector_store.add_documents,
-                    documents,
+                    sanitized_documents,
                     ids=ids,
                 )
 
@@ -328,54 +585,15 @@ class PGVectorRepository:
                 audit_context=audit_context,
                 context=context,
             )
-
-        texts = [doc.page_content for doc in documents]
-        batch_size = settings.EMBEDDING_BATCH_SIZE
-
-        logger.info(f"Generating embeddings for {len(documents)} documents (batch_size={batch_size})")
-
-        try:
-            # 서브배치 분할 후 병렬 호출
-            async def _embed_sub_batch(sub_texts: list[str]) -> list[list[float]]:
-                async with _embedding_semaphore:
-                    return await asyncio.to_thread(
-                        self.embeddings.embed_documents, sub_texts
-                    )
-
-            tasks = [
-                _embed_sub_batch(texts[i : i + batch_size])
-                for i in range(0, len(texts), batch_size)
-            ]
-            sub_results = await asyncio.gather(*tasks)
-
-            # 서브배치 결과를 순서대로 합침
-            embeddings = [emb for sub in sub_results for emb in sub]
-
-            logger.info(f"Successfully generated {len(embeddings)} embeddings")
-            if audit_context is not None:
-                emit_sync_ingestion_audit(
-                    action=SyncIngestionEventAction.EMBED,
-                    status=AuditEventStatus.SUCCESS,
-                    audit_context=audit_context,
-                    context=context,
-                )
-            return embeddings
-
-        except Exception as e:
-            logger.error(f"Failed to generate embeddings: {e}")
-            if audit_context is not None:
-                emit_sync_ingestion_audit(
-                    action=SyncIngestionEventAction.EMBED,
-                    status=AuditEventStatus.FAIL,
-                    audit_context=audit_context,
-                    context=(
-                        f"{context},error={_truncate_error(e)}"
-                        if context
-                        else f"error={_truncate_error(e)}"
-                    ),
-                    level=AuditLevel.ERROR,
-                )
-            raise
+        sanitized_documents = self._sanitize_documents(
+            documents,
+            operation="generate_embeddings",
+        )
+        return await self._generate_embeddings_from_documents(
+            sanitized_documents,
+            audit_context=audit_context,
+            context=context,
+        )
 
     async def store_with_embeddings(
         self,
@@ -404,45 +622,17 @@ class PGVectorRepository:
         if not documents:
             return []
 
-        texts = [doc.page_content for doc in documents]
-        metadatas = [doc.metadata for doc in documents]
-
-        logger.info(f"Storing {len(documents)} documents with pre-computed embeddings")
-
-        try:
-            result_ids = await asyncio.to_thread(
-                self.vector_store.add_embeddings,
-                texts=texts,
-                embeddings=embeddings,
-                metadatas=metadatas,
-                ids=ids,
-            )
-
-            logger.info(f"Successfully stored {len(result_ids)} documents")
-            if audit_context is not None:
-                emit_sync_ingestion_audit(
-                    action=SyncIngestionEventAction.DOCUMENT_PERSISTED,
-                    status=AuditEventStatus.SUCCESS,
-                    audit_context=audit_context,
-                    context=context,
-                )
-            return result_ids
-
-        except Exception as e:
-            logger.error(f"Failed to store documents with embeddings: {e}")
-            if audit_context is not None:
-                emit_sync_ingestion_audit(
-                    action=SyncIngestionEventAction.DOCUMENT_PERSISTED,
-                    status=AuditEventStatus.FAIL,
-                    audit_context=audit_context,
-                    context=(
-                        f"{context},error={_truncate_error(e)}"
-                        if context
-                        else f"error={_truncate_error(e)}"
-                    ),
-                    level=AuditLevel.ERROR,
-                )
-            raise
+        sanitized_documents = self._sanitize_documents(
+            documents,
+            operation="store_with_embeddings",
+        )
+        return await self._store_sanitized_documents_with_embeddings(
+            sanitized_documents,
+            embeddings,
+            ids,
+            audit_context=audit_context,
+            context=context,
+        )
 
     async def add_documents_batch(
         self,
@@ -630,17 +820,21 @@ class PGVectorRepository:
         if len(documents) != len(ids):
             raise ValueError("documents와 ids의 길이가 일치해야 합니다.")
 
+        sanitized_documents = self._sanitize_documents(
+            documents,
+            operation="upsert_documents",
+        )
         logger.info(f"Upserting {len(documents)} documents")
 
         # 기존 문서 삭제 후 새로 추가 (atomic하지 않음, 필요시 트랜잭션 추가)
         await self.delete_documents(ids)
-        embeddings = await self.generate_embeddings(
-            documents,
+        embeddings = await self._generate_embeddings_from_documents(
+            sanitized_documents,
             audit_context=audit_context,
             context=context,
         )
-        return await self.store_with_embeddings(
-            documents,
+        return await self._store_sanitized_documents_with_embeddings(
+            sanitized_documents,
             embeddings,
             ids,
             audit_context=audit_context,
