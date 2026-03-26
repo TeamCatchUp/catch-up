@@ -41,20 +41,6 @@ def _validate_utc_datetime(value: datetime, *, field_name: str) -> datetime:
     return value.astimezone(timezone.utc)
 
 
-def _validate_iso_datetime_text(value: str | None, *, field_name: str) -> str | None:
-    if value is None:
-        return None
-
-    stripped = value.strip()
-    if not stripped:
-        raise ValueError(f"{field_name} must not be blank")
-
-    parsed = datetime.fromisoformat(stripped)
-    if parsed.tzinfo is None:
-        raise ValueError(f"{field_name} must be timezone-aware")
-    return parsed.astimezone(timezone.utc).isoformat()
-
-
 class SyncDispatchStatus(StrEnum):
     ACCEPTED = "accepted"
     NO_EVENTS = "no_events"
@@ -267,16 +253,6 @@ class FullSyncTaskPayload(BaseModel):
         default=None,
         description="absolute full sync start timestamp in UTC epoch seconds string",
     )
-    range_start: str | None = Field(
-        default=None,
-        description="chunk range start timestamp in UTC ISO-8601 string",
-    )
-    range_end: str | None = Field(
-        default=None,
-        description="chunk range end timestamp in UTC ISO-8601 string",
-    )
-    chunk_index: int | None = Field(default=None, ge=1, description="full sync chunk index")
-    chunk_total: int | None = Field(default=None, ge=1, description="full sync chunk total")
 
     @field_validator("target_id", "stage")
     @classmethod
@@ -293,26 +269,6 @@ class FullSyncTaskPayload(BaseModel):
     def _validate_sync_from_ts(cls, value: str | None) -> str | None:
         return _validate_epoch_ts(value, field_name="sync_from_ts")
 
-    @field_validator("range_start", "range_end")
-    @classmethod
-    def _validate_range_text(cls, value: str | None, info) -> str | None:
-        return _validate_iso_datetime_text(value, field_name=info.field_name)
-
-    @model_validator(mode="after")
-    def _validate_chunk_context(self) -> "FullSyncTaskPayload":
-        has_range = self.range_start is not None or self.range_end is not None
-        if has_range and (self.range_start is None or self.range_end is None):
-            raise ValueError("full sync chunk range requires both range_start and range_end")
-
-        has_chunk = self.chunk_index is not None or self.chunk_total is not None
-        if has_chunk and (self.chunk_index is None or self.chunk_total is None):
-            raise ValueError("full sync chunk metadata requires both chunk_index and chunk_total")
-        if self.chunk_index is not None and self.chunk_total is not None:
-            if self.chunk_index > self.chunk_total:
-                raise ValueError("chunk_index must be less than or equal to chunk_total")
-
-        return self
-
     def to_stream_fields(self) -> dict[str, str]:
         fields = {
             "target_type": self.target_type.value,
@@ -321,14 +277,6 @@ class FullSyncTaskPayload(BaseModel):
         }
         if self.sync_from_ts is not None:
             fields["sync_from_ts"] = self.sync_from_ts
-        if self.range_start is not None:
-            fields["range_start"] = self.range_start
-        if self.range_end is not None:
-            fields["range_end"] = self.range_end
-        if self.chunk_index is not None:
-            fields["chunk_index"] = str(self.chunk_index)
-        if self.chunk_total is not None:
-            fields["chunk_total"] = str(self.chunk_total)
         return fields
 
 
@@ -429,10 +377,6 @@ class SyncStreamTask(BaseModel):
         target_id: str,
         stage: str,
         sync_from_ts: str | None,
-        range_start: str | None = None,
-        range_end: str | None = None,
-        chunk_index: int | None = None,
-        chunk_total: int | None = None,
         attempt: int = 0,
         max_attempts: int = 3,
     ) -> "SyncStreamTask":
@@ -447,10 +391,6 @@ class SyncStreamTask(BaseModel):
                 target_id=target_id,
                 stage=stage,
                 sync_from_ts=sync_from_ts,
-                range_start=range_start,
-                range_end=range_end,
-                chunk_index=chunk_index,
-                chunk_total=chunk_total,
             ),
             attempt=attempt,
             max_attempts=max_attempts,
@@ -565,30 +505,6 @@ class SyncStreamTask(BaseModel):
     def sync_from_ts(self) -> str | None:
         return self.payload.sync_from_ts
 
-    @property
-    def range_start(self) -> str | None:
-        if isinstance(self.payload, FullSyncTaskPayload):
-            return self.payload.range_start
-        return None
-
-    @property
-    def range_end(self) -> str | None:
-        if isinstance(self.payload, FullSyncTaskPayload):
-            return self.payload.range_end
-        return None
-
-    @property
-    def chunk_index(self) -> int | None:
-        if isinstance(self.payload, FullSyncTaskPayload):
-            return self.payload.chunk_index
-        return None
-
-    @property
-    def chunk_total(self) -> int | None:
-        if isinstance(self.payload, FullSyncTaskPayload):
-            return self.payload.chunk_total
-        return None
-
     def to_stream_fields(self) -> dict[str, str]:
         fields = {
             "event_id": self.event_id,
@@ -630,26 +546,6 @@ class SyncStreamTask(BaseModel):
                 sync_from_ts=(
                     str(fields.get("sync_from_ts"))
                     if fields.get("sync_from_ts") is not None
-                    else None
-                ),
-                range_start=(
-                    str(fields.get("range_start"))
-                    if fields.get("range_start") is not None
-                    else None
-                ),
-                range_end=(
-                    str(fields.get("range_end"))
-                    if fields.get("range_end") is not None
-                    else None
-                ),
-                chunk_index=(
-                    int(fields.get("chunk_index"))
-                    if fields.get("chunk_index") is not None
-                    else None
-                ),
-                chunk_total=(
-                    int(fields.get("chunk_total"))
-                    if fields.get("chunk_total") is not None
                     else None
                 ),
             )
