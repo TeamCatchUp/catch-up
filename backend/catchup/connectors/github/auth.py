@@ -52,7 +52,12 @@ class GitHubAppService:
         }
         return jwt.encode(payload, self.private_key, algorithm="RS256")
 
-    async def get_installation_access_token(self, installation_id: int) -> str:
+    async def get_installation_access_token(
+        self,
+        installation_id: int,
+        *,
+        force_refresh: bool = False,
+    ) -> str:
         """
         Installation Access Token 발급
         - 유효 시간: 1시간
@@ -63,7 +68,7 @@ class GitHubAppService:
         """
         now = time.time()
         cached = self._installation_tokens.get(installation_id)
-        if cached is not None:
+        if not force_refresh and cached is not None:
             token, expires_at = cached
             if expires_at - now > 60:
                 return token
