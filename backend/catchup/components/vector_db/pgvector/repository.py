@@ -32,6 +32,7 @@ from sqlalchemy import DateTime, Engine, and_, cast, delete as sa_delete, func, 
 
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.configs.config import settings
+from catchup.db.engine import engine
 from catchup.events.enums import SyncIngestionEventAction
 from catchup.sync.audit import SyncAuditContext, emit_sync_ingestion_audit
 
@@ -96,7 +97,7 @@ class PGVectorRepository:
             self.vector_store = PGVector(
                 embeddings=self.embeddings,
                 collection_name=self.collection_name,
-                connection=settings.sqlalchemy_database_url,
+                connection=engine,
                 use_jsonb=True,  # metadata를 JSONB로 저장 (필터링 지원)
             )
             
