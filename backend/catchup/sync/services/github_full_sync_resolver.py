@@ -14,7 +14,7 @@ from catchup.sync.common.schemas import (
     FullSyncResolvedTargets,
     FullSyncDispatchRequest,
 )
-from catchup.sync.full_sync.target_normalizer import (
+from catchup.sync.services.full_sync_target_normalizer import (
     resolve_full_sync_targets_from_rows,
 )
 

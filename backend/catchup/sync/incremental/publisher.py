@@ -24,7 +24,7 @@ from catchup.db.models import (
     SyncConnector,
 )
 from catchup.sync.common.schemas import SyncStreamTask
-from catchup.sync.incremental.policy.full_sync_guard import is_incremental_target_eligible
+from catchup.sync.incremental.full_sync_guard import is_incremental_target_eligible
 from catchup.sync.stream_runtime.stream_queue import publish_task
 
 logger = logging.getLogger(__name__)

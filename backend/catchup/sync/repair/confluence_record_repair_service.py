@@ -18,7 +18,7 @@ from catchup.server.sync.schemas import (
     SyncRecordRetryResponse,
 )
 from catchup.sync.common.exceptions import SyncRequestError
-from catchup.sync.repair.core.context import RecordRepairContext
+from catchup.sync.repair.context import RecordRepairContext
 
 
 @dataclass(slots=True, frozen=True)

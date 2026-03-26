@@ -21,13 +21,8 @@ from catchup.db.engine import SessionLocal
 from catchup.db.models import SyncConnector
 from catchup.events.enums import SyncTriggerEventAction
 from catchup.sync.audit import SyncAuditContext, emit_sync_trigger_audit
-from catchup.sync.incremental.ingest.service import (
-    build_confluence_record_change,
-    ingest_record_changes,
-)
-from catchup.sync.incremental.policy.full_sync_guard import (
-    filter_record_changes_by_full_sync,
-)
+from catchup.sync.incremental.full_sync_guard import filter_record_changes_by_full_sync
+from catchup.sync.incremental.ingress import build_confluence_record_change, ingest_record_changes
 
 logger = logging.getLogger(__name__)
 

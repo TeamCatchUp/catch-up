@@ -18,7 +18,7 @@ from catchup.sync.common.schemas import (
     SyncDispatchResult,
     SyncEventSeed,
 )
-from catchup.sync.dispatch.orchestrator import SyncDispatchOrchestrator
+from catchup.sync.services.sync_orchestrator import SyncDispatchOrchestrator
 
 logger = structlog.get_logger()
 
