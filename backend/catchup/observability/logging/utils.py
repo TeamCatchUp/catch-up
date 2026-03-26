@@ -1,22 +1,28 @@
+import logging
 import time
-from typing import Any, Final
+from typing import Any
 
 from catchup.configs.config import settings
 from catchup.observability.logging.constants import LOG_LEVELS
 
-
-CONSOLE_EXCLUDE_KEYS: Final[set[str]] = {
+CONSOLE_EXCLUDE_KEYS: set[str] = {
     "actor",
     "environment",
     "event_action",
     "event_type",
-    # "event_status",
     "metadata",
     "service",
     "trace_id",
     "version",
     "remote_addr",
 }
+
+
+def resolve_console_exclude_keys(log_level: int) -> str:
+    if log_level == logging.DEBUG:
+        CONSOLE_EXCLUDE_KEYS.discard("metadata")
+        return "metadata_exposed_on_debug_level"
+    return ""
 
 
 def resolve_log_level() -> int:

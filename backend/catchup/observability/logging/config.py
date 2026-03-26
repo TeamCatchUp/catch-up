@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import logging
+
 import structlog
 
 from catchup.configs.config import settings
-from catchup.observability.logging.handlers import (
-    build_console_handler,
-    build_json_file_handler,
-    build_audit_file_handler,
-)
+from catchup.observability.logging.handlers import build_audit_file_handler
+from catchup.observability.logging.handlers import build_console_handler
+from catchup.observability.logging.handlers import build_json_file_handler
 from catchup.observability.logging.processors import SHARED_PROCESSORS
+from catchup.observability.logging.utils import resolve_console_exclude_keys
 from catchup.observability.logging.utils import resolve_log_level
 
 
@@ -59,7 +59,7 @@ def _setup_third_party_loggers(log_level: int) -> None:
     access_logger.propagate = False
     
 
-def _setup_audit_logger() -> list[str]:
+def _setup_audit_logger(log_level: int) -> list[str]:
     warnings: list[str] = []
     
     audit_logger = logging.getLogger("catchup.audit")
@@ -69,6 +69,9 @@ def _setup_audit_logger() -> list[str]:
     
     if settings.LOG_CONSOLE_ENABLED:
         audit_logger.addHandler(build_console_handler())
+        msg = resolve_console_exclude_keys(log_level)
+        if msg:
+            warnings.append(msg)
     
     if settings.LOG_AUDIT_FILE_ENABLED:
         try:
@@ -96,7 +99,7 @@ def configure_logging() -> None:
     
     warnings.extend(_setup_root_logger(log_level))
     _setup_third_party_loggers(log_level)
-    warnings.extend(_setup_audit_logger())
+    warnings.extend(_setup_audit_logger(log_level))
     _configure_structlog()
     
     internal_logger = logging.getLogger("catchup.observability.logging")
