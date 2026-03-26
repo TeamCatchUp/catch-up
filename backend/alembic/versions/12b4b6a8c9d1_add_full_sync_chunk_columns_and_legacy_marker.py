@@ -40,7 +40,7 @@ def upgrade() -> None:
                 resource_metadata = jsonb_set(
                     COALESCE(se.resource_metadata, '{}'::jsonb),
                     '{event_schema_version}',
-                    to_jsonb(CAST(:legacy_schema_version AS int)),
+                    to_jsonb(:legacy_schema_version::int),
                     true
                 ),
                 updated_at = NOW()
@@ -60,7 +60,7 @@ def upgrade() -> None:
                 resource_metadata = jsonb_set(
                     COALESCE(se.resource_metadata, '{}'::jsonb),
                     '{ignored_reason}',
-                    to_jsonb(CAST(:legacy_ignored_reason AS text)),
+                    to_jsonb(:legacy_ignored_reason::text),
                     true
                 ),
                 status = 'failed',
