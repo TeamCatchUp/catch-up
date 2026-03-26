@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 from catchup.db.models import SyncType
-from catchup.sync.common.protocols import FullSyncCollectingHandlerProtocol
 from catchup.sync.common.protocols import IngestionHandlerProtocol
-from catchup.sync.common.schemas import FullSyncContext
-from catchup.sync.common.schemas import TargetSyncResult
+from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
 
 
-class BaseFullSyncHandler(
-    IngestionHandlerProtocol,
-    FullSyncCollectingHandlerProtocol,
-):
+class BaseFullSyncHandler(IngestionHandlerProtocol):
     """
     Full Sync 핸들러 공통 기본 구현.
 
@@ -35,16 +30,6 @@ class BaseFullSyncHandler(
             synced_count=synced_count,
             error_count=error_count,
             skipped=skipped,
-        )
-    
-    async def collect_identifiers(
-        self,
-        *,
-        context: FullSyncContext,
-        service_cache: dict[str, object],
-    ) -> list[str]:
-        raise NotImplementedError(
-            f"{self.__class__.__name__}.collect_identifiers is not implemented"
         )
 
     async def on_job_started(

@@ -156,6 +156,7 @@ class JiraRecordRepairService:
         retry_records = _index_retry_records(request.records)
         retry_result = await service.retry_missing_records(
             project_key=target.project_key,
+            sync_from_dt=repair_context.sync_from_dt,
             issue_ids=retry_records.issue_ids,
             epic_ids=retry_records.epic_ids,
         )

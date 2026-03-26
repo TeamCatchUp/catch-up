@@ -6,8 +6,6 @@ from typing import Any
 
 from sqlalchemy import select
 
-from catchup.configs.constants import FULL_SYNC_EVENT_SCHEMA_VERSION
-from catchup.configs.constants import LEGACY_FULL_SYNC_IGNORED_REASON
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SyncConnector
 from catchup.db.models import SyncEvent
@@ -112,23 +110,6 @@ def load_record_repair_context(event_id: str) -> RecordRepairContext:
         )
 
     metadata = event.resource_metadata if isinstance(event.resource_metadata, dict) else {}
-    event_schema_version = metadata.get("event_schema_version")
-    ignored_reason = _metadata_text(metadata, "ignored_reason")
-
-    if job.sync_type == SyncType.FULL and event_schema_version not in (
-        FULL_SYNC_EVENT_SCHEMA_VERSION,
-        str(FULL_SYNC_EVENT_SCHEMA_VERSION),
-    ):
-        raise SyncRequestError(
-            "manual retry does not support legacy full sync events",
-            code="legacy_full_sync_event",
-            metadata={
-                "event_id": normalized_event_id,
-                "event_schema_version": event_schema_version,
-                "ignored_reason": ignored_reason or LEGACY_FULL_SYNC_IGNORED_REASON,
-            },
-        )
-
     scope_id = _metadata_text(metadata, "scope_id") or str(job.scope_id or "").strip()
     target_id = _metadata_text(metadata, "target_id") or str(event.resource_id or "").strip()
     target_name = _metadata_text(metadata, "target_name") or target_id
