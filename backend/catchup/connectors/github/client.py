@@ -158,9 +158,14 @@ class GitHubApiClient:
         access_token: GitHub Installation Access Token
     """
 
-    def __init__(self, access_token: str):
+    def __init__(
+        self,
+        access_token: str,
+        refresh_access_token: Callable[[], Awaitable[str]] | None = None,
+    ):
         self.access_token = access_token
         self._github = GitHub(access_token)
+        self._refresh_access_token = refresh_access_token
 
         # Rate limiting을 위한 세마포어
         self._semaphore = asyncio.Semaphore(int(settings.GITHUB_SYNC_MAX_CONCURRENT_REQUESTS))
@@ -169,6 +174,22 @@ class GitHubApiClient:
         self._rate_limit_delay = float(settings.GITHUB_API_RATE_LIMIT_DELAY)
         self._max_rate_limit_retries = 3
         self._max_client_retry_after_seconds = 30
+        self._max_auth_retries = 1
+
+    def _set_access_token(self, access_token: str) -> None:
+        self.access_token = access_token
+        self._github = GitHub(access_token)
+
+    async def _refresh_auth_token(self) -> bool:
+        if self._refresh_access_token is None:
+            return False
+
+        refreshed_token = await self._refresh_access_token()
+        if not refreshed_token:
+            return False
+
+        self._set_access_token(refreshed_token)
+        return True
 
     @staticmethod
     def _extract_header_subset(headers: Any) -> dict[str, str]:
@@ -408,6 +429,7 @@ class GitHubApiClient:
         """
         async with self._semaphore:
             retry_count = 0
+            auth_retry_count = 0
 
             while True:
                 try:
@@ -415,6 +437,16 @@ class GitHubApiClient:
                     await asyncio.sleep(self._rate_limit_delay)
                     return result
                 except RequestFailed as e:
+                    status_code = e.response.status_code if e.response else None
+                    if status_code == 401 and auth_retry_count < self._max_auth_retries:
+                        refreshed = await self._refresh_auth_token()
+                        if refreshed:
+                            auth_retry_count += 1
+                            logger.info(
+                                "[GITHUB][API] Refreshed installation token after 401 response"
+                            )
+                            continue
+
                     try:
                         self._handle_error(e)
                     except GitHubRateLimitError as rate_limit_error:

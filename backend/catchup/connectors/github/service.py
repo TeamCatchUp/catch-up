@@ -21,6 +21,8 @@ Note:
 import asyncio
 import logging
 import traceback
+from collections.abc import Awaitable
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from typing import Any, Literal
@@ -156,6 +158,7 @@ class GithubIngestionService:
         account_login: str,
         account_type: GithubInstallationType,
         enable_summarization: bool = True,
+        refresh_access_token: Callable[[], Awaitable[str]] | None = None,
     ):
         """
         Args:
@@ -167,7 +170,10 @@ class GithubIngestionService:
         self.access_token = access_token
         self.enable_summarization = enable_summarization
 
-        self.client = GitHubApiClient(access_token)
+        self.client = GitHubApiClient(
+            access_token,
+            refresh_access_token=refresh_access_token,
+        )
         self.transformer: GithubTransformer | None = None
         self.repository = repository
         self.summarizer: SummarizerService | None = None
