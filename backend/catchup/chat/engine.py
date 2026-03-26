@@ -35,7 +35,7 @@ from catchup.db.models import SourceType
 from catchup.events.enums import ChatEventAction
 from catchup.events.enums import EventType
 from catchup.observability.langfuse.configs import get_langfuse_client
-from catchup.observability.langfuse.configs import observe
+from catchup.observability.langfuse.configs import get_observe
 from catchup.rag.checkpoint import get_langgraph_checkpointer
 from catchup.rag.graph import get_compiled_graph
 from catchup.rag.schemas.context import GlobalContext
@@ -43,6 +43,8 @@ from catchup.rag.schemas.sources import BaseSource
 
 logger = structlog.get_logger()
 
+# Langfuse
+observe = get_observe()
 
 class ChatService:
     # Compiled Graph
