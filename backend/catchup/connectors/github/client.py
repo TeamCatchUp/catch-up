@@ -22,7 +22,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Literal
 
 from githubkit import GitHub
 from githubkit.exception import RequestFailed, RequestTimeout
@@ -175,21 +175,29 @@ class GitHubApiClient:
         self._max_rate_limit_retries = 3
         self._max_client_retry_after_seconds = 30
         self._max_auth_retries = 1
+        self._auth_refresh_lock = asyncio.Lock()
 
     def _set_access_token(self, access_token: str) -> None:
         self.access_token = access_token
         self._github = GitHub(access_token)
 
-    async def _refresh_auth_token(self) -> bool:
+    async def _refresh_auth_token(
+        self,
+        failed_token: str,
+    ) -> Literal["refreshed", "reused"] | None:
         if self._refresh_access_token is None:
-            return False
+            return None
 
-        refreshed_token = await self._refresh_access_token()
-        if not refreshed_token:
-            return False
+        async with self._auth_refresh_lock:
+            if self.access_token != failed_token:
+                return "reused"
 
-        self._set_access_token(refreshed_token)
-        return True
+            refreshed_token = await self._refresh_access_token()
+            if not refreshed_token:
+                return None
+
+            self._set_access_token(refreshed_token)
+            return "refreshed"
 
     @staticmethod
     def _extract_header_subset(headers: Any) -> dict[str, str]:
@@ -433,17 +441,21 @@ class GitHubApiClient:
 
             while True:
                 try:
+                    request_token = self.access_token
                     result = await request_factory()
                     await asyncio.sleep(self._rate_limit_delay)
                     return result
                 except RequestFailed as e:
                     status_code = e.response.status_code if e.response else None
                     if status_code == 401 and auth_retry_count < self._max_auth_retries:
-                        refreshed = await self._refresh_auth_token()
-                        if refreshed:
+                        refresh_result = await self._refresh_auth_token(request_token)
+                        if refresh_result is not None:
                             auth_retry_count += 1
                             logger.info(
-                                "[GITHUB][API] Refreshed installation token after 401 response"
+                                "[GITHUB][API] Installation token %s after 401 response",
+                                "refreshed"
+                                if refresh_result == "refreshed"
+                                else "reused from concurrent refresh",
                             )
                             continue
 
