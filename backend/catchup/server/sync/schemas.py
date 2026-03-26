@@ -26,7 +26,6 @@ class SyncJobTargetSnapshotItem(BaseModel):
     target_id: str
     target_name: str
     status: SyncEventStatus
-    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
     def from_snapshot_result(

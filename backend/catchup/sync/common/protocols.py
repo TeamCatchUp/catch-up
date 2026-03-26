@@ -2,20 +2,18 @@ from __future__ import annotations
 
 import asyncio
 from typing import Protocol
-from typing import runtime_checkable
 
-from catchup.db.models import SyncConnector
-from catchup.db.models import SyncType
-from catchup.sync.common.schemas import FullSyncContext
-from catchup.sync.common.schemas import FullSyncDispatchRequest
-from catchup.sync.common.schemas import FullSyncResolvedTargets
-from catchup.sync.common.schemas import FullSyncRepairResult
-from catchup.sync.common.schemas import FullSyncValidationResult
-from catchup.sync.common.schemas import PublishTasksResult
-from catchup.sync.common.schemas import SyncContext
-from catchup.sync.common.schemas import SyncStreamMessage
-from catchup.sync.common.schemas import SyncStreamTask
-from catchup.sync.common.schemas import TargetSyncResult
+from catchup.db.models import SyncConnector, SyncType
+from catchup.sync.common.schemas import (
+    FullSyncDispatchRequest,
+    FullSyncContext,
+    FullSyncResolvedTargets,
+    PublishTasksResult,
+    SyncContext,
+    SyncStreamMessage,
+    SyncStreamTask,
+    TargetSyncResult,
+)
 
 
 class EventPublisherProtocol(Protocol):
@@ -104,40 +102,6 @@ class IngestionHandlerProtocol(Protocol):
         total_targets: int,
         failed_targets: int,
     ) -> None:
-        ...
-
-@runtime_checkable
-class FullSyncCollectingHandlerProtocol(Protocol):
-    async def collect_identifiers(
-        self,
-        *,
-        context: FullSyncContext,
-        service_cache: dict[str, object],
-    ) -> list[str]:
-        """Full Sync chunk event 범위의 canonical identifier 목록을 수집."""
-        ...
-
-
-@runtime_checkable
-class FullSyncValidatingHandlerProtocol(Protocol):
-    async def validate_sync_result(
-        self,
-        *,
-        context: FullSyncContext,
-        expected_ids: list[str],
-        service_cache: dict[str, object],
-    ) -> FullSyncValidationResult:
-        """Full Sync chunk 실행 후 stored/missing 상태를 검증."""
-        ...
-
-    async def repair_missing_records(
-        self,
-        *,
-        context: FullSyncContext,
-        validation_result: FullSyncValidationResult,
-        service_cache: dict[str, object],
-    ) -> FullSyncRepairResult:
-        """Validation 결과가 threshold 이내일 때 by-id repair를 수행."""
         ...
 
 class FullSyncTargetResolverProtocol(Protocol):

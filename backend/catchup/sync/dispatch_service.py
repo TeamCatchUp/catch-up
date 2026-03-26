@@ -12,8 +12,8 @@ from catchup.sync.common.schemas import (
 )
 from catchup.sync.event_publisher.redis_stream_publisher import get_event_publisher
 from catchup.sync.registry import get_full_sync_target_resolver
-from catchup.sync.dispatch.orchestrator import SyncDispatchOrchestrator
-from catchup.sync.full_sync.orchestrator import FullSyncDispatchOrchestrator
+from catchup.sync.services.full_sync_orchestrator import FullSyncDispatchOrchestrator
+from catchup.sync.services.sync_orchestrator import SyncDispatchOrchestrator
 
 logger = logging.getLogger(__name__)
 

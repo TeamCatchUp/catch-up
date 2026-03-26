@@ -3,15 +3,19 @@ from __future__ import annotations
 import logging
 from uuid import uuid4
 
-from catchup.db.models import SyncType
 from catchup.sync.common.protocols import IngestionHandlerProtocol
-from catchup.sync.common.schemas import FullSyncContext
-from catchup.sync.common.schemas import SyncContext
-from catchup.sync.common.schemas import SyncStreamMessage
-from catchup.sync.common.schemas import SyncStreamTask
-from catchup.sync.status_stream.schemas import SyncStatusEventType
-from catchup.sync.status_stream.schemas import SyncStatusStreamEvent
-from catchup.sync.status_stream.schemas import utc_now_iso
+from catchup.sync.common.schemas import (
+    FullSyncContext,
+    SyncContext,
+    SyncStreamMessage,
+    SyncStreamTask,
+)
+from catchup.sync.status_stream.pubsub import publish_job_status_event
+from catchup.sync.status_stream.schemas import (
+    SyncStatusEventType,
+    SyncStatusStreamEvent,
+    utc_now_iso,
+)
 from catchup.sync.stream_runtime.stream_constants import SyncStreamFailureReason
 from catchup.sync.stream_runtime.stream_queue import publish_deadletter
 from catchup.worker.handlers import get_ingestion_handler
@@ -27,30 +31,8 @@ def task_fields(task: SyncStreamTask) -> dict[str, str]:
     return task.to_stream_fields()
 
 
-# 같은 대상에 대한 중복처리를 방지하기 위한 Lock Key 생성
-def task_lock_key(task: SyncStreamTask) -> tuple[str, ...]:
-    if task.sync_type == SyncType.FULL:
-        stage = (task.stage or "").strip()
-        target_id = (task.target_id or "").strip() or task.event_id
-        base_key = (
-            task.connector.strip(),
-            (task.scope_id or "").strip(),
-            target_id,
-            stage,
-        )
-
-        range_start = (task.range_start or "").strip()
-        range_end = (task.range_end or "").strip()
-        if range_start and range_end:
-            return base_key + (range_start, range_end)
-
-        chunk_index = task.chunk_index
-        chunk_total = task.chunk_total
-        if chunk_index is not None and chunk_total is not None:
-            return base_key + (str(chunk_index), str(chunk_total))
-
-        return base_key
-
+# 같은 대상에 대한 중복처리를 방지하기 위한 Lock Key 생성 
+def task_lock_key(task: SyncStreamTask) -> tuple[str, str, str, str]:
     target_type = (
         (task.target_type or "").strip()
         or ("record" if task.record_key else "event")
@@ -66,6 +48,7 @@ def task_lock_key(task: SyncStreamTask) -> tuple[str, ...]:
         target_type,
         target_id,
     )
+
 
 def select_handler(context: SyncContext) -> IngestionHandlerProtocol | None:
     return get_ingestion_handler(
@@ -139,20 +122,16 @@ def build_job_status_event(
 
 # Status Streaming이 Sync 흐름을 막지 않도록 로그만 남김
 async def publish_status_event(event: SyncStatusStreamEvent) -> None:
-    # NOTE:
-    # Sync status SSE stream is currently unused, so Redis Pub/Sub publish is
-    # intentionally disabled while keeping the implementation reusable.
-    # try:
-    #     await publish_job_status_event(event)
-    # except Exception as exc:
-    #     logger.warning(
-    #         "[SYNC][STATUS][WORKER] Failed to publish status event: job_id=%s, event_type=%s, error=%s",
-    #         event.job_id,
-    #         event.event_type.value,
-    #         exc,
-    #         exc_info=True,
-    #     )
-    return None
+    try:
+        await publish_job_status_event(event)
+    except Exception as exc:
+        logger.warning(
+            "[SYNC][STATUS][WORKER] Failed to publish status event: job_id=%s, event_type=%s, error=%s",
+            event.job_id,
+            event.event_type.value,
+            exc,
+            exc_info=True,
+        )
 
 
 # 최종 실패 event를 DLQ 처리함

@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
-from typing import Any
 from typing import Sequence
 
 from sqlalchemy import case
@@ -16,7 +15,6 @@ from sqlalchemy.orm import Session
 
 from catchup.db.models import SyncConnector
 from catchup.db.models import SyncEvent
-from catchup.db.models import SyncEventMissingRecord
 from catchup.db.models import SyncEventPublishStatus
 from catchup.db.models import SyncEventStatus
 from catchup.db.models import SyncJob
@@ -44,25 +42,11 @@ class SyncEventCreateInput:
     resource_metadata: dict[str, object] | None = None
     max_attempts: int = 3
 
-    stage: str | None = None
-    range_start: datetime | None = None
-    range_end: datetime | None = None
-    chunk_index: int | None = None
-    chunk_total: int | None = None
-    range_watermark: datetime | None = None
-
 
 @dataclass(slots=True, frozen=True)
 class SyncEventPublishResultInput:
     event_id: str
     stream_message_id: str
-
-
-@dataclass(slots=True, frozen=True)
-class SyncEventMissingRecordInput:
-    event_id: str
-    record_type: str
-    record_id: str
 
 
 @dataclass(slots=True, frozen=True)
@@ -365,12 +349,6 @@ def create_events(db: Session, payloads: Sequence[SyncEventCreateInput]) -> list
             resource_type=item.resource_type,
             resource_id=item.resource_id,
             resource_metadata=item.resource_metadata or {},
-            stage=item.stage,
-            range_start=_to_utc(item.range_start) if item.range_start else None,
-            range_end=_to_utc(item.range_end) if item.range_end else None,
-            chunk_index=item.chunk_index,
-            chunk_total=item.chunk_total,
-            range_watermark=_to_utc(item.range_watermark) if item.range_watermark else None,
             status=SyncEventStatus.PENDING,
             attempt=0,
             max_attempts=item.max_attempts,
@@ -391,121 +369,6 @@ def create_events(db: Session, payloads: Sequence[SyncEventCreateInput]) -> list
 def get_event(db: Session, event_id: str) -> SyncEvent | None:
     stmt = select(SyncEvent).where(SyncEvent.event_id == event_id)
     return db.execute(stmt).scalar_one_or_none()
-
-def update_event_resource_metadata(
-    db: Session,
-    *,
-    event_id: str,
-    values: dict[str, Any],
-    from_statuses: Sequence[SyncEventStatus] | None = None,
-) -> bool:
-    event = get_event(db, event_id)
-    if event is None:
-        return False
-
-    if from_statuses and event.status not in set(from_statuses):
-        return False
-    
-    current_metadata = (
-        dict(event.resource_metadata)
-        if isinstance(event.resource_metadata, dict)
-        else {}
-    )
-    current_metadata.update(values)
-
-    event.resource_metadata = current_metadata
-    event.updated_at = _utc_now()
-    db.flush()
-    return True
-
-
-def replace_event_missing_records(
-    db: Session,
-    *,
-    event_id: str,
-    items: Sequence[SyncEventMissingRecordInput],
-) -> int:
-    db.query(SyncEventMissingRecord).filter(
-        SyncEventMissingRecord.event_id == event_id
-    ).delete(synchronize_session=False)
-
-    normalized_items: list[SyncEventMissingRecordInput] = []
-    seen: set[tuple[str, str]] = set()
-    for item in items:
-        record_type = str(item.record_type).strip()
-        record_id = str(item.record_id).strip()
-        if not record_type or not record_id:
-            continue
-        dedupe_key = (record_type, record_id)
-        if dedupe_key in seen:
-            continue
-        seen.add(dedupe_key)
-        normalized_items.append(
-            SyncEventMissingRecordInput(
-                event_id=event_id,
-                record_type=record_type,
-                record_id=record_id,
-            )
-        )
-
-    if not normalized_items:
-        db.flush()
-        return 0
-
-    db.add_all(
-        [
-            SyncEventMissingRecord(
-                event_id=item.event_id,
-                record_type=item.record_type,
-                record_id=item.record_id,
-            )
-            for item in normalized_items
-        ]
-    )
-    db.flush()
-    return len(normalized_items)
-
-
-def list_event_missing_records(
-    db: Session,
-    *,
-    event_id: str,
-) -> list[SyncEventMissingRecord]:
-    stmt = (
-        select(SyncEventMissingRecord)
-        .where(SyncEventMissingRecord.event_id == event_id)
-        .order_by(
-            SyncEventMissingRecord.record_type.asc(),
-            SyncEventMissingRecord.record_id.asc(),
-        )
-    )
-    return list(db.execute(stmt).scalars().all())
-
-
-def clear_event_missing_records(
-    db: Session,
-    *,
-    event_id: str,
-) -> int:
-    deleted = db.query(SyncEventMissingRecord).filter(
-        SyncEventMissingRecord.event_id == event_id
-    ).delete(synchronize_session=False)
-    db.flush()
-    return int(deleted or 0)
-
-def set_event_execution_phase(
-    db: Session,
-    *,
-    event_id: str,
-    execution_phase: str,
-    from_statuses: Sequence[SyncEventStatus] | None = None,
-) -> bool:
-    return update_event_resource_metadata(
-        db,
-        event_id=event_id,
-        values={"execution_phase": execution_phase},
-        from_statuses=from_statuses,
-    )
 
 
 def list_retry_ready_events(
@@ -925,15 +788,6 @@ def requeue_retrying_event(
         from_statuses=[SyncEventStatus.RETRYING],
         to_status=SyncEventStatus.PENDING,
         retry_ready_at=ready_at if require_due else None,
-    )
-
-def release_claimed_event_to_pending(db: Session, event_id: str) -> bool:
-    return update_event_status_cas(
-        db,
-        event_id=event_id,
-        from_statuses=[SyncEventStatus.IN_PROGRESS],
-        to_status=SyncEventStatus.PENDING,
-        last_error=None,
     )
 
 

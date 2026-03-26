@@ -15,36 +15,6 @@ def _normalize_sync_from_ts(metadata: dict[str, object]) -> str | None:
     return value or None
 
 
-def _normalize_iso_datetime(value: object) -> str | None:
-    if value is None:
-        return None
-    return str(value).strip() or None
-
-
-def _normalize_chunk_int(value: object) -> int | None:
-    if value is None:
-        return None
-    return int(value)
-
-def _resolve_stage(
-    *,
-    event: SyncEvent,
-    metadata: dict[str, object],
-) -> str:
-    if event.stage is not None:
-        value = str(event.stage).strip()
-        if value:
-            return value
-    
-    raw = metadata.get("stage")
-    if raw is not None:
-        value = str(raw).strip()
-        if value:
-            return value
-        
-    raise ValueError(f"stage is missing for event: {event.event_id}")
-
-
 def build_stream_task_from_persisted_event(
     *,
     event: SyncEvent,
@@ -59,8 +29,6 @@ def build_stream_task_from_persisted_event(
     target_id = str(event.resource_id).strip()
     if not target_type or not target_id:
         raise ValueError(f"target identity is invalid for event: {event.event_id}")
-    
-    stage = _resolve_stage(event=event, metadata=metadata)
 
     return SyncStreamTask.full(
         event_id=event.event_id,
@@ -69,12 +37,7 @@ def build_stream_task_from_persisted_event(
         scope_id=scope_id,
         target_type=target_type,
         target_id=target_id,
-        stage=stage,
         sync_from_ts=_normalize_sync_from_ts(metadata),
-        range_start=_normalize_iso_datetime(event.range_start or metadata.get("range_start")),
-        range_end=_normalize_iso_datetime(event.range_end or metadata.get("range_end")),
-        chunk_index=_normalize_chunk_int(event.chunk_index or metadata.get("chunk_index")),
-        chunk_total=_normalize_chunk_int(event.chunk_total or metadata.get("chunk_total")),
         attempt=max(0, int(event.attempt)),
         max_attempts=max(1, int(event.max_attempts)),
     )
