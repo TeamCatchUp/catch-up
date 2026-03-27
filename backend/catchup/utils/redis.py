@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 _redis_client: RedisCluster | Redis | None = None
 _stream_redis_client: RedisCluster | Redis | None = None
+_redis_client_lock = asyncio.Lock()
+_stream_redis_client_lock = asyncio.Lock()
 
 OAUTH_STATE_PREFIX = "oauth:state:"
 OAUTH_STATE_TTL = 600  # 10분
@@ -125,41 +127,156 @@ async def _create_redis_client(
         raise
 
 
+async def _create_stream_redis_client(
+    *,
+    client_type: str,
+    socket_timeout: float,
+) -> Redis:
+    socket_connect_timeout = REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS
+    ping_timeout = REDIS_PING_TIMEOUT_SECONDS
+    health_check_interval = REDIS_HEALTH_CHECK_INTERVAL_SECONDS
+
+    redis_url = urlsplit(settings.REDIS_URL)
+    redis_host = redis_url.hostname or "unknown"
+    redis_port = redis_url.port or 6379
+    redis_db = redis_url.path.lstrip("/") or "0"
+
+    logger.debug(
+        (
+            "[REDIS][CLIENT][INIT] Creating Redis client: "
+            "client_type=%s, host=%s, port=%s, db=%s, cluster_mode=%s, socket_connect_timeout=%.1fs, "
+            "socket_timeout=%.1fs, ping_timeout=%.1fs, health_check_interval=%ss"
+        ),
+        client_type,
+        redis_host,
+        redis_port,
+        redis_db,
+        False,
+        socket_connect_timeout,
+        socket_timeout,
+        ping_timeout,
+        health_check_interval,
+    )
+
+    redis_client: Redis | None = None
+
+    try:
+        redis_client = Redis.from_url(
+            settings.REDIS_URL,
+            socket_connect_timeout=socket_connect_timeout,
+            socket_timeout=socket_timeout,
+            health_check_interval=health_check_interval,
+        )
+
+        ping_started_at = time.perf_counter()
+        await asyncio.wait_for(redis_client.ping(), timeout=ping_timeout)
+        ping_elapsed_ms = (time.perf_counter() - ping_started_at) * 1000
+
+        logger.debug(
+            "[REDIS][CLIENT][INIT] Redis client connected successfully: client_type=%s, ping_elapsed_ms=%.2f",
+            client_type,
+            ping_elapsed_ms,
+        )
+        return redis_client
+
+    except asyncio.TimeoutError:
+        logger.error(
+            "[REDIS][CLIENT][INIT] Redis connection timed out: client_type=%s, host=%s, port=%s, db=%s, cluster_mode=%s",
+            client_type,
+            redis_host,
+            redis_port,
+            redis_db,
+            False,
+            exc_info=True,
+        )
+        if redis_client is not None:
+            await redis_client.aclose()
+        raise
+    except Exception:
+        logger.error(
+            "[REDIS][CLIENT][INIT] Failed to initialize Redis client: client_type=%s, host=%s, port=%s, db=%s, cluster_mode=%s",
+            client_type,
+            redis_host,
+            redis_port,
+            redis_db,
+            False,
+            exc_info=True,
+        )
+        if redis_client is not None:
+            await redis_client.aclose()
+        raise
+
+
 async def get_redis_client() -> RedisCluster | Redis:
     global _redis_client
 
-    # 이미 생성된 클라이언트가 있으면 재사용한다.
     if _redis_client is not None:
         return _redis_client
 
-    _redis_client = await _create_redis_client(
-        client_type="default",
-        socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
-    )
+    async with _redis_client_lock:
+        if _redis_client is not None:
+            return _redis_client
+
+        _redis_client = await _create_redis_client(
+            client_type="default",
+            socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+        )
     return _redis_client
 
 
-async def get_stream_redis_client() -> RedisCluster | Redis:
+async def get_stream_redis_client() -> Redis:
     global _stream_redis_client
 
     if _stream_redis_client is not None:
         return _stream_redis_client
 
-    _stream_redis_client = await _create_redis_client(
-        client_type="stream",
-        socket_timeout=REDIS_STREAM_SOCKET_TIMEOUT_SECONDS,
-    )
+    async with _stream_redis_client_lock:
+        if _stream_redis_client is not None:
+            return _stream_redis_client
+
+        _stream_redis_client = await _create_stream_redis_client(
+            client_type="stream",
+            socket_timeout=REDIS_STREAM_SOCKET_TIMEOUT_SECONDS,
+        )
     return _stream_redis_client
+
+
+async def reset_stream_redis_client(
+    client: RedisCluster | Redis | None = None,
+) -> None:
+    global _stream_redis_client
+
+    async with _stream_redis_client_lock:
+        current_client = _stream_redis_client
+        if current_client is None:
+            return
+        if client is not None and current_client is not client:
+            return
+
+        _stream_redis_client = None
+
+    try:
+        await current_client.aclose()
+    except Exception:
+        logger.warning(
+            "[REDIS][CLIENT][RESET] Failed to close stream Redis client",
+            exc_info=True,
+        )
+    else:
+        logger.warning("[REDIS][CLIENT][RESET] Stream Redis client reset")
 
 
 async def check_all_redis_health() -> bool:
     """공용/stream Redis 클라이언트 상태를 모두 확인합니다."""
     try:
-        default_client = await get_redis_client()
-        await default_client.ping()
-
-        stream_client = await get_stream_redis_client()
-        await stream_client.ping()
+        default_client, stream_client = await asyncio.gather(
+            get_redis_client(),
+            get_stream_redis_client(),
+        )
+        await asyncio.gather(
+            default_client.ping(),
+            stream_client.ping(),
+        )
         return True
     except Exception as e:
         logger.error(f"[REDIS][HEALTH] Health check failed: {e}")

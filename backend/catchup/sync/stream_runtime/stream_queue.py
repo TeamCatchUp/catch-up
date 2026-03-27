@@ -4,7 +4,9 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
+from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import ResponseError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from catchup.configs.config import settings
 from catchup.sync.stream_runtime.stream_constants import (
@@ -21,7 +23,11 @@ from catchup.sync.stream_runtime.stream_schemas import (
     SyncStreamMessage,
     SyncStreamTask,
 )
-from catchup.utils.redis import get_redis_client, get_stream_redis_client
+from catchup.utils.redis import (
+    get_redis_client,
+    get_stream_redis_client,
+    reset_stream_redis_client,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -218,13 +224,17 @@ async def read_new_messages(
         else max(0, block_ms)
     )
 
-    raw = await redis.xreadgroup(
-        groupname=SYNC_EVENTS_CONSUMER_GROUP,
-        consumername=consumer_name,
-        streams={SYNC_EVENTS_STREAM_KEY: STREAM_READ_NEW_MESSAGE_ID},
-        count=max(1, count),
-        block=block_timeout_ms,
-    )
+    try:
+        raw = await redis.xreadgroup(
+            groupname=SYNC_EVENTS_CONSUMER_GROUP,
+            consumername=consumer_name,
+            streams={SYNC_EVENTS_STREAM_KEY: STREAM_READ_NEW_MESSAGE_ID},
+            count=max(1, count),
+            block=block_timeout_ms,
+        )
+    except (RedisTimeoutError, RedisConnectionError):
+        await reset_stream_redis_client(redis)
+        raise
 
     if not raw:
         return []
@@ -245,14 +255,18 @@ async def autoclaim_stale_messages(
 ) -> SyncClaimBatch:
     redis = await get_stream_redis_client()
 
-    raw = await redis.xautoclaim(
-        name=SYNC_EVENTS_STREAM_KEY,
-        groupname=SYNC_EVENTS_CONSUMER_GROUP,
-        consumername=consumer_name,
-        min_idle_time=max(1, min_idle_ms),
-        start_id=start_id,
-        count=max(1, count),
-    )
+    try:
+        raw = await redis.xautoclaim(
+            name=SYNC_EVENTS_STREAM_KEY,
+            groupname=SYNC_EVENTS_CONSUMER_GROUP,
+            consumername=consumer_name,
+            min_idle_time=max(1, min_idle_ms),
+            start_id=start_id,
+            count=max(1, count),
+        )
+    except (RedisTimeoutError, RedisConnectionError):
+        await reset_stream_redis_client(redis)
+        raise
 
     if not raw:
         return SyncClaimBatch(next_start_id=start_id, messages=[])

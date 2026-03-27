@@ -10,8 +10,8 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
-from fastapi import Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import inspect
 
 from catchup.audit.enums import AuditEventStatus
@@ -629,10 +629,12 @@ app.middleware("http")(request_context_middleware)
 
 # 헬스 체크
 @app.get("/api/v1/health")
-async def health_check(response: Response):
+async def health_check():
     if not await check_all_redis_health():
-        response.status_code = 503
-        return {"status": "fail", "message": "Redis is unavailable."}
+        return JSONResponse(
+            status_code=503,
+            content={"status": "fail", "message": "Redis is unavailable."},
+        )
 
     return {"status": "ok", "message": "Catch Up backend is running."}
 
