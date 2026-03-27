@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 _redis_client: RedisCluster | Redis | None = None
 _stream_redis_client: RedisCluster | Redis | None = None
+_redis_client_lock = asyncio.Lock()
+_stream_redis_client_lock = asyncio.Lock()
 
 OAUTH_STATE_PREFIX = "oauth:state:"
 OAUTH_STATE_TTL = 600  # 10분
@@ -128,14 +130,17 @@ async def _create_redis_client(
 async def get_redis_client() -> RedisCluster | Redis:
     global _redis_client
 
-    # 이미 생성된 클라이언트가 있으면 재사용한다.
     if _redis_client is not None:
         return _redis_client
 
-    _redis_client = await _create_redis_client(
-        client_type="default",
-        socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
-    )
+    async with _redis_client_lock:
+        if _redis_client is not None:
+            return _redis_client
+
+        _redis_client = await _create_redis_client(
+            client_type="default",
+            socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+        )
     return _redis_client
 
 
@@ -145,21 +150,28 @@ async def get_stream_redis_client() -> RedisCluster | Redis:
     if _stream_redis_client is not None:
         return _stream_redis_client
 
-    _stream_redis_client = await _create_redis_client(
-        client_type="stream",
-        socket_timeout=REDIS_STREAM_SOCKET_TIMEOUT_SECONDS,
-    )
+    async with _stream_redis_client_lock:
+        if _stream_redis_client is not None:
+            return _stream_redis_client
+
+        _stream_redis_client = await _create_redis_client(
+            client_type="stream",
+            socket_timeout=REDIS_STREAM_SOCKET_TIMEOUT_SECONDS,
+        )
     return _stream_redis_client
 
 
 async def check_all_redis_health() -> bool:
     """공용/stream Redis 클라이언트 상태를 모두 확인합니다."""
     try:
-        default_client = await get_redis_client()
-        await default_client.ping()
-
-        stream_client = await get_stream_redis_client()
-        await stream_client.ping()
+        default_client, stream_client = await asyncio.gather(
+            get_redis_client(),
+            get_stream_redis_client(),
+        )
+        await asyncio.gather(
+            default_client.ping(),
+            stream_client.ping(),
+        )
         return True
     except Exception as e:
         logger.error(f"[REDIS][HEALTH] Health check failed: {e}")
