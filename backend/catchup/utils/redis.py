@@ -152,6 +152,20 @@ async def get_stream_redis_client() -> RedisCluster | Redis:
     return _stream_redis_client
 
 
+async def check_all_redis_health() -> bool:
+    """공용/stream Redis 클라이언트 상태를 모두 확인합니다."""
+    try:
+        default_client = await get_redis_client()
+        await default_client.ping()
+
+        stream_client = await get_stream_redis_client()
+        await stream_client.ping()
+        return True
+    except Exception as e:
+        logger.error(f"[REDIS][HEALTH] Health check failed: {e}")
+        return False
+
+
 async def store_oauth_state(state: str, provider: str) -> None:
     """OAuth state를 Redis에 저장 (TTL: 10분)"""
     redis = await get_redis_client()
@@ -169,11 +183,4 @@ async def validate_oauth_state(state: str, provider: str) -> bool:
 
 async def check_redis_health() -> bool:
     """Redis 서버 상태를 확인합니다."""
-    try:
-        # get_redis_client() 내부에서 이미 ping을 수행하므로 호출만으로 검증 가능합니다.
-        client = await get_redis_client()
-        await client.ping()
-        return True
-    except Exception as e:
-        logger.error(f"[REDIS][HEALTH] Health check failed: {e}")
-        return False
+    return await check_all_redis_health()
