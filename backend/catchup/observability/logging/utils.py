@@ -18,6 +18,7 @@ CONSOLE_EXCLUDE_KEYS: set[str] = {
 }
 
 
+# TODO: 협의 후 활성화 또는 삭제
 def resolve_console_exclude_keys(log_level: int) -> str:
     if log_level == logging.DEBUG:
         CONSOLE_EXCLUDE_KEYS.discard("metadata")
