@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 
 import { Button } from '@/shared/components/ui/button';
 import { authQueries } from '@/shared/queries/auth.queries';
+import type { AuthUser } from '@/shared/queries/auth.types';
 
 import { useAdminSignUp, useUserSignUp } from '../mutations';
 import type { OnboardingSteps } from '../types/onboarding';
@@ -25,9 +26,14 @@ export function CompleteStep({ data, isAdmin }: CompleteStepProps) {
   const hasSubmitted = useRef(false);
 
   const submitOnboarding = useCallback(() => {
-    const onSuccess = async () => {
-      await queryClient.invalidateQueries({ queryKey: authQueries.all() });
+    const onSuccess = () => {
+      // 캐시를 즉시 'active'로 업데이트하여 useCurrentUser가 홈으로 리다이렉트하도록 함
+      queryClient.setQueryData<AuthUser>(authQueries.me().queryKey, (old) =>
+        old ? { ...old, status: 'active' } : old,
+      );
       router.replace('/');
+      // 백그라운드에서 서버 데이터 동기화 (await 하지 않음)
+      queryClient.invalidateQueries({ queryKey: authQueries.all() });
     };
 
     if (isAdmin) {

@@ -21,10 +21,11 @@ class Environment(StrEnum):
 class Settings(BaseSettings):
     
     #===========================#
-    #     Degubber Settings     #
+    #     Debug Settings     #
     #===========================#
     DEBUGGER_ENABLED: bool = False
     DEBUGGER_PORT: int = 5678
+    PYINSTRUMENT_ENABLED: bool = False
     
     #=============================#
     #     System Base Settings    #
@@ -71,6 +72,11 @@ class Settings(BaseSettings):
     DB_DATABASE: str
     DB_HOST_LOCAL: str = "localhost"
     DB_PORT_LOCAL: int = 5433
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 20
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE_SECONDS: int = 1800
+    DB_POOL_PRE_PING: bool = True
     
     # AWS S3
     AWS_S3_AUDIT_ENABLED: bool = False
@@ -241,7 +247,7 @@ class Settings(BaseSettings):
     INCREMENTAL_OUTBOX_PUBLISHING_STALE_SECONDS: int = 300
     INCREMENTAL_RUNTIME_INTERVAL_MINUTES: int = 1
     CONFLUENCE_INCREMENTAL_POLL_INTERVAL_MINUTES: int = 15
-    CONFLUENCE_INCREMENTAL_POLL_LOOKBACK_MINUTES: int = 20
+    CONFLUENCE_INCREMENTAL_POLL_LOOKBACK_MINUTES: int = 35
 
     model_config = SettingsConfigDict(
         env_file=".env",

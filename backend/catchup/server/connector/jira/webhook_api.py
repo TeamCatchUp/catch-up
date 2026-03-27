@@ -39,16 +39,33 @@ async def handle_jira_webhook(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Jira Webhook Sender",
         )
-    
+
+    raw_body = await request.body()
+
     try:
         payload = await request.json()
-    except Exception:
-        logger.warning(f"[JIRA][WEBHOOK] Invalid JSON payload: cloud_id={cloud_id}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid JSON payload",
+    except Exception as exc:
+        logger.warning(
+            "[JIRA][WEBHOOK] Invalid JSON payload: cloud_id=%s, content_type=%s, content_length=%s, body_size=%s, error=%s",
+            cloud_id,
+            request.headers.get("content-type"),
+            request.headers.get("content-length"),
+            len(raw_body),
+            bool(authorization),
+            exc.__class__.__name__,
         )
-    
+        payload = {}
+
+    if not isinstance(payload, dict):
+        logger.warning(
+            "[JIRA][WEBHOOK] Unexpected JSON payload type: cloud_id=%s, payload_type=%s, content_type=%s, body_size=%s",
+            cloud_id,
+            type(payload).__name__,
+            request.headers.get("content-type"),
+            len(raw_body),
+        )
+        payload = {}
+
     try:
         return await handle_jira_webhook_ingress(
             cloud_id=cloud_id,

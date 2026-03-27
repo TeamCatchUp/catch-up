@@ -177,6 +177,11 @@ class PromoteUserResponse(BaseModel):
     role: UserRole
 
 
+class RevokeUserResponse(BaseModel):
+    user_id: int
+    role: UserRole
+
+
 # =====================
 # Confluence utilities
 # =====================

@@ -1,6 +1,6 @@
 [project]
 name = "CatchUp"
-version = "0.2.13"
+version = "0.2.14"
 description = "A backend server for CatchUp."
 readme = "README.md"
 requires-python = ">=3.12.3"
@@ -53,6 +53,7 @@ dev = [
     "debugpy>=1.8.20",
     "pip-licenses",
     "pydeps>=3.0.2",
+    "pyinstrument>=5.1.2",
     "ruff",
 ]
 

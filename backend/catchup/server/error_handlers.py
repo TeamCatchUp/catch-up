@@ -5,7 +5,12 @@ from fastapi.responses import JSONResponse
 
 from catchup.user.exceptions import CannotPromoteDeletedUserError
 from catchup.user.exceptions import CannotPromoteInactiveUserError
+from catchup.user.exceptions import CannotRevokeDeletedUserError
+from catchup.user.exceptions import CannotRevokeInactiveUserError
+from catchup.user.exceptions import CannotRevokeOwnAdminRoleError
+from catchup.user.exceptions import AdminCountViolationError
 from catchup.user.exceptions import UserAlreadyAdminError
+from catchup.user.exceptions import UserAlreadyUserError
 from catchup.user.exceptions import UserError
 from catchup.user.exceptions import UserNotFoundError
 
@@ -15,12 +20,19 @@ def _get_user_error_status_code(
     if isinstance(exc, UserNotFoundError):
         return status.HTTP_404_NOT_FOUND
 
+    if isinstance(exc, CannotRevokeOwnAdminRoleError):
+        return status.HTTP_403_FORBIDDEN
+
     if isinstance(
         exc,
         (
             UserAlreadyAdminError,
+            UserAlreadyUserError,
+            AdminCountViolationError,
             CannotPromoteDeletedUserError,
             CannotPromoteInactiveUserError,
+            CannotRevokeDeletedUserError,
+            CannotRevokeInactiveUserError,
         ),
     ):
         return status.HTTP_409_CONFLICT

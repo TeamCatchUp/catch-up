@@ -6,7 +6,13 @@ logger = structlog.get_logger()
 
 _langfuse_client = None
 
-if settings.ENABLE_LANGFUSE:
+
+def init_langfuse() -> None:
+    global _langfuse_client
+    
+    if not settings.ENABLE_LANGFUSE:
+        return
+
     try:
         from langfuse import get_client
         _langfuse_client = get_client()
@@ -21,18 +27,20 @@ if settings.ENABLE_LANGFUSE:
             status="failed",
             error=str(e)
         )
-        settings.ENABLE_LANGFUSE = False # 실패 시 플래그 강제 종료
+        settings.ENABLE_LANGFUSE = False
         
 
-if settings.ENABLE_LANGFUSE:
-    from langfuse import observe as _observe
-else:
-    def _observe(*args, **kwargs):
-        def decorator(func):
-            return func
-        return decorator
+def _noop_observe(*args, **kwargs):
+    def decorator(func):
+        return func
+    return decorator
 
-observe = _observe
+
+def get_observe():
+    if settings.ENABLE_LANGFUSE:
+        from langfuse import observe
+        return observe
+    return _noop_observe
 
 
 def get_langfuse_client():

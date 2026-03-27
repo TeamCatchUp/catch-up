@@ -1,9 +1,6 @@
 import tomllib
 from pathlib import Path
 
-import structlog
-
-logger = structlog.get_logger()
 
 def get_version() -> str:
     """
@@ -15,18 +12,7 @@ def get_version() -> str:
         with open(path, "rb") as f:
             data = tomllib.load(f)
             version = data["project"]["version"]
-            logger.info(
-                "version_detection_success",
-                context="APP_VERSION_missing",
-                version=version
-            )
-
         return version
     
     except Exception as e:
-        logger.warning(
-            "version_detection_failed",
-            context="pyproject.toml",
-            error=str(e)
-        )
         raise RuntimeError(f"Could not read version from {path}. Check if file exists.") from e

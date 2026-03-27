@@ -1,54 +1,64 @@
+from catchup.observability.langfuse.configs import init_langfuse
+from catchup.observability.logging import configure_logging
+
+# Logger 설정
+configure_logging()
+
 import asyncio
 import time
 from contextlib import asynccontextmanager
 
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
-import structlog
 
-from catchup.costs.handlers import chat_token_usage_handler
-from catchup.server.error_handlers import register_exception_handlers
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.enums import AuditEventStatus
+from catchup.audit.enums import AuditLevel
+from catchup.audit.handlers import audit_event_handler
 from catchup.audit.metadata import SystemAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
-from catchup.components.vector_db.factory import get_pgvector_repository, get_vector_db_service
-from catchup.components.vector_db.pgvector.constants import VectorDbProvider
+from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.configs.config import settings
-from catchup.db.engine import SessionLocal, engine
-from catchup.db.global_state import has_admin_ever_onboarded, has_csv_file_ever_been_uploaded
+from catchup.costs.handlers import chat_token_usage_handler
+from catchup.db.engine import SessionLocal
+from catchup.db.engine import engine
+from catchup.db.global_state import has_admin_ever_onboarded
+from catchup.db.global_state import has_csv_file_ever_been_uploaded
 from catchup.db.models import Base
-from catchup.events.enums import EventTopic, EventType, SystemEventAction
-from catchup.observability.logging import configure_logging
-from catchup.observability.logging.s3_uploader import audit_log_uploader_task, graceful_shutdown
+from catchup.events.bus import bus
+from catchup.events.enums import EventTopic
+from catchup.events.enums import EventType
+from catchup.events.enums import SystemEventAction
+from catchup.observability.logging.s3_uploader import audit_log_uploader_task
+from catchup.observability.logging.s3_uploader import graceful_shutdown
+from catchup.rag.checkpoint import close_langgraph_checkpointer
+from catchup.rag.checkpoint import init_langgraph_checkpointer
 from catchup.server.admin.api import router as admin_router
 from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
 from catchup.server.chat_room.api import router as chatroom_router
-from catchup.server.connector.atlassian.auth_api import (
-    router as atlassian_auth_router,
-)
+from catchup.server.connector.atlassian.auth_api import router as atlassian_auth_router
 from catchup.server.connector.github.auth_api import router as github_auth_router
 from catchup.server.connector.github.webhook_api import router as github_webhook_router
 from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.webhook_api import router as slack_webhook_router
+from catchup.server.error_handlers import register_exception_handlers
 from catchup.server.initialization import ensure_pg_indices
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.settings.api import router as settings_router
-from catchup.server.sync.api import router as sync_runtime_router
 from catchup.server.state import state
-from catchup.worker.worker_event_processor import run_forever as run_sync_worker
-from catchup.utils.redis import get_redis_client
-from catchup.utils.scheduler import init_scheduler, shutdown_scheduler
+from catchup.server.sync.api import router as sync_runtime_router
 from catchup.utils.client import _shared_client
-from catchup.rag.checkpoint import close_langgraph_checkpointer, init_langgraph_checkpointer
-from catchup.events.bus import bus
-from catchup.audit.handlers import audit_event_handler
+from catchup.utils.redis import get_redis_client
+from catchup.utils.scheduler import init_scheduler
+from catchup.utils.scheduler import shutdown_scheduler
+from catchup.worker.worker_event_processor import run_forever as run_sync_worker
 
 # 디버그 모드 설정
 debug_mode = settings.ENV == "development" and settings.DEBUGGER_ENABLED
@@ -57,15 +67,28 @@ if debug_mode:
     debugpy.listen(("0.0.0.0", settings.DEBUGGER_PORT))
     # debugpy.wait_for_client()
 
-# 로깅 설정
-configure_logging()
+
+# Logger
 logger = structlog.get_logger()
 
+
+# debugpy 연결 정보 출력
 if debug_mode:
     logger.info(
         "debugpy_attachment_success",
         port=settings.DEBUGGER_PORT
     )
+
+# 버전 정보 출력
+version = settings.APP_VERSION
+if version:
+    logger.info(
+        "version_detection_success",
+        app_version=version,
+    )
+else:
+    logger.warning("version_detection_failed")
+
 
 # 감사 로그 이벤트 리스너 등록
 bus.subscribe(EventTopic.AUDIT, audit_event_handler)
@@ -75,11 +98,11 @@ bus.subscribe(EventTopic.COST, chat_token_usage_handler)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    
+
     logger.info(
         "global_logging_config",
         context="server_startup",
-        level=settings.LOG_LEVEL
+        log_level=str(settings.LOG_LEVEL).upper()
     )
     
     sync_worker_stop_event: asyncio.Event | None = None
@@ -435,7 +458,16 @@ async def lifespan(app: FastAPI):
         logger.critical(
             "admin_initiation_check_failed",
             context="server_startup",
-            error=e,
+            error=str(e),
+        )
+        
+    try:
+        init_langfuse()
+    except Exception as e:
+        logger.warning(
+            "langfuse_init_failed",
+            context="server_startup",
+            error=str(e),
         )
         
     yield
@@ -459,7 +491,7 @@ async def lifespan(app: FastAPI):
             logger.critical(
                 "audit_file_flush_failed",
                 context="server_shutdown",
-                error=e,
+                error=str(e),
                 exc_info=True,
             )
 
@@ -475,7 +507,7 @@ async def lifespan(app: FastAPI):
             logger.error(
                 "worker_shutdown_failed",
                 context="server_shutdown",
-                error=e,
+                error=str(e),
                 exc_info=True,
             )
 
@@ -540,7 +572,7 @@ async def lifespan(app: FastAPI):
         logger.error(
             "global_shared_async_client_shutdown_failed",
             context="server_shutdown",
-            error=e,
+            error=str(e),
             exc_info=True,
         )
 
@@ -585,6 +617,9 @@ app.add_middleware(
 )
 
 # 미들웨어 등록
+if settings.PYINSTRUMENT_ENABLED:
+    from catchup.server.middleware.pyinstrument import profile_middleware
+    app.middleware("http")(profile_middleware)
 app.middleware("http")(request_context_middleware)
 
 

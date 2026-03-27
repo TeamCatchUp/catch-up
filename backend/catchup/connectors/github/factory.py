@@ -74,6 +74,10 @@ async def create_github_ingestion_service(
             access_token=access_token,
             account_login=installation.account_login,
             account_type=installation.account_type,
+            refresh_access_token=lambda: github_app_service.get_installation_access_token(
+                installation_id,
+                force_refresh=True,
+            ),
         )
         await service.initialize()
         return service

@@ -12,7 +12,9 @@ class ChatTokenUsageEvent(BaseTokenUsageEvent):
     message_id: int
 
     purpose: TokenPurpose = TokenPurpose.CHAT
-    token_breakdown: dict[str, dict[str, int]]
+    
     # e.g) {"claude-haiku-4-5": {"input_tokens": 1200, "output_tokens": 300}}
+    token_breakdown: dict[str, dict[str, int]]
+    rerank_count: int
 
     model_config = ConfigDict(from_attributes=True)

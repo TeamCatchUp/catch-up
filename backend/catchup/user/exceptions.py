@@ -34,6 +34,12 @@ class UserAlreadyUserError(UserRoleError):
     code = "user_already_user"
     default_message = "User already user"
 
+
+class CannotRevokeOwnAdminRoleError(UserRoleError):
+    code = "cannot_revoke_own_admin_role"
+    default_message = "Cannot revoke your own admin role"
+
+
 class AdminCountViolationError(UserRoleError):
     code = "admin_count_violation"
     default_message = "At least one admin must remain"
@@ -52,3 +58,13 @@ class CannotPromoteDeletedUserError(UserStateError):
 class CannotPromoteInactiveUserError(UserStateError):
     code = "cannot_promote_inactive_user"
     default_message = "Cannot promote inactive user"
+
+
+class CannotRevokeDeletedUserError(UserStateError):
+    code = "cannot_revoke_deleted_user"
+    default_message = "Cannot revoke deleted user"
+
+
+class CannotRevokeInactiveUserError(UserStateError):
+    code = "cannot_revoke_inactive_user"
+    default_message = "Cannot revoke inactive user"

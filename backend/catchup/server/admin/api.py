@@ -6,7 +6,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
-from catchup.user.role_service import promote_user_to_admin as promote_user_to_admin_service
+from catchup.user.role_service import promote_admin_role
+from catchup.user.role_service import revoke_admin_role
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import AdminOAuthAuditMetadata
 from catchup.audit.service import emit_audit_event
@@ -14,7 +15,6 @@ from catchup.auth.dependencies import require_admin_user
 from catchup.chat.schemas import UserQueryWithSaveStatusResponse
 from catchup.db.chat_room import get_all_queries_for_admin
 from catchup.db.dependencies import get_db
-from catchup.db.engine import SessionLocal
 from catchup.db.models import (
     ConfluenceSpace,
     ConfluenceUser,
@@ -64,6 +64,7 @@ from catchup.server.admin.schemas import (
     DeactivateUserResponse,
     DeleteUserResponse,
     PromoteUserResponse,
+    RevokeUserResponse,
     UserIntegrations,
     JiraAccount,
     GithubAccount,
@@ -642,19 +643,40 @@ def delete_user(
 )
 def promote_user_to_admin(
     user_id: int,
+    db: Session = Depends(get_db),
     _admin_user: User = Depends(require_admin_user),
 ):
-    with SessionLocal() as db:
-        user = promote_user_to_admin_service(
-            db,
-            user_id=user_id,
-        )
+    user = promote_admin_role(
+        db,
+        user_id=user_id,
+    )
 
-        return PromoteUserResponse(
-            user_id=user.id,
-            role=user.role,
-        )
+    return PromoteUserResponse(
+        user_id=user.id,
+        role=user.role,
+    )
 
+
+@router.post(
+    path="/users/revoke/{user_id}",
+    description="관리자용 사용자 Admin 권한 회수",
+    response_model=RevokeUserResponse,
+)
+def revoke_admin_role_from_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin_user),
+):
+    user = revoke_admin_role(
+        db,
+        user_id=user_id,
+        actor_user_id=admin_user.id,
+    )
+
+    return RevokeUserResponse(
+        user_id=user.id,
+        role=user.role,
+    )
 
 def _get_syncable_jira_projects(db: Session) -> JiraSyncableResponse:
     rows = (

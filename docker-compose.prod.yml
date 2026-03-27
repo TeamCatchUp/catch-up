@@ -15,7 +15,7 @@ services:
       - DB_USER=${DB_USERNAME}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_DATABASE=${DB_DATABASE:-catchup}
-      - LOG_LEVEL=INFO
+      - LOG_LEVEL=${LOG_LEVEL}
     volumes:
       - ${LOG_EBS_PATH:-/mnt/ebs/catchup/logs}:/var/log/catchup
     logging:

@@ -1,10 +1,8 @@
-from importlib import metadata
 import logging
 import uuid
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
 
 from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.audit.metadata import ChatAuditMetadata
@@ -13,7 +11,6 @@ from catchup.chat.dependencies import get_valid_chat_room
 from catchup.chat.factory import get_chat_service
 from catchup.chat.schemas import ChatRequest, ChatResponse
 from catchup.chat.engine import ChatService
-from catchup.db.dependencies import get_db
 from catchup.db.models import ChatRoom
 from catchup.events.enums import ChatEventAction, EventType
 from catchup.rag.schemas.context import GlobalContext
@@ -48,7 +45,6 @@ async def chat_response(
 )
 async def chat_response_stream(
     request: ChatRequest,
-    db: Session = Depends(get_db),
     service: ChatService = Depends(get_chat_service),
     global_context: GlobalContext = Depends(get_rag_global_context)
 ):    
@@ -71,7 +67,6 @@ async def chat_response_stream(
     
     async def event_generator():
         async for chunk in service.chat_stream(
-            db=db,
             query=query,
             session_id=session_id,
             tool_filters=tool_filters,
@@ -88,13 +83,12 @@ async def chat_response_stream(
 )
 async def reset_last_conversation_turn(
     session_id: uuid.UUID,
-    db: Session = Depends(get_db),
     room: ChatRoom = Depends(get_valid_chat_room),
     chat_service: ChatService = Depends()
 ):
     deleted_query = await chat_service.reset_last_turn(
-        db=db,
-        room=room
+        room_id=room.id,
+        session_id=session_id
     )
     
     if not deleted_query:
