@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
+from fastapi import Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 
@@ -55,7 +56,9 @@ from catchup.server.settings.api import router as settings_router
 from catchup.server.state import state
 from catchup.server.sync.api import router as sync_runtime_router
 from catchup.utils.client import _shared_client
+from catchup.utils.redis import check_all_redis_health
 from catchup.utils.redis import get_redis_client
+from catchup.utils.redis import get_stream_redis_client
 from catchup.utils.scheduler import init_scheduler
 from catchup.utils.scheduler import shutdown_scheduler
 from catchup.worker.worker_event_processor import run_forever as run_sync_worker
@@ -401,6 +404,7 @@ async def lifespan(app: FastAPI):
 
     try:
         await get_redis_client()
+        await get_stream_redis_client()
         emit_audit_event(
             event_type=EventType.SYSTEM,
             event_action=SystemEventAction.STARTUP_REDIS_INIT,
@@ -625,7 +629,11 @@ app.middleware("http")(request_context_middleware)
 
 # 헬스 체크
 @app.get("/api/v1/health")
-async def health_check():
+async def health_check(response: Response):
+    if not await check_all_redis_health():
+        response.status_code = 503
+        return {"status": "fail", "message": "Redis is unavailable."}
+
     return {"status": "ok", "message": "Catch Up backend is running."}
 
 

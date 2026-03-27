@@ -21,7 +21,7 @@ from catchup.sync.stream_runtime.stream_schemas import (
     SyncStreamMessage,
     SyncStreamTask,
 )
-from catchup.utils.redis import get_redis_client
+from catchup.utils.redis import get_redis_client, get_stream_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +210,7 @@ async def read_new_messages(
     count: int = 10,
     block_ms: int | None = None,
 ) -> list[SyncStreamMessage]:
-    redis = await get_redis_client()
+    redis = await get_stream_redis_client()
 
     block_timeout_ms = (
         settings.SYNC_QUEUE_BLOCK_TIMEOUT_SECONDS * 1000
@@ -243,7 +243,7 @@ async def autoclaim_stale_messages(
     start_id: str = STREAM_CLAIM_START_ID,
     count: int = 100,
 ) -> SyncClaimBatch:
-    redis = await get_redis_client()
+    redis = await get_stream_redis_client()
 
     raw = await redis.xautoclaim(
         name=SYNC_EVENTS_STREAM_KEY,
