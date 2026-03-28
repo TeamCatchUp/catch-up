@@ -18,11 +18,15 @@ class EventType(StrEnum):
 
 
 # Event Actions
-class AdminOAuthAction(StrEnum):
+class BaseEventAction(StrEnum):
+    pass
+
+
+class AdminOAuthAction(BaseEventAction):
     SYNC_USERS = "sync_users"
 
 
-class AuthEventAction(StrEnum):
+class AuthEventAction(BaseEventAction):
     # 로그인
     LOGIN = "login"
 
@@ -33,7 +37,7 @@ class AuthEventAction(StrEnum):
     LOGOUT = "logout"
 
 
-class ChatEventAction(StrEnum):
+class ChatEventAction(BaseEventAction):
     # 사용자 질문 생성
     USER_QUERY_SENT = "user_query_sent"
 
@@ -44,11 +48,11 @@ class ChatEventAction(StrEnum):
     SOURCES_PROVIDED = "sources_provided"
 
 
-class AwsS3EventAction(StrEnum):
+class AwsS3EventAction(BaseEventAction):
     AUDIT_FILE_UPLOADED = "audit_file_uploaded"
 
 
-class SystemEventAction(StrEnum):
+class SystemEventAction(BaseEventAction):
     STARTUP_DB_INIT = "startup_db_init"
     STARTUP_DB_SCHEMA_DRIFT = "startup_db_schema_drift"
     STARTUP_SCHEDULER_INIT = "startup_scheduler_init"
@@ -61,7 +65,7 @@ class SystemEventAction(StrEnum):
 # 1. Slack / Atalssian : 앱 설치 Callback (metadata에 성공 / 실패 / 실패 시 사유 기록)
 # 2. Github : Installation Event를 Webhook으로 수신 (metadata에 성공 / 실패 / 실패 시 사유 기록)
 # 3. OAUTH_TOKEN_PERSISTED : DB 저장 시점에 저장 기록
-class IntegrationEventAction(StrEnum):
+class IntegrationEventAction(BaseEventAction):
     # Callback 수신
     OAUTH_CALLBACK = "oauth_callback"
 
@@ -79,7 +83,7 @@ class IntegrationEventAction(StrEnum):
 
 
 # DB 저장 성공 여부와 실행 Queue인 Redis Stream 발행 성공 여부로 로그에 기록
-class SyncTriggerEventAction(StrEnum):
+class SyncTriggerEventAction(BaseEventAction):
     # Full Sync Trigger
     FULL_SYNC_REQUESTED = "full_sync_requested"
     # Incremental Sync Trigger
@@ -87,18 +91,18 @@ class SyncTriggerEventAction(StrEnum):
     CONFLUENCE_POLLING_STARTED = "confluence_polling_started"
 
 
-class SyncIngestionEventAction(StrEnum):
+class SyncIngestionEventAction(BaseEventAction):
     SUMMARIZE = "summarize"
     EMBED = "embed"
     DOCUMENT_PERSISTED = "document_persisted"
 
 
-class UserEventAction(StrEnum):
+class UserEventAction(BaseEventAction):
     USER_PROMOTED = "user_promoted"
     ADMIN_REVOKED = "admin_revoked"
 
 
-class UserCustomPromptEventAction(StrEnum):
+class UserCustomPromptEventAction(BaseEventAction):
     CREATED = "custom_prompt_created"
     EDITED = "custom_prompt_edited"
     DELETED = "custom_prompt_deleted"
