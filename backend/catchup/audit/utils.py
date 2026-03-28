@@ -1,9 +1,11 @@
 import functools
 import inspect
+from os import error
 
 from catchup.audit.contexts import AuditContext
 from catchup.audit.enums import AuditEventStatus
 from catchup.audit.enums import AuditLevel
+from catchup.audit.metadata import BaseAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.events.enums import BaseEventAction
 from catchup.events.enums import EventType
@@ -73,7 +75,7 @@ def audit_log(
                 ...
                 AuditContext.get().metadata = DomainAuditMetadata(
                     attr1=val1,
-                    att2=val2,
+                    attr2=val2,
                 )
                 ...
 
@@ -117,8 +119,11 @@ def audit_log(
             event_action and ctx_action
         ), "BaseEventAction은 데코레이터나 AuditContext.action 중 하나에만 주입되어야 합니다."
 
-        if ctx_metadata and error_type:
-            ctx_metadata.context = error_type
+        if error_type:
+            if ctx_metadata:
+                ctx_metadata.error_type = error_type
+            else:
+                ctx_metadata = BaseAuditMetadata(error_type=error_type)
         
         action = event_action if event_action else ctx_action
         
@@ -148,7 +153,7 @@ def audit_log(
                     # FAIL
                     _emit(
                         status=AuditEventStatus.FAIL, 
-                        level=AuditLevel.WARNING,
+                        level=AuditLevel.ERROR,
                         error_type=type(e).__name__
                     )
                     raise
@@ -165,11 +170,11 @@ def audit_log(
                         level=level
                     )
                     return result
-                except Exception as e:                    
+                except Exception as e:
                     # FAIL
                     _emit(
                         status=AuditEventStatus.FAIL, 
-                        level=AuditLevel.WARNING,
+                        level=AuditLevel.ERROR,
                         error_type=type(e).__name__
                     )
                     raise
