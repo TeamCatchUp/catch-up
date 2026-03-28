@@ -2,23 +2,24 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable
+from collections.abc import Callable
+
 import structlog
-from fastapi import BackgroundTasks, HTTPException, Request, Response
+from fastapi import HTTPException
+from fastapi import Request
+from fastapi import Response
 from fastapi.concurrency import run_in_threadpool
 
+from catchup.audit.contexts import AuditContext
 from catchup.audit.schemas import AuditActor
 from catchup.auth.jwt import verify_token
 from catchup.costs.contexts.chat import ChatTokenUsageContext
 from catchup.db.engine import SessionLocal
 from catchup.db.users import get_user_by_sub
-from catchup.observability.logging.context import (
-    bind_actor_context,
-    bind_base_context,
-    clear_request_context,
-)
-from catchup.events.context import current_bg_tasks
-
+from catchup.observability.logging.context import bind_actor_context
+from catchup.observability.logging.context import bind_base_context
+from catchup.observability.logging.context import clear_request_context
 
 logger = structlog.get_logger()
 
@@ -100,6 +101,9 @@ async def request_context_middleware(
     request: Request,
     call_next: CallNext
 ) -> Response:
+    status_code = 500  # Fallback
+    process_time = 0.0
+    
     start_time = time.perf_counter()
 
     trace_id = _resolve_trace_id(request)
@@ -117,45 +121,40 @@ async def request_context_middleware(
     )
     bind_actor_context(actor)
 
-    request.state.trace_id = trace_id
-    request.state.actor = actor
-    
     logger.debug(
         "request_trace_info",
-        trace_id_=request.state.trace_id,
-        actor_=request.state.actor.model_dump(mode="json")
+        trace_id_=trace_id,
+        actor_=actor.model_dump(mode="json")
     )
-    
-    # TODO: Contextvar 컨벤션 통일(module->class)
-    # BackgroundTasks를 ContextVars로 설정
-    bg_tasks = BackgroundTasks()
-    token = current_bg_tasks.set(bg_tasks)
-    
+
+    # TODO: 모든 요청에 대해서 초기화할 필요는 없어 보임.
     # 채팅 토큰 사용량 컨텍스트 초기화
     ChatTokenUsageContext.init()
     
+    # 감사 로그 메타데이터 컨텍스트 초기화
+    AuditContext.init()
+    
+    logger.debug(
+        "http_request_started",
+        method=request.method,
+        path=request.url.path,
+    )
+    
     try:
-        # 비즈니스 로직 수행
+        # 서비스 로직 수행
         response: Response = await call_next(request)
-        
-        process_time = time.perf_counter() - start_time
+        status_code = response.status_code
+        process_time = time.perf_counter() - start_time        
+        response.headers[REQUEST_ID_HEADER] = trace_id
+        return response
+    finally:
         logger.info(
             "http_request_finished",
             method=request.method,
             path=request.url.path,
-            status_code=response.status_code,
+            status_code=status_code,
             duration=f"{process_time:.4f}s",
             event_type="SYSTEM",
             event_action=f"{request.method} {request.url.path}"
         )
-        
-        response.headers[REQUEST_ID_HEADER] = trace_id
-        if response.background is None:
-            response.background = bg_tasks
-        else:
-            response.background.tasks.extend(bg_tasks.tasks)
-        
-        return response
-    finally:
-        current_bg_tasks.reset(token)
         clear_request_context()
