@@ -4,7 +4,6 @@ from collections.abc import Awaitable
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import StreamingResponse
 
 from catchup.auth.dependencies import require_admin_user
 from catchup.configs.config import settings
@@ -25,7 +24,6 @@ from catchup.sync.common.exceptions import SyncAPIError, SyncRequestError
 from catchup.sync.full.service import FullSyncService
 from catchup.sync.repair.record_repair_service import get_record_repair_service
 from catchup.sync.query_service import get_sync_query_service
-from catchup.sync.status_stream.service import get_sync_status_stream_service
 from catchup.server.sync.dependencies import get_full_sync_service_dependency
 
 logger = logging.getLogger(__name__)
@@ -280,41 +278,6 @@ async def get_job_snapshot(
         )
 
     return SyncJobSnapshotResponse.from_snapshot_result(snapshot)
-
-
-@router.get(
-    "/jobs/{job_id}/stream",
-    responses={status.HTTP_404_NOT_FOUND: {"model": SyncErrorResponse}},
-)
-async def stream_job_events(
-    job_id: str,
-):
-    query_service = get_sync_query_service()
-    stream_service = get_sync_status_stream_service()
-    first_snapshot = await query_service.get_job_snapshot_async(job_id)
-
-    if first_snapshot is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=_build_error_detail(
-                code="not_found",
-                message=f"sync job not found: {job_id}",
-            ),
-        )
-
-    return StreamingResponse(
-        stream_service.stream_job_events_sse(
-            snapshot=SyncJobSnapshotResponse.from_snapshot_result(
-                first_snapshot
-            ).model_dump(mode="json"),
-            heartbeat_seconds=settings.SYNC_SSE_HEARTBEAT_SECONDS,
-        ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
 
 
 def _build_error_detail(

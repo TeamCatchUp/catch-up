@@ -31,12 +31,8 @@ from catchup.sync.common.schemas import ClaimState
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import SyncStreamMessage
 from catchup.sync.common.schemas import SyncStreamTask
-from catchup.sync.status_stream.schemas import SyncStatusEventType
 from catchup.sync.stream_runtime.stream_constants import SyncStreamFailureReason
-from catchup.worker.common import build_job_status_event
-from catchup.worker.common import build_target_status_event
 from catchup.worker.common import deadletter
-from catchup.worker.common import publish_status_event
 from catchup.worker.common import select_handler
 from catchup.worker.schemas import ClaimResult
 from catchup.worker.schemas import FailureResult
@@ -262,14 +258,6 @@ async def _handle_event_failure(
             )
             return
 
-        await publish_status_event(
-            build_target_status_event(
-                context=context,
-                event_type=SyncStatusEventType.TARGET_REQUEUED,
-                status=SyncEventStatus.RETRYING.value,
-                attempt=next_attempt,
-            )
-        )
         await handler.on_target_requeued(
             context=context,
             next_attempt=next_attempt,
@@ -304,14 +292,6 @@ async def _handle_event_failure(
         )
         return
 
-    await publish_status_event(
-        build_target_status_event(
-            context=context,
-            event_type=SyncStatusEventType.TARGET_FAILED,
-            status=SyncEventStatus.FAILED.value,
-            attempt=next_attempt,
-        )
-    )
     await handler.on_target_failed(
         context=context,
         next_attempt=next_attempt,
@@ -392,17 +372,6 @@ async def _finalize_job_if_done(
         return
 
     if result.status == SyncJobStatus.SUCCESS:
-        await publish_status_event(
-            build_job_status_event(
-                context=context,
-                event_type=SyncStatusEventType.JOB_COMPLETED,
-                status=SyncJobStatus.SUCCESS.value,
-                total_targets=result.total_targets,
-                completed_targets=result.completed_targets,
-                failed_targets=result.failed_targets,
-                requeued_targets=result.requeued_targets,
-            )
-        )
         await handler.on_job_completed(
             context=context,
             total_targets=result.total_targets,
@@ -412,17 +381,6 @@ async def _finalize_job_if_done(
         )
         return
 
-    await publish_status_event(
-        build_job_status_event(
-            context=context,
-            event_type=SyncStatusEventType.JOB_FAILED,
-            status=SyncJobStatus.FAILED.value,
-            total_targets=result.total_targets,
-            completed_targets=result.completed_targets,
-            failed_targets=result.failed_targets,
-            requeued_targets=result.requeued_targets,
-        )
-    )
     await handler.on_job_failed(
         context=context,
         total_targets=result.total_targets,
@@ -526,26 +484,11 @@ async def process_full_sync_message(
             return
 
         if claim.job_started:
-            await publish_status_event(
-                build_job_status_event(
-                    context=context,
-                    event_type=SyncStatusEventType.JOB_STARTED,
-                    status=SyncJobStatus.IN_PROGRESS.value,
-                    total_targets=claim.total_targets,
-                )
-            )
             await handler.on_job_started(
                 context=context,
                 total_targets=claim.total_targets,
             )
 
-        await publish_status_event(
-            build_target_status_event(
-                context=context,
-                event_type=SyncStatusEventType.TARGET_STARTED,
-                status=SyncEventStatus.IN_PROGRESS.value,
-            )
-        )
         await handler.on_target_started(context=context)
 
         result = await handler.handle(
@@ -560,13 +503,6 @@ async def process_full_sync_message(
             )
             return
 
-        await publish_status_event(
-            build_target_status_event(
-                context=context,
-                event_type=SyncStatusEventType.TARGET_COMPLETED,
-                status=SyncEventStatus.SUCCESS.value,
-            )
-        )
         await handler.on_target_completed(context=context, result=result)
     except Exception as exc:
         if context is None:

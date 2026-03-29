@@ -70,19 +70,6 @@ class SyncJobSnapshotResponse(BaseModel):
         return cls.model_validate(asdict(result))
 
 
-class SyncStreamEventResponse(BaseModel):
-    """
-    Sync 상태 스트림 SSE payload 포맷
-    """
-
-    connector: SyncConnector
-    job_id: str
-    scope_id: str
-    event_type: str
-    timestamp: str
-    payload: dict[str, Any] = Field(default_factory=dict)
-
-
 class FullSyncRequest(BaseModel):
     """
     공통 Full Sync 요청
@@ -182,10 +169,6 @@ class SyncAcceptedResponse(BaseModel):
     snapshot_url: str | None = Field(
         default=None,
         description="job snapshot endpoint for the created or conflicting job",
-    )
-    stream_url: str | None = Field(
-        default=None,
-        description="job status stream endpoint for the created or conflicting job",
     )
 
     @classmethod

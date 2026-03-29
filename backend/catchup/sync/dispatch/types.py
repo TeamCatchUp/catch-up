@@ -50,7 +50,6 @@ class DispatchRequest:
     trigger: SyncTrigger
     event_seeds: list[SyncEventSeed]
     base_url: str | None
-    sync_from_ts: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -80,7 +79,6 @@ class PublishDispatchInput:
     tasks: list[SyncStreamTask]
     trigger: SyncTrigger
     target_count: int
-    sync_from_ts: str | None
     observer: SyncDispatchObserver
 
     @classmethod
@@ -97,7 +95,6 @@ class PublishDispatchInput:
             tasks=tasks,
             trigger=request.trigger,
             target_count=len(request.event_seeds),
-            sync_from_ts=request.sync_from_ts,
             observer=observer,
         )
 

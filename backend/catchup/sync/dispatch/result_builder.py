@@ -6,15 +6,12 @@ from catchup.sync.common.schemas import SyncDispatchStatus
 from catchup.sync.dispatch.types import DispatchContext
 
 
-def build_job_urls(base_url: str | None, job_id: str) -> tuple[str | None, str | None]:
+def build_snapshot_url(base_url: str | None, job_id: str) -> str | None:
     if not base_url:
-        return None, None
+        return None
 
     base = base_url.rstrip("/")
-    return (
-        f"{base}/api/v1/sync/jobs/{job_id}",
-        f"{base}/api/v1/sync/jobs/{job_id}/stream",
-    )
+    return f"{base}/api/v1/sync/jobs/{job_id}"
 
 
 def build_no_events_response(
@@ -41,9 +38,8 @@ def build_conflict_response(
     message: str = "active full sync already exists for this scope",
 ) -> SyncDispatchResult:
     snapshot_url = None
-    stream_url = None
     if job_id is not None:
-        snapshot_url, stream_url = build_job_urls(base_url, job_id)
+        snapshot_url = build_snapshot_url(base_url, job_id)
 
     return SyncDispatchResult(
         status=SyncDispatchStatus.CONFLICT,
@@ -52,7 +48,6 @@ def build_conflict_response(
         job_id=job_id,
         message=message,
         snapshot_url=snapshot_url,
-        stream_url=stream_url,
     )
 
 
@@ -63,7 +58,7 @@ def build_accepted_response(
     queued_targets: int,
     base_url: str | None,
 ) -> SyncDispatchResult:
-    snapshot_url, stream_url = build_job_urls(base_url, context.job_id)
+    snapshot_url = build_snapshot_url(base_url, context.job_id)
 
     return SyncDispatchResult(
         status=SyncDispatchStatus.ACCEPTED,
@@ -75,5 +70,4 @@ def build_accepted_response(
         queued_targets=queued_targets,
         message="sync dispatch accepted",
         snapshot_url=snapshot_url,
-        stream_url=stream_url,
     )

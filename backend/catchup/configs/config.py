@@ -234,8 +234,6 @@ class Settings(BaseSettings):
     SYNC_JOB_META_TTL_SECONDS: int = 86400       # 24h
     SYNC_JOB_EVENT_TTL_SECONDS: int = 86400      # 24h
 
-    # SSE heartbeat 주기
-    SYNC_SSE_HEARTBEAT_SECONDS: int = 15
     # Incremental sync_from fallback (team/channel cursor 없을 때)
     SYNC_INCREMENTAL_FALLBACK_HOURS: int = 2
     INCREMENTAL_DEBOUNCE_SECONDS: int = 300

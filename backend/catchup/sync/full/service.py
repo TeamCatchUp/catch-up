@@ -88,7 +88,6 @@ class FullSyncService:
             trigger=request.trigger,
             event_seeds=event_seeds,
             base_url=base_url,
-            sync_from_ts=request.sync_from_ts,
         )
 
     async def dispatch(

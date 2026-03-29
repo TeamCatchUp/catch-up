@@ -1,26 +1,16 @@
 from __future__ import annotations
 
-import logging
 from uuid import uuid4
 
 from catchup.sync.common.protocols import IngestionHandlerProtocol
 from catchup.sync.common.schemas import (
-    FullSyncContext,
     SyncContext,
     SyncStreamMessage,
     SyncStreamTask,
 )
-from catchup.sync.status_stream.pubsub import publish_job_status_event
-from catchup.sync.status_stream.schemas import (
-    SyncStatusEventType,
-    SyncStatusStreamEvent,
-    utc_now_iso,
-)
 from catchup.sync.stream_runtime.stream_constants import SyncStreamFailureReason
 from catchup.sync.stream_runtime.stream_queue import publish_deadletter
 from catchup.worker.handlers import get_ingestion_handler
-
-logger = logging.getLogger(__name__)
 
 
 def consumer_name() -> str:
@@ -55,83 +45,6 @@ def select_handler(context: SyncContext) -> IngestionHandlerProtocol | None:
         connector=context.connector,
         sync_type=context.sync_type,
     )
-
-
-def build_target_status_event(
-    *,
-    context: SyncContext,
-    event_type: SyncStatusEventType,
-    status: str,
-    attempt: int | None = None,
-    extra_payload: dict[str, object] | None = None,
-) -> SyncStatusStreamEvent:
-    payload: dict[str, object] = {
-        "sync_type": context.sync_type,
-        "event_id": context.event_id,
-        "target_type": context.target_type,
-        "target_id": context.target_id,
-        "target_name": context.target_name,
-        "status": status,
-        "attempt": context.attempt if attempt is None else attempt,
-        "max_attempts": context.max_attempts,
-    }
-    if extra_payload:
-        payload.update(extra_payload)
-
-    return SyncStatusStreamEvent(
-        connector=context.connector,
-        job_id=context.job_id,
-        scope_id=context.scope_id,
-        event_type=event_type,
-        timestamp=utc_now_iso(),
-        payload=payload,
-    )
-
-
-def build_job_status_event(
-    *,
-    context: FullSyncContext,
-    event_type: SyncStatusEventType,
-    status: str,
-    total_targets: int,
-    completed_targets: int | None = None,
-    failed_targets: int | None = None,
-    requeued_targets: int | None = None,
-) -> SyncStatusStreamEvent:
-    payload: dict[str, object] = {
-        "sync_type": context.sync_type,
-        "status": status,
-        "total_targets": total_targets,
-    }
-    if completed_targets is not None:
-        payload["completed_targets"] = completed_targets
-    if failed_targets is not None:
-        payload["failed_targets"] = failed_targets
-    if requeued_targets is not None:
-        payload["requeued_targets"] = requeued_targets
-
-    return SyncStatusStreamEvent(
-        connector=context.connector,
-        job_id=context.job_id,
-        scope_id=context.scope_id,
-        event_type=event_type,
-        timestamp=utc_now_iso(),
-        payload=payload,
-    )
-
-
-# Status Streaming이 Sync 흐름을 막지 않도록 로그만 남김
-async def publish_status_event(event: SyncStatusStreamEvent) -> None:
-    try:
-        await publish_job_status_event(event)
-    except Exception as exc:
-        logger.warning(
-            "[SYNC][STATUS][WORKER] Failed to publish status event: job_id=%s, event_type=%s, error=%s",
-            event.job_id,
-            event.event_type.value,
-            exc,
-            exc_info=True,
-        )
 
 
 # 최종 실패 event를 DLQ 처리함
