@@ -12,6 +12,7 @@ from catchup.sync.common.schemas import (
     SyncDispatchResult,
     SyncEventSeed,
 )
+from catchup.sync.dispatch.types import DispatchRequest
 from catchup.sync.services.sync_orchestrator import SyncDispatchOrchestrator
 
 
@@ -59,11 +60,13 @@ class FullSyncDispatchOrchestrator:
         ]
 
         return await self._orchestrator.dispatch(
-            connector=connector,
-            sync_type=SyncType.FULL,
-            scope_id=scope_id,
-            trigger=request.trigger,
-            event_seeds=event_seeds,
-            base_url=base_url,
-            sync_from_ts=sync_from_ts,
+            DispatchRequest(
+                connector=connector,
+                sync_type=SyncType.FULL,
+                scope_id=scope_id,
+                trigger=request.trigger,
+                event_seeds=event_seeds,
+                base_url=base_url,
+                sync_from_ts=sync_from_ts,
+            )
         )
