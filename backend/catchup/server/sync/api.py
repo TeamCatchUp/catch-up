@@ -22,11 +22,11 @@ from catchup.server.sync.schemas import (
 )
 from catchup.sync.common.schemas import FullSyncDispatchRequest, SyncDispatchResult
 from catchup.sync.common.exceptions import SyncAPIError, SyncRequestError
+from catchup.sync.full.service import FullSyncService
 from catchup.sync.repair.record_repair_service import get_record_repair_service
-from catchup.sync.dispatch_service import SyncDispatchService
 from catchup.sync.query_service import get_sync_query_service
 from catchup.sync.status_stream.service import get_sync_status_stream_service
-from catchup.server.sync.dependencies import get_sync_dispatch_service_dependency
+from catchup.server.sync.dependencies import get_full_sync_service_dependency
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ router = APIRouter(
 async def dispatch_full_sync(
     sync_request: FullSyncRequest,
     request: Request,
-    dispatch_service: SyncDispatchService = Depends(get_sync_dispatch_service_dependency),
+    full_sync_service: FullSyncService = Depends(get_full_sync_service_dependency),
 ):
     dispatch_request = sync_request.to_dispatch_request(
         default_sync_days=settings.DEFAULT_SYNC_DAYS,
@@ -58,7 +58,7 @@ async def dispatch_full_sync(
     return await _resolve_full_sync_dispatch_response(
         connector=sync_request.connector,
         dispatch_request=dispatch_request,
-        dispatch_call=dispatch_service.dispatch_full_sync(
+        dispatch_call=full_sync_service.dispatch(
             connector=sync_request.connector,
             request=dispatch_request,
             base_url=str(request.base_url),

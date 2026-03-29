@@ -4,6 +4,7 @@ from functools import lru_cache
 from uuid import uuid4
 
 import structlog
+
 from catchup.configs.config import settings
 from catchup.db.models import SyncConnector
 from catchup.db.models import SyncType
@@ -40,30 +41,68 @@ def _build_event_seed(
     )
 
 
-class SyncDispatchService:
+class FullSyncService:
     def __init__(self, dispatch_service: DispatchService):
         self._dispatch_service = dispatch_service
 
-    async def dispatch_full_sync(
+    def _normalize_base_url(
+        self,
+        *,
+        connector: SyncConnector,
+        request: FullSyncDispatchRequest,
+        base_url: str | None,
+    ) -> str:
+        normalized_base_url = (base_url or "").strip()
+        if normalized_base_url:
+            return normalized_base_url
+
+        raise SyncInternalError(
+            message="full sync dispatch requires base_url",
+            metadata={
+                "connector": connector.value,
+                "scope_id": request.scope_id,
+                "target_count": len(request.target_ids) if request.target_ids else 0,
+                "trigger": request.trigger.value,
+                "sync_from_ts": request.sync_from_ts,
+            },
+        )
+
+    def _normalize_scope_id(self, request: FullSyncDispatchRequest) -> str:
+        scope_id = request.scope_id.strip()
+        if scope_id:
+            return scope_id
+        raise SyncRequestError("scope_id is required")
+
+    def _build_dispatch_request(
+        self,
+        *,
+        connector: SyncConnector,
+        request: FullSyncDispatchRequest,
+        base_url: str,
+        event_seeds: list[SyncEventSeed],
+    ) -> DispatchRequest:
+        return DispatchRequest(
+            connector=connector,
+            sync_type=SyncType.FULL,
+            scope_id=self._normalize_scope_id(request),
+            trigger=request.trigger,
+            event_seeds=event_seeds,
+            base_url=base_url,
+            sync_from_ts=request.sync_from_ts,
+        )
+
+    async def dispatch(
         self,
         *,
         connector: SyncConnector,
         request: FullSyncDispatchRequest,
         base_url: str | None,
     ) -> SyncDispatchResult:
-        normalized_base_url = (base_url or "").strip()
-
-        if not normalized_base_url:
-            raise SyncInternalError(
-                message="full sync dispatch requires base_url",
-                metadata={
-                    "connector": connector.value,
-                    "scope_id": request.scope_id,
-                    "target_count": len(request.target_ids) if request.target_ids else 0,
-                    "trigger": request.trigger.value,
-                    "sync_from_ts": request.sync_from_ts,
-                },
-            )
+        normalized_base_url = self._normalize_base_url(
+            connector=connector,
+            request=request,
+            base_url=base_url,
+        )
 
         logger.info(
             "full_sync_dispatch_requested",
@@ -75,10 +114,6 @@ class SyncDispatchService:
         )
 
         resolver = get_full_sync_target_resolver(connector)
-        scope_id = request.scope_id.strip()
-        if not scope_id:
-            raise SyncRequestError("scope_id is required")
-
         sync_from_ts = request.sync_from_ts
         resolved = await resolver.resolve_full_sync_targets(request=request)
         event_seeds = [
@@ -87,46 +122,43 @@ class SyncDispatchService:
         ]
 
         return await self._dispatch_service.dispatch(
-            DispatchRequest(
+            self._build_dispatch_request(
                 connector=connector,
-                sync_type=SyncType.FULL,
-                scope_id=scope_id,
-                trigger=request.trigger,
-                event_seeds=event_seeds,
+                request=request,
                 base_url=normalized_base_url,
-                sync_from_ts=sync_from_ts,
+                event_seeds=event_seeds,
             )
         )
 
 
-def create_sync_dispatch_service(
+def create_full_sync_service(
     *,
     publisher: EventPublisherProtocol | None = None,
     dispatch_service: DispatchService | None = None,
-) -> SyncDispatchService:
+) -> FullSyncService:
     resolved_dispatch_service = dispatch_service
     if resolved_dispatch_service is None:
         resolved_dispatch_service = DispatchService(
             event_publisher=publisher or get_event_publisher(),
         )
 
-    return SyncDispatchService(dispatch_service=resolved_dispatch_service)
+    return FullSyncService(dispatch_service=resolved_dispatch_service)
 
 
 @lru_cache(maxsize=1)
-def get_sync_dispatch_service() -> SyncDispatchService:
+def get_full_sync_service() -> FullSyncService:
     try:
-        return create_sync_dispatch_service()
+        return create_full_sync_service()
     except SyncInternalError:
         raise
     except Exception as exc:
         logger.error(
-            "sync_dispatch_service_init_failed",
+            "full_sync_service_init_failed",
             error=str(exc),
             exc_info=True,
         )
         raise SyncInternalError(
-            message="sync dispatch service initialization failed",
+            message="full sync service initialization failed",
             metadata={
                 "error_message": str(exc),
             },

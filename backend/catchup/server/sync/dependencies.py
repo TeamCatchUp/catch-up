@@ -1,24 +1,23 @@
 from __future__ import annotations
 
-import logging
-
 from fastapi import HTTPException, status
+import structlog
 
 from catchup.server.sync.schemas import FullSyncRequest
 from catchup.sync.common.exceptions import SyncAPIError
-from catchup.sync.dispatch_service import (
-    SyncDispatchService,
-    get_sync_dispatch_service,
+from catchup.sync.full.service import (
+    FullSyncService,
+    get_full_sync_service,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
-def get_sync_dispatch_service_dependency(
+def get_full_sync_service_dependency(
     sync_request: FullSyncRequest,
-) -> SyncDispatchService:
+) -> FullSyncService:
     try:
-        return get_sync_dispatch_service()
+        return get_full_sync_service()
     except SyncAPIError as exc:
         raise HTTPException(
             status_code=exc.status_code,
@@ -29,17 +28,17 @@ def get_sync_dispatch_service_dependency(
         ) from exc
     except Exception as exc:
         logger.error(
-            "[SYNC][DISPATCH][API] Service initialization failed: connector=%s, scope_id=%s, error=%s",
-            sync_request.connector,
-            sync_request.scope_id,
-            exc,
+            "full_sync_service_dependency_failed",
+            connector=sync_request.connector.value,
+            scope_id=sync_request.scope_id,
+            error=str(exc),
             exc_info=True,
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "code": "internal_error",
-                "message": "sync dispatch service initialization failed",
+                "message": "full sync service initialization failed",
                 "connector": sync_request.connector,
                 "scope_id": sync_request.scope_id,
             },
