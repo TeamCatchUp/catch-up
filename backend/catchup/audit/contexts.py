@@ -43,35 +43,3 @@ class AuditContext:
             ctx.metadata.context = context
         else:
             ctx.metadata = BaseAuditMetadata(context=context)
-
-    @classmethod
-    def set_error(cls, error: Exception) -> None:
-        """
-        예외 발생 시 감사 로그에 error_type과 context를 주입한다.
-        raise 전에 호출한다.
-
-        Args:
-            error: 발생한 예외 객체.
-                커스텀 도메인 예외의 code를 context로 자동 추출한다.
-
-        Examples:
-            except UserError as e:
-                AuditContext.set_error(e)
-                raise
-        """        
-        ctx = cls.get()
-        if not ctx:
-            return
-
-        error_type = type(error).__name__
-        context = getattr(error, "code", None)
-
-        if ctx.metadata:
-            ctx.metadata.error_type = error_type
-            if context:
-                ctx.metadata.context = context
-        else:
-            ctx.metadata = BaseAuditMetadata(
-                error_type=error_type,
-                context=context,
-            )

@@ -6,7 +6,6 @@ from catchup.db.models import SourceType, SyncConnector
 
 class BaseAuditMetadata(BaseModel):
     context: str | None = None
-    error_type: str | None = None
 
 
 class SystemAuditMetadata(BaseAuditMetadata):

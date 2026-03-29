@@ -142,7 +142,8 @@ def audit_log(
                     return result
                 except Exception as e:
                     # FAIL
-                    AuditContext.set_error(e)
+                    context = getattr(e, "code", None)
+                    AuditContext.set_context(context)
                     _emit(
                         status=AuditEventStatus.FAIL, 
                         level=AuditLevel.ERROR,
@@ -163,7 +164,8 @@ def audit_log(
                     return result
                 except Exception as e:
                     # FAIL
-                    AuditContext.set_error(e)
+                    context = getattr(e, "code", None)
+                    AuditContext.set_context(context)
                     _emit(
                         status=AuditEventStatus.FAIL, 
                         level=AuditLevel.ERROR,
