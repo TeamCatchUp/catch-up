@@ -17,18 +17,12 @@ from catchup.sync.dispatch.types import PublishDispatchInput
 logger = structlog.get_logger(__name__)
 
 
-class SyncDispatchOrchestrator:
-    def __init__(
-        self,
-        event_publisher: EventPublisherProtocol,
-    ):
+class DispatchService:
+    def __init__(self, event_publisher: EventPublisherProtocol):
         self._preparer = DispatchPreparer()
         self._publisher = DispatchPublisher(event_publisher=event_publisher)
 
-    async def dispatch(
-        self,
-        request: DispatchRequest,
-    ) -> SyncDispatchResult:
+    async def dispatch(self, request: DispatchRequest) -> SyncDispatchResult:
         if not request.event_seeds:
             logger.info(
                 "no_events_to_dispatch",
