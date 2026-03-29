@@ -39,7 +39,8 @@ class AuditContext:
         ctx = cls.get()
         if not ctx:
             return
-        if ctx.metadata:
-            ctx.metadata.context = context
-        else:
-            ctx.metadata = BaseAuditMetadata(context=context)
+        
+        if not ctx.metadata:
+            ctx.metadata = BaseAuditMetadata()
+        
+        ctx.metadata.context = context
