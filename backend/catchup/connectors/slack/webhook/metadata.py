@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 import structlog
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.connectors.slack import webhook_service
@@ -37,7 +38,7 @@ def is_supported_channel_membership_event(event: dict[str, Any]) -> bool:
     return channel_id.startswith(("C", "G"))
 
 
-def handle_metadata_event(
+async def handle_metadata_event(
     request: SlackWebhookRequest,
 ) -> SlackWebhookResponse:
     if request.event_type in MEMBER_EVENTS:
@@ -54,7 +55,17 @@ def handle_metadata_event(
             reason="unsupported_event",
         )
 
-    handler = resolved
+    return await run_in_threadpool(
+        _handle_metadata_event_sync,
+        request,
+        resolved,
+    )
+
+
+def _handle_metadata_event_sync(
+    request: SlackWebhookRequest,
+    handler: Callable[[Session, str, dict[str, Any]], None],
+) -> SlackWebhookResponse:
     with SessionLocal() as db:
         try:
             _run_metadata_handler(

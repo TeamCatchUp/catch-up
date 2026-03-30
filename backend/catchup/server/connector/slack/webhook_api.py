@@ -5,7 +5,6 @@ from fastapi import Header
 from fastapi import HTTPException
 from fastapi import Request
 from fastapi import status
-from fastapi.concurrency import run_in_threadpool
 from fastapi.encoders import jsonable_encoder
 import structlog
 
@@ -59,8 +58,7 @@ async def handle_slack_webhook(
 
     try:
         event_wrapper = SlackEventWrapper(**payload)
-        response = await run_in_threadpool(
-            handle_slack_webhook_ingress,
+        response = await handle_slack_webhook_ingress(
             request=SlackWebhookRequest.from_raw(
                 wrapper_type=event_wrapper.type,
                 team_id=event_wrapper.team_id or "",

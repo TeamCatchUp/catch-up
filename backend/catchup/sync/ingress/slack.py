@@ -33,7 +33,7 @@ SUPPORTED_METADATA_EVENTS = frozenset({
 })
 
 
-def handle_slack_webhook(
+async def handle_slack_webhook(
     *,
     request: SlackWebhookRequest,
 ) -> SlackWebhookResponse:
@@ -57,10 +57,10 @@ def handle_slack_webhook(
         return SlackIgnoredWebhookResponse(status="ignored", reason="missing_team_id")
 
     if request.event_type in SUPPORTED_METADATA_EVENTS:
-        return handle_metadata_event(request)
+        return await handle_metadata_event(request)
 
     if request.event_type == "message":
-        return _handle_incremental_event(request)
+        return await _handle_incremental_event(request)
 
     logger.warning(
         "slack_webhook_ignored_unsupported_event",
@@ -74,7 +74,7 @@ def handle_slack_webhook(
     )
 
 
-def _handle_incremental_event(
+async def _handle_incremental_event(
     request: SlackWebhookRequest,
 ) -> SlackWebhookResponse:
     resolved = resolve_slack_event(team_id=request.team_id, event=request.event)
@@ -84,7 +84,7 @@ def _handle_incremental_event(
             reason=resolved.reason or "unsupported_message_payload",
         )
 
-    result = get_incremental_service().ingest_changes(
+    result = await get_incremental_service().ingest_changes_async(
         changes=resolved.changes,
         event_name=request.event_type,
     )
