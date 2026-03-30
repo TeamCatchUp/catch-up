@@ -1,45 +1,39 @@
 from __future__ import annotations
 
-import logging
-from collections.abc import Callable
 from typing import Any
 
+import structlog
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.enums import AuditEventStatus
+from catchup.audit.enums import AuditLevel
 from catchup.audit.metadata import IntegrationAuditMetadata
 from catchup.audit.service import emit_audit_event
 from catchup.connectors.github.factory import create_github_ingestion_service
-from catchup.connectors.github.schemas import (
-    InstallationRepositoriesWebhookPayload,
-    InstallationWebhookPayload,
-)
+from catchup.connectors.github.schemas import InstallationRepositoriesWebhookPayload
+from catchup.connectors.github.schemas import InstallationWebhookPayload
 from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github import installation_repository as installation_crud
 from catchup.db.github.domain_repository import RepositoryUpsertData
 from catchup.db.knowledge_source import add_knowledge_source
-from catchup.db.models import (
-    GithubInstallationType,
-    GithubRepositorySelection,
-    KnowledgeSource,
-    SourceType,
-)
+from catchup.db.models import GithubInstallationType
+from catchup.db.models import GithubRepositorySelection
+from catchup.db.models import KnowledgeSource
+from catchup.db.models import SourceType
 from catchup.db.workspaces import get_workspace_limit_one
-from catchup.events.enums import EventType, IntegrationEventAction
+from catchup.events.enums import EventType
+from catchup.events.enums import IntegrationEventAction
 from catchup.sync.common.exceptions import SyncAPIError
+from catchup.sync.ingress.types import GithubWebhookRequest
 
-from .responses import (
-    ignored_event_response,
-    installation_repositories_response,
-    installation_status_response,
-    processed_metadata_response,
-)
+from .responses import ignored_event_response
+from .responses import installation_repositories_response
+from .responses import installation_status_response
+from .responses import processed_metadata_response
 
-logger = logging.getLogger(__name__)
-
-ScheduleTask = Callable[..., None]
+logger = structlog.get_logger(__name__)
 
 _REPOSITORY_REFRESH_EVENTS = frozenset({
     "repository",
@@ -53,57 +47,49 @@ _USER_REFRESH_EVENTS = frozenset({
 
 
 async def handle_metadata_event(
-    *,
-    event_name: str,
-    payload: dict[str, Any],
-    schedule_task: ScheduleTask,
+    request: GithubWebhookRequest,
 ) -> dict[str, Any]:
-    if event_name == "installation":
-        return await _handle_installation_event(
-            payload=payload,
-            schedule_task=schedule_task,
-        )
+    if request.event_name == "installation":
+        return await _handle_installation_event(request)
 
-    if event_name == "installation_repositories":
+    if request.event_name == "installation_repositories":
         return await run_in_threadpool(
             _handle_installation_repositories_event,
-            payload,
+            request.payload,
         )
 
-    installation_id = _extract_installation_id(payload)
+    installation_id = _extract_installation_id(request.payload)
     if installation_id is None:
         return ignored_event_response(
-            event=event_name,
+            event=request.event_name,
             reason="missing_installation_id",
         )
 
     logger.info(
-        "[GITHUB][WEBHOOK][INGRESS] Metadata refresh scheduled: event=%s, installation_id=%s",
-        event_name,
-        installation_id,
+        "github_metadata_refresh_started",
+        event_name=request.event_name,
+        installation_id=installation_id,
     )
-    schedule_task(_sync_installation_metadata, installation_id)
+    await _sync_installation_metadata(installation_id)
 
-    refresh_target = "repositories" if event_name in _REPOSITORY_REFRESH_EVENTS else "users"
-    if event_name not in _REPOSITORY_REFRESH_EVENTS | _USER_REFRESH_EVENTS:
+    refresh_target = "repositories" if request.event_name in _REPOSITORY_REFRESH_EVENTS else "users"
+    if request.event_name not in _REPOSITORY_REFRESH_EVENTS | _USER_REFRESH_EVENTS:
         refresh_target = "metadata"
 
     return processed_metadata_response(
-        event=event_name,
+        event=request.event_name,
         installation_id=installation_id,
         refresh_target=refresh_target,
     )
 
 
 async def _handle_installation_event(
-    *,
-    payload: dict[str, Any],
-    schedule_task: ScheduleTask,
+    request: GithubWebhookRequest,
 ) -> dict[str, Any]:
-    data = InstallationWebhookPayload(**payload)
+    data = InstallationWebhookPayload(**request.payload)
     action = data.action
     installation_id = data.installation.id
-    context = f"github_installation_created:installation_id={installation_id}:event_name=installation"
+    context = f"github_installation_event:installation_id={installation_id}:event_name={request.event_name}"
 
     if action == "created":
         metadata = IntegrationAuditMetadata(
@@ -121,7 +107,6 @@ async def _handle_installation_event(
         try:
             result = await _handle_installation_created(
                 data=data,
-                schedule_task=schedule_task,
             )
         except Exception:
             emit_audit_event(
@@ -152,7 +137,7 @@ async def _handle_installation_event(
 
     if action == "unsuspended":
         result = await run_in_threadpool(_handle_installation_unsuspended, data)
-        schedule_task(_sync_installation_metadata, installation_id)
+        await _sync_installation_metadata(installation_id)
         return result
 
     return {
@@ -163,9 +148,7 @@ async def _handle_installation_event(
 
 
 async def _handle_installation_created(
-    *,
     data: InstallationWebhookPayload,
-    schedule_task: ScheduleTask,
 ) -> dict[str, Any]:
     result = await run_in_threadpool(
         _create_installation,
@@ -177,7 +160,7 @@ async def _handle_installation_created(
 
     installation_id = int(result["installation_id"])
     await _register_knowledge_source(installation_id)
-    schedule_task(_sync_installation_metadata, installation_id)
+    await _sync_installation_metadata(installation_id)
 
     return result
 
@@ -353,17 +336,16 @@ async def _sync_installation_metadata(installation_id: int) -> None:
         await service.sync_installation_metadata()
     except SyncAPIError as exc:
         logger.warning(
-            "[GITHUB][WEBHOOK][INGRESS] Installation metadata sync failed: installation_id=%s, code=%s, message=%s, metadata=%s",
-            installation_id,
-            exc.code,
-            exc.message,
-            exc.metadata,
+            "github_metadata_sync_failed",
+            installation_id=installation_id,
+            code=exc.code,
+            message=exc.message,
         )
     except Exception as exc:
         logger.error(
-            "[GITHUB][WEBHOOK][INGRESS] Installation metadata sync failed: installation_id=%s, error=%s",
-            installation_id,
-            exc,
+            "github_metadata_sync_failed",
+            installation_id=installation_id,
+            error=str(exc),
             exc_info=True,
         )
 
@@ -373,7 +355,7 @@ async def _register_knowledge_source(installation_id: int) -> None:
         with SessionLocal() as db:
             workspace = get_workspace_limit_one(db)
             if not workspace:
-                logger.error("[GITHUB][WEBHOOK][INGRESS] Workspace not found")
+                logger.error("github_workspace_not_found")
                 return
 
             existing = db.scalar(

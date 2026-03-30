@@ -1,16 +1,16 @@
 from typing import Optional
 
+import structlog
 from fastapi import APIRouter
-from fastapi import BackgroundTasks
 from fastapi import Header
 from fastapi import HTTPException
 from fastapi import Request
 from fastapi import status
-import structlog
 
 from catchup.configs.config import settings
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 from catchup.sync.ingress.github import handle_github_webhook as handle_github_webhook_ingress
+from catchup.sync.ingress.types import GithubWebhookRequest
 
 logger = structlog.get_logger(__name__)
 
@@ -20,7 +20,6 @@ router = APIRouter(prefix="/api/v1/github", tags=["github-webhook"])
 @router.post("/webhooks", status_code=status.HTTP_200_OK)
 async def handle_github_webhook(
     request: Request,
-    background_tasks: BackgroundTasks,
     x_hub_signature_256: Optional[str] = Header(None),
     x_github_event: Optional[str] = Header(None),
 ):
@@ -62,9 +61,10 @@ async def handle_github_webhook(
 
     try:
         return await handle_github_webhook_ingress(
-            event_name=x_github_event,
-            payload=payload,
-            schedule_task=background_tasks.add_task,
+            request=GithubWebhookRequest.from_raw(
+                event_name=x_github_event,
+                payload=payload,
+            ),
         )
     except Exception as exc:
         logger.error(
