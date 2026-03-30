@@ -105,7 +105,7 @@ class SyncDispatchResult:
     """Dispatch 결과
 
     queued_targets : dispatch 시점에 queue publish 까지 성공한 target 수
-    처리 진행 상황은 이후 job snapshot/status 에서 다시 조회
+    처리 진행 상황은 이후 job snapshot 에서 다시 조회
     """
 
     status: SyncDispatchStatus
@@ -117,7 +117,6 @@ class SyncDispatchResult:
     queued_targets: int = 0
     message: str | None = None
     snapshot_url: str | None = None
-    stream_url: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "status", SyncDispatchStatus(self.status))

@@ -1,39 +1,26 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 
 from fastapi.concurrency import run_in_threadpool
 
 from catchup.configs.config import settings
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
-from catchup.connectors.atlassian.token_manager import (
-    AtlassianTokenManager,
-    AtlassianTokenProvider,
-)
+from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.confluence.client import ConfluenceApiClient
-from catchup.audit.enums import AuditEventStatus, AuditLevel
 from catchup.db.atlassian import oauth_repository
 from catchup.db.confluence import domain_repository as confluence_domain
 from catchup.db.engine import SessionLocal
-from catchup.db.models import SyncConnector
 from catchup.events.enums import SyncTriggerEventAction
-from catchup.sync.audit import SyncAuditContext, emit_sync_trigger_audit
-from catchup.sync.incremental.full_sync_guard import filter_record_changes_by_full_sync
-from catchup.sync.incremental.ingress import build_confluence_record_change, ingest_record_changes
+from catchup.sync.incremental.resolve import build_confluence_record_change
+from catchup.sync.incremental.service import get_incremental_service
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(slots=True, frozen=True)
-class ConfluencePollProcessResult:
-    changed: int
-    allowed_count: int
-    blocked: int
-    audit_context: SyncAuditContext | None
-    target_id: str | None
 
 
 def _load_tokens_sync():
@@ -44,36 +31,6 @@ def _load_tokens_sync():
 def _load_spaces_sync(cloud_id: str):
     with SessionLocal() as db:
         return confluence_domain.get_spaces_by_cloud_id(db, cloud_id)
-
-
-def _process_changes_sync(
-    *,
-    changes: list,
-) -> ConfluencePollProcessResult:
-    with SessionLocal() as db:
-        guard_result = filter_record_changes_by_full_sync(db, changes)
-        blocked_count = len(guard_result.blocked_changes)
-        if not guard_result.allowed_changes:
-            return ConfluencePollProcessResult(
-                changed=0,
-                allowed_count=0,
-                blocked=blocked_count,
-                audit_context=None,
-                target_id=None,
-            )
-
-        first_change = guard_result.allowed_changes[0]
-        return ConfluencePollProcessResult(
-            changed=len(ingest_record_changes(db, guard_result.allowed_changes)),
-            allowed_count=len(guard_result.allowed_changes),
-            blocked=blocked_count,
-            audit_context=SyncAuditContext(
-                connector=SyncConnector.CONFLUENCE,
-                scope_id=first_change.scope_id,
-                target_id=first_change.parent_id,
-            ),
-            target_id=first_change.parent_id,
-        )
 
 
 async def poll_confluence_incremental_changes() -> dict[str, int]:
@@ -120,59 +77,22 @@ async def poll_confluence_incremental_changes() -> dict[str, int]:
                 if not changes:
                     continue
 
-                audit_context = SyncAuditContext(
-                    connector=SyncConnector.CONFLUENCE,
-                    scope_id=token.cloud_id,
-                    target_id=space_key,
-                )
-                emit_sync_trigger_audit(
+                result = await get_incremental_service().dispatch_changes(
+                    changes=changes,
+                    event_name=space_key,
+                    context_name="space_key",
                     action=SyncTriggerEventAction.CONFLUENCE_POLLING_STARTED,
-                    status=AuditEventStatus.ATTEMPT,
-                    audit_context=audit_context,
-                    context=(
-                        f"stage=record_change_ingest,space_key={space_key},"
-                        f"change_count={len(changes)}"
-                    ),
                 )
-                try:
-                    process_result = await run_in_threadpool(
-                        _process_changes_sync,
-                        changes=changes,
-                    )
-                except Exception as exc:
-                    emit_sync_trigger_audit(
-                        action=SyncTriggerEventAction.CONFLUENCE_POLLING_STARTED,
-                        status=AuditEventStatus.FAIL,
-                        audit_context=audit_context,
-                        context=(
-                            f"stage=record_change_ingest_failed,space_key={space_key},"
-                            f"error={str(exc).strip()[:200]}"
-                        ),
-                        level=AuditLevel.ERROR,
-                    )
-                    raise
-                blocked += process_result.blocked
-                if process_result.blocked > 0:
+                blocked += result.blocked_count
+                if result.blocked_count > 0:
                     logger.info(
                         "[CONFLUENCE][POLL] Incremental blocked before ingest: cloud_id=%s, source=poll, blocked_count=%s",
                         token.cloud_id,
-                        process_result.blocked,
+                        result.blocked_count,
                     )
-
-                if process_result.audit_context is None or process_result.target_id is None:
+                if not result.record_keys:
                     continue
-
-                changed += process_result.changed
-                emit_sync_trigger_audit(
-                    action=SyncTriggerEventAction.CONFLUENCE_POLLING_STARTED,
-                    status=AuditEventStatus.SUCCESS,
-                    audit_context=process_result.audit_context,
-                    context=(
-                        f"stage=record_change_ingested,space_key={process_result.target_id},"
-                        f"change_count={process_result.allowed_count},"
-                        f"blocked_count={process_result.blocked}"
-                    ),
-                )
+                changed += len(result.record_keys)
         except Exception:
             logger.exception(
                 "[CONFLUENCE][POLL] Failed to poll cloud: cloud_id=%s",

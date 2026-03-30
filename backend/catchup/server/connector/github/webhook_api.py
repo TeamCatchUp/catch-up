@@ -1,13 +1,19 @@
-import logging
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
+import structlog
+from fastapi import APIRouter
+from fastapi import Header
+from fastapi import HTTPException
+from fastapi import Request
+from fastapi import status
+from fastapi.encoders import jsonable_encoder
 
 from catchup.configs.config import settings
-from catchup.connectors.github.webhook import handle_webhook as handle_github_webhook_ingress
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
+from catchup.sync.ingress.github import handle_github_webhook as handle_github_webhook_ingress
+from catchup.sync.ingress.types import GithubWebhookRequest
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/github", tags=["github-webhook"])
 
@@ -15,7 +21,6 @@ router = APIRouter(prefix="/api/v1/github", tags=["github-webhook"])
 @router.post("/webhooks", status_code=status.HTTP_200_OK)
 async def handle_github_webhook(
     request: Request,
-    background_tasks: BackgroundTasks,
     x_hub_signature_256: Optional[str] = Header(None),
     x_github_event: Optional[str] = Header(None),
 ):
@@ -34,9 +39,9 @@ async def handle_github_webhook(
     )
     if not verify_result.ok:
         logger.warning(
-            "[WEBHOOK][GITHUB][VERIFY] Failed: event=%s, reason=%s",
-            x_github_event,
-            verify_result.reason,
+            "github_webhook_verify_failed",
+            event_name=x_github_event,
+            reason=verify_result.reason,
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -47,8 +52,8 @@ async def handle_github_webhook(
         payload = await request.json()
     except Exception:
         logger.warning(
-            "[WEBHOOK][GITHUB] Invalid JSON payload: event=%s",
-            x_github_event,
+            "github_webhook_invalid_json",
+            event_name=x_github_event,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -56,16 +61,18 @@ async def handle_github_webhook(
         )
 
     try:
-        return await handle_github_webhook_ingress(
-            event_name=x_github_event,
-            payload=payload,
-            schedule_task=background_tasks.add_task,
+        response = await handle_github_webhook_ingress(
+            request=GithubWebhookRequest.from_raw(
+                event_name=x_github_event,
+                payload=payload,
+            ),
         )
+        return jsonable_encoder(response, exclude_none=True)
     except Exception as exc:
         logger.error(
-            "[GITHUB][WEBHOOK] Failed to process event: event=%s, error=%s",
-            x_github_event,
-            exc,
+            "github_webhook_dispatch_failed",
+            event_name=x_github_event,
+            error=str(exc),
             exc_info=True,
         )
         raise HTTPException(
