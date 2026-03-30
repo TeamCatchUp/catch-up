@@ -5,8 +5,8 @@ from fastapi import APIRouter, Header, HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
 
 from catchup.configs.config import settings
-from catchup.connectors.slack.webhook import handle_webhook as handle_slack_webhook_ingress
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
+from catchup.sync.ingress.slack import handle_slack_webhook as handle_slack_webhook_ingress
 
 logger = logging.getLogger(__name__)
 

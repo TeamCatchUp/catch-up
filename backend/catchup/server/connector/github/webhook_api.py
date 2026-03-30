@@ -4,8 +4,8 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
 
 from catchup.configs.config import settings
-from catchup.connectors.github.webhook import handle_webhook as handle_github_webhook_ingress
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
+from catchup.sync.ingress.github import handle_github_webhook as handle_github_webhook_ingress
 
 logger = logging.getLogger(__name__)
 

@@ -8,8 +8,8 @@ from catchup.connectors.jira.dynamic_webhook_service import (
     JiraDynamicWebhookService,
     get_jira_dynamic_webhook_service,
 )
-from catchup.connectors.jira.webhook import handle_webhook as handle_jira_webhook_ingress
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
+from catchup.sync.ingress.jira import handle_jira_webhook as handle_jira_webhook_ingress
 
 logger = logging.getLogger(__name__)
 

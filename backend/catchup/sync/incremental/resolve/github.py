@@ -1,124 +1,13 @@
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi.concurrency import run_in_threadpool
-
-from catchup.audit.enums import AuditEventStatus, AuditLevel
-from catchup.db.engine import SessionLocal
 from catchup.db.models import SyncConnector
-from catchup.events.enums import SyncTriggerEventAction
-from catchup.sync.audit import SyncAuditContext, emit_sync_trigger_audit
-from catchup.sync.incremental import ingest_record_changes
-from catchup.sync.incremental.full_sync_guard import filter_record_changes_by_full_sync
 from catchup.sync.incremental.schemas import RecordChange
 
-from .responses import accepted_incremental_response, ignored_event_response
 
-logger = logging.getLogger(__name__)
-
-
-async def handle_incremental_event(
-    *,
-    event_name: str,
-    payload: dict[str, Any],
-) -> dict[str, Any]:
-    def _sync_task() -> dict[str, Any]:
-        changes = _build_incremental_changes(
-            event_name=event_name,
-            payload=payload,
-        )
-        if not changes:
-            return ignored_event_response(
-                event=event_name,
-                reason="unsupported_payload",
-            )
-
-        with SessionLocal() as db:
-            guard_result = filter_record_changes_by_full_sync(db, changes)
-            blocked_count = len(guard_result.blocked_changes)
-            if blocked_count > 0:
-                blocked_targets = guard_result.blocked_targets
-                if not guard_result.allowed_changes:
-                    logger.info(
-                        "[GITHUB][WEBHOOK][INGRESS] Incremental blocked before ingest: installation_id=%s, source=webhook, blocked_count=%s, blocked_targets=%s",
-                        changes[0].scope_id,
-                        blocked_count,
-                        [
-                            f"{target.target_type}:{target.target_id}"
-                            for target in blocked_targets
-                        ],
-                    )
-                    return ignored_event_response(
-                        event=event_name,
-                        reason="full_sync_required",
-                        blocked_count=blocked_count,
-                    )
-
-                logger.info(
-                    "[GITHUB][WEBHOOK][INGRESS] Incremental partially blocked before ingest: installation_id=%s, source=webhook, allowed_count=%s, blocked_count=%s, blocked_targets=%s",
-                    changes[0].scope_id,
-                    len(guard_result.allowed_changes),
-                    blocked_count,
-                    [
-                        f"{target.target_type}:{target.target_id}"
-                        for target in blocked_targets
-                    ],
-                )
-
-            record_keys: list[str] = []
-            if guard_result.allowed_changes:
-                first_change = guard_result.allowed_changes[0]
-                audit_context = SyncAuditContext(
-                    connector=first_change.connector,
-                    scope_id=first_change.scope_id,
-                    target_id=first_change.parent_id,
-                )
-                emit_sync_trigger_audit(
-                    action=SyncTriggerEventAction.WEBHOOK_EVENT_RECEIVED,
-                    status=AuditEventStatus.ATTEMPT,
-                    audit_context=audit_context,
-                    context=(
-                        f"stage=record_change_ingest,event_name={event_name},"
-                        f"event_kind={first_change.event_kind},change_count={len(guard_result.allowed_changes)}"
-                    ),
-                )
-                try:
-                    record_keys = ingest_record_changes(db, guard_result.allowed_changes)
-                except Exception as exc:
-                    emit_sync_trigger_audit(
-                        action=SyncTriggerEventAction.WEBHOOK_EVENT_RECEIVED,
-                        status=AuditEventStatus.FAIL,
-                        audit_context=audit_context,
-                        context=(
-                            f"stage=record_change_ingest_failed,event_name={event_name},"
-                            f"event_kind={first_change.event_kind},error={str(exc).strip()[:200]}"
-                        ),
-                        level=AuditLevel.ERROR,
-                    )
-                    raise
-                emit_sync_trigger_audit(
-                    action=SyncTriggerEventAction.WEBHOOK_EVENT_RECEIVED,
-                    status=AuditEventStatus.SUCCESS,
-                    audit_context=audit_context,
-                    context=(
-                        f"stage=record_change_ingested,event_name={event_name},"
-                        f"record_key_count={len(record_keys)},blocked_count={blocked_count}"
-                    ),
-                )
-
-        return accepted_incremental_response(
-            event=event_name,
-            record_keys=record_keys,
-            blocked_count=blocked_count,
-        )
-
-    return await run_in_threadpool(_sync_task)
-
-
-def _build_incremental_changes(
+def resolve_github_event(
     *,
     event_name: str,
     payload: dict[str, Any],
