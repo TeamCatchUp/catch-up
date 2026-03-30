@@ -23,13 +23,13 @@ def _setup_root_logger(log_level: int) -> list[str]:
     if settings.LOG_JSON_FILE_ENABLED:
         try:
             handlers.append(build_json_file_handler())
-        except Exception:
-            warnings.append("handler_initialization_failed")
+        except Exception as e:
+            warnings.append(f"handler_initialization_failed: {str(e)}")
     
     if not handlers:
         handlers.append(build_console_handler())
-        warnings.append("handler_initialization_failed")
-        
+        warnings.append("fallback_to_console_handler: no handlers configured")
+
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
     for handler in handlers:
@@ -76,8 +76,8 @@ def _setup_audit_logger(log_level: int) -> list[str]:
     if settings.LOG_AUDIT_FILE_ENABLED:
         try:
             audit_logger.addHandler(build_audit_file_handler())
-        except Exception:
-            warnings.append("handler_initialization_failed")
+        except Exception as e:
+            warnings.append(f"handler_initialization_failed: {str(e)}")
             
     return warnings
 
