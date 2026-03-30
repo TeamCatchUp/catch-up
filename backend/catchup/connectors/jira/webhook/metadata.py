@@ -1,58 +1,39 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+import structlog
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.db.engine import SessionLocal
 from catchup.db.jira import domain_repository
+from catchup.sync.ingress.types import JiraWebhookRequest
 
-from .responses import ignored_event_response, processed_metadata_response
+from .responses import ignored_event_response
+from .responses import processed_metadata_response
 
-logger = logging.getLogger(__name__)
-
-SUPPORTED_METADATA_EVENTS = frozenset({
-    "jira:project_created",
-    "jira:project_updated",
-    "jira:project_deleted",
-    "sprint_created",
-    "sprint_updated",
-    "sprint_deleted",
-    "user_created",
-    "user_updated",
-    "user_deleted",
-})
+logger = structlog.get_logger(__name__)
 
 
 async def handle_metadata_event(
-    *,
-    cloud_id: str,
-    event_type: str,
-    payload: dict[str, Any],
+    request: JiraWebhookRequest,
 ) -> dict[str, Any]:
     return await run_in_threadpool(
         _handle_metadata_event_db,
-        cloud_id,
-        event_type,
-        payload,
+        request,
     )
 
 
 def _handle_metadata_event_db(
-    cloud_id: str,
-    event_type: str,
-    payload: dict[str, Any],
+    request: JiraWebhookRequest,
 ) -> dict[str, Any]:
     with SessionLocal() as db:
         try:
             response = _process_metadata_event(
                 db=db,
-                cloud_id=cloud_id,
-                event_type=event_type,
-                payload=payload,
+                request=request,
             )
             db.commit()
             return response
@@ -64,10 +45,12 @@ def _handle_metadata_event_db(
 def _process_metadata_event(
     *,
     db: Session,
-    cloud_id: str,
-    event_type: str,
-    payload: dict[str, Any],
+    request: JiraWebhookRequest,
 ) -> dict[str, Any]:
+    cloud_id = request.cloud_id
+    event_type = request.event_type
+    payload = request.payload
+
     if event_type in {"jira:project_created", "jira:project_updated"}:
         project = payload.get("project") or {}
         project_key = project.get("key")
@@ -93,10 +76,10 @@ def _process_metadata_event(
         )
 
         logger.info(
-            "[JIRA][WEBHOOK][METADATA] Project upserted: cloud_id=%s, project_key=%s, event_type=%s",
-            cloud_id,
-            project_key,
-            event_type,
+            "jira_project_upserted",
+            cloud_id=cloud_id,
+            project_key=project_key,
+            event_type=event_type,
         )
         return processed_metadata_response(
             event_type=event_type,
@@ -111,9 +94,9 @@ def _process_metadata_event(
 
         domain_repository.delete_project(db, cloud_id, project_key)
         logger.info(
-            "[JIRA][WEBHOOK][METADATA] Project deleted: cloud_id=%s, project_key=%s",
-            cloud_id,
-            project_key,
+            "jira_project_deleted",
+            cloud_id=cloud_id,
+            project_key=project_key,
         )
         return processed_metadata_response(
             event_type=event_type,
@@ -143,10 +126,10 @@ def _process_metadata_event(
         )
 
         logger.info(
-            "[JIRA][WEBHOOK][METADATA] Sprint upserted: cloud_id=%s, sprint_id=%s, event_type=%s",
-            cloud_id,
-            sprint_id,
-            event_type,
+            "jira_sprint_upserted",
+            cloud_id=cloud_id,
+            sprint_id=sprint_id,
+            event_type=event_type,
         )
         return processed_metadata_response(
             event_type=event_type,
@@ -162,9 +145,9 @@ def _process_metadata_event(
 
         domain_repository.delete_sprint(db, cloud_id, int(sprint_id))
         logger.info(
-            "[JIRA][WEBHOOK][METADATA] Sprint deleted: cloud_id=%s, sprint_id=%s",
-            cloud_id,
-            sprint_id,
+            "jira_sprint_deleted",
+            cloud_id=cloud_id,
+            sprint_id=sprint_id,
         )
         return processed_metadata_response(
             event_type=event_type,
@@ -192,10 +175,10 @@ def _process_metadata_event(
         )
 
         logger.info(
-            "[JIRA][WEBHOOK][METADATA] User upserted: cloud_id=%s, account_id=%s, event_type=%s",
-            cloud_id,
-            account_id,
-            event_type,
+            "jira_user_upserted",
+            cloud_id=cloud_id,
+            account_id=account_id,
+            event_type=event_type,
         )
         return processed_metadata_response(
             event_type=event_type,
@@ -211,9 +194,9 @@ def _process_metadata_event(
 
         domain_repository.delete_user(db, cloud_id, account_id)
         logger.info(
-            "[JIRA][WEBHOOK][METADATA] User deleted: cloud_id=%s, account_id=%s",
-            cloud_id,
-            account_id,
+            "jira_user_deleted",
+            cloud_id=cloud_id,
+            account_id=account_id,
         )
         return processed_metadata_response(
             event_type=event_type,

@@ -14,6 +14,7 @@ from catchup.connectors.jira.dynamic_webhook_service import JiraDynamicWebhookSe
 from catchup.connectors.jira.dynamic_webhook_service import get_jira_dynamic_webhook_service
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 from catchup.sync.ingress.jira import handle_jira_webhook as handle_jira_webhook_ingress
+from catchup.sync.ingress.types import JiraWebhookRequest
 
 logger = structlog.get_logger(__name__)
 
@@ -66,8 +67,10 @@ async def handle_jira_webhook(
 
     try:
         return await handle_jira_webhook_ingress(
-            cloud_id=cloud_id,
-            payload=payload,
+            request=JiraWebhookRequest.from_raw(
+                cloud_id=cloud_id,
+                payload=payload,
+            ),
         )
     except Exception as exc:
         event_type = str(payload.get("webhookEvent") or "").strip()

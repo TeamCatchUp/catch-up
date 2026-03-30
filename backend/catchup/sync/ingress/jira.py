@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-from catchup.connectors.jira.webhook.metadata import (
-    SUPPORTED_METADATA_EVENTS,
-    handle_metadata_event,
-)
+import structlog
+
+from catchup.connectors.jira.webhook.metadata import handle_metadata_event
 from catchup.sync.incremental.resolve import resolve_jira_event
 from catchup.sync.incremental.service import get_incremental_service
+from catchup.sync.ingress.types import JiraWebhookRequest
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 SUPPORTED_INCREMENTAL_EVENTS = frozenset({
     "jira:issue_created",
@@ -21,88 +20,86 @@ SUPPORTED_INCREMENTAL_EVENTS = frozenset({
     "comment_deleted",
 })
 
+SUPPORTED_METADATA_EVENTS = frozenset({
+    "jira:project_created",
+    "jira:project_updated",
+    "jira:project_deleted",
+    "sprint_created",
+    "sprint_updated",
+    "sprint_deleted",
+    "user_created",
+    "user_updated",
+    "user_deleted",
+})
+
 
 async def handle_jira_webhook(
     *,
-    cloud_id: str,
-    payload: dict[str, Any],
+    request: JiraWebhookRequest,
 ) -> dict[str, Any]:
-    event_type = str(payload.get("webhookEvent") or "").strip().lower()
+    if request.event_type in SUPPORTED_METADATA_EVENTS:
+        return await handle_metadata_event(request)
 
-    if event_type in SUPPORTED_METADATA_EVENTS:
-        return await handle_metadata_event(
-            cloud_id=cloud_id,
-            event_type=event_type,
-            payload=payload,
-        )
+    if request.event_type in SUPPORTED_INCREMENTAL_EVENTS:
+        return await _handle_incremental_event(request)
 
-    if event_type in SUPPORTED_INCREMENTAL_EVENTS:
-        return await _handle_incremental_event(
-            cloud_id=cloud_id,
-            event_type=event_type,
-            payload=payload,
-        )
-
-    logger.info(
-        "[JIRA][WEBHOOK][INGRESS] Ignored payload: cloud_id=%s, event_type=%s",
-        cloud_id,
-        event_type,
+    logger.debug(
+        "jira_webhook_ignored_unsupported_event",
+        cloud_id=request.cloud_id,
+        event_type=request.event_type,
     )
     return _ignored_event_response(
-        event_type=event_type,
+        event_type=request.event_type,
         reason="unsupported_event",
     )
 
 
 async def _handle_incremental_event(
-    *,
-    cloud_id: str,
-    event_type: str,
-    payload: dict[str, Any],
+    request: JiraWebhookRequest,
 ) -> dict[str, Any]:
     changes = resolve_jira_event(
-        cloud_id=cloud_id,
-        payload=payload,
+        cloud_id=request.cloud_id,
+        payload=request.payload,
     )
     if not changes:
-        logger.info(
-            "[JIRA][WEBHOOK][INGRESS] Ignored payload: cloud_id=%s, event_type=%s",
-            cloud_id,
-            event_type,
+        logger.debug(
+            "jira_webhook_ignored_unsupported_payload",
+            cloud_id=request.cloud_id,
+            event_type=request.event_type,
         )
         return _ignored_event_response(
-            event_type=event_type,
+            event_type=request.event_type,
             reason="unsupported_payload",
         )
 
     result = await get_incremental_service().ingest_changes_async(
         changes=changes,
-        event_name=event_type,
+        event_name=request.event_type,
     )
     if result.blocked_count > 0:
         if not result.record_keys:
             logger.info(
-                "[JIRA][WEBHOOK][INGRESS] Incremental blocked before ingest: cloud_id=%s, source=webhook, blocked_count=%s, blocked_targets=%s",
-                cloud_id,
-                result.blocked_count,
-                result.blocked_target_keys,
+                "jira_incremental_blocked_before_full_sync",
+                cloud_id=request.cloud_id,
+                event_type=request.event_type,
+                blocked_count=result.blocked_count,
             )
             return _ignored_event_response(
-                event_type=event_type,
+                event_type=request.event_type,
                 reason="full_sync_required",
                 blocked_count=result.blocked_count,
             )
 
         logger.info(
-            "[JIRA][WEBHOOK][INGRESS] Incremental partially blocked before ingest: cloud_id=%s, source=webhook, allowed_count=%s, blocked_count=%s, blocked_targets=%s",
-            cloud_id,
-            len(result.record_keys),
-            result.blocked_count,
-            result.blocked_target_keys,
+            "jira_incremental_partially_blocked",
+            cloud_id=request.cloud_id,
+            event_type=request.event_type,
+            record_key_count=len(result.record_keys),
+            blocked_count=result.blocked_count,
         )
 
     return _accepted_incremental_response(
-        event_type=event_type,
+        event_type=request.event_type,
         record_keys=result.record_keys,
         blocked_count=result.blocked_count,
     )
