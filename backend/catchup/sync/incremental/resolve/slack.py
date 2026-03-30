@@ -39,6 +39,13 @@ class SlackResolveResult:
     reason: str | None = None
 
 
+@dataclass(slots=True, frozen=True)
+class SlackMessageRef:
+    record_id: str
+    message_ts: str
+    is_thread_reply: bool
+
+
 def resolve_slack_event(
     *,
     team_id: str,
@@ -49,7 +56,7 @@ def resolve_slack_event(
 
     subtype = str(event.get("subtype") or "").strip().lower()
     channel_id = str(event.get("channel") or "").strip()
-    if not _is_supported_channel_message(channel_id):
+    if not channel_id.startswith(("C", "G")):
         return SlackResolveResult(changes=[], reason="unsupported_channel")
 
     subtype_policy = _classify_message_subtype(subtype)
@@ -62,14 +69,14 @@ def resolve_slack_event(
     if not isinstance(message_payload, dict):
         return SlackResolveResult(changes=[], reason="unsupported_message_payload")
 
-    record_id = _resolve_slack_record_id(event, message_payload)
-    if not channel_id or not record_id:
+    message_ref = _resolve_slack_message_ref(event, message_payload)
+    if not channel_id or not message_ref.record_id:
         return SlackResolveResult(changes=[], reason="unsupported_message_payload")
 
-    event_kind = _resolve_slack_event_kind(subtype, event, message_payload)
+    event_kind = _resolve_slack_event_kind(subtype, message_ref)
     last_event_at = _parse_slack_ts(
-        str(event.get("event_ts") or message_payload.get("ts") or record_id)
-    ) or _utc_now()
+        str(event.get("event_ts") or message_ref.message_ts or message_ref.record_id)
+    ) or datetime.now(timezone.utc)
 
     return SlackResolveResult(
         changes=[
@@ -77,7 +84,7 @@ def resolve_slack_event(
                 connector=SyncConnector.SLACK,
                 scope_id=team_id.strip(),
                 record_type="message",
-                record_id=record_id,
+                record_id=message_ref.record_id,
                 parent_type="channel",
                 parent_id=channel_id,
                 event_kind=event_kind,
@@ -93,11 +100,6 @@ def _classify_message_subtype(subtype: str) -> str:
     if subtype in INCREMENTAL_MESSAGE_SUBTYPES:
         return "incremental"
     return "unsupported"
-
-
-def _is_supported_channel_message(channel_id: str) -> bool:
-    return channel_id.startswith(("C", "G"))
-
 
 def _resolve_slack_message_payload(
     event: dict[str, object],
@@ -120,25 +122,10 @@ def _resolve_slack_message_payload(
     return event
 
 
-def _resolve_slack_record_id(
+def _resolve_slack_message_ref(
     event: dict[str, object],
     message_payload: dict[str, object],
-) -> str:
-    message_ts = str(
-        message_payload.get("ts")
-        or event.get("deleted_ts")
-        or event.get("ts")
-        or ""
-    ).strip()
-    thread_ts = str(message_payload.get("thread_ts") or "").strip()
-    return thread_ts or message_ts
-
-
-def _resolve_slack_event_kind(
-    subtype: str,
-    event: dict[str, object],
-    message_payload: dict[str, object],
-) -> str:
+) -> SlackMessageRef:
     message_ts = str(
         message_payload.get("ts")
         or event.get("deleted_ts")
@@ -148,17 +135,24 @@ def _resolve_slack_event_kind(
     thread_ts = str(message_payload.get("thread_ts") or "").strip()
     is_thread_reply = bool(thread_ts) and thread_ts != message_ts
 
+    return SlackMessageRef(
+        record_id=thread_ts or message_ts,
+        message_ts=message_ts,
+        is_thread_reply=is_thread_reply,
+    )
+
+
+def _resolve_slack_event_kind(
+    subtype: str,
+    message_ref: SlackMessageRef,
+) -> str:
     if subtype == "message_deleted":
-        return "updated" if is_thread_reply else "deleted"
+        return "updated" if message_ref.is_thread_reply else "deleted"
     if subtype == "message_changed":
         return "updated"
-    if is_thread_reply:
+    if message_ref.is_thread_reply:
         return "updated"
     return "created"
-
-
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 def _parse_slack_ts(value: str) -> datetime | None:

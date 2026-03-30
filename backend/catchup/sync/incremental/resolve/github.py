@@ -1,10 +1,36 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
+from datetime import timezone
 from typing import Any
 
 from catchup.db.models import SyncConnector
 from catchup.sync.incremental.schemas import RecordChange
+
+
+@dataclass(slots=True, frozen=True)
+class GithubScope:
+    installation_id: str
+    repository_id: str
+
+
+@dataclass(slots=True, frozen=True)
+class GithubRecord:
+    record_type: str
+    record_id: str
+    last_event_at: datetime
+
+
+type GithubEventResolver = Callable[[dict[str, Any]], GithubRecord | None]
+
+UPDATED_ONLY_EVENTS = frozenset({
+    "issue_comment",
+    "pull_request_review",
+    "pull_request_review_comment",
+    "pull_request_review_thread",
+})
 
 
 def resolve_github_event(
@@ -12,115 +38,152 @@ def resolve_github_event(
     event_name: str,
     payload: dict[str, Any],
 ) -> list[RecordChange]:
-    installation_id = _extract_installation_id(payload)
-    repository_id = _extract_repository_id(payload)
-    if installation_id is None or repository_id is None:
+    scope = _resolve_scope(payload)
+    if scope is None:
         return []
 
-    record_type, record_id, last_event_at = _resolve_parent_record(event_name, payload)
-    if not record_type or not record_id:
+    resolver = GITHUB_EVENT_RESOLVERS.get(event_name)
+    if resolver is None:
+        return []
+
+    record = resolver(payload)
+    if record is None:
         return []
 
     return [
         RecordChange(
             connector=SyncConnector.GITHUB,
-            scope_id=str(installation_id),
-            record_type=record_type,
-            record_id=record_id,
+            scope_id=scope.installation_id,
+            record_type=record.record_type,
+            record_id=record.record_id,
             parent_type="repository",
-            parent_id=str(repository_id),
+            parent_id=scope.repository_id,
             event_kind=_resolve_event_kind(event_name, payload),
-            last_event_at=last_event_at,
+            last_event_at=record.last_event_at,
         )
     ]
 
 
-def _resolve_parent_record(
-    event_name: str,
+def _resolve_scope(payload: dict[str, Any]) -> GithubScope | None:
+    installation_id = _extract_int(payload.get("installation"), "id")
+    repository_id = _extract_int(payload.get("repository"), "id")
+    if installation_id is None or repository_id is None:
+        return None
+
+    return GithubScope(
+        installation_id=str(installation_id),
+        repository_id=str(repository_id),
+    )
+def _resolve_issue(payload: dict[str, Any]) -> GithubRecord | None:
+    issue = payload.get("issue") or {}
+    record_id = _extract_number(issue, "number")
+    if not record_id:
+        return None
+
+    return GithubRecord(
+        record_type="issue",
+        record_id=record_id,
+        last_event_at=_first_datetime(
+            issue.get("updated_at"),
+            issue.get("created_at"),
+        ),
+    )
+
+
+def _resolve_issue_comment(payload: dict[str, Any]) -> GithubRecord | None:
+    issue = payload.get("issue") or {}
+    comment = payload.get("comment") or {}
+    record_id = _extract_number(issue, "number")
+    if not record_id:
+        return None
+
+    return GithubRecord(
+        record_type="pull_request" if issue.get("pull_request") else "issue",
+        record_id=record_id,
+        last_event_at=_first_datetime(
+            comment.get("updated_at"),
+            comment.get("created_at"),
+            issue.get("updated_at"),
+        ),
+    )
+
+
+def _resolve_pull_request(payload: dict[str, Any]) -> GithubRecord | None:
+    return _resolve_pull_request_record(
+        payload,
+        "pull_request",
+        "updated_at",
+        "created_at",
+    )
+
+
+def _resolve_pull_request_review(payload: dict[str, Any]) -> GithubRecord | None:
+    return _resolve_pull_request_record(
+        payload,
+        "review",
+        "submitted_at",
+        "submittedAt",
+        "updated_at",
+    )
+
+
+def _resolve_pull_request_review_comment(payload: dict[str, Any]) -> GithubRecord | None:
+    return _resolve_pull_request_record(
+        payload,
+        "comment",
+        "updated_at",
+        "created_at",
+        "updated_at",
+    )
+
+
+def _resolve_pull_request_review_thread(payload: dict[str, Any]) -> GithubRecord | None:
+    return _resolve_pull_request_record(
+        payload,
+        "thread",
+        "updated_at",
+        "created_at",
+        "updated_at",
+    )
+
+
+def _resolve_pull_request_record(
     payload: dict[str, Any],
-) -> tuple[str, str, datetime]:
-    if event_name == "issues":
-        issue = payload.get("issue") or {}
-        return (
-            "issue",
-            str(issue.get("number") or "").strip(),
-            _parse_datetime(issue.get("updated_at"))
-            or _parse_datetime(issue.get("created_at"))
-            or _utc_now(),
-        )
+    event_node_key: str,
+    *timestamp_keys: str,
+) -> GithubRecord | None:
+    pull_request = payload.get("pull_request") or {}
+    record_id = _extract_number(pull_request, "number")
+    if not record_id:
+        return None
 
-    if event_name == "issue_comment":
-        issue = payload.get("issue") or {}
-        comment = payload.get("comment") or {}
-        record_type = "pull_request" if issue.get("pull_request") else "issue"
-        return (
-            record_type,
-            str(issue.get("number") or "").strip(),
-            _parse_datetime(comment.get("updated_at"))
-            or _parse_datetime(comment.get("created_at"))
-            or _parse_datetime(issue.get("updated_at"))
-            or _utc_now(),
-        )
+    event_node = payload.get(event_node_key) or {}
 
-    if event_name == "pull_request":
-        pull_request = payload.get("pull_request") or {}
-        return (
-            "pull_request",
-            str(pull_request.get("number") or "").strip(),
-            _parse_datetime(pull_request.get("updated_at"))
-            or _parse_datetime(pull_request.get("created_at"))
-            or _utc_now(),
-        )
+    return GithubRecord(
+        record_type="pull_request",
+        record_id=record_id,
+        last_event_at=_first_datetime(
+            *[event_node.get(key) for key in timestamp_keys],
+            pull_request.get("updated_at"),
+        ),
+    )
 
-    if event_name == "pull_request_review":
-        pull_request = payload.get("pull_request") or {}
-        review = payload.get("review") or {}
-        return (
-            "pull_request",
-            str(pull_request.get("number") or "").strip(),
-            _parse_datetime(review.get("submitted_at"))
-            or _parse_datetime(review.get("submittedAt"))
-            or _parse_datetime(pull_request.get("updated_at"))
-            or _utc_now(),
-        )
 
-    if event_name == "pull_request_review_comment":
-        pull_request = payload.get("pull_request") or {}
-        comment = payload.get("comment") or {}
-        return (
-            "pull_request",
-            str(pull_request.get("number") or "").strip(),
-            _parse_datetime(comment.get("updated_at"))
-            or _parse_datetime(comment.get("created_at"))
-            or _parse_datetime(pull_request.get("updated_at"))
-            or _utc_now(),
-        )
-
-    if event_name == "pull_request_review_thread":
-        pull_request = payload.get("pull_request") or {}
-        thread = payload.get("thread") or {}
-        return (
-            "pull_request",
-            str(pull_request.get("number") or "").strip(),
-            _parse_datetime(thread.get("updated_at"))
-            or _parse_datetime(thread.get("created_at"))
-            or _parse_datetime(pull_request.get("updated_at"))
-            or _utc_now(),
-        )
-
-    return "", "", _utc_now()
+GITHUB_EVENT_RESOLVERS: dict[str, GithubEventResolver] = {
+    "issues": _resolve_issue,
+    "issue_comment": _resolve_issue_comment,
+    "pull_request": _resolve_pull_request,
+    "pull_request_review": _resolve_pull_request_review,
+    "pull_request_review_comment": _resolve_pull_request_review_comment,
+    "pull_request_review_thread": _resolve_pull_request_review_thread,
+}
 
 
 def _resolve_event_kind(
     event_name: str,
     payload: dict[str, Any],
 ) -> str:
-    if event_name in {
-        "issue_comment",
-        "pull_request_review",
-        "pull_request_review_comment",
-        "pull_request_review_thread",
-    }:
+    if event_name in UPDATED_ONLY_EVENTS:
         return "updated"
 
     action = str(payload.get("action") or "").strip().lower()
@@ -131,9 +194,11 @@ def _resolve_event_kind(
     return "updated"
 
 
-def _extract_installation_id(payload: dict[str, Any]) -> int | None:
-    installation = payload.get("installation") or {}
-    raw = installation.get("id")
+def _extract_int(node: Any, key: str) -> int | None:
+    if not isinstance(node, dict):
+        return None
+
+    raw = node.get(key)
     if raw in (None, ""):
         return None
 
@@ -143,19 +208,17 @@ def _extract_installation_id(payload: dict[str, Any]) -> int | None:
         return None
 
 
-def _extract_repository_id(payload: dict[str, Any]) -> int | None:
-    repository = payload.get("repository") or {}
-    raw = repository.get("id")
-    if raw in (None, ""):
-        return None
-
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return None
+def _extract_number(node: Any, key: str) -> str:
+    if not isinstance(node, dict):
+        return ""
+    return str(node.get(key) or "").strip()
 
 
-def _utc_now() -> datetime:
+def _first_datetime(*values: Any) -> datetime:
+    for value in values:
+        parsed = _parse_datetime(value)
+        if parsed is not None:
+            return parsed
     return datetime.now(timezone.utc)
 
 

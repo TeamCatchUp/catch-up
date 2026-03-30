@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timezone
 from typing import Any
 
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
@@ -33,7 +34,7 @@ def resolve_jira_event(
         _parse_datetime((payload.get("comment") or {}).get("updated"))
         or _parse_datetime((payload.get("comment") or {}).get("created"))
         or _parse_datetime(issue_fields.get("updated"))
-        or _utc_now()
+        or datetime.now(timezone.utc)
     )
 
     return [
@@ -48,12 +49,6 @@ def resolve_jira_event(
             last_event_at=last_event_at,
         )
     ]
-
-
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
 def _parse_datetime(value: Any) -> datetime | None:
     if value is None:
         return None
