@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
+import structlog
 from sqlalchemy.orm import Session
 
 from catchup.connectors.slack import webhook_service
 from catchup.db.engine import SessionLocal
+from catchup.sync.ingress.types import SlackWebhookRequest
 
-from .responses import (
-    ignored_event_response,
-    metadata_error_response,
-    processed_metadata_response,
-)
+from .responses import ignored_event_response
+from .responses import metadata_error_response
+from .responses import processed_metadata_response
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 CHANNEL_UPSERT_EVENTS = frozenset(
     {"channel_created", "channel_rename", "group_created", "group_rename"}
@@ -25,14 +25,6 @@ CHANNEL_ARCHIVE_EVENTS = frozenset(
 )
 MEMBER_EVENTS = frozenset({"member_joined_channel", "member_left_channel"})
 USER_EVENTS = frozenset({"team_join", "user_change"})
-
-SUPPORTED_METADATA_EVENTS = frozenset().union(
-    CHANNEL_UPSERT_EVENTS,
-    CHANNEL_DELETE_EVENTS,
-    CHANNEL_ARCHIVE_EVENTS,
-    MEMBER_EVENTS,
-    USER_EVENTS,
-)
 
 
 def is_supported_channel_membership_event(event: dict[str, Any]) -> bool:
@@ -45,22 +37,19 @@ def is_supported_channel_membership_event(event: dict[str, Any]) -> bool:
 
 
 def handle_metadata_event(
-    *,
-    team_id: str,
-    event_type: str,
-    event: dict[str, Any],
+    request: SlackWebhookRequest,
 ) -> dict[str, Any]:
-    if event_type in MEMBER_EVENTS:
-        if not is_supported_channel_membership_event(event):
+    if request.event_type in MEMBER_EVENTS:
+        if not is_supported_channel_membership_event(request.event):
             return ignored_event_response(
-                event_type=event_type,
+                event_type=request.event_type,
                 reason="unsupported_channel",
             )
 
-    resolved = _resolve_metadata_handler(event_type)
+    resolved = _resolve_metadata_handler(request.event_type)
     if resolved is None:
         return ignored_event_response(
-            event_type=event_type,
+            event_type=request.event_type,
             reason="unsupported_event",
         )
 
@@ -69,19 +58,20 @@ def handle_metadata_event(
         try:
             _run_metadata_handler(
                 db=db,
-                team_id=team_id,
-                event=event,
+                team_id=request.team_id,
+                event=request.event,
                 handler=handler,
             )
             db.commit()
-            return processed_metadata_response(event_type=event_type)
+            return processed_metadata_response(event_type=request.event_type)
         except Exception as exc:
             db.rollback()
             logger.error(
-                "[SLACK][WEBHOOK][METADATA] %s failed: team_id=%s, error=%s",
-                label,
-                team_id,
-                exc,
+                "slack_metadata_sync_failed",
+                team_id=request.team_id,
+                event_type=request.event_type,
+                handler_label=label,
+                error=str(exc),
             )
             return metadata_error_response()
 

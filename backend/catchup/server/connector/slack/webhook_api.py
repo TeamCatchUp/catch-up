@@ -9,8 +9,10 @@ from fastapi.concurrency import run_in_threadpool
 import structlog
 
 from catchup.configs.config import settings
+from catchup.connectors.slack.schemas import SlackEventWrapper
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 from catchup.sync.ingress.slack import handle_slack_webhook as handle_slack_webhook_ingress
+from catchup.sync.ingress.types import SlackWebhookRequest
 
 logger = structlog.get_logger(__name__)
 
@@ -55,9 +57,15 @@ async def handle_slack_webhook(
         )
 
     try:
+        event_wrapper = SlackEventWrapper(**payload)
         return await run_in_threadpool(
             handle_slack_webhook_ingress,
-            payload=payload,
+            request=SlackWebhookRequest.from_raw(
+                wrapper_type=event_wrapper.type,
+                team_id=event_wrapper.team_id or "",
+                event=event_wrapper.event,
+                challenge=event_wrapper.challenge,
+            ),
         )
     except Exception as exc:
         logger.error(

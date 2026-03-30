@@ -1,49 +1,102 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime
+from datetime import timezone
 
 from catchup.db.models import SyncConnector
 from catchup.sync.incremental.schemas import RecordChange
+
+IGNORED_MESSAGE_SUBTYPES = frozenset(
+    {
+        "channel_join",
+        "channel_leave",
+        "group_join",
+        "group_leave",
+        "channel_topic",
+        "channel_purpose",
+        "channel_name",
+        "group_topic",
+        "group_purpose",
+        "group_name",
+    }
+)
+INCREMENTAL_MESSAGE_SUBTYPES = frozenset(
+    {
+        "",
+        "bot_message",
+        "file_share",
+        "message_changed",
+        "message_deleted",
+        "thread_broadcast",
+    }
+)
+
+
+@dataclass(slots=True, frozen=True)
+class SlackResolveResult:
+    changes: list[RecordChange]
+    reason: str | None = None
 
 
 def resolve_slack_event(
     *,
     team_id: str,
     event: dict[str, object],
-) -> list[RecordChange]:
+) -> SlackResolveResult:
     if str(event.get("type") or "").strip() != "message":
-        return []
+        return SlackResolveResult(changes=[], reason="unsupported_event")
 
     subtype = str(event.get("subtype") or "").strip().lower()
     channel_id = str(event.get("channel") or "").strip()
-    if not channel_id.startswith(("C", "G")):
-        return []
+    if not _is_supported_channel_message(channel_id):
+        return SlackResolveResult(changes=[], reason="unsupported_channel")
+
+    subtype_policy = _classify_message_subtype(subtype)
+    if subtype_policy == "ignore":
+        return SlackResolveResult(changes=[], reason="ignored_subtype")
+    if subtype_policy == "unsupported":
+        return SlackResolveResult(changes=[], reason="unsupported_subtype")
 
     message_payload = _resolve_slack_message_payload(event, subtype)
     if not isinstance(message_payload, dict):
-        return []
+        return SlackResolveResult(changes=[], reason="unsupported_message_payload")
 
     record_id = _resolve_slack_record_id(event, message_payload)
     if not channel_id or not record_id:
-        return []
+        return SlackResolveResult(changes=[], reason="unsupported_message_payload")
 
     event_kind = _resolve_slack_event_kind(subtype, event, message_payload)
     last_event_at = _parse_slack_ts(
         str(event.get("event_ts") or message_payload.get("ts") or record_id)
     ) or _utc_now()
 
-    return [
-        RecordChange(
-            connector=SyncConnector.SLACK,
-            scope_id=team_id.strip(),
-            record_type="message",
-            record_id=record_id,
-            parent_type="channel",
-            parent_id=channel_id,
-            event_kind=event_kind,
-            last_event_at=last_event_at,
-        )
-    ]
+    return SlackResolveResult(
+        changes=[
+            RecordChange(
+                connector=SyncConnector.SLACK,
+                scope_id=team_id.strip(),
+                record_type="message",
+                record_id=record_id,
+                parent_type="channel",
+                parent_id=channel_id,
+                event_kind=event_kind,
+                last_event_at=last_event_at,
+            )
+        ]
+    )
+
+
+def _classify_message_subtype(subtype: str) -> str:
+    if subtype in IGNORED_MESSAGE_SUBTYPES:
+        return "ignore"
+    if subtype in INCREMENTAL_MESSAGE_SUBTYPES:
+        return "incremental"
+    return "unsupported"
+
+
+def _is_supported_channel_message(channel_id: str) -> bool:
+    return channel_id.startswith(("C", "G"))
 
 
 def _resolve_slack_message_payload(
