@@ -2,23 +2,26 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from fastapi.concurrency import run_in_threadpool
 import structlog
+from fastapi.concurrency import run_in_threadpool
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.enums import AuditEventStatus
+from catchup.audit.enums import AuditLevel
 from catchup.db.models import SyncConnector
 from catchup.events.enums import SyncTriggerEventAction
-from catchup.sync.audit import SyncAuditContext, emit_sync_trigger_audit
-from catchup.sync.incremental.persist import ingest_record_changes
+from catchup.sync.audit import SyncAuditContext
+from catchup.sync.audit import emit_sync_trigger_audit
+from catchup.sync.incremental.persist import persist_incremental_changes
 from catchup.sync.incremental.promoter import promote_incremental_records
 from catchup.sync.incremental.publisher import publish_incremental_outbox
-from catchup.sync.incremental.schemas import IncrementalIngestResult, RecordChange
+from catchup.sync.incremental.schemas import IncrementalIngestResult
+from catchup.sync.incremental.schemas import RecordChange
 
 logger = structlog.get_logger(__name__)
 
 
 class IncrementalService:
-    def ingest_changes(
+    def _dispatch_changes_sync(
         self,
         *,
         changes: list[RecordChange],
@@ -27,7 +30,7 @@ class IncrementalService:
         action: SyncTriggerEventAction = SyncTriggerEventAction.WEBHOOK_EVENT_RECEIVED,
     ) -> IncrementalIngestResult:
         try:
-            result = ingest_record_changes(changes)
+            result = persist_incremental_changes(changes)
         except Exception as exc:
             if changes:
                 first_change = changes[0]
@@ -41,7 +44,7 @@ class IncrementalService:
                     status=AuditEventStatus.FAIL,
                     audit_context=audit_context,
                     context=(
-                        f"stage=record_change_ingest_failed,{context_name}={event_name},"
+                        f"stage=incremental_dispatch_failed,{context_name}={event_name},"
                         f"event_kind={first_change.event_kind},error={str(exc).strip()[:200]}"
                     ),
                     level=AuditLevel.ERROR,
@@ -60,7 +63,7 @@ class IncrementalService:
                 status=AuditEventStatus.ATTEMPT,
                 audit_context=audit_context,
                 context=(
-                    f"stage=record_change_ingest,{context_name}={event_name},"
+                    f"stage=incremental_dispatch,{context_name}={event_name},"
                     f"event_kind={first_change.event_kind},change_count={len(result.record_keys)}"
                 ),
             )
@@ -69,13 +72,13 @@ class IncrementalService:
                 status=AuditEventStatus.SUCCESS,
                 audit_context=audit_context,
                 context=(
-                    f"stage=record_change_ingested,{context_name}={event_name},"
+                    f"stage=incremental_dispatched,{context_name}={event_name},"
                     f"record_key_count={len(result.record_keys)},blocked_count={result.blocked_count}"
                 ),
             )
         return result
 
-    async def ingest_changes_async(
+    async def dispatch_changes(
         self,
         *,
         changes: list[RecordChange],
@@ -84,7 +87,7 @@ class IncrementalService:
         action: SyncTriggerEventAction = SyncTriggerEventAction.WEBHOOK_EVENT_RECEIVED,
     ) -> IncrementalIngestResult:
         return await run_in_threadpool(
-            self.ingest_changes,
+            self._dispatch_changes_sync,
             changes=changes,
             event_name=event_name,
             context_name=context_name,

@@ -156,12 +156,11 @@ async def _handle_installation_created(
         data,
     )
 
-    if result["status"] != "created":
+    if result.status != "created":
         return result
 
-    installation_id = int(result["installation_id"])
-    await _register_knowledge_source(installation_id)
-    await _sync_installation_metadata(installation_id)
+    await _register_knowledge_source(result.installation_id)
+    await _sync_installation_metadata(result.installation_id)
 
     return result
 

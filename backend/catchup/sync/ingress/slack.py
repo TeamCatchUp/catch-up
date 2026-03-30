@@ -84,7 +84,7 @@ async def _handle_incremental_event(
             reason=resolved.reason or "unsupported_message_payload",
         )
 
-    result = await get_incremental_service().ingest_changes_async(
+    result = await get_incremental_service().dispatch_changes(
         changes=resolved.changes,
         event_name=request.event_type,
     )

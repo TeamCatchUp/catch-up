@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 
 from fastapi.concurrency import run_in_threadpool
 
 from catchup.configs.config import settings
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
-from catchup.connectors.atlassian.token_manager import (
-    AtlassianTokenManager,
-    AtlassianTokenProvider,
-)
+from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
+from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
 from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.db.atlassian import oauth_repository
@@ -77,7 +77,7 @@ async def poll_confluence_incremental_changes() -> dict[str, int]:
                 if not changes:
                     continue
 
-                result = await get_incremental_service().ingest_changes_async(
+                result = await get_incremental_service().dispatch_changes(
                     changes=changes,
                     event_name=space_key,
                     context_name="space_key",

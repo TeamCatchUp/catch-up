@@ -5,10 +5,11 @@ from sqlalchemy.orm import Session
 from catchup.db.engine import SessionLocal
 from catchup.db.incremental import upsert_record_change
 from catchup.sync.incremental.full_sync_guard import filter_record_changes_by_full_sync
-from catchup.sync.incremental.schemas import IncrementalIngestResult, RecordChange
+from catchup.sync.incremental.schemas import IncrementalIngestResult
+from catchup.sync.incremental.schemas import RecordChange
 
 
-def ingest_record_changes(changes: list[RecordChange]) -> IncrementalIngestResult:
+def persist_incremental_changes(changes: list[RecordChange]) -> IncrementalIngestResult:
     if not changes:
         return IncrementalIngestResult(
             record_keys=[],
