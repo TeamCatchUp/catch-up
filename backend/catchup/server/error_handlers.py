@@ -5,11 +5,15 @@ from fastapi.responses import JSONResponse
 
 from catchup.user.exceptions import CannotPromoteDeletedUserError
 from catchup.user.exceptions import CannotPromoteInactiveUserError
+from catchup.user.exceptions import CannotDeactivateAdminUserError
+from catchup.user.exceptions import CannotDeleteAdminUserError
 from catchup.user.exceptions import CannotRevokeDeletedUserError
 from catchup.user.exceptions import CannotRevokeInactiveUserError
 from catchup.user.exceptions import CannotRevokeOwnAdminRoleError
 from catchup.user.exceptions import AdminCountViolationError
 from catchup.user.exceptions import UserAlreadyAdminError
+from catchup.user.exceptions import UserAlreadyDeletedError
+from catchup.user.exceptions import UserAlreadyInactiveError
 from catchup.user.exceptions import UserAlreadyUserError
 from catchup.user.exceptions import UserError
 from catchup.user.exceptions import UserNotFoundError
@@ -23,11 +27,19 @@ def _get_user_error_status_code(
     if isinstance(exc, CannotRevokeOwnAdminRoleError):
         return status.HTTP_403_FORBIDDEN
 
+    if isinstance(exc, CannotDeactivateAdminUserError):
+        return status.HTTP_403_FORBIDDEN
+
+    if isinstance(exc, CannotDeleteAdminUserError):
+        return status.HTTP_403_FORBIDDEN
+
     if isinstance(
         exc,
         (
             UserAlreadyAdminError,
             UserAlreadyUserError,
+            UserAlreadyDeletedError,
+            UserAlreadyInactiveError,
             AdminCountViolationError,
             CannotPromoteDeletedUserError,
             CannotPromoteInactiveUserError,

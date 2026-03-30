@@ -70,6 +70,16 @@ class UserStatus(StrEnum):
     DELETED = "deleted" # 관리자에 의해 삭제된 상태
 
 
+class UserRoleHistoryAction(StrEnum):
+    PROMOTE = "promote"
+    REVOKE = "revoke"
+
+
+class UserStatusHistoryAction(StrEnum):
+    DEACTIVATE = "deactivate"
+    DELETE = "delete"
+
+
 class Company(Base):
     __tablename__ = "companies"
     
@@ -161,6 +171,44 @@ class InactiveUser(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "deactivated_at", name="uq_inactive_user_timestamp"),
         Index("idx_inactive_users_user_id", "user_id"),
+    )
+
+
+class UserRoleHistory(Base):
+    __tablename__ = "user_role_histories"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    action: Mapped[UserRoleHistoryAction] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    before_role: Mapped[UserRole] = mapped_column(String(20), nullable=False)
+    after_role: Mapped[UserRole] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_user_role_histories_user_created_at", "user_id", "created_at"),
+    )
+
+
+class UserStatusHistory(Base):
+    __tablename__ = "user_status_histories"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    action: Mapped[UserStatusHistoryAction] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    before_status: Mapped[UserStatus] = mapped_column(String(20), nullable=False)
+    after_status: Mapped[UserStatus] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_user_status_histories_user_created_at", "user_id", "created_at"),
     )
 
 class UserWorkspace(Base):

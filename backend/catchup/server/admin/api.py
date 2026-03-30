@@ -6,6 +6,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
+from catchup.user.status_service import deactivate_user as deactivate_user_service
+from catchup.user.status_service import delete_user as delete_user_service
 from catchup.user.role_service import promote_admin_role
 from catchup.user.role_service import revoke_admin_role
 from catchup.audit.enums import AuditEventStatus, AuditLevel
@@ -153,105 +155,6 @@ def get_connector_status(
     _admin_user: User = Depends(require_admin_user),
 ):
     return _get_connector_status(db, source=source)
-
-
-# ============================
-# Admin - User state change
-# ============================
-def _deactivate_user(
-    db: Session,
-    admin_user: User,
-    user_id: int,
-    reason: str,
-):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        logger.info("[ADMIN][USER_DEACTIVATE] user not found (user_id=%s)", user_id)
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if user.role == UserRole.ADMIN:
-        logger.info(
-            "[ADMIN][USER_DEACTIVATE] cannot deactivate admin user (user_id=%s)",
-            user_id,
-        )
-        raise HTTPException(status_code=403, detail="Cannot deactivate admin user")
-
-    if user.status == UserStatus.DELETED:
-        logger.info(
-            "[ADMIN][USER_DEACTIVATE] cannot deactivate deleted user (user_id=%s)",
-            user_id,
-        )
-        raise HTTPException(status_code=409, detail="User already deleted")
-
-    if user.status == UserStatus.INACTIVE:
-        logger.info(
-            "[ADMIN][USER_DEACTIVATE] already inactive (user_id=%s)", user_id
-        )
-        raise HTTPException(status_code=409, detail="User already inactive")
-
-    inactive = InactiveUser(
-        user_id=user.id,
-        reason=reason,
-        admin_id=admin_user.id,
-    )
-
-    user.status = UserStatus.INACTIVE
-    db.add(inactive)
-    db.commit()
-    db.refresh(user)
-    db.refresh(inactive)
-
-    logger.info(
-        "[ADMIN][USER_DEACTIVATE] action=deactivate user_id=%s admin_id=%s reason=%s",
-        user_id,
-        admin_user.id,
-        reason,
-    )
-
-    return DeactivateUserResponse(
-        userId=user.id,
-        status=user.status,
-        inactiveRecordId=inactive.id,
-        deactivatedAt=inactive.deactivated_at.isoformat(),
-        reason=inactive.reason,
-    )
-
-
-def _delete_user(db: Session, admin_user: User, user_id: int):
-    # 비활성 로그 없이 상태만 DELETED로 전환한다.
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        logger.info("[ADMIN][USER_DELETE] user not found (user_id=%s)", user_id)
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if user.role == UserRole.ADMIN:
-        logger.info("[ADMIN][USER_DELETE] cannot delete admin user (user_id=%s)", user_id)
-        raise HTTPException(status_code=403, detail="Cannot delete admin user")
-
-    if user.status == UserStatus.DELETED:
-        logger.info("[ADMIN][USER_DELETE] already deleted (user_id=%s)", user_id)
-        raise HTTPException(status_code=409, detail="User already deleted")
-
-    # 기존 비활성화 기록은 삭제한다 (상태 삭제 시 남기지 않음).
-    removed_logs = (
-        db.query(InactiveUser)
-        .filter(InactiveUser.user_id == user.id)
-        .delete(synchronize_session=False)
-    )
-
-    user.status = UserStatus.DELETED
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    logger.info(
-        "[ADMIN][USER_DELETE] action=delete user_id=%s admin_id=%s removed_inactive_logs=%s",
-        user_id,
-        admin_user.id,
-        removed_logs,
-    )
-
-    return DeleteUserResponse(userId=user.id, status=user.status)
 
 # ============================
 # Admin - User management
@@ -615,11 +518,18 @@ def deactivate_user(
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin_user),
 ):
-    return _deactivate_user(
+    user, inactive = deactivate_user_service(
         db=db,
         admin_user=admin_user,
         user_id=user_id,
         reason=payload.reason,
+    )
+    return DeactivateUserResponse(
+        userId=user.id,
+        status=user.status,
+        inactiveRecordId=inactive.id,
+        deactivatedAt=inactive.deactivated_at.isoformat(),
+        reason=inactive.reason,
     )
 
 
@@ -633,7 +543,12 @@ def delete_user(
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin_user),
 ):
-    return _delete_user(db=db, admin_user=admin_user, user_id=user_id)
+    user = delete_user_service(
+        db=db,
+        admin_user=admin_user,
+        user_id=user_id,
+    )
+    return DeleteUserResponse(userId=user.id, status=user.status)
 
 
 @router.post(

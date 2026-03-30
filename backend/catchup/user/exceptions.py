@@ -68,3 +68,23 @@ class CannotRevokeDeletedUserError(UserStateError):
 class CannotRevokeInactiveUserError(UserStateError):
     code = "cannot_revoke_inactive_user"
     default_message = "Cannot revoke inactive user"
+
+
+class CannotDeactivateAdminUserError(UserStateError):
+    code = "cannot_deactivate_admin_user"
+    default_message = "Cannot deactivate admin user"
+
+
+class CannotDeleteAdminUserError(UserStateError):
+    code = "cannot_delete_admin_user"
+    default_message = "Cannot delete admin user"
+
+
+class UserAlreadyDeletedError(UserStateError):
+    code = "user_already_deleted"
+    default_message = "User already deleted"
+
+
+class UserAlreadyInactiveError(UserStateError):
+    code = "user_already_inactive"
+    default_message = "User already inactive"
