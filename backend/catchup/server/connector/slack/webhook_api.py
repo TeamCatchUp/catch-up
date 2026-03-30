@@ -1,14 +1,18 @@
-import logging
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Request, status
+from fastapi import APIRouter
+from fastapi import Header
+from fastapi import HTTPException
+from fastapi import Request
+from fastapi import status
 from fastapi.concurrency import run_in_threadpool
+import structlog
 
 from catchup.configs.config import settings
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 from catchup.sync.ingress.slack import handle_slack_webhook as handle_slack_webhook_ingress
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/slack", tags=["slack-webhook"])
 
@@ -33,15 +37,23 @@ async def handle_slack_webhook(
     )
     if not verify_result.ok:
         logger.warning(
-            "[SLACK][WEBHOOK][VERIFY] Failed: reason=%s",
-            verify_result.reason,
+            "slack_webhook_verify_failed",
+            reason=verify_result.reason,
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Slack Webhook Signature",
         )
 
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except Exception:
+        logger.warning("slack_webhook_invalid_json")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid JSON payload",
+        )
+
     try:
         return await run_in_threadpool(
             handle_slack_webhook_ingress,
@@ -49,8 +61,8 @@ async def handle_slack_webhook(
         )
     except Exception as exc:
         logger.error(
-            "[SLACK][WEBHOOK] Failed to process event: error=%s",
-            exc,
+            "slack_webhook_dispatch_failed",
+            error=str(exc),
             exc_info=True,
         )
         raise HTTPException(
