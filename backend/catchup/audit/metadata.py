@@ -1,7 +1,7 @@
 import uuid
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from catchup.db.models import SourceType, SyncConnector
+from catchup.db.models import SourceType, SyncConnector, UserRole
 
 
 class BaseAuditMetadata(BaseModel):
@@ -85,3 +85,7 @@ class AwsS3AuditMetadata(BaseAuditMetadata):
 
 class AdminOAuthAuditMetadata(BaseAuditMetadata):
     pass
+
+
+class UserOnboardingAuditMetadata(BaseAuditMetadata):
+    role: UserRole

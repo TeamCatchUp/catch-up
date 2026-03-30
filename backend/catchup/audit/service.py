@@ -49,5 +49,6 @@ def emit_audit_event(
             "audit_event_emit_failed",
             event_type=event_type,
             event_action=event_action,
-            error=str(e)
+            error=str(e),
+            exc_info=True,
         )
