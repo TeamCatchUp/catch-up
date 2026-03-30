@@ -18,3 +18,7 @@ class ChatTokenUsageEvent(BaseTokenUsageEvent):
     rerank_count: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class EmbeddingTokenUsageResponse(BaseModel):
+    total_costs_usd: float
