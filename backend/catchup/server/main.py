@@ -40,6 +40,7 @@ from catchup.server.admin.api import router as admin_router
 from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
 from catchup.server.chat_room.api import router as chatroom_router
+from catchup.server.costs.api import router as costs_router
 from catchup.server.connector.atlassian.auth_api import router as atlassian_auth_router
 from catchup.server.connector.github.auth_api import router as github_auth_router
 from catchup.server.connector.github.webhook_api import router as github_webhook_router
@@ -603,6 +604,7 @@ app.include_router(github_mapping_csv_router)
 app.include_router(onboarding_router)
 app.include_router(settings_router)
 app.include_router(sync_runtime_router)
+app.include_router(costs_router)
 
 
 app.add_middleware(
