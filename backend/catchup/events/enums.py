@@ -8,6 +8,7 @@ class EventTopic(StrEnum):
 
 class EventType(StrEnum):
     AUTH = "AUTH"
+    ONBOARDING = "ONBOARDING"
     INTEGRATION = "INTEGRATION"
     SYNC = "SYNC"
     CHAT = "CHAT"
@@ -106,3 +107,7 @@ class UserCustomPromptEventAction(BaseEventAction):
     CREATED = "custom_prompt_created"
     EDITED = "custom_prompt_edited"
     DELETED = "custom_prompt_deleted"
+
+
+class UserOnboardingEventAction(BaseEventAction):
+    COMPLETED = "user_onboarding_completed"
