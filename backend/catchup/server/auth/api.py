@@ -320,7 +320,8 @@ async def logout(
 
 @router.get(
     path="/me",
-    description="인증된 사용자의 정보를 반환한다. (미가입 상태 포함)" 
+    description="인증된 사용자의 정보를 반환한다. (미가입 상태 포함)",
+    response_model=CurrentUserInfo,
 )
 def read_users_me(
     user_info: dict = Depends(get_current_user_info)

@@ -191,6 +191,7 @@ def get_current_user_info(
     
     if user:
         return {
+            "user_id": user.id,
             "email": user.email,
             "name": user.name,
             "role": user.role,
@@ -205,6 +206,7 @@ def get_current_user_info(
         
         # Oauth 로그인 O, 회원가입 X (일반 유저)
         return {
+            "user_id": None,
             "email": email,
             "name": name or "Unknown",
             "role": suggested_role,
