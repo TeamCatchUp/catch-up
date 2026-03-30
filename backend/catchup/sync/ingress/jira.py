@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
-
 import structlog
 
 from catchup.connectors.jira.webhook.metadata import handle_metadata_event
+from catchup.connectors.jira.webhook.responses import accepted_incremental_response
+from catchup.connectors.jira.webhook.responses import ignored_event_response
 from catchup.sync.incremental.resolve import resolve_jira_event
 from catchup.sync.incremental.service import get_incremental_service
 from catchup.sync.ingress.types import JiraWebhookRequest
+from catchup.sync.ingress.types import JiraWebhookResponse
 
 logger = structlog.get_logger(__name__)
 
@@ -36,7 +37,7 @@ SUPPORTED_METADATA_EVENTS = frozenset({
 async def handle_jira_webhook(
     *,
     request: JiraWebhookRequest,
-) -> dict[str, Any]:
+) -> JiraWebhookResponse:
     if request.event_type in SUPPORTED_METADATA_EVENTS:
         return await handle_metadata_event(request)
 
@@ -48,7 +49,7 @@ async def handle_jira_webhook(
         cloud_id=request.cloud_id,
         event_type=request.event_type,
     )
-    return _ignored_event_response(
+    return ignored_event_response(
         event_type=request.event_type,
         reason="unsupported_event",
     )
@@ -56,7 +57,7 @@ async def handle_jira_webhook(
 
 async def _handle_incremental_event(
     request: JiraWebhookRequest,
-) -> dict[str, Any]:
+) -> JiraWebhookResponse:
     changes = resolve_jira_event(
         cloud_id=request.cloud_id,
         payload=request.payload,
@@ -67,7 +68,7 @@ async def _handle_incremental_event(
             cloud_id=request.cloud_id,
             event_type=request.event_type,
         )
-        return _ignored_event_response(
+        return ignored_event_response(
             event_type=request.event_type,
             reason="unsupported_payload",
         )
@@ -84,7 +85,7 @@ async def _handle_incremental_event(
                 event_type=request.event_type,
                 blocked_count=result.blocked_count,
             )
-            return _ignored_event_response(
+            return ignored_event_response(
                 event_type=request.event_type,
                 reason="full_sync_required",
                 blocked_count=result.blocked_count,
@@ -98,39 +99,8 @@ async def _handle_incremental_event(
             blocked_count=result.blocked_count,
         )
 
-    return _accepted_incremental_response(
+    return accepted_incremental_response(
         event_type=request.event_type,
         record_keys=result.record_keys,
         blocked_count=result.blocked_count,
     )
-
-
-def _ignored_event_response(
-    *,
-    event_type: str,
-    reason: str,
-    **extra: Any,
-) -> dict[str, Any]:
-    response = {
-        "status": "ignored",
-        "event_type": event_type,
-        "reason": reason,
-    }
-    response.update(extra)
-    return response
-
-
-def _accepted_incremental_response(
-    *,
-    event_type: str,
-    record_keys: list[str],
-    blocked_count: int = 0,
-) -> dict[str, Any]:
-    response: dict[str, Any] = {
-        "status": "accepted",
-        "event_type": event_type,
-        "record_keys": record_keys,
-    }
-    if blocked_count > 0:
-        response["blocked_count"] = blocked_count
-    return response

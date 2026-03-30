@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from fastapi import Request
 from fastapi import status
 from fastapi.concurrency import run_in_threadpool
+from fastapi.encoders import jsonable_encoder
 import structlog
 
 from catchup.configs.config import settings
@@ -58,7 +59,7 @@ async def handle_slack_webhook(
 
     try:
         event_wrapper = SlackEventWrapper(**payload)
-        return await run_in_threadpool(
+        response = await run_in_threadpool(
             handle_slack_webhook_ingress,
             request=SlackWebhookRequest.from_raw(
                 wrapper_type=event_wrapper.type,
@@ -67,6 +68,7 @@ async def handle_slack_webhook(
                 challenge=event_wrapper.challenge,
             ),
         )
+        return jsonable_encoder(response, exclude_none=True)
     except Exception as exc:
         logger.error(
             "slack_webhook_dispatch_failed",

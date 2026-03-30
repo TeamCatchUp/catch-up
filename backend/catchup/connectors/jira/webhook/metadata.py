@@ -10,6 +10,7 @@ from catchup.connectors.atlassian.utils import parse_atlassian_datetime
 from catchup.db.engine import SessionLocal
 from catchup.db.jira import domain_repository
 from catchup.sync.ingress.types import JiraWebhookRequest
+from catchup.sync.ingress.types import JiraWebhookResponse
 
 from .responses import ignored_event_response
 from .responses import processed_metadata_response
@@ -19,7 +20,7 @@ logger = structlog.get_logger(__name__)
 
 async def handle_metadata_event(
     request: JiraWebhookRequest,
-) -> dict[str, Any]:
+) -> JiraWebhookResponse:
     return await run_in_threadpool(
         _handle_metadata_event_db,
         request,
@@ -28,7 +29,7 @@ async def handle_metadata_event(
 
 def _handle_metadata_event_db(
     request: JiraWebhookRequest,
-) -> dict[str, Any]:
+) -> JiraWebhookResponse:
     with SessionLocal() as db:
         try:
             response = _process_metadata_event(
@@ -46,7 +47,7 @@ def _process_metadata_event(
     *,
     db: Session,
     request: JiraWebhookRequest,
-) -> dict[str, Any]:
+) -> JiraWebhookResponse:
     cloud_id = request.cloud_id
     event_type = request.event_type
     payload = request.payload

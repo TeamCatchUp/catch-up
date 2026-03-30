@@ -27,6 +27,7 @@ from catchup.events.enums import EventType
 from catchup.events.enums import IntegrationEventAction
 from catchup.sync.common.exceptions import SyncAPIError
 from catchup.sync.ingress.types import GithubWebhookRequest
+from catchup.sync.ingress.types import GithubWebhookResponse
 
 from .responses import ignored_event_response
 from .responses import installation_repositories_response
@@ -48,7 +49,7 @@ _USER_REFRESH_EVENTS = frozenset({
 
 async def handle_metadata_event(
     request: GithubWebhookRequest,
-) -> dict[str, Any]:
+) -> GithubWebhookResponse:
     if request.event_name == "installation":
         return await _handle_installation_event(request)
 
@@ -85,7 +86,7 @@ async def handle_metadata_event(
 
 async def _handle_installation_event(
     request: GithubWebhookRequest,
-) -> dict[str, Any]:
+) -> GithubWebhookResponse:
     data = InstallationWebhookPayload(**request.payload)
     action = data.action
     installation_id = data.installation.id
@@ -140,16 +141,16 @@ async def _handle_installation_event(
         await _sync_installation_metadata(installation_id)
         return result
 
-    return {
-        "status": "ignored",
-        "event": "installation",
-        "action": action,
-    }
+    return ignored_event_response(
+        event=request.event_name,
+        reason="unsupported_action",
+        action=action,
+    )
 
 
 async def _handle_installation_created(
     data: InstallationWebhookPayload,
-) -> dict[str, Any]:
+) -> GithubWebhookResponse:
     result = await run_in_threadpool(
         _create_installation,
         data,
@@ -167,7 +168,7 @@ async def _handle_installation_created(
 
 def _create_installation(
     data: InstallationWebhookPayload,
-) -> dict[str, Any]:
+) -> GithubWebhookResponse:
     installation = data.installation
 
     with SessionLocal() as db:
@@ -219,7 +220,7 @@ def _create_installation(
 
 def _handle_installation_deleted(
     data: InstallationWebhookPayload,
-) -> dict[str, Any]:
+) -> GithubWebhookResponse:
     installation_id = data.installation.id
 
     with SessionLocal() as db:
@@ -244,7 +245,7 @@ def _handle_installation_deleted(
 
 def _handle_installation_suspended(
     data: InstallationWebhookPayload,
-) -> dict[str, Any]:
+) -> GithubWebhookResponse:
     installation = data.installation
 
     with SessionLocal() as db:
@@ -263,7 +264,7 @@ def _handle_installation_suspended(
 
 def _handle_installation_unsuspended(
     data: InstallationWebhookPayload,
-) -> dict[str, Any]:
+) -> GithubWebhookResponse:
     installation_id = data.installation.id
 
     with SessionLocal() as db:
@@ -282,7 +283,7 @@ def _handle_installation_unsuspended(
 
 def _handle_installation_repositories_event(
     payload: dict[str, Any],
-) -> dict[str, Any]:
+) -> GithubWebhookResponse:
     data = InstallationRepositoriesWebhookPayload(**payload)
     installation_id = data.installation.id
 

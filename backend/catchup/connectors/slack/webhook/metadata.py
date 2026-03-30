@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from catchup.connectors.slack import webhook_service
 from catchup.db.engine import SessionLocal
 from catchup.sync.ingress.types import SlackWebhookRequest
+from catchup.sync.ingress.types import SlackWebhookResponse
 
 from .responses import ignored_event_response
 from .responses import metadata_error_response
@@ -38,7 +39,7 @@ def is_supported_channel_membership_event(event: dict[str, Any]) -> bool:
 
 def handle_metadata_event(
     request: SlackWebhookRequest,
-) -> dict[str, Any]:
+) -> SlackWebhookResponse:
     if request.event_type in MEMBER_EVENTS:
         if not is_supported_channel_membership_event(request.event):
             return ignored_event_response(
@@ -53,7 +54,7 @@ def handle_metadata_event(
             reason="unsupported_event",
         )
 
-    handler, label = resolved
+    handler = resolved
     with SessionLocal() as db:
         try:
             _run_metadata_handler(
@@ -70,7 +71,6 @@ def handle_metadata_event(
                 "slack_metadata_sync_failed",
                 team_id=request.team_id,
                 event_type=request.event_type,
-                handler_label=label,
                 error=str(exc),
             )
             return metadata_error_response()
@@ -78,21 +78,21 @@ def handle_metadata_event(
 
 def _resolve_metadata_handler(
     event_type: str,
-) -> tuple[Callable[[Session, str, dict[str, Any]], None], str] | None:
+) -> Callable[[Session, str, dict[str, Any]], None] | None:
     if event_type in CHANNEL_UPSERT_EVENTS:
-        return webhook_service.handle_channel_upsert, "Channel upsert"
+        return webhook_service.handle_channel_upsert
 
     if event_type in CHANNEL_DELETE_EVENTS:
-        return webhook_service.handle_channel_delete, "Channel delete"
+        return webhook_service.handle_channel_delete
 
     if event_type in CHANNEL_ARCHIVE_EVENTS:
-        return webhook_service.handle_channel_archive, "Channel archive"
+        return webhook_service.handle_channel_archive
 
     if event_type in MEMBER_EVENTS:
-        return webhook_service.handle_member_event, "Member event"
+        return webhook_service.handle_member_event
 
     if event_type in USER_EVENTS:
-        return webhook_service.handle_user_event, "User event"
+        return webhook_service.handle_user_event
 
     return None
 

@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from fastapi import Query
 from fastapi import Request
 from fastapi import status
+from fastapi.encoders import jsonable_encoder
 import structlog
 
 from catchup.configs.config import settings
@@ -66,12 +67,13 @@ async def handle_jira_webhook(
         payload = {}
 
     try:
-        return await handle_jira_webhook_ingress(
+        response = await handle_jira_webhook_ingress(
             request=JiraWebhookRequest.from_raw(
                 cloud_id=cloud_id,
                 payload=payload,
             ),
         )
+        return jsonable_encoder(response, exclude_none=True)
     except Exception as exc:
         event_type = str(payload.get("webhookEvent") or "").strip()
         logger.error(

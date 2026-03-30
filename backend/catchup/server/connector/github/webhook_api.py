@@ -6,6 +6,7 @@ from fastapi import Header
 from fastapi import HTTPException
 from fastapi import Request
 from fastapi import status
+from fastapi.encoders import jsonable_encoder
 
 from catchup.configs.config import settings
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
@@ -60,12 +61,13 @@ async def handle_github_webhook(
         )
 
     try:
-        return await handle_github_webhook_ingress(
+        response = await handle_github_webhook_ingress(
             request=GithubWebhookRequest.from_raw(
                 event_name=x_github_event,
                 payload=payload,
             ),
         )
+        return jsonable_encoder(response, exclude_none=True)
     except Exception as exc:
         logger.error(
             "github_webhook_dispatch_failed",

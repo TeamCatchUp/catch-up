@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from typing import Any
-
 import structlog
 
 from catchup.connectors.slack.webhook.metadata import handle_metadata_event
+from catchup.connectors.slack.webhook.responses import accepted_incremental_response
+from catchup.connectors.slack.webhook.responses import ignored_event_response
+from catchup.connectors.slack.webhook.responses import ignored_wrapper_response
+from catchup.connectors.slack.webhook.responses import url_verification_response
 from catchup.sync.incremental.resolve import resolve_slack_event
 from catchup.sync.incremental.service import get_incremental_service
+from catchup.sync.ingress.types import SlackIgnoredWebhookResponse
 from catchup.sync.ingress.types import SlackWebhookRequest
+from catchup.sync.ingress.types import SlackWebhookResponse
 
 logger = structlog.get_logger(__name__)
 
@@ -32,28 +36,25 @@ SUPPORTED_METADATA_EVENTS = frozenset({
 def handle_slack_webhook(
     *,
     request: SlackWebhookRequest,
-) -> dict[str, Any]:
+) -> SlackWebhookResponse:
     if request.wrapper_type == "url_verification":
         logger.debug("slack_webhook_url_verification")
-        return {"challenge": request.challenge}
+        return url_verification_response(challenge=request.challenge)
 
     if request.wrapper_type != "event_callback":
         logger.warning(
             "slack_webhook_ignored_unknown_wrapper",
             wrapper_type=request.wrapper_type,
         )
-        return {
-            "status": "ignored",
-            "wrapper_type": request.wrapper_type,
-        }
+        return ignored_wrapper_response(wrapper_type=request.wrapper_type)
 
     if not request.event:
         logger.warning("slack_webhook_ignored_empty_event")
-        return {"status": "ignored", "reason": "empty_event"}
+        return SlackIgnoredWebhookResponse(status="ignored", reason="empty_event")
 
     if not request.team_id:
         logger.warning("slack_webhook_ignored_missing_team_id")
-        return {"status": "ignored", "reason": "missing_team_id"}
+        return SlackIgnoredWebhookResponse(status="ignored", reason="missing_team_id")
 
     if request.event_type in SUPPORTED_METADATA_EVENTS:
         return handle_metadata_event(request)
@@ -67,7 +68,7 @@ def handle_slack_webhook(
         event_type=request.event_type,
         event_subtype=request.event_subtype,
     )
-    return _ignored_event_response(
+    return ignored_event_response(
         event_type=request.event_type,
         reason="unsupported_event",
     )
@@ -75,10 +76,10 @@ def handle_slack_webhook(
 
 def _handle_incremental_event(
     request: SlackWebhookRequest,
-) -> dict[str, Any]:
+) -> SlackWebhookResponse:
     resolved = resolve_slack_event(team_id=request.team_id, event=request.event)
     if not resolved.changes:
-        return _ignored_event_response(
+        return ignored_event_response(
             event_type=request.event_type,
             reason=resolved.reason or "unsupported_message_payload",
         )
@@ -95,7 +96,7 @@ def _handle_incremental_event(
                 event_type=request.event_type,
                 blocked_count=result.blocked_count,
             )
-            return _ignored_event_response(
+            return ignored_event_response(
                 event_type=request.event_type,
                 reason="full_sync_required",
                 blocked_count=result.blocked_count,
@@ -109,39 +110,8 @@ def _handle_incremental_event(
             blocked_count=result.blocked_count,
         )
 
-    return _accepted_incremental_response(
+    return accepted_incremental_response(
         event_type=request.event_type,
         record_keys=result.record_keys,
         blocked_count=result.blocked_count,
     )
-
-
-def _ignored_event_response(
-    *,
-    event_type: str,
-    reason: str,
-    **extra: Any,
-) -> dict[str, Any]:
-    response = {
-        "status": "ignored",
-        "event_type": event_type,
-        "reason": reason,
-    }
-    response.update(extra)
-    return response
-
-
-def _accepted_incremental_response(
-    *,
-    event_type: str,
-    record_keys: list[str],
-    blocked_count: int = 0,
-) -> dict[str, Any]:
-    response: dict[str, Any] = {
-        "status": "accepted",
-        "event_type": event_type,
-        "record_keys": record_keys,
-    }
-    if blocked_count > 0:
-        response["blocked_count"] = blocked_count
-    return response
