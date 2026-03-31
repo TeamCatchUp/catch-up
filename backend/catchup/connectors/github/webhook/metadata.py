@@ -30,10 +30,10 @@ from catchup.sync.common.exceptions import SyncAPIError
 from catchup.sync.ingress.types import GithubWebhookRequest
 from catchup.sync.ingress.types import GithubWebhookResponse
 
-from .responses import ignored_event_response
-from .responses import installation_repositories_response
-from .responses import installation_status_response
-from .responses import processed_metadata_response
+from catchup.connectors.github.webhook.responses import ignored_event_response
+from catchup.connectors.github.webhook.responses import installation_repositories_response
+from catchup.connectors.github.webhook.responses import installation_status_response
+from catchup.connectors.github.webhook.responses import processed_metadata_response
 
 logger = structlog.get_logger(__name__)
 

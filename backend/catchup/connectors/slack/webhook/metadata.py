@@ -12,9 +12,9 @@ from catchup.db.engine import SessionLocal
 from catchup.sync.ingress.types import SlackWebhookRequest
 from catchup.sync.ingress.types import SlackWebhookResponse
 
-from .responses import ignored_event_response
-from .responses import metadata_error_response
-from .responses import processed_metadata_response
+from catchup.connectors.slack.webhook.responses import ignored_event_response
+from catchup.connectors.slack.webhook.responses import metadata_error_response
+from catchup.connectors.slack.webhook.responses import processed_metadata_response
 
 logger = structlog.get_logger(__name__)
 
