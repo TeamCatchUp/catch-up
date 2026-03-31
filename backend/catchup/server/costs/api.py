@@ -7,11 +7,12 @@ from fastapi.concurrency import run_in_threadpool
 
 from catchup.auth.dependencies import require_admin_user
 from catchup.components.aws.cloudwatch import CloudWatchMetrics
+from catchup.components.aws.utils import extract_model_part_from_arn
 from catchup.configs.config import settings
 from catchup.costs.dependencies import CostQueryParam
 from catchup.costs.dependencies import cloudwatch_metrics_dependency
 from catchup.costs.dependencies import cost_query_params
-from catchup.costs.pricing import TOKEN_PRICING, calc_token_cost
+from catchup.costs.pricing import calc_token_cost, resolve_model_key
 from catchup.costs.schemas import EmbeddingTokenUsageResponse
 
 logger = structlog.get_logger()
@@ -51,8 +52,12 @@ async def get_total_input_tokens_for_embeddings(
         )
     
     # TODO: 대상 모델 주입 유연성 확보
+    model_key = resolve_model_key(
+        extract_model_part_from_arn(settings.AWS_BEDROCK_EMBEDDING_MODEL)
+    )
+    
     total_costs_usd= round(
-        calc_token_cost("cohere.embed-v4", total_tokens), 6
+        calc_token_cost(model_key, total_tokens), 6
     )
     
     return {"total_costs_usd": total_costs_usd}
