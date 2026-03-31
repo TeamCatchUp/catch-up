@@ -14,19 +14,20 @@ Slack SDK의 AsyncWebClient를 래핑하여 동시 요청 제어 및 에러 핸�
 """
 
 import asyncio
-import logging
+import structlog
 from typing import Any
+from time import monotonic
 
-from slack_sdk.http_retry.builtin_async_handlers import AsyncRateLimitErrorRetryHandler
 from slack_sdk.web.async_base_client import async_default_handlers
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
 
+from catchup.connectors.slack.rate_limiter import get_slack_rate_limiter
 from catchup.connectors.base.exceptions import ConnectorApiError, RateLimitError
 from catchup.connectors.base.retry import parse_retry_after_header
 from catchup.configs.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.getLogger(__name__)
 
 
 class SlackConnectorApiError(ConnectorApiError):
@@ -44,7 +45,7 @@ class SlackApiClientWrapper:
     특징:
     - Slack SDK의 AsyncWebClient 사용 (aiohttp 기반)
     - Rate Limit 자동 처리 (Retry-After 기반)
-    - 세마포어로 동시 요청 수 제어
+    - 팀 단위 rate limiter로 호출 시작 시점 제어
     """
 
     def __init__(self, access_token: str, team_id: str):
@@ -58,13 +59,11 @@ class SlackApiClientWrapper:
         self.team_id = team_id
         retry_handlers = [
             *async_default_handlers(),
-            AsyncRateLimitErrorRetryHandler(max_retry_count=1),
         ]
         self.client = AsyncWebClient(
             token=access_token,
             retry_handlers=retry_handlers,
         )
-        self._semaphore = asyncio.Semaphore(settings.SLACK_SYNC_MAX_CONCURRENT_REQUESTS)
 
     @staticmethod
     def _response_get(response: Any, key: str, default: Any = None) -> Any:
@@ -138,19 +137,56 @@ class SlackApiClientWrapper:
         client_method: str,
         **kwargs,
     ) -> dict[str, Any]:
-        async with self._semaphore:
+        limiter = await get_slack_rate_limiter(self.team_id)
+        started_at = monotonic()
+
+        while True:
+            delay = await limiter.acquire_delay()
+            if delay > 0:
+                await asyncio.sleep(delay)
+
             try:
                 response = await getattr(self.client, client_method)(**kwargs)
                 return response.data
             except SlackApiError as exc:
                 error = self._build_api_error(api_name, exc)
+
+                if isinstance(error, SlackRateLimitError):
+                    waited = monotonic() - started_at
+                    remaining = (
+                        float(settings.SLACK_API_MAX_WAIT_SECONDS_PER_CALL) - waited
+                    )
+                    if remaining <= 0:
+                        logger.error(
+                            "slack_max_wait_seconds_exhausted",
+                            team_id=self.team_id,
+                            api_name=api_name,
+                            waited_seconds=waited,
+                            retry_after=error.retry_after,
+                        )
+                        raise error from exc
+
+                    retry_after = max(1, int(error.retry_after or 1))
+                    sleep_for = min(float(retry_after), max(0.0, remaining))
+
+                    logger.warning(
+                        "slack_api_rate_limited",
+                        team_id=self.team_id,
+                        api_name=api_name,
+                        retry_after=retry_after,
+                        sleep_for=sleep_for,
+                        waited_seconds=waited,
+                    )
+                    await asyncio.sleep(sleep_for)
+                    continue
+
                 logger.error(
-                    "[SLACK][API] %s failed: team_id=%s, status=%s, error=%s, retry_after=%s",
-                    api_name,
-                    self.team_id,
-                    error.status_code,
-                    error.metadata.get("error"),
-                    error.retry_after,
+                    "slack_api_failed",
+                    api_name=api_name,
+                    team_id=self.team_id,
+                    status_code=error.status_code,
+                    error_code=error.metadata.get("error"),
+                    retry_after=error.retry_after,
                 )
                 raise error from exc
 
