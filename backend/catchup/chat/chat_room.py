@@ -1,5 +1,5 @@
 import structlog
-from langchain.messages import AIMessage
+from langchain_core.messages import AIMessage
 
 from catchup.chat.exceptions import FeedbackImmutableError
 from catchup.chat.exceptions import LikedWithNegativeFeedbackError
