@@ -54,8 +54,6 @@ class AwsS3EventAction(BaseEventAction):
 
 
 class SystemEventAction(BaseEventAction):
-    STARTUP_DB_INIT = "startup_db_init"
-    STARTUP_DB_SCHEMA_DRIFT = "startup_db_schema_drift"
     STARTUP_SCHEDULER_INIT = "startup_scheduler_init"
     STARTUP_CHECKPOINTER_INIT = "startup_checkpointer_init"
     STARTUP_REDIS_INIT = "startup_redis_init"
