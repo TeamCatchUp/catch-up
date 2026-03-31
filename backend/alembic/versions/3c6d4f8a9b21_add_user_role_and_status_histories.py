@@ -19,6 +19,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
     op.create_table(
         "user_role_histories",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -71,8 +74,57 @@ def upgrade() -> None:
         unique=False,
     )
 
+    if inspector.has_table("inactive_users"):
+        bind.execute(
+            sa.text(
+                """
+                INSERT INTO user_status_histories (
+                    user_id,
+                    actor_user_id,
+                    action,
+                    reason,
+                    before_status,
+                    after_status,
+                    created_at
+                )
+                SELECT
+                    user_id,
+                    COALESCE(admin_id, user_id),
+                    'deactivate',
+                    reason,
+                    'active',
+                    'inactive',
+                    deactivated_at
+                FROM inactive_users
+                """
+            )
+        )
+        indexes = {index["name"] for index in inspector.get_indexes("inactive_users")}
+        if "idx_inactive_users_user_id" in indexes:
+            op.drop_index("idx_inactive_users_user_id", table_name="inactive_users")
+        op.drop_table("inactive_users")
+
 
 def downgrade() -> None:
+    op.create_table(
+        "inactive_users",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("reason", sa.Text(), nullable=False),
+        sa.Column(
+            "deactivated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column("reactivated", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+        sa.Column("admin_id", sa.Integer(), nullable=True),
+        sa.ForeignKeyConstraint(["admin_id"], ["users.id"]),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("user_id", "deactivated_at", name="uq_inactive_user_timestamp"),
+    )
+    op.create_index("idx_inactive_users_user_id", "inactive_users", ["user_id"], unique=False)
     op.drop_index("idx_user_status_histories_user_created_at", table_name="user_status_histories")
     op.drop_table("user_status_histories")
     op.drop_index("idx_user_role_histories_user_created_at", table_name="user_role_histories")
