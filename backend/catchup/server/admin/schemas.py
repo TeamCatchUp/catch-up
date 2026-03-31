@@ -170,6 +170,11 @@ class PromoteUserRequest(BaseModel):
     reason: str
 
 
+class RevokeUserRequest(BaseModel):
+    userId: int
+    reason: str
+
+
 class DeactivateUserResponse(BaseModel):
     userId: int
     status: UserStatus
