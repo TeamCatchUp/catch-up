@@ -1774,8 +1774,8 @@ class ChatHistory(Base):
 
 class TokenPurpose(StrEnum):
     SUMMARIZE = "summarize"
-    EMBEDDING = "embedding"
     CHAT = "chat"
+    TITLE_GENERATION = "title_generation"
 
 
 class ChatTokenUsage(Base):
@@ -1786,7 +1786,9 @@ class ChatTokenUsage(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), nullable=False)
     company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"), nullable=False)
-    message_id: Mapped[int] = mapped_column(ForeignKey("chat_histories.id"), nullable=False)
+    message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chat_histories.id"), nullable=True, comment="purpose가 title_generation인 경우 NULL 허용"
+    )
     
     purpose: Mapped[TokenPurpose] = mapped_column(String(50), nullable=False)
     

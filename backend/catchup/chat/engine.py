@@ -76,6 +76,9 @@ class ChatService:
         
          # 실행 시간 측정 시작
         start = time.perf_counter()
+        
+        # 채팅 토큰 사용량 컨텍스트 초기화
+        ChatTokenUsageContext.init()
             
         try:            
             # 채팅 세션 획득
@@ -483,7 +486,10 @@ class ChatService:
         room_id = await run_in_threadpool(_get_chat_room_sync)
 
         if not room_id:
-            initial_title = await generate_chat_room_title(query)
+            initial_title = await generate_chat_room_title(
+                global_context=global_context,
+                query=query
+            )
                
             # 새로운 채팅 세션일 경우
             def _create_room_sync():
