@@ -8,7 +8,9 @@ from catchup.audit.enums import AuditLevel
 from catchup.audit.service import emit_audit_event
 from catchup.db.models import User
 from catchup.db.models import UserRole
+from catchup.db.models import UserRoleHistoryAction
 from catchup.db.models import UserStatus
+from catchup.db.users import create_user_role_history
 from catchup.db.users import get_user_by_id_for_update
 from catchup.db.users import update_user_role
 from catchup.events.enums import EventType, UserEventAction
@@ -119,17 +121,28 @@ def _apply_role_change(
     db: Session,
     *,
     user: User,
+    actor_user_id: int,
     role: UserRole,
+    action: UserRoleHistoryAction,
+    reason: str,
     context: str,
     event_action: UserEventAction,
-    log_event: str,
 ) -> User:
-    before_role = str(user.role)
+    before_role = user.role
 
     user = update_user_role(
         db=db,
         user=user,
         role=role,
+    )
+    create_user_role_history(
+        db,
+        user_id=user.id,
+        actor_user_id=actor_user_id,
+        action=action,
+        reason=reason,
+        before_role=before_role,
+        after_role=user.role,
     )
     db.commit()
     db.refresh(user)
@@ -139,7 +152,8 @@ def _apply_role_change(
         event_action=event_action,
         event_status=AuditEventStatus.SUCCESS,
         user_id=user.id,
-        before_role=before_role,
+        reason=reason,
+        before_role=str(before_role),
         after_role=str(user.role),
         status=str(user.status),
     )
@@ -151,6 +165,8 @@ def promote_admin_role(
     db: Session,
     *,
     user_id: int,
+    actor_user_id: int,
+    reason: str,
 ) -> User:
     user = _get_user_or_raise(
         db,
@@ -207,10 +223,12 @@ def promote_admin_role(
     return _apply_role_change(
         db,
         user=user,
+        actor_user_id=actor_user_id,
         role=UserRole.ADMIN,
+        action=UserRoleHistoryAction.PROMOTE,
+        reason=reason,
         context="admin_user_promote",
         event_action=UserEventAction.USER_PROMOTED,
-        log_event="user_promoted",
     )
 
 
@@ -307,8 +325,10 @@ def revoke_admin_role(
     return _apply_role_change(
         db,
         user=user,
+        actor_user_id=actor_user_id,
         role=UserRole.USER,
+        action=UserRoleHistoryAction.REVOKE,
+        reason="admin_role_revoked",
         context="admin_role_revoke",
         event_action=UserEventAction.ADMIN_REVOKED,
-        log_event="admin_revoked",
     )
