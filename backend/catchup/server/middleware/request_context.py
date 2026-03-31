@@ -14,7 +14,6 @@ from fastapi.concurrency import run_in_threadpool
 from catchup.audit.contexts import AuditContext
 from catchup.audit.schemas import AuditActor
 from catchup.auth.jwt import verify_token
-from catchup.costs.contexts.chat import ChatTokenUsageContext
 from catchup.db.engine import SessionLocal
 from catchup.db.users import get_user_by_sub
 from catchup.observability.logging.context import bind_actor_context
@@ -127,10 +126,6 @@ async def request_context_middleware(
         actor_=actor.model_dump(mode="json")
     )
 
-    # TODO: 모든 요청에 대해서 초기화할 필요는 없어 보임.
-    # 채팅 토큰 사용량 컨텍스트 초기화
-    ChatTokenUsageContext.init()
-    
     # 감사 로그 메타데이터 컨텍스트 초기화
     AuditContext.init()
     
@@ -148,7 +143,14 @@ async def request_context_middleware(
         response.headers[REQUEST_ID_HEADER] = trace_id
         return response
     finally:
-        logger.info(
+        if status_code >= 500:
+            log_fn = logger.error
+        elif status_code >= 400:
+            log_fn = logger.warning
+        else:
+            log_fn = logger.info
+        
+        log_fn(
             "http_request_finished",
             method=request.method,
             path=request.url.path,
