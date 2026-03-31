@@ -12,8 +12,8 @@ from catchup.db.jira import domain_repository
 from catchup.sync.ingress.types import JiraWebhookRequest
 from catchup.sync.ingress.types import JiraWebhookResponse
 
-from .responses import ignored_event_response
-from .responses import processed_metadata_response
+from catchup.connectors.jira.webhook.responses import ignored_event_response
+from catchup.connectors.jira.webhook.responses import processed_metadata_response
 
 logger = structlog.get_logger(__name__)
 

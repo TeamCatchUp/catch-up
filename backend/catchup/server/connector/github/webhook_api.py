@@ -2,6 +2,7 @@ from typing import Optional
 
 import structlog
 from fastapi import APIRouter
+from fastapi import BackgroundTasks
 from fastapi import Header
 from fastapi import HTTPException
 from fastapi import Request
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/api/v1/github", tags=["github-webhook"])
 @router.post("/webhooks", status_code=status.HTTP_200_OK)
 async def handle_github_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
     x_hub_signature_256: Optional[str] = Header(None),
     x_github_event: Optional[str] = Header(None),
 ):
@@ -65,7 +67,8 @@ async def handle_github_webhook(
             request=GithubWebhookRequest.from_raw(
                 event_name=x_github_event,
                 payload=payload,
-            ),
+            ), 
+            background_tasks=background_tasks,
         )
         return jsonable_encoder(response, exclude_none=True)
     except Exception as exc:
