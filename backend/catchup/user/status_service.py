@@ -1,10 +1,13 @@
 import structlog
-from sqlalchemy.orm import Session
+from dataclasses import dataclass
 
-from catchup.db.models import InactiveUser
-from catchup.db.models import User
+from catchup.db.engine import SessionLocal
 from catchup.db.models import UserRole
 from catchup.db.models import UserStatus
+from catchup.db.models import UserStatusHistoryAction
+from catchup.db.users import create_user_status_history
+from catchup.db.users import get_user_by_id_for_update
+from catchup.db.users import update_user_status
 from catchup.user.exceptions import CannotDeactivateAdminUserError
 from catchup.user.exceptions import CannotDeleteAdminUserError
 from catchup.user.exceptions import UserAlreadyDeletedError
@@ -15,79 +18,135 @@ from catchup.user.exceptions import UserNotFoundError
 logger = structlog.get_logger(__name__)
 
 
+@dataclass(frozen=True)
+class DeactivateUserResult:
+    user_id: int
+    status: UserStatus
+    deactivated_at: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class DeleteUserResult:
+    user_id: int
+    status: UserStatus
+    deleted_at: str
+    reason: str
+
+
 def deactivate_user(
-    db: Session,
     *,
-    admin_user: User,
+    admin_user_id: int,
     user_id: int,
     reason: str,
-) -> tuple[User, InactiveUser]:
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        logger.debug("admin_user_deactivate_user_not_found", user_id=user_id)
-        raise UserNotFoundError(detail={"user_id": user_id})
+) -> DeactivateUserResult:
+    with SessionLocal() as db:
+        try:
+            user = get_user_by_id_for_update(db, user_id=user_id)
+            if not user:
+                logger.info("admin_user_deactivate_user_not_found", user_id=user_id)
+                raise UserNotFoundError(detail={"user_id": user_id})
 
-    if user.role == UserRole.ADMIN:
-        logger.debug("admin_user_deactivate_admin_blocked", user_id=user.id)
-        raise CannotDeactivateAdminUserError(detail={"user_id": user.id})
+            if user.role == UserRole.ADMIN:
+                logger.info("cannot_deactivate_admin", user_id=user.id)
+                raise CannotDeactivateAdminUserError(detail={"user_id": user.id})
 
-    if user.status == UserStatus.DELETED:
-        logger.debug("admin_user_deactivate_deleted_blocked", user_id=user.id)
-        raise UserAlreadyDeletedError(detail={"user_id": user.id})
+            if user.status == UserStatus.DELETED:
+                logger.info("cannot_deactivate_deleted_user", user_id=user.id)
+                raise UserAlreadyDeletedError(detail={"user_id": user.id})
 
-    if user.status == UserStatus.INACTIVE:
-        logger.debug("admin_user_deactivate_inactive_blocked", user_id=user.id)
-        raise UserAlreadyInactiveError(detail={"user_id": user.id})
+            if user.status == UserStatus.INACTIVE:
+                logger.info("user_already_deactivated", user_id=user.id)
+                raise UserAlreadyInactiveError(detail={"user_id": user.id})
 
-    inactive = InactiveUser(
-        user_id=user.id,
-        reason=reason,
-        admin_id=admin_user.id,
-    )
-    user.status = UserStatus.INACTIVE
+            before_status = user.status
+            user = update_user_status(
+                db,
+                user=user,
+                status=UserStatus.INACTIVE,
+            )
+            history = create_user_status_history(
+                db,
+                user_id=user.id,
+                actor_user_id=admin_user_id,
+                action=UserStatusHistoryAction.DEACTIVATE,
+                reason=reason,
+                before_status=before_status,
+                after_status=user.status,
+            )
+            db.commit()
+            db.refresh(user)
+            db.refresh(history)
 
-    db.add(inactive)
-    db.commit()
-    db.refresh(user)
-    db.refresh(inactive)
+            logger.info(
+                "user_deactivated",
+                user_id=user.id,
+                admin_user_id=admin_user_id,
+            )
 
-    logger.info(
-        "admin_user_deactivated",
-        user_id=user.id,
-        admin_user_id=admin_user.id,
-    )
-
-    return user, inactive
+            return DeactivateUserResult(
+                user_id=user.id,
+                status=user.status,
+                deactivated_at=history.created_at.isoformat(),
+                reason=history.reason,
+            )
+        except Exception:
+            db.rollback()
+            raise
 
 
 def delete_user(
-    db: Session,
     *,
-    admin_user: User,
+    admin_user_id: int,
     user_id: int,
-) -> User:
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        logger.debug("admin_user_delete_user_not_found", user_id=user_id)
-        raise UserNotFoundError(detail={"user_id": user_id})
+    reason: str,
+) -> DeleteUserResult:
+    with SessionLocal() as db:
+        try:
+            user = get_user_by_id_for_update(db, user_id=user_id)
+            if not user:
+                logger.info("admin_user_delete_user_not_found", user_id=user_id)
+                raise UserNotFoundError(detail={"user_id": user_id})
 
-    if user.role == UserRole.ADMIN:
-        logger.debug("admin_user_delete_admin_blocked", user_id=user.id)
-        raise CannotDeleteAdminUserError(detail={"user_id": user.id})
+            if user.role == UserRole.ADMIN:
+                logger.info("admin_user_delete_admin_blocked", user_id=user.id)
+                raise CannotDeleteAdminUserError(detail={"user_id": user.id})
 
-    if user.status == UserStatus.DELETED:
-        logger.debug("admin_user_delete_deleted_blocked", user_id=user.id)
-        raise UserAlreadyDeletedError(detail={"user_id": user.id})
+            if user.status == UserStatus.DELETED:
+                logger.info("admin_user_delete_deleted_blocked", user_id=user.id)
+                raise UserAlreadyDeletedError(detail={"user_id": user.id})
 
-    user.status = UserStatus.DELETED
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+            before_status = user.status
+            user = update_user_status(
+                db,
+                user=user,
+                status=UserStatus.DELETED,
+            )
+            history = create_user_status_history(
+                db,
+                user_id=user.id,
+                actor_user_id=admin_user_id,
+                action=UserStatusHistoryAction.DELETE,
+                reason=reason,
+                before_status=before_status,
+                after_status=user.status,
+            )
+            db.commit()
+            db.refresh(user)
+            db.refresh(history)
 
-    logger.info(
-        "admin_user_deleted",
-        user_id=user.id,
-        admin_user_id=admin_user.id,
-    )
+            logger.info(
+                "user_deleted",
+                user_id=user.id,
+                admin_user_id=admin_user_id,
+            )
 
-    return user
+            return DeleteUserResult(
+                user_id=user.id,
+                status=user.status,
+                deleted_at=history.created_at.isoformat(),
+                reason=history.reason,
+            )
+        except Exception:
+            db.rollback()
+            raise

@@ -22,7 +22,6 @@ from catchup.db.models import (
     ConfluenceUser,
     GitHubUser,
     GithubRepository,
-    InactiveUser,
     JiraAccountType,
     JiraProject,
     JiraUser,
@@ -64,6 +63,7 @@ from catchup.server.admin.schemas import (
     AdminUserDetailResponse,
     DeactivateUserRequest,
     DeactivateUserResponse,
+    DeleteUserRequest,
     DeleteUserResponse,
     PromoteUserResponse,
     RevokeUserResponse,
@@ -508,47 +508,47 @@ def get_user_sync_status(
 
 
 @router.post(
-    path="/users/deactivate/{user_id}",
+    path="/users/deactivate",
     description="관리자용 사용자 비활성화",
     response_model=DeactivateUserResponse,
 )
 def deactivate_user(
-    user_id: int,
     payload: DeactivateUserRequest,
-    db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin_user),
 ):
-    user, inactive = deactivate_user_service(
-        db=db,
-        admin_user=admin_user,
-        user_id=user_id,
+    result = deactivate_user_service(
+        admin_user_id=admin_user.id,
+        user_id=payload.userId,
         reason=payload.reason,
     )
     return DeactivateUserResponse(
-        userId=user.id,
-        status=user.status,
-        inactiveRecordId=inactive.id,
-        deactivatedAt=inactive.deactivated_at.isoformat(),
-        reason=inactive.reason,
+        userId=result.user_id,
+        status=result.status,
+        deactivatedAt=result.deactivated_at,
+        reason=result.reason,
     )
 
 
 @router.post(
-    path="/users/delete/{user_id}",
+    path="/users/delete",
     description="관리자용 사용자 삭제",
     response_model=DeleteUserResponse,
 )
 def delete_user(
-    user_id: int,
-    db: Session = Depends(get_db),
+    payload: DeleteUserRequest,
     admin_user: User = Depends(require_admin_user),
 ):
-    user = delete_user_service(
-        db=db,
-        admin_user=admin_user,
-        user_id=user_id,
+    result = delete_user_service(
+        admin_user_id=admin_user.id,
+        user_id=payload.userId,
+        reason=payload.reason,
     )
-    return DeleteUserResponse(userId=user.id, status=user.status)
+    return DeleteUserResponse(
+        userId=result.user_id,
+        status=result.status,
+        deletedAt=result.deleted_at,
+        reason=result.reason,
+    )
 
 
 @router.post(

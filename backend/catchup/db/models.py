@@ -156,24 +156,6 @@ class User(Base):
     oauth_user: Mapped["OAuthUser"] = relationship(back_populates="user")
 
 
-class InactiveUser(Base):
-    __tablename__ = "inactive_users"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    reason: Mapped[str] = mapped_column(Text, nullable=False)
-    deactivated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    reactivated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
-    admin_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-
-    __table_args__ = (
-        UniqueConstraint("user_id", "deactivated_at", name="uq_inactive_user_timestamp"),
-        Index("idx_inactive_users_user_id", "user_id"),
-    )
-
-
 class UserRoleHistory(Base):
     __tablename__ = "user_role_histories"
 
