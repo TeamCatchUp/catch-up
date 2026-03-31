@@ -2,7 +2,7 @@ from typing import Optional
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
-from catchup.db.models import OAuthUser, User, UserRole, UserWorkspace, Workspace
+from catchup.db.models import OAuthUser, User, UserRole, UserStatus, UserStatusHistory, UserStatusHistoryAction, UserWorkspace, Workspace
 
 def get_user_by_id(
     db: Session,
@@ -33,6 +33,42 @@ def update_user_role(
     db.flush()
 
     return user
+
+
+def update_user_status(
+    db: Session,
+    *,
+    user: User,
+    status: UserStatus,
+) -> User:
+    user.status = status
+    db.flush()
+
+    return user
+
+
+def create_user_status_history(
+    db: Session,
+    *,
+    user_id: int,
+    actor_user_id: int,
+    action: UserStatusHistoryAction,
+    reason: str,
+    before_status: UserStatus,
+    after_status: UserStatus,
+) -> UserStatusHistory:
+    history = UserStatusHistory(
+        user_id=user_id,
+        actor_user_id=actor_user_id,
+        action=action,
+        reason=reason,
+        before_status=before_status,
+        after_status=after_status,
+    )
+    db.add(history)
+    db.flush()
+
+    return history
 
 def get_user_by_email(
     db: Session,
