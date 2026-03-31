@@ -1,27 +1,27 @@
-from catchup.sync.services.confluence_full_sync_resolver import (
+from catchup.sync.full.resolvers.confluence import (
     ConfluenceFullSyncTargetResolver,
     get_confluence_full_sync_target_resolver,
 )
-from catchup.sync.services.github_full_sync_resolver import (
+from catchup.sync.full.resolvers.github import (
     GithubFullSyncTargetResolver,
     get_github_full_sync_target_resolver,
 )
-from catchup.sync.services.jira_full_sync_resolver import (
+from catchup.sync.full.resolvers.jira import (
     JiraFullSyncTargetResolver,
     get_jira_full_sync_target_resolver,
 )
-from catchup.sync.services.slack_full_sync_resolver import (
+from catchup.sync.full.resolvers.slack import (
     SlackFullSyncTargetResolver,
     get_slack_full_sync_target_resolver,
 )
 
 __all__ = [
-    "GithubFullSyncTargetResolver",
-    "SlackFullSyncTargetResolver",
     "ConfluenceFullSyncTargetResolver",
+    "GithubFullSyncTargetResolver",
     "JiraFullSyncTargetResolver",
-    "get_github_full_sync_target_resolver",
-    "get_slack_full_sync_target_resolver",
+    "SlackFullSyncTargetResolver",
     "get_confluence_full_sync_target_resolver",
+    "get_github_full_sync_target_resolver",
     "get_jira_full_sync_target_resolver",
+    "get_slack_full_sync_target_resolver",
 ]

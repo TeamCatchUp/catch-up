@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 
 from fastapi.concurrency import run_in_threadpool
+import structlog
 
 from catchup.db.engine import SessionLocal
 from catchup.db.slack import domain_repository as slack_entities
@@ -14,11 +14,11 @@ from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
     FullSyncResolvedTargets,
 )
-from catchup.sync.services.full_sync_target_normalizer import (
+from catchup.sync.full.targets import (
     resolve_full_sync_targets_from_rows,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
@@ -65,10 +65,10 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         )
 
         logger.info(
-            "[SLACK][FULL SYNC][RESOLVER] Targets resolved: team_id=%s, requested=%s, resolved=%s",
-            team_id,
-            len(requested_target_ids),
-            len(resolved_targets.targets),
+            "slack_full_sync_targets_resolved",
+            team_id=team_id,
+            requested_count=len(requested_target_ids),
+            resolved_count=len(resolved_targets.targets),
         )
 
         return resolved_targets
