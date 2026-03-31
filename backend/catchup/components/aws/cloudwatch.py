@@ -1,9 +1,10 @@
 from datetime import UTC
 from datetime import datetime
-from datetime import timedelta
 
 import boto3
 import structlog
+
+from catchup.components.aws.utils import extract_model_part_from_arn
 
 logger = structlog.get_logger()
 
@@ -34,9 +35,12 @@ class CloudWatchMetrics:
             model_id: Bedrock 임베딩 모델 ID. ARN 형식인 경우 자동으로 파싱된다.
             start_time: 집계 시작 시간.
             end_time: 집계 종료 시간.
-
+            
+        Raises:
+            botocore.exceptions.ClientError: CloudWatch API 호출 실패 시.
+            
         Returns:
-            집계 기간 내 총 입력 토큰 수. 집계 실패 시 0을 반환한다.
+            집계 기간 내 총 입력 토큰 수.
         """
         
         if end_time is None:
@@ -46,9 +50,10 @@ class CloudWatchMetrics:
         start_time = self._ensure_utc(start_time)
         end_time = self._ensure_utc(end_time)
         
-        # model_id 파싱 (e.g global.cohere.embed-v4:0)
-        # Inference profile ARN (e.g 'arn:...')은 유효하지 않음.
-        parsed_model_id = self._parse_model_id(model_id)
+        # ARN인 경우 model 식별 부분만 추출
+        # (e.g. arn:.../global.cohere.embed-v4:0 -> global.cohere.embed-v4:0)
+        # Dimensions의 ModelId는 ARN을 포함한 모델 id를 사용할 수 없음.
+        parsed_model_id = extract_model_part_from_arn(model_id)
         
         try:
             response = self.client.get_metric_statistics(
@@ -73,15 +78,7 @@ class CloudWatchMetrics:
                 total_tokens=total_tokens
             )
         return total_tokens
-    
-    def _parse_model_id(
-        self,
-        model_id: str,
-    ) -> str:        
-        if not model_id.startswith('arn:'):
-            return model_id
-        return model_id.split('/')[1]
-    
+
     def _ensure_utc(
         self,
         time: datetime,
