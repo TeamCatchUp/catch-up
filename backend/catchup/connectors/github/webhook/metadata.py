@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
+from fastapi import BackgroundTasks
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 
@@ -49,9 +50,10 @@ _USER_REFRESH_EVENTS = frozenset({
 
 async def handle_metadata_event(
     request: GithubWebhookRequest,
+    background_tasks: BackgroundTasks,
 ) -> GithubWebhookResponse:
     if request.event_name == "installation":
-        return await _handle_installation_event(request)
+        return await _handle_installation_event(request, background_tasks)
 
     if request.event_name == "installation_repositories":
         return await run_in_threadpool(
@@ -71,7 +73,7 @@ async def handle_metadata_event(
         event_name=request.event_name,
         installation_id=installation_id,
     )
-    await _sync_installation_metadata(installation_id)
+    _schedule_metadata_sync(background_tasks, installation_id)
 
     refresh_target = "repositories" if request.event_name in _REPOSITORY_REFRESH_EVENTS else "users"
     if request.event_name not in _REPOSITORY_REFRESH_EVENTS | _USER_REFRESH_EVENTS:
@@ -86,6 +88,7 @@ async def handle_metadata_event(
 
 async def _handle_installation_event(
     request: GithubWebhookRequest,
+    background_tasks: BackgroundTasks,
 ) -> GithubWebhookResponse:
     data = InstallationWebhookPayload(**request.payload)
     action = data.action
@@ -108,6 +111,7 @@ async def _handle_installation_event(
         try:
             result = await _handle_installation_created(
                 data=data,
+                background_tasks=background_tasks,
             )
         except Exception:
             emit_audit_event(
@@ -138,7 +142,7 @@ async def _handle_installation_event(
 
     if action == "unsuspended":
         result = await run_in_threadpool(_handle_installation_unsuspended, data)
-        await _sync_installation_metadata(installation_id)
+        _schedule_metadata_sync(background_tasks, installation_id)
         return result
 
     return ignored_event_response(
@@ -150,6 +154,7 @@ async def _handle_installation_event(
 
 async def _handle_installation_created(
     data: InstallationWebhookPayload,
+    background_tasks: BackgroundTasks,
 ) -> GithubWebhookResponse:
     result = await run_in_threadpool(
         _create_installation,
@@ -160,7 +165,7 @@ async def _handle_installation_created(
         return result
 
     await _register_knowledge_source(result.installation_id)
-    await _sync_installation_metadata(result.installation_id)
+    _schedule_metadata_sync(background_tasks, result.installation_id)
 
     return result
 
@@ -392,3 +397,10 @@ def _extract_installation_id(payload: dict[str, Any]) -> int | None:
         return int(raw)
     except (TypeError, ValueError):
         return None
+
+
+def _schedule_metadata_sync(
+    background_tasks: BackgroundTasks,
+    installation_id: int,
+) -> None:
+    background_tasks.add_task(_sync_installation_metadata, installation_id)

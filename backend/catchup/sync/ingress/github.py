@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from fastapi import BackgroundTasks
 import structlog
 
 from catchup.connectors.github.webhook.metadata import handle_metadata_event
@@ -34,6 +35,7 @@ SUPPORTED_METADATA_EVENTS = frozenset({
 async def handle_github_webhook(
     *,
     request: GithubWebhookRequest,
+    background_tasks: BackgroundTasks,
 ) -> GithubWebhookResponse:
     if request.event_name == "ping":
         return ignored_event_response(
@@ -45,7 +47,10 @@ async def handle_github_webhook(
         return await _handle_incremental_event(request)
 
     if request.event_name in SUPPORTED_METADATA_EVENTS:
-        return await handle_metadata_event(request)
+        return await handle_metadata_event(
+            request,
+            background_tasks,
+        )
 
     return ignored_event_response(
         event=request.event_name,
