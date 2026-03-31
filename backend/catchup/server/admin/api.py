@@ -67,6 +67,7 @@ from catchup.server.admin.schemas import (
     DeleteUserResponse,
     PromoteUserRequest,
     PromoteUserResponse,
+    RevokeUserRequest,
     RevokeUserResponse,
     UserIntegrations,
     JiraAccount,
@@ -576,19 +577,20 @@ def promote_user_to_admin(
 
 
 @router.post(
-    path="/users/revoke/{user_id}",
+    path="/users/revoke",
     description="관리자용 사용자 Admin 권한 회수",
     response_model=RevokeUserResponse,
 )
 def revoke_admin_role_from_user(
-    user_id: int,
+    payload: RevokeUserRequest,
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin_user),
 ):
     user = revoke_admin_role(
         db,
-        user_id=user_id,
+        user_id=payload.userId,
         actor_user_id=admin_user.id,
+        reason=payload.reason,
     )
 
     return RevokeUserResponse(

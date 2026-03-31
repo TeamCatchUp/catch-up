@@ -237,6 +237,7 @@ def revoke_admin_role(
     *,
     user_id: int,
     actor_user_id: int,
+    reason: str,
 ) -> User:
     admin_user_ids = _lock_admin_user_ids(db)
     user = _get_user_or_raise(
@@ -328,7 +329,7 @@ def revoke_admin_role(
         actor_user_id=actor_user_id,
         role=UserRole.USER,
         action=UserRoleHistoryAction.REVOKE,
-        reason="admin_role_revoked",
+        reason=reason,
         context="admin_role_revoke",
         event_action=UserEventAction.ADMIN_REVOKED,
     )
