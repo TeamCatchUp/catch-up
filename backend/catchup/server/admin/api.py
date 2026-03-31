@@ -65,6 +65,7 @@ from catchup.server.admin.schemas import (
     DeactivateUserResponse,
     DeleteUserRequest,
     DeleteUserResponse,
+    PromoteUserRequest,
     PromoteUserResponse,
     RevokeUserResponse,
     UserIntegrations,
@@ -552,18 +553,20 @@ def delete_user(
 
 
 @router.post(
-    path="/users/promote/{user_id}",
+    path="/users/promote",
     description="관리자용 사용자 Admin 승격",
     response_model=PromoteUserResponse,
 )
 def promote_user_to_admin(
-    user_id: int,
+    payload: PromoteUserRequest,
     db: Session = Depends(get_db),
-    _admin_user: User = Depends(require_admin_user),
+    admin_user: User = Depends(require_admin_user),
 ):
     user = promote_admin_role(
         db,
-        user_id=user_id,
+        user_id=payload.userId,
+        actor_user_id=admin_user.id,
+        reason=payload.reason,
     )
 
     return PromoteUserResponse(
