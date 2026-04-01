@@ -101,7 +101,7 @@ def audit_log(
         
         assert not(
             action and ctx_action
-        ), "BaseEventAction은 데코레이터나 AuditContext.action 중 하나에만 주입되어야 합니다."
+        ), "BaseAuditAction 데코레이터나 AuditContext.action 중 하나에만 주입되어야 합니다."
         
         resolved_action = action if action else ctx_action
         
