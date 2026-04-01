@@ -33,6 +33,9 @@ export const useDeactivateUserMutation = () => {
       queryClient.invalidateQueries({ queryKey: adminMembersQueries.all() });
       toast('계정이 비활성화되었습니다.');
     },
+    onError: () => {
+      toast('비활성화 요청에 실패했습니다.');
+    },
   });
 };
 
@@ -47,6 +50,9 @@ export const useDeleteUserMutation = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminMembersQueries.all() });
       toast('계정이 삭제되었습니다.');
+    },
+    onError: () => {
+      toast('계정 삭제 요청에 실패했습니다.');
     },
   });
 };
