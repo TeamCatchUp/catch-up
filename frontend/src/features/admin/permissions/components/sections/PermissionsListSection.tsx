@@ -27,6 +27,7 @@ interface PermissionsListSectionProps {
   isError: boolean;
   onRetry: () => void;
   onChangeRoleClick: (member: PermissionMember) => void;
+  onRoleChangeClick: (member: PermissionMember) => void;
 }
 
 /** 권한 목록 섹션 */
@@ -43,6 +44,7 @@ const PermissionsListSection = ({
   isError,
   onRetry,
   onChangeRoleClick,
+  onRoleChangeClick,
 }: PermissionsListSectionProps) => {
   return (
     <section className="flex w-full flex-col gap-3">
@@ -102,7 +104,7 @@ const PermissionsListSection = ({
           </div>
         ) : (
           <>
-            <PermissionsTable rows={rows} onChangeRoleClick={onChangeRoleClick} />
+            <PermissionsTable rows={rows} onChangeRoleClick={onChangeRoleClick} onRoleChangeClick={onRoleChangeClick} />
             <div className="flex h-21 shrink-0 items-center justify-center">
               <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={onPageChange} />
             </div>

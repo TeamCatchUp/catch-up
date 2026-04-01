@@ -83,8 +83,8 @@ const ReasonPopover = ({ trigger, title, reasonLabel, reasons, requestReason, on
                         <div className="relative flex size-6 shrink-0 items-center justify-center">
                           {isSelected ? (
                             <>
-                              <div className="border-blue-40 size-[18px] rounded-full border-[1.5px]" />
-                              <div className="bg-blue-40 absolute size-2.5 rounded-full" />
+                              <div className="border-icon-primary size-[18px] rounded-full border-[1.5px]" />
+                              <div className="bg-icon-primary size-2.5 rounded-full" />
                             </>
                           ) : (
                             <div className="border-edge-strong size-[18px] rounded-full border-[1.5px]" />
