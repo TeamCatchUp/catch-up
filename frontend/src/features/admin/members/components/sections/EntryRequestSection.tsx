@@ -20,7 +20,7 @@ import { adminMembersQueries } from '../../queries/adminMembers.queries';
 import type { AdminSortKey, EntryRequest, MemberTableRow } from '../../types/adminMember';
 import MemberDetailPanel from '../shared/MemberDetailPanel';
 import MemberTable from '../shared/MemberTable';
-import ReasonPopover from '../shared/ReasonPopover';
+import ReasonDialog from '../shared/ReasonPopover';
 import SectionHeader from '../shared/SectionHeader';
 
 interface EntryRequestSectionProps {
@@ -33,6 +33,7 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
   const decideMutation = useDecideRequestMutation();
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<AdminSortKey>('newest');
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 
@@ -177,12 +178,12 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
           actionButtons={
             selectedRequest && (
               <>
-                <ReasonPopover
-                  trigger={
-                    <Button variant="box-outline-gray" size="md">
-                      반려
-                    </Button>
-                  }
+                <Button variant="box-outline-gray" size="md" onClick={() => setRejectDialogOpen(true)}>
+                  반려
+                </Button>
+                <ReasonDialog
+                  open={rejectDialogOpen}
+                  onOpenChange={setRejectDialogOpen}
                   title="반려 사유"
                   reasonLabel="반려 사유를 선택해주세요."
                   reasons={REJECTION_REASONS}

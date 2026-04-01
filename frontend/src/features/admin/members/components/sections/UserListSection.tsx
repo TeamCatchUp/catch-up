@@ -26,7 +26,7 @@ import { adminMembersQueries } from '../../queries/adminMembers.queries';
 import type { AdminSortKey, MemberTableRow } from '../../types/adminMember';
 import MemberDetailPanel from '../shared/MemberDetailPanel';
 import MemberTable from '../shared/MemberTable';
-import ReasonPopover from '../shared/ReasonPopover';
+import ReasonDialog from '../shared/ReasonPopover';
 import SectionHeader from '../shared/SectionHeader';
 
 interface UserListSectionProps {
@@ -42,6 +42,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
 
   const [activeUserId, setActiveUserId] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<AdminSortKey>('newest');
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   /* 검색 필터 */
@@ -126,12 +127,12 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
           actionButtons={
             selectedUser && !isAdmin ? (
               <>
-                <ReasonPopover
-                  trigger={
-                    <Button variant="box-outline-gray" size="md">
-                      비활성화
-                    </Button>
-                  }
+                <Button variant="box-outline-gray" size="md" onClick={() => setDeactivateDialogOpen(true)}>
+                  비활성화
+                </Button>
+                <ReasonDialog
+                  open={deactivateDialogOpen}
+                  onOpenChange={setDeactivateDialogOpen}
                   title="비활성화 사유"
                   reasonLabel="비활성화 사유를 선택해주세요."
                   reasons={DEACTIVATION_REASONS}
