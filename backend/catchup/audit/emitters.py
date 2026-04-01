@@ -1,5 +1,6 @@
 import structlog
 
+from catchup.audit.actions import UnknownTaskAction
 from catchup.audit.base import AuditLevel
 from catchup.audit.base import AuditStatus
 from catchup.audit.base import BaseAuditAction
@@ -40,7 +41,7 @@ def emit_audit_event(
     except Exception as e:
         logger.warning(
             "audit_event_emit_failed",
-            action=action.full,
+            action=action.full if action else UnknownTaskAction.UNKNOWN.full,
             error=str(e),
             exc_info=True,
         )
