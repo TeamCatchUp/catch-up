@@ -152,7 +152,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
                   description="계정을 삭제하면 모든 데이터가 영구 삭제되며 복구할 수 없습니다."
                   confirmLabel="삭제"
                   variant="danger"
-                  onConfirm={() => deleteMutation.mutate(selectedUser.id)}
+                  onConfirm={() => deleteMutation.mutate({ userId: selectedUser.id, reason: '' })}
                 />
               </>
             ) : null

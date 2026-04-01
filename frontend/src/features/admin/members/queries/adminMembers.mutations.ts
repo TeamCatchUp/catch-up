@@ -25,7 +25,7 @@ export const useDeactivateUserMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ userId, reason }: { userId: number; reason: string }) => {
-      const res = await api.post(API.admin.users.deactivate(userId), { reason });
+      const res = await api.post(API.admin.users.deactivate, { userId, reason });
       return res.data;
     },
     onSuccess: () => {
@@ -38,8 +38,8 @@ export const useDeactivateUserMutation = () => {
 export const useDeleteUserMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (userId: number) => {
-      const res = await api.post(API.admin.users.delete(userId));
+    mutationFn: async ({ userId, reason }: { userId: number; reason: string }) => {
+      const res = await api.post(API.admin.users.delete, { userId, reason });
       return res.data;
     },
     onSuccess: () => {
