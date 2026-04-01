@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
@@ -30,6 +31,7 @@ export const useDeactivateUserMutation = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminMembersQueries.all() });
+      toast('계정이 비활성화되었습니다.');
     },
   });
 };
@@ -44,6 +46,7 @@ export const useDeleteUserMutation = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminMembersQueries.all() });
+      toast('계정이 삭제되었습니다.');
     },
   });
 };

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
+import { toast } from 'sonner';
 
 import AdminPromoteModal from '@/features/admin/permissions/components/modals/AdminPromoteModal';
 import RoleChangeModal from '@/features/admin/permissions/components/modals/RoleChangeModal';
@@ -99,6 +100,7 @@ export default function AdminPermissionsPage() {
       {
         onSuccess: () => {
           setChangeModalOpen(false);
+          toast('Admin 권한이 부여되었습니다.');
         },
       },
     );
@@ -116,6 +118,7 @@ export default function AdminPermissionsPage() {
       {
         onSuccess: () => {
           setRoleChangeModalOpen(false);
+          toast('Admin 권한이 회수되었습니다.');
         },
       },
     );
