@@ -15,10 +15,11 @@ import type { PermissionMember } from '../../types/adminPermission';
 interface PermissionsTableProps {
   rows: PermissionMember[];
   onChangeRoleClick: (member: PermissionMember) => void;
+  onRoleChangeClick: (member: PermissionMember) => void;
 }
 
 /** 권한 목록 테이블 */
-const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) => {
+const PermissionsTable = ({ rows, onChangeRoleClick, onRoleChangeClick }: PermissionsTableProps) => {
   return (
     <section className="border-edge-neutral bg-fill-normal flex min-h-0 flex-1 flex-col overflow-hidden border-y">
       <div className="border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-b px-6 lg:px-9">
@@ -88,7 +89,7 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
                   </div>
 
                   <div className="flex w-[110px] items-center justify-end">
-                    {member.role !== 'admin' && (
+                    {member.role !== 'admin' ? (
                       <Button
                         variant="box-outline-gray"
                         size="sm"
@@ -96,6 +97,15 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
                         onClick={() => onChangeRoleClick(member)}
                       >
                         Admin 권한 부여
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="box-outline-gray"
+                        size="sm"
+                        className="h-7.5 w-[110px]"
+                        onClick={() => onRoleChangeClick(member)}
+                      >
+                        권한 변경
                       </Button>
                     )}
                   </div>

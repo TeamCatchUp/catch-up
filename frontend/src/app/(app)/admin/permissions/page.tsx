@@ -3,17 +3,23 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
+import { toast } from 'sonner';
 
-import PermissionChangeModal from '@/features/admin/permissions/components/modals/PermissionChangeModal';
+import AdminPromoteModal from '@/features/admin/permissions/components/modals/AdminPromoteModal';
+import RoleChangeModal from '@/features/admin/permissions/components/modals/RoleChangeModal';
 import PermissionsListSection from '@/features/admin/permissions/components/sections/PermissionsListSection';
 import AdminOwnerInfoTag from '@/features/admin/permissions/components/shared/AdminOwnerInfoTag';
 import {
   LIST_PAGE_SIZE,
   PROMOTE_ERROR_MESSAGES,
+  REVOKE_ERROR_MESSAGES,
   ROLE_FILTER_OPTIONS,
   type RoleFilter,
 } from '@/features/admin/permissions/constants/permissionsConfig';
-import { usePromoteToAdminMutation } from '@/features/admin/permissions/queries/adminPermissions.mutations';
+import {
+  usePromoteToAdminMutation,
+  useRevokeAdminMutation,
+} from '@/features/admin/permissions/queries/adminPermissions.mutations';
 import { adminPermissionsQueries } from '@/features/admin/permissions/queries/adminPermissions.queries';
 import type { PermissionMember } from '@/features/admin/permissions/types/adminPermission';
 import type { ApiErrorBody } from '@/shared/api/errors';
@@ -24,9 +30,13 @@ export default function AdminPermissionsPage() {
   const { data: members = [], isLoading, isError, refetch } = useQuery(adminPermissionsQueries.list());
 
   const promoteMutation = usePromoteToAdminMutation();
+  const revokeMutation = useRevokeAdminMutation();
 
   const [changeModalOpen, setChangeModalOpen] = useState(false);
-  const [selectedChangeMemberId, setSelectedChangeMemberId] = useState<number | null>(null);
+  const [selectedChangeMember, setSelectedChangeMember] = useState<PermissionMember | null>(null);
+
+  const [roleChangeModalOpen, setRoleChangeModalOpen] = useState(false);
+  const [selectedRoleChangeMember, setSelectedRoleChangeMember] = useState<PermissionMember | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>(DEFAULT_ROLE_FILTER);
@@ -66,18 +76,52 @@ export default function AdminPermissionsPage() {
     return '권한 부여 요청에 실패했습니다.';
   }, [promoteMutation.isError, promoteMutation.error]);
 
+  const revokeErrorMessage = useMemo(() => {
+    if (!revokeMutation.isError) return undefined;
+    const err = revokeMutation.error;
+    if (err instanceof AxiosError && err.response?.data) {
+      const body = err.response.data as ApiErrorBody;
+      if (body.code) {
+        return REVOKE_ERROR_MESSAGES[body.code] ?? body.message ?? '권한 변경 요청에 실패했습니다.';
+      }
+    }
+    return '권한 변경 요청에 실패했습니다.';
+  }, [revokeMutation.isError, revokeMutation.error]);
+
   const handleOpenChangeModal = (member: PermissionMember) => {
     promoteMutation.reset();
-    setSelectedChangeMemberId(member.id);
+    setSelectedChangeMember(member);
     setChangeModalOpen(true);
   };
 
-  const handleChangeSubmit = (userId: number) => {
-    promoteMutation.mutate(userId, {
-      onSuccess: () => {
-        setChangeModalOpen(false);
+  const handleChangeSubmit = (userId: number, reason: string) => {
+    promoteMutation.mutate(
+      { userId, reason },
+      {
+        onSuccess: () => {
+          setChangeModalOpen(false);
+          toast('Admin 권한이 부여되었습니다.');
+        },
       },
-    });
+    );
+  };
+
+  const handleOpenRoleChangeModal = (member: PermissionMember) => {
+    revokeMutation.reset();
+    setSelectedRoleChangeMember(member);
+    setRoleChangeModalOpen(true);
+  };
+
+  const handleRoleChangeSubmit = (userId: number, reason: string) => {
+    revokeMutation.mutate(
+      { userId, reason },
+      {
+        onSuccess: () => {
+          setRoleChangeModalOpen(false);
+          toast('Admin 권한이 회수되었습니다.');
+        },
+      },
+    );
   };
 
   return (
@@ -109,18 +153,28 @@ export default function AdminPermissionsPage() {
             void refetch();
           }}
           onChangeRoleClick={handleOpenChangeModal}
+          onRoleChangeClick={handleOpenRoleChangeModal}
         />
       </div>
 
-      <PermissionChangeModal
-        key={`change-${changeModalOpen ? 'open' : 'closed'}-${selectedChangeMemberId}`}
+      <AdminPromoteModal
+        key={`change-${changeModalOpen ? 'open' : 'closed'}-${selectedChangeMember?.id}`}
         open={changeModalOpen}
         onOpenChange={setChangeModalOpen}
-        members={members}
-        initialMemberId={selectedChangeMemberId}
+        member={selectedChangeMember}
         isSubmitting={promoteMutation.isPending}
         errorMessage={changeErrorMessage}
         onSubmit={handleChangeSubmit}
+      />
+
+      <RoleChangeModal
+        key={`role-${roleChangeModalOpen ? 'open' : 'closed'}-${selectedRoleChangeMember?.id}`}
+        open={roleChangeModalOpen}
+        onOpenChange={setRoleChangeModalOpen}
+        member={selectedRoleChangeMember}
+        isSubmitting={revokeMutation.isPending}
+        errorMessage={revokeErrorMessage}
+        onSubmit={handleRoleChangeSubmit}
       />
     </section>
   );

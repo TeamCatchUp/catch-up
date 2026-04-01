@@ -20,3 +20,8 @@ export interface PromoteAdminResponse {
   user_id: number;
   role: PermissionRole;
 }
+
+export interface RevokeAdminResponse {
+  user_id: number;
+  role: PermissionRole;
+}

@@ -78,9 +78,10 @@ export const API = {
       list: `${API_PREFIX}/admin/users`, // GET 이용자 목록
       detail: (userId: number) => `${API_PREFIX}/admin/users/${userId}/detail`, // GET 이용자 상세
       syncStatus: `${API_PREFIX}/admin/users/sync-status`, // GET 서비스별 사용자 매핑 현황
-      deactivate: (userId: number) => `${API_PREFIX}/admin/users/deactivate/${userId}`, // POST 비활성화
-      delete: (userId: number) => `${API_PREFIX}/admin/users/delete/${userId}`, // POST 삭제
-      promote: (userId: number) => `${API_PREFIX}/admin/users/promote/${userId}`, // POST Admin 승격
+      deactivate: `${API_PREFIX}/admin/users/deactivate`, // POST 비활성화 (body: { userId, reason })
+      delete: `${API_PREFIX}/admin/users/delete`, // POST 삭제 (body: { userId, reason })
+      promote: `${API_PREFIX}/admin/users/promote`, // POST Admin 승격 (body: { userId, reason })
+      revoke: `${API_PREFIX}/admin/users/revoke`, // POST Admin 권한 회수 (body: { userId, reason })
       syncOAuthUsers: `${API_PREFIX}/admin/oauth-users`, // POST SSO 유저 동기화
     },
     vendorUsers: (vendorType: string) => `${API_PREFIX}/admin/${vendorType}/users`, // GET 툴별 사용자 목록 (드롭다운)

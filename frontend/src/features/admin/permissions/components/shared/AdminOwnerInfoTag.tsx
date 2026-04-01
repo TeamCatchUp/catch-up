@@ -22,8 +22,8 @@ const AdminOwnerInfoTag = () => {
         </span>
       </TooltipTrigger>
 
-      <TooltipContent side="bottom" align="start" size="lg" className="w-[360px] gap-1">
-        <div className="flex items-center gap-1.5 text-white">
+      <TooltipContent side="bottom" align="start" size="lg" className="w-90 gap-1">
+        <div className="flex h-7 items-center gap-2 self-stretch text-white">
           <IconHelp className="size-5 shrink-0 text-white" />
           <span className="text-body-small">{ADMIN_OWNER_LINE_1}</span>
         </div>
