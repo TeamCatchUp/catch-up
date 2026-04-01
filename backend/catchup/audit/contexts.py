@@ -4,8 +4,8 @@ from contextvars import ContextVar
 from typing import ClassVar
 from typing import Self
 
+from catchup.audit.base import BaseAuditAction
 from catchup.audit.metadata import BaseAuditMetadata
-from catchup.events.enums import BaseEventAction
 
 
 class AuditContext:
@@ -18,7 +18,7 @@ class AuditContext:
         
         # action은 함수 진입 시점에 주입해야 함.
         # (audit/utils.py audit_log 데코레이터 주석 참고)
-        self.action: BaseEventAction | None = None
+        self.action: BaseAuditAction | None = None
 
     @classmethod
     def init(cls,) -> Self:
