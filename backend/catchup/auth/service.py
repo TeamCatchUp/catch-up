@@ -1,18 +1,18 @@
+import structlog
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
-import structlog
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.auth.jwt import create_access_token
+from catchup.auth.jwt import create_refresh_token
 from catchup.auth.schemas import BaseOAuthUserInfoResponse
+from catchup.auth.utils import reformat_name
 from catchup.components.auth.constants import OAuthIdentityProviderType
 from catchup.components.auth.provider import OAuthIdentityProvider
-from catchup.db.models import OAuthUser, UserStatus
-from catchup.auth.utils import reformat_name
-from catchup.auth.jwt import create_access_token, create_refresh_token
-from catchup.db.users import get_oauth_user_with_sub, get_user_by_sub, update_user_refresh_token
-from catchup.events.enums import AuthEventAction, EventType
-from catchup.audit.service import emit_audit_event
-
+from catchup.db.models import OAuthUser
+from catchup.db.models import UserStatus
+from catchup.db.users import get_oauth_user_with_sub
+from catchup.db.users import get_user_by_sub
+from catchup.db.users import update_user_refresh_token
 
 logger = structlog.get_logger()
 
@@ -101,15 +101,6 @@ class OAuthService:
                 if registered_user:
                     snapshot = registered_user.to_snapshot()
                     snapshot["sub"] = oauth_user.sub
-
-                emit_audit_event(
-                    event_type=EventType.AUTH,
-                    event_action=AuthEventAction.LOGIN,
-                    event_status=AuditEventStatus.SUCCESS,
-                    level=AuditLevel.INFO,
-                    immediate=True,
-                    actor=snapshot,
-                )
                 
                 logger.debug(
                     "token_created",
@@ -117,20 +108,18 @@ class OAuthService:
                     refresh_token=bool(refresh_token)
                 )
                 
-                return access_token, refresh_token
+                # snapshot: 감사 로그용 actor 정보.
+                # run_in_threadpool 내부에서는 ContextVar가 메인 스레드에 반영되지 않아
+                # AuditContext에 직접 주입할 수 없으므로, 호출자(oauth_callback)가 주입한다.
+                return access_token, refresh_token, snapshot
             
             return await run_in_threadpool(_process_callback_sync)
         
         except Exception as e:
-            emit_audit_event(
-                event_type=EventType.AUTH,
-                event_action=AuthEventAction.LOGIN,
-                event_status=AuditEventStatus.FAIL,
-                metadata={
-                    "reason": "idp_token_exchange_failed",
-                    "error": str(e)
-                },
-                level=AuditLevel.INFO
+            logger.error(
+                "idp_token_exchange_failed",
+                error=str(e),
+                exc_info=True,
             )
             
             raise e
