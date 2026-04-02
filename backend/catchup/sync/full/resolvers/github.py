@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 
 from fastapi.concurrency import run_in_threadpool
+import structlog
 
 from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
@@ -14,11 +14,11 @@ from catchup.sync.common.schemas import (
     FullSyncResolvedTargets,
     FullSyncDispatchRequest,
 )
-from catchup.sync.services.full_sync_target_normalizer import (
+from catchup.sync.full.targets import (
     resolve_full_sync_targets_from_rows,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
@@ -73,10 +73,10 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
         )
 
         logger.info(
-            "[GITHUB][FULL SYNC][RESOLVER] Targets resolved: installation_id=%s, requested=%s, resolved=%s",
-            installation_id,
-            len(requested_repo_ids),
-            len(resolved_targets.targets),
+            "github_full_sync_targets_resolved",
+            installation_id=installation_id,
+            requested_count=len(requested_repo_ids),
+            resolved_count=len(resolved_targets.targets),
         )
 
         return resolved_targets

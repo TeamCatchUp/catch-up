@@ -20,7 +20,7 @@ from catchup.sync.common.schemas import (
 from catchup.sync.dispatch.service import DispatchService
 from catchup.sync.dispatch.types import DispatchRequest
 from catchup.sync.event_publisher.redis_stream_publisher import get_event_publisher
-from catchup.sync.registry import get_full_sync_target_resolver
+from catchup.sync.full.registry import get_full_sync_target_resolver
 
 logger = structlog.get_logger(__name__)
 

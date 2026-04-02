@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable, Mapping, Sequence
 from typing import TypeVar
+import structlog
 
 from catchup.sync.common.exceptions import SyncRequestError
 from catchup.sync.common.schemas import (
@@ -12,7 +12,7 @@ from catchup.sync.common.schemas import (
 )
 
 T = TypeVar("T")
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def _normalize_text(value: str | None) -> str:
@@ -67,9 +67,9 @@ def index_targets(
 
     if blank_key_count:
         logger.warning(
-            "[SYNC][FULL SYNC][NORMALIZER] Blank target key detected: count=%s, context=%s",
-            blank_key_count,
-            context,
+            "sync_target_key_blank",
+            count=blank_key_count,
+            **context,
         )
         raise SyncRequestError(
             "resolved target rows contain blank target_id",
@@ -81,10 +81,10 @@ def index_targets(
 
     if duplicate_key_samples:
         logger.warning(
-            "[SYNC][FULL SYNC][NORMALIZER] Duplicate target key detected: count=%s, sample_keys=%s, context=%s",
-            duplicate_key_count,
-            duplicate_key_samples,
-            context,
+            "sync_target_key_duplicate",
+            count=duplicate_key_count,
+            sample_keys=duplicate_key_samples,
+            **context,
         )
         raise SyncRequestError(
             "resolved target rows contain duplicate target_id",
