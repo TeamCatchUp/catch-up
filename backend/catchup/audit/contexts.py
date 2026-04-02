@@ -14,11 +14,14 @@ class AuditContext:
     )
 
     def __init__(self):
-        self.metadata: BaseAuditMetadata | None = None
-        
         # action은 함수 진입 시점에 주입해야 함.
         # (audit/utils.py audit_log 데코레이터 주석 참고)
         self.action: BaseAuditAction | None = None
+        
+        self.metadata: BaseAuditMetadata | None = None
+        
+        # actor snapshot, trace_id 등
+        self.extra_payload: dict = {}
 
     @classmethod
     def init(cls,) -> Self:
