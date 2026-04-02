@@ -132,7 +132,7 @@ def audit_log(
                     AuditContext.set_context(context)
                     _emit(
                         status=AuditStatus.FAILURE, 
-                        level=AuditLevel.ERROR,
+                        level=AuditLevel.WARNING,
                     )
                     raise
         # 래핑 대상 함수가 def (sync)인 경우
@@ -154,7 +154,7 @@ def audit_log(
                     AuditContext.set_context(context)
                     _emit(
                         status=AuditStatus.FAILURE, 
-                        level=AuditLevel.ERROR,
+                        level=AuditLevel.WARNING,
                     )
                     raise
                 
