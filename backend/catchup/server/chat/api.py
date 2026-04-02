@@ -1,22 +1,22 @@
-import logging
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
+from fastapi import Depends
 from fastapi.responses import StreamingResponse
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.actions import ChatAction
+from catchup.audit.base import AuditLevel
+from catchup.audit.base import AuditStatus
+from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import ChatAuditMetadata
-from catchup.audit.service import emit_audit_event
 from catchup.chat.dependencies import get_valid_chat_room
-from catchup.chat.factory import get_chat_service
-from catchup.chat.schemas import ChatRequest, ChatResponse
 from catchup.chat.engine import ChatService
+from catchup.chat.factory import get_chat_service
+from catchup.chat.schemas import ChatRequest
+from catchup.chat.schemas import ChatResponse
 from catchup.db.models import ChatRoom
-from catchup.events.enums import ChatEventAction, EventType
-from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.dependencies import get_rag_global_context
-
-logger = logging.getLogger()
+from catchup.rag.schemas.context import GlobalContext
 
 router = APIRouter(
     prefix="/api/v1/chat",
@@ -53,16 +53,14 @@ async def chat_response_stream(
     tool_filters = request.tool_filters
     
     emit_audit_event(
-        event_type=EventType.CHAT,
-        event_action=ChatEventAction.USER_QUERY_SENT,
-        event_status=AuditEventStatus.SUCCESS,
+        action=ChatAction.SEND_QUERY,
+        status=AuditStatus.SUCCESS,
         level=AuditLevel.INFO,
         metadata=ChatAuditMetadata(
             session_id=session_id,
             query=query,
             tool_filters=tool_filters
         ),
-        immediate=True
     )
     
     async def event_generator():
