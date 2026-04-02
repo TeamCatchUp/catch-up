@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Final
+from typing import Any
+from typing import Final
 
 import structlog
 
 from catchup.configs.config import settings
-from catchup.events.enums import EventType
-
 
 MAX_STRING_LENGTH = 2048
 MAX_LIST_LENGTH = 50
@@ -78,8 +77,6 @@ def ensure_required_fields(
 
     if event_dict.get("metadata") is None:
         event_dict["metadata"] = {}
-
-    event_dict.setdefault("event_type", EventType.SYSTEM)
 
     return event_dict
 
