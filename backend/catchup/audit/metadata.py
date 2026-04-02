@@ -1,11 +1,13 @@
 import uuid
-from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from catchup.db.models import SourceType, SyncConnector, UserRole
+from pydantic import ConfigDict
+from pydantic import Field
+from pydantic import model_validator
 
-
-class BaseAuditMetadata(BaseModel):
-    context: str | None = None
+from catchup.audit.base import BaseAuditMetadata
+from catchup.db.models import SourceType
+from catchup.db.models import SyncConnector
+from catchup.db.models import UserRole
 
 
 class SystemAuditMetadata(BaseAuditMetadata):
