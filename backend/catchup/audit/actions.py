@@ -70,3 +70,7 @@ class UserCustomPromptAction(BaseAuditAction):
 
 class UserOnboardingAction(BaseAuditAction):
     SUBMIT = "submit"
+
+
+class UserMappingAction(BaseAuditAction):
+    UPLOAD_FILE = "upload_file"
