@@ -11,10 +11,11 @@ from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
 from langgraph.pregel.types import StateSnapshot
 
-from catchup.audit.enums import AuditEventStatus
-from catchup.audit.enums import AuditLevel
+from catchup.audit.actions import ChatAction
+from catchup.audit.base import AuditLevel
+from catchup.audit.base import AuditStatus
+from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import ChatAuditMetadata
-from catchup.audit.service import emit_audit_event
 from catchup.chat.chat_room import generate_chat_room_title
 from catchup.chat.schemas import NODE_STATUS_MAP
 from catchup.chat.schemas import ChatResponse
@@ -32,8 +33,6 @@ from catchup.db.chat_room import get_chat_room
 from catchup.db.chat_room import soft_delete_last_conversation_turn
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
-from catchup.events.enums import ChatEventAction
-from catchup.events.enums import EventType
 from catchup.observability.langfuse.configs import get_langfuse_client
 from catchup.observability.langfuse.configs import get_observe
 from catchup.rag.checkpoint import get_langgraph_checkpointer
@@ -138,12 +137,13 @@ class ChatService:
 
         except asyncio.CancelledError:
             emit_audit_event(
-                event_type=EventType.CHAT,
-                event_action=ChatEventAction.ASSISTANT_RESPONSE_GENERATED,
-                event_status=AuditEventStatus.FAIL,
+                action=ChatAction.GENERATE_RESPONSE,
+                status=AuditStatus.FAILURE,
                 level=AuditLevel.WARNING,
-                metadata=ChatAuditMetadata(session_id=session_id),
-                immediate=True
+                metadata=ChatAuditMetadata(
+                    context="connection_cancelled",
+                    session_id=session_id,
+                )
             )
             raise
 
@@ -174,22 +174,21 @@ class ChatService:
                 )
                 
             emit_audit_event(
-                event_type=EventType.CHAT,
-                event_action=ChatEventAction.ASSISTANT_RESPONSE_GENERATED,
-                event_status=AuditEventStatus.FAIL,
+                action=ChatAction.GENERATE_RESPONSE,
+                status=AuditStatus.FAILURE,
                 level=AuditLevel.ERROR,
-                metadata=ChatAuditMetadata(session_id=session_id),
-                immediate=True
+                metadata=ChatAuditMetadata(
+                    session_id=session_id,
+                    context="streaming_error",
+                ),
             )
 
         else:
             emit_audit_event(
-                event_type=EventType.CHAT,
-                event_action=ChatEventAction.ASSISTANT_RESPONSE_GENERATED,
-                event_status=AuditEventStatus.SUCCESS,
+                action=ChatAction.GENERATE_RESPONSE,
+                status=AuditStatus.SUCCESS,
                 level=AuditLevel.INFO,
                 metadata=ChatAuditMetadata(session_id=session_id),
-                immediate=True
             )
 
         finally:
@@ -319,16 +318,14 @@ class ChatService:
                 for i, doc in enumerate(docs, start=1)
             ]
             emit_audit_event(
-                event_type=EventType.CHAT,
-                event_action=ChatEventAction.SOURCES_PROVIDED,
-                event_status=AuditEventStatus.SUCCESS,
+                action=ChatAction.PROVIDE_SOURCES,
+                status=AuditStatus.SUCCESS,
                 level=AuditLevel.INFO,
                 metadata=ChatAuditMetadata(
                     session_id=session_id,
                     provided_sources_count=len(sources),
                     provided_source_ids=[src.id for src in sources]
                 ),
-                immediate=True
             )
             
             yield ChatStreamingSourceResponse(session_id=session_id, sources=sources)

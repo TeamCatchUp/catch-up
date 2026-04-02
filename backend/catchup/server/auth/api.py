@@ -1,45 +1,55 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse, RedirectResponse
-from sqlalchemy.orm import Session
 import structlog
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import HTTPException
+from fastapi import Query
+from fastapi import Request
+from fastapi import Response
+from fastapi import status
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse
+from fastapi.responses import RedirectResponse
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from catchup.audit.actions import AuthAction
+from catchup.audit.base import AuditStatus
+from catchup.audit.contexts import AuditContext
+from catchup.audit.emitters import emit_audit_event
+from catchup.audit.enums import AuditLevel
 from catchup.audit.metadata import AuthAuditMetadata
-from catchup.audit.service import emit_audit_event
-from catchup.audit.enums import AuditEventStatus, AuditLevel
-from catchup.events.enums import AuthEventAction
+from catchup.audit.utils import audit_log
+from catchup.auth.cookies import delete_auth_cookies
+from catchup.auth.cookies import delete_oauth_state_cookie
+from catchup.auth.cookies import set_auth_cookies
+from catchup.auth.cookies import set_oauth_state_cookie
+from catchup.auth.dependencies import get_current_user
+from catchup.auth.dependencies import get_current_user_info
+from catchup.auth.dependencies import get_oauth_provider
+from catchup.auth.dependencies import get_oauth_service_from_state
+from catchup.auth.jwt import create_access_token
+from catchup.auth.jwt import create_refresh_token
+from catchup.auth.jwt import verify_token
 from catchup.auth.service import OAuthService
-from catchup.auth.cookies import delete_auth_cookies, delete_oauth_state_cookie, set_auth_cookies, set_oauth_state_cookie
-from catchup.auth.dependencies import (
-    get_current_user,
-    get_current_user_info,
-    get_oauth_provider,
-    get_oauth_service_from_state
-)
-from catchup.auth.jwt import create_access_token, create_refresh_token, verify_token
-from catchup.components.auth.provider import OAuthIdentityProvider
 from catchup.components.auth.constants import OAuthIdentityProviderType
+from catchup.components.auth.provider import OAuthIdentityProvider
 from catchup.configs.config import auth_settings
 from catchup.db.dependencies import get_db
-from catchup.db.models import (
-    ConfluenceUser,
-    GitHubUser,
-    JiraUser,
-    PreMappingBuffer,
-    SlackUser,
-    SourceType,
-    User,
-)
-from catchup.db.users import get_user_by_sub, update_user_refresh_token
-from sqlalchemy import select
-from catchup.events.enums import EventType
-from catchup.server.auth.schemas import (
-    CurrentUserInfo,
-    CurrentUserProfile,
-    IntegrationProfileItem,
-    IntegrationProfileResponse
-)
-from catchup.utils.redis import store_oauth_state, validate_oauth_state
+from catchup.db.models import ConfluenceUser
+from catchup.db.models import GitHubUser
+from catchup.db.models import JiraUser
+from catchup.db.models import PreMappingBuffer
+from catchup.db.models import SlackUser
+from catchup.db.models import SourceType
+from catchup.db.models import User
+from catchup.db.users import get_user_by_sub
+from catchup.db.users import update_user_refresh_token
+from catchup.server.auth.schemas import CurrentUserInfo
+from catchup.server.auth.schemas import CurrentUserProfile
+from catchup.server.auth.schemas import IntegrationProfileItem
+from catchup.server.auth.schemas import IntegrationProfileResponse
+from catchup.utils.redis import store_oauth_state
+from catchup.utils.redis import validate_oauth_state
 
 logger = structlog.get_logger()
 
@@ -52,6 +62,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
     path="/oauth/login",
     description="OAuth2 로그인 (현재는 Keycloak만 지원)"
 )
+@audit_log(AuthAction.LOGIN_ATTEMPT)
 async def oauth2_login(
     request: Request,
     # TODO: Path()로 변경. 수정 범위를 최소화하기 위한 PoC 한정 임시방편
@@ -72,14 +83,6 @@ async def oauth2_login(
         response=response,
         state=provider.state
     )
-    
-    emit_audit_event(
-        event_type=EventType.AUTH,
-        event_action=AuthEventAction.LOGIN,
-        event_status=AuditEventStatus.ATTEMPT,
-        level=AuditLevel.INFO,
-        immediate=True
-    )
 
     return response
 
@@ -88,68 +91,49 @@ async def oauth2_login(
     path="/oauth/callback",
     description="OAuth2 리다이렉트 URI"
 )
+@audit_log(AuthAction.LOGIN)
 async def oauth_callback(
     request: Request,
     code: str,
     state: str,
     auth_service: OAuthService = Depends(get_oauth_service_from_state)
 ):
+    audit_ctx = AuditContext.get()
     cookie_state = request.cookies.get("oauth_state")
-    valid_state = True
+    
     if not cookie_state:
         logger.warning("login_failed", context="state_not_exists")
-        emit_audit_event(
-            event_type=EventType.AUTH,
-            event_action=AuthEventAction.LOGIN,
-            event_status=AuditEventStatus.FAIL,
-            level=AuditLevel.WARNING,
-            metadata=AuthAuditMetadata(context="state_missing"),
-            immediate=True
-        )
-        valid_state = False
-    
-    elif cookie_state != state:
-        logger.warning("login_failed", context="invalid_state")
-        emit_audit_event(
-            event_type=EventType.AUTH,
-            event_action=AuthEventAction.LOGIN,
-            event_status=AuditEventStatus.FAIL,
-            level=AuditLevel.WARNING,
-            metadata=AuthAuditMetadata(context="state_mismatch"),
-            immediate=True
-        )
-        valid_state = False
-        
-    if not valid_state:
+        audit_ctx.metadata = AuthAuditMetadata(context="state_missing")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="유효하지 않은 인증 접근입니다."
         )
-
+    
+    elif cookie_state != state:
+        logger.warning("login_failed", context="invalid_state")
+        audit_ctx.metadata = AuthAuditMetadata(context="state_mismatch")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="유효하지 않은 인증 접근입니다."
+        )
+    
     # OAuth state 유효성 검사
-    is_valid = await validate_oauth_state(
+    valid = await validate_oauth_state(
         state=state,
         provider=auth_service.provider_type.value
     )
-    
-    if not is_valid:
-        emit_audit_event(
-            event_type=EventType.AUTH,
-            event_action=AuthEventAction.LOGIN,
-            event_status=AuditEventStatus.FAIL,
-            level=AuditLevel.WARNING,
-            metadata=AuthAuditMetadata(context="expired_state"),
-            immediate=True
-        )
+        
+    if not valid:
+        audit_ctx.metadata = AuthAuditMetadata(context="expired_state")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="유효하지 않거나 만료된 인증입니다."
         )
     
-    access_token, refresh_token = await auth_service.handle_callback(code)
+    access_token, refresh_token, actor_snapshot = await auth_service.handle_callback(code)
+    audit_ctx.extra_payload["actor"] = actor_snapshot
     
     response = RedirectResponse(url=auth_settings.FRONTEND_REDIRECT_URI)
-    
     delete_oauth_state_cookie(response)
     set_auth_cookies(
         response=response,
@@ -184,12 +168,10 @@ def refresh_token(
         )
     except HTTPException as e:
         emit_audit_event(
-            event_type=EventType.AUTH,
-            event_action=AuthEventAction.TOKEN_REFRESH,
-            event_status=AuditEventStatus.FAIL,
+            action=AuthAction.REFRESH_TOKEN,
+            status=AuditStatus.FAILURE,
             level=AuditLevel.WARNING,
             metadata=AuthAuditMetadata(context="refresh_token_invalid"),
-            immediate=True
         )
         
         # 유효하지 않은 토큰인 경우 사용자 쿠키 삭제
@@ -198,6 +180,7 @@ def refresh_token(
             content={"detail": e.detail}
         )
         delete_auth_cookies(err_response)
+
         return err_response
     
     
@@ -216,12 +199,10 @@ def refresh_token(
     # 존재하지 않는 사용자이거나 refresh token이 일치하지 않는 경우
     if not user or user.refresh_token != refresh_token:
         emit_audit_event(
-            event_type=EventType.AUTH,
-            event_action=AuthEventAction.TOKEN_REFRESH,
-            event_status=AuditEventStatus.FAIL,
+            action=AuthAction.REFRESH_TOKEN,
+            status=AuditStatus.FAILURE,
             level=AuditLevel.WARNING,
             metadata=AuthAuditMetadata(context="refresh_token_invalid"),
-            immediate=True,
             actor=snapshot,
         )
         err_response = JSONResponse(
@@ -255,11 +236,9 @@ def refresh_token(
     )
 
     emit_audit_event(
-        event_type=EventType.AUTH,
-        event_action=AuthEventAction.TOKEN_REFRESH,
-        event_status=AuditEventStatus.SUCCESS,
+        action=AuthAction.REFRESH_TOKEN,
+        status=AuditStatus.SUCCESS,
         level=AuditLevel.INFO,
-        immediate=True,
         actor=snapshot,
     )
 
@@ -273,19 +252,12 @@ def refresh_token(
     path="/logout",
     description="access & refresh 토큰을 쿠키에서 제거한다."
 )
+@audit_log(AuthAction.LOGOUT)
 async def logout(
     response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    emit_audit_event(
-        event_type=EventType.AUTH,
-        event_action=AuthEventAction.LOGOUT,
-        event_status=AuditEventStatus.ATTEMPT,
-        level=AuditLevel.INFO,
-        immediate=True
-    )
-    
     def _update_user_refresh_token_sync():
         success = update_user_refresh_token(
             db=db,
@@ -295,27 +267,19 @@ async def logout(
         db.commit()
         
         if not success:
-            emit_audit_event(
-                event_type=EventType.AUTH,
-                event_action=AuthEventAction.LOGOUT,
-                event_status=AuditEventStatus.FAIL,
-                level=AuditLevel.WARNING,
-                immediate=True
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="로그아웃 처리 중 오류가 발생했습니다."
             )
-    
+
     await run_in_threadpool(_update_user_refresh_token_sync)
-
+    
     delete_auth_cookies(response)
-
-    emit_audit_event(
-        event_type=EventType.AUTH,
-        event_action=AuthEventAction.LOGOUT,
-        event_status=AuditEventStatus.SUCCESS,
-        level=AuditLevel.INFO,
-        immediate=True
-    )
-
-    return {"status": "success", "detail": "Logged out successfully"}
+    
+    return {
+        "status": "success",
+        "detail": "Logged out successfully"
+    }
 
 
 @router.get(

@@ -1,15 +1,21 @@
-from fastapi import APIRouter, Depends, File, HTTPException, Path, UploadFile
+import structlog
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import File
+from fastapi import HTTPException
+from fastapi import Path
+from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
-import logging
-
 from sqlalchemy.orm import Session
 
+from catchup.audit.actions import UserMappingAction
+from catchup.audit.utils import audit_log
 from catchup.auth.dependencies import require_admin_user
 from catchup.db.dependencies import get_db
 from catchup.mapping.file import process_mapping_file_sync
 from catchup.server.state import state
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1/mapping", tags=["mapping"])
 
 
@@ -17,6 +23,7 @@ router = APIRouter(prefix="/api/v1/mapping", tags=["mapping"])
     path="/{vendor_type}/upload",
     summary="어드민용 협업툴 사용자 리스트 업로드"
 )
+@audit_log(UserMappingAction.UPLOAD_FILE)
 async def upload_tool_mapping_file(
     vendor_type: str = Path(..., description="협업 툴 vendor 종류 (github, slack, atlassian)"),
     file: UploadFile = File(...),
@@ -26,7 +33,7 @@ async def upload_tool_mapping_file(
     filename = file.filename.lower()
     
     if not filename.endswith(('.csv', '.xlsx', '.xls')):
-        logger.warning(f"Invalid file extension attempted: {filename}")
+        logger.warning("invalid_file_extension", filename=filename)
         raise HTTPException(
             status_code=400,
             detail="CSV 또는 Excel(xlsx, xls) 파일만 업로드 가능합니다."
@@ -35,7 +42,7 @@ async def upload_tool_mapping_file(
     try:
         content = await file.read()
     except Exception as e:
-        logger.error(f"File Read Error: {e}")
+        logger.error("file_read_error", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=400,
             detail="파일을 읽는 중 오류가 발생했습니다."
