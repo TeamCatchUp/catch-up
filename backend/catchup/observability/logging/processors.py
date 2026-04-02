@@ -84,7 +84,6 @@ def ensure_required_fields(
 SHARED_PROCESSORS: Final[list[Any]] = [
     structlog.contextvars.merge_contextvars,
     structlog.stdlib.add_log_level,
-    structlog.stdlib.add_logger_name,
     process_audit_payload,
     ensure_required_fields,
 ]
