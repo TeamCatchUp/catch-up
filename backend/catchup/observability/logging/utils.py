@@ -12,7 +12,6 @@ CONSOLE_EXCLUDE_KEYS: set[str] = {
     "event_type",
     "metadata",
     "service",
-    "trace_id",
     "version",
     "remote_addr",
 }
