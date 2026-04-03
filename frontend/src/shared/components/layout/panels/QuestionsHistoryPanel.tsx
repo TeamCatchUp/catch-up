@@ -52,6 +52,11 @@ const QuestionsHistoryPanel = () => {
     }));
   }, [data?.pages]);
 
+  const keyword = searchValue.trim().toLowerCase();
+  const filteredQueries = keyword
+    ? recentQueries.filter((item) => item.query.toLowerCase().includes(keyword))
+    : recentQueries;
+
   const handleNewQuestion = () => {
     setActivePanel(null);
     router.push('/search');
@@ -71,7 +76,7 @@ const QuestionsHistoryPanel = () => {
       <div className="flex items-center justify-between px-1">
         <h2 className="text-heading-medium text-content-normal">내 질문 기록</h2>
         <div className="flex items-center gap-1.5">
-          {/* 새 질문 Button - Box button with icon + text per Figma */}
+          {/* 새 질문 Button */}
           <button
             onClick={handleNewQuestion}
             className="border-edge-neutral hover:bg-fill-interaction-hover bg-fill-normal flex h-7.5 cursor-pointer items-center gap-1 rounded-lg border px-2 py-1"
@@ -111,8 +116,10 @@ const QuestionsHistoryPanel = () => {
           <div className="text-content-assistive flex items-center justify-center py-8">
             데이터를 불러오는 중입니다...
           </div>
+        ) : searchValue.trim() && filteredQueries.length === 0 ? (
+          <div className="text-content-assistive flex items-center justify-center py-8">검색 결과가 없습니다.</div>
         ) : (
-          <SearchHistory querys={recentQueries} isModal={false} onItemClick={handleItemClick} />
+          <SearchHistory querys={filteredQueries} isModal={false} onItemClick={handleItemClick} />
         )}
         {isFetchingNextPage && (
           <div className="text-content-assistive flex items-center justify-center py-4">불러오는 중...</div>
