@@ -45,28 +45,6 @@ class FullSyncService:
     def __init__(self, dispatch_service: DispatchService):
         self._dispatch_service = dispatch_service
 
-    def _normalize_base_url(
-        self,
-        *,
-        connector: SyncConnector,
-        request: FullSyncDispatchRequest,
-        base_url: str | None,
-    ) -> str:
-        normalized_base_url = (base_url or "").strip()
-        if normalized_base_url:
-            return normalized_base_url
-
-        raise SyncInternalException(
-            message="full sync dispatch requires base_url",
-            metadata={
-                "connector": connector.value,
-                "scope_id": request.scope_id,
-                "target_count": len(request.target_ids) if request.target_ids else 0,
-                "trigger": request.trigger.value,
-                "sync_from_ts": request.sync_from_ts,
-            },
-        )
-
     def _normalize_scope_id(self, request: FullSyncDispatchRequest) -> str:
         scope_id = request.scope_id.strip()
         if scope_id:
@@ -78,7 +56,6 @@ class FullSyncService:
         *,
         connector: SyncConnector,
         request: FullSyncDispatchRequest,
-        base_url: str,
         event_seeds: list[SyncEventSeed],
     ) -> DispatchRequest:
         return DispatchRequest(
@@ -87,7 +64,6 @@ class FullSyncService:
             scope_id=self._normalize_scope_id(request),
             trigger=request.trigger,
             event_seeds=event_seeds,
-            base_url=base_url,
         )
 
     async def dispatch(
@@ -95,14 +71,7 @@ class FullSyncService:
         *,
         connector: SyncConnector,
         request: FullSyncDispatchRequest,
-        base_url: str | None,
     ) -> SyncDispatchResult:
-        normalized_base_url = self._normalize_base_url(
-            connector=connector,
-            request=request,
-            base_url=base_url,
-        )
-
         logger.info(
             "full_sync_dispatch_requested",
             connector=connector.value,
@@ -124,7 +93,6 @@ class FullSyncService:
             self._build_dispatch_request(
                 connector=connector,
                 request=request,
-                base_url=normalized_base_url,
                 event_seeds=event_seeds,
             )
         )

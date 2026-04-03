@@ -73,5 +73,4 @@ class DispatchService:
             context=context,
             db_event_ids=db_event_ids,
             queued_targets=publish_result.published_count,
-            base_url=request.base_url,
         )

@@ -111,7 +111,6 @@ class DispatchPreparer:
                 connector=data.connector,
                 scope_id=data.scope_id,
                 job_id=None,
-                base_url=data.base_url,
                 message="another full sync dispatch is already being created for this scope",
             )
 
@@ -134,7 +133,6 @@ class DispatchPreparer:
             connector=data.connector,
             scope_id=data.scope_id,
             job_id=active_job.job_id,
-            base_url=data.base_url,
         )
 
     def _persist_events(

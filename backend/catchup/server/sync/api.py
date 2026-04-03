@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Awaitable
 import structlog
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from catchup.audit.actions import SyncTriggerAction
 from catchup.audit.contexts import AuditContext
@@ -51,7 +51,6 @@ router = APIRouter(
 @audit_log(SyncTriggerAction.FULL_SYNC_REQUESTED)
 async def dispatch_full_sync(
     sync_request: FullSyncRequest,
-    request: Request,
     full_sync_service: FullSyncService = Depends(get_full_sync_service_dependency),
 ):
     dispatch_request = sync_request.to_dispatch_request(
@@ -63,7 +62,6 @@ async def dispatch_full_sync(
         dispatch_call=full_sync_service.dispatch(
             connector=sync_request.connector,
             request=dispatch_request,
-            base_url=str(request.base_url),
         ),
     )
 

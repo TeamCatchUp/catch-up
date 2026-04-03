@@ -166,10 +166,6 @@ class SyncAcceptedResponse(BaseModel):
     )
 
     message: str | None = None
-    snapshot_url: str | None = Field(
-        default=None,
-        description="job snapshot endpoint for the created or conflicting job",
-    )
 
     @classmethod
     def from_dispatch_result(cls, result: SyncDispatchResult) -> "SyncAcceptedResponse":
