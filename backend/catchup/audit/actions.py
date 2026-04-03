@@ -36,7 +36,78 @@ class SystemAction(BaseAuditAction):
     SHUTDOWN_SCHEDULER = "shutdown_scheduler"
     SHUTDOWN_CHECKPOINTER = "shutdown_checkpointer"
 
+# ======================= SYNC FLOW AUDIT =======================
 
+class SyncTriggerAction(BaseAuditAction):
+
+    # "sync_trigger.full_sync_request"
+    FULL_SYNC_REQUESTED = "full_sync_requested"
+
+    # "sync_trigger.incremental"
+    INCREMENTAL = "incremental"
+
+class FullSyncAction(BaseAuditAction):
+    """
+    dispatch() 이후 full sync 처리 단위와 주요 전이를 기록
+    """
+    # "full_sync.resolve_targets"
+    RESOLVE_TARGETS = "resolve_targets"
+
+    # "full_sync.persist_job_events"
+    PERSIST_JOB_EVENTS = "persist_job_events"
+
+    # "full_sync.publish"
+    PUBLISH = "publish"
+
+    # "full_sync.job"
+    # ATTEMPT : JOB_STARTED | SUCCESS : JOB_SUCCESS | FAIL : JOB_FAILED
+    JOB = "job"
+
+    # "full_sync.event"
+    # ATTEMPT : EVENT_STARTED | SUCCESS : EVENT_SUCCESS | FAIL : EVENT_FAILED
+    EVENT = "event"
+
+    # "full_sync.retry_event"
+    RETRY_EVENT = "retry_event"
+
+    # "full_sync.requeue_event"
+    REQUEUE_EVENT = "requeue_event"
+
+class IncrementalSyncAction(BaseAuditAction):
+    """
+    incremental dispatch 이후 record / outbox / worker 처리 단위를 기록
+    """
+    # "incremental_sync.persist_changes"
+    PERSIST_CHANGES = "persist_changes"
+
+    # "incremental_sync.promote_records"
+    PROMOTE_RECORDS = "promote_records"
+
+    # "incremental_sync.outbox"
+    # ATTEMPT : OUTBOX_PUBLISHING | SUCCESS : OUTBOX_PUBLISHED | FAIL : OUTBOX_FAILED/SKIPPED
+    OUTBOX = "outbox"
+
+    # "incremental_sync.record"
+    # ATTEMPT : RECORD_PROCESSING | SUCCESS : RECORD_SYNCED | FAIL : RECORD_DEAD
+    RECORD = "record"
+
+    # "incremental_sync.retry_record"
+    RETRY_RECORD = "retry_record"
+
+class SyncIngestionAction(BaseAuditAction):
+    # "sync_ingestion.fetch"
+    FETCH = "fetch"
+    # "sync_ingestion.transform"
+    TRANSFORM = "transform"
+    # "sync_ingestion.summarize"
+    SUMMARIZE = "summarize"
+    # "sync_ingestion.embed"
+    EMBED = "embed"
+    # "sync_ingestion.persist"
+    PERSIST = "persist"
+
+
+# ======================= CONNECTOR AUDIT =======================
 class IntegrationAction(BaseAuditAction):
     HANDLE_OAUTH_CALLBACK = "handle_oauth_callback"
     HANDLE_INSTALLATION = "handle_installation"
@@ -44,19 +115,7 @@ class IntegrationAction(BaseAuditAction):
     REFRESH_OAUTH_TOKEN = "refresh_oauth_token"
     REGISTER_WEBHOOK = "register_webhook"
 
-
-class SyncTriggerAction(BaseAuditAction):
-    TRIGGER_FULL_SYNC = "trigger_full_sync"
-    HANDLE_WEBHOOK_EVENT = "handle_webhook_event"
-    START_CONFLUENCE_POLLING = "start_confluence_polling"
-
-
-class SyncIngestionAction(BaseAuditAction):
-    SUMMARIZE = "summarize"
-    EMBED = "embed"
-    PERSIST_DOCUMENT = "persist_document"
-
-
+# ======================= USER AUDIT =======================
 class UserRoleAction(BaseAuditAction):
     PROMOTE = "promote"
     REVOKE_ADMIN = "revoke_admin"

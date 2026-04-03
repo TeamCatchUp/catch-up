@@ -5,6 +5,10 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
+from catchup.audit.actions import SyncTriggerAction
+from catchup.audit.contexts import AuditContext
+from catchup.audit.metadata import FullSyncTriggerMetadata
+from catchup.audit.utils import audit_log
 from catchup.auth.dependencies import require_admin_user
 from catchup.configs.config import settings
 from catchup.db.models import SyncConnector
@@ -44,6 +48,7 @@ router = APIRouter(
         status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": SyncErrorResponse},
     },
 )
+@audit_log(SyncTriggerAction.FULL_SYNC_REQUESTED)
 async def dispatch_full_sync(
     sync_request: FullSyncRequest,
     request: Request,
@@ -52,8 +57,7 @@ async def dispatch_full_sync(
     dispatch_request = sync_request.to_dispatch_request(
         default_sync_days=settings.DEFAULT_SYNC_DAYS,
     )
-
-    return await _resolve_full_sync_dispatch_response(
+    response = await _resolve_full_sync_dispatch_response(
         connector=sync_request.connector,
         dispatch_request=dispatch_request,
         dispatch_call=full_sync_service.dispatch(
@@ -62,6 +66,12 @@ async def dispatch_full_sync(
             base_url=str(request.base_url),
         ),
     )
+    AuditContext.get().metadata = FullSyncTriggerMetadata.from_full_sync(
+        sync_request=sync_request,
+        default_sync_days=settings.DEFAULT_SYNC_DAYS,
+        response=response,
+    )
+    return response
 
 
 @router.get(

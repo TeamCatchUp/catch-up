@@ -1,4 +1,5 @@
 import uuid
+from typing import TYPE_CHECKING
 
 from pydantic import ConfigDict
 from pydantic import Field
@@ -8,6 +9,12 @@ from catchup.audit.base import BaseAuditMetadata
 from catchup.db.models import SourceType
 from catchup.db.models import SyncConnector
 from catchup.db.models import UserRole
+
+if TYPE_CHECKING:
+    from catchup.server.sync.schemas import FullSyncRequest
+    from catchup.server.sync.schemas import SyncAcceptedResponse
+    from catchup.sync.incremental.schemas import IncrementalIngestResult
+    from catchup.sync.incremental.schemas import RecordChange
 
 
 class SystemAuditMetadata(BaseAuditMetadata):
@@ -27,6 +34,67 @@ class UserAuditMetadata(BaseAuditMetadata):
 
 class IntegrationAuditMetadata(BaseAuditMetadata):
     provider: str | None = None
+
+
+class FullSyncTriggerMetadata(BaseAuditMetadata):
+    connector: SyncConnector
+    scope_id: str
+    target_ids: list[str]
+    sync_days: int
+    job_id: str | None = None
+    event_ids: list[str] | None = None
+
+    @classmethod
+    def from_full_sync(
+        cls,
+        *,
+        sync_request: "FullSyncRequest",
+        default_sync_days: int,
+        response: "SyncAcceptedResponse" | None = None,
+    ) -> "FullSyncTriggerMetadata":
+        resolved_sync_days = (
+            sync_request.sync_days
+            if sync_request.sync_days is not None
+            else default_sync_days
+        )
+        return cls(
+            connector=sync_request.connector,
+            scope_id=sync_request.scope_id,
+            target_ids=sync_request.target_ids,
+            sync_days=resolved_sync_days,
+            job_id=response.job_id if response is not None else None,
+            event_ids=response.event_ids if response is not None else None,
+        )
+
+
+class IncrementalSyncTriggerMetadata(BaseAuditMetadata):
+    connector: SyncConnector
+    scope_id: str
+    target_id: str
+    record_type: str
+    record_ids: list[str]
+    change_count: int
+    record_key_count: int
+    blocked_count: int
+
+    @classmethod
+    def from_incremental_sync(
+        cls,
+        *,
+        changes: list["RecordChange"],
+        result: "IncrementalIngestResult",
+    ) -> "IncrementalSyncTriggerMetadata":
+        first_change = changes[0]
+        return cls(
+            connector=first_change.connector,
+            scope_id=first_change.scope_id,
+            target_id=first_change.parent_id,
+            record_type=first_change.record_type,
+            record_ids=[change.record_id for change in changes],
+            change_count=len(changes),
+            record_key_count=len(result.record_keys),
+            blocked_count=result.blocked_count,
+        )
 
 
 class SyncAuditMetadata(BaseAuditMetadata):
