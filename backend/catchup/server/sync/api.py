@@ -97,14 +97,8 @@ async def list_sync_targets(
             scope_id=scope_id,
         )
         return SyncTargetsResponse.from_targets_result(result)
-    except BaseSyncException as exc:
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail=exc.to_detail(
-                connector=connector,
-                scope_id=scope_id,
-            ),
-        ) from exc
+    except BaseSyncException:
+        raise
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -193,11 +187,8 @@ async def get_record_gaps(
                 },
             ),
         ) from exc
-    except BaseSyncException as exc:
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail=exc.to_detail(),
-        ) from exc
+    except BaseSyncException:
+        raise
     except Exception as exc:
         logger.error(
             "[SYNC][RECORDS][GAPS][API] Request failed: event_id=%s, error=%s",
@@ -246,11 +237,8 @@ async def retry_records(
                 },
             ),
         ) from exc
-    except BaseSyncException as exc:
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail=exc.to_detail(),
-        ) from exc
+    except BaseSyncException:
+        raise
     except Exception as exc:
         logger.error(
             "[SYNC][RECORDS][RETRY][API] Request failed: event_id=%s, error=%s",
