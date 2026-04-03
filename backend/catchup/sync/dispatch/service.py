@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.concurrency import run_in_threadpool
 import structlog
 
-from catchup.sync.common.exceptions import SyncInternalError
+from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.common.protocols import EventPublisherProtocol
 from catchup.sync.common.schemas import SyncDispatchResult
 from catchup.sync.dispatch.preparer import DispatchPreparer
@@ -48,7 +48,7 @@ class DispatchService:
         tasks = prepared.tasks
 
         if context is None or observer is None or db_event_ids is None or tasks is None:
-            raise SyncInternalError("prepared dispatch state is incomplete")
+            raise SyncInternalException("prepared dispatch state is incomplete")
 
         publish_result = await self._publisher.publish(
             PublishDispatchInput.from_request(

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable
-import logging
+import structlog
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
@@ -24,13 +24,13 @@ from catchup.server.sync.schemas import (
     SyncTargetsResponse,
 )
 from catchup.sync.common.schemas import FullSyncDispatchRequest, SyncDispatchResult
-from catchup.sync.common.exceptions import SyncAPIError, SyncRequestError
+from catchup.sync.common.exceptions import BaseSyncException, SyncRequestException
 from catchup.sync.full.service import FullSyncService
 from catchup.sync.repair.record_repair_service import get_record_repair_service
 from catchup.sync.query_service import get_sync_query_service
 from catchup.server.sync.dependencies import get_full_sync_service_dependency
 
-logger = logging.getLogger(__name__)
+logger = structlog.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/sync",
@@ -66,6 +66,7 @@ async def dispatch_full_sync(
             base_url=str(request.base_url),
         ),
     )
+
     AuditContext.get().metadata = FullSyncTriggerMetadata.from_full_sync(
         sync_request=sync_request,
         default_sync_days=settings.DEFAULT_SYNC_DAYS,
@@ -94,7 +95,7 @@ async def list_sync_targets(
             scope_id=scope_id,
         )
         return SyncTargetsResponse.from_targets_result(result)
-    except SyncAPIError as exc:
+    except BaseSyncException as exc:
         raise HTTPException(
             status_code=exc.status_code,
             detail=exc.to_detail(
@@ -178,7 +179,7 @@ async def get_record_gaps(
         return await repair_service.get_record_gaps(
             event_id=event_id,
         )
-    except SyncRequestError as exc:
+    except SyncRequestException as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_build_error_detail(
@@ -190,7 +191,7 @@ async def get_record_gaps(
                 },
             ),
         ) from exc
-    except SyncAPIError as exc:
+    except BaseSyncException as exc:
         raise HTTPException(
             status_code=exc.status_code,
             detail=exc.to_detail(),
@@ -231,7 +232,7 @@ async def retry_records(
         return await repair_service.retry_records(
             request=retry_request,
         )
-    except SyncRequestError as exc:
+    except SyncRequestException as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_build_error_detail(
@@ -243,7 +244,7 @@ async def retry_records(
                 },
             ),
         ) from exc
-    except SyncAPIError as exc:
+    except BaseSyncException as exc:
         raise HTTPException(
             status_code=exc.status_code,
             detail=exc.to_detail(),
@@ -335,7 +336,7 @@ async def _resolve_full_sync_dispatch_response(
     try:
         result = await dispatch_call
         return SyncAcceptedResponse.from_dispatch_result(result)
-    except SyncRequestError as exc:
+    except SyncRequestException as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_build_error_detail(
@@ -349,7 +350,7 @@ async def _resolve_full_sync_dispatch_response(
                 },
             ),
         ) from exc
-    except SyncAPIError as exc:
+    except BaseSyncException as exc:
         raise HTTPException(
             status_code=exc.status_code,
             detail=exc.to_detail(

@@ -4,7 +4,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import TypeVar
 import structlog
 
-from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.schemas import (
     FullSyncResolvedTargets,
     FullSyncTarget,
@@ -21,7 +21,7 @@ def _normalize_text(value: str | None) -> str:
 
 def normalize_target_ids(target_ids: list[str] | None) -> list[str]:
     if target_ids is None:
-        raise SyncRequestError("target_ids is required")
+        raise SyncRequestException("target_ids is required")
 
     normalized: list[str] = []
     seen: set[str] = set()
@@ -33,7 +33,7 @@ def normalize_target_ids(target_ids: list[str] | None) -> list[str]:
         normalized.append(candidate)
 
     if not normalized:
-        raise SyncRequestError(
+        raise SyncRequestException(
             "target_ids is empty after normalization",
             metadata={"requested_target_ids": target_ids},
         )
@@ -71,7 +71,7 @@ def index_targets(
             count=blank_key_count,
             **context,
         )
-        raise SyncRequestError(
+        raise SyncRequestException(
             "resolved target rows contain blank target_id",
             metadata={
                 **context,
@@ -86,7 +86,7 @@ def index_targets(
             sample_keys=duplicate_key_samples,
             **context,
         )
-        raise SyncRequestError(
+        raise SyncRequestException(
             "resolved target rows contain duplicate target_id",
             metadata={
                 **context,
@@ -111,7 +111,7 @@ def resolve_requested_targets(
         if target_id not in target_index
     ]
     if unknown_target_ids:
-        raise SyncRequestError(
+        raise SyncRequestException(
             error_message,
             metadata={
                 **error_metadata,
@@ -137,7 +137,7 @@ def build_full_sync_targets(
     for row in rows:
         target_id = _normalize_text(id_getter(row))
         if not target_id:
-            raise SyncRequestError("resolved target_id is empty")
+            raise SyncRequestException("resolved target_id is empty")
 
         target_name = _normalize_text(name_getter(row)) or target_id
         metadata = dict(metadata_getter(row) or {}) if metadata_getter is not None else {}

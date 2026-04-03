@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 import structlog
 
 from catchup.server.sync.schemas import FullSyncRequest
-from catchup.sync.common.exceptions import SyncAPIError
+from catchup.sync.common.exceptions import BaseSyncException
 from catchup.sync.full.service import (
     FullSyncService,
     get_full_sync_service,
@@ -18,7 +18,7 @@ def get_full_sync_service_dependency(
 ) -> FullSyncService:
     try:
         return get_full_sync_service()
-    except SyncAPIError as exc:
+    except BaseSyncException as exc:
         raise HTTPException(
             status_code=exc.status_code,
             detail=exc.to_detail(

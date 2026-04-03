@@ -24,7 +24,7 @@ from catchup.connectors.atlassian.token_manager import (
 from catchup.connectors.jira.service import JiraIngestionService
 from catchup.db.atlassian import oauth_repository
 from catchup.db.engine import SessionLocal
-from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
+from catchup.sync.common.exceptions import SyncConnectorException, SyncInternalException
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +52,12 @@ async def create_jira_ingestion_service(
         token_provider = AtlassianTokenProvider(token_manager)
         site_url = await run_in_threadpool(_load_site_url_db, cloud_id)
     except AtlassianTokenNotFoundError as exc:
-        raise SyncConnectorError(
+        raise SyncConnectorException(
             f"Jira 연결을 찾을 수 없습니다: {cloud_id}",
             metadata={"cloud_id": cloud_id},
         ) from exc
     except AtlassianTokenExpiredError as exc:
-        raise SyncConnectorError(
+        raise SyncConnectorException(
             f"Jira 인증이 만료되었습니다. 재연결이 필요합니다: {cloud_id}",
             metadata={"cloud_id": cloud_id},
         ) from exc
@@ -68,7 +68,7 @@ async def create_jira_ingestion_service(
             exc,
             exc_info=True,
         )
-        raise SyncInternalError(
+        raise SyncInternalException(
             "Jira access token 획득 중 오류가 발생했습니다",
             metadata={"cloud_id": cloud_id},
         ) from exc
@@ -94,7 +94,7 @@ async def create_jira_ingestion_service(
             exc,
             exc_info=True,
         )
-        raise SyncInternalError(
+        raise SyncInternalException(
             "Jira ingestion service 초기화에 실패했습니다",
             metadata={"cloud_id": cloud_id},
         ) from exc

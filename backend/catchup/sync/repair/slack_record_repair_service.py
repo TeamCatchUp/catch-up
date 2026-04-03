@@ -17,7 +17,7 @@ from catchup.server.sync.schemas import (
     SyncRecordRetryRequest,
     SyncRecordRetryResponse,
 )
-from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.repair.context import RecordRepairContext
 
 
@@ -41,15 +41,15 @@ def _load_slack_target_ref(
     channel_id = target_id.strip()
 
     if not team_id:
-        raise SyncRequestError("scope_id is required", code="invalid_scope_id")
+        raise SyncRequestException("scope_id is required", code="invalid_scope_id")
     if not channel_id:
-        raise SyncRequestError("target_id is required", code="invalid_target_id")
+        raise SyncRequestException("target_id is required", code="invalid_target_id")
 
     with SessionLocal() as db:
         channel = slack_entities.get_channel(db, channel_id)
 
     if channel is None or channel.team_id != team_id:
-        raise SyncRequestError(
+        raise SyncRequestException(
             "slack channel not found in workspace",
             code="target_not_found",
             metadata={
@@ -72,7 +72,7 @@ def _index_retry_records(
 
     for item in records:
         if item.record_type != "message":
-            raise SyncRequestError(
+            raise SyncRequestException(
                 "unsupported slack record_type",
                 code="unsupported_record_type",
                 metadata={"record_type": item.record_type},

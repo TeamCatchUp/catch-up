@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from catchup.connectors.confluence.factory import create_confluence_ingestion_service
 from catchup.sync.audit import SyncAuditContext
-from catchup.sync.common.exceptions import SyncInternalError
+from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.common.schemas import IncrementalSyncContext, TargetSyncResult
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
 
@@ -52,7 +52,7 @@ class ConfluenceIncrementalHandler(BaseIncrementalHandler):
 
         error_count = int(result.get("errors", 0))
         if error_count > 0:
-            raise SyncInternalError(
+            raise SyncInternalException(
                 "confluence incremental sync failed",
                 metadata={"record_key": context.record_key},
             )

@@ -26,7 +26,7 @@ from catchup.db.models import SourceType
 from catchup.db.workspaces import get_workspace_limit_one
 from catchup.events.enums import EventType
 from catchup.events.enums import IntegrationEventAction
-from catchup.sync.common.exceptions import SyncAPIError
+from catchup.sync.common.exceptions import BaseSyncException
 from catchup.sync.ingress.types import GithubWebhookRequest
 from catchup.sync.ingress.types import GithubWebhookResponse
 
@@ -339,7 +339,7 @@ async def _sync_installation_metadata(installation_id: int) -> None:
     try:
         service = await create_github_ingestion_service(installation_id)
         await service.sync_installation_metadata()
-    except SyncAPIError as exc:
+    except BaseSyncException as exc:
         logger.warning(
             "github_metadata_sync_failed",
             installation_id=installation_id,

@@ -8,8 +8,8 @@ import structlog
 from catchup.configs.config import settings
 from catchup.db.models import SyncConnector
 from catchup.db.models import SyncType
-from catchup.sync.common.exceptions import SyncInternalError
-from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.protocols import EventPublisherProtocol
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
@@ -56,7 +56,7 @@ class FullSyncService:
         if normalized_base_url:
             return normalized_base_url
 
-        raise SyncInternalError(
+        raise SyncInternalException(
             message="full sync dispatch requires base_url",
             metadata={
                 "connector": connector.value,
@@ -71,7 +71,7 @@ class FullSyncService:
         scope_id = request.scope_id.strip()
         if scope_id:
             return scope_id
-        raise SyncRequestError("scope_id is required")
+        raise SyncRequestException("scope_id is required")
 
     def _build_dispatch_request(
         self,
@@ -148,7 +148,7 @@ def create_full_sync_service(
 def get_full_sync_service() -> FullSyncService:
     try:
         return create_full_sync_service()
-    except SyncInternalError:
+    except SyncInternalException:
         raise
     except Exception as exc:
         logger.error(
@@ -156,7 +156,7 @@ def get_full_sync_service() -> FullSyncService:
             error=str(exc),
             exc_info=True,
         )
-        raise SyncInternalError(
+        raise SyncInternalException(
             message="full sync service initialization failed",
             metadata={
                 "error_message": str(exc),

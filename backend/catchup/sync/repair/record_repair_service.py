@@ -15,8 +15,8 @@ from catchup.server.sync.schemas import (
     SyncRecordRetryRequest,
     SyncRecordRetryResponse,
 )
-from catchup.sync.common.exceptions import SyncInternalError
-from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.repair.context import RecordRepairContext
 from catchup.sync.repair.context import load_record_repair_context
 from catchup.sync.repair.github_record_repair_service import (
@@ -75,7 +75,7 @@ class RecordRepairService:
         if connector == SyncConnector.SLACK:
             return self._slack_handler
 
-        raise SyncRequestError(
+        raise SyncRequestException(
             "record repair not supported for this connector",
             code="unsupported_connector",
             metadata={"connector": connector.value},
@@ -104,7 +104,7 @@ class RecordRepairService:
                     next_status = SyncEventStatus.SUCCESS
 
                 if not updated:
-                    raise SyncInternalError(
+                    raise SyncInternalException(
                         "failed to update retry event status",
                         code="event_status_update_failed",
                         metadata={"event_id": repair_context.event_id},
