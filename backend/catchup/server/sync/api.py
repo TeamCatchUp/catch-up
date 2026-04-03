@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable
 import structlog
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -23,14 +22,12 @@ from catchup.server.sync.schemas import (
     SyncStatusResponse,
     SyncTargetsResponse,
 )
-from catchup.sync.common.schemas import FullSyncDispatchRequest, SyncDispatchResult
 from catchup.sync.common.exceptions import BaseSyncException, SyncRequestException
-from catchup.sync.full.service import FullSyncService
+from catchup.sync.full.service import get_full_sync_service
 from catchup.sync.repair.record_repair_service import get_record_repair_service
 from catchup.sync.query_service import get_sync_query_service
-from catchup.server.sync.dependencies import get_full_sync_service_dependency
 
-logger = structlog.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/sync",
@@ -51,19 +48,26 @@ router = APIRouter(
 @audit_log(SyncTriggerAction.FULL_SYNC_REQUESTED)
 async def dispatch_full_sync(
     sync_request: FullSyncRequest,
-    full_sync_service: FullSyncService = Depends(get_full_sync_service_dependency),
 ):
+    logger.info(
+        "full_sync_requested",
+        connector=sync_request.connector.value,
+        scope_id=sync_request.scope_id,
+        target_ids=sync_request.target_ids,
+        sync_days=sync_request.sync_days,
+    )
+
+    full_sync_service = get_full_sync_service()
+
     dispatch_request = sync_request.to_dispatch_request(
         default_sync_days=settings.DEFAULT_SYNC_DAYS,
     )
-    response = await _resolve_full_sync_dispatch_response(
+
+    dispatch_result = await full_sync_service.dispatch(
         connector=sync_request.connector,
-        dispatch_request=dispatch_request,
-        dispatch_call=full_sync_service.dispatch(
-            connector=sync_request.connector,
-            request=dispatch_request,
-        ),
+        request=dispatch_request,
     )
+    response = SyncAcceptedResponse.from_dispatch_result(dispatch_result)
 
     AuditContext.get().metadata = FullSyncTriggerMetadata.from_full_sync(
         sync_request=sync_request,
@@ -310,70 +314,3 @@ def _build_error_detail(
         detail["metadata"] = metadata
 
     return detail
-
-
-def _build_dispatch_metadata(
-    dispatch_request: FullSyncDispatchRequest,
-) -> dict[str, object]:
-    return {
-        "target_count": len(dispatch_request.target_ids or []),
-        "trigger": dispatch_request.trigger.value,
-        "sync_from_ts": dispatch_request.sync_from_ts,
-    }
-
-
-async def _resolve_full_sync_dispatch_response(
-    *,
-    connector: SyncConnector,
-    dispatch_request: FullSyncDispatchRequest,
-    dispatch_call: Awaitable[SyncDispatchResult],
-) -> SyncAcceptedResponse:
-    scope_id = dispatch_request.scope_id
-    dispatch_metadata = _build_dispatch_metadata(dispatch_request)
-
-    try:
-        result = await dispatch_call
-        return SyncAcceptedResponse.from_dispatch_result(result)
-    except SyncRequestException as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_build_error_detail(
-                code=exc.code,
-                message=exc.message,
-                connector=connector,
-                scope_id=scope_id,
-                metadata={
-                    **dispatch_metadata,
-                    **exc.metadata,
-                },
-            ),
-        ) from exc
-    except BaseSyncException as exc:
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail=exc.to_detail(
-                connector=connector,
-                scope_id=scope_id,
-            ),
-        ) from exc
-    except Exception as exc:
-        logger.error(
-            "[SYNC][FULL][API] Dispatch failed: connector=%s, scope_id=%s, target_count=%s, trigger=%s, sync_from_ts=%s, error=%s",
-            connector,
-            scope_id,
-            dispatch_metadata["target_count"],
-            dispatch_metadata["trigger"],
-            dispatch_metadata["sync_from_ts"],
-            exc,
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_build_error_detail(
-                code="internal_error",
-                message="sync full request failed",
-                connector=connector,
-                scope_id=scope_id,
-                metadata=dispatch_metadata,
-            ),
-        ) from exc
