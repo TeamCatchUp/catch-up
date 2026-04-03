@@ -1,4 +1,5 @@
 from collections import defaultdict
+from copy import deepcopy
 
 import structlog
 from langchain_core.documents import Document
@@ -11,6 +12,7 @@ from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
 
+MAX_RERANK_DOCUMENT_TEXT_LENGTH = 30_000
 
 @log_node
 async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
@@ -26,6 +28,7 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
     rerank_count: int = state.get("rerank_count", 0)
     query = state["rewritten_query"]
     
+    retrieved_docs = _validate_retrieved_docs(retrieved_docs)
     final_docs = retrieved_docs
     try:
         async with rerank_semaphore:
@@ -46,7 +49,7 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
             "rerank_count": 0,
         }
     else: 
-        final_docs = select_diverse_top_k(
+        final_docs = _select_diverse_top_k(
             reranked_docs=reranked_docs,
             total_k=settings.RERANK_TOTAL_K,  # LLM에게 최종적으로 제공되는 문서 개수
             min_guarantee=2,  # 최소 2개 보장
@@ -57,7 +60,25 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
         }
 
 
-def select_diverse_top_k(
+def _validate_retrieved_docs(
+    retrieved_docs: list[Document],
+) -> list[Document]:
+    valid_docs = []
+    
+    # page_content 길이 제한 방어 (AWS Bedrock Cohere Rerank 3.5)
+    for doc in retrieved_docs:
+        content = doc.page_content
+        if len(content) <= MAX_RERANK_DOCUMENT_TEXT_LENGTH:
+            valid_docs.append(doc)
+            continue
+        truncated_doc = deepcopy(doc)
+        truncated_doc.page_content = content[:MAX_RERANK_DOCUMENT_TEXT_LENGTH]
+        valid_docs.append(truncated_doc)
+        
+    return valid_docs
+
+
+def _select_diverse_top_k(
     reranked_docs: list[Document], total_k: int, min_guarantee: int
 ) -> list[Document]:
     """Rerank된 소스 타입들이 골고루 섞이도록 동적으로 Top K 선정"""
