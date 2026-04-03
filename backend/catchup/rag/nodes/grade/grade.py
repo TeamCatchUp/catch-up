@@ -6,10 +6,10 @@ from langchain_core.documents import Document
 
 from catchup.costs.utils import extract_token_usages
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.nodes.utils import llm_semaphore
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import prepare_context_text
 from catchup.rag.schemas.structures import GradeDocuments
+from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
@@ -47,7 +47,7 @@ async def grade_node(state: AgentState, llm: BaseChatModel):
     )
     
     try:
-        async with llm_semaphore:
+        async with rag_semaphores.analysis:
             raw_response = await structured_llm.ainvoke(input=prompt)
             token_usages = extract_token_usages(raw_response.get("raw"))
             grade_result: GradeDocuments = raw_response.get("parsed")

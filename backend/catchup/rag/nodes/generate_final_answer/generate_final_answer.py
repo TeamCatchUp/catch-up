@@ -12,12 +12,12 @@ from langchain_core.messages import SystemMessage
 from catchup.costs.utils import extract_token_usages
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history
-from catchup.rag.nodes.utils import llm_semaphore
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import prepare_context_text
 from catchup.rag.policies import CITATION_POLICY_MESSAGE
 from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.schemas.sources import BaseSource
+from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
@@ -52,7 +52,7 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
     )
 
     try:
-        async with llm_semaphore:
+        async with rag_semaphores.final_answer:
             raw_response = await llm.ainvoke(input=messages)
             token_usages = extract_token_usages(raw_response)
             full_answer = raw_response.content
