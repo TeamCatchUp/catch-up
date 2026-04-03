@@ -78,6 +78,8 @@ class ChatService:
         
         # 채팅 토큰 사용량 컨텍스트 초기화
         ChatTokenUsageContext.init()
+        
+        base_config = None
             
         try:            
             # 채팅 세션 획득
@@ -199,28 +201,29 @@ class ChatService:
                 duration=round(elapsed, 4)
             )
             
-            token_usage_ctx = ChatTokenUsageContext.get()
-            lg_current_state = await self._app.aget_state(base_config)
-            values = lg_current_state.values
+            if base_config is not None:
+                token_usage_ctx = ChatTokenUsageContext.get()
+                lg_current_state = await self._app.aget_state(base_config)
+                values = lg_current_state.values
 
-            if token_usage_ctx and values:
-                # langgraph state로부터 토큰 사용량 및 rerank 횟수 추출
-                token_breakdown = values.get("token_breakdown", {})
-                rerank_count = values.get("rerank_count", 0)
+                if token_usage_ctx and values:
+                    # langgraph state로부터 토큰 사용량 및 rerank 횟수 추출
+                    token_breakdown = values.get("token_breakdown", {})
+                    rerank_count = values.get("rerank_count", 0)
+                    
+                    token_usage_ctx.add_tokens(token_breakdown)
+                    token_usage_ctx.rerank_count = rerank_count
                 
-                token_usage_ctx.add_tokens(token_breakdown)
-                token_usage_ctx.rerank_count = rerank_count
-            
-            if (
-                token_usage_ctx
-                and token_usage_ctx.token_breakdown
-                and token_usage_ctx.message_id
-            ):
-                emit_chat_token_usage_event(
-                    user_id=global_context.user.id,
-                    workspace_id=global_context.workspace.id,
-                    company_id=global_context.company.id,
-                )
+                if (
+                    token_usage_ctx
+                    and token_usage_ctx.token_breakdown
+                    and token_usage_ctx.message_id
+                ):
+                    emit_chat_token_usage_event(
+                        user_id=global_context.user.id,
+                        workspace_id=global_context.workspace.id,
+                        company_id=global_context.company.id,
+                    )
             
             if settings.ENABLE_LANGFUSE:
                 client = get_langfuse_client()
