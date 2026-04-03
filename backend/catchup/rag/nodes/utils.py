@@ -1,5 +1,3 @@
-# llm 호출 Rate Limit 방어
-import asyncio
 import functools
 import time
 from typing import Annotated
@@ -11,10 +9,6 @@ from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 from langgraph.graph.message import add_messages
-
-# Semaphores (Rate limit 방어용)
-llm_semaphore = asyncio.Semaphore(10)
-rerank_semaphore = asyncio.Semaphore(10)
 
 
 # 사용자-어시스턴트 대화 전처리 함수들

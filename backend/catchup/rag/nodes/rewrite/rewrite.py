@@ -6,8 +6,8 @@ from langchain_core.messages import HumanMessage
 from catchup.costs.utils import extract_token_usages
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history
-from catchup.rag.nodes.utils import llm_semaphore
 from catchup.rag.nodes.utils import log_node
+from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
@@ -30,7 +30,7 @@ async def rewrite_node(state: AgentState, llm: BaseChatModel):
     token_usages = {"token_breakdown": {}}
 
     try:
-        async with llm_semaphore:
+        async with rag_semaphores.analysis:
             raw_response = await llm.ainvoke(input=prompt)
             token_usages = extract_token_usages(raw_response)
             rewritten_query = raw_response.content

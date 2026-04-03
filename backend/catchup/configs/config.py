@@ -2,8 +2,10 @@ import os
 from enum import StrEnum
 
 from dotenv import load_dotenv
-from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
+from pydantic import model_validator
+from pydantic_settings import BaseSettings
+from pydantic_settings import SettingsConfigDict
 from sqlalchemy import URL
 
 from catchup.configs.utils import get_version
@@ -108,6 +110,9 @@ class Settings(BaseSettings):
     AWS_RERANK_MODEL_ARN: str
     AWS_RERANK_MODEL_REGION: str
     AWS_EMBEDDING_MODEL_REGION: str
+    AWS_BEDROCK_SMALL_MODEL_SEMA_VALUE: int = 10
+    AWS_BEDROCK_LARGE_MODEL_SEMA_VALUE: int = 10
+    AWS_BEDROCK_RERANK_SEMA_VALUE: int = 10
 
     # Cohere (native)
     COHERE_API_KEY: str
