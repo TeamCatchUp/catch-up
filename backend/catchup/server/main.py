@@ -33,6 +33,7 @@ from catchup.observability.logging.s3_uploader import audit_log_uploader_task
 from catchup.observability.logging.s3_uploader import graceful_shutdown
 from catchup.rag.checkpoint import close_langgraph_checkpointer
 from catchup.rag.checkpoint import init_langgraph_checkpointer
+from catchup.rag.semaphores import rag_semaphores
 from catchup.server.admin.api import router as admin_router
 from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
@@ -175,6 +176,16 @@ async def lifespan(app: FastAPI):
             ),
             immediate=True,
         )
+        
+    try:
+        rag_semaphores.init_langgraph_semaphores(
+            small_model_sema_value=settings.AWS_BEDROCK_SMALL_MODEL_SEMA_VALUE,
+            large_model_sema_value=settings.AWS_BEDROCK_LARGE_MODEL_SEMA_VALUE,
+            rerank_sema_value=settings.AWS_BEDROCK_RERANK_SEMA_VALUE,
+        )
+    except:
+        # TODO: emit_audit_event()
+        logger.error("langgraph_semaphore_init_failed", exc_info=True)
         raise
 
     # Scheduler 초기화
