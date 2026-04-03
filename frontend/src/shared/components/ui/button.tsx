@@ -36,7 +36,7 @@ const buttonVariants = cva(
           'border-edge-normal hover:bg-fill-interaction-hover active:border-edge-neutral active:bg-fill-interaction-pressed disabled:border-edge-normal disabled:bg-fill-interaction-inactive disabled:text-content-assistive bg-fill-normal rounded-full border',
         'capsule-outline-blue':
           'border-edge-primary bg-fill-primary-assistive text-content-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive active:border-edge-primary-strong disabled:text-content-assistive disabled:bg-fill-interaction-inactive disabled:border-edge-assistive rounded-full border',
-        'capsule-solid-purple': 'bg-accent-violet-lighten rounded-full',
+        'capsule-solid-purple': 'bg-accent-violet-neutral rounded-full',
         'capsule-solid-light-blue': 'bg-accent-light-blue-lighten rounded-full',
 
         /* ── Text Buttons ── */

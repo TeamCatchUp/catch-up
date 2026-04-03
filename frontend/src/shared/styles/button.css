@@ -35,7 +35,7 @@
   }
 
   .capsule-button-solid-purple {
-    @apply bg-accent-violet-lighten rounded-full;
+    @apply bg-accent-violet-neutral rounded-full;
   }
 
   .capsule-button-solid-light-blue {

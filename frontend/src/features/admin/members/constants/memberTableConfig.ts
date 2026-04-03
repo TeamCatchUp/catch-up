@@ -18,7 +18,7 @@ export const JOB_LEVEL_LABEL: Record<JobLevel, string> = {
 /** 직급 Badge 스타일 */
 export const RANK_BADGE_CLASS: Record<string, string> = {
   경영진: 'bg-accent-red-orange-neutral text-accent-red-orange',
-  팀장: 'bg-accent-violet-lighten text-accent-violet',
+  팀장: 'bg-accent-violet-neutral text-accent-violet',
   팀원: 'bg-fill-primary-normal-neutral text-content-primary',
 };
 
