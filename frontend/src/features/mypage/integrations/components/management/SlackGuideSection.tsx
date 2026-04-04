@@ -2,7 +2,7 @@ import Image from 'next/image';
 
 import IconSlack from '@/public/icons/logo/Slack.svg';
 
-import { SLACK_GUIDE_IMAGES } from '../../constants/integrations';
+import { SLACK_GUIDE_IMAGES } from '../../constants/integrationsConfig';
 
 /** Slack 연동 가이드 섹션 */
 const SlackGuideSection = () => {

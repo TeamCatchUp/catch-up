@@ -10,7 +10,7 @@ import type {
   SyncJobStatus,
   SyncStatusResponse,
 } from '../types/syncModel';
-import { isConfluenceResource, isJiraResource } from '../utils/atlassianScopeFilter';
+import { isConfluenceResource, isJiraResource } from '../utils/filterAtlassianScope';
 
 const SESSION_KEY = 'catchup:activeEmbeddingJobs';
 

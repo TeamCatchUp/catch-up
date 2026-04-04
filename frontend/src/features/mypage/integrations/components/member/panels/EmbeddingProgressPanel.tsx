@@ -10,7 +10,7 @@ import IconRotate from '@/public/icons/icon/rotate.svg';
 import IconTriangleUp from '@/public/icons/icon/triangle_up.svg';
 import { cn } from '@/shared/utils/cn';
 
-import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
+import { INTEGRATION_ACCOUNTS } from '../../../constants/integrationsConfig';
 import { useEmbeddingGaps } from '../../../hooks/useEmbeddingGaps';
 import type {
   AdminConnectorTargetRangeResponse,

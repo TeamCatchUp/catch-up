@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import { INTEGRATION_ACCOUNTS } from '../constants/integrations';
+import { INTEGRATION_ACCOUNTS } from '../constants/integrationsConfig';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
 import type { PreMappingInfo, SyncFilterType, UserSyncItem } from '../types/integrationApi';
 import type {

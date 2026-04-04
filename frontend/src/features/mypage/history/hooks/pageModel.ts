@@ -10,7 +10,7 @@ import { groupItemsByDate, isInPeriod as isInPeriodShared } from '@/shared/utils
 
 import { useHistoryFilterStore } from '../store/historyFilterStore';
 import type { HistoryItem } from '../types/historyModel';
-import { toHistoryItem } from '../utils/transformers';
+import { toHistoryItem } from '../utils/mapHistory';
 
 /** {@link usePageModel} 훅의 반환 타입 */
 interface UsePageModelReturn {

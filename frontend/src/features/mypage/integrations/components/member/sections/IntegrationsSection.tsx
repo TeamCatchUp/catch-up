@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 
-import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
+import { INTEGRATION_ACCOUNTS } from '../../../constants/integrationsConfig';
 import { useEmbeddingHistory } from '../../../hooks/useEmbeddingHistory';
 import { useEmbeddingJobs } from '../../../hooks/useEmbeddingJobs';
 import { useMemberIntegrationViewModel } from '../../../hooks/useMemberIntegrationViewModel';

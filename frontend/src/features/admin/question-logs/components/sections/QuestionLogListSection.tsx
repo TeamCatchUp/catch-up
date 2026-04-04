@@ -19,7 +19,7 @@ import {
 
 import { adminQueriesQueries } from '../../queries/adminQueries.queries';
 import { useQuestionLogFilterStore } from '../../store/questionLogFilterStore';
-import { toQuestionLogItem } from '../../utils/transformers';
+import { toQuestionLogItem } from '../../utils/mapQuestionLog';
 import QuestionLogListItem from '../QuestionLogListItem';
 
 /** DatePeriod → API period 변환 (서버 사전 필터용) */

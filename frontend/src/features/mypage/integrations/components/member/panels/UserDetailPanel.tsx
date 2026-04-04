@@ -4,7 +4,7 @@ import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { cn } from '@/shared/utils/cn';
 
-import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
+import { INTEGRATION_ACCOUNTS } from '../../../constants/integrationsConfig';
 import type { MemberIntegrationRow } from '../../../types/integrationModel';
 
 interface UserDetailPanelProps {

@@ -2,7 +2,7 @@ import Image from 'next/image';
 
 import IconAT from '@/public/icons/logo/atlassian.svg';
 
-import { ATLASSIAN_PROFILE_URL, CONFLUENCE_GUIDE_IMAGES } from '../../constants/integrations';
+import { ATLASSIAN_PROFILE_URL, CONFLUENCE_GUIDE_IMAGES } from '../../constants/integrationsConfig';
 
 /** Confluence (Atlassian) 연동 가이드 섹션 */
 const ConfluenceGuideSection = () => {

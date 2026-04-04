@@ -5,7 +5,7 @@ import Image from 'next/image';
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { cn } from '@/shared/utils/cn';
 
-import { MEMBER_TABLE_SERVICES } from '../../../constants/memberUi';
+import { MEMBER_TABLE_SERVICES } from '../../../constants/memberUiConfig';
 import type { IntegrationService } from '../../../types/integrationModel';
 import type { MemberDisplayRow } from '../../../types/memberDisplayModel';
 import AccountSelectDropdown, { type AccountOption } from './AccountSelectDropdown';

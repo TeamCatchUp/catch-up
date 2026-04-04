@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
-import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
+import { INTEGRATION_ACCOUNTS } from '../../../constants/integrationsConfig';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
 import type { PreMappingInfo, UserSyncItem } from '../../../types/integrationApi';
 import type { IntegrationAccountInfo, MemberIntegrationRow } from '../../../types/integrationModel';
