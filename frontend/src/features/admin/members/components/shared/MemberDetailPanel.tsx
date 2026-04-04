@@ -56,7 +56,7 @@ const getAccountIdentifier = (service: IntegrationService, integrations: UserInt
 };
 
 /** 우측 상세 패널 (입장 신청 / 이용자 목록 공통) */
-const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) => {
+export default function MemberDetailPanel({ member, actionButtons }: MemberDetailPanelProps) {
   if (!member) {
     return (
       <section className="bg-fill-normal overflow-clip pt-5 pb-5 pl-6">
@@ -168,6 +168,4 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
       </div>
     </section>
   );
-};
-
-export default MemberDetailPanel;
+}

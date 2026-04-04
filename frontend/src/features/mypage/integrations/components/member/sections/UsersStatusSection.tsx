@@ -45,14 +45,14 @@ const FILTER_OPTIONS: { key: SyncFilterType; label: string }[] = [
 ];
 
 /** 이용자 계정 연동 상태 섹션 */
-const UsersStatusSection = ({
+export default function UsersStatusSection({
   total,
   displayRows,
   filterType,
   onFilterChange,
   currentPage,
   onPageChange,
-}: UsersStatusSectionProps) => {
+}: UsersStatusSectionProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
 
@@ -340,6 +340,4 @@ const UsersStatusSection = ({
       <CsvUploadModal open={isCsvModalOpen} onOpenChange={setIsCsvModalOpen} />
     </section>
   );
-};
-
-export default UsersStatusSection;
+}

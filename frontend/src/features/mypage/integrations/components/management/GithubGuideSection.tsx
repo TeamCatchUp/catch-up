@@ -3,7 +3,7 @@ import Image from 'next/image';
 import { GITHUB_GUIDE_IMAGES } from '../../constants/integrationsConfig';
 
 /** GitHub 연동 가이드 섹션 */
-const GithubGuideSection = () => {
+export default function GithubGuideSection() {
   return (
     <div className="border-edge-neutral bg-fill-normal flex flex-col gap-10 overflow-clip rounded-xl border p-6">
       {/* 인트로 */}
@@ -79,6 +79,4 @@ const GithubGuideSection = () => {
       <p className="text-label-small text-content-strong">찾느라 쓰던 시간, 이제 개발에 집중하세요</p>
     </div>
   );
-};
-
-export default GithubGuideSection;
+}

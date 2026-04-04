@@ -7,7 +7,7 @@ interface Props {
   className?: string;
 }
 
-const SidebarHeader = ({ sourceCount, className }: Props) => {
+export default function SidebarHeader({ sourceCount, className }: Props) {
   return (
     <div
       className={cn(
@@ -42,6 +42,4 @@ const SidebarHeader = ({ sourceCount, className }: Props) => {
       </TooltipProvider>
     </div>
   );
-};
-
-export default SidebarHeader;
+}

@@ -46,12 +46,12 @@ interface IntegrationManagementSectionProps {
 }
 
 /** 관리자 협업툴 연동 관리 섹션 */
-const IntegrationManagementSection = ({
+export default function IntegrationManagementSection({
   integrationMenu,
   selectedService,
   onSelectService,
   detail,
-}: IntegrationManagementSectionProps) => {
+}: IntegrationManagementSectionProps) {
   const [currentPage, setCurrentPage] = useState(1);
 
   // 서비스 변경 시 페이지 리셋 — 렌더 중 조정 (useEffect 이중 렌더 방지)
@@ -203,6 +203,4 @@ const IntegrationManagementSection = ({
       </div>
     </div>
   );
-};
-
-export default IntegrationManagementSection;
+}

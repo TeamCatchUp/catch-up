@@ -19,7 +19,7 @@ interface PermissionsTableProps {
 }
 
 /** 권한 목록 테이블 */
-const PermissionsTable = ({ rows, onChangeRoleClick, onRoleChangeClick }: PermissionsTableProps) => {
+export default function PermissionsTable({ rows, onChangeRoleClick, onRoleChangeClick }: PermissionsTableProps) {
   return (
     <section className="border-edge-neutral bg-fill-normal flex min-h-0 flex-1 flex-col overflow-hidden border-y">
       <div className="border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-b px-6 lg:px-9">
@@ -117,6 +117,4 @@ const PermissionsTable = ({ rows, onChangeRoleClick, onRoleChangeClick }: Permis
       )}
     </section>
   );
-};
-
-export default PermissionsTable;
+}

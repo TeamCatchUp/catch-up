@@ -25,7 +25,7 @@ interface AccountRegisterModalProps {
 }
 
 /** 계정 등록 모달 */
-const AccountRegisterModal = ({ open, onOpenChange, allRows, service, serviceName }: AccountRegisterModalProps) => {
+export default function AccountRegisterModal({ open, onOpenChange, allRows, service, serviceName }: AccountRegisterModalProps) {
   const [selectedReason, setSelectedReason] = useState('new-tool');
   const [customReason, setCustomReason] = useState('');
   const [selectedAccountKey, setSelectedAccountKey] = useState('');
@@ -129,6 +129,4 @@ const AccountRegisterModal = ({ open, onOpenChange, allRows, service, serviceNam
       </DialogContent>
     </Dialog>
   );
-};
-
-export default AccountRegisterModal;
+}

@@ -55,11 +55,11 @@ const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMap
 type ModalType = 'edit' | 'register' | null;
 
 /** 연동 계정 정보 섹션 공통 베이스 */
-const ConnectedAccountsSectionBase = ({
+export default function ConnectedAccountsSectionBase({
   variant,
   sectionGapClassName,
   accountInfoMap,
-}: ConnectedAccountsSectionBaseProps) => {
+}: ConnectedAccountsSectionBaseProps) {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [selectedRow, setSelectedRow] = useState<MemberIntegrationRow | null>(null);
   const [serviceName, setServiceName] = useState('');
@@ -158,6 +158,4 @@ const ConnectedAccountsSectionBase = ({
       )}
     </section>
   );
-};
-
-export default ConnectedAccountsSectionBase;
+}

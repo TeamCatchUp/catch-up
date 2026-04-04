@@ -20,7 +20,7 @@ interface SettingDropdownRowProps {
   onChange: (value: string) => void;
 }
 
-const SettingDropdownRow = ({ label, description, options, value, onChange }: SettingDropdownRowProps) => {
+export default function SettingDropdownRow({ label, description, options, value, onChange }: SettingDropdownRowProps) {
   const [open, setOpen] = useState(false);
   const selectedLabel = options.find((o) => o.value === value)?.label ?? '';
 
@@ -59,6 +59,4 @@ const SettingDropdownRow = ({ label, description, options, value, onChange }: Se
       </DropdownMenu>
     </div>
   );
-};
-
-export default SettingDropdownRow;
+}

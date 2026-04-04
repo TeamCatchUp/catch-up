@@ -28,7 +28,7 @@ const getVisiblePages = (currentPage: number, totalPages: number) => {
 };
 
 /** 공통 숫자 페이지네이션 */
-const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) => {
+export default function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) {
   const visiblePages = getVisiblePages(currentPage, totalPages);
 
   return (
@@ -73,6 +73,4 @@ const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) 
       </button>
     </div>
   );
-};
-
-export default Pagination;
+}

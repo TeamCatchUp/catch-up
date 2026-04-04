@@ -78,7 +78,8 @@ const IntegrationAccountsSection = ({
 );
 
 /** 계정관리 상세 패널 */
-const AccountDetailPanel = ({ log }: { log: AuditLog }) => (
+export default function AccountDetailPanel({ log }: { log: AuditLog }) {
+  return (
   <div className="flex h-full flex-col gap-4">
     {/* 프로필 + 이름 */}
     <div className="flex items-center gap-3">
@@ -100,6 +101,5 @@ const AccountDetailPanel = ({ log }: { log: AuditLog }) => (
       <IntegrationAccountsSection name={log.name} email={log.email} accountIds={log.accountIds} />
     </div>
   </div>
-);
-
-export default AccountDetailPanel;
+  );
+}

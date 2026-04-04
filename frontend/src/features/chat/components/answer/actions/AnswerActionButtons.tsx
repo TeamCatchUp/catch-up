@@ -16,7 +16,7 @@ const TOOLTIP_LABELS: Record<string, string> = {
   Rotate: '다시 시도하기',
 };
 
-const AnswerActionButtons = ({
+export default function AnswerActionButtons({
   icons,
   messageId,
   answerContent,
@@ -28,7 +28,7 @@ const AnswerActionButtons = ({
   setFeedbackVisibleMap,
   onRetry,
   onFeedbackSubmitted,
-}: AnswerActionButtonsProps) => {
+}: AnswerActionButtonsProps) {
   const queryClient = useQueryClient();
   const [bookmarked, setBookmarked] = useState(isSaved ?? false);
 
@@ -160,6 +160,4 @@ const AnswerActionButtons = ({
       })}
     </div>
   );
-};
-
-export default AnswerActionButtons;
+}

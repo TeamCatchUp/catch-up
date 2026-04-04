@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { POLICY_ITEMS } from '@/features/mypage/help/constants/helpSections';
 import ArrowRight from '@/public/icons/icon/arrow_right.svg';
 
-const TermsPolicySection = () => {
+export default function TermsPolicySection() {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
@@ -25,6 +25,4 @@ const TermsPolicySection = () => {
       </div>
     </section>
   );
-};
-
-export default TermsPolicySection;
+}

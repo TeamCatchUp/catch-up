@@ -9,7 +9,7 @@ interface EmbeddingActiveCardProps {
   connector: SyncConnector;
 }
 
-const EmbeddingActiveCard = ({ items, connector }: EmbeddingActiveCardProps) => {
+export default function EmbeddingActiveCard({ items, connector }: EmbeddingActiveCardProps) {
   const ResourceIcon = RESOURCE_ICONS[connector];
 
   return (
@@ -38,6 +38,4 @@ const EmbeddingActiveCard = ({ items, connector }: EmbeddingActiveCardProps) => 
       </div>
     </div>
   );
-};
-
-export default EmbeddingActiveCard;
+}

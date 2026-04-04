@@ -21,7 +21,7 @@ interface RecentQuestionsModalProps {
 
 type SearchQueryWithRawDate = SearchQuery & { rawDate: Date };
 
-const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
+export default function RecentQuestionsModal({ onClose }: RecentQuestionsModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { data, isLoading } = useQuery(chatQueries.recentQueries());
@@ -86,6 +86,4 @@ const RecentQuestionsModal = ({ onClose }: RecentQuestionsModalProps) => {
       )}
     </div>
   );
-};
-
-export default RecentQuestionsModal;
+}

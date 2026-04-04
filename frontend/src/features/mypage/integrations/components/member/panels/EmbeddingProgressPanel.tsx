@@ -72,7 +72,7 @@ const ConnectorStatusIcon = ({ status, isSelected }: { status: ConnectorEmbeddin
   }
 };
 
-const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading, historyByConnector }: EmbeddingProgressPanelProps) => {
+export default function EmbeddingProgressPanel({ progresses, buttonStates, isInitialLoading, historyByConnector }: EmbeddingProgressPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedConnector, setSelectedConnector] = useState<SyncConnector>(
     CONNECTOR_ORDER.find((c) => progresses.some((p) => p.connector === c)) ?? CONNECTOR_ORDER[0],
@@ -190,6 +190,4 @@ const EmbeddingProgressPanel = ({ progresses, buttonStates, isInitialLoading, hi
       </div>
     </div>
   );
-};
-
-export default EmbeddingProgressPanel;
+}

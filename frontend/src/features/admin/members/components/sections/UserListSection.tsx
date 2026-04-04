@@ -34,7 +34,7 @@ interface UserListSectionProps {
 }
 
 /** 이용자 목록 섹션 */
-const UserListSection = ({ searchTerm }: UserListSectionProps) => {
+export default function UserListSection({ searchTerm }: UserListSectionProps) {
   const { data } = useQuery(adminMembersQueries.list());
 
   const deactivateMutation = useDeactivateUserMutation();
@@ -162,6 +162,4 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
       </div>
     </section>
   );
-};
-
-export default UserListSection;
+}

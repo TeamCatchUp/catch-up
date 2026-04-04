@@ -37,7 +37,7 @@ const usePrefersReducedMotion = () => {
   return prefersReducedMotion;
 };
 
-const RagSidebar = ({ currentQA, isLoading, isError }: RagSidebarProps) => {
+export default function RagSidebar({ currentQA, isLoading, isError }: RagSidebarProps) {
   const [displayQA, setDisplayQA] = useState<QAPair | undefined>(currentQA);
   const [isVisible, setIsVisible] = useState(true);
   const transitionTimerRef = useRef<number | null>(null);
@@ -114,6 +114,4 @@ const RagSidebar = ({ currentQA, isLoading, isError }: RagSidebarProps) => {
       </div>
     </div>
   );
-};
-
-export default RagSidebar;
+}

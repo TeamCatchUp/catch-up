@@ -17,7 +17,7 @@ import AccountDetailPanel from '../account/AccountDetailPanel';
 import AuditLogFilterBar from '../AuditLogFilterBar';
 
 /** 계정관리 감사 로그 섹션 */
-const AccountLogSection = () => {
+export default function AccountLogSection() {
   const { data: logs = [] } = useQuery(auditLogsQueries.list());
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<AuditSortKey>('newest');
@@ -168,6 +168,4 @@ const AccountLogSection = () => {
       </div>
     </div>
   );
-};
-
-export default AccountLogSection;
+}

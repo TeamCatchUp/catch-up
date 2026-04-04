@@ -7,7 +7,7 @@ const DotDivider = () => (
 );
 
 /** 자주 묻는 질문 (FAQ) */
-const Support1Content = () => {
+export default function Support1Content() {
   return (
     <div className="flex w-full flex-col gap-16">
       <DotDivider />
@@ -273,6 +273,4 @@ const Support1Content = () => {
       </section>
     </div>
   );
-};
-
-export default Support1Content;
+}

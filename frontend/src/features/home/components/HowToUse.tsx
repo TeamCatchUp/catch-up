@@ -25,7 +25,7 @@ const cardData = [
   },
 ];
 
-const HowToUse = () => {
+export default function HowToUse() {
   return (
     <section className="flex w-268 flex-col gap-4">
       <header className="flex items-center gap-3">
@@ -70,6 +70,4 @@ const HowToUse = () => {
       </ul>
     </section>
   );
-};
-
-export default HowToUse;
+}

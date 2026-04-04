@@ -11,7 +11,7 @@ interface CollapsibleQuestionTextProps {
   content: string;
 }
 
-const CollapsibleQuestionText = ({ content }: CollapsibleQuestionTextProps) => {
+export default function CollapsibleQuestionText({ content }: CollapsibleQuestionTextProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const measureRef = useRef<HTMLParagraphElement>(null);
   const isExpandable = useIsOverflowingLines({
@@ -54,6 +54,4 @@ const CollapsibleQuestionText = ({ content }: CollapsibleQuestionTextProps) => {
       )}
     </>
   );
-};
-
-export default CollapsibleQuestionText;
+}

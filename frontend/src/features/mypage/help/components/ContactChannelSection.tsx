@@ -3,7 +3,7 @@ import ArrowForward from '@/public/icons/icon/arrow_circle_right.svg';
 import CommentFilled from '@/public/icons/icon/comment_filled.svg';
 import { Button } from '@/shared/components/ui/button';
 
-const ContactChannelSection = () => {
+export default function ContactChannelSection() {
   return (
     <section className="flex w-full flex-col gap-3">
       <div className="flex items-end justify-between">
@@ -38,6 +38,4 @@ const ContactChannelSection = () => {
       </div>
     </section>
   );
-};
-
-export default ContactChannelSection;
+}

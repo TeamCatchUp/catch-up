@@ -14,7 +14,7 @@ interface SessionQuestionsModalProps {
   onSelect: (messageId: number) => void;
 }
 
-const SessionQuestionsModal = ({ sessionId, onClose, onSelect }: SessionQuestionsModalProps) => {
+export default function SessionQuestionsModal({ sessionId, onClose, onSelect }: SessionQuestionsModalProps) {
   const canLoadSessionQueries = isValidSessionId(sessionId);
 
   const modalRef = useRef<HTMLDivElement>(null);
@@ -84,6 +84,4 @@ const SessionQuestionsModal = ({ sessionId, onClose, onSelect }: SessionQuestion
       </div>
     </div>
   );
-};
-
-export default SessionQuestionsModal;
+}

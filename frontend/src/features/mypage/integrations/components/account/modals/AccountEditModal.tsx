@@ -28,14 +28,14 @@ interface AccountEditModalProps {
 }
 
 /** 계정 정보 수정 모달 */
-const AccountEditModal = ({
+export default function AccountEditModal({
   open,
   onOpenChange,
   selectedRow,
   allRows,
   service,
   serviceName,
-}: AccountEditModalProps) => {
+}: AccountEditModalProps) {
   const [selectedReason, setSelectedReason] = useState('not-my-account');
   const [customReason, setCustomReason] = useState('');
   const [selectedAccountKey, setSelectedAccountKey] = useState('');
@@ -164,6 +164,4 @@ const AccountEditModal = ({
       </DialogContent>
     </Dialog>
   );
-};
-
-export default AccountEditModal;
+}

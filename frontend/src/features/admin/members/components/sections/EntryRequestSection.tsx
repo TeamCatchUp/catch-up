@@ -28,7 +28,7 @@ interface EntryRequestSectionProps {
 }
 
 /** 입장 신청 목록 섹션 */
-const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
+export default function EntryRequestSection({ searchTerm }: EntryRequestSectionProps) {
   const { data: requests = [] } = useQuery(adminMembersQueries.requests());
   const decideMutation = useDecideRequestMutation();
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -204,6 +204,4 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
       </div>
     </section>
   );
-};
-
-export default EntryRequestSection;
+}

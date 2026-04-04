@@ -40,7 +40,7 @@ interface QuestionLogListSectionProps {
 }
 
 /** 이용자 질문 기록 — 서버사이드 필터 + 무한 스크롤 + 날짜별 그룹 리스트 섹션 */
-const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
+export default function QuestionLogListSection({ userId }: QuestionLogListSectionProps) {
   const sort = useQuestionLogFilterStore((s) => s.sort);
   const setSort = useQuestionLogFilterStore((s) => s.setSort);
   const period = useQuestionLogFilterStore((s) => s.period);
@@ -182,6 +182,4 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
       )}
     </div>
   );
-};
-
-export default QuestionLogListSection;
+}

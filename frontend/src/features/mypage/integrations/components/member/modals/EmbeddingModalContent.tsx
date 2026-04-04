@@ -10,7 +10,7 @@ export interface EmbeddingContentProps {
 }
 
 /** 임베딩 모달 항목 목록 (모든 서비스 공통) */
-const EmbeddingModalContent = ({ targets, selectedItems, onToggleItem }: EmbeddingContentProps) => {
+export default function EmbeddingModalContent({ targets, selectedItems, onToggleItem }: EmbeddingContentProps) {
   return (
     <div className="border-edge-assistive overflow-clip rounded-xl border">
       <div className="thin-scrollbar flex max-h-101 flex-col overflow-y-auto">
@@ -44,6 +44,4 @@ const EmbeddingModalContent = ({ targets, selectedItems, onToggleItem }: Embeddi
       </div>
     </div>
   );
-};
-
-export default EmbeddingModalContent;
+}

@@ -130,7 +130,7 @@ interface CsvUploadModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const CsvUploadModal = ({ open, onOpenChange }: CsvUploadModalProps) => {
+export default function CsvUploadModal({ open, onOpenChange }: CsvUploadModalProps) {
   const [files, setFiles] = useState<Record<VendorType, File | null>>({
     atlassian: null,
     github: null,
@@ -279,6 +279,4 @@ const CsvUploadModal = ({ open, onOpenChange }: CsvUploadModalProps) => {
       </DialogContent>
     </Dialog>
   );
-};
-
-export default CsvUploadModal;
+}

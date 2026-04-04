@@ -11,7 +11,8 @@ interface CheckboxIconProps {
 }
 
 /** Figma SVG 기반 체크박스 아이콘 (hover 시 원형 배경 효과) */
-const CheckboxIcon = ({ checked, className }: CheckboxIconProps) => (
+export default function CheckboxIcon({ checked, className }: CheckboxIconProps) {
+  return (
   <span
     className={cn(
       'inline-flex shrink-0 items-center justify-center rounded-full p-1 transition-colors',
@@ -24,6 +25,5 @@ const CheckboxIcon = ({ checked, className }: CheckboxIconProps) => (
       <CheckboxUnchecked className={cn('text-content-assistive shrink-0', className)} />
     )}
   </span>
-);
-
-export default CheckboxIcon;
+  );
+}

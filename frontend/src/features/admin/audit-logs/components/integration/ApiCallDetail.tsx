@@ -4,7 +4,7 @@ import { formatDate } from '../../utils/formatDate';
 import { getServiceIconCls, InfoRow, SERVICE_NAMES, ServiceIcon } from './Helpers';
 
 /** API 호출 상세 패널 */
-const ApiCallDetail = ({ log }: { log: AuditIntegrationLog }) => {
+export default function ApiCallDetail({ log }: { log: AuditIntegrationLog }) {
   const iconCls = getServiceIconCls(log.service);
 
   return (
@@ -49,6 +49,4 @@ const ApiCallDetail = ({ log }: { log: AuditIntegrationLog }) => {
       </div>
     </div>
   );
-};
-
-export default ApiCallDetail;
+}

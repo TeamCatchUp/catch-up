@@ -28,7 +28,7 @@ interface LimitReleaseDetailPanelProps {
   onReject: (id: string) => void;
 }
 
-const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseDetailPanelProps) => {
+export default function LimitReleaseDetailPanel({ request, onApprove, onReject }: LimitReleaseDetailPanelProps) {
   const [grantAmount, setGrantAmount] = useState('');
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
@@ -165,6 +165,4 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
       />
     </div>
   );
-};
-
-export default LimitReleaseDetailPanel;
+}

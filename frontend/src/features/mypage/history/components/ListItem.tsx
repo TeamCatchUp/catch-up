@@ -19,7 +19,7 @@ interface HistoryListItemProps {
  * 채팅 아이콘, 질문 텍스트, 저장 라벨, 날짜를 표시하며
  * 클릭 시 해당 채팅 세션으로 이동한다.
  */
-const HistoryListItem = ({ item, group }: HistoryListItemProps) => {
+export default function HistoryListItem({ item, group }: HistoryListItemProps) {
   const showDate = group !== 'today';
   const showSavedLabel = item.isSaved;
   const dateText = group === 'sevenDays' ? item.relativeDate : item.fullDate;
@@ -41,6 +41,4 @@ const HistoryListItem = ({ item, group }: HistoryListItemProps) => {
       )}
     </Link>
   );
-};
-
-export default HistoryListItem;
+}

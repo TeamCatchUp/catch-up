@@ -14,7 +14,7 @@ interface TutorialHeaderProps {
   currentLabel: string;
 }
 
-const TutorialHeader = ({ prevLabel, prevHref, currentLabel }: TutorialHeaderProps) => {
+export default function TutorialHeader({ prevLabel, prevHref, currentLabel }: TutorialHeaderProps) {
   const router = useRouter();
 
   return (
@@ -52,6 +52,4 @@ const TutorialHeader = ({ prevLabel, prevHref, currentLabel }: TutorialHeaderPro
       </div>
     </div>
   );
-};
-
-export default TutorialHeader;
+}

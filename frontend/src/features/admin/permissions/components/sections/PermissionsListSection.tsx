@@ -31,7 +31,7 @@ interface PermissionsListSectionProps {
 }
 
 /** 권한 목록 섹션 */
-const PermissionsListSection = ({
+export default function PermissionsListSection({
   searchTerm,
   onSearchTermChange,
   roleFilter,
@@ -45,7 +45,7 @@ const PermissionsListSection = ({
   onRetry,
   onChangeRoleClick,
   onRoleChangeClick,
-}: PermissionsListSectionProps) => {
+}: PermissionsListSectionProps) {
   return (
     <section className="flex w-full flex-col gap-3">
       <div className="flex items-end justify-between">
@@ -113,6 +113,4 @@ const PermissionsListSection = ({
       </div>
     </section>
   );
-};
-
-export default PermissionsListSection;
+}

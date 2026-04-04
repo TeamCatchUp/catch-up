@@ -23,7 +23,7 @@ interface UserSelectSectionProps {
 }
 
 /** 이용자 질문 기록 — 이용자 선택 섹션 */
-const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSectionProps) => {
+export default function UserSelectSection({ users, selectedUserId, onUserChange }: UserSelectSectionProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -113,6 +113,4 @@ const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSe
       <p className="text-label-xsmall text-content-alternative">선택한 이용자의 활동 내역이 표시됩니다.</p>
     </div>
   );
-};
-
-export default UserSelectSection;
+}

@@ -31,13 +31,13 @@ interface AccountSelectDropdownProps {
   onToggleUnused: (unused: boolean) => void;
 }
 
-const AccountSelectDropdown = ({
+export default function AccountSelectDropdown({
   status,
   options,
   selectedAccount,
   onSelect,
   onToggleUnused,
-}: AccountSelectDropdownProps) => {
+}: AccountSelectDropdownProps) {
   const [open, setOpen] = useState(false);
   const [localUnused, setLocalUnused] = useState(status === '미사용');
   const isUnused = !selectedAccount && localUnused;
@@ -137,6 +137,4 @@ const AccountSelectDropdown = ({
       </PopoverContent>
     </Popover>
   );
-};
-
-export default AccountSelectDropdown;
+}

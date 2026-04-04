@@ -20,7 +20,7 @@ const PAGE_SIZE = 10;
 const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence'];
 
 /** 관리자 이용자 연동 탭 섹션 */
-const IntegrationsSection = () => {
+export default function IntegrationsSection() {
   const queryClient = useQueryClient();
   const [filterType, setFilterType] = useState<SyncFilterType>('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -107,6 +107,4 @@ const IntegrationsSection = () => {
       />
     </section>
   );
-};
-
-export default IntegrationsSection;
+}

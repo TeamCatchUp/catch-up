@@ -77,7 +77,7 @@ const SETTINGS_SECTIONS_BY_ROLE: Record<UserRole, SettingsSection[]> = {
 /**
  * 좌측 설정 패널 렌더링 및 메뉴 라우팅을 처리
  */
-const SettingsPanel = () => {
+export default function SettingsPanel() {
   const pathname = usePathname();
   const router = useRouter();
   const userRole = useUserStore((state) => state.user?.role);
@@ -121,6 +121,4 @@ const SettingsPanel = () => {
       ))}
     </div>
   );
-};
-
-export default SettingsPanel;
+}

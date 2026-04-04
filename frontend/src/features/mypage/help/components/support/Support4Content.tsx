@@ -7,7 +7,7 @@ const DotDivider = () => (
 );
 
 /** 오류 및 장애 */
-const Support4Content = () => {
+export default function Support4Content() {
   return (
     <div className="flex w-full flex-col gap-16">
       {/* 도입부 */}
@@ -192,6 +192,4 @@ const Support4Content = () => {
       </section>
     </div>
   );
-};
-
-export default Support4Content;
+}

@@ -12,7 +12,7 @@ interface ConnectedAccountCardProps {
 }
 
 /** 연동 계정 정보를 표시하는 공통 카드 */
-const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: ConnectedAccountCardProps) => {
+export default function ConnectedAccountCard({ account, accountInfo, variant, onEditClick }: ConnectedAccountCardProps) {
   const { service, name, Icon } = account;
   const isAdmin = variant === 'admin';
   const isConnected =
@@ -89,6 +89,4 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
       )}
     </article>
   );
-};
-
-export default ConnectedAccountCard;
+}

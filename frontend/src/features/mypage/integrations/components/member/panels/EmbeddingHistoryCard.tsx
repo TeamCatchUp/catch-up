@@ -19,7 +19,7 @@ interface EmbeddingHistoryCardProps {
   gapByTargetId?: Map<string, GapSummary>;
 }
 
-const EmbeddingHistoryCard = ({ items, connector, isInitialLoading, gapByTargetId }: EmbeddingHistoryCardProps) => {
+export default function EmbeddingHistoryCard({ items, connector, isInitialLoading, gapByTargetId }: EmbeddingHistoryCardProps) {
   const [filter, setFilter] = useState<HistoryFilter>('all');
   const [retryTarget, setRetryTarget] = useState<AdminConnectorTargetRangeResponse | null>(null);
 
@@ -220,6 +220,4 @@ const EmbeddingHistoryCard = ({ items, connector, isInitialLoading, gapByTargetI
       />
     </>
   );
-};
-
-export default EmbeddingHistoryCard;
+}

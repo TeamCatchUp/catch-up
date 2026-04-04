@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { SUPPORT_CARDS } from '@/features/mypage/help/constants/helpSections';
 import { Badge } from '@/shared/components/ui/badge';
 
-const AccountSupportSection = () => {
+export default function AccountSupportSection() {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
@@ -41,6 +41,4 @@ const AccountSupportSection = () => {
       </ul>
     </section>
   );
-};
-
-export default AccountSupportSection;
+}

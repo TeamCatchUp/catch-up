@@ -7,7 +7,7 @@ interface TaskManagePartProps {
   manager: string;
 }
 
-const TaskManagePart = ({ depart, manager }: TaskManagePartProps) => {
+export default function TaskManagePart({ depart, manager }: TaskManagePartProps) {
   return (
     <div className="flex flex-col">
       <div className="flex flex-col gap-1.25">
@@ -32,6 +32,4 @@ const TaskManagePart = ({ depart, manager }: TaskManagePartProps) => {
       </div>
     </div>
   );
-};
-
-export default TaskManagePart;
+}

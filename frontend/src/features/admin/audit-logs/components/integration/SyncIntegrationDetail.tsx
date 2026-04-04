@@ -6,7 +6,7 @@ import { formatDate } from '../../utils/formatDate';
 import { getServiceIconCls, InfoRow, ResourceIcon, SERVICE_NAMES, ServiceIcon, StatusBadgeRow } from './Helpers';
 
 /** 동기화/연동 상세 패널 */
-const SyncIntegrationDetail = ({ log }: { log: AuditIntegrationLog }) => {
+export default function SyncIntegrationDetail({ log }: { log: AuditIntegrationLog }) {
   const iconCls = getServiceIconCls(log.service);
 
   return (
@@ -63,6 +63,4 @@ const SyncIntegrationDetail = ({ log }: { log: AuditIntegrationLog }) => {
       </div>
     </div>
   );
-};
-
-export default SyncIntegrationDetail;
+}

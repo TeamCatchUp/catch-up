@@ -50,7 +50,7 @@ interface EmbeddingModalProps {
 }
 
 /** 임베딩 모달 (셸) */
-const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }: EmbeddingModalProps) => {
+export default function EmbeddingModal({ open, onOpenChange, service, serviceName, onJobStart }: EmbeddingModalProps) {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('3년');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -277,6 +277,4 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
       </DialogContent>
     </Dialog>
   );
-};
-
-export default EmbeddingModal;
+}

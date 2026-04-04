@@ -14,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
 
-const SideNavBar = () => {
+export default function SideNavBar() {
   const pathname = usePathname();
   const router = useRouter();
   const isRagAnswerPage = pathname.startsWith('/chat');
@@ -102,6 +102,4 @@ const SideNavBar = () => {
       </nav>
     </>
   );
-};
-
-export default SideNavBar;
+}

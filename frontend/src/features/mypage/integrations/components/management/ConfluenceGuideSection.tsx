@@ -5,7 +5,7 @@ import IconAT from '@/public/icons/logo/atlassian.svg';
 import { ATLASSIAN_PROFILE_URL, CONFLUENCE_GUIDE_IMAGES } from '../../constants/integrationsConfig';
 
 /** Confluence (Atlassian) 연동 가이드 섹션 */
-const ConfluenceGuideSection = () => {
+export default function ConfluenceGuideSection() {
   return (
     <div className="border-edge-neutral bg-fill-normal flex flex-col gap-10 overflow-clip rounded-xl border p-6">
       {/* 인트로 */}
@@ -94,6 +94,4 @@ const ConfluenceGuideSection = () => {
       <p className="text-label-small text-content-strong">팀이 커져도, 기획의 맥락은 그대로 남습니다.</p>
     </div>
   );
-};
-
-export default ConfluenceGuideSection;
+}

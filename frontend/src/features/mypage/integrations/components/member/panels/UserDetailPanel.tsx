@@ -12,7 +12,7 @@ interface UserDetailPanelProps {
 }
 
 /** 이용자 연동 우측 상세 패널 */
-const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
+export default function UserDetailPanel({ selectedRow }: UserDetailPanelProps) {
   if (!selectedRow) {
     return (
       <section className="bg-fill-normal overflow-clip pt-5 pb-5 pl-6">
@@ -96,6 +96,4 @@ const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
       </div>
     </section>
   );
-};
-
-export default UserDetailPanel;
+}

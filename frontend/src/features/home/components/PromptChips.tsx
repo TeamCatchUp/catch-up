@@ -13,7 +13,7 @@ interface PromptChipsProps {
   selectedIndex: number | null;
 }
 
-const PromptChips = ({ onChipClick, selectedIndex }: PromptChipsProps) => {
+export default function PromptChips({ onChipClick, selectedIndex }: PromptChipsProps) {
   const {
     scrollRef,
     canScrollLeft,
@@ -95,6 +95,4 @@ const PromptChips = ({ onChipClick, selectedIndex }: PromptChipsProps) => {
       </div>
     </section>
   );
-};
-
-export default PromptChips;
+}

@@ -22,7 +22,7 @@ interface AccountSelectorPopoverProps {
 }
 
 /** 계정 선택 드롭다운 (Popover + Command) */
-const AccountSelectorPopover = ({
+export default function AccountSelectorPopover({
   open,
   onOpenChange,
   options,
@@ -31,7 +31,8 @@ const AccountSelectorPopover = ({
   searchValue,
   onSearchValueChange,
   onSelect,
-}: AccountSelectorPopoverProps) => (
+}: AccountSelectorPopoverProps) {
+  return (
   <Popover open={open} onOpenChange={onOpenChange}>
     <PopoverTrigger asChild>
       <button
@@ -106,6 +107,5 @@ const AccountSelectorPopover = ({
       </Command>
     </PopoverContent>
   </Popover>
-);
-
-export default AccountSelectorPopover;
+  );
+}

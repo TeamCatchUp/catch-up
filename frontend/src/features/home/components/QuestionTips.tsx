@@ -13,7 +13,7 @@ interface QuestionTipsProps {
   onTipClick: (index: number) => void;
 }
 
-const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
+export default function QuestionTips({ onTipClick }: QuestionTipsProps) {
   const {
     scrollRef,
     canScrollLeft,
@@ -99,6 +99,4 @@ const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
       </div>
     </section>
   );
-};
-
-export default QuestionTips;
+}

@@ -21,7 +21,7 @@ interface FilterDropdownProps<T extends string> {
 }
 
 /** 정렬·기간 등 필터 옵션을 선택하는 제네릭 드롭다운 */
-const FilterDropdown = <T extends string>({ options, value, onChange }: FilterDropdownProps<T>) => {
+export default function FilterDropdown<T extends string>({ options, value, onChange }: FilterDropdownProps<T>) {
   const [open, setOpen] = useState(false);
 
   const selectedLabel = useMemo(() => options.find((o) => o.value === value)?.label ?? '', [options, value]);
@@ -54,6 +54,4 @@ const FilterDropdown = <T extends string>({ options, value, onChange }: FilterDr
       </DropdownMenuContent>
     </DropdownMenu>
   );
-};
-
-export default FilterDropdown;
+}

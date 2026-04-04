@@ -13,7 +13,7 @@ const DEFAULT_TAB: AdminIntegrationTab = 'my';
 const isValidTab = (v: string | null): v is AdminIntegrationTab => v === 'my' || v === 'member';
 
 /** 관리자 협업툴 연동 화면 */
-const AdminIntegrationsView = () => {
+export default function AdminIntegrationsView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
@@ -80,6 +80,4 @@ const AdminIntegrationsView = () => {
       </div>
     </section>
   );
-};
-
-export default AdminIntegrationsView;
+}

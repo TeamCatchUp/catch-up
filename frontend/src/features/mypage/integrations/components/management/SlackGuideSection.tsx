@@ -5,7 +5,7 @@ import IconSlack from '@/public/icons/logo/Slack.svg';
 import { SLACK_GUIDE_IMAGES } from '../../constants/integrationsConfig';
 
 /** Slack 연동 가이드 섹션 */
-const SlackGuideSection = () => {
+export default function SlackGuideSection() {
   return (
     <div className="border-edge-neutral bg-fill-normal flex flex-col gap-10 overflow-clip rounded-xl border p-6">
       {/* 인트로 */}
@@ -76,6 +76,4 @@ const SlackGuideSection = () => {
       <p className="text-label-small text-content-strong">대화는 흘러가도, 팀이 합의한 지식은 남겨둡니다.</p>
     </div>
   );
-};
-
-export default SlackGuideSection;
+}

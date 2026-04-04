@@ -28,7 +28,7 @@ interface RagInputProps {
   onNewMessage: () => void;
 }
 
-const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: RagInputProps) => {
+export default function RagInput({ filters, isLoading, onSendMessage, onStop, onNewMessage }: RagInputProps) {
   const [newInput, setNewInput] = useState('');
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -237,6 +237,4 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
       </div>
     </div>
   );
-};
-
-export default RagInput;
+}

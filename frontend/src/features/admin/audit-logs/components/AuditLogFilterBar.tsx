@@ -24,14 +24,15 @@ interface AuditLogFilterBarProps {
 }
 
 /** 감사 로그 공통 필터바 (정렬 + 날짜 범위 + 검색) */
-const AuditLogFilterBar = ({
+export default function AuditLogFilterBar({
   sortKey,
   onSortChange,
   dateRange,
   onDateRangeChange,
   searchTerm,
   onSearchTermChange,
-}: AuditLogFilterBarProps) => (
+}: AuditLogFilterBarProps) {
+  return (
   <div className="flex items-center justify-between">
     <div className="flex items-center gap-2">
       {/* 정렬 드롭다운 */}
@@ -76,6 +77,5 @@ const AuditLogFilterBar = ({
       />
     </label>
   </div>
-);
-
-export default AuditLogFilterBar;
+  );
+}

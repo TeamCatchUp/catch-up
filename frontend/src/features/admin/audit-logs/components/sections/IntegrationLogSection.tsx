@@ -19,7 +19,7 @@ import { getServiceIconCls, ServiceIcon } from '../integration/Helpers';
 import SyncIntegrationDetail from '../integration/SyncIntegrationDetail';
 
 /** 연동 감사 로그 섹션 */
-const IntegrationLogSection = () => {
+export default function IntegrationLogSection() {
   const { data: logs = [] } = useQuery(auditLogsQueries.integrations());
 
   const {
@@ -166,6 +166,4 @@ const IntegrationLogSection = () => {
       </div>
     </div>
   );
-};
-
-export default IntegrationLogSection;
+}

@@ -17,7 +17,7 @@ const JOB_LEVEL_LABEL: Record<string, string> = {
 /**
  * 마이페이지 프로필 화면을 렌더링
  */
-const ProfilePage = () => {
+export default function ProfilePage() {
   const { user } = useUserStore();
   const queryClient = useQueryClient();
   const isAdmin = user?.role === 'admin';
@@ -124,6 +124,4 @@ const ProfilePage = () => {
       </div>
     </section>
   );
-};
-
-export default ProfilePage;
+}

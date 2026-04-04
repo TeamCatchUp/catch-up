@@ -7,7 +7,7 @@ const DotDivider = () => (
 );
 
 /** 권한과 접근 문제 */
-const Support3Content = () => {
+export default function Support3Content() {
   return (
     <div className="flex w-full flex-col gap-16">
       {/* 도입부 */}
@@ -107,6 +107,4 @@ const Support3Content = () => {
       </section>
     </div>
   );
-};
-
-export default Support3Content;
+}

@@ -17,7 +17,7 @@ import type { LimitReleaseRequest, LimitReleaseTableRow } from '../../types/toke
 import LimitReleaseDetailPanel from './LimitReleaseDetailPanel';
 
 /** 제한 해제 요청 섹션 */
-const LimitReleaseSection = () => {
+export default function LimitReleaseSection() {
   const { data: requests = [] } = useQuery(tokenUsageQueries.limitReleaseRequests());
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -251,6 +251,4 @@ const LimitReleaseSection = () => {
       />
     </div>
   );
-};
-
-export default LimitReleaseSection;
+}

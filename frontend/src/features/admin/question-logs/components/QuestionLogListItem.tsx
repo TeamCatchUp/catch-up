@@ -12,7 +12,7 @@ interface QuestionLogListItemProps {
 }
 
 /** 질문 로그 리스트 행 */
-const QuestionLogListItem = ({ item, group, userId }: QuestionLogListItemProps) => {
+export default function QuestionLogListItem({ item, group, userId }: QuestionLogListItemProps) {
   const showDate = group !== 'today';
   const showSavedLabel = item.isSaved;
   const dateText = group === 'sevenDays' ? item.relativeDate : item.fullDate;
@@ -34,6 +34,4 @@ const QuestionLogListItem = ({ item, group, userId }: QuestionLogListItemProps) 
       )}
     </Link>
   );
-};
-
-export default QuestionLogListItem;
+}

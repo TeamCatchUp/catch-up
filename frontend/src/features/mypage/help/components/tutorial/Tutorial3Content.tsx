@@ -14,7 +14,7 @@ const ExampleBox = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
-const Tutorial3Content = () => {
+export default function Tutorial3Content() {
   return (
     <div className="flex w-full flex-col gap-16">
       {/* 도입부 */}
@@ -236,6 +236,4 @@ const Tutorial3Content = () => {
       </section>
     </div>
   );
-};
-
-export default Tutorial3Content;
+}
