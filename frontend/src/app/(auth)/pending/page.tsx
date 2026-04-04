@@ -41,9 +41,7 @@ export default function PendingPage() {
             </div>
 
             <div className="flex min-w-80 flex-col gap-2.5">
-              <p className="text-body-medium text-content-alternative">
-                승인이 완료되면 바로 알려드릴게요.
-              </p>
+              <p className="text-body-medium text-content-alternative">승인이 완료되면 바로 알려드릴게요.</p>
               <Button variant="box-solid-primary" size="lg" className="h-11.5 w-full" onClick={handleRequestApproval}>
                 관리자에게 승인 요청하기
               </Button>

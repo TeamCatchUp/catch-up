@@ -19,10 +19,7 @@ export interface GapSummary {
  * 히스토리의 실패 항목에서 event_id를 추출하여 gap API를 호출한다.
  */
 export const useEmbeddingGaps = (failedItems: AdminConnectorTargetRangeResponse[]) => {
-  const targets = useMemo(
-    () => failedItems.filter((item) => item.event_id),
-    [failedItems],
-  );
+  const targets = useMemo(() => failedItems.filter((item) => item.event_id), [failedItems]);
 
   const gapQueries = useQueries({
     queries: targets.map((item) => syncRecordGapsOptions(item.event_id)),

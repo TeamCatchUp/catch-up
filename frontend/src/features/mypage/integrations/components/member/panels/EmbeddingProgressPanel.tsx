@@ -72,7 +72,12 @@ const ConnectorStatusIcon = ({ status, isSelected }: { status: ConnectorEmbeddin
   }
 };
 
-export default function EmbeddingProgressPanel({ progresses, buttonStates, isInitialLoading, historyByConnector }: EmbeddingProgressPanelProps) {
+export default function EmbeddingProgressPanel({
+  progresses,
+  buttonStates,
+  isInitialLoading,
+  historyByConnector,
+}: EmbeddingProgressPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedConnector, setSelectedConnector] = useState<SyncConnector>(
     CONNECTOR_ORDER.find((c) => progresses.some((p) => p.connector === c)) ?? CONNECTOR_ORDER[0],
@@ -176,9 +181,7 @@ export default function EmbeddingProgressPanel({ progresses, buttonStates, isIni
 
           {/* 우측: 두 개의 독립 카드 */}
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-            {activeItems.length > 0 && (
-              <EmbeddingActiveCard items={activeItems} connector={selectedConnector} />
-            )}
+            {activeItems.length > 0 && <EmbeddingActiveCard items={activeItems} connector={selectedConnector} />}
             <EmbeddingHistoryCard
               items={historyItems}
               connector={selectedConnector}

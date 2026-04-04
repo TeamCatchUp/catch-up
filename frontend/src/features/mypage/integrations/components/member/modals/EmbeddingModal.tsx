@@ -92,7 +92,8 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
   };
 
   const filteredTargets = useMemo(
-    () => (searchQuery ? targets.filter((t) => t.display_name.toLowerCase().includes(searchQuery.toLowerCase())) : targets),
+    () =>
+      searchQuery ? targets.filter((t) => t.display_name.toLowerCase().includes(searchQuery.toLowerCase())) : targets,
     [targets, searchQuery],
   );
 
@@ -217,11 +218,7 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
                     {selectedItems.size > 0 && (
                       <span className="text-body-small text-content-primary">{selectedItems.size}개 선택됨</span>
                     )}
-                    <button
-                      type="button"
-                      onClick={toggleAll}
-                      className="flex cursor-pointer items-center gap-0.5"
-                    >
+                    <button type="button" onClick={toggleAll} className="flex cursor-pointer items-center gap-0.5">
                       <CheckboxIcon checked={isAllSelected} className="size-5" />
                       <span className="text-body-small text-content-normal whitespace-nowrap">전체 선택하기</span>
                     </button>
@@ -253,7 +250,11 @@ export default function EmbeddingModal({ open, onOpenChange, service, serviceNam
                     </div>
                   </div>
                 ) : (
-                  <EmbeddingModalContent targets={filteredTargets} selectedItems={selectedItems} onToggleItem={toggleItem} />
+                  <EmbeddingModalContent
+                    targets={filteredTargets}
+                    selectedItems={selectedItems}
+                    onToggleItem={toggleItem}
+                  />
                 )}
               </div>
             </>

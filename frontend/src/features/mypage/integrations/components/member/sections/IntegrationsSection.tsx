@@ -71,8 +71,18 @@ export default function IntegrationsSection() {
   return (
     <section className="flex w-full flex-col gap-8">
       <div className="flex flex-col gap-3">
-        <StatusCardsSection cards={cards} buttonStates={buttonStates} onJobStart={handleJobStart} isInitialLoading={isInitialLoading} />
-        <EmbeddingProgressPanel progresses={progresses} buttonStates={buttonStates} isInitialLoading={isInitialLoading} historyByConnector={historyByConnector} />
+        <StatusCardsSection
+          cards={cards}
+          buttonStates={buttonStates}
+          onJobStart={handleJobStart}
+          isInitialLoading={isInitialLoading}
+        />
+        <EmbeddingProgressPanel
+          progresses={progresses}
+          buttonStates={buttonStates}
+          isInitialLoading={isInitialLoading}
+          historyByConnector={historyByConnector}
+        />
       </div>
       <UsersStatusSection
         total={total}

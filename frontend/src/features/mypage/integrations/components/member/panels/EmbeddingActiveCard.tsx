@@ -23,7 +23,10 @@ export default function EmbeddingActiveCard({ items, connector }: EmbeddingActiv
       {/* 아이템 리스트 */}
       <div className="thin-scrollbar flex flex-col overflow-y-auto">
         {items.map((item) => (
-          <div key={item.targetId} className="border-edge-assistive flex h-14 shrink-0 items-center gap-4 border-b px-4 last:border-b-0">
+          <div
+            key={item.targetId}
+            className="border-edge-assistive flex h-14 shrink-0 items-center gap-4 border-b px-4 last:border-b-0"
+          >
             <div className="border-edge-normal bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
               <ResourceIcon className="size-5" />
             </div>

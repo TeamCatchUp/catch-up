@@ -22,9 +22,7 @@ export default function Login() {
             <h1 className="text-display-large text-content-strong w-full">환영합니다!</h1>
 
             <div className="flex w-full min-w-80 flex-col gap-2.5">
-              <p className="text-body-medium text-content-alternative">
-                소속 조직의 계정으로 안전하게 로그인하세요.
-              </p>
+              <p className="text-body-medium text-content-alternative">소속 조직의 계정으로 안전하게 로그인하세요.</p>
               <Button variant="box-solid-primary" size="lg" className="h-11.5 w-full" onClick={handleOAuthLogin}>
                 SSO 통합 로그인하기
               </Button>

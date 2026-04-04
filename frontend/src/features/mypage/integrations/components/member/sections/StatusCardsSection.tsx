@@ -19,7 +19,12 @@ interface StatusCardsSectionProps {
 }
 
 /** 이용자 연동 상단 계정 등록 카드 섹션 */
-export default function StatusCardsSection({ cards, buttonStates, onJobStart, isInitialLoading }: StatusCardsSectionProps) {
+export default function StatusCardsSection({
+  cards,
+  buttonStates,
+  onJobStart,
+  isInitialLoading,
+}: StatusCardsSectionProps) {
   const [embeddingModal, setEmbeddingModal] = useState<{
     open: boolean;
     service: IntegrationService;

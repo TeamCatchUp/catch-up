@@ -37,9 +37,7 @@ export default function InactivePage() {
               <div className="border-edge-assistive bg-fill-primary-assistive shrink-0 rounded-full border p-2">
                 <ErrorIcon className="size-6" />
               </div>
-              <h1 className="text-display-large text-content-strong whitespace-nowrap">
-                비활성화 된 계정이에요.
-              </h1>
+              <h1 className="text-display-large text-content-strong whitespace-nowrap">비활성화 된 계정이에요.</h1>
             </div>
 
             <div className="flex min-w-80 flex-col gap-2.5">

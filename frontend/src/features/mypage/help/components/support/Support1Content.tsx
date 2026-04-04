@@ -66,8 +66,8 @@ export default function Support1Content() {
             </p>
             <br />
             <p>
-              Catch Up은 검색과 답변 생성을 위해 데이터를 &apos;참조&apos;할 뿐, 이를 외부 모델의 학습 데이터로
-              넘기지 않습니다.
+              Catch Up은 검색과 답변 생성을 위해 데이터를 &apos;참조&apos;할 뿐, 이를 외부 모델의 학습 데이터로 넘기지
+              않습니다.
               <br />
               모든 데이터 처리는 보안 가이드라인 안에서 안전하게 이루어집니다.
             </p>
@@ -87,17 +87,14 @@ export default function Support1Content() {
           <h3 className="text-heading-medium text-content-normal">Q. 질문을 어떻게 해야 정확한 답이 나오나요?</h3>
           <div className="text-label-medium text-content-normal">
             <p>
-              <strong>A.</strong> 길게 쓰지 않아도 됩니다. <strong>[단서 + 목적 + 기간]</strong> 이 3가지만
-              기억하세요.
+              <strong>A.</strong> 길게 쓰지 않아도 됩니다. <strong>[단서 + 목적 + 기간]</strong> 이 3가지만 기억하세요.
             </p>
           </div>
         </div>
 
         <div className="bg-fill-strong border-edge-assistive flex flex-col gap-3 rounded-xl border px-5 py-4">
           <p className="text-label-medium text-content-normal">[예시]</p>
-          <p className="text-label-medium text-content-normal">
-            - 나쁜 예: &quot;로그인 안 돼.&quot; (너무 막연함)
-          </p>
+          <p className="text-label-medium text-content-normal">- 나쁜 예: &quot;로그인 안 돼.&quot; (너무 막연함)</p>
           <div className="text-label-medium text-content-normal">
             <p>
               - 좋은 예: &quot;어제 배포 이후(기간) 소셜 로그인(단서)에서 발생하는 500 에러의 담당자가
@@ -118,8 +115,8 @@ export default function Support1Content() {
             <p>홈 화면 하단에 있는 카드들을 눌러보세요.</p>
             <br />
             <p>
-              &quot;유사 사례 찾기&quot;, &quot;배포 후 원인 좁히기&quot;, &quot;히스토리 파악&quot; 등 자주 쓰는
-              질문 템플릿이 자동으로 입력됩니다.
+              &quot;유사 사례 찾기&quot;, &quot;배포 후 원인 좁히기&quot;, &quot;히스토리 파악&quot; 등 자주 쓰는 질문
+              템플릿이 자동으로 입력됩니다.
               <br />
               빈칸만 내 상황에 맞게 톡톡 바꿔주시면 질문 완성입니다.
             </p>
@@ -166,8 +163,8 @@ export default function Support1Content() {
             </p>
             <br />
             <p>
-              &quot;최신 변경 사항이 포함됨&quot;, &quot;오류 원인 코드가 있음&quot;, &quot;최종 합의된
-              스레드&quot; 같은 이유를 먼저 훑어보세요.
+              &quot;최신 변경 사항이 포함됨&quot;, &quot;오류 원인 코드가 있음&quot;, &quot;최종 합의된 스레드&quot;
+              같은 이유를 먼저 훑어보세요.
               <br />그 이유가 납득된다면 굳이 원문을 열어보지 않고 넘어가셔도 됩니다.
             </p>
           </div>
@@ -225,8 +222,7 @@ export default function Support1Content() {
             </p>
             <br />
             <p>
-              굳이 무거운 뷰어를 띄우지 않고, 클릭 한 번으로 원본 툴에서 파일을 바로 열 수 있어 훨씬 빠르고
-              가볍습니다.
+              굳이 무거운 뷰어를 띄우지 않고, 클릭 한 번으로 원본 툴에서 파일을 바로 열 수 있어 훨씬 빠르고 가볍습니다.
             </p>
           </div>
         </div>
@@ -241,8 +237,8 @@ export default function Support1Content() {
             <p>이미지 자체를 분석하는 게 아니라, 그 이미지를 올릴 때 나눴던 대화나 이슈 내용을 바탕으로 찾습니다.</p>
             <br />
             <p>
-              &quot;로그인 화면 캡처&quot;라고 검색하면, 해당 스레드를 찾아 <strong>이미지 원본 링크</strong>를
-              드리는 식이죠.
+              &quot;로그인 화면 캡처&quot;라고 검색하면, 해당 스레드를 찾아 <strong>이미지 원본 링크</strong>를 드리는
+              식이죠.
               <br />
               이미지를 설명하는 주변 텍스트가 단서가 됩니다.
             </p>
@@ -250,9 +246,7 @@ export default function Support1Content() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-medium text-content-normal">
-            Q. 방금 올린 자료가 검색에 안 떠요. 고장인가요?
-          </h3>
+          <h3 className="text-heading-medium text-content-normal">Q. 방금 올린 자료가 검색에 안 떠요. 고장인가요?</h3>
           <div className="text-label-medium text-content-normal">
             <p>
               <strong>A.</strong> 잠깐 시간이 필요해요.
