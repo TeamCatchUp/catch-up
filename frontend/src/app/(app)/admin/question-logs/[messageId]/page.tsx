@@ -75,7 +75,7 @@ export default function QuestionLogDetailPage() {
       )}
 
       {detailQuery.isError && (
-        <div className="text-body-small py-4 text-red-50">
+        <div className="text-body-small py-4 text-status-destructive">
           질문 내용을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
         </div>
       )}

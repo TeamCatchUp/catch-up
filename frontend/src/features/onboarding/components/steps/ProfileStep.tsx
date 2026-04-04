@@ -68,7 +68,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
           {/* 이름 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-heading-medium text-content-normal flex items-center gap-1">
-              <span className="size-1.25 rounded-full bg-red-50" />
+              <span className="size-1.25 rounded-full bg-status-destructive" />
               이름을 적어주세요.
             </label>
             <Input
@@ -87,7 +87,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-1.5">
               <label className="text-heading-medium text-content-normal flex items-center gap-1">
-                <span className="size-1.25 rounded-full bg-red-50" />
+                <span className="size-1.25 rounded-full bg-status-destructive" />
                 직급을 알려주세요.
               </label>
               <Select
@@ -97,7 +97,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
                   if (errors.jobLevel) setErrors((p) => ({ ...p, jobLevel: false }));
                 }}
               >
-                <SelectTrigger className={`h-11.5 ${errors.jobLevel ? 'border-red-50' : ''}`}>
+                <SelectTrigger className={`h-11.5 ${errors.jobLevel ? 'border-status-destructive' : ''}`}>
                   <SelectValue placeholder="선택 안됨" />
                 </SelectTrigger>
                 <SelectContent position="popper" side="bottom" sideOffset={4} avoidCollisions={false}>
@@ -110,8 +110,8 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
               </Select>
               {errors.jobLevel && (
                 <div className="flex items-center gap-0.5">
-                  <ErrorIcon className="size-4 shrink-0 text-red-50" />
-                  <span className="text-label-xsmall text-red-50">직급을 선택해주세요.</span>
+                  <ErrorIcon className="size-4 shrink-0 text-status-destructive" />
+                  <span className="text-label-xsmall text-status-destructive">직급을 선택해주세요.</span>
                 </div>
               )}
             </div>
@@ -120,7 +120,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
             {!isAdmin && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-heading-medium text-content-normal flex items-center gap-1">
-                  <span className="size-1.25 rounded-full bg-red-50" />
+                  <span className="size-1.25 rounded-full bg-status-destructive" />
                   부서명을 알려주세요.
                 </label>
                 <Select
@@ -130,7 +130,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
                     if (errors.department) setErrors((p) => ({ ...p, department: false }));
                   }}
                 >
-                  <SelectTrigger className={`h-11.5 ${errors.department ? 'border-red-50' : ''}`}>
+                  <SelectTrigger className={`h-11.5 ${errors.department ? 'border-status-destructive' : ''}`}>
                     <SelectValue placeholder="선택 안됨" />
                   </SelectTrigger>
                   <SelectContent
@@ -149,8 +149,8 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
                 </Select>
                 {errors.department && (
                   <div className="flex items-center gap-0.5">
-                    <ErrorIcon className="size-4 shrink-0 text-red-50" />
-                    <span className="text-label-xsmall text-red-50">부서명을 선택해주세요.</span>
+                    <ErrorIcon className="size-4 shrink-0 text-status-destructive" />
+                    <span className="text-label-xsmall text-status-destructive">부서명을 선택해주세요.</span>
                   </div>
                 )}
               </div>

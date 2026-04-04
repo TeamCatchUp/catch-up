@@ -10,9 +10,9 @@ export const MEMBER_LIST_STATUS_BADGE_BASE_CLASS =
 
 /** 이용자 연동 표 상태 칩 색상 */
 export const getMemberStatusBadgeClassName = (status: MemberIntegrationStatus) => {
-  if (status === '완료') return 'bg-green-10 text-green-60';
+  if (status === '완료') return 'bg-accent-green-neutral text-accent-green';
   if (status === '미등록') return 'bg-violet-5 text-violet-50';
-  return 'bg-neutral-2 text-gray-50';
+  return 'bg-neutral-2 text-content-alternative';
 };
 
 /** 이용자 연동 표 정렬 옵션 */

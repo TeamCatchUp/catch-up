@@ -77,7 +77,7 @@ const InstructionInput = ({
       className={cn(
         'bg-fill-normal w-full rounded-xl border',
         !isActive && 'h-11.5',
-        isActive ? (isAtLimit ? 'border-red-50' : 'border-blue-40') : 'border-edge-neutral',
+        isActive ? (isAtLimit ? 'border-status-destructive' : 'border-edge-primary') : 'border-edge-neutral',
       )}
     >
       <div className={cn(isActive ? 'px-4.5 py-2.5' : 'p-3')}>
