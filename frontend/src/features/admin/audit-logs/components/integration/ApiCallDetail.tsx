@@ -17,7 +17,7 @@ const ApiCallDetail = ({ log }: { log: AuditIntegrationLog }) => {
 
       <div className="flex flex-col gap-9">
         {/* 기본 정보 (상태 없음) */}
-        <div className="flex flex-col gap-2 tracking-tight">
+        <div className="flex flex-col gap-2">
           <InfoRow label="일자" value={formatDate(log.executedAt)} />
           <InfoRow label="구분" value={CATEGORY_LABEL[log.category]} />
         </div>

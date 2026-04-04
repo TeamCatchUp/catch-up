@@ -50,7 +50,7 @@ const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSe
           <button
             type="button"
             className={cn(
-              'border-edge-neutral text-body-small bg-fill-normal flex h-9 w-full cursor-pointer items-center justify-between rounded-lg border px-2.5 py-1.5 tracking-tight transition-colors',
+              'border-edge-neutral text-body-small bg-fill-normal flex h-9 w-full cursor-pointer items-center justify-between rounded-lg border px-2.5 py-1.5 transition-colors',
               'hover:bg-fill-interaction-hover data-[state=open]:bg-fill-interaction-pressed data-[state=open]:border-edge-normal',
               selectedUser ? 'text-content-normal' : 'text-content-assistive',
             )}
@@ -92,10 +92,10 @@ const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSe
                 )}
               >
                 <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
-                <span className="text-body-small text-content-neutral min-w-0 flex-1 truncate text-left tracking-tight">
+                <span className="text-body-small text-content-neutral min-w-0 flex-1 truncate text-left">
                   {user.name}
                 </span>
-                <span className="text-body-xsmall text-content-assistive max-w-[72px] shrink-0 truncate tracking-tight">
+                <span className="text-body-xsmall text-content-assistive max-w-[72px] shrink-0 truncate">
                   {user.department}
                 </span>
               </button>

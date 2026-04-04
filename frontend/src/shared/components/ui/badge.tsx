@@ -5,7 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/shared/utils/cn';
 
-const badgeVariants = cva('inline-flex items-center rounded-full tracking-tight transition-colors', {
+const badgeVariants = cva('inline-flex items-center rounded-full transition-colors', {
   variants: {
     variant: {
       default: 'bg-fill-primary-normal-neutral text-content-primary',

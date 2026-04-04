@@ -47,12 +47,12 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
         {/* 헤더 영역: 스텝 인디케이터 + 타이틀 + 설명 */}
         <div className="flex flex-col gap-4">
           <StepIndicator totalSteps={2} currentStep={2} />
-          <h1 className="text-display-large text-content-normal tracking-tight">
+          <h1 className="text-display-large text-content-normal">
             회사에 대해
             <br />
             조금만 알려주세요!
           </h1>
-          <p className="text-body-large text-content-alternative tracking-tight">
+          <p className="text-body-large text-content-alternative">
             팀 구성에 따라 더 정확한 인수인계 경험을
             <br />
             준비해드릴게요.
@@ -63,7 +63,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
         <div className="flex flex-col gap-6">
           {/* 회사명 */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-heading-medium text-content-normal flex items-center gap-1 tracking-tight">
+            <label className="text-heading-medium text-content-normal flex items-center gap-1">
               <span className="size-[5px] rounded-full bg-red-50" />
               회사명을 알려주세요.
             </label>
@@ -81,7 +81,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
 
           {/* 팀 규모 */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-heading-medium text-content-normal flex items-center gap-1 tracking-tight">
+            <label className="text-heading-medium text-content-normal flex items-center gap-1">
               <span className="size-[5px] rounded-full bg-red-50" />팀 규모는 어느 정도인가요?
             </label>
             <Select

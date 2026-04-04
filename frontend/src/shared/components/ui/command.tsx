@@ -46,7 +46,7 @@ const CommandInput = React.forwardRef<
         value={value}
         onValueChange={handleValueChange}
         className={cn(
-          'text-body-small text-content-normal placeholder:text-content-assistive flex w-full bg-transparent tracking-tight outline-none disabled:cursor-not-allowed disabled:opacity-50',
+          'text-body-small text-content-normal placeholder:text-content-assistive flex w-full bg-transparent outline-none disabled:cursor-not-allowed disabled:opacity-50',
           className,
         )}
         {...props}

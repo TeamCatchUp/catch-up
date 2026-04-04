@@ -87,7 +87,7 @@ export function FilterOptionList({ title, options, selected, onToggle, Icon }: F
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={searchPlaceholder}
-              className="text-body-small placeholder:text-content-assistive h-6 w-full bg-transparent tracking-tight outline-none"
+              className="text-body-small placeholder:text-content-assistive h-6 w-full bg-transparent outline-none"
             />
           </div>
 

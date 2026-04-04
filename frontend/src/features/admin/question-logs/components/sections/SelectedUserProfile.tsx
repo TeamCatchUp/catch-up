@@ -13,7 +13,7 @@ const SelectedUserProfile = ({ user }: SelectedUserProfileProps) => {
       <DefaultProfile className="text-content-assistive size-14 shrink-0 rounded-full" />
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
         <h2 className="text-heading-large text-content-neutral">{user.name}</h2>
-        <p className="text-body-small text-content-alternative tracking-tight">
+        <p className="text-body-small text-content-alternative">
           {user.department} · {user.rank}
         </p>
       </div>

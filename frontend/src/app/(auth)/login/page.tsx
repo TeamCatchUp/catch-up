@@ -19,10 +19,10 @@ export default function Login() {
           <div className="flex w-full min-w-80 flex-col gap-8">
             <CatchUpLogo className="h-[55px] w-[181px]" />
 
-            <h1 className="text-display-large text-content-strong w-full tracking-tight">환영합니다!</h1>
+            <h1 className="text-display-large text-content-strong w-full">환영합니다!</h1>
 
             <div className="flex w-full min-w-80 flex-col gap-2.5">
-              <p className="text-body-medium text-content-alternative tracking-tight">
+              <p className="text-body-medium text-content-alternative">
                 소속 조직의 계정으로 안전하게 로그인하세요.
               </p>
               <Button variant="box-solid-primary" size="lg" className="h-[46px] w-full" onClick={handleOAuthLogin}>

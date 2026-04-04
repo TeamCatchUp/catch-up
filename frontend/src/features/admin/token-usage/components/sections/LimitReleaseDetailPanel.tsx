@@ -62,7 +62,7 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
         </div>
 
         {/* 정보 섹션 */}
-        <div className="text-body-small flex flex-col gap-4 tracking-tight">
+        <div className="text-body-small flex flex-col gap-4">
           {/* 기본 정보 */}
           <div className="flex flex-col gap-2">
             <InfoRow label="메일" value={request.email} />
@@ -109,7 +109,7 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
             </Link>
           </div>
           <Separator />
-          <div className="text-body-small flex flex-col gap-1 tracking-tight">
+          <div className="text-body-small flex flex-col gap-1">
             <div className="flex items-center justify-between">
               <span className="text-content-alternative">하루 최대 토큰 비용</span>
               <span className="text-content-neutral">
