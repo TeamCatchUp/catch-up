@@ -1,5 +1,5 @@
 import Help from '@/public/icons/icon/help.svg';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { cn } from '@/shared/utils/cn';
 
 interface Props {

@@ -1,4 +1,4 @@
-import CheckboxIcon from '@/shared/components/ui/checkboxIcon';
+import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 import { cn } from '@/shared/utils/cn';
 
 import type { SyncTargetItem } from '../../../types/syncModel';

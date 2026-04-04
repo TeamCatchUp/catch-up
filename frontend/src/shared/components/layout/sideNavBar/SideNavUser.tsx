@@ -9,7 +9,7 @@ import Profile from '@/public/icons/icon/profile.svg';
 import UnfoldMore from '@/public/icons/icon/unfold_more.svg';
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { useUserStore } from '@/shared/store/userStore';
 import { cn } from '@/shared/utils/cn';
 

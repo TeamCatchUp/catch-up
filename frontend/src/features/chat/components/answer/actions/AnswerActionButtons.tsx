@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 
 import { chatMutations } from '@/features/chat/mutations';
 import type { AnswerActionButtonsProps } from '@/features/chat/types/props/actionProps';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { cn } from '@/shared/utils/cn';
 

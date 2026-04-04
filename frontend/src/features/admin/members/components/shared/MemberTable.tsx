@@ -1,5 +1,5 @@
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
-import CheckboxIcon from '@/shared/components/ui/checkboxIcon';
+import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 import { cn } from '@/shared/utils/cn';
 
 import { RANK_BADGE_CLASS, TAG_BASE_CLASS } from '../../constants/memberTableConfig';

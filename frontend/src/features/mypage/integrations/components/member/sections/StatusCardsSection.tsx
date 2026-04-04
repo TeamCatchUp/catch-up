@@ -4,7 +4,7 @@ import IconHelp from '@/public/icons/icon/help.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
 import IconRotate from '@/public/icons/icon/rotate.svg';
 import { Button } from '@/shared/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
 import type { MemberIntegrationCardItem } from '../../../types/integrationModel';

@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import Cancel from '@/public/icons/icon/cancel.svg';
 import IconSearch from '@/public/icons/icon/search.svg';
 import { Button } from '@/shared/components/ui/button';
-import CheckboxIcon from '@/shared/components/ui/checkboxIcon';
+import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import type { IntegrationService } from '@/shared/types/integrationService';
