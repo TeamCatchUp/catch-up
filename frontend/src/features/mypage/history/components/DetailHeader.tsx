@@ -12,7 +12,7 @@ interface DetailHeaderProps {
   nextQuery: string | null;
 }
 
-const DetailHeader = ({ sessionId, prevQuery, nextQuery }: DetailHeaderProps) => {
+export default function DetailHeader({ sessionId, prevQuery, nextQuery }: DetailHeaderProps) {
   const buildHref = (q: string) => `/mypage/history/${sessionId}?q=${encodeURIComponent(q)}`;
 
   return (
@@ -57,6 +57,4 @@ const DetailHeader = ({ sessionId, prevQuery, nextQuery }: DetailHeaderProps) =>
       </div>
     </div>
   );
-};
-
-export default DetailHeader;
+}

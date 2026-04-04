@@ -4,15 +4,15 @@ import IconCloudCheckFilled from '@/public/icons/icon/cloud_check_filled.svg';
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { cn } from '@/shared/utils/cn';
 
-import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
-import type { MemberIntegrationRow } from '../../../types/integrations';
+import { INTEGRATION_ACCOUNTS } from '../../../constants/integrationsConfig';
+import type { MemberIntegrationRow } from '../../../types/integrationModel';
 
 interface UserDetailPanelProps {
   selectedRow: MemberIntegrationRow | null;
 }
 
 /** 이용자 연동 우측 상세 패널 */
-const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
+export default function UserDetailPanel({ selectedRow }: UserDetailPanelProps) {
   if (!selectedRow) {
     return (
       <section className="bg-fill-normal overflow-clip pt-5 pb-5 pl-6">
@@ -96,6 +96,4 @@ const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
       </div>
     </section>
   );
-};
-
-export default UserDetailPanel;
+}

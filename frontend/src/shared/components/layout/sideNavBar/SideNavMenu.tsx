@@ -12,7 +12,7 @@ import Home from '@/public/icons/icon/home.svg';
 // TODO: 수신함 기능 활성화 시 Inbox import 복원
 // import Inbox from '@/public/icons/icon/inbox.svg';
 import Settings from '@/public/icons/icon/settings.svg';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
 

@@ -5,8 +5,8 @@ import IconErrorFilled from '@/public/icons/icon/error_filled.svg';
 import { cn } from '@/shared/utils/cn';
 
 import type { GapSummary } from '../../../hooks/useEmbeddingGaps';
-import { useSyncRecordRetry } from '../../../mutations/syncRecords.mutations';
-import type { AdminConnectorTargetRangeResponse, SyncConnector } from '../../../types/sync';
+import { useSyncRecordRetry } from '../../../queries/syncRecords.mutations';
+import type { AdminConnectorTargetRangeResponse, SyncConnector } from '../../../types/syncModel';
 import { formatHistoryDate, RESOURCE_ICONS } from '../../../utils/embeddingUtils';
 import EmbeddingRetryModal from '../modals/EmbeddingRetryModal';
 
@@ -19,7 +19,12 @@ interface EmbeddingHistoryCardProps {
   gapByTargetId?: Map<string, GapSummary>;
 }
 
-const EmbeddingHistoryCard = ({ items, connector, isInitialLoading, gapByTargetId }: EmbeddingHistoryCardProps) => {
+export default function EmbeddingHistoryCard({
+  items,
+  connector,
+  isInitialLoading,
+  gapByTargetId,
+}: EmbeddingHistoryCardProps) {
   const [filter, setFilter] = useState<HistoryFilter>('all');
   const [retryTarget, setRetryTarget] = useState<AdminConnectorTargetRangeResponse | null>(null);
 
@@ -84,15 +89,13 @@ const EmbeddingHistoryCard = ({ items, connector, isInitialLoading, gapByTargetI
                 onClick={() => setFilter(value)}
                 className={cn(
                   'text-body-small relative h-9 cursor-pointer rounded-full px-3',
-                  filter === value
-                    ? 'border-edge-strong bg-fill-normal border'
-                    : 'text-content-alternative',
+                  filter === value ? 'border-edge-strong bg-fill-normal border' : 'text-content-alternative',
                 )}
               >
                 {label}
                 {count !== undefined && ` ${count}`}
                 {hasRedTag && (
-                  <span className="bg-status-destructive absolute right-1.5 top-1.5 size-1.5 rounded-full" />
+                  <span className="bg-status-destructive absolute top-1.5 right-1.5 size-1.5 rounded-full" />
                 )}
               </button>
             ))}
@@ -138,9 +141,7 @@ const EmbeddingHistoryCard = ({ items, connector, isInitialLoading, gapByTargetI
                     <div className="border-edge-normal bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
                       <ResourceIcon className="size-5" />
                     </div>
-                    <span className="text-body-small text-content-normal flex-1 truncate">
-                      {item.target_name}
-                    </span>
+                    <span className="text-body-small text-content-normal flex-1 truncate">{item.target_name}</span>
                     <div className="flex shrink-0 items-center gap-4">
                       <div className="flex items-center gap-1.5">
                         <span className="text-label-xsmall text-content-alternative whitespace-nowrap">
@@ -190,9 +191,7 @@ const EmbeddingHistoryCard = ({ items, connector, isInitialLoading, gapByTargetI
                     <ResourceIcon className="size-5" />
                   </div>
                   <div className="border-edge-assistive flex flex-1 items-center gap-5 border-b py-4">
-                    <span className="text-body-small text-content-normal flex-1 truncate">
-                      {item.target_name}
-                    </span>
+                    <span className="text-body-small text-content-normal flex-1 truncate">{item.target_name}</span>
                     <span className="text-label-xsmall text-content-alternative shrink-0 whitespace-nowrap">
                       {formatHistoryDate(item.last_succeeded_at ?? '')}
                     </span>
@@ -220,6 +219,4 @@ const EmbeddingHistoryCard = ({ items, connector, isInitialLoading, gapByTargetI
       />
     </>
   );
-};
-
-export default EmbeddingHistoryCard;
+}

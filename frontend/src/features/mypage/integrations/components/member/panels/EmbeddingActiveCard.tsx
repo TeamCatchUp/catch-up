@@ -1,7 +1,7 @@
 import IconClockPending from '@/public/icons/icon/clock_pending.svg';
 import IconRotate from '@/public/icons/icon/rotate.svg';
 
-import type { EmbeddingProgressItem, SyncConnector } from '../../../types/sync';
+import type { EmbeddingProgressItem, SyncConnector } from '../../../types/syncModel';
 import { RESOURCE_ICONS } from '../../../utils/embeddingUtils';
 
 interface EmbeddingActiveCardProps {
@@ -9,7 +9,7 @@ interface EmbeddingActiveCardProps {
   connector: SyncConnector;
 }
 
-const EmbeddingActiveCard = ({ items, connector }: EmbeddingActiveCardProps) => {
+export default function EmbeddingActiveCard({ items, connector }: EmbeddingActiveCardProps) {
   const ResourceIcon = RESOURCE_ICONS[connector];
 
   return (
@@ -23,7 +23,10 @@ const EmbeddingActiveCard = ({ items, connector }: EmbeddingActiveCardProps) => 
       {/* 아이템 리스트 */}
       <div className="thin-scrollbar flex flex-col overflow-y-auto">
         {items.map((item) => (
-          <div key={item.targetId} className="border-edge-assistive flex h-14 shrink-0 items-center gap-4 border-b px-4 last:border-b-0">
+          <div
+            key={item.targetId}
+            className="border-edge-assistive flex h-14 shrink-0 items-center gap-4 border-b px-4 last:border-b-0"
+          >
             <div className="border-edge-normal bg-fill-normal/75 flex shrink-0 items-center justify-center overflow-hidden rounded-full border p-1.5">
               <ResourceIcon className="size-5" />
             </div>
@@ -38,6 +41,4 @@ const EmbeddingActiveCard = ({ items, connector }: EmbeddingActiveCardProps) => 
       </div>
     </div>
   );
-};
-
-export default EmbeddingActiveCard;
+}

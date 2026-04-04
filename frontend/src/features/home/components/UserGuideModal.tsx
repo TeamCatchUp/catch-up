@@ -55,7 +55,7 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
       <DialogPortal>
         <DialogOverlay />
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="shadow-modal border-edge-strong bg-fill-normal flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border p-6">
+          <div className="shadow-modal border-edge-strong bg-fill-normal flex h-135.75 w-108.75 flex-col overflow-clip rounded-2xl border p-6">
             {/* 콘텐츠 영역 */}
             <div
               className={`flex min-h-0 flex-1 flex-col gap-5 overflow-hidden transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}

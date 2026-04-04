@@ -17,9 +17,9 @@ interface InstructionCardProps {
   onDelete: () => void;
 }
 
-const InstructionCard = ({ content, onEdit, onDelete }: InstructionCardProps) => {
+export default function InstructionCard({ content, onEdit, onDelete }: InstructionCardProps) {
   return (
-    <div className="border-edge-neutral bg-fill-normal flex max-h-[160px] min-h-[46px] items-start gap-6 overflow-y-auto rounded-xl border px-4 py-3">
+    <div className="border-edge-neutral bg-fill-normal flex max-h-40 min-h-11.5 items-start gap-6 overflow-y-auto rounded-xl border px-4 py-3">
       <p className="text-body-small text-icon-normal w-full wrap-break-word whitespace-pre-wrap">{content}</p>
 
       <DropdownMenu>
@@ -31,7 +31,7 @@ const InstructionCard = ({ content, onEdit, onDelete }: InstructionCardProps) =>
             <IconKebab className="text-icon-normal size-6" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" sideOffset={4} className="w-[250px] min-w-0">
+        <DropdownMenuContent align="end" sideOffset={4} className="w-62.5 min-w-0">
           <DropdownMenuItem onClick={onEdit} className="gap-2.5">
             <IconEditSquare className="size-6 shrink-0" />
             맞춤형 지침 수정하기
@@ -45,6 +45,4 @@ const InstructionCard = ({ content, onEdit, onDelete }: InstructionCardProps) =>
       </DropdownMenu>
     </div>
   );
-};
-
-export default InstructionCard;
+}

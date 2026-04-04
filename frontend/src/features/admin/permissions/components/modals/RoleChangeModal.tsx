@@ -9,7 +9,7 @@ import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 
 import { PERMISSION_ROLE_CHANGE_REASONS, ROLE_LABEL } from '../../constants/permissionsConfig';
-import type { PermissionMember, PermissionRole } from '../../types/adminPermission';
+import type { PermissionMember, PermissionRole } from '../../types/adminPermissionModel';
 
 interface RoleChangeModalProps {
   open: boolean;
@@ -23,14 +23,14 @@ interface RoleChangeModalProps {
 const NEW_ROLE_OPTIONS: { value: PermissionRole; label: string }[] = [{ value: 'user', label: 'Member' }];
 
 /** 권한 변경 모달 (Admin → Member 회수) */
-const RoleChangeModal = ({
+export default function RoleChangeModal({
   open,
   onOpenChange,
   member,
   isSubmitting,
   errorMessage,
   onSubmit,
-}: RoleChangeModalProps) => {
+}: RoleChangeModalProps) {
   const [newRole, setNewRole] = useState<PermissionRole | ''>('');
   const [selectedReason, setSelectedReason] = useState<string>('');
   const [customReason, setCustomReason] = useState('');
@@ -178,6 +178,4 @@ const RoleChangeModal = ({
       </DialogContent>
     </Dialog>
   );
-};
-
-export default RoleChangeModal;
+}

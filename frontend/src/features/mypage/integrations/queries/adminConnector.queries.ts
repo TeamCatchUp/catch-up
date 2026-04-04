@@ -12,7 +12,7 @@ import type {
   UserSyncStatusResponse,
   VendorType,
   VendorUsersResponse,
-} from '../types/api';
+} from '../types/integrationApi';
 import type {
   AdminConnectorStatusResponse,
   AtlassianInstallationStatus,
@@ -23,7 +23,7 @@ import type {
   SyncJobSnapshotResponse,
   SyncStatusResponse,
   SyncTargetsResponse,
-} from '../types/sync';
+} from '../types/syncModel';
 
 export const adminConnectorQueries = {
   all: () => ['admin', 'connector'] as const,

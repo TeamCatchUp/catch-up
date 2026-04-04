@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { PromoteAdminResponse, RevokeAdminResponse } from '../types/adminPermission';
+import type { PromoteAdminResponse, RevokeAdminResponse } from '../types/adminPermissionModel';
 import { adminPermissionsQueries } from './adminPermissions.queries';
 
 interface PromoteParams {

@@ -1,4 +1,4 @@
-import type { AtlassianResource } from '../types/sync';
+import type { AtlassianResource } from '../types/syncModel';
 
 const JIRA_REQUIRED_SCOPE = 'read:jira-work';
 

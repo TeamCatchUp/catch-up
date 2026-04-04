@@ -12,16 +12,16 @@ import { Button } from '@/shared/components/ui/button';
 import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
-import { adminConnectorMutations } from '../../../mutations/adminConnector.mutations';
+import { adminConnectorMutations } from '../../../queries/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
 import type {
   PreMappingBulkUpdateResponse,
   PreMappingUpdateItem,
   SyncFilterType,
   VendorType,
-} from '../../../types/api';
-import type { IntegrationService } from '../../../types/integrations';
-import type { MemberDisplayRow } from '../../../types/memberDisplay';
+} from '../../../types/integrationApi';
+import type { IntegrationService } from '../../../types/integrationModel';
+import type { MemberDisplayRow } from '../../../types/memberDisplayModel';
 import type { AccountOption } from '../tables/AccountSelectDropdown';
 import UsersTable from '../tables/UsersTable';
 
@@ -45,14 +45,14 @@ const FILTER_OPTIONS: { key: SyncFilterType; label: string }[] = [
 ];
 
 /** 이용자 계정 연동 상태 섹션 */
-const UsersStatusSection = ({
+export default function UsersStatusSection({
   total,
   displayRows,
   filterType,
   onFilterChange,
   currentPage,
   onPageChange,
-}: UsersStatusSectionProps) => {
+}: UsersStatusSectionProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
 
@@ -340,6 +340,4 @@ const UsersStatusSection = ({
       <CsvUploadModal open={isCsvModalOpen} onOpenChange={setIsCsvModalOpen} />
     </section>
   );
-};
-
-export default UsersStatusSection;
+}

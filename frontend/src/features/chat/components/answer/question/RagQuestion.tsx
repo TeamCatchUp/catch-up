@@ -14,7 +14,7 @@ interface RagQuestionProps {
   onSubmitEdit: (messageId: string, newContent: string) => Promise<void>;
 }
 
-const RagQuestion = ({ currentQA, isLastPage, onSubmitEdit }: RagQuestionProps) => {
+export default function RagQuestion({ currentQA, isLastPage, onSubmitEdit }: RagQuestionProps) {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
   const questionId = currentQA?.question.id ?? null;
@@ -48,6 +48,4 @@ const RagQuestion = ({ currentQA, isLastPage, onSubmitEdit }: RagQuestionProps) 
       {isLastPage && <QuestionEditButton onClick={() => setEditingMessageId(questionId)} />}
     </div>
   );
-};
-
-export default RagQuestion;
+}

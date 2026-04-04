@@ -17,7 +17,7 @@ import { cn } from '@/shared/utils/cn';
 import { REJECTION_REASONS, ROLE_BADGE_CLASS, ROLE_LABEL, SORT_OPTIONS } from '../../constants/memberTableConfig';
 import { useDecideRequestMutation } from '../../queries/adminMembers.mutations';
 import { adminMembersQueries } from '../../queries/adminMembers.queries';
-import type { AdminSortKey, EntryRequest, MemberTableRow } from '../../types/adminMember';
+import type { AdminSortKey, EntryRequest, MemberTableRow } from '../../types/adminMemberModel';
 import MemberDetailPanel from '../shared/MemberDetailPanel';
 import MemberTable from '../shared/MemberTable';
 import ReasonDialog from '../shared/ReasonPopover';
@@ -28,7 +28,7 @@ interface EntryRequestSectionProps {
 }
 
 /** 입장 신청 목록 섹션 */
-const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
+export default function EntryRequestSection({ searchTerm }: EntryRequestSectionProps) {
   const { data: requests = [] } = useQuery(adminMembersQueries.requests());
   const decideMutation = useDecideRequestMutation();
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -204,6 +204,4 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
       </div>
     </section>
   );
-};
-
-export default EntryRequestSection;
+}

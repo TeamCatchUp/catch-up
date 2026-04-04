@@ -7,16 +7,16 @@ import { toast } from 'sonner';
 import Cancel from '@/public/icons/icon/cancel.svg';
 import IconSearch from '@/public/icons/icon/search.svg';
 import { Button } from '@/shared/components/ui/button';
-import CheckboxIcon from '@/shared/components/ui/checkboxIcon';
+import CheckboxIcon from '@/shared/components/ui/checkbox-icon';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
 import { useScopeId } from '../../../hooks/useScopeId';
-import { adminConnectorMutations } from '../../../mutations/adminConnector.mutations';
+import { adminConnectorMutations } from '../../../queries/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
-import type { SyncConnector } from '../../../types/sync';
+import type { SyncConnector } from '../../../types/syncModel';
 import EmbeddingModalContent from './EmbeddingModalContent';
 
 const PERIOD_OPTIONS = ['1개월', '3개월', '6개월', '1년', '3년'] as const;
@@ -50,7 +50,7 @@ interface EmbeddingModalProps {
 }
 
 /** 임베딩 모달 (셸) */
-const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }: EmbeddingModalProps) => {
+export default function EmbeddingModal({ open, onOpenChange, service, serviceName, onJobStart }: EmbeddingModalProps) {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('3년');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -92,7 +92,8 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
   };
 
   const filteredTargets = useMemo(
-    () => (searchQuery ? targets.filter((t) => t.display_name.toLowerCase().includes(searchQuery.toLowerCase())) : targets),
+    () =>
+      searchQuery ? targets.filter((t) => t.display_name.toLowerCase().includes(searchQuery.toLowerCase())) : targets,
     [targets, searchQuery],
   );
 
@@ -217,11 +218,7 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
                     {selectedItems.size > 0 && (
                       <span className="text-body-small text-content-primary">{selectedItems.size}개 선택됨</span>
                     )}
-                    <button
-                      type="button"
-                      onClick={toggleAll}
-                      className="flex cursor-pointer items-center gap-0.5"
-                    >
+                    <button type="button" onClick={toggleAll} className="flex cursor-pointer items-center gap-0.5">
                       <CheckboxIcon checked={isAllSelected} className="size-5" />
                       <span className="text-body-small text-content-normal whitespace-nowrap">전체 선택하기</span>
                     </button>
@@ -253,7 +250,11 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
                     </div>
                   </div>
                 ) : (
-                  <EmbeddingModalContent targets={filteredTargets} selectedItems={selectedItems} onToggleItem={toggleItem} />
+                  <EmbeddingModalContent
+                    targets={filteredTargets}
+                    selectedItems={selectedItems}
+                    onToggleItem={toggleItem}
+                  />
                 )}
               </div>
             </>
@@ -277,6 +278,4 @@ const EmbeddingModal = ({ open, onOpenChange, service, serviceName, onJobStart }
       </DialogContent>
     </Dialog>
   );
-};
-
-export default EmbeddingModal;
+}

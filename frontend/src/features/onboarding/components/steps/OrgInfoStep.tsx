@@ -7,7 +7,7 @@ import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { COMPANY_SIZE_OPTIONS } from '@/shared/constants/organization';
 
-import type { CompanySize, OrgInfoFormData } from '../../types/onboarding';
+import type { CompanySize, OrgInfoFormData } from '../../types/onboardingModel';
 import { StepIndicator } from '../StepIndicator';
 import { StepNavButtons } from '../StepNavButtons';
 
@@ -42,7 +42,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
   const isComplete = companyName.trim() && companySize;
 
   return (
-    <div className="flex h-full w-[441px] flex-col justify-between">
+    <div className="flex h-full w-110.25 flex-col justify-between">
       <div className="flex flex-col gap-12">
         {/* 헤더 영역: 스텝 인디케이터 + 타이틀 + 설명 */}
         <div className="flex flex-col gap-4">
@@ -64,7 +64,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
           {/* 회사명 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-heading-medium text-content-normal flex items-center gap-1">
-              <span className="size-[5px] rounded-full bg-red-50" />
+              <span className="size-1.25 rounded-full bg-red-50" />
               회사명을 알려주세요.
             </label>
             <Input
@@ -75,14 +75,14 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
               }}
               placeholder="회사명"
               error={errors.companyName}
-              className="h-[46px]"
+              className="h-11.5"
             />
           </div>
 
           {/* 팀 규모 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-heading-medium text-content-normal flex items-center gap-1">
-              <span className="size-[5px] rounded-full bg-red-50" />팀 규모는 어느 정도인가요?
+              <span className="size-1.25 rounded-full bg-red-50" />팀 규모는 어느 정도인가요?
             </label>
             <Select
               value={companySize}
@@ -91,7 +91,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
                 if (errors.companySize) setErrors((p) => ({ ...p, companySize: false }));
               }}
             >
-              <SelectTrigger className={`h-[46px] ${errors.companySize ? 'border-red-50' : ''}`}>
+              <SelectTrigger className={`h-11.5 ${errors.companySize ? 'border-red-50' : ''}`}>
                 <SelectValue placeholder="선택 안됨" />
               </SelectTrigger>
               <SelectContent>

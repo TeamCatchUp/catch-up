@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import InstructionCard from '@/features/mypage/preferences/components/InstructionCard';
 import InstructionInput from '@/features/mypage/preferences/components/InstructionInput';
-import { promptMutations } from '@/features/mypage/preferences/mutations/prompt.mutations';
+import { promptMutations } from '@/features/mypage/preferences/queries/prompt.mutations';
 import { promptQueries } from '@/features/mypage/preferences/queries/prompt.queries';
 
 export default function PreferencesPage() {
@@ -43,7 +43,7 @@ export default function PreferencesPage() {
   };
 
   return (
-    <section className="flex min-w-[600px] flex-col gap-6 px-16 pt-9 pb-[120px]">
+    <section className="flex min-w-150 flex-col gap-6 px-16 pt-9 pb-30">
       <h1 className="text-heading-xlarge text-content-normal">개인 맞춤 설정</h1>
 
       {/* 개인 지침 섹션 */}
@@ -63,7 +63,7 @@ export default function PreferencesPage() {
 
             {/* 로딩 상태 */}
             {isLoading && (
-              <div className="border-edge-neutral bg-fill-normal flex h-[46px] items-center justify-center rounded-xl border">
+              <div className="border-edge-neutral bg-fill-normal flex h-11.5 items-center justify-center rounded-xl border">
                 <span className="text-body-small text-content-assistive">불러오는 중...</span>
               </div>
             )}

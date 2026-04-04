@@ -8,7 +8,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
-import type { MemberIntegrationRow } from '../../../types/integrations';
+import type { MemberIntegrationRow } from '../../../types/integrationModel';
 import AccountSelectorPopover, { type AccountOption } from './AccountSelectorPopover';
 import ReasonRadioGroup, { type ReasonOption } from './ReasonRadioGroup';
 
@@ -28,14 +28,14 @@ interface AccountEditModalProps {
 }
 
 /** 계정 정보 수정 모달 */
-const AccountEditModal = ({
+export default function AccountEditModal({
   open,
   onOpenChange,
   selectedRow,
   allRows,
   service,
   serviceName,
-}: AccountEditModalProps) => {
+}: AccountEditModalProps) {
   const [selectedReason, setSelectedReason] = useState('not-my-account');
   const [customReason, setCustomReason] = useState('');
   const [selectedAccountKey, setSelectedAccountKey] = useState('');
@@ -82,7 +82,7 @@ const AccountEditModal = ({
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         hideClose
-        className="border-edge-neutral shadow-modal bg-fill-normal max-w-[400px] gap-2 rounded-2xl border px-5 pt-3 pb-4"
+        className="border-edge-neutral shadow-modal bg-fill-normal max-w-100 gap-2 rounded-2xl border px-5 pt-3 pb-4"
       >
         <div className="flex h-9 items-center justify-between">
           <DialogTitle className="text-heading-medium text-content-normal">계정 정보 수정하기</DialogTitle>
@@ -91,7 +91,7 @@ const AccountEditModal = ({
           </button>
         </div>
 
-        <div className="border-edge-neutral max-h-[378px] w-full overflow-y-auto border-t pt-4">
+        <div className="border-edge-neutral max-h-94.5 w-full overflow-y-auto border-t pt-4">
           <div className="border-edge-neutral relative w-full overflow-clip rounded-xl border">
             <div className="bg-fill-strong border-edge-neutral flex flex-col gap-2 border-b p-4">
               <span className="text-body-small text-content-normal">현재 연결된 계정</span>
@@ -110,7 +110,7 @@ const AccountEditModal = ({
             <div className="bg-fill-normal flex flex-col gap-1.5 p-4">
               <div className="text-body-small text-content-normal flex items-center gap-1">
                 새 계정 선택
-                <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
+                <span className="block size-1.25 shrink-0 rounded-full bg-red-50" />
               </div>
 
               <AccountSelectorPopover
@@ -133,8 +133,8 @@ const AccountEditModal = ({
               </p>
             </div>
 
-            <div className="border-edge-assistive bg-gray-80 absolute top-[101px] left-1/2 -translate-x-1/2 rounded-full border p-1">
-              <ArrowDown className="size-[18px] text-white" />
+            <div className="border-edge-assistive bg-gray-80 absolute top-25.25 left-1/2 -translate-x-1/2 rounded-full border p-1">
+              <ArrowDown className="size-4.5 text-white" />
             </div>
           </div>
 
@@ -164,6 +164,4 @@ const AccountEditModal = ({
       </DialogContent>
     </Dialog>
   );
-};
-
-export default AccountEditModal;
+}

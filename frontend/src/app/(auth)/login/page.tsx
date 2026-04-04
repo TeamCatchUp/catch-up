@@ -17,15 +17,13 @@ export default function Login() {
       <div className="border-edge-normal flex flex-[1_0_0] items-center gap-5 self-stretch overflow-clip rounded-2xl border p-6">
         <div className="flex min-w-80 flex-[1_0_0] flex-col items-center justify-center gap-24 self-stretch overflow-clip px-28 py-30">
           <div className="flex w-full min-w-80 flex-col gap-8">
-            <CatchUpLogo className="h-[55px] w-[181px]" />
+            <CatchUpLogo className="h-13.75 w-45.25" />
 
             <h1 className="text-display-large text-content-strong w-full">환영합니다!</h1>
 
             <div className="flex w-full min-w-80 flex-col gap-2.5">
-              <p className="text-body-medium text-content-alternative">
-                소속 조직의 계정으로 안전하게 로그인하세요.
-              </p>
-              <Button variant="box-solid-primary" size="lg" className="h-[46px] w-full" onClick={handleOAuthLogin}>
+              <p className="text-body-medium text-content-alternative">소속 조직의 계정으로 안전하게 로그인하세요.</p>
+              <Button variant="box-solid-primary" size="lg" className="h-11.5 w-full" onClick={handleOAuthLogin}>
                 SSO 통합 로그인하기
               </Button>
             </div>

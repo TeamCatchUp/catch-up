@@ -5,7 +5,7 @@ interface QuestionEditButtonProps {
   onClick: () => void;
 }
 
-const QuestionEditButton = ({ onClick }: QuestionEditButtonProps) => {
+export default function QuestionEditButton({ onClick }: QuestionEditButtonProps) {
   return (
     <button
       type="button"
@@ -20,6 +20,4 @@ const QuestionEditButton = ({ onClick }: QuestionEditButtonProps) => {
       <span className="text-body-xsmall text-content-normal whitespace-nowrap">수정하기</span>
     </button>
   );
-};
-
-export default QuestionEditButton;
+}

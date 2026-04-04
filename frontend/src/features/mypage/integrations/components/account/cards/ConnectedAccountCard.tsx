@@ -2,7 +2,7 @@ import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import EmptyGraphic from '@/public/icons/icon/empty.svg';
 import { cn } from '@/shared/utils/cn';
 
-import type { IntegrationAccountInfo, IntegrationAccountMeta } from '../../../types/integrations';
+import type { IntegrationAccountInfo, IntegrationAccountMeta } from '../../../types/integrationModel';
 
 interface ConnectedAccountCardProps {
   account: IntegrationAccountMeta;
@@ -12,7 +12,12 @@ interface ConnectedAccountCardProps {
 }
 
 /** 연동 계정 정보를 표시하는 공통 카드 */
-const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: ConnectedAccountCardProps) => {
+export default function ConnectedAccountCard({
+  account,
+  accountInfo,
+  variant,
+  onEditClick,
+}: ConnectedAccountCardProps) {
   const { service, name, Icon } = account;
   const isAdmin = variant === 'admin';
   const isConnected =
@@ -32,8 +37,8 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
     </div>
   ) : (
     <div className="flex flex-col gap-1.5">
-      <div className="flex h-[55px] w-full items-center justify-center overflow-hidden">
-        <EmptyGraphic className="h-[55px] w-[203px]" />
+      <div className="flex h-13.75 w-full items-center justify-center overflow-hidden">
+        <EmptyGraphic className="h-13.75 w-50.75" />
       </div>
       <p className="text-label-xsmall text-content-assistive h-5 w-full truncate text-center">
         아직 연결된 {name} 계정이 없어요.
@@ -89,6 +94,4 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
       )}
     </article>
   );
-};
-
-export default ConnectedAccountCard;
+}

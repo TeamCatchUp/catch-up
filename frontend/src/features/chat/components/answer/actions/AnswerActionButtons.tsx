@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 
 import { chatMutations } from '@/features/chat/mutations';
 import type { AnswerActionButtonsProps } from '@/features/chat/types/props/actionProps';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { cn } from '@/shared/utils/cn';
 
@@ -16,7 +16,7 @@ const TOOLTIP_LABELS: Record<string, string> = {
   Rotate: '다시 시도하기',
 };
 
-const AnswerActionButtons = ({
+export default function AnswerActionButtons({
   icons,
   messageId,
   answerContent,
@@ -28,7 +28,7 @@ const AnswerActionButtons = ({
   setFeedbackVisibleMap,
   onRetry,
   onFeedbackSubmitted,
-}: AnswerActionButtonsProps) => {
+}: AnswerActionButtonsProps) {
   const queryClient = useQueryClient();
   const [bookmarked, setBookmarked] = useState(isSaved ?? false);
 
@@ -160,6 +160,4 @@ const AnswerActionButtons = ({
       })}
     </div>
   );
-};
-
-export default AnswerActionButtons;
+}

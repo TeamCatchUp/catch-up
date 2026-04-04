@@ -3,7 +3,7 @@ import { queryOptions } from '@tanstack/react-query';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { PermissionMember, PermissionUserListResponse } from '../types/adminPermission';
+import type { PermissionMember, PermissionUserListResponse } from '../types/adminPermissionModel';
 
 export const adminPermissionsQueries = {
   all: () => ['admin', 'permissions'] as const,

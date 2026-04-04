@@ -28,14 +28,14 @@ const FEEDBACK_CHIPS: { id: number; label: string; reason: FeedbackReason }[] = 
 const DETAIL_ID = 8;
 const ANIM_MS = 200;
 
-const FeedbackSection = ({
+export default function FeedbackSection({
   messageId,
   sessionId,
   chatHistoryId,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
   onFeedbackSubmitted,
-}: FeedbackSectionProps) => {
+}: FeedbackSectionProps) {
   const feedbackRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
 
@@ -200,6 +200,4 @@ const FeedbackSection = ({
       )}
     </div>
   );
-};
-
-export default FeedbackSection;
+}

@@ -10,11 +10,11 @@ import CatchupLogoLetter from '@/public/icons/logo/logo_catchup_letter.svg';
 import SideNavMenu from '@/shared/components/layout/sideNavBar/SideNavMenu';
 import SideNavQuestions from '@/shared/components/layout/sideNavBar/SideNavQuestions';
 import SideNavUser from '@/shared/components/layout/sideNavBar/SideNavUser';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
 
-const SideNavBar = () => {
+export default function SideNavBar() {
   const pathname = usePathname();
   const router = useRouter();
   const isRagAnswerPage = pathname.startsWith('/chat');
@@ -102,6 +102,4 @@ const SideNavBar = () => {
       </nav>
     </>
   );
-};
-
-export default SideNavBar;
+}

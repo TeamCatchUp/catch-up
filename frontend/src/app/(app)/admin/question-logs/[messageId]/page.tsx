@@ -14,7 +14,7 @@ import DetailHeader from '@/features/admin/question-logs/components/DetailHeader
 import { adminQueriesQueries } from '@/features/admin/question-logs/queries/adminQueries.queries';
 // chat feature (app layer can import from any feature)
 import { MarkDownComponents } from '@/features/chat/components/answer/markdown/MarkDownComponents';
-import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/renderWithBadges';
+import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/RenderWithBadges';
 import CollapsibleQuestionText from '@/features/chat/components/answer/question/CollapsibleQuestionText';
 import SidebarHeader from '@/features/chat/components/sidebar/SidebarHeader';
 import SourceList from '@/features/chat/components/sidebar/source/SourceList';
@@ -67,7 +67,7 @@ export default function QuestionLogDetailPage() {
   const citationOrderMap = useMemo(() => getCitationDisplayOrderMap(formattedAnswer), [formattedAnswer]);
 
   return (
-    <section className="flex flex-col gap-6 px-16 pt-9 pb-[120px]">
+    <section className="flex flex-col gap-6 px-16 pt-9 pb-30">
       <DetailHeader userId={userId} userName={user?.name ?? ''} userDepartment={user?.department ?? ''} from={from} />
 
       {detailQuery.isLoading && (

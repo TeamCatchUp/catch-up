@@ -20,7 +20,7 @@ interface RagHeaderProps {
   sessionId: string;
 }
 
-const RagHeader = ({ title, sessionId }: RagHeaderProps) => {
+export default function RagHeader({ title, sessionId }: RagHeaderProps) {
   const { activePanel, setActivePanel } = useSidebarStore();
   const router = useRouter();
   const isQuestionsHistoryPanelOpen = activePanel === 'questionsHistory';
@@ -103,6 +103,4 @@ const RagHeader = ({ title, sessionId }: RagHeaderProps) => {
       </div>
     </>
   );
-};
-
-export default RagHeader;
+}

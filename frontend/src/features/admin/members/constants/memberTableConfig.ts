@@ -1,6 +1,6 @@
 import type { UserStatus } from '@/shared/queries/auth.types';
 
-import type { AdminSortKey, JobLevel } from '../types/adminMember';
+import type { AdminSortKey, JobLevel } from '../types/adminMemberModel';
 
 /** 정렬 옵션 */
 export const SORT_OPTIONS: { key: AdminSortKey; label: string }[] = [

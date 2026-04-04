@@ -8,7 +8,7 @@ interface RagDetailedTasksSkeletonProps {
   message?: string;
 }
 
-const RagRightComponentSkeleton = ({ message }: RagDetailedTasksSkeletonProps) => {
+export default function RagRightComponentSkeleton({ message }: RagDetailedTasksSkeletonProps) {
   return (
     <div className="mt-2 flex w-full flex-col items-center justify-center gap-5">
       <div className="skeleton-loading-card flex w-full animate-pulse flex-col items-center justify-center gap-5 rounded-2xl p-5">
@@ -24,6 +24,4 @@ const RagRightComponentSkeleton = ({ message }: RagDetailedTasksSkeletonProps) =
       </div>
     </div>
   );
-};
-
-export default RagRightComponentSkeleton;
+}

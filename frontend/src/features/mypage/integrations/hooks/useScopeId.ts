@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import type { SyncConnector } from '../types/sync';
-import { isConfluenceResource, isJiraResource } from '../utils/atlassianScopeFilter';
+import type { SyncConnector } from '../types/syncModel';
+import { isConfluenceResource, isJiraResource } from '../utils/filterAtlassianScope';
 
 /**
  * 서비스별 scope_id를 자동으로 획득하는 훅.

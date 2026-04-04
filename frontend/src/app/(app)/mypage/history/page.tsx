@@ -49,7 +49,7 @@ export default function HistoryPage() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
-    <section className="flex flex-col gap-6 px-16 pt-9 pb-[120px]">
+    <section className="flex flex-col gap-6 px-16 pt-9 pb-30">
       <h1 className="text-heading-xlarge text-content-normal">질문 히스토리</h1>
 
       <div className="flex flex-col gap-4">
@@ -61,7 +61,7 @@ export default function HistoryPage() {
               type="button"
               onClick={toggleSavedOnly}
               className={cn(
-                'flex h-9 max-w-[145px] min-w-9 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1.5',
+                'flex h-9 max-w-36.25 min-w-9 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1.5',
                 savedOnly
                   ? 'border-edge-primary bg-fill-primary-assistive'
                   : 'border-edge-neutral hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed bg-fill-normal',
@@ -81,7 +81,7 @@ export default function HistoryPage() {
             </button>
           </div>
 
-          <label className="border-edge-assistive bg-fill-strong focus-within:border-edge-neutral flex h-10 w-[280px] items-center gap-1.5 rounded-lg border px-3 py-2">
+          <label className="border-edge-assistive bg-fill-strong focus-within:border-edge-neutral flex h-10 w-70 items-center gap-1.5 rounded-lg border px-3 py-2">
             <SearchIcon className="text-content-assistive size-5 shrink-0" />
             <input
               type="text"

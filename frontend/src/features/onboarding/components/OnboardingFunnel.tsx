@@ -5,7 +5,7 @@ import { useFunnel } from '@use-funnel/browser';
 
 import { useUserStore } from '@/shared/store/userStore';
 
-import type { OnboardingSteps, OrgInfoFormData } from '../types/onboarding';
+import type { OnboardingSteps, OrgInfoFormData } from '../types/onboardingModel';
 import { CompleteStep } from './CompleteStep';
 import { OnboardingLayout } from './OnboardingLayout';
 import { OrgInfoStep } from './steps/OrgInfoStep';

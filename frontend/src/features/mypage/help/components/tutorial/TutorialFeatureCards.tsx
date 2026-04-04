@@ -8,7 +8,7 @@ import ArrowForward from '@/public/icons/icon/arrow_forward.svg';
 
 const CARD_SCROLL_AMOUNT = 340; // card width (320) + gap (20)
 
-const TutorialFeatureCards = () => {
+export default function TutorialFeatureCards() {
   const scrollRef = useRef<HTMLUListElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -100,6 +100,4 @@ const TutorialFeatureCards = () => {
       </button>
     </div>
   );
-};
-
-export default TutorialFeatureCards;
+}

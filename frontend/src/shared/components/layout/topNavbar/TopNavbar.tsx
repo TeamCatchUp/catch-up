@@ -52,7 +52,7 @@ interface TopNavbarProps {
 /**
  * 화면 타입에 맞는 상단 네비게이션을 렌더링한다.
  */
-const TopNavbar = ({ pageType }: TopNavbarProps) => {
+export default function TopNavbar({ pageType }: TopNavbarProps) {
   const config = pageConfigs[pageType];
   const IconComponent = config.icon;
 
@@ -80,6 +80,4 @@ const TopNavbar = ({ pageType }: TopNavbarProps) => {
       </div>
     </nav>
   );
-};
-
-export default TopNavbar;
+}

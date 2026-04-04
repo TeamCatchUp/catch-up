@@ -7,7 +7,7 @@ interface SelectedUserProfileProps {
 }
 
 /** 선택된 이용자 프로필 카드 */
-const SelectedUserProfile = ({ user }: SelectedUserProfileProps) => {
+export default function SelectedUserProfile({ user }: SelectedUserProfileProps) {
   return (
     <div className="flex items-start gap-4">
       <DefaultProfile className="text-content-assistive size-14 shrink-0 rounded-full" />
@@ -19,6 +19,4 @@ const SelectedUserProfile = ({ user }: SelectedUserProfileProps) => {
       </div>
     </div>
   );
-};
-
-export default SelectedUserProfile;
+}

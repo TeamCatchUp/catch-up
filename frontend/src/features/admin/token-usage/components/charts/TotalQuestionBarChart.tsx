@@ -8,7 +8,7 @@ import { Bar, BarChart, Cell, XAxis, YAxis } from 'recharts';
 
 import { type ChartConfig, ChartContainer, ChartTooltip } from '@/shared/components/ui/chart';
 
-import type { TotalQuestionCount } from '../../types/tokenUsage';
+import type { TotalQuestionCount } from '../../types/tokenUsageModel';
 import ChartCustomTooltip from './ChartCustomTooltip';
 
 interface TotalQuestionBarChartProps {

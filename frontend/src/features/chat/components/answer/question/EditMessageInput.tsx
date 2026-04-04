@@ -10,7 +10,7 @@ interface EditMessageInputProps {
   onSubmit: (newContent: string) => void;
 }
 
-const EditMessageInput = ({ initialContent, onCancel, onSubmit }: EditMessageInputProps) => {
+export default function EditMessageInput({ initialContent, onCancel, onSubmit }: EditMessageInputProps) {
   const [editText, setEditText] = useState(initialContent);
   const [isFocused, setIsFocused] = useState(false);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
@@ -80,6 +80,4 @@ const EditMessageInput = ({ initialContent, onCancel, onSubmit }: EditMessageInp
       </div>
     </div>
   );
-};
-
-export default EditMessageInput;
+}

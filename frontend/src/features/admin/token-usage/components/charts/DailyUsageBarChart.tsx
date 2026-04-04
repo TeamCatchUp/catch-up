@@ -8,7 +8,7 @@ import { Bar, BarChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from 'recha
 
 import { type ChartConfig, ChartContainer, ChartTooltip } from '@/shared/components/ui/chart';
 
-import type { DailyTokenUsage } from '../../types/tokenUsage';
+import type { DailyTokenUsage } from '../../types/tokenUsageModel';
 import ChartCustomTooltip from './ChartCustomTooltip';
 
 interface DailyUsageBarChartProps {

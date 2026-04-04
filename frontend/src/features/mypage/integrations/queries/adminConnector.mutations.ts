@@ -4,7 +4,7 @@ import type { AxiosResponse } from 'axios';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { FullSyncRequest, SyncAcceptedResponse } from '../types/sync';
+import type { FullSyncRequest, SyncAcceptedResponse } from '../types/syncModel';
 
 export const adminConnectorMutations = {
   syncFull: () =>

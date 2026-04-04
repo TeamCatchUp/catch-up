@@ -7,7 +7,7 @@ import { INTEGRATION_ACCOUNTS } from '@/shared/constants/integrationAccounts';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
-import type { UserIntegrations } from '../../types/adminMember';
+import type { UserIntegrations } from '../../types/adminMemberModel';
 
 /** 프로필 아바타 (avatarUrl이 있으면 img, 없으면 DefaultProfile SVG) */
 const Avatar = ({ src, size = 'sm' }: { src?: string | null; size?: 'sm' | 'xs' }) => {
@@ -56,7 +56,7 @@ const getAccountIdentifier = (service: IntegrationService, integrations: UserInt
 };
 
 /** 우측 상세 패널 (입장 신청 / 이용자 목록 공통) */
-const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) => {
+export default function MemberDetailPanel({ member, actionButtons }: MemberDetailPanelProps) {
   if (!member) {
     return (
       <section className="bg-fill-normal overflow-clip pt-5 pb-5 pl-6">
@@ -151,7 +151,7 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
                           </span>
                         </div>
                       ) : (
-                        <div className="bg-fill-strong flex w-[259px] shrink-0 items-center justify-center self-stretch rounded-lg">
+                        <div className="bg-fill-strong flex w-64.75 shrink-0 items-center justify-center self-stretch rounded-lg">
                           <div className="flex items-center gap-1">
                             <IconCloudOff className="text-content-assistive size-5" />
                             <span className="text-body-xsmall text-content-alternative">연동 안됨</span>
@@ -168,6 +168,4 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
       </div>
     </section>
   );
-};
-
-export default MemberDetailPanel;
+}

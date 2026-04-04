@@ -7,7 +7,7 @@ const DotDivider = () => (
 );
 
 /** 오류 및 장애 */
-const Support4Content = () => {
+export default function Support4Content() {
   return (
     <div className="flex w-full flex-col gap-16">
       {/* 도입부 */}
@@ -40,9 +40,7 @@ const Support4Content = () => {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-heading-medium text-content-strong">
-            혹시 &apos;비공개&apos;로 설정된 글인가요?
-          </h3>
+          <h3 className="text-heading-medium text-content-strong">혹시 &apos;비공개&apos;로 설정된 글인가요?</h3>
           <div className="text-label-medium text-content-normal">
             <p>
               아무것도 나오지 않는다면, 오류가 아니라
@@ -83,17 +81,12 @@ const Support4Content = () => {
           </p>
           <div className="text-label-medium text-content-normal">
             <p>&quot;로그인 안 돼&quot; (X)</p>
-            <p>
-              &quot;어제(기간) 발생한 소셜 로그인(단서) 실패 원인(목적)이 뭐야?&quot; (O)
-            </p>
+            <p>&quot;어제(기간) 발생한 소셜 로그인(단서) 실패 원인(목적)이 뭐야?&quot; (O)</p>
           </div>
         </div>
 
         <div className="text-label-medium text-content-normal">
-          <p>
-            단어 몇 개만 더해주셔도, Catch Up은 숨겨진 맥락까지 파악하여 훨씬 더 선명하고 정확한 답을
-            찾아냅니다.
-          </p>
+          <p>단어 몇 개만 더해주셔도, Catch Up은 숨겨진 맥락까지 파악하여 훨씬 더 선명하고 정확한 답을 찾아냅니다.</p>
         </div>
       </section>
 
@@ -119,8 +112,8 @@ const Support4Content = () => {
             </h3>
             <div className="text-label-medium text-content-normal">
               <p>
-                [설정 &gt; 협업 툴 연동] 메뉴에서 혹시 &apos;연동 해제&apos;나 &apos;재인증 필요&apos; 상태가
-                아닌지 살펴봐 주세요.
+                [설정 &gt; 협업 툴 연동] 메뉴에서 혹시 &apos;연동 해제&apos;나 &apos;재인증 필요&apos; 상태가 아닌지
+                살펴봐 주세요.
                 <br />
                 다음과 같은 상황에서 흔히 나타납니다.
               </p>
@@ -132,16 +125,13 @@ const Support4Content = () => {
           <ul className="text-label-medium text-content-normal list-disc space-y-3 pl-6">
             <li>사내 보안 시스템(Okta 등 통합 인증)의 권한 정보가 갱신되거나 세션이 만료된 경우</li>
             <li>
-              관리자에 의해 원본 도구(Slack, Jira 등)에 설치된 Catch Up 앱이 일시적으로 삭제되거나 권한이 변경된
-              경우
+              관리자에 의해 원본 도구(Slack, Jira 등)에 설치된 Catch Up 앱이 일시적으로 삭제되거나 권한이 변경된 경우
             </li>
           </ul>
         </div>
 
         <div className="text-label-medium text-content-normal">
-          <p>
-            이러한 경우에는 사내 관리자에게 확인을 요청해 주시면, 끊어졌던 맥락을 곧바로 다시 이어드립니다.
-          </p>
+          <p>이러한 경우에는 사내 관리자에게 확인을 요청해 주시면, 끊어졌던 맥락을 곧바로 다시 이어드립니다.</p>
         </div>
       </section>
 
@@ -192,6 +182,4 @@ const Support4Content = () => {
       </section>
     </div>
   );
-};
-
-export default Support4Content;
+}

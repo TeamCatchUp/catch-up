@@ -5,7 +5,7 @@ import { INTEGRATION_ACCOUNTS } from '@/shared/constants/integrationAccounts';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
-import type { AuditLog } from '../../types/auditLog';
+import type { AuditLog } from '../../types/auditLogModel';
 import { formatDate } from '../../utils/formatDate';
 
 /** 정보 행 */
@@ -63,7 +63,7 @@ const IntegrationAccountsSection = ({
                 <span className="text-body-xsmall text-content-alternative shrink-0 truncate">{email}</span>
               </div>
             ) : (
-              <div className="bg-fill-strong flex w-[259px] shrink-0 items-center justify-center self-stretch rounded-lg">
+              <div className="bg-fill-strong flex w-64.75 shrink-0 items-center justify-center self-stretch rounded-lg">
                 <div className="flex items-center gap-1">
                   <IconCloudOff className="text-content-alternative size-6" />
                   <span className="text-body-xsmall text-content-alternative">연동 안됨</span>
@@ -78,28 +78,28 @@ const IntegrationAccountsSection = ({
 );
 
 /** 계정관리 상세 패널 */
-const AccountDetailPanel = ({ log }: { log: AuditLog }) => (
-  <div className="flex h-full flex-col gap-4">
-    {/* 프로필 + 이름 */}
-    <div className="flex items-center gap-3">
-      <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
-      <span className="text-heading-medium text-content-normal truncate">{log.name}</span>
-    </div>
-
-    <div className="flex flex-col gap-9">
-      {/* 기본 정보 */}
-      <div className="text-body-small flex flex-col gap-2">
-        <InfoRow label="메일" value={log.email} />
-        <InfoRow label="부서" value={log.department} />
-        <InfoRow label="직급" value={log.rank} />
-        <InfoRow label="가입일" value={formatDate(log.joinedAt)} />
-        <InfoRow label="승인자" value={log.approver} />
+export default function AccountDetailPanel({ log }: { log: AuditLog }) {
+  return (
+    <div className="flex h-full flex-col gap-4">
+      {/* 프로필 + 이름 */}
+      <div className="flex items-center gap-3">
+        <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
+        <span className="text-heading-medium text-content-normal truncate">{log.name}</span>
       </div>
 
-      {/* 연동된 계정 정보 */}
-      <IntegrationAccountsSection name={log.name} email={log.email} accountIds={log.accountIds} />
-    </div>
-  </div>
-);
+      <div className="flex flex-col gap-9">
+        {/* 기본 정보 */}
+        <div className="text-body-small flex flex-col gap-2">
+          <InfoRow label="메일" value={log.email} />
+          <InfoRow label="부서" value={log.department} />
+          <InfoRow label="직급" value={log.rank} />
+          <InfoRow label="가입일" value={formatDate(log.joinedAt)} />
+          <InfoRow label="승인자" value={log.approver} />
+        </div>
 
-export default AccountDetailPanel;
+        {/* 연동된 계정 정보 */}
+        <IntegrationAccountsSection name={log.name} email={log.email} accountIds={log.accountIds} />
+      </div>
+    </div>
+  );
+}

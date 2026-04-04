@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
-import { MAX_INSTRUCTION_LENGTH } from '../constants/preferences';
+import { MAX_INSTRUCTION_LENGTH } from '../constants/preferencesConfig';
 
 interface InstructionInputProps {
   onSave: (value: string) => void;
@@ -76,11 +76,11 @@ const InstructionInput = ({
       ref={containerRef}
       className={cn(
         'bg-fill-normal w-full rounded-xl border',
-        !isActive && 'h-[46px]',
+        !isActive && 'h-11.5',
         isActive ? (isAtLimit ? 'border-red-50' : 'border-blue-40') : 'border-edge-neutral',
       )}
     >
-      <div className={cn(isActive ? 'px-[18px] py-2.5' : 'p-3')}>
+      <div className={cn(isActive ? 'px-4.5 py-2.5' : 'p-3')}>
         <textarea
           ref={textareaRef}
           value={value}
@@ -92,7 +92,7 @@ const InstructionInput = ({
           className={cn(
             'text-body-small w-full resize-none bg-transparent outline-none',
             'placeholder:text-content-assistive',
-            isActive ? 'max-h-[114px] overflow-y-auto' : 'h-[22px] overflow-hidden',
+            isActive ? 'max-h-28.5 overflow-y-auto' : 'h-5.5 overflow-hidden',
           )}
         />
         {isActive && (

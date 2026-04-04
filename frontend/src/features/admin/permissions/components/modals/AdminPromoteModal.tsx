@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialo
 import { Input } from '@/shared/components/ui/input';
 
 import { PERMISSION_CHANGE_REASONS } from '../../constants/permissionsConfig';
-import type { PermissionMember } from '../../types/adminPermission';
+import type { PermissionMember } from '../../types/adminPermissionModel';
 
 interface AdminPromoteModalProps {
   open: boolean;
@@ -20,14 +20,14 @@ interface AdminPromoteModalProps {
 }
 
 /** Admin 권한 부여 모달 */
-const AdminPromoteModal = ({
+export default function AdminPromoteModal({
   open,
   onOpenChange,
   member,
   isSubmitting,
   errorMessage,
   onSubmit,
-}: AdminPromoteModalProps) => {
+}: AdminPromoteModalProps) {
   const [selectedReason, setSelectedReason] = useState<string>(PERMISSION_CHANGE_REASONS[0]);
   const [customReason, setCustomReason] = useState('');
 
@@ -134,6 +134,4 @@ const AdminPromoteModal = ({
       </DialogContent>
     </Dialog>
   );
-};
-
-export default AdminPromoteModal;
+}

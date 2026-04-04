@@ -4,10 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
-import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
+import { INTEGRATION_ACCOUNTS } from '../../../constants/integrationsConfig';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
-import type { PreMappingInfo, UserSyncItem } from '../../../types/api';
-import type { IntegrationAccountInfo, MemberIntegrationRow } from '../../../types/integrations';
+import type { PreMappingInfo, UserSyncItem } from '../../../types/integrationApi';
+import type { IntegrationAccountInfo, MemberIntegrationRow } from '../../../types/integrationModel';
 import ConnectedAccountCard from '../cards/ConnectedAccountCard';
 import AccountEditModal from '../modals/AccountEditModal';
 import AccountRegisterModal from '../modals/AccountRegisterModal';
@@ -55,11 +55,11 @@ const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMap
 type ModalType = 'edit' | 'register' | null;
 
 /** 연동 계정 정보 섹션 공통 베이스 */
-const ConnectedAccountsSectionBase = ({
+export default function ConnectedAccountsSectionBase({
   variant,
   sectionGapClassName,
   accountInfoMap,
-}: ConnectedAccountsSectionBaseProps) => {
+}: ConnectedAccountsSectionBaseProps) {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [selectedRow, setSelectedRow] = useState<MemberIntegrationRow | null>(null);
   const [serviceName, setServiceName] = useState('');
@@ -158,6 +158,4 @@ const ConnectedAccountsSectionBase = ({
       )}
     </section>
   );
-};
-
-export default ConnectedAccountsSectionBase;
+}

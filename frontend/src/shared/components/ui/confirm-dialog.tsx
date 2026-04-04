@@ -31,7 +31,7 @@ function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent hideClose className="border-edge-neutral flex max-w-[491px] flex-col gap-3 border p-5">
+      <DialogContent hideClose className="border-edge-neutral flex max-w-122.75 flex-col gap-3 border p-5">
         <div className="flex flex-col gap-3">
           <DialogTitle className="text-heading-medium text-content-normal">{title}</DialogTitle>
           {description && <DialogDescription className="whitespace-pre-line">{description}</DialogDescription>}

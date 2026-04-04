@@ -11,7 +11,7 @@ interface WelcomeStepProps {
 export function WelcomeStep({ onStart }: WelcomeStepProps) {
   return (
     <div className="bg-onboarding-gradient flex size-full flex-col items-center justify-center">
-      <div className="flex w-[440px] flex-col items-start gap-10 pb-[120px]">
+      <div className="flex w-110 flex-col items-start gap-10 pb-30">
         {/* 텍스트 섹션 */}
         <div className="flex w-full flex-col items-start gap-9">
           <h1 className="text-display-large text-content-normal">반갑습니다!</h1>
@@ -20,10 +20,10 @@ export function WelcomeStep({ onStart }: WelcomeStepProps) {
             <p className="text-display-large text-content-normal">이제 팀의 기억이 사라지지 않도록 </p>
             <div className="flex items-center gap-1.5">
               <div className="flex items-center gap-2">
-                <div className="border-edge-neutral bg-fill-normal flex size-[55px] shrink-0 flex-col items-center justify-center overflow-clip rounded-2xl border p-2">
+                <div className="border-edge-neutral bg-fill-normal flex size-13.75 shrink-0 flex-col items-center justify-center overflow-clip rounded-2xl border p-2">
                   <CatchUpIcon className="w-full shrink-0" />
                 </div>
-                <CatchUpLetter className="h-[31px] w-[133px]" />
+                <CatchUpLetter className="h-7.75 w-33.25" />
               </div>
               <span className="text-display-large text-content-normal">이 도와드릴게요.</span>
             </div>
@@ -31,7 +31,7 @@ export function WelcomeStep({ onStart }: WelcomeStepProps) {
         </div>
 
         {/* 액션 섹션 */}
-        <Button variant="box-solid-primary" size="lg" onClick={onStart} className="h-[46px] w-full">
+        <Button variant="box-solid-primary" size="lg" onClick={onStart} className="h-11.5 w-full">
           온보딩 시작하기
         </Button>
       </div>

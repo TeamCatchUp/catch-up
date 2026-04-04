@@ -8,7 +8,7 @@ interface SectionHeaderProps {
 }
 
 /** 섹션 헤더 (입장 신청 목록 / 이용자 목록 공통) */
-const SectionHeader = ({ title, count, description, actions }: SectionHeaderProps) => {
+export default function SectionHeader({ title, count, description, actions }: SectionHeaderProps) {
   return (
     <div className="flex items-end justify-between">
       <div className="flex flex-col gap-0.5">
@@ -20,6 +20,4 @@ const SectionHeader = ({ title, count, description, actions }: SectionHeaderProp
       <div className="flex items-center gap-2.5">{actions}</div>
     </div>
   );
-};
-
-export default SectionHeader;
+}

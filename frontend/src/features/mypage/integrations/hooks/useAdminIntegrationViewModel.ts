@@ -1,10 +1,15 @@
 import { useCallback, useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 
-import { INTEGRATION_ACCOUNTS } from '../constants/integrations';
+import { INTEGRATION_ACCOUNTS } from '../constants/integrationsConfig';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import type { AdminIntegrationViewModel, ConnectorDetail, ConnectorResource, IntegrationService } from '../types/integrations';
-import type { AdminConnectorStatusResponse, ConnectorStatusSource } from '../types/sync';
+import type {
+  AdminIntegrationViewModel,
+  ConnectorDetail,
+  ConnectorResource,
+  IntegrationService,
+} from '../types/integrationModel';
+import type { AdminConnectorStatusResponse, ConnectorStatusSource } from '../types/syncModel';
 
 const SOURCE_ORDER: ConnectorStatusSource[] = ['github', 'jira', 'slack', 'confluence'];
 

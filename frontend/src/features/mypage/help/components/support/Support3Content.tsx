@@ -7,7 +7,7 @@ const DotDivider = () => (
 );
 
 /** 권한과 접근 문제 */
-const Support3Content = () => {
+export default function Support3Content() {
   return (
     <div className="flex w-full flex-col gap-16">
       {/* 도입부 */}
@@ -48,17 +48,13 @@ const Support3Content = () => {
 
       {/* 2. 개인적인 업무나 비공개 프로젝트 */}
       <section className="flex flex-col gap-5">
-        <h2 className="text-heading-xlarge text-content-strong">
-          2. 그럼 제 개인적인 업무나 비공개 프로젝트는요?
-        </h2>
+        <h2 className="text-heading-xlarge text-content-strong">2. 그럼 제 개인적인 업무나 비공개 프로젝트는요?</h2>
         <div className="text-label-medium text-content-normal">
           <p>
             <strong>안전하게 가려져 있습니다.</strong>
           </p>
           <br />
-          <p>
-            현재 버전에서는 개인적인 DM, 비공개 채널, 특정 멤버만 볼 수 있는 문서는 기술적으로 수집하지 않아요.
-          </p>
+          <p>현재 버전에서는 개인적인 DM, 비공개 채널, 특정 멤버만 볼 수 있는 문서는 기술적으로 수집하지 않아요.</p>
           <br />
           <p>
             혹시라도 민감한 정보가 의도치 않게 노출되는 일을 원천적으로 차단하기 위함입니다.
@@ -107,6 +103,4 @@ const Support3Content = () => {
       </section>
     </div>
   );
-};
-
-export default Support3Content;
+}

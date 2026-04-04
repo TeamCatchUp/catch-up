@@ -2,7 +2,7 @@ import IconSpace from '@/public/icons/icon/space.svg';
 import IconTag from '@/public/icons/icon/tag.svg';
 import IconGithubLogo from '@/public/icons/logo/GitHub.svg';
 
-import type { SyncConnector } from '../types/sync';
+import type { SyncConnector } from '../types/syncModel';
 
 /** 서비스별 리소스 아이템 아이콘 */
 export const RESOURCE_ICONS: Record<SyncConnector, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {

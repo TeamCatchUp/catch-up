@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { SUPPORT_CARDS } from '@/features/mypage/help/constants/helpSections';
 import { Badge } from '@/shared/components/ui/badge';
 
-const AccountSupportSection = () => {
+export default function AccountSupportSection() {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
@@ -16,7 +16,7 @@ const AccountSupportSection = () => {
         {SUPPORT_CARDS.map((card) => (
           <li
             key={card.title}
-            className="border-edge-neutral bg-fill-normal flex max-w-100 flex-col overflow-hidden rounded-xl border transition-colors hover:bg-fill-strong"
+            className="border-edge-neutral bg-fill-normal hover:bg-fill-strong flex max-w-100 flex-col overflow-hidden rounded-xl border transition-colors"
           >
             <Link href={`/mypage/help/support/${card.id}`}>
               <div className="border-edge-neutral relative aspect-292/128 w-full border-b">
@@ -31,7 +31,7 @@ const AccountSupportSection = () => {
               <div className="flex flex-col gap-2 px-5 py-4">
                 <div className="flex items-center gap-2 whitespace-nowrap">
                   <h3 className="text-heading-small text-content-normal">{card.title}</h3>
-                  <Badge className="shrink-0 rounded-md2 px-1.5 py-0.5">{card.tag}</Badge>
+                  <Badge className="rounded-md2 shrink-0 px-1.5 py-0.5">{card.tag}</Badge>
                 </div>
                 <p className="text-body-xsmall text-content-alternative whitespace-pre-line">{card.description}</p>
               </div>
@@ -41,6 +41,4 @@ const AccountSupportSection = () => {
       </ul>
     </section>
   );
-};
-
-export default AccountSupportSection;
+}

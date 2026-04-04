@@ -8,7 +8,7 @@ import type {
   TokenUsageSummary,
   TotalQuestionCount,
   TotalTokenUsageTrend,
-} from '../types/tokenUsage';
+} from '../types/tokenUsageModel';
 
 // TODO: 백엔드 API 준비 시 실제 API 호출로 교체
 // Mock 버전: src/shared/mocks/admin/token-usage/tokenUsage.queries.ts

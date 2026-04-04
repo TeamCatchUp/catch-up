@@ -19,7 +19,7 @@ interface ReasonDialogProps {
 }
 
 /** 사유 선택 모달 (반려 / 비활성화 공통) */
-const ReasonDialog = ({
+export default function ReasonDialog({
   open,
   onOpenChange,
   title,
@@ -27,7 +27,7 @@ const ReasonDialog = ({
   reasons,
   requestReason,
   onSave,
-}: ReasonDialogProps) => {
+}: ReasonDialogProps) {
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [customReason, setCustomReason] = useState('');
 
@@ -136,6 +136,4 @@ const ReasonDialog = ({
       </DialogContent>
     </Dialog>
   );
-};
-
-export default ReasonDialog;
+}

@@ -5,12 +5,12 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 
-import { INTEGRATION_ACCOUNTS } from '../../../constants/integrations';
+import { INTEGRATION_ACCOUNTS } from '../../../constants/integrationsConfig';
 import { useEmbeddingHistory } from '../../../hooks/useEmbeddingHistory';
 import { useEmbeddingJobs } from '../../../hooks/useEmbeddingJobs';
 import { useMemberIntegrationViewModel } from '../../../hooks/useMemberIntegrationViewModel';
-import type { SyncFilterType } from '../../../types/api';
-import type { EmbeddingButtonState, SyncConnector } from '../../../types/sync';
+import type { SyncFilterType } from '../../../types/integrationApi';
+import type { EmbeddingButtonState, SyncConnector } from '../../../types/syncModel';
 import { buildMemberDisplayRows } from '../../../utils/memberDisplay';
 import EmbeddingProgressPanel from '../panels/EmbeddingProgressPanel';
 import StatusCardsSection from './StatusCardsSection';
@@ -20,7 +20,7 @@ const PAGE_SIZE = 10;
 const CONNECTOR_ORDER: SyncConnector[] = ['jira', 'github', 'slack', 'confluence'];
 
 /** 관리자 이용자 연동 탭 섹션 */
-const IntegrationsSection = () => {
+export default function IntegrationsSection() {
   const queryClient = useQueryClient();
   const [filterType, setFilterType] = useState<SyncFilterType>('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -71,8 +71,18 @@ const IntegrationsSection = () => {
   return (
     <section className="flex w-full flex-col gap-8">
       <div className="flex flex-col gap-3">
-        <StatusCardsSection cards={cards} buttonStates={buttonStates} onJobStart={handleJobStart} isInitialLoading={isInitialLoading} />
-        <EmbeddingProgressPanel progresses={progresses} buttonStates={buttonStates} isInitialLoading={isInitialLoading} historyByConnector={historyByConnector} />
+        <StatusCardsSection
+          cards={cards}
+          buttonStates={buttonStates}
+          onJobStart={handleJobStart}
+          isInitialLoading={isInitialLoading}
+        />
+        <EmbeddingProgressPanel
+          progresses={progresses}
+          buttonStates={buttonStates}
+          isInitialLoading={isInitialLoading}
+          historyByConnector={historyByConnector}
+        />
       </div>
       <UsersStatusSection
         total={total}
@@ -107,6 +117,4 @@ const IntegrationsSection = () => {
       />
     </section>
   );
-};
-
-export default IntegrationsSection;
+}

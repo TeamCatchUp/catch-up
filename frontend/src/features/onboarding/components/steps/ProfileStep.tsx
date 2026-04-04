@@ -7,7 +7,7 @@ import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { DEPARTMENT_OPTIONS, JOB_LEVEL_OPTIONS } from '@/shared/constants/organization';
 
-import type { ProfileFormData } from '../../types/onboarding';
+import type { ProfileFormData } from '../../types/onboardingModel';
 import { StepIndicator } from '../StepIndicator';
 import { StepNavButtons } from '../StepNavButtons';
 
@@ -60,9 +60,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
             <br />
             간단한 정보를 알려주세요.
           </h1>
-          <p className="text-body-large text-content-alternative">
-            성함과 맡고 계신 역할만 알려주셔도 충분합니다.
-          </p>
+          <p className="text-body-large text-content-alternative">성함과 맡고 계신 역할만 알려주셔도 충분합니다.</p>
         </div>
 
         {/* 폼 영역 */}
@@ -70,7 +68,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
           {/* 이름 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-heading-medium text-content-normal flex items-center gap-1">
-              <span className="size-[5px] rounded-full bg-red-50" />
+              <span className="size-1.25 rounded-full bg-red-50" />
               이름을 적어주세요.
             </label>
             <Input
@@ -81,7 +79,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
               }}
               placeholder="이름"
               error={errors.name}
-              className="h-[46px]"
+              className="h-11.5"
             />
           </div>
 
@@ -89,7 +87,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-1.5">
               <label className="text-heading-medium text-content-normal flex items-center gap-1">
-                <span className="size-[5px] rounded-full bg-red-50" />
+                <span className="size-1.25 rounded-full bg-red-50" />
                 직급을 알려주세요.
               </label>
               <Select
@@ -99,7 +97,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
                   if (errors.jobLevel) setErrors((p) => ({ ...p, jobLevel: false }));
                 }}
               >
-                <SelectTrigger className={`h-[46px] ${errors.jobLevel ? 'border-red-50' : ''}`}>
+                <SelectTrigger className={`h-11.5 ${errors.jobLevel ? 'border-red-50' : ''}`}>
                   <SelectValue placeholder="선택 안됨" />
                 </SelectTrigger>
                 <SelectContent position="popper" side="bottom" sideOffset={4} avoidCollisions={false}>
@@ -122,7 +120,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
             {!isAdmin && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-heading-medium text-content-normal flex items-center gap-1">
-                  <span className="size-[5px] rounded-full bg-red-50" />
+                  <span className="size-1.25 rounded-full bg-red-50" />
                   부서명을 알려주세요.
                 </label>
                 <Select
@@ -132,7 +130,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
                     if (errors.department) setErrors((p) => ({ ...p, department: false }));
                   }}
                 >
-                  <SelectTrigger className={`h-[46px] ${errors.department ? 'border-red-50' : ''}`}>
+                  <SelectTrigger className={`h-11.5 ${errors.department ? 'border-red-50' : ''}`}>
                     <SelectValue placeholder="선택 안됨" />
                   </SelectTrigger>
                   <SelectContent

@@ -4,7 +4,7 @@ import { AxiosError } from 'axios';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { AdminSignUpRequest, SignUpResponse, UserSignUpRequest } from './types/onboarding';
+import type { AdminSignUpRequest, SignUpResponse, UserSignUpRequest } from './types/onboardingApi';
 
 const retryOnServerError = (failureCount: number, error: Error) => {
   if (

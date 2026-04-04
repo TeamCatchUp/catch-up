@@ -6,7 +6,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
-import type { MemberIntegrationRow } from '../../../types/integrations';
+import type { MemberIntegrationRow } from '../../../types/integrationModel';
 import AccountSelectorPopover, { type AccountOption } from './AccountSelectorPopover';
 import ReasonRadioGroup, { type ReasonOption } from './ReasonRadioGroup';
 
@@ -25,7 +25,13 @@ interface AccountRegisterModalProps {
 }
 
 /** 계정 등록 모달 */
-const AccountRegisterModal = ({ open, onOpenChange, allRows, service, serviceName }: AccountRegisterModalProps) => {
+export default function AccountRegisterModal({
+  open,
+  onOpenChange,
+  allRows,
+  service,
+  serviceName,
+}: AccountRegisterModalProps) {
   const [selectedReason, setSelectedReason] = useState('new-tool');
   const [customReason, setCustomReason] = useState('');
   const [selectedAccountKey, setSelectedAccountKey] = useState('');
@@ -71,7 +77,7 @@ const AccountRegisterModal = ({ open, onOpenChange, allRows, service, serviceNam
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         hideClose
-        className="border-edge-neutral shadow-modal bg-fill-normal max-w-[400px] gap-2 rounded-2xl border px-5 pt-3 pb-4"
+        className="border-edge-neutral shadow-modal bg-fill-normal max-w-100 gap-2 rounded-2xl border px-5 pt-3 pb-4"
       >
         <div className="flex h-9 items-center justify-between">
           <DialogTitle className="text-heading-medium text-content-normal">계정 등록하기</DialogTitle>
@@ -80,7 +86,7 @@ const AccountRegisterModal = ({ open, onOpenChange, allRows, service, serviceNam
           </button>
         </div>
 
-        <div className="border-edge-neutral max-h-[378px] w-full overflow-y-auto border-t pt-4">
+        <div className="border-edge-neutral max-h-94.5 w-full overflow-y-auto border-t pt-4">
           <div className="flex flex-col gap-1.5">
             <AccountSelectorPopover
               open={accountPopoverOpen}
@@ -129,6 +135,4 @@ const AccountRegisterModal = ({ open, onOpenChange, allRows, service, serviceNam
       </DialogContent>
     </Dialog>
   );
-};
-
-export default AccountRegisterModal;
+}

@@ -4,11 +4,11 @@ import IconHelp from '@/public/icons/icon/help.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
 import IconRotate from '@/public/icons/icon/rotate.svg';
 import { Button } from '@/shared/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
-import type { MemberIntegrationCardItem } from '../../../types/integrations';
-import type { EmbeddingButtonState, SyncConnector } from '../../../types/sync';
+import type { MemberIntegrationCardItem } from '../../../types/integrationModel';
+import type { EmbeddingButtonState, SyncConnector } from '../../../types/syncModel';
 import EmbeddingModal from '../modals/EmbeddingModal';
 
 interface StatusCardsSectionProps {
@@ -19,7 +19,12 @@ interface StatusCardsSectionProps {
 }
 
 /** 이용자 연동 상단 계정 등록 카드 섹션 */
-const StatusCardsSection = ({ cards, buttonStates, onJobStart, isInitialLoading }: StatusCardsSectionProps) => {
+export default function StatusCardsSection({
+  cards,
+  buttonStates,
+  onJobStart,
+  isInitialLoading,
+}: StatusCardsSectionProps) {
   const [embeddingModal, setEmbeddingModal] = useState<{
     open: boolean;
     service: IntegrationService;
@@ -131,7 +136,7 @@ const StatusCardsSection = ({ cards, buttonStates, onJobStart, isInitialLoading 
                     </span>
                   </div>
                   <div
-                    className="bg-edge-primary absolute bottom-0 left-0 h-[5px] rounded-full"
+                    className="bg-edge-primary absolute bottom-0 left-0 h-1.25 rounded-full"
                     style={{ width: `${completionRate}%` }}
                   />
                 </div>
@@ -152,6 +157,4 @@ const StatusCardsSection = ({ cards, buttonStates, onJobStart, isInitialLoading 
       />
     </section>
   );
-};
-
-export default StatusCardsSection;
+}

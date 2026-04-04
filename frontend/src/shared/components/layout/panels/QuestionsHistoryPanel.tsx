@@ -15,7 +15,7 @@ import { formatFullDate } from '@/shared/utils/formatDate';
 
 type SearchQueryWithRawDate = SearchQuery & { rawDate: Date };
 
-const QuestionsHistoryPanel = () => {
+export default function QuestionsHistoryPanel() {
   const router = useRouter();
   const { setActivePanel } = useSidebarStore();
   const [searchValue, setSearchValue] = useState('');
@@ -128,6 +128,4 @@ const QuestionsHistoryPanel = () => {
       </div>
     </div>
   );
-};
-
-export default QuestionsHistoryPanel;
+}

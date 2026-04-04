@@ -1,7 +1,7 @@
 import type { RecentQueryWithSaveStatusResponse } from '@/shared/types/query/api';
 import { formatFullDate, formatRelativeDate } from '@/shared/utils/formatDate';
 
-import type { QuestionLogItem } from '../types/questionLog';
+import type { QuestionLogItem } from '../types/questionLogModel';
 
 /** API 응답 → QuestionLogItem UI 모델 변환 */
 export const toQuestionLogItem = (item: RecentQueryWithSaveStatusResponse): QuestionLogItem => ({

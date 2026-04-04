@@ -3,7 +3,7 @@ import type { DatePeriod } from '@/shared/utils/dateGrouping';
 import { getDateGroup, isInPeriod as isInPeriodShared } from '@/shared/utils/dateGrouping';
 import { formatFullDate, formatRelativeDate } from '@/shared/utils/formatDate';
 
-import type { HistoryItem } from '../types/models';
+import type { HistoryItem } from '../types/historyModel';
 
 /** shared getDateGroup 래퍼 (기존 호출부 호환) */
 export const getHistoryGroup = getDateGroup;
