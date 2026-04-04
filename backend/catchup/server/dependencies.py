@@ -1,7 +1,8 @@
+
+from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
 
-from attr import dataclass
 from fastapi import HTTPException
 from fastapi import Query
 from fastapi import status
