@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import InstructionCard from '@/features/mypage/preferences/components/InstructionCard';
 import InstructionInput from '@/features/mypage/preferences/components/InstructionInput';
-import { promptMutations } from '@/features/mypage/preferences/mutations/prompt.mutations';
+import { promptMutations } from '@/features/mypage/preferences/queries/prompt.mutations';
 import { promptQueries } from '@/features/mypage/preferences/queries/prompt.queries';
 
 export default function PreferencesPage() {

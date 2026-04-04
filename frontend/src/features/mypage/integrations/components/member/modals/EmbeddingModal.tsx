@@ -14,7 +14,7 @@ import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
 import { useScopeId } from '../../../hooks/useScopeId';
-import { adminConnectorMutations } from '../../../mutations/adminConnector.mutations';
+import { adminConnectorMutations } from '../../../queries/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
 import type { SyncConnector } from '../../../types/syncModel';
 import EmbeddingModalContent from './EmbeddingModalContent';

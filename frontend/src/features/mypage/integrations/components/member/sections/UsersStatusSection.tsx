@@ -12,7 +12,7 @@ import { Button } from '@/shared/components/ui/button';
 import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
-import { adminConnectorMutations } from '../../../mutations/adminConnector.mutations';
+import { adminConnectorMutations } from '../../../queries/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
 import type {
   PreMappingBulkUpdateResponse,
