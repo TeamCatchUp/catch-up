@@ -56,7 +56,7 @@ const IntegrationAccountsSection = ({
                 <div className="flex shrink-0 items-center gap-2.5">
                   <DefaultProfile className="text-content-assistive size-6.25 shrink-0 rounded-full" />
                   <span className="text-body-xsmall text-content-normal max-w-33.25 shrink-0 truncate">{name}</span>
-                  <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall text-content-alternative shrink-0 px-1.5 py-0.5 tracking-tight">
+                  <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall text-content-alternative shrink-0 px-1.5 py-0.5">
                     {accountId}
                   </span>
                 </div>
@@ -88,7 +88,7 @@ const AccountDetailPanel = ({ log }: { log: AuditLog }) => (
 
     <div className="flex flex-col gap-9">
       {/* 기본 정보 */}
-      <div className="text-body-small flex flex-col gap-2 tracking-tight">
+      <div className="text-body-small flex flex-col gap-2">
         <InfoRow label="메일" value={log.email} />
         <InfoRow label="부서" value={log.department} />
         <InfoRow label="직급" value={log.rank} />

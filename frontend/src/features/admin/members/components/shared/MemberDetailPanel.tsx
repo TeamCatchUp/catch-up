@@ -86,7 +86,7 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
 
         <div className="flex flex-col gap-9">
           {/* 기본 정보 */}
-          <div className="text-body-small flex flex-col gap-2 tracking-tight">
+          <div className="text-body-small flex flex-col gap-2">
             <div className="flex w-full items-center gap-14">
               <span className="text-content-alternative w-19.75 shrink-0">메일</span>
               <span className="text-content-neutral min-w-0 flex-1 truncate">{member.email}</span>

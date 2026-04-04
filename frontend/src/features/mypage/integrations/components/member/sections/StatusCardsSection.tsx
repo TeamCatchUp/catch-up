@@ -126,7 +126,7 @@ const StatusCardsSection = ({ cards, buttonStates, onJobStart, isInitialLoading 
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-heading-medium text-content-neutral">{completionRate}%</span>
-                    <span className="rounded-md2 text-body-xsmall bg-fill-primary-normal-neutral text-content-primary px-1.5 py-0.5 leading-none tracking-tight">
+                    <span className="rounded-md2 text-body-xsmall bg-fill-primary-normal-neutral text-content-primary px-1.5 py-0.5 leading-none">
                       {`${completedCount}/${totalCount}`}
                     </span>
                   </div>

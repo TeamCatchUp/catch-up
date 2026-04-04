@@ -21,7 +21,7 @@ export function StepIndicator({ totalSteps, currentStep }: StepIndicatorProps) {
               isActive ? 'bg-blue-50' : 'bg-blue-10',
             )}
           >
-            <span className="text-heading-medium tracking-tight text-white">{stepNum}</span>
+            <span className="text-heading-medium text-white">{stepNum}</span>
           </div>
         );
       })}

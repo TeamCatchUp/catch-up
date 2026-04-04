@@ -27,7 +27,7 @@ const DetailHeader = ({ userId, userName, userDepartment, from }: DetailHeaderPr
         <Separator orientation="vertical" className="h-6" />
         <div className="flex min-w-0 items-center gap-3">
           <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
-          <span className="text-body-small text-content-neutral truncate tracking-tight">
+          <span className="text-body-small text-content-neutral truncate">
             {userName} ({userDepartment})
           </span>
         </div>

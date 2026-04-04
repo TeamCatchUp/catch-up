@@ -32,7 +32,7 @@ const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
         </div>
 
         <div className="flex flex-col gap-9">
-          <div className="text-body-small flex flex-col gap-2 tracking-tight">
+          <div className="text-body-small flex flex-col gap-2">
             <div className="flex w-full items-center gap-14">
               <span className="text-content-alternative w-19.75 shrink-0">메일</span>
               <span className="text-content-neutral min-w-0 flex-1 truncate">{selectedRow.email}</span>
@@ -79,7 +79,7 @@ const UserDetailPanel = ({ selectedRow }: UserDetailPanelProps) => {
                         <span className="text-body-xsmall text-content-normal max-w-33.25 shrink-0 truncate">
                           {info?.name ?? '-'}
                         </span>
-                        <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall text-content-alternative shrink-0 px-1.5 py-0.5 tracking-tight">
+                        <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall text-content-alternative shrink-0 px-1.5 py-0.5">
                           {info?.identifier ?? '-'}
                         </span>
                       </div>
