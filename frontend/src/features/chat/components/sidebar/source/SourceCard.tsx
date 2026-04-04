@@ -20,7 +20,7 @@ type SourceLogoType = 'jira' | 'github' | 'slack' | 'confluence';
 // 이 출처가 사용된 이유(content) 미리보기 최대 글자 수
 const REASON_PREVIEW_MAX_LENGTH = 120;
 
-const SourceCard = ({ source, showCount = true, count }: Props) => {
+export default function SourceCard({ source, showCount = true, count }: Props) {
   // html_url이 없으면 클릭 무시
   const handleClick = () => {
     if (!source.html_url) return;
@@ -102,6 +102,4 @@ const SourceCard = ({ source, showCount = true, count }: Props) => {
       </div>
     </button>
   );
-};
-
-export default SourceCard;
+}
