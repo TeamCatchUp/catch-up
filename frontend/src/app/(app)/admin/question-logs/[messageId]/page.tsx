@@ -14,7 +14,7 @@ import DetailHeader from '@/features/admin/question-logs/components/DetailHeader
 import { adminQueriesQueries } from '@/features/admin/question-logs/queries/adminQueries.queries';
 // chat feature (app layer can import from any feature)
 import { MarkDownComponents } from '@/features/chat/components/answer/markdown/MarkDownComponents';
-import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/renderWithBadges';
+import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/RenderWithBadges';
 import CollapsibleQuestionText from '@/features/chat/components/answer/question/CollapsibleQuestionText';
 import SidebarHeader from '@/features/chat/components/sidebar/SidebarHeader';
 import SourceList from '@/features/chat/components/sidebar/source/SourceList';

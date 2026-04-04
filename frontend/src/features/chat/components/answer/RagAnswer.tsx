@@ -22,7 +22,7 @@ import AnswerActionButtons from './actions/AnswerActionButtons';
 import AnswerError from './actions/AnswerError';
 import FeedbackSection from './actions/FeedbackSection';
 import { MarkDownComponents } from './markdown/MarkDownComponents';
-import { getCitationDisplayOrderMap } from './markdown/renderWithBadges';
+import { getCitationDisplayOrderMap } from './markdown/RenderWithBadges';
 
 const ANSWER_ICONS = [
   { name: 'Copy', icon: Copy },

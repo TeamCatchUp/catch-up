@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/renderWithBadges';
+import { getCitationDisplayOrderMap } from '@/features/chat/components/answer/markdown/RenderWithBadges';
 import RagSourceSkeleton from '@/features/chat/components/skeleton/RagRightComponentSkeleton';
 import type { ChatSource } from '@/features/chat/types';
 import AddCircle from '@/public/icons/icon/add_circle.svg';
