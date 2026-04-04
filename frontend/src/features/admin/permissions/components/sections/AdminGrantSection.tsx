@@ -51,7 +51,7 @@ const AdminGrantSection = ({
             onValueChange={(v) => onMemberChange(Number(v))}
             disabled={disabled}
           >
-            <SelectTrigger className="h-[46px]">
+            <SelectTrigger className="h-11.5">
               <SelectValue placeholder="멤버 선택" />
             </SelectTrigger>
             <SelectContent>
@@ -70,7 +70,7 @@ const AdminGrantSection = ({
             value={reason}
             onChange={(event) => onReasonChange(event.target.value)}
             placeholder="부여 사유를 작성해주세요."
-            className="h-[46px]"
+            className="h-11.5"
             disabled={disabled}
           />
         </div>

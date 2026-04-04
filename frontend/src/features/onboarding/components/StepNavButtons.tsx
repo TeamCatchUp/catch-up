@@ -20,7 +20,7 @@ export function StepNavButtons({
   return (
     <div className="flex w-full items-center gap-[15px]">
       {showBack && onBack && (
-        <Button type="button" variant="box-outline-gray" size="lg" onClick={onBack} className="h-[46px] shrink-0">
+        <Button type="button" variant="box-outline-gray" size="lg" onClick={onBack} className="h-11.5 shrink-0">
           이전
         </Button>
       )}
@@ -30,7 +30,7 @@ export function StepNavButtons({
         size="lg"
         onClick={onNext}
         disabled={isNextDisabled}
-        className="h-[46px] flex-1"
+        className="h-11.5 flex-1"
       >
         {nextLabel}
       </Button>

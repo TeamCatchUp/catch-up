@@ -88,7 +88,7 @@ const ReasonRadioGroup = ({
                   value={customValue}
                   onChange={(event) => onCustomValueChange(event.target.value)}
                   placeholder={customPlaceholder}
-                  className="h-[46px]"
+                  className="h-11.5"
                 />
               )}
             </div>

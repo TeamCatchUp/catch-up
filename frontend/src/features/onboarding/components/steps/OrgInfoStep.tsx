@@ -75,7 +75,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
               }}
               placeholder="회사명"
               error={errors.companyName}
-              className="h-[46px]"
+              className="h-11.5"
             />
           </div>
 
@@ -91,7 +91,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
                 if (errors.companySize) setErrors((p) => ({ ...p, companySize: false }));
               }}
             >
-              <SelectTrigger className={`h-[46px] ${errors.companySize ? 'border-red-50' : ''}`}>
+              <SelectTrigger className={`h-11.5 ${errors.companySize ? 'border-red-50' : ''}`}>
                 <SelectValue placeholder="선택 안됨" />
               </SelectTrigger>
               <SelectContent>

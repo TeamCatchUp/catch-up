@@ -49,7 +49,7 @@ export default function HistoryPage() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
-    <section className="flex flex-col gap-6 px-16 pt-9 pb-[120px]">
+    <section className="flex flex-col gap-6 px-16 pt-9 pb-30">
       <h1 className="text-heading-xlarge text-content-normal">질문 히스토리</h1>
 
       <div className="flex flex-col gap-4">

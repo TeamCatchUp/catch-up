@@ -67,7 +67,7 @@ export default function QuestionLogDetailPage() {
   const citationOrderMap = useMemo(() => getCitationDisplayOrderMap(formattedAnswer), [formattedAnswer]);
 
   return (
-    <section className="flex flex-col gap-6 px-16 pt-9 pb-[120px]">
+    <section className="flex flex-col gap-6 px-16 pt-9 pb-30">
       <DetailHeader userId={userId} userName={user?.name ?? ''} userDepartment={user?.department ?? ''} from={from} />
 
       {detailQuery.isLoading && (

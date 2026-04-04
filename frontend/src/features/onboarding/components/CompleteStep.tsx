@@ -80,7 +80,7 @@ export function CompleteStep({ data, isAdmin }: CompleteStepProps) {
             <p className="text-body-large text-content-alternative">
               네트워크 상태를 확인하고 다시 시도해주세요.
             </p>
-            <Button variant="box-solid-primary" size="lg" className="mt-4 h-[46px]" onClick={submitOnboarding}>
+            <Button variant="box-solid-primary" size="lg" className="mt-4 h-11.5" onClick={submitOnboarding}>
               다시 시도
             </Button>
           </>

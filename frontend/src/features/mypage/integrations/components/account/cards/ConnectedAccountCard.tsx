@@ -32,8 +32,8 @@ const ConnectedAccountCard = ({ account, accountInfo, variant, onEditClick }: Co
     </div>
   ) : (
     <div className="flex flex-col gap-1.5">
-      <div className="flex h-[55px] w-full items-center justify-center overflow-hidden">
-        <EmptyGraphic className="h-[55px] w-[203px]" />
+      <div className="flex h-13.75 w-full items-center justify-center overflow-hidden">
+        <EmptyGraphic className="h-13.75 w-[203px]" />
       </div>
       <p className="text-label-xsmall text-content-assistive h-5 w-full truncate text-center">
         아직 연결된 {name} 계정이 없어요.

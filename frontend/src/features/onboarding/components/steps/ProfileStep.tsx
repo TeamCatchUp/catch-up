@@ -81,7 +81,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
               }}
               placeholder="이름"
               error={errors.name}
-              className="h-[46px]"
+              className="h-11.5"
             />
           </div>
 
@@ -99,7 +99,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
                   if (errors.jobLevel) setErrors((p) => ({ ...p, jobLevel: false }));
                 }}
               >
-                <SelectTrigger className={`h-[46px] ${errors.jobLevel ? 'border-red-50' : ''}`}>
+                <SelectTrigger className={`h-11.5 ${errors.jobLevel ? 'border-red-50' : ''}`}>
                   <SelectValue placeholder="선택 안됨" />
                 </SelectTrigger>
                 <SelectContent position="popper" side="bottom" sideOffset={4} avoidCollisions={false}>
@@ -132,7 +132,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
                     if (errors.department) setErrors((p) => ({ ...p, department: false }));
                   }}
                 >
-                  <SelectTrigger className={`h-[46px] ${errors.department ? 'border-red-50' : ''}`}>
+                  <SelectTrigger className={`h-11.5 ${errors.department ? 'border-red-50' : ''}`}>
                     <SelectValue placeholder="선택 안됨" />
                   </SelectTrigger>
                   <SelectContent

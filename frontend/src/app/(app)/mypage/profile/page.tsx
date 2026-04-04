@@ -39,7 +39,7 @@ const ProfilePage = () => {
   ];
 
   return (
-    <section className="flex flex-col gap-6 px-16 pt-9 pb-[120px]">
+    <section className="flex flex-col gap-6 px-16 pt-9 pb-30">
       <h1 className="text-heading-xlarge text-content-normal">계정</h1>
       <div className="border-edge-neutral h-px w-full border-b" />
 

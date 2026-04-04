@@ -29,7 +29,7 @@ export default function PendingPage() {
       <div className="border-edge-normal flex flex-[1_0_0] items-center gap-5 self-stretch overflow-clip rounded-2xl border p-6">
         <div className="flex min-w-80 flex-[1_0_0] flex-col items-center justify-center gap-24 self-stretch overflow-clip px-28 py-30">
           <div className="flex w-full min-w-80 flex-col gap-8">
-            <CatchUpLogo className="h-[55px] w-[181px]" />
+            <CatchUpLogo className="h-13.75 w-45.25" />
 
             <div className="flex items-start gap-3">
               <div className="border-edge-assistive bg-fill-primary-assistive shrink-0 rounded-full border p-2">
@@ -44,13 +44,13 @@ export default function PendingPage() {
               <p className="text-body-medium text-content-alternative">
                 승인이 완료되면 바로 알려드릴게요.
               </p>
-              <Button variant="box-solid-primary" size="lg" className="h-[46px] w-full" onClick={handleRequestApproval}>
+              <Button variant="box-solid-primary" size="lg" className="h-11.5 w-full" onClick={handleRequestApproval}>
                 관리자에게 승인 요청하기
               </Button>
               <Button
                 variant="box-outline-gray"
                 size="lg"
-                className="h-[46px] w-full"
+                className="h-11.5 w-full"
                 onClick={() => refetch()}
                 disabled={isFetching}
               >
