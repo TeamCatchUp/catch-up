@@ -4,7 +4,7 @@ import Link from 'next/link';
 
 import ChatIcon from '@/public/icons/icon/chat.svg';
 
-import type { HistoryGroup, HistoryItem } from '../types/models';
+import type { HistoryGroup, HistoryItem } from '../types/historyModel';
 
 /** {@link HistoryListItem} 컴포넌트 Props */
 interface HistoryListItemProps {

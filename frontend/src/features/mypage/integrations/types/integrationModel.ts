@@ -2,7 +2,7 @@ export type { IntegrationAccountMeta, IntegrationService } from '@/shared/types/
 
 import type { IntegrationAccountMeta, IntegrationService } from '@/shared/types/integrationService';
 
-import type { PreMappingInfo } from './api';
+import type { PreMappingInfo } from './integrationApi';
 
 /** 관리자 연동 화면 탭 식별자 */
 export type AdminIntegrationTab = 'my' | 'member';

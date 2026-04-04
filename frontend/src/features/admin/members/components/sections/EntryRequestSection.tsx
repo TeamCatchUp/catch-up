@@ -17,7 +17,7 @@ import { cn } from '@/shared/utils/cn';
 import { REJECTION_REASONS, ROLE_BADGE_CLASS, ROLE_LABEL, SORT_OPTIONS } from '../../constants/memberTableConfig';
 import { useDecideRequestMutation } from '../../queries/adminMembers.mutations';
 import { adminMembersQueries } from '../../queries/adminMembers.queries';
-import type { AdminSortKey, EntryRequest, MemberTableRow } from '../../types/adminMember';
+import type { AdminSortKey, EntryRequest, MemberTableRow } from '../../types/adminMemberModel';
 import MemberDetailPanel from '../shared/MemberDetailPanel';
 import MemberTable from '../shared/MemberTable';
 import ReasonDialog from '../shared/ReasonPopover';

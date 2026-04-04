@@ -1,7 +1,7 @@
 import IconClockPending from '@/public/icons/icon/clock_pending.svg';
 import IconRotate from '@/public/icons/icon/rotate.svg';
 
-import type { EmbeddingProgressItem, SyncConnector } from '../../../types/sync';
+import type { EmbeddingProgressItem, SyncConnector } from '../../../types/syncModel';
 import { RESOURCE_ICONS } from '../../../utils/embeddingUtils';
 
 interface EmbeddingActiveCardProps {

@@ -7,8 +7,8 @@ import { Button } from '@/shared/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
-import type { MemberIntegrationCardItem } from '../../../types/integrations';
-import type { EmbeddingButtonState, SyncConnector } from '../../../types/sync';
+import type { MemberIntegrationCardItem } from '../../../types/integrationModel';
+import type { EmbeddingButtonState, SyncConnector } from '../../../types/syncModel';
 import EmbeddingModal from '../modals/EmbeddingModal';
 
 interface StatusCardsSectionProps {

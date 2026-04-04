@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { RequestDecisionPayload } from '../types/adminMember';
+import type { RequestDecisionPayload } from '../types/adminMemberModel';
 import { adminMembersQueries } from './adminMembers.queries';
 
 /** 입장 신청 승인/반려 */

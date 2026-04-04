@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 
 import { syncRecordGapsOptions } from '../queries/syncRecords.queries';
-import type { AdminConnectorTargetRangeResponse, SyncRecordGapItem, SyncTargetStatus } from '../types/sync';
+import type { AdminConnectorTargetRangeResponse, SyncRecordGapItem, SyncTargetStatus } from '../types/syncModel';
 
 export interface GapSummary {
   eventId: string;

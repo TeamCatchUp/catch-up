@@ -12,7 +12,7 @@ import {
 import { cn } from '@/shared/utils/cn';
 
 import { SORT_OPTIONS } from '../constants/auditLogConfig';
-import type { AuditSortKey } from '../types/auditLog';
+import type { AuditSortKey } from '../types/auditLogModel';
 
 interface AuditLogFilterBarProps {
   sortKey: AuditSortKey;

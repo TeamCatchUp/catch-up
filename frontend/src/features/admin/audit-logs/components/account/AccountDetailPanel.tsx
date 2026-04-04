@@ -5,7 +5,7 @@ import { INTEGRATION_ACCOUNTS } from '@/shared/constants/integrationAccounts';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
-import type { AuditLog } from '../../types/auditLog';
+import type { AuditLog } from '../../types/auditLogModel';
 import { formatDate } from '../../utils/formatDate';
 
 /** 정보 행 */

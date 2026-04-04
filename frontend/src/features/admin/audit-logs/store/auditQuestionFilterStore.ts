@@ -1,7 +1,7 @@
 import type { DateRange } from 'react-day-picker';
 import { create } from 'zustand';
 
-import type { AuditSortKey } from '../types/auditLog';
+import type { AuditSortKey } from '../types/auditLogModel';
 
 interface AuditQuestionFilterStore {
   sort: AuditSortKey;

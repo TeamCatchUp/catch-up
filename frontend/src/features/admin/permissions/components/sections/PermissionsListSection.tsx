@@ -11,7 +11,7 @@ import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
 import { ROLE_FILTER_OPTIONS, type RoleFilter } from '../../constants/permissionsConfig';
-import type { PermissionMember } from '../../types/adminPermission';
+import type { PermissionMember } from '../../types/adminPermissionModel';
 import PermissionsTable from '../shared/PermissionsTable';
 
 interface PermissionsListSectionProps {

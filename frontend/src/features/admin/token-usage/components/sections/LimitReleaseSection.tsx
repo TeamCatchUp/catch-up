@@ -13,7 +13,7 @@ import { cn } from '@/shared/utils/cn';
 
 import { POSITION_BADGE_CLASS, TEAM_BADGE_CLASS } from '../../constants/tokenUsageConfig';
 import { tokenUsageQueries } from '../../queries/tokenUsage.queries';
-import type { LimitReleaseRequest, LimitReleaseTableRow } from '../../types/tokenUsage';
+import type { LimitReleaseRequest, LimitReleaseTableRow } from '../../types/tokenUsageModel';
 import LimitReleaseDetailPanel from './LimitReleaseDetailPanel';
 
 /** 제한 해제 요청 섹션 */

@@ -3,13 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 
 import { INTEGRATION_ACCOUNTS } from '../constants/integrations';
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import type { PreMappingInfo, SyncFilterType, UserSyncItem } from '../types/api';
+import type { PreMappingInfo, SyncFilterType, UserSyncItem } from '../types/integrationApi';
 import type {
   IntegrationService,
   MemberIntegrationCardItem,
   MemberIntegrationRow,
   MemberIntegrationViewModel,
-} from '../types/integrations';
+} from '../types/integrationModel';
 
 /** 매핑 아이템에서 서비스별 PreMappingInfo 추출 */
 const getServiceInfo = (item: UserSyncItem, service: IntegrationService): PreMappingInfo | null => {

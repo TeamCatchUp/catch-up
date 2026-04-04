@@ -3,7 +3,7 @@ import { queryOptions } from '@tanstack/react-query';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { AdminUserDetailResponse, AdminUserListResponse, EntryRequest } from '../types/adminMember';
+import type { AdminUserDetailResponse, AdminUserListResponse, EntryRequest } from '../types/adminMemberModel';
 
 export const adminMembersQueries = {
   all: () => ['admin', 'members'] as const,

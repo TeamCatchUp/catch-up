@@ -12,7 +12,7 @@ import { Input } from '@/shared/components/ui/input';
 import { Separator } from '@/shared/components/ui/separator';
 
 import { DEFAULT_DAILY_LIMIT, DEFAULT_MONTHLY_LIMIT } from '../../constants/tokenUsageConfig';
-import type { LimitReleaseRequest } from '../../types/tokenUsage';
+import type { LimitReleaseRequest } from '../../types/tokenUsageModel';
 
 /** 정보 행 (label w-28 = 112px, gap-14 = 56px) */
 const InfoRow = ({ label, value }: { label: string; value: string }) => (

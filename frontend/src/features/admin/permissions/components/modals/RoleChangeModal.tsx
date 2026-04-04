@@ -9,7 +9,7 @@ import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 
 import { PERMISSION_ROLE_CHANGE_REASONS, ROLE_LABEL } from '../../constants/permissionsConfig';
-import type { PermissionMember, PermissionRole } from '../../types/adminPermission';
+import type { PermissionMember, PermissionRole } from '../../types/adminPermissionModel';
 
 interface RoleChangeModalProps {
   open: boolean;

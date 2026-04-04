@@ -1,7 +1,7 @@
 import CheckboxIcon from '@/shared/components/ui/checkboxIcon';
 import { cn } from '@/shared/utils/cn';
 
-import type { SyncTargetItem } from '../../../types/sync';
+import type { SyncTargetItem } from '../../../types/syncModel';
 
 export interface EmbeddingContentProps {
   targets: SyncTargetItem[];

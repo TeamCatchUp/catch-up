@@ -11,7 +11,7 @@ import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
 import { RESOURCES_PER_PAGE } from '../../constants/integrations';
-import type { ConnectorDetail, IntegrationMenuItem, IntegrationService } from '../../types/integrations';
+import type { ConnectorDetail, IntegrationMenuItem, IntegrationService } from '../../types/integrationModel';
 import ConfluenceGuideSection from './ConfluenceGuideSection';
 import GithubGuideSection from './GithubGuideSection';
 import JiraGuideSection from './JiraGuideSection';

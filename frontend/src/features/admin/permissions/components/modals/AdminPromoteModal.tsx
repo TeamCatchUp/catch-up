@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialo
 import { Input } from '@/shared/components/ui/input';
 
 import { PERMISSION_CHANGE_REASONS } from '../../constants/permissionsConfig';
-import type { PermissionMember } from '../../types/adminPermission';
+import type { PermissionMember } from '../../types/adminPermissionModel';
 
 interface AdminPromoteModalProps {
   open: boolean;

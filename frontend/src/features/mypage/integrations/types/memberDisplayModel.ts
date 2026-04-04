@@ -1,4 +1,4 @@
-﻿import type { IntegrationService, MemberIntegrationRow, MemberIntegrationStatus } from './integrations';
+﻿import type { IntegrationService, MemberIntegrationRow, MemberIntegrationStatus } from './integrationModel';
 
 /** 이용자 연동 테이블 렌더 전용 행 모델 */
 export interface MemberDisplayRow {

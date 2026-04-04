@@ -7,7 +7,7 @@ import Image from 'next/image';
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import { Badge } from '@/shared/components/ui/badge';
 
-import type { TokenUsageRankingEntry } from '../../types/tokenUsage';
+import type { TokenUsageRankingEntry } from '../../types/tokenUsageModel';
 
 interface TokenUsageRankingListProps {
   data: TokenUsageRankingEntry[];

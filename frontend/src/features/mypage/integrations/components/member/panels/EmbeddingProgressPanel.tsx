@@ -17,7 +17,7 @@ import type {
   ConnectorProgress,
   EmbeddingButtonState,
   SyncConnector,
-} from '../../../types/sync';
+} from '../../../types/syncModel';
 import EmbeddingActiveCard from './EmbeddingActiveCard';
 import EmbeddingHistoryCard from './EmbeddingHistoryCard';
 

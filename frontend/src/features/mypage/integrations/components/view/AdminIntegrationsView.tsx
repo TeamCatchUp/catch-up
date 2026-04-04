@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/shared/utils/cn';
 
 import { useAdminIntegrationViewModel } from '../../hooks/useAdminIntegrationViewModel';
-import type { AdminIntegrationTab, IntegrationService } from '../../types/integrations';
+import type { AdminIntegrationTab, IntegrationService } from '../../types/integrationModel';
 import ConnectedAccountsAdminSection from '../account/sections/ConnectedAccountsAdminSection';
 import IntegrationManagementSection from '../management/IntegrationManagementSection';
 import IntegrationsSection from '../member/sections/IntegrationsSection';

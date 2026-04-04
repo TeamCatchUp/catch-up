@@ -16,7 +16,7 @@ import { cn } from '@/shared/utils/cn';
 import { useScopeId } from '../../../hooks/useScopeId';
 import { adminConnectorMutations } from '../../../mutations/adminConnector.mutations';
 import { adminConnectorQueries } from '../../../queries/adminConnector.queries';
-import type { SyncConnector } from '../../../types/sync';
+import type { SyncConnector } from '../../../types/syncModel';
 import EmbeddingModalContent from './EmbeddingModalContent';
 
 const PERIOD_OPTIONS = ['1개월', '3개월', '6개월', '1년', '3년'] as const;

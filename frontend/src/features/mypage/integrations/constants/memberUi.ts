@@ -1,5 +1,5 @@
-﻿import type { IntegrationService, MemberIntegrationStatus } from '../types/integrations';
-import type { MemberSortKey } from '../types/memberDisplay';
+﻿import type { IntegrationService, MemberIntegrationStatus } from '../types/integrationModel';
+import type { MemberSortKey } from '../types/memberDisplayModel';
 
 /** 이용자 연동 표에서 노출할 서비스 컬럼 */
 export const MEMBER_TABLE_SERVICES: IntegrationService[] = ['github', 'jira', 'slack'];

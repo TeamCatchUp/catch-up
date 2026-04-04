@@ -6,7 +6,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
-import type { MemberIntegrationRow } from '../../../types/integrations';
+import type { MemberIntegrationRow } from '../../../types/integrationModel';
 import AccountSelectorPopover, { type AccountOption } from './AccountSelectorPopover';
 import ReasonRadioGroup, { type ReasonOption } from './ReasonRadioGroup';
 

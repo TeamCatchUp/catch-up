@@ -7,7 +7,7 @@ import { Area, AreaChart, XAxis, YAxis } from 'recharts';
 
 import { type ChartConfig, ChartContainer, ChartTooltip } from '@/shared/components/ui/chart';
 
-import type { TotalTokenUsageTrend } from '../../types/tokenUsage';
+import type { TotalTokenUsageTrend } from '../../types/tokenUsageModel';
 import ChartCustomTooltip from './ChartCustomTooltip';
 
 interface TotalTokenLineChartProps {

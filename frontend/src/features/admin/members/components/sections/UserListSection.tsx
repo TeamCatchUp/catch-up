@@ -23,7 +23,7 @@ import {
 } from '../../constants/memberTableConfig';
 import { useDeactivateUserMutation, useDeleteUserMutation } from '../../queries/adminMembers.mutations';
 import { adminMembersQueries } from '../../queries/adminMembers.queries';
-import type { AdminSortKey, MemberTableRow } from '../../types/adminMember';
+import type { AdminSortKey, MemberTableRow } from '../../types/adminMemberModel';
 import MemberDetailPanel from '../shared/MemberDetailPanel';
 import MemberTable from '../shared/MemberTable';
 import ReasonDialog from '../shared/ReasonPopover';

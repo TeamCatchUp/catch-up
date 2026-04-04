@@ -7,7 +7,7 @@ import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { COMPANY_SIZE_OPTIONS } from '@/shared/constants/organization';
 
-import type { CompanySize, OrgInfoFormData } from '../../types/onboarding';
+import type { CompanySize, OrgInfoFormData } from '../../types/onboardingModel';
 import { StepIndicator } from '../StepIndicator';
 import { StepNavButtons } from '../StepNavButtons';
 

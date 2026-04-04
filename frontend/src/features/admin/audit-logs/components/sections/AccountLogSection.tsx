@@ -11,7 +11,7 @@ import { cn } from '@/shared/utils/cn';
 
 import { ACTION_LABEL, STATUS_BADGE_CLASS, STATUS_LABEL } from '../../constants/auditLogConfig';
 import { auditLogsQueries } from '../../queries/auditLogs.queries';
-import type { AuditLog, AuditLogTableRow, AuditSortKey } from '../../types/auditLog';
+import type { AuditLog, AuditLogTableRow, AuditSortKey } from '../../types/auditLogModel';
 import { formatDate } from '../../utils/formatDate';
 import AccountDetailPanel from '../account/AccountDetailPanel';
 import AuditLogFilterBar from '../AuditLogFilterBar';

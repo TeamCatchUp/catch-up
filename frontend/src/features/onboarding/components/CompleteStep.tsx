@@ -9,7 +9,7 @@ import { authQueries } from '@/shared/queries/auth.queries';
 import type { AuthUser } from '@/shared/queries/auth.types';
 
 import { useAdminSignUp, useUserSignUp } from '../mutations';
-import type { OnboardingSteps } from '../types/onboarding';
+import type { OnboardingSteps } from '../types/onboardingModel';
 
 interface CompleteStepProps {
   data: OnboardingSteps['Complete'];

@@ -10,7 +10,7 @@ import {
   ROLE_LABEL,
   TAG_BASE_CLASS,
 } from '../../constants/permissionsConfig';
-import type { PermissionMember } from '../../types/adminPermission';
+import type { PermissionMember } from '../../types/adminPermissionModel';
 
 interface PermissionsTableProps {
   rows: PermissionMember[];

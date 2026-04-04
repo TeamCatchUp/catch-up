@@ -1,4 +1,4 @@
-import type { TokenUsageSummary } from '../types/tokenUsage';
+import type { TokenUsageSummary } from '../types/tokenUsageModel';
 
 /** 탭 목록 */
 export const TOKEN_USAGE_TABS = ['나의 토큰 사용량', '조직 토큰 사용량', '이용자 관리', '제한 해제 요청'] as const;

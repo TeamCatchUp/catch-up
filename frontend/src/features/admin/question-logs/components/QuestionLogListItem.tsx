@@ -3,7 +3,7 @@ import Link from 'next/link';
 import ChatIcon from '@/public/icons/icon/chat.svg';
 import type { DateGroup } from '@/shared/utils/dateGrouping';
 
-import type { QuestionLogItem } from '../types/questionLog';
+import type { QuestionLogItem } from '../types/questionLogModel';
 
 interface QuestionLogListItemProps {
   item: QuestionLogItem;

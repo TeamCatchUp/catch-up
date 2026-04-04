@@ -11,7 +11,7 @@ import IconKebab from '@/public/icons/icon/kebab.svg';
 import { Button } from '@/shared/components/ui/button';
 import FilterDropdown, { type FilterOption } from '@/shared/components/ui/filter-dropdown';
 
-import type { OrgMember } from '../../types/tokenUsage';
+import type { OrgMember } from '../../types/tokenUsageModel';
 
 interface MemberProfileCardProps {
   members: OrgMember[];

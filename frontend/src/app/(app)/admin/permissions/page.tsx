@@ -21,7 +21,7 @@ import {
   useRevokeAdminMutation,
 } from '@/features/admin/permissions/queries/adminPermissions.mutations';
 import { adminPermissionsQueries } from '@/features/admin/permissions/queries/adminPermissions.queries';
-import type { PermissionMember } from '@/features/admin/permissions/types/adminPermission';
+import type { PermissionMember } from '@/features/admin/permissions/types/adminPermissionModel';
 import type { ApiErrorBody } from '@/shared/api/errors';
 
 const DEFAULT_ROLE_FILTER: RoleFilter = ROLE_FILTER_OPTIONS[0].key;

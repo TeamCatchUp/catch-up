@@ -2,7 +2,7 @@ import DefaultProfile from '@/public/icons/icon/default_profile.svg';
 import EmptyGraphic from '@/public/icons/icon/empty.svg';
 import { cn } from '@/shared/utils/cn';
 
-import type { IntegrationAccountInfo, IntegrationAccountMeta } from '../../../types/integrations';
+import type { IntegrationAccountInfo, IntegrationAccountMeta } from '../../../types/integrationModel';
 
 interface ConnectedAccountCardProps {
   account: IntegrationAccountMeta;

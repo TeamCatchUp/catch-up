@@ -3,7 +3,7 @@ import { queryOptions } from '@tanstack/react-query';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { SyncRecordGapResponse } from '../types/sync';
+import type { SyncRecordGapResponse } from '../types/syncModel';
 
 /** event_id로 gap 데이터 조회 */
 export const syncRecordGapsOptions = (eventId: string) =>

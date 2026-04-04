@@ -4,7 +4,7 @@ import {
   TAG_BASE_CLASS as MEMBER_TAG_BASE_CLASS,
 } from '@/features/admin/members/constants/memberTableConfig';
 
-import type { PermissionRole } from '../types/adminPermission';
+import type { PermissionRole } from '../types/adminPermissionModel';
 
 export const LIST_PAGE_SIZE = 15;
 

@@ -1,8 +1,8 @@
 import { queryOptions } from '@tanstack/react-query';
 
-import type { AuditIntegrationLog } from '../types/auditIntegrationLog';
-import type { AuditLog } from '../types/auditLog';
-import type { AuditQuestionLog } from '../types/auditQuestionLog';
+import type { AuditIntegrationLog } from '../types/auditIntegrationLogModel';
+import type { AuditLog } from '../types/auditLogModel';
+import type { AuditQuestionLog } from '../types/auditQuestionLogModel';
 
 // TODO: 백엔드 API 준비 시 실제 API 호출로 교체
 // Mock 버전: src/shared/mocks/admin/audit-logs/auditLogs.queries.ts

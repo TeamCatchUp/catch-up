@@ -19,9 +19,9 @@ import type {
   PreMappingUpdateItem,
   SyncFilterType,
   VendorType,
-} from '../../../types/api';
-import type { IntegrationService } from '../../../types/integrations';
-import type { MemberDisplayRow } from '../../../types/memberDisplay';
+} from '../../../types/integrationApi';
+import type { IntegrationService } from '../../../types/integrationModel';
+import type { MemberDisplayRow } from '../../../types/memberDisplayModel';
 import type { AccountOption } from '../tables/AccountSelectDropdown';
 import UsersTable from '../tables/UsersTable';
 

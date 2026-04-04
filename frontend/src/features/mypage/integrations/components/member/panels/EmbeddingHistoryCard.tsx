@@ -6,7 +6,7 @@ import { cn } from '@/shared/utils/cn';
 
 import type { GapSummary } from '../../../hooks/useEmbeddingGaps';
 import { useSyncRecordRetry } from '../../../mutations/syncRecords.mutations';
-import type { AdminConnectorTargetRangeResponse, SyncConnector } from '../../../types/sync';
+import type { AdminConnectorTargetRangeResponse, SyncConnector } from '../../../types/syncModel';
 import { formatHistoryDate, RESOURCE_ICONS } from '../../../utils/embeddingUtils';
 import EmbeddingRetryModal from '../modals/EmbeddingRetryModal';
 

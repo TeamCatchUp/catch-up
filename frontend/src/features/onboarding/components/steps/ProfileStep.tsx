@@ -7,7 +7,7 @@ import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { DEPARTMENT_OPTIONS, JOB_LEVEL_OPTIONS } from '@/shared/constants/organization';
 
-import type { ProfileFormData } from '../../types/onboarding';
+import type { ProfileFormData } from '../../types/onboardingModel';
 import { StepIndicator } from '../StepIndicator';
 import { StepNavButtons } from '../StepNavButtons';
 

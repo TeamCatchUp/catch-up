@@ -14,7 +14,7 @@ import { API } from '@/shared/api/endpoints';
 import { Button } from '@/shared/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/components/ui/dialog';
 
-import type { MappingUploadResponse, VendorType } from '../../../types/api';
+import type { MappingUploadResponse, VendorType } from '../../../types/integrationApi';
 
 // ─── 벤더 설정 ───
 

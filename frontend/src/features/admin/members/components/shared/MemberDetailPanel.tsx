@@ -7,7 +7,7 @@ import { INTEGRATION_ACCOUNTS } from '@/shared/constants/integrationAccounts';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
-import type { UserIntegrations } from '../../types/adminMember';
+import type { UserIntegrations } from '../../types/adminMemberModel';
 
 /** 프로필 아바타 (avatarUrl이 있으면 img, 없으면 DefaultProfile SVG) */
 const Avatar = ({ src, size = 'sm' }: { src?: string | null; size?: 'sm' | 'xs' }) => {

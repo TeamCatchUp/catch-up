@@ -19,7 +19,7 @@ import {
 import { Switch } from '@/shared/components/ui/switch';
 
 import { POSITION_BADGE_CLASS, TEAM_BADGE_CLASS } from '../../constants/tokenUsageConfig';
-import type { OrgMember } from '../../types/tokenUsage';
+import type { OrgMember } from '../../types/tokenUsageModel';
 
 const TAG_BASE = 'text-body-xsmall inline-flex shrink-0 items-center truncate rounded-md2 px-1.5 py-0.5';
 

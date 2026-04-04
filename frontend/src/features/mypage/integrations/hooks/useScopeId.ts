@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { IntegrationService } from '@/shared/types/integrationService';
 
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import type { SyncConnector } from '../types/sync';
+import type { SyncConnector } from '../types/syncModel';
 import { isConfluenceResource, isJiraResource } from '../utils/atlassianScopeFilter';
 
 /**

@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { SyncRecordRetryRequest, SyncRecordRetryResponse } from '../types/sync';
+import type { SyncRecordRetryRequest, SyncRecordRetryResponse } from '../types/syncModel';
 
 export const useSyncRecordRetry = () => {
   const queryClient = useQueryClient();

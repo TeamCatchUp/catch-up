@@ -4,7 +4,7 @@ import type { AxiosResponse } from 'axios';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { CustomPromptRequest, CustomPromptResponse } from '../types/api';
+import type { CustomPromptRequest, CustomPromptResponse } from '../types/preferencesApi';
 
 export const promptMutations = {
   updateCustomPrompt: () =>

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 
 import { adminConnectorQueries } from '../queries/adminConnector.queries';
-import type { AdminConnectorTargetRangeResponse, ConnectorStatusSource, SyncConnector } from '../types/sync';
+import type { AdminConnectorTargetRangeResponse, ConnectorStatusSource, SyncConnector } from '../types/syncModel';
 
 const SOURCE_ORDER: ConnectorStatusSource[] = ['jira', 'github', 'slack', 'confluence'];
 

@@ -11,11 +11,11 @@ import { cn } from '@/shared/utils/cn';
 import { CATEGORY_LABEL, STATUS_BADGE_CLASS, STATUS_LABEL } from '../../constants/auditLogConfig';
 import { auditLogsQueries } from '../../queries/auditLogs.queries';
 import { useAuditIntegrationFilterStore } from '../../store/auditIntegrationFilterStore';
-import type { AuditIntegrationLog } from '../../types/auditIntegrationLog';
+import type { AuditIntegrationLog } from '../../types/auditIntegrationLogModel';
 import { formatDate } from '../../utils/formatDate';
 import AuditLogFilterBar from '../AuditLogFilterBar';
 import ApiCallDetail from '../integration/ApiCallDetail';
-import { getServiceIconCls, ServiceIcon } from '../integration/helpers';
+import { getServiceIconCls, ServiceIcon } from '../integration/Helpers';
 import SyncIntegrationDetail from '../integration/SyncIntegrationDetail';
 
 /** 연동 감사 로그 섹션 */

@@ -23,7 +23,7 @@ import {
   USERS_PER_PAGE,
 } from '../../constants/tokenUsageConfig';
 import { tokenUsageQueries } from '../../queries/tokenUsage.queries';
-import type { OrgMember } from '../../types/tokenUsage';
+import type { OrgMember } from '../../types/tokenUsageModel';
 import UserManagementTable from '../user-management/UserManagementTable';
 
 const sortOptions: FilterOption<UserMgmtSortKey>[] = USER_MGMT_SORT_OPTIONS.map((o) => ({

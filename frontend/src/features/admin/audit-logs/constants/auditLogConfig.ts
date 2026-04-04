@@ -1,7 +1,7 @@
 import type { IntegrationService } from '@/shared/types/integrationService';
 
-import type { IntegrationLogCategory } from '../types/auditIntegrationLog';
-import type { AuditAction, AuditSortKey, AuditStatus } from '../types/auditLog';
+import type { IntegrationLogCategory } from '../types/auditIntegrationLogModel';
+import type { AuditAction, AuditSortKey, AuditStatus } from '../types/auditLogModel';
 
 /** 정렬 옵션 */
 export const SORT_OPTIONS: { key: AuditSortKey; label: string }[] = [

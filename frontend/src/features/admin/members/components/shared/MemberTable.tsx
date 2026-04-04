@@ -3,7 +3,7 @@ import CheckboxIcon from '@/shared/components/ui/checkboxIcon';
 import { cn } from '@/shared/utils/cn';
 
 import { RANK_BADGE_CLASS, TAG_BASE_CLASS } from '../../constants/memberTableConfig';
-import type { MemberTableRow } from '../../types/adminMember';
+import type { MemberTableRow } from '../../types/adminMemberModel';
 
 interface MemberTableProps {
   rows: MemberTableRow[];
