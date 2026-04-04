@@ -184,7 +184,7 @@ export default function FeedbackSection({
         ))}
       </div>
 
-      {submitError && <p className="text-xsmall text-status-destructive0">피드백 제출에 실패했습니다. 다시 시도해주세요.</p>}
+      {submitError && <p className="text-xsmall text-status-destructive">피드백 제출에 실패했습니다. 다시 시도해주세요.</p>}
 
       {detail.mounted && (
         <div ref={detailRef}>
