@@ -70,7 +70,7 @@ export default function AccountSelectorPopover({
       align="start"
       sideOffset={6}
       avoidCollisions={false}
-      className="border-edge-normal shadow-dropdown-menu w-[336px] rounded-xl p-0"
+      className="border-edge-normal shadow-dropdown-menu w-84 rounded-xl p-0"
     >
       <Command className="gap-2.5 rounded-xl py-2.5">
         <div className="px-2.5">
@@ -80,7 +80,7 @@ export default function AccountSelectorPopover({
             placeholder="이름, 이메일, 아이디를 검색하세요."
           />
         </div>
-        <CommandList className="max-h-[310px] px-0 py-0">
+        <CommandList className="max-h-77.5 px-0 py-0">
           <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
           {options.map((option) => (
             <CommandItem
@@ -92,7 +92,7 @@ export default function AccountSelectorPopover({
               <DefaultProfile className="text-content-assistive size-10 shrink-0 rounded-full" />
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-heading-small text-content-normal max-w-[160px] truncate">
+                  <span className="text-heading-small text-content-normal max-w-40 truncate">
                     {option.userName}
                   </span>
                   <span className="rounded-md2 bg-fill-interaction-hover text-body-xsmall text-content-alternative shrink-0 px-1.5 py-0.5">

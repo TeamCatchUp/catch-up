@@ -34,7 +34,7 @@ const AdminGrantSection = ({
         <Button
           variant="box-solid-primary"
           size="md"
-          className="text-heading-small h-9 w-[99px]"
+          className="text-heading-small h-9 w-24.75"
           onClick={onOpenGrantModal}
           disabled={isSubmitDisabled}
         >
@@ -44,7 +44,7 @@ const AdminGrantSection = ({
       </div>
 
       <div className="border-edge-neutral flex items-start gap-5 rounded-xl border px-5 py-5">
-        <div className="flex w-[470px] flex-col gap-1.5">
+        <div className="flex w-117.5 flex-col gap-1.5">
           <span className="text-body-small text-content-normal">멤버</span>
           <Select
             value={selectedMemberId != null ? String(selectedMemberId) : ''}
@@ -64,7 +64,7 @@ const AdminGrantSection = ({
           </Select>
         </div>
 
-        <div className="flex w-[470px] flex-col gap-1.5">
+        <div className="flex w-117.5 flex-col gap-1.5">
           <span className="text-body-small text-content-normal">부여 사유</span>
           <Input
             value={reason}

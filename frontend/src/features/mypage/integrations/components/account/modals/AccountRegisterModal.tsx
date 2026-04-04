@@ -71,7 +71,7 @@ export default function AccountRegisterModal({ open, onOpenChange, allRows, serv
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         hideClose
-        className="border-edge-neutral shadow-modal bg-fill-normal max-w-[400px] gap-2 rounded-2xl border px-5 pt-3 pb-4"
+        className="border-edge-neutral shadow-modal bg-fill-normal max-w-100 gap-2 rounded-2xl border px-5 pt-3 pb-4"
       >
         <div className="flex h-9 items-center justify-between">
           <DialogTitle className="text-heading-medium text-content-normal">계정 등록하기</DialogTitle>
@@ -80,7 +80,7 @@ export default function AccountRegisterModal({ open, onOpenChange, allRows, serv
           </button>
         </div>
 
-        <div className="border-edge-neutral max-h-[378px] w-full overflow-y-auto border-t pt-4">
+        <div className="border-edge-neutral max-h-94.5 w-full overflow-y-auto border-t pt-4">
           <div className="flex flex-col gap-1.5">
             <AccountSelectorPopover
               open={accountPopoverOpen}

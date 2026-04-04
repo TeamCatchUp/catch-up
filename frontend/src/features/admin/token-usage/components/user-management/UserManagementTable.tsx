@@ -94,7 +94,7 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
                   <IconKebab className="size-5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={4} className="min-w-[260px]">
+              <DropdownMenuContent align="end" sideOffset={4} className="min-w-65">
                 <DropdownMenuItem>
                   <IconGraph className="text-content-alternative size-6" />
                   토큰 이용 대시보드 바로가기

@@ -151,7 +151,7 @@ export default function MemberDetailPanel({ member, actionButtons }: MemberDetai
                           </span>
                         </div>
                       ) : (
-                        <div className="bg-fill-strong flex w-[259px] shrink-0 items-center justify-center self-stretch rounded-lg">
+                        <div className="bg-fill-strong flex w-64.75 shrink-0 items-center justify-center self-stretch rounded-lg">
                           <div className="flex items-center gap-1">
                             <IconCloudOff className="text-content-assistive size-5" />
                             <span className="text-body-xsmall text-content-alternative">연동 안됨</span>

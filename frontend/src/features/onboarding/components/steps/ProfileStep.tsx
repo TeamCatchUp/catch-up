@@ -70,7 +70,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
           {/* 이름 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-heading-medium text-content-normal flex items-center gap-1">
-              <span className="size-[5px] rounded-full bg-red-50" />
+              <span className="size-1.25 rounded-full bg-red-50" />
               이름을 적어주세요.
             </label>
             <Input
@@ -89,7 +89,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-1.5">
               <label className="text-heading-medium text-content-normal flex items-center gap-1">
-                <span className="size-[5px] rounded-full bg-red-50" />
+                <span className="size-1.25 rounded-full bg-red-50" />
                 직급을 알려주세요.
               </label>
               <Select
@@ -122,7 +122,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
             {!isAdmin && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-heading-medium text-content-normal flex items-center gap-1">
-                  <span className="size-[5px] rounded-full bg-red-50" />
+                  <span className="size-1.25 rounded-full bg-red-50" />
                   부서명을 알려주세요.
                 </label>
                 <Select

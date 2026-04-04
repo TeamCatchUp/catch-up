@@ -12,8 +12,8 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
       className={cn('p-5', className)}
       classNames={{
         months: 'relative flex gap-9',
-        month: 'flex w-[220px] flex-col',
-        month_caption: 'flex h-[34px] items-center justify-center pb-1.5',
+        month: 'flex w-55 flex-col',
+        month_caption: 'flex h-8.5 items-center justify-center pb-1.5',
         caption_label: 'text-body-small text-content-strong',
         nav: 'absolute inset-x-0 top-0 z-20 flex items-center justify-between',
         button_previous:

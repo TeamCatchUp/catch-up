@@ -33,12 +33,12 @@ const ReasonRadio = ({
     aria-label={ariaLabel}
     className="relative mt-px size-6 shrink-0 cursor-pointer"
   >
-    <span className="absolute inset-[3px] size-[18px]">
-      {selected ? <RadioSelectedRing className="size-[18px]" /> : <RadioUnselectedRing className="size-[18px]" />}
+    <span className="absolute inset-0.75 size-4.5">
+      {selected ? <RadioSelectedRing className="size-4.5" /> : <RadioUnselectedRing className="size-4.5" />}
     </span>
     {selected && (
-      <span className="absolute inset-[7px] size-[10px]">
-        <RadioSelectedDot className="size-[10px]" />
+      <span className="absolute inset-1.75 size-2.5">
+        <RadioSelectedDot className="size-2.5" />
       </span>
     )}
   </button>
@@ -57,7 +57,7 @@ const ReasonRadioGroup = ({
   <div className="mt-4 flex w-full flex-col gap-2">
     <div className="text-body-small text-content-normal flex items-center gap-1">
       {title}
-      <span className="block size-[5px] shrink-0 rounded-full bg-red-50" />
+      <span className="block size-1.25 shrink-0 rounded-full bg-red-50" />
     </div>
 
     <div className="border-edge-assistive flex flex-col gap-4 rounded-xl border px-4 py-4">

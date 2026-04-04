@@ -18,7 +18,7 @@ export function StepNavButtons({
   showBack = true,
 }: StepNavButtonsProps) {
   return (
-    <div className="flex w-full items-center gap-[15px]">
+    <div className="flex w-full items-center gap-3.75">
       {showBack && onBack && (
         <Button type="button" variant="box-outline-gray" size="lg" onClick={onBack} className="h-11.5 shrink-0">
           이전

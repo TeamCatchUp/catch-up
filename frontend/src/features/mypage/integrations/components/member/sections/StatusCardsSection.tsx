@@ -131,7 +131,7 @@ export default function StatusCardsSection({ cards, buttonStates, onJobStart, is
                     </span>
                   </div>
                   <div
-                    className="bg-edge-primary absolute bottom-0 left-0 h-[5px] rounded-full"
+                    className="bg-edge-primary absolute bottom-0 left-0 h-1.25 rounded-full"
                     style={{ width: `${completionRate}%` }}
                   />
                 </div>

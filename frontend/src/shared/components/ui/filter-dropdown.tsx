@@ -31,17 +31,17 @@ export default function FilterDropdown<T extends string>({ options, value, onCha
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="border-edge-neutral hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed bg-fill-normal flex h-9 max-w-[150px] min-w-9 cursor-pointer items-center gap-1 rounded-lg border px-2.5 py-2"
+          className="border-edge-neutral hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed bg-fill-normal flex h-9 max-w-37.5 min-w-9 cursor-pointer items-center gap-1 rounded-lg border px-2.5 py-2"
         >
           <span className="text-body-small text-content-neutral whitespace-nowrap">{selectedLabel}</span>
           {open ? (
-            <DropdownUp className="text-icon-neutral size-[18px] shrink-0" />
+            <DropdownUp className="text-icon-neutral size-4.5 shrink-0" />
           ) : (
-            <DropdownDown className="text-icon-neutral size-[18px] shrink-0" />
+            <DropdownDown className="text-icon-neutral size-4.5 shrink-0" />
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={4} className="w-[140px] min-w-0">
+      <DropdownMenuContent align="start" sideOffset={4} className="w-35 min-w-0">
         {options.map((option) => (
           <DropdownMenuItem
             key={option.value}

@@ -33,7 +33,7 @@ export default function ConnectedAccountCard({ account, accountInfo, variant, on
   ) : (
     <div className="flex flex-col gap-1.5">
       <div className="flex h-13.75 w-full items-center justify-center overflow-hidden">
-        <EmptyGraphic className="h-13.75 w-[203px]" />
+        <EmptyGraphic className="h-13.75 w-50.75" />
       </div>
       <p className="text-label-xsmall text-content-assistive h-5 w-full truncate text-center">
         아직 연결된 {name} 계정이 없어요.

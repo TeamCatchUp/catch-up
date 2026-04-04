@@ -42,7 +42,7 @@ export default function UserSelectSection({ users, selectedUserId, onUserChange 
   };
 
   return (
-    <div className="flex w-[500px] flex-col gap-1.5">
+    <div className="flex w-125 flex-col gap-1.5">
       <h2 className="text-heading-small text-content-neutral">이용자 선택</h2>
 
       <Popover open={open} onOpenChange={setOpen}>
@@ -65,7 +65,7 @@ export default function UserSelectSection({ users, selectedUserId, onUserChange 
         <PopoverContent
           align="start"
           sideOffset={2}
-          className="border-edge-strong flex h-[380px] w-[var(--radix-popover-trigger-width)] flex-col gap-3 rounded-xl p-2.5"
+          className="border-edge-strong flex h-95 w-[var(--radix-popover-trigger-width)] flex-col gap-3 rounded-xl p-2.5"
         >
           {/* 검색 */}
           <label className="bg-fill-interaction-hover border-edge-primary flex h-10 items-center gap-1.5 rounded-lg border px-3">
@@ -95,7 +95,7 @@ export default function UserSelectSection({ users, selectedUserId, onUserChange 
                 <span className="text-body-small text-content-neutral min-w-0 flex-1 truncate text-left">
                   {user.name}
                 </span>
-                <span className="text-body-xsmall text-content-assistive max-w-[72px] shrink-0 truncate">
+                <span className="text-body-xsmall text-content-assistive max-w-18 shrink-0 truncate">
                   {user.department}
                 </span>
               </button>

@@ -43,7 +43,7 @@ export default function PreferencesPage() {
   };
 
   return (
-    <section className="flex min-w-[600px] flex-col gap-6 px-16 pt-9 pb-30">
+    <section className="flex min-w-150 flex-col gap-6 px-16 pt-9 pb-30">
       <h1 className="text-heading-xlarge text-content-normal">개인 맞춤 설정</h1>
 
       {/* 개인 지침 섹션 */}

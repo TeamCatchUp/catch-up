@@ -105,7 +105,7 @@ function GuideContent({
   onPrev: () => void;
 }) {
   return (
-    <div className="shadow-modal border-edge-strong bg-fill-normal flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border p-6">
+    <div className="shadow-modal border-edge-strong bg-fill-normal flex h-135.75 w-108.75 flex-col overflow-clip rounded-2xl border p-6">
       {/* 콘텐츠 영역 */}
       <div
         className={`flex min-h-0 flex-1 flex-col gap-5 overflow-hidden transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}
@@ -175,7 +175,7 @@ function GuideContent({
 /** 닫기 확인 모달 본문 */
 function CloseConfirmContent({ onDismiss, onNavigate }: { onDismiss: () => void; onNavigate: () => void }) {
   return (
-    <div className="shadow-modal border-edge-strong bg-fill-normal flex w-[400px] flex-col gap-3 overflow-clip rounded-2xl border p-5">
+    <div className="shadow-modal border-edge-strong bg-fill-normal flex w-100 flex-col gap-3 overflow-clip rounded-2xl border p-5">
       {/* 텍스트 */}
       <div className="flex flex-col gap-3">
         <p className="text-heading-medium text-orange-60">

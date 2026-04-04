@@ -35,17 +35,17 @@ export default function SettingDropdownRow({ label, description, options, value,
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex max-w-[150px] min-w-9 shrink-0 cursor-pointer items-center gap-1 rounded-lg px-2 py-1"
+            className="flex max-w-37.5 min-w-9 shrink-0 cursor-pointer items-center gap-1 rounded-lg px-2 py-1"
           >
             <span className="text-body-small text-content-neutral whitespace-nowrap">{selectedLabel}</span>
             {open ? (
-              <DropdownUp className="text-icon-normal size-[18px] shrink-0" />
+              <DropdownUp className="text-icon-normal size-4.5 shrink-0" />
             ) : (
-              <DropdownDown className="text-icon-normal size-[18px] shrink-0" />
+              <DropdownDown className="text-icon-normal size-4.5 shrink-0" />
             )}
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" sideOffset={4} className="w-[200px] min-w-0">
+        <DropdownMenuContent align="end" sideOffset={4} className="w-50 min-w-0">
           {options.map((option) => (
             <DropdownMenuItem
               key={option.value}

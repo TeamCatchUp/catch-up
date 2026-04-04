@@ -28,7 +28,7 @@ export default function PermissionsTable({ rows, onChangeRoleClick, onRoleChange
           <span className="text-body-xsmall text-content-alternative text-center">직급</span>
           <span className="text-body-xsmall text-content-alternative text-center">부서</span>
           <span className="text-body-xsmall text-content-alternative text-center">권한</span>
-          <span aria-hidden className="block w-[110px]" />
+          <span aria-hidden className="block w-27.5" />
         </div>
       </div>
 
@@ -88,12 +88,12 @@ export default function PermissionsTable({ rows, onChangeRoleClick, onRoleChange
                     <span className={cn(TAG_BASE_CLASS, ROLE_BADGE_CLASS[roleLabel])}>{roleLabel}</span>
                   </div>
 
-                  <div className="flex w-[110px] items-center justify-end">
+                  <div className="flex w-27.5 items-center justify-end">
                     {member.role !== 'admin' ? (
                       <Button
                         variant="box-outline-gray"
                         size="sm"
-                        className="h-7.5 w-[110px]"
+                        className="h-7.5 w-27.5"
                         onClick={() => onChangeRoleClick(member)}
                       >
                         Admin 권한 부여
@@ -102,7 +102,7 @@ export default function PermissionsTable({ rows, onChangeRoleClick, onRoleChange
                       <Button
                         variant="box-outline-gray"
                         size="sm"
-                        className="h-7.5 w-[110px]"
+                        className="h-7.5 w-27.5"
                         onClick={() => onRoleChangeClick(member)}
                       >
                         권한 변경
