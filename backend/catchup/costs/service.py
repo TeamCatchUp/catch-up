@@ -2,11 +2,8 @@ from datetime import datetime
 from datetime import timedelta
 from typing import TypedDict
 
-from sqlalchemy.orm import Session
-
 from catchup.costs.pricing import calc_token_cost
 from catchup.db.costs import DailyModelTokenUsage
-from catchup.db.costs import get_user_chat_token_usage_by_range
 
 
 class DailyTokenCost(TypedDict):
@@ -64,18 +61,11 @@ def _calculate_daily_cost(
 
 
 def calculate_chat_token_cost(
-    db: Session,
-    user_id: int,
+    usages: dict[int, dict[str, DailyModelTokenUsage]],
     start_date: datetime,
     end_date: datetime,
 ) -> ChatTokenCostResult:
-    usages = get_user_chat_token_usage_by_range(
-        db=db, 
-        user_id=user_id,
-        start_date=start_date,
-        end_date=end_date,
-    )
-    
+
     # date range별 토큰 사용량(USD) 계산
     by_date: list[DailyTokenCost] = []
     for i, (from_date, to_date) in enumerate(_generate_date_range(start_date, end_date)):
