@@ -11,6 +11,7 @@ class AuditLevel(StrEnum):
 
 
 class AuditStatus(StrEnum):
+    ATTEMPT = "attempt"
     SUCCESS = "success"
     FAILURE = "failure"
     UNKNOWN = "unknown"  # Fallback
