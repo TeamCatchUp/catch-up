@@ -4,7 +4,7 @@ from datetime import datetime
 import boto3
 import structlog
 
-from catchup.components.aws.utils import extract_model_part_from_arn
+from catchup.components.aws.utils import extract_model_id_from_arn
 
 logger = structlog.get_logger()
 
@@ -53,7 +53,7 @@ class CloudWatchMetrics:
         # ARN인 경우 model 식별 부분만 추출
         # (e.g. arn:.../global.cohere.embed-v4:0 -> global.cohere.embed-v4:0)
         # Dimensions의 ModelId는 ARN을 포함한 모델 id를 사용할 수 없음.
-        parsed_model_id = extract_model_part_from_arn(model_id)
+        parsed_model_id = extract_model_id_from_arn(model_id)
         
         try:
             response = self.client.get_metric_statistics(
