@@ -56,13 +56,8 @@ class FullSyncAction(BaseAuditAction):
 
     # "full_sync.event"
     # ATTEMPT : EVENT_STARTED | SUCCESS : EVENT_SUCCESS | FAIL : EVENT_FAILED
+    # 재시도 이벤트는 metadata.is_retry로, requeue는 metadata.phase="requeue"로 구분
     EVENT = "event"
-
-    # "full_sync.retry_event"
-    RETRY_EVENT = "retry_event"
-
-    # "full_sync.requeue_event"
-    REQUEUE_EVENT = "requeue_event"
 
 class IncrementalSyncAction(BaseAuditAction):
     """

@@ -78,6 +78,12 @@ class FullSyncEventAuditMetadata(BaseAuditMetadata):
     attempt: int
     max_attempts: int
     sync_from_ts: str | None = None
+    # requeue
+    phase: str = "process"
+    is_retry: bool = False
+    next_attempt: int | None = None
+    retry_at: str | None = None
+    error_summary: str | None = None
     synced_count: int | None = None
     error_count: int | None = None
     skipped: bool | None = None
@@ -98,11 +104,83 @@ class FullSyncEventAuditMetadata(BaseAuditMetadata):
             attempt=context.attempt,
             max_attempts=context.max_attempts,
             sync_from_ts=context.sync_from_ts,
+            phase="process",
+            is_retry=context.attempt > 0,
             synced_count=getattr(result, "synced_count", None),
             error_count=getattr(result, "error_count", None),
             skipped=getattr(result, "skipped", None),
         )
 
+    @classmethod
+    def from_requeue(
+        cls,
+        *,
+        context,
+        next_attempt: int,
+        retry_at: str,
+        error_summary: str,
+    ) -> "FullSyncEventAuditMetadata":
+        return cls(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            job_id=context.job_id,
+            event_id=context.event_id,
+            target_type=context.target_type,
+            target_id=context.target_id,
+            target_name=context.target_name,
+            attempt=context.attempt,
+            max_attempts=context.max_attempts,
+            sync_from_ts=context.sync_from_ts,
+            phase="requeue",
+            is_retry=True,
+            next_attempt=next_attempt,
+            retry_at=retry_at,
+            error_summary=error_summary,
+        )
+
+
+class FullSyncJobAuditMetadata(BaseAuditMetadata):
+    connector: SyncConnector
+    scope_id: str
+    job_id: str
+    total_targets: int
+    completed_targets: int | None = None
+    failed_targets: int | None = None
+    requeued_targets: int | None = None
+
+    @classmethod
+    def from_job_start(
+        cls,
+        *,
+        context,
+        total_targets: int,
+    ) -> "FullSyncJobAuditMetadata":
+        return cls(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            job_id=context.job_id,
+            total_targets=total_targets,
+        )
+
+    @classmethod
+    def from_job_result(
+        cls,
+        *,
+        context,
+        total_targets: int,
+        completed_targets: int,
+        failed_targets: int,
+        requeued_targets: int,
+    ) -> "FullSyncJobAuditMetadata":
+        return cls(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            job_id=context.job_id,
+            total_targets=total_targets,
+            completed_targets=completed_targets,
+            failed_targets=failed_targets,
+            requeued_targets=requeued_targets,
+        )
 
 class IncrementalSyncTriggerMetadata(BaseAuditMetadata):
     connector: SyncConnector
