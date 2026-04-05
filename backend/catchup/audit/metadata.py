@@ -132,7 +132,7 @@ class FullSyncEventAuditMetadata(BaseAuditMetadata):
             max_attempts=context.max_attempts,
             sync_from_ts=context.sync_from_ts,
             phase="requeue",
-            is_retry=True,
+            is_retry=context.attempt > 0,
             next_attempt=next_attempt,
             retry_at=retry_at,
             error_summary=error_summary,
