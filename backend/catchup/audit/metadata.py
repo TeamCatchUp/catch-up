@@ -233,6 +233,55 @@ class IncrementalSyncTriggerMetadata(BaseAuditMetadata):
         )
 
 
+class IncrementalRecordAuditMetadata(BaseAuditMetadata):
+    connector: SyncConnector
+    scope_id: str
+    target_id: str
+    record_key: str
+    record_type: str | None = None
+    phase: str = "process"
+    attempt: int
+    next_attempt: int | None = None
+    retry_at: str | None = None
+    skipped: bool | None = None
+
+    @classmethod
+    def from_audit(cls, data: "AuditLogMetadataInput") -> "IncrementalRecordAuditMetadata":
+        context = data.arguments["context"]
+        result = data.result
+
+        return cls(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            target_id=context.target_id,
+            record_key=context.record_key,
+            record_type=context.record_type,
+            phase="process",
+            attempt=context.attempt,
+            skipped=getattr(result, "skipped", None),
+        )
+
+    @classmethod
+    def from_requeue(
+        cls,
+        *,
+        context,
+        next_attempt: int,
+        retry_at: str,
+    ) -> "IncrementalRecordAuditMetadata":
+        return cls(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            target_id=context.target_id,
+            record_key=context.record_key,
+            record_type=context.record_type,
+            phase="requeue",
+            attempt=context.attempt,
+            next_attempt=next_attempt,
+            retry_at=retry_at,
+        )
+
+
 class SyncAuditMetadata(BaseAuditMetadata):
     connector: SyncConnector | None = None
     scope_id: str | None = None

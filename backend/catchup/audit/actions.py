@@ -65,10 +65,8 @@ class IncrementalSyncAction(BaseAuditAction):
     """
     # "incremental_sync.record"
     # ATTEMPT : RECORD_PROCESSING | SUCCESS : RECORD_SYNCED | FAIL : RECORD_DEAD
+    # 재시도 레코드는 metadata.is_retry로, requeue는 metadata.phase="requeue"로 구분
     RECORD = "record"
-
-    # "incremental_sync.retry_record"
-    RETRY_RECORD = "retry_record"
 
 # class SyncIngestionAction(BaseAuditAction):
 #     # "sync_ingestion.fetch"
