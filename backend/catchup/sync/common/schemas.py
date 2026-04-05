@@ -116,7 +116,6 @@ class SyncDispatchResult:
     total_targets: int = 0
     queued_targets: int = 0
     message: str | None = None
-    snapshot_url: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "status", SyncDispatchStatus(self.status))

@@ -7,8 +7,8 @@ from fastapi.concurrency import run_in_threadpool
 from catchup.db.sync import SyncEventPublishResultInput
 from catchup.db.sync import claim_events_for_publish
 from catchup.db.sync import record_event_publish_outcomes
-from catchup.sync.common.exceptions import RedisStreamPublishError
-from catchup.sync.common.exceptions import SyncInternalError
+from catchup.sync.common.exceptions import RedisStreamPublishException
+from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.common.protocols import EventPublisherProtocol
 from catchup.sync.common.schemas import PublishTasksResult
 from catchup.sync.common.schemas import SyncStreamTask
@@ -68,7 +68,7 @@ class DispatchPublisher:
                 requested_count=publish_result.requested_count,
                 published_count=publish_result.published_count,
             )
-            raise RedisStreamPublishError(
+            raise RedisStreamPublishException(
                 metadata={
                     "requested_count": publish_result.requested_count,
                     "published_count": publish_result.published_count,
@@ -107,7 +107,7 @@ class DispatchPublisher:
                 raise
 
             db.rollback()
-            raise SyncInternalError(
+            raise SyncInternalException(
                 "failed to transition events to publishing",
                 metadata={
                     "connector": context.connector.value,
@@ -142,7 +142,7 @@ class DispatchPublisher:
                 raise
 
             db.rollback()
-            raise SyncInternalError(
+            raise SyncInternalException(
                 "failed to persist publish failure state",
                 metadata={
                     "connector": context.connector.value,
@@ -161,7 +161,7 @@ class DispatchPublisher:
         publish_result: PublishTasksResult,
     ) -> None:
         if publish_result.published_count != len(publish_result.message_ids):
-            raise SyncInternalError(
+            raise SyncInternalException(
                 "publish result message count mismatch",
                 metadata={
                     "connector": context.connector.value,
@@ -201,7 +201,7 @@ class DispatchPublisher:
                 raise
 
             db.rollback()
-            raise SyncInternalError(
+            raise SyncInternalException(
                 "failed to persist publish result state",
                 metadata={
                     "connector": context.connector.value,

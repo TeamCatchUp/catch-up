@@ -10,7 +10,7 @@ from catchup.db.models import SyncEvent
 from catchup.db.models import SyncType
 from catchup.db.sync import find_active_full_sync_job
 from catchup.db.sync import try_acquire_full_sync_scope_lock
-from catchup.sync.common.exceptions import SyncInternalError
+from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.event_publisher.event_record_persistence import (
     persist_sync_job_and_events,
 )
@@ -111,7 +111,6 @@ class DispatchPreparer:
                 connector=data.connector,
                 scope_id=data.scope_id,
                 job_id=None,
-                base_url=data.base_url,
                 message="another full sync dispatch is already being created for this scope",
             )
 
@@ -134,7 +133,6 @@ class DispatchPreparer:
             connector=data.connector,
             scope_id=data.scope_id,
             job_id=active_job.job_id,
-            base_url=data.base_url,
         )
 
     def _persist_events(
@@ -155,7 +153,7 @@ class DispatchPreparer:
         )
 
         if len(events) != len(event_seeds):
-            raise SyncInternalError(
+            raise SyncInternalException(
                 "persisted event count mismatch",
                 metadata={
                     "connector": context.connector.value,
@@ -181,7 +179,7 @@ class DispatchPreparer:
         )
 
         if len(tasks) != len(events):
-            raise SyncInternalError(
+            raise SyncInternalException(
                 "stream task build count mismatch",
                 metadata={
                     "connector": context.connector.value,

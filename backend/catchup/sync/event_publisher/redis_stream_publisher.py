@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from catchup.sync.common.exceptions import RedisStreamInitializationError
+from catchup.sync.common.exceptions import RedisStreamInitializationException
 from catchup.sync.common.protocols import EventPublisherProtocol
 from catchup.sync.common.schemas import PublishTasksResult, SyncStreamTask
 from catchup.sync.stream_runtime.stream_queue import publish_tasks
@@ -31,7 +31,7 @@ class RedisStreamEventPublisher(EventPublisherProtocol):
                 exc,
                 exc_info=True,
             )
-            raise RedisStreamInitializationError(
+            raise RedisStreamInitializationException(
                 metadata={
                     "requested_count": len(tasks),
                     "error_message": str(exc),

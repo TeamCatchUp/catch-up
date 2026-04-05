@@ -8,7 +8,7 @@ import structlog
 from catchup.db.atlassian.oauth_repository import get_token_by_cloud_id
 from catchup.db.engine import SessionLocal
 from catchup.db.jira import domain_repository as jira_entities
-from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import (
     FullSyncResolvedTargets,
@@ -37,14 +37,14 @@ class JiraFullSyncTargetResolver(FullSyncTargetResolverProtocol):
     ) -> FullSyncResolvedTargets:
         cloud_id = request.scope_id.strip()
         if not cloud_id:
-            raise SyncRequestError("scope_id is required")
+            raise SyncRequestException("scope_id is required")
 
         token, projects = await asyncio.gather(
             run_in_threadpool(self._load_token_sync, cloud_id),
             run_in_threadpool(self._load_projects_sync, cloud_id),
         )
         if token is None:
-            raise SyncRequestError(
+            raise SyncRequestException(
                 "jira cloud is not connected",
                 metadata={"cloud_id": cloud_id},
             )
