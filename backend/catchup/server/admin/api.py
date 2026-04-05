@@ -1,84 +1,94 @@
-from enum import StrEnum
 import logging
+from enum import StrEnum
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
-from sqlalchemy import and_, delete, func, or_, select
-from sqlalchemy.orm import Session, aliased
+from fastapi import APIRouter
+from fastapi import Body
+from fastapi import Depends
+from fastapi import HTTPException
+from fastapi import Path
+from fastapi import Query
+from sqlalchemy import and_
+from sqlalchemy import delete
+from sqlalchemy import func
+from sqlalchemy import or_
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from sqlalchemy.orm import aliased
 
-from catchup.user.status_service import deactivate_user as deactivate_user_service
-from catchup.user.status_service import delete_user as delete_user_service
-from catchup.user.role_service import promote_admin_role
-from catchup.user.role_service import revoke_admin_role
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.actions import UserRoleAction
+from catchup.audit.enums import AuditEventStatus
+from catchup.audit.enums import AuditLevel
 from catchup.audit.metadata import AdminOAuthAuditMetadata
+from catchup.audit.metadata import UserAuditMetadata
 from catchup.audit.service import emit_audit_event
+from catchup.audit.utils import audit_log
 from catchup.auth.dependencies import require_admin_user
 from catchup.chat.schemas import UserQueryWithSaveStatusResponse
 from catchup.db.chat_room import get_all_queries_for_admin
 from catchup.db.dependencies import get_db
-from catchup.db.models import (
-    ConfluenceSpace,
-    ConfluenceUser,
-    GitHubUser,
-    GithubRepository,
-    JiraAccountType,
-    JiraProject,
-    JiraUser,
-    PreMappingBuffer,
-    SyncConnector,
-    SlackUser,
-    SourceType,
-    User,
-    UserStatus,
-    UserRole,
+from catchup.db.models import ConfluenceSpace
+from catchup.db.models import ConfluenceUser
+from catchup.db.models import GithubRepository
+from catchup.db.models import GitHubUser
+from catchup.db.models import JiraAccountType
+from catchup.db.models import JiraProject
+from catchup.db.models import JiraUser
+from catchup.db.models import PreMappingBuffer
+from catchup.db.models import SlackUser
+from catchup.db.models import SourceType
+from catchup.db.models import SyncConnector
+from catchup.db.models import User
+from catchup.db.sync.admin_connector_status import (
+    list_admin_connector_target_range_rows,
 )
-from catchup.db.sync.admin_connector_status import list_admin_connector_target_range_rows
 from catchup.db.user_source_mapping import SOURCE_MAP
-from catchup.db.users import get_all_oauth_users_for_admin, get_all_users_for_admin
-from catchup.events.enums import AdminOAuthAction, EventType
+from catchup.db.users import get_all_oauth_users_for_admin
+from catchup.db.users import get_all_users_for_admin
+from catchup.events.enums import AdminOAuthAction
+from catchup.events.enums import EventType
 from catchup.onboarding.oauth import sync_initial_keycloak_users
-from catchup.server.auth.schemas import (
-    ConfluenceSyncableResponse,
-    ConfluenceSyncableSpace,
-    GithubSyncableRepository,
-    GithubSyncableResponse,
-    JiraSyncableProject,
-    JiraSyncableResponse,
-)
-from catchup.server.admin.schemas import (
-    AdminConnectorStatusResponse,
-    AdminConnectorTargetRangeResponse,
-    OAuthUserResponse,
-    PreMappingBulkUpdateRequest,
-    PreMappingInfo,
-    SyncStatusCounts,
-    ToolUserResponse,
-    UserResponse,
-    UserSyncMapping,
-    UserSyncStatusResponse,
-    SourceUserCount,
-    AdminUserListResponse,
-    AdminUserListItem,
-    AdminUserDetailResponse,
-    DeactivateUserRequest,
-    DeactivateUserResponse,
-    DeleteUserRequest,
-    DeleteUserResponse,
-    PromoteUserRequest,
-    PromoteUserResponse,
-    RevokeUserRequest,
-    RevokeUserResponse,
-    UserIntegrations,
-    JiraAccount,
-    GithubAccount,
-    SlackAccount,
-    ConfluenceAccount,
-    ConfluenceCloudIdListResponse,
-    ConnectorResourceType,
-    ConnectorStatusSource,
-)
-from catchup.server.schemas import BasePagination, calculate_skip
+from catchup.server.admin.schemas import AdminConnectorStatusResponse
+from catchup.server.admin.schemas import AdminConnectorTargetRangeResponse
+from catchup.server.admin.schemas import AdminUserDetailResponse
+from catchup.server.admin.schemas import AdminUserListItem
+from catchup.server.admin.schemas import AdminUserListResponse
+from catchup.server.admin.schemas import ConfluenceAccount
+from catchup.server.admin.schemas import ConfluenceCloudIdListResponse
+from catchup.server.admin.schemas import ConnectorResourceType
+from catchup.server.admin.schemas import ConnectorStatusSource
+from catchup.server.admin.schemas import DeactivateUserRequest
+from catchup.server.admin.schemas import DeactivateUserResponse
+from catchup.server.admin.schemas import DeleteUserRequest
+from catchup.server.admin.schemas import DeleteUserResponse
+from catchup.server.admin.schemas import GithubAccount
+from catchup.server.admin.schemas import JiraAccount
+from catchup.server.admin.schemas import OAuthUserResponse
+from catchup.server.admin.schemas import PreMappingBulkUpdateRequest
+from catchup.server.admin.schemas import PreMappingInfo
+from catchup.server.admin.schemas import PromoteUserRequest
+from catchup.server.admin.schemas import PromoteUserResponse
+from catchup.server.admin.schemas import RevokeUserRequest
+from catchup.server.admin.schemas import RevokeUserResponse
+from catchup.server.admin.schemas import SlackAccount
+from catchup.server.admin.schemas import SourceUserCount
+from catchup.server.admin.schemas import SyncStatusCounts
+from catchup.server.admin.schemas import ToolUserResponse
+from catchup.server.admin.schemas import UserIntegrations
+from catchup.server.admin.schemas import UserResponse
+from catchup.server.admin.schemas import UserSyncMapping
+from catchup.server.auth.schemas import ConfluenceSyncableResponse
+from catchup.server.auth.schemas import ConfluenceSyncableSpace
+from catchup.server.auth.schemas import GithubSyncableRepository
+from catchup.server.auth.schemas import GithubSyncableResponse
+from catchup.server.auth.schemas import JiraSyncableProject
+from catchup.server.auth.schemas import JiraSyncableResponse
+from catchup.server.schemas import BasePagination
+from catchup.server.schemas import calculate_skip
+from catchup.user.role_service import promote_admin_role
+from catchup.user.role_service import revoke_admin_role
+from catchup.user.status_service import deactivate_user as deactivate_user_service
+from catchup.user.status_service import delete_user as delete_user_service
 
 logger = logging.getLogger(__name__)
 
@@ -558,22 +568,24 @@ def delete_user(
     description="관리자용 사용자 Admin 승격",
     response_model=PromoteUserResponse,
 )
+@audit_log(
+    UserRoleAction.PROMOTE,
+    metadata_factory=UserAuditMetadata.from_audit,
+    emit_attempt=True,
+)
 def promote_user_to_admin(
     payload: PromoteUserRequest,
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin_user),
 ):
-    user = promote_admin_role(
+    result = promote_admin_role(
         db,
         user_id=payload.userId,
         actor_user_id=admin_user.id,
         reason=payload.reason,
     )
 
-    return PromoteUserResponse(
-        user_id=user.id,
-        role=user.role,
-    )
+    return result
 
 
 @router.post(
@@ -581,22 +593,24 @@ def promote_user_to_admin(
     description="관리자용 사용자 Admin 권한 회수",
     response_model=RevokeUserResponse,
 )
+@audit_log(
+    UserRoleAction.REVOKE_ADMIN,
+    metadata_factory=UserAuditMetadata.from_audit,
+    emit_attempt=True,
+)
 def revoke_admin_role_from_user(
     payload: RevokeUserRequest,
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin_user),
 ):
-    user = revoke_admin_role(
+    result = revoke_admin_role(
         db,
         user_id=payload.userId,
         actor_user_id=admin_user.id,
         reason=payload.reason,
     )
 
-    return RevokeUserResponse(
-        user_id=user.id,
-        role=user.role,
-    )
+    return result
 
 def _get_syncable_jira_projects(db: Session) -> JiraSyncableResponse:
     rows = (

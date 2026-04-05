@@ -34,6 +34,25 @@ class UserAuditMetadata(BaseAuditMetadata):
     status: str | None = None
     reason: str | None = None
 
+    @classmethod
+    def from_audit(cls, data: "AuditLogMetadataInput") -> "UserAuditMetadata":
+        payload = data.arguments.get("payload")
+        result = data.result if isinstance(data.result, dict) else {}
+        exc = data.exception
+        detail = getattr(exc, "detail", {}) if exc else {}
+        detail = detail if isinstance(detail, dict) else {}
+
+        return cls(
+            user_id=detail.get(
+                "user_id",
+                result.get("user_id", getattr(payload, "userId", None)),
+            ),
+            before_role=detail.get("before_role", result.get("before_role")),
+            after_role=detail.get("after_role", result.get("after_role")),
+            status=detail.get("status", result.get("status")),
+            reason=detail.get("reason", result.get("reason", getattr(payload, "reason", None))),
+        )
+
 
 class IntegrationAuditMetadata(BaseAuditMetadata):
     provider: str | None = None
