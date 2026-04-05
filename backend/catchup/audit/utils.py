@@ -29,7 +29,7 @@ def audit_log(
     action: BaseAuditAction | None = None,
     level: AuditLevel = AuditLevel.INFO,
     metadata_factory: AuditMetadataFactory | None = None,
-    emit_attempt: bool = False,
+    emit_attempt: bool | None= False,
 ):
     """
     서비스 로직을 래핑하여 감사 로그를 발행하는 데코레이터.

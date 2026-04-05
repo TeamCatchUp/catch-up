@@ -12,6 +12,7 @@ from catchup.configs.config import settings
 from catchup.db.models import SourceType
 from catchup.db.models import SyncConnector
 from catchup.db.models import UserRole
+from catchup.sync.common.schemas import SyncTargetType
 
 if TYPE_CHECKING:
     from catchup.audit.utils import AuditLogMetadataInput
@@ -63,6 +64,43 @@ class FullSyncTriggerMetadata(BaseAuditMetadata):
             sync_days=resolved_sync_days,
             job_id=getattr(response, "job_id", None),
             event_ids=getattr(response, "event_ids", None),
+        )
+
+
+class FullSyncEventAuditMetadata(BaseAuditMetadata):
+    connector: SyncConnector
+    scope_id: str
+    job_id: str
+    event_id: str
+    target_type: SyncTargetType
+    target_id: str
+    target_name: str | None = None
+    attempt: int
+    max_attempts: int
+    sync_from_ts: str | None = None
+    synced_count: int | None = None
+    error_count: int | None = None
+    skipped: bool | None = None
+
+    @classmethod
+    def from_audit(cls, data: "AuditLogMetadataInput") -> "FullSyncEventAuditMetadata":
+        context = data.arguments["context"]
+        result = data.result
+
+        return cls(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            job_id=context.job_id,
+            event_id=context.event_id,
+            target_type=context.target_type,
+            target_id=context.target_id,
+            target_name=context.target_name,
+            attempt=context.attempt,
+            max_attempts=context.max_attempts,
+            sync_from_ts=context.sync_from_ts,
+            synced_count=getattr(result, "synced_count", None),
+            error_count=getattr(result, "error_count", None),
+            skipped=getattr(result, "skipped", None),
         )
 
 
