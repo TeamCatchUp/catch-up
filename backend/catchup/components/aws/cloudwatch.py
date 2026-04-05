@@ -1,10 +1,9 @@
-from datetime import UTC
 from datetime import datetime
 
 import boto3
 import structlog
 
-from catchup.components.aws.utils import extract_model_part_from_arn
+from catchup.components.aws.utils import extract_model_id_from_arn
 
 logger = structlog.get_logger()
 
@@ -12,10 +11,10 @@ logger = structlog.get_logger()
 class CloudWatchMetrics:
     def __init__(
         self,
-        region_name: str = 'ap-northeast-2'
+        region_name: str = "ap-northeast-2"
     ):
         self.client = boto3.client(
-            'cloudwatch',
+            "cloudwatch",
             region_name=region_name
         )
     
@@ -23,7 +22,7 @@ class CloudWatchMetrics:
         self,
         model_id: str,
         start_time: datetime,
-        end_time: datetime | None = None,
+        end_time: datetime,
     ) -> int:
         """
         BedrockEmbeddings 호출로 인한 입력 토큰 사용량을 CloudWatch로부터 집계한다.
@@ -33,8 +32,8 @@ class CloudWatchMetrics:
 
         Args:
             model_id: Bedrock 임베딩 모델 ID. ARN 형식인 경우 자동으로 파싱된다.
-            start_time: 집계 시작 시간.
-            end_time: 집계 종료 시간.
+            start_time: 집계 시작 시간 (UTC).
+            end_time: 집계 종료 시간 (UTC).
             
         Raises:
             botocore.exceptions.ClientError: CloudWatch API 호출 실패 시.
@@ -43,27 +42,20 @@ class CloudWatchMetrics:
             집계 기간 내 총 입력 토큰 수.
         """
         
-        if end_time is None:
-            end_time = datetime.now(UTC)
-        
-        # Ensure UTC
-        start_time = self._ensure_utc(start_time)
-        end_time = self._ensure_utc(end_time)
-        
         # ARN인 경우 model 식별 부분만 추출
         # (e.g. arn:.../global.cohere.embed-v4:0 -> global.cohere.embed-v4:0)
         # Dimensions의 ModelId는 ARN을 포함한 모델 id를 사용할 수 없음.
-        parsed_model_id = extract_model_part_from_arn(model_id)
+        parsed_model_id = extract_model_id_from_arn(model_id)
         
         try:
             response = self.client.get_metric_statistics(
-                Namespace='AWS/Bedrock',
-                MetricName='InputTokenCount',
-                Dimensions=[{'Name': 'ModelId', 'Value': parsed_model_id}],
+                Namespace="AWS/Bedrock",
+                MetricName="InputTokenCount",
+                Dimensions=[{"Name": "ModelId", "Value": parsed_model_id}],
                 StartTime=start_time,
                 EndTime=end_time,
                 Period=86400,
-                Statistics=['Sum']
+                Statistics=["Sum"]
             )
         except Exception as e:
             logger.error(
@@ -71,18 +63,11 @@ class CloudWatchMetrics:
                 error=str(e)
             )
             raise
-        else:
-            total_tokens = int(sum(point['Sum'] for point in response['Datapoints']))
-            logger.info(
-                "embeddings_total_tokens_aggregation_success",
-                total_tokens=total_tokens
-            )
+        
+        total_tokens = int(sum(point["Sum"] for point in response["Datapoints"]))
+        logger.info(
+            "embeddings_total_tokens_aggregation_success",
+            total_tokens=total_tokens
+        )
         return total_tokens
 
-    def _ensure_utc(
-        self,
-        time: datetime,
-    ) -> datetime:
-        if time.tzinfo is None:
-            return time.replace(tzinfo=UTC)
-        return time.astimezone(UTC)
