@@ -44,7 +44,6 @@ from catchup.server.connector.github.webhook_api import router as github_webhook
 from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.webhook_api import router as slack_webhook_router
-from catchup.server.costs.api import router as costs_router
 from catchup.server.error_handlers import register_exception_handlers
 from catchup.server.initialization import ensure_pg_indices
 from catchup.server.mapping.api import router as github_mapping_csv_router
@@ -52,6 +51,7 @@ from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.settings.api import router as settings_router
 from catchup.server.state import state
+from catchup.server.stats.api import router as stats_router
 from catchup.server.sync.api import router as sync_runtime_router
 from catchup.utils.client import _shared_client
 from catchup.utils.redis import check_all_redis_health
@@ -422,7 +422,7 @@ app.include_router(github_mapping_csv_router)
 app.include_router(onboarding_router)
 app.include_router(settings_router)
 app.include_router(sync_runtime_router)
-app.include_router(costs_router)
+app.include_router(stats_router)
 
 
 app.add_middleware(
