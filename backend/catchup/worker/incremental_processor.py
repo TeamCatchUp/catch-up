@@ -7,6 +7,11 @@ from datetime import timezone
 
 from fastapi.concurrency import run_in_threadpool
 
+from catchup.audit.actions import IncrementalSyncAction
+from catchup.audit.base import AuditLevel
+from catchup.audit.base import AuditStatus
+from catchup.audit.emitters import emit_audit_event
+from catchup.audit.metadata import IncrementalRecordAuditMetadata
 from catchup.configs.config import settings
 from catchup.db.engine import SessionLocal
 from catchup.db.incremental import get_record_state
@@ -42,6 +47,24 @@ def _incremental_retry_delay(exc: Exception, attempt: int) -> timedelta:
         attempt=attempt,
         base_delay_seconds=settings.INCREMENTAL_RETRY_BASE_DELAY_SECONDS,
         max_delay_seconds=settings.INCREMENTAL_RETRY_MAX_DELAY_SECONDS,
+    )
+
+
+def _emit_requeue_record_audit(
+    *,
+    context: IncrementalSyncContext,
+    next_attempt: int,
+    retry_at: str,
+) -> None:
+    emit_audit_event(
+        action=IncrementalSyncAction.RECORD,
+        status=AuditStatus.SUCCESS,
+        level=AuditLevel.WARNING,
+        metadata=IncrementalRecordAuditMetadata.from_requeue(
+            context=context,
+            next_attempt=next_attempt,
+            retry_at=retry_at,
+        ),
     )
 
 
@@ -283,13 +306,10 @@ async def _handle_incremental_failure(
         next_attempt=next_attempt,
         error_summary=error_summary,
     )
-    logger.warning(
-        "[%s][INCREMENTAL][WORKER] Record retry scheduled: record_key=%s, next_attempt=%s, retry_at=%s, error=%s",
-        context.connector.upper(),
-        context.record_key,
-        next_attempt,
-        next_retry_at.isoformat(),
-        error_summary,
+    _emit_requeue_record_audit(
+        context=context,
+        next_attempt=next_attempt,
+        retry_at=next_retry_at.isoformat(),
     )
 
 
@@ -375,14 +395,6 @@ async def process_incremental_message(
             return
 
         await handler.on_target_completed(context=context, result=result)
-        logger.info(
-            "[%s][INCREMENTAL][WORKER] Record synced: record_key=%s, generation=%s, synced=%s, errors=%s",
-            context.connector.upper(),
-            context.record_key,
-            context.generation,
-            result.synced_count,
-            result.error_count,
-        )
     except Exception as exc:
         if context is None:
             logger.exception(

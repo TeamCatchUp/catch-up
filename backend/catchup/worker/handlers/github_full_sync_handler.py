@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import logging
 
+from catchup.audit.actions import FullSyncAction
+from catchup.audit.metadata import FullSyncEventAuditMetadata
+from catchup.audit.utils import audit_log
 from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
 from catchup.sync.audit import SyncAuditContext
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
-
-logger = logging.getLogger(__name__)
-
 
 class GithubFullSyncHandler(BaseFullSyncHandler):
     connector = "github"
@@ -33,6 +32,11 @@ class GithubFullSyncHandler(BaseFullSyncHandler):
         cache[cache_key] = service
         return service
 
+    @audit_log(
+        FullSyncAction.EVENT,
+        metadata_factory=FullSyncEventAuditMetadata.from_audit,
+        emit_attempt=True,
+    )
     async def handle(
         self,
         *,
@@ -72,12 +76,4 @@ class GithubFullSyncHandler(BaseFullSyncHandler):
                 "[GITHUB][FULL SYNC][WORKER] Target sync failed: "
                 f"scope_id={context.scope_id}, repository_id={context.target_id}, errors={result.error_count}"
             )
-
-        logger.info(
-            "[GITHUB][FULL SYNC][WORKER] Target synced: scope_id=%s, repository_id=%s, synced=%s, sync_from_ts=%s",
-            context.scope_id,
-            context.target_id,
-            result.synced_count,
-            context.sync_from_ts,
-        )
         return result

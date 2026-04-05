@@ -7,6 +7,12 @@ from datetime import timezone
 from fastapi.concurrency import run_in_threadpool
 import structlog
 
+from catchup.audit.actions import FullSyncAction
+from catchup.audit.base import AuditLevel
+from catchup.audit.base import AuditStatus
+from catchup.audit.emitters import emit_audit_event
+from catchup.audit.metadata import FullSyncEventAuditMetadata
+from catchup.audit.metadata import FullSyncJobAuditMetadata
 from catchup.configs.config import settings
 from catchup.db.models import SyncJobStatus
 from catchup.sync.common.protocols import IngestionHandlerProtocol
@@ -65,18 +71,6 @@ def create_target_log(context: FullSyncContext):
     )
 
 
-def create_job_log(context: FullSyncContext):
-    return logger.bind(
-        connector=context.connector,
-        sync_type=context.sync_type.value,
-        scope_id=context.scope_id,
-        job_id=context.job_id,
-        event_id=context.event_id,
-        target_type=context.target_type,
-        target_id=context.target_id,
-    )
-
-
 def create_handler_log(context: FullSyncContext):
     return logger.bind(
         connector=context.connector,
@@ -95,6 +89,40 @@ def _full_sync_retry_delay(exc: Exception, attempt: int) -> timedelta:
         attempt=attempt,
         base_delay_seconds=settings.SYNC_JOB_RETRY_BASE_DELAY_SECONDS,
         max_delay_seconds=settings.SYNC_JOB_RETRY_MAX_DELAY_SECONDS,
+    )
+
+
+def _emit_job_audit(
+    *,
+    status: AuditStatus,
+    metadata: FullSyncJobAuditMetadata,
+    level: AuditLevel = AuditLevel.INFO,
+) -> None:
+    emit_audit_event(
+        action=FullSyncAction.JOB,
+        status=status,
+        level=level,
+        metadata=metadata,
+    )
+
+
+def _emit_requeue_event_audit(
+    *,
+    context: FullSyncContext,
+    next_attempt: int,
+    retry_at: str,
+    error_summary: str,
+) -> None:
+    emit_audit_event(
+        action=FullSyncAction.EVENT,
+        status=AuditStatus.SUCCESS,
+        level=AuditLevel.WARNING,
+        metadata=FullSyncEventAuditMetadata.from_requeue(
+            context=context,
+            next_attempt=next_attempt,
+            retry_at=retry_at,
+            error_summary=error_summary,
+        ),
     )
 
 
@@ -139,8 +167,8 @@ async def _handle_event_failure(
             next_attempt=next_attempt,
             error_summary=error_summary,
         )
-        target_log.warning(
-            "full_sync_target_requeued",
+        _emit_requeue_event_audit(
+            context=context,
             next_attempt=next_attempt,
             retry_at=next_retry_at.isoformat(),
             error_summary=error_summary,
@@ -188,8 +216,6 @@ async def _finalize_job_if_done(
     if not result.finalized or result.status is None:
         return
 
-    job_log = create_job_log(context)
-
     if result.status == SyncJobStatus.SUCCESS:
         await handler.on_job_completed(
             context=context,
@@ -198,12 +224,16 @@ async def _finalize_job_if_done(
             failed_targets=result.failed_targets,
             requeued_targets=result.requeued_targets,
         )
-        job_log.info(
-            "full_sync_job_completed",
-            total_targets=result.total_targets,
-            completed_targets=result.completed_targets,
-            failed_targets=result.failed_targets,
-            requeued_targets=result.requeued_targets,
+        # full_sync.job SUCCESS
+        _emit_job_audit(
+            status=AuditStatus.SUCCESS,
+            metadata=FullSyncJobAuditMetadata.from_job_result(
+                context=context,
+                total_targets=result.total_targets,
+                completed_targets=result.completed_targets,
+                failed_targets=result.failed_targets,
+                requeued_targets=result.requeued_targets,
+            ),
         )
         return
 
@@ -212,12 +242,17 @@ async def _finalize_job_if_done(
         total_targets=result.total_targets,
         failed_targets=result.failed_targets,
     )
-    job_log.warning(
-        "full_sync_job_failed",
-        total_targets=result.total_targets,
-        completed_targets=result.completed_targets,
-        failed_targets=result.failed_targets,
-        requeued_targets=result.requeued_targets,
+    # full_sync.job FAILURE
+    _emit_job_audit(
+        status=AuditStatus.FAILURE,
+        level=AuditLevel.WARNING,
+        metadata=FullSyncJobAuditMetadata.from_job_result(
+            context=context,
+            total_targets=result.total_targets,
+            completed_targets=result.completed_targets,
+            failed_targets=result.failed_targets,
+            requeued_targets=result.requeued_targets,
+        ),
     )
 
 
@@ -320,9 +355,13 @@ async def process_full_sync_message(
                 context=context,
                 total_targets=claim.total_targets,
             )
-            claim_log.info(
-                "full_sync_job_started",
-                total_targets=claim.total_targets,
+            # full_sync.job ATTEMPT
+            _emit_job_audit(
+                status=AuditStatus.ATTEMPT,
+                metadata=FullSyncJobAuditMetadata.from_job_start(
+                    context=context,
+                    total_targets=claim.total_targets,
+                ),
             )
 
         await handler.on_target_started(context=context)

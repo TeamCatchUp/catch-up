@@ -29,6 +29,7 @@ def audit_log(
     action: BaseAuditAction | None = None,
     level: AuditLevel = AuditLevel.INFO,
     metadata_factory: AuditMetadataFactory | None = None,
+    emit_attempt: bool = False,
 ):
     """
     서비스 로직을 래핑하여 감사 로그를 발행하는 데코레이터.
@@ -211,6 +212,14 @@ def audit_log(
             async def wrapper(*args, **kwargs):
                 arguments = _bind_arguments(func, args, kwargs)
 
+                if emit_attempt:
+                    _emit(
+                        func=func,
+                        arguments=arguments,
+                        status=AuditStatus.ATTEMPT,
+                        level=level,
+                    )
+
                 try:
                     result = await func(*args, **kwargs)
                     _emit(
@@ -241,6 +250,14 @@ def audit_log(
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
                 arguments = _bind_arguments(func, args, kwargs)
+
+                if emit_attempt:
+                    _emit(
+                        func=func,
+                        arguments=arguments,
+                        status=AuditStatus.ATTEMPT,
+                        level=level,
+                    )
 
                 try:
                     result = func(*args, **kwargs)

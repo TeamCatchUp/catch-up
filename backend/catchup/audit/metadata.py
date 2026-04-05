@@ -12,6 +12,7 @@ from catchup.configs.config import settings
 from catchup.db.models import SourceType
 from catchup.db.models import SyncConnector
 from catchup.db.models import UserRole
+from catchup.sync.common.schemas import SyncTargetType
 
 if TYPE_CHECKING:
     from catchup.audit.utils import AuditLogMetadataInput
@@ -66,6 +67,121 @@ class FullSyncTriggerMetadata(BaseAuditMetadata):
         )
 
 
+class FullSyncEventAuditMetadata(BaseAuditMetadata):
+    connector: SyncConnector
+    scope_id: str
+    job_id: str
+    event_id: str
+    target_type: SyncTargetType
+    target_id: str
+    target_name: str | None = None
+    attempt: int
+    max_attempts: int
+    sync_from_ts: str | None = None
+    # requeue
+    phase: str = "process"
+    is_retry: bool = False
+    next_attempt: int | None = None
+    retry_at: str | None = None
+    error_summary: str | None = None
+    synced_count: int | None = None
+    error_count: int | None = None
+    skipped: bool | None = None
+
+    @classmethod
+    def from_audit(cls, data: "AuditLogMetadataInput") -> "FullSyncEventAuditMetadata":
+        context = data.arguments["context"]
+        result = data.result
+
+        return cls(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            job_id=context.job_id,
+            event_id=context.event_id,
+            target_type=context.target_type,
+            target_id=context.target_id,
+            target_name=context.target_name,
+            attempt=context.attempt,
+            max_attempts=context.max_attempts,
+            sync_from_ts=context.sync_from_ts,
+            phase="process",
+            is_retry=context.attempt > 0,
+            synced_count=getattr(result, "synced_count", None),
+            error_count=getattr(result, "error_count", None),
+            skipped=getattr(result, "skipped", None),
+        )
+
+    @classmethod
+    def from_requeue(
+        cls,
+        *,
+        context,
+        next_attempt: int,
+        retry_at: str,
+        error_summary: str,
+    ) -> "FullSyncEventAuditMetadata":
+        return cls(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            job_id=context.job_id,
+            event_id=context.event_id,
+            target_type=context.target_type,
+            target_id=context.target_id,
+            target_name=context.target_name,
+            attempt=context.attempt,
+            max_attempts=context.max_attempts,
+            sync_from_ts=context.sync_from_ts,
+            phase="requeue",
+            is_retry=context.attempt > 0,
+            next_attempt=next_attempt,
+            retry_at=retry_at,
+            error_summary=error_summary,
+        )
+
+
+class FullSyncJobAuditMetadata(BaseAuditMetadata):
+    connector: SyncConnector
+    scope_id: str
+    job_id: str
+    total_targets: int
+    completed_targets: int | None = None
+    failed_targets: int | None = None
+    requeued_targets: int | None = None
+
+    @classmethod
+    def from_job_start(
+        cls,
+        *,
+        context,
+        total_targets: int,
+    ) -> "FullSyncJobAuditMetadata":
+        return cls(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            job_id=context.job_id,
+            total_targets=total_targets,
+        )
+
+    @classmethod
+    def from_job_result(
+        cls,
+        *,
+        context,
+        total_targets: int,
+        completed_targets: int,
+        failed_targets: int,
+        requeued_targets: int,
+    ) -> "FullSyncJobAuditMetadata":
+        return cls(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            job_id=context.job_id,
+            total_targets=total_targets,
+            completed_targets=completed_targets,
+            failed_targets=failed_targets,
+            requeued_targets=requeued_targets,
+        )
+
 class IncrementalSyncTriggerMetadata(BaseAuditMetadata):
     connector: SyncConnector
     scope_id: str
@@ -114,6 +230,55 @@ class IncrementalSyncTriggerMetadata(BaseAuditMetadata):
             change_count=len(changes),
             record_key_count=len(result.record_keys),
             blocked_count=result.blocked_count,
+        )
+
+
+class IncrementalRecordAuditMetadata(BaseAuditMetadata):
+    connector: SyncConnector
+    scope_id: str
+    target_id: str
+    record_key: str
+    record_type: str | None = None
+    phase: str = "process"
+    attempt: int
+    next_attempt: int | None = None
+    retry_at: str | None = None
+    skipped: bool | None = None
+
+    @classmethod
+    def from_audit(cls, data: "AuditLogMetadataInput") -> "IncrementalRecordAuditMetadata":
+        context = data.arguments["context"]
+        result = data.result
+
+        return cls(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            target_id=context.target_id,
+            record_key=context.record_key,
+            record_type=context.record_type,
+            phase="process",
+            attempt=context.attempt,
+            skipped=getattr(result, "skipped", None),
+        )
+
+    @classmethod
+    def from_requeue(
+        cls,
+        *,
+        context,
+        next_attempt: int,
+        retry_at: str,
+    ) -> "IncrementalRecordAuditMetadata":
+        return cls(
+            connector=context.connector,
+            scope_id=context.scope_id,
+            target_id=context.target_id,
+            record_key=context.record_key,
+            record_type=context.record_type,
+            phase="requeue",
+            attempt=context.attempt,
+            next_attempt=next_attempt,
+            retry_at=retry_at,
         )
 
 
