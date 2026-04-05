@@ -154,7 +154,7 @@ class SyncAcceptedResponse(BaseModel):
     connector: SyncConnector
     scope_id: str
 
-    ㅈ: str | None = Field(
+    job_id: str | None = Field(
         default=None,
         description="created job id, or the active job id when status is conflict",
     )
