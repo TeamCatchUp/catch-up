@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import structlog
 
+from catchup.audit.utils import audit_log
 from catchup.configs.config import settings
 from catchup.db.models import SyncConnector
 from catchup.db.models import SyncType
@@ -65,7 +66,6 @@ class FullSyncService:
             trigger=request.trigger,
             event_seeds=event_seeds,
         )
-
     async def dispatch(
         self,
         *,
@@ -88,7 +88,6 @@ class FullSyncService:
             _build_event_seed(target, sync_from_ts=sync_from_ts)
             for target in resolved.targets
         ]
-
         return await self._dispatch_service.dispatch(
             self._build_dispatch_request(
                 connector=connector,

@@ -6,7 +6,6 @@ import structlog
 from fastapi.concurrency import run_in_threadpool
 
 from catchup.audit.actions import SyncTriggerAction
-from catchup.audit.contexts import AuditContext
 from catchup.audit.metadata import IncrementalSyncTriggerMetadata
 from catchup.audit.utils import audit_log
 from catchup.db.models import SyncConnector
@@ -21,7 +20,10 @@ logger = structlog.get_logger(__name__)
 
 class IncrementalService:
     
-    @audit_log(SyncTriggerAction.INCREMENTAL)
+    @audit_log(
+        SyncTriggerAction.INCREMENTAL,
+        metadata_factory=IncrementalSyncTriggerMetadata.from_audit,
+    )
     async def dispatch_changes(
         self,
         *,
@@ -30,10 +32,6 @@ class IncrementalService:
         result = await run_in_threadpool(
             persist_incremental_changes,
             changes,
-        )
-        AuditContext.get().metadata = IncrementalSyncTriggerMetadata.from_incremental_sync(
-            changes=changes,
-            result=result,
         )
         return result
 

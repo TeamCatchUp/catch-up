@@ -41,7 +41,7 @@ class SystemAction(BaseAuditAction):
 class SyncTriggerAction(BaseAuditAction):
 
     # "sync_trigger.full_sync_request"
-    FULL_SYNC_REQUESTED = "full_sync_requested"
+    FULL_SYNC_REQUEST = "full_sync_request"
 
     # "sync_trigger.incremental"
     INCREMENTAL = "incremental"
@@ -50,15 +50,6 @@ class FullSyncAction(BaseAuditAction):
     """
     dispatch() 이후 full sync 처리 단위와 주요 전이를 기록
     """
-    # "full_sync.resolve_targets"
-    RESOLVE_TARGETS = "resolve_targets"
-
-    # "full_sync.persist_job_events"
-    PERSIST_JOB_EVENTS = "persist_job_events"
-
-    # "full_sync.publish"
-    PUBLISH = "publish"
-
     # "full_sync.job"
     # ATTEMPT : JOB_STARTED | SUCCESS : JOB_SUCCESS | FAIL : JOB_FAILED
     JOB = "job"
@@ -77,16 +68,6 @@ class IncrementalSyncAction(BaseAuditAction):
     """
     incremental dispatch 이후 record / outbox / worker 처리 단위를 기록
     """
-    # "incremental_sync.persist_changes"
-    PERSIST_CHANGES = "persist_changes"
-
-    # "incremental_sync.promote_records"
-    PROMOTE_RECORDS = "promote_records"
-
-    # "incremental_sync.outbox"
-    # ATTEMPT : OUTBOX_PUBLISHING | SUCCESS : OUTBOX_PUBLISHED | FAIL : OUTBOX_FAILED/SKIPPED
-    OUTBOX = "outbox"
-
     # "incremental_sync.record"
     # ATTEMPT : RECORD_PROCESSING | SUCCESS : RECORD_SYNCED | FAIL : RECORD_DEAD
     RECORD = "record"
@@ -94,17 +75,17 @@ class IncrementalSyncAction(BaseAuditAction):
     # "incremental_sync.retry_record"
     RETRY_RECORD = "retry_record"
 
-class SyncIngestionAction(BaseAuditAction):
-    # "sync_ingestion.fetch"
-    FETCH = "fetch"
-    # "sync_ingestion.transform"
-    TRANSFORM = "transform"
-    # "sync_ingestion.summarize"
-    SUMMARIZE = "summarize"
-    # "sync_ingestion.embed"
-    EMBED = "embed"
-    # "sync_ingestion.persist"
-    PERSIST = "persist"
+# class SyncIngestionAction(BaseAuditAction):
+#     # "sync_ingestion.fetch"
+#     FETCH = "fetch"
+#     # "sync_ingestion.transform"
+#     TRANSFORM = "transform"
+#     # "sync_ingestion.summarize"
+#     SUMMARIZE = "summarize"
+#     # "sync_ingestion.embed"
+#     EMBED = "embed"
+#     # "sync_ingestion.persist"
+#     PERSIST = "persist"
 
 
 # ======================= CONNECTOR AUDIT =======================
