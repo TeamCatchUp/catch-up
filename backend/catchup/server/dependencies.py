@@ -1,6 +1,5 @@
-from datetime import UTC
 from datetime import datetime
-from datetime import timedelta
+from datetime import timezone
 
 from attr import dataclass
 from fastapi import HTTPException
@@ -19,19 +18,14 @@ class DateRangeQueryParam:
 
 def date_range_query_params(
     start_date: datetime = Query(
-        description="집계 시작 날짜 (ISO 8601, UTC)",
+        description="집계 시작 날짜 (ISO 8601, UTC). KST 기준이면 T15:00:00Z로 변환 후 전송.",
     ),
     end_date: datetime | None = Query(
         default=None,
-        description="집계 종료 날짜 (ISO 8601, UTC). 없으면 현재 시간 기준.",
+        description="집계 종료 날짜 (ISO 8601, UTC). KST 기준이면 T15:00:00Z로 변환 후 전송. 없으면 현재 시간 기준.",
     ),
 ) -> DateRangeQueryParam:
-    resolved_end = (
-        end_date + timedelta(days=1)
-        if end_date
-        else datetime.now(UTC)
-    )
-
+    resolved_end = end_date or datetime.now(timezone.utc)
     if (resolved_end - start_date).days > MAX_RANGE_DAYS:
         # TODO: OutOfQueryRangeError 커스텀 예외 대체
         raise HTTPException(

@@ -1,48 +1,48 @@
 from datetime import datetime
+from typing import TypedDict
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 
-def get_user_chat_token_usage_by_model(
+class DailyModelTokenUsage(TypedDict):
+    input_tokens: int
+    output_tokens: int
+
+type DailyTokenUsage = dict[str, dict[str, DailyModelTokenUsage]]
+
+def get_user_chat_token_usage_by_range(
     db: Session,
     user_id: int,
-    start_date: datetime | None = None,
-    end_date: datetime | None = None,
-) -> dict[str, dict[str, int]]:
-    """
-    사용자의 모델별 채팅 토큰 사용량 합계를 반환한다.
-    """
-    conditions = ["user_id = :user_id"]
-    params: dict = {"user_id": user_id}
-
-    if start_date is not None:
-        conditions.append("created_at >= :start_date")
-        params["start_date"] = start_date
-    if end_date is not None:
-        conditions.append("created_at < :end_date")
-        params["end_date"] = end_date
-
-    where_clause = " AND ".join(conditions)
-
+    start_date: datetime,
+    end_date: datetime,
+) -> dict[int, dict[str, DailyModelTokenUsage]]:
+    """start_date 기준 day_index별 모델별 토큰 사용량을 반환한다."""
+    
+    # start_date 기준 24시간 단위로 그룹화 (타임존과 무관)
     rows = db.execute(
-        text(f"""
+        text("""
             SELECT
+                FLOOR(EXTRACT(EPOCH FROM (created_at - :start_date)) / 86400)::int AS day_index,
                 model_data.key AS model_id,
                 COALESCE(SUM((model_data.value->>'input_tokens')::int), 0) AS input_tokens,
                 COALESCE(SUM((model_data.value->>'output_tokens')::int), 0) AS output_tokens
             FROM chat_token_usages,
                  jsonb_each(token_breakdown) AS model_data
-            WHERE {where_clause}
-            GROUP BY model_data.key
+            WHERE user_id = :user_id
+              AND created_at >= :start_date
+              AND created_at < :end_date
+            GROUP BY day_index, model_data.key
         """),
-        params,
+        {"user_id": user_id, "start_date": start_date, "end_date": end_date},
     ).all()
 
-    return {
-        row.model_id: {
+    result: dict[int, dict[str, DailyModelTokenUsage]] = {}
+    for row in rows:
+        if row.day_index not in result:
+            result[row.day_index] = {}
+        result[row.day_index][row.model_id] = {
             "input_tokens": row.input_tokens,
             "output_tokens": row.output_tokens,
         }
-        for row in rows
-    }
+    return result
