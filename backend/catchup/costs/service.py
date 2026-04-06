@@ -20,6 +20,13 @@ class ChatTokenCostResult(TypedDict):
     by_date: list[DailyTokenCost]
 
 
+class UserTokenCostRanking(TypedDict):
+    user_id: int
+    user_name: str
+    department: str
+    total_usd: float
+
+
 def _generate_date_range(
     start: datetime, 
     end: datetime
@@ -79,3 +86,26 @@ def calculate_chat_token_cost(
         "daily_avg_usd": daily_avg_usd,
         "by_date": by_date,
     }
+
+
+def calculate_user_token_cost_ranking(
+    rows: list,  # get_user_token_usage_ranking 반환값
+) -> list[UserTokenCostRanking]:
+    result = []
+    for row in rows:
+        total_usd = 0.0
+        if row.token_breakdown:
+            for model_arn, usage in row.token_breakdown.items():
+                total_usd += calc_token_cost(
+                    model_arn,
+                    input_tokens=usage.get("input_tokens", 0),
+                    output_tokens=usage.get("output_tokens", 0),
+                )
+        result.append({
+            "user_id": row.user_id,
+            "user_name": row.user_name,
+            "department": row.department,
+            "total_usd": round(total_usd, 4),
+        })
+
+    return sorted(result, key=lambda x: x["total_usd"], reverse=True)
