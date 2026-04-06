@@ -93,6 +93,11 @@ export const API = {
     vendorUpload: (vendor: string) => `${API_PREFIX}/mapping/${vendor}/upload`, // POST 협업툴별 사용자 매핑 CSV/Excel 일괄 업로드
   },
 
+  stats: {
+    myTokenCost: `${API_PREFIX}/stats/costs/tokens/me`, // GET 내 일자별 토큰 사용량(USD)
+    orgTokenCost: `${API_PREFIX}/stats/costs/tokens/org`, // GET 조직 일자별 토큰 사용량(USD) (admin only)
+  },
+
   settings: {
     prompts: `${API_PREFIX}/settings/prompts`, // GET & PATCH 커스텀 프롬프트 지침
   },

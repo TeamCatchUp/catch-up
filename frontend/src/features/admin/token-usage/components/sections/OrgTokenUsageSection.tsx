@@ -2,7 +2,7 @@
 
 /** 토큰 사용량 관리 > "조직 토큰 사용량" 탭 — SegmentedPicker(팀 전체/멤버 선택) + 차트 3개 + 순위 + 제한 설정 */
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
 import { startOfMonth, startOfToday } from 'date-fns';
@@ -10,7 +10,6 @@ import { startOfMonth, startOfToday } from 'date-fns';
 import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
 
 import { DEFAULT_DAILY_LIMIT } from '../../constants/tokenUsageConfig';
-import useFilteredByDateRange from '../../hooks/useFilteredByDateRange';
 import { tokenUsageQueries } from '../../queries/tokenUsage.queries';
 import DailyUsageBarChart from '../charts/DailyUsageBarChart';
 import TotalQuestionBarChart from '../charts/TotalQuestionBarChart';
@@ -26,12 +25,6 @@ const VIEW_MAP: Record<string, ViewMode> = { '멤버 선택': 'member', '팀 전
 const VIEW_LABEL: Record<ViewMode, string> = { member: '멤버 선택', team: '팀 전체' };
 
 export default function OrgTokenUsageSection() {
-  const { data: members } = useQuery(tokenUsageQueries.orgMembers());
-  const { data: dailyUsage } = useQuery(tokenUsageQueries.orgDailyUsage());
-  const { data: totalTrend } = useQuery(tokenUsageQueries.orgTotalTrend());
-  const { data: questionCounts } = useQuery(tokenUsageQueries.orgQuestionCounts());
-  const { data: ranking } = useQuery(tokenUsageQueries.orgRanking());
-
   const [viewMode, setViewMode] = useState<ViewMode>('team');
   const [selectedMemberId, setSelectedMemberId] = useState<string>('1');
 
@@ -40,16 +33,16 @@ export default function OrgTokenUsageSection() {
     to: startOfToday(),
   });
 
-  // 날짜 범위 필터링
-  const filteredDaily = useFilteredByDateRange(dailyUsage, dateRange);
-  const filteredTrend = useFilteredByDateRange(totalTrend, dateRange);
-  const filteredQuestions = useFilteredByDateRange(questionCounts, dateRange);
+  const { data: members } = useQuery(tokenUsageQueries.orgMembers());
+  const { data: dailyUsage } = useQuery(tokenUsageQueries.orgDailyUsage(dateRange?.from, dateRange?.to));
+  const { data: totalTrend } = useQuery(tokenUsageQueries.orgTotalTrend(dateRange?.from, dateRange?.to));
+  const { data: questionCounts } = useQuery(tokenUsageQueries.orgQuestionCounts());
+  const { data: ranking } = useQuery(tokenUsageQueries.orgRanking());
 
-  const filteredTotalCost = useMemo(() => filteredDaily.reduce((sum, d) => sum + d.cost, 0), [filteredDaily]);
+  // TODO: orgSummary API 별도 구현 시 교체
+  const { data: orgSummary } = useQuery(tokenUsageQueries.orgSummary());
 
   const chartTitle = viewMode === 'team' ? '조직 전체 일자별 토큰 사용량' : '개인 일자별 토큰 사용량';
-
-  if (!dailyUsage) return null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -82,18 +75,18 @@ export default function OrgTokenUsageSection() {
         <div className="flex w-150 shrink-0 flex-col gap-3">
           <div className="min-h-0 flex-[2.2]">
             <DailyUsageBarChart
-              data={filteredDaily}
-              totalCost={filteredTotalCost}
+              data={dailyUsage ?? []}
+              totalCost={orgSummary?.total_cost ?? 0}
               dailyLimit={DEFAULT_DAILY_LIMIT}
               title={chartTitle}
             />
           </div>
           <div className="flex min-h-0 flex-1 gap-3">
             <div className="min-h-0 flex-1">
-              <TotalTokenLineChart data={filteredTrend} />
+              <TotalTokenLineChart data={totalTrend ?? []} />
             </div>
             <div className="min-h-0 flex-1">
-              <TotalQuestionBarChart data={filteredQuestions} />
+              <TotalQuestionBarChart data={questionCounts ?? []} />
             </div>
           </div>
         </div>

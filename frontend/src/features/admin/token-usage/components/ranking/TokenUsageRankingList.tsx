@@ -15,7 +15,7 @@ interface TokenUsageRankingListProps {
 
 export default function TokenUsageRankingList({ data }: TokenUsageRankingListProps) {
   return (
-    <div className="border-edge-neutral bg-fill-normal flex h-full flex-col overflow-hidden rounded-xl border">
+    <div className="border-edge-neutral bg-fill-normal flex h-full flex-col overflow-hidden rounded-md border">
       {/* 헤더 */}
       <div className="bg-fill-strong rounded-md px-5 py-1.5">
         <span className="text-heading-small text-content-neutral">토큰 사용량 순위</span>
