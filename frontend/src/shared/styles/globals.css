@@ -50,12 +50,15 @@
 
   .thin-scrollbar::-webkit-scrollbar {
     width: 8px;
+    height: 8px;
   }
   .thin-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
+    background: var(--color-background-alternative, #f7f7f8);
+    border-radius: 1000px;
+    margin: 2px;
   }
   .thin-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1);
+    background: var(--color-fill-interaction-pressed, #dbdcdf);
     border-radius: 16px;
   }
 
@@ -91,8 +94,11 @@
     background: linear-gradient(180deg, #1e2124 30.97%, #001536 100%);
   }
 
+  .dark .thin-scrollbar::-webkit-scrollbar-track {
+    background: var(--color-background-alternative);
+  }
   .dark .thin-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-fill-interaction-pressed);
   }
 }
 
