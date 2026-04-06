@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
-import { parseISO } from 'date-fns';
+import { startOfMonth, startOfToday } from 'date-fns';
 
 import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
 
@@ -35,13 +35,9 @@ export default function OrgTokenUsageSection() {
   const [viewMode, setViewMode] = useState<ViewMode>('team');
   const [selectedMemberId, setSelectedMemberId] = useState<string>('1');
 
-  // 날짜 범위 초기값: mock 데이터 첫날 ~ 마지막날
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
-    if (!dailyUsage?.length) return undefined;
-    return {
-      from: parseISO(dailyUsage[0].date),
-      to: parseISO(dailyUsage[dailyUsage.length - 1].date),
-    };
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfMonth(startOfToday()),
+    to: startOfToday(),
   });
 
   // 날짜 범위 필터링
