@@ -19,7 +19,7 @@ from catchup.connectors.slack.ingestion_service import SlackIngestionService
 from catchup.connectors.slack.metadata_service import SlackMetadataService
 from catchup.db.engine import SessionLocal
 from catchup.db.slack import oauth_repository as slack_crud
-from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
+from catchup.sync.common.exceptions import SyncConnectorException, SyncInternalException
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ async def _resolve_access_token(
 ) -> str:
     token_record = await run_in_threadpool(_load_token_db, team_id)
     if not token_record:
-        raise SyncConnectorError(
+        raise SyncConnectorException(
             f"Slack 연결을 찾을 수 없습니다: {team_id}",
             metadata={"team_id": team_id},
         )
@@ -46,9 +46,9 @@ async def _resolve_access_token(
         raise
     except SlackConnectorApiError as exc:
         error_cls = (
-            SyncInternalError
+            SyncInternalException
             if exc.status_code is not None and exc.status_code >= 500
-            else SyncConnectorError
+            else SyncConnectorException
         )
         raise error_cls(
             exc.message,
@@ -60,7 +60,7 @@ async def _resolve_access_token(
             if isinstance(exc.detail, str)
             else "Slack 인증 정보를 확인할 수 없습니다"
         )
-        error_cls = SyncInternalError if exc.status_code >= 500 else SyncConnectorError
+        error_cls = SyncInternalException if exc.status_code >= 500 else SyncConnectorException
         raise error_cls(
             message,
             metadata={"team_id": team_id},
@@ -72,7 +72,7 @@ async def _resolve_access_token(
             exc,
             exc_info=True,
         )
-        raise SyncInternalError(
+        raise SyncInternalException(
             "Slack access token 획득 중 오류가 발생했습니다",
             metadata={"team_id": team_id},
         ) from exc
@@ -103,7 +103,7 @@ async def create_slack_ingestion_service(
             exc,
             exc_info=True,
         )
-        raise SyncInternalError(
+        raise SyncInternalException(
             "Slack ingestion service 초기화에 실패했습니다",
             metadata={"team_id": team_id},
         ) from exc
@@ -128,7 +128,7 @@ async def create_slack_metadata_service(
             exc,
             exc_info=True,
         )
-        raise SyncInternalError(
+        raise SyncInternalException(
             "Slack metadata service 초기화에 실패했습니다",
             metadata={"team_id": team_id},
         ) from exc

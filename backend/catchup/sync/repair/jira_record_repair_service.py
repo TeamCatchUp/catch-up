@@ -17,7 +17,7 @@ from catchup.server.sync.schemas import (
     SyncRecordRetryRequest,
     SyncRecordRetryResponse,
 )
-from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.repair.context import RecordRepairContext
 
 
@@ -42,15 +42,15 @@ def _load_jira_target_ref(
     project_key = target_id.strip()
 
     if not cloud_id:
-        raise SyncRequestError("scope_id is required", code="invalid_scope_id")
+        raise SyncRequestException("scope_id is required", code="invalid_scope_id")
     if not project_key:
-        raise SyncRequestError("target_id is required", code="invalid_target_id")
+        raise SyncRequestException("target_id is required", code="invalid_target_id")
 
     with SessionLocal() as db:
         project = jira_entities.get_project(db, cloud_id, project_key)
 
     if project is None:
-        raise SyncRequestError(
+        raise SyncRequestException(
             "jira project not found in cloud",
             code="target_not_found",
             metadata={
@@ -78,7 +78,7 @@ def _index_retry_records(
         elif item.record_type == "epic":
             epic_ids = list(item.record_ids)
         else:
-            raise SyncRequestError(
+            raise SyncRequestException(
                 "unsupported jira record_type",
                 code="unsupported_record_type",
                 metadata={"record_type": item.record_type},

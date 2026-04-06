@@ -16,7 +16,7 @@ from catchup.connectors.github.service import GithubIngestionService
 from catchup.db.engine import SessionLocal
 from catchup.db.github.installation_repository import get_installation_by_installation_id
 from catchup.connectors.github.auth import get_github_app_service
-from catchup.sync.common.exceptions import SyncConnectorError, SyncInternalError
+from catchup.sync.common.exceptions import SyncConnectorException, SyncInternalException
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ async def create_github_ingestion_service(
     installation = await run_in_threadpool(_load_installation_sync, installation_id)
 
     if not installation:
-        raise SyncConnectorError(
+        raise SyncConnectorException(
             f"Github Installation not found: {installation_id}",
             metadata={"installation_id": installation_id},
         )
@@ -91,14 +91,14 @@ async def create_github_ingestion_service(
         }
 
         if status_code == 401:
-            raise SyncConnectorError(
+            raise SyncConnectorException(
                 "GitHub App 인증에 실패했습니다. GITHUB_APP_ID와 GITHUB_APP_PRIVATE_KEY 조합, 앱 키 재발급 여부를 확인하세요.",
                 metadata=metadata,
                 code="github_auth_failed",
             ) from exc
 
         if 400 <= status_code < 500:
-            raise SyncConnectorError(
+            raise SyncConnectorException(
                 "GitHub installation access token 발급에 실패했습니다.",
                 metadata=metadata,
                 code="github_installation_token_failed",
@@ -111,7 +111,7 @@ async def create_github_ingestion_service(
             detail,
             exc_info=True,
         )
-        raise SyncInternalError(
+        raise SyncInternalException(
             "GitHub API 요청 중 오류가 발생했습니다",
             metadata=metadata,
             code="github_api_failed",
@@ -123,12 +123,12 @@ async def create_github_ingestion_service(
             exc,
             exc_info=True,
         )
-        raise SyncInternalError(
+        raise SyncInternalException(
             "GitHub API 네트워크 요청 중 오류가 발생했습니다",
             metadata={"installation_id": installation_id},
             code="github_api_network_failed",
         ) from exc
-    except SyncConnectorError:
+    except SyncConnectorException:
         raise
     except Exception as exc:
         logger.error(
@@ -137,7 +137,7 @@ async def create_github_ingestion_service(
             exc,
             exc_info=True,
         )
-        raise SyncInternalError(
+        raise SyncInternalException(
             "Github ingestion service initialization failed",
             metadata={"installation_id": installation_id},
         ) from exc

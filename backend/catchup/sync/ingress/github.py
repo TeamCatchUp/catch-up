@@ -73,7 +73,6 @@ async def _handle_incremental_event(
 
     result = await get_incremental_service().dispatch_changes(
         changes=changes,
-        event_name=request.event_name,
     )
     if result.blocked_count > 0:
         if not result.record_keys:

@@ -8,7 +8,7 @@ import structlog
 from catchup.db.engine import SessionLocal
 from catchup.db.github import domain_repository as github_entities
 from catchup.db.github.installation_repository import get_installation_by_installation_id
-from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import (
     FullSyncResolvedTargets,
@@ -37,12 +37,12 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
     ) -> FullSyncResolvedTargets:
         scope_id = request.scope_id.strip()
         if not scope_id:
-            raise SyncRequestError("scope_id is required")
+            raise SyncRequestException("scope_id is required")
 
         try:
             installation_id = int(scope_id)
         except ValueError as exc:
-            raise SyncRequestError(
+            raise SyncRequestException(
                 "scope_id must be a github installation_id",
                 metadata={"scope_id": request.scope_id},
             ) from exc
@@ -52,7 +52,7 @@ class GithubFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             run_in_threadpool(self._load_repositories_sync, installation_id),
         )
         if installation is None:
-            raise SyncRequestError(
+            raise SyncRequestException(
                 "github installation not found",
                 metadata={"installation_id": installation_id},
             )

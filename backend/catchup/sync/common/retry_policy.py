@@ -15,9 +15,9 @@ from sqlalchemy.exc import OperationalError
 
 from catchup.connectors.base.exceptions import ConnectorApiError
 from catchup.connectors.base.exceptions import RateLimitError
-from catchup.sync.common.exceptions import RedisStreamInitializationError
-from catchup.sync.common.exceptions import RedisStreamPublishError
-from catchup.sync.common.exceptions import SyncInternalError
+from catchup.sync.common.exceptions import RedisStreamInitializationException
+from catchup.sync.common.exceptions import RedisStreamPublishException
+from catchup.sync.common.exceptions import SyncInternalException
 
 
 def is_retryable_sync_error(exc: Exception) -> bool:
@@ -30,9 +30,9 @@ def is_retryable_sync_error(exc: Exception) -> bool:
             RateLimitError,
             RedisConnectionError,
             RedisTimeoutError,
-            RedisStreamInitializationError,
-            RedisStreamPublishError,
-            SyncInternalError,
+            RedisStreamInitializationException,
+            RedisStreamPublishException,
+            SyncInternalException,
 
             # DB Internal Error
             OperationalError,

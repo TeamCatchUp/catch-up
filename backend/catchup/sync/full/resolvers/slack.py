@@ -8,7 +8,7 @@ import structlog
 from catchup.db.engine import SessionLocal
 from catchup.db.slack import domain_repository as slack_entities
 from catchup.db.slack import oauth_repository as slack_oauth_repository
-from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
@@ -37,14 +37,14 @@ class SlackFullSyncTargetResolver(FullSyncTargetResolverProtocol):
     ) -> FullSyncResolvedTargets:
         team_id = request.scope_id.strip()
         if not team_id:
-            raise SyncRequestError("scope_id is required")
+            raise SyncRequestException("scope_id is required")
 
         token, channels = await asyncio.gather(
             run_in_threadpool(self._load_token_sync, team_id),
             run_in_threadpool(self._load_channels_sync, team_id),
         )
         if token is None:
-            raise SyncRequestError(
+            raise SyncRequestException(
                 "slack team is not connected",
                 metadata={"team_id": team_id},
             )

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from catchup.audit.actions import FullSyncAction
+from catchup.audit.metadata import FullSyncEventAuditMetadata
+from catchup.audit.utils import audit_log
 from catchup.connectors.slack.factory import create_slack_ingestion_service
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
@@ -23,6 +26,11 @@ class SlackFullSyncHandler(BaseFullSyncHandler):
         cache[cache_key] = service
         return service
 
+    @audit_log(
+        FullSyncAction.EVENT,
+        metadata_factory=FullSyncEventAuditMetadata.from_audit,
+        emit_attempt=True,
+    )
     async def handle(
         self,
         *,

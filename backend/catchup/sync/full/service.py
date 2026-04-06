@@ -5,11 +5,12 @@ from uuid import uuid4
 
 import structlog
 
+from catchup.audit.utils import audit_log
 from catchup.configs.config import settings
 from catchup.db.models import SyncConnector
 from catchup.db.models import SyncType
-from catchup.sync.common.exceptions import SyncInternalError
-from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.exceptions import SyncInternalException
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.protocols import EventPublisherProtocol
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
@@ -45,40 +46,17 @@ class FullSyncService:
     def __init__(self, dispatch_service: DispatchService):
         self._dispatch_service = dispatch_service
 
-    def _normalize_base_url(
-        self,
-        *,
-        connector: SyncConnector,
-        request: FullSyncDispatchRequest,
-        base_url: str | None,
-    ) -> str:
-        normalized_base_url = (base_url or "").strip()
-        if normalized_base_url:
-            return normalized_base_url
-
-        raise SyncInternalError(
-            message="full sync dispatch requires base_url",
-            metadata={
-                "connector": connector.value,
-                "scope_id": request.scope_id,
-                "target_count": len(request.target_ids) if request.target_ids else 0,
-                "trigger": request.trigger.value,
-                "sync_from_ts": request.sync_from_ts,
-            },
-        )
-
     def _normalize_scope_id(self, request: FullSyncDispatchRequest) -> str:
         scope_id = request.scope_id.strip()
         if scope_id:
             return scope_id
-        raise SyncRequestError("scope_id is required")
+        raise SyncRequestException("scope_id is required")
 
     def _build_dispatch_request(
         self,
         *,
         connector: SyncConnector,
         request: FullSyncDispatchRequest,
-        base_url: str,
         event_seeds: list[SyncEventSeed],
     ) -> DispatchRequest:
         return DispatchRequest(
@@ -87,22 +65,13 @@ class FullSyncService:
             scope_id=self._normalize_scope_id(request),
             trigger=request.trigger,
             event_seeds=event_seeds,
-            base_url=base_url,
         )
-
     async def dispatch(
         self,
         *,
         connector: SyncConnector,
         request: FullSyncDispatchRequest,
-        base_url: str | None,
     ) -> SyncDispatchResult:
-        normalized_base_url = self._normalize_base_url(
-            connector=connector,
-            request=request,
-            base_url=base_url,
-        )
-
         logger.info(
             "full_sync_dispatch_requested",
             connector=connector.value,
@@ -119,12 +88,10 @@ class FullSyncService:
             _build_event_seed(target, sync_from_ts=sync_from_ts)
             for target in resolved.targets
         ]
-
         return await self._dispatch_service.dispatch(
             self._build_dispatch_request(
                 connector=connector,
                 request=request,
-                base_url=normalized_base_url,
                 event_seeds=event_seeds,
             )
         )
@@ -148,7 +115,7 @@ def create_full_sync_service(
 def get_full_sync_service() -> FullSyncService:
     try:
         return create_full_sync_service()
-    except SyncInternalError:
+    except SyncInternalException:
         raise
     except Exception as exc:
         logger.error(
@@ -156,7 +123,7 @@ def get_full_sync_service() -> FullSyncService:
             error=str(exc),
             exc_info=True,
         )
-        raise SyncInternalError(
+        raise SyncInternalException(
             message="full sync service initialization failed",
             metadata={
                 "error_message": str(exc),

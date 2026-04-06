@@ -49,7 +49,6 @@ class DispatchRequest:
     scope_id: str
     trigger: SyncTrigger
     event_seeds: list[SyncEventSeed]
-    base_url: str | None
 
 
 @dataclass(slots=True, frozen=True)
@@ -59,7 +58,6 @@ class PrepareDispatchInput:
     scope_id: str
     trigger: SyncTrigger
     event_seeds: list[SyncEventSeed]
-    base_url: str | None
 
     @classmethod
     def from_request(cls, request: DispatchRequest) -> "PrepareDispatchInput":
@@ -69,7 +67,6 @@ class PrepareDispatchInput:
             scope_id=request.scope_id,
             trigger=request.trigger,
             event_seeds=request.event_seeds,
-            base_url=request.base_url,
         )
 
 

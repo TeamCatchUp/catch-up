@@ -37,7 +37,6 @@ def emit_sync_trigger_audit(
             scope_id=audit_context.scope_id,
             target_id=audit_context.target_id,
             job_id=audit_context.job_id,
-            task_id=audit_context.task_id,
         ),
     )
 

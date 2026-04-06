@@ -16,7 +16,6 @@ from catchup.connectors.confluence.client import ConfluenceApiClient
 from catchup.db.atlassian import oauth_repository
 from catchup.db.confluence import domain_repository as confluence_domain
 from catchup.db.engine import SessionLocal
-from catchup.events.enums import SyncTriggerEventAction
 from catchup.sync.incremental.resolve import build_confluence_record_change
 from catchup.sync.incremental.service import get_incremental_service
 
@@ -79,9 +78,6 @@ async def poll_confluence_incremental_changes() -> dict[str, int]:
 
                 result = await get_incremental_service().dispatch_changes(
                     changes=changes,
-                    event_name=space_key,
-                    context_name="space_key",
-                    action=SyncTriggerEventAction.CONFLUENCE_POLLING_STARTED,
                 )
                 blocked += result.blocked_count
                 if result.blocked_count > 0:

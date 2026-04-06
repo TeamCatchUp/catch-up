@@ -12,7 +12,7 @@ from catchup.db.models import SyncEvent
 from catchup.db.models import SyncEventStatus
 from catchup.db.models import SyncJob
 from catchup.db.models import SyncType
-from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.exceptions import SyncRequestException
 
 
 ACTIVE_EVENT_STATUSES = {
@@ -46,7 +46,7 @@ def _parse_sync_from_ts(sync_from_ts: str) -> datetime:
     try:
         parsed = datetime.fromisoformat(normalized_sync_from_ts.replace("Z", "+00:00"))
     except ValueError as exc:
-        raise SyncRequestError(
+        raise SyncRequestException(
             "event sync_from_ts is invalid",
             code="invalid_event_metadata",
             metadata={"sync_from_ts": sync_from_ts},
@@ -67,7 +67,7 @@ def _metadata_text(metadata: dict[str, Any], key: str) -> str:
 def load_record_repair_context(event_id: str) -> RecordRepairContext:
     normalized_event_id = event_id.strip()
     if not normalized_event_id:
-        raise SyncRequestError("event_id is required", code="invalid_event_id")
+        raise SyncRequestException("event_id is required", code="invalid_event_id")
 
     with SessionLocal() as db:
         stmt = (
@@ -78,7 +78,7 @@ def load_record_repair_context(event_id: str) -> RecordRepairContext:
         row = db.execute(stmt).one_or_none()
 
         if row is None:
-            raise SyncRequestError(
+            raise SyncRequestException(
                 "sync event not found",
                 code="event_not_found",
                 metadata={"event_id": normalized_event_id},
@@ -86,21 +86,21 @@ def load_record_repair_context(event_id: str) -> RecordRepairContext:
 
         event, job = row
         if job is None:
-            raise SyncRequestError(
+            raise SyncRequestException(
                 "sync job not found for event",
                 code="event_job_not_found",
                 metadata={"event_id": normalized_event_id},
             )
 
     if job.sync_type != SyncType.FULL:
-        raise SyncRequestError(
+        raise SyncRequestException(
             "manual retry supports full sync events only",
             code="unsupported_event_type",
             metadata={"event_id": normalized_event_id},
         )
 
     if event.status in ACTIVE_EVENT_STATUSES:
-        raise SyncRequestError(
+        raise SyncRequestException(
             "manual retry supports terminal events only",
             code="invalid_event_status",
             metadata={
@@ -116,19 +116,19 @@ def load_record_repair_context(event_id: str) -> RecordRepairContext:
     sync_from_ts = _metadata_text(metadata, "sync_from_ts")
 
     if not scope_id:
-        raise SyncRequestError(
+        raise SyncRequestException(
             "event scope_id is missing",
             code="invalid_event_metadata",
             metadata={"event_id": normalized_event_id},
         )
     if not target_id:
-        raise SyncRequestError(
+        raise SyncRequestException(
             "event target_id is missing",
             code="invalid_event_metadata",
             metadata={"event_id": normalized_event_id},
         )
     if not sync_from_ts:
-        raise SyncRequestError(
+        raise SyncRequestException(
             "event sync_from_ts is missing",
             code="invalid_event_metadata",
             metadata={"event_id": normalized_event_id},

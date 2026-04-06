@@ -8,7 +8,7 @@ import structlog
 from catchup.db.atlassian.oauth_repository import get_token_by_cloud_id
 from catchup.db.confluence import domain_repository as confluence_entities
 from catchup.db.engine import SessionLocal
-from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import (
     FullSyncResolvedTargets,
@@ -37,14 +37,14 @@ class ConfluenceFullSyncTargetResolver(FullSyncTargetResolverProtocol):
     ) -> FullSyncResolvedTargets:
         cloud_id = request.scope_id.strip()
         if not cloud_id:
-            raise SyncRequestError("scope_id is required")
+            raise SyncRequestException("scope_id is required")
 
         token, spaces = await asyncio.gather(
             run_in_threadpool(self._load_token_sync, cloud_id),
             run_in_threadpool(self._load_spaces_sync, cloud_id),
         )
         if token is None:
-            raise SyncRequestError(
+            raise SyncRequestException(
                 "confluence cloud is not connected",
                 metadata={"cloud_id": cloud_id},
             )

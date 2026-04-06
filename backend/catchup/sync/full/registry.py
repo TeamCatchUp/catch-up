@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from catchup.db.models import SyncConnector
-from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.exceptions import UnsupportedConnectorException
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.full.resolvers import (
     get_confluence_full_sync_target_resolver,
@@ -26,14 +26,12 @@ def get_full_sync_target_resolver(
     """
     resolver = _FULL_SYNC_TARGET_RESOLVERS.get(connector)
     if resolver is None:
-        raise SyncRequestError(
-            f"unsupported sync connector: {connector}",
-            metadata={
-                "requested_connector": getattr(connector, "value", str(connector)),
-                "registered_connectors": [
-                    item.value for item in list_registered_sync_connectors()
-                ],
-            },
+        raise UnsupportedConnectorException(
+            requested_connector=getattr(connector, "value", str(connector)),
+            registered_connectors=[
+                item.value for item in list_registered_sync_connectors()
+            ],
+            message=f"unsupported sync connector: {connector}",
         )
     return resolver
 
