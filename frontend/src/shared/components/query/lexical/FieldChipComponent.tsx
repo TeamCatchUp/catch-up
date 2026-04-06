@@ -5,7 +5,7 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import { $getNodeByKey } from 'lexical';
 import { toast } from 'sonner';
 
-import IconDelete from '@/public/icons/icon/delete (2).svg';
+import IconDelete from '@/public/icons/icon/delete_circle.svg';
 import IconError from '@/public/icons/icon/error.svg';
 import { cn } from '@/shared/utils/cn';
 
