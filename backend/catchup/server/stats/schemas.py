@@ -19,3 +19,16 @@ class ChatTokenUsageResponse(BaseModel):
     by_date: list[DailyTokenCostSchema] = Field(..., description="일자별 토큰 사용량 및 비용")
     start_date: datetime | None = Field(None, description="집계 시작일")
     end_date: datetime | None = Field(None, description="집계 종료일")
+    
+    
+class UserTokenCostRankingSchema(BaseModel):
+    user_id: int
+    user_name: str
+    department: str
+    total_usd: float
+
+
+class UserTokenCostRankingResponse(BaseModel):
+    ranking: list[UserTokenCostRankingSchema]
+    start_date: datetime | None = Field(None)
+    end_date: datetime | None = Field(None)

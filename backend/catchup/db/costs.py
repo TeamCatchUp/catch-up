@@ -9,7 +9,9 @@ class DailyModelTokenUsage(TypedDict):
     input_tokens: int
     output_tokens: int
 
+
 type DailyTokenUsage = dict[str, dict[str, DailyModelTokenUsage]]
+
 
 def get_user_chat_token_usage_by_range(
     db: Session,
@@ -81,3 +83,30 @@ def get_org_chat_token_usage_by_range(
             "output_tokens": row.output_tokens,
         }
     return result
+
+
+def get_user_token_usage_ranking(
+    db: Session,
+    start_date: datetime,
+    end_date: datetime,
+) -> list[dict]:
+    """기간 내 구성원별 토큰 사용량 합계를 USD 내림차순으로 반환한다."""
+    rows = db.execute(
+        text("""
+            SELECT
+                u.id AS user_id,
+                u.name AS user_name,
+                u.department,
+                COALESCE(SUM((model_data.value->>'input_tokens')::int), 0) AS input_tokens,
+                COALESCE(SUM((model_data.value->>'output_tokens')::int), 0) AS output_tokens,
+                jsonb_object_agg(model_data.key, model_data.value) FILTER (WHERE model_data.key IS NOT NULL) AS token_breakdown
+            FROM users u
+            LEFT JOIN chat_token_usages ctu ON u.id = ctu.user_id
+                AND ctu.created_at >= :start_date
+                AND ctu.created_at < :end_date
+            LEFT JOIN LATERAL jsonb_each(ctu.token_breakdown) AS model_data ON true
+            GROUP BY u.id, u.name, u.department
+        """),
+        {"start_date": start_date, "end_date": end_date},
+    ).all()
+    return rows
