@@ -153,7 +153,7 @@ function GuideContent({
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
             <div
               key={i}
-              className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-fill-interaction-hover'}`}
+              className={`size-2.5 rounded-full ${i === step ? 'bg-edge-primary' : 'bg-fill-interaction-hover'}`}
             />
           ))}
         </div>
@@ -178,7 +178,7 @@ function CloseConfirmContent({ onDismiss, onNavigate }: { onDismiss: () => void;
     <div className="shadow-modal border-edge-strong bg-fill-normal flex w-100 flex-col gap-3 overflow-clip rounded-2xl border p-5">
       {/* 텍스트 */}
       <div className="flex flex-col gap-3">
-        <p className="text-heading-medium text-orange-60">
+        <p className="text-heading-medium text-status-cautionary">
           원활한 캐치업 이용을 위해선
           <br />
           최소 1개 이상의 협업 툴을 연동해야 해요.

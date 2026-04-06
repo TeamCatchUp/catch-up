@@ -108,7 +108,7 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
                 {Array.from({ length: USER_GUIDE_TOTAL_STEPS }).map((_, i) => (
                   <div
                     key={i}
-                    className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-fill-interaction-hover'}`}
+                    className={`size-2.5 rounded-full ${i === step ? 'bg-edge-primary' : 'bg-fill-interaction-hover'}`}
                   />
                 ))}
               </div>

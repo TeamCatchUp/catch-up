@@ -113,7 +113,7 @@ export default function ProfilePage() {
                   'text-body-small h-9 rounded-full border px-3 py-1.5',
                   isAdmin
                     ? 'border-edge-neutral bg-fill-strong text-content-assistive cursor-not-allowed'
-                    : 'hover:bg-red-5 active:bg-red-10 bg-fill-normal cursor-pointer border-red-50 text-red-50',
+                    : 'hover:bg-accent-red-lighten active:bg-accent-red-lighten bg-fill-normal cursor-pointer border-status-destructive text-status-destructive',
                 )}
               >
                 삭제

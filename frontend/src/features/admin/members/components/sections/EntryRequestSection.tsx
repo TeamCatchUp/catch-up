@@ -109,7 +109,7 @@ export default function EntryRequestSection({ searchTerm }: EntryRequestSectionP
               <Button
                 variant="text-secondary-mono"
                 size="md"
-                className="text-green-40"
+                className="text-status-positive"
                 onClick={() =>
                   handleDecide(
                     filtered.map((r) => r.requestId),
@@ -192,7 +192,7 @@ export default function EntryRequestSection({ searchTerm }: EntryRequestSectionP
                 <Button
                   variant="box-outline-gray"
                   size="md"
-                  className="text-green-40"
+                  className="text-status-positive"
                   onClick={() => handleDecide([selectedRequest.requestId], 'approve')}
                 >
                   승인

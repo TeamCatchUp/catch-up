@@ -50,7 +50,7 @@ export const NoHistoryGuide = ({ onExampleClick }: NoHistoryGuideProps) => {
     <div className="no-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
       <div className="flex items-center gap-5">
         <div className="bg-fill-primary-assistive flex size-11.25 shrink-0 items-center justify-center rounded-xl p-1">
-          <IconLightbulb className="size-6 text-orange-50" />
+          <IconLightbulb className="size-6 text-accent-red-orange" />
         </div>
         <div className="flex flex-col gap-1">
           <p className="text-heading-small text-content-normal">이렇게 질문해보세요!</p>

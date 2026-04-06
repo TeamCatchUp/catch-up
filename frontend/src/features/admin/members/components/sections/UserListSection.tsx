@@ -141,7 +141,7 @@ export default function UserListSection({ searchTerm }: UserListSectionProps) {
                 <Button
                   variant="box-outline-gray"
                   size="md"
-                  className="text-red-50"
+                  className="text-status-destructive"
                   onClick={() => setDeleteDialogOpen(true)}
                 >
                   계정 삭제

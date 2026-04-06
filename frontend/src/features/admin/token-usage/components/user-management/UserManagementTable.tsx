@@ -61,9 +61,9 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
             )}
             <span className="text-body-small text-content-normal truncate">{member.name}</span>
             {!member.tokenEnabled && (
-              <div className="rounded-md2 bg-pink-5 flex shrink-0 items-center gap-0.5 px-1.5 py-0.5">
-                <IconError className="text-pink-60 size-3.5" />
-                <span className="text-body-xsmall text-pink-60">이용 중지</span>
+              <div className="rounded-md2 bg-accent-pink-lighten flex shrink-0 items-center gap-0.5 px-1.5 py-0.5">
+                <IconError className="text-accent-pink size-3.5" />
+                <span className="text-body-xsmall text-accent-pink">이용 중지</span>
               </div>
             )}
           </div>

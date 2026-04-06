@@ -64,7 +64,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
           {/* 회사명 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-heading-medium text-content-normal flex items-center gap-1">
-              <span className="size-1.25 rounded-full bg-red-50" />
+              <span className="size-1.25 rounded-full bg-status-destructive" />
               회사명을 알려주세요.
             </label>
             <Input
@@ -82,7 +82,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
           {/* 팀 규모 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-heading-medium text-content-normal flex items-center gap-1">
-              <span className="size-1.25 rounded-full bg-red-50" />팀 규모는 어느 정도인가요?
+              <span className="size-1.25 rounded-full bg-status-destructive" />팀 규모는 어느 정도인가요?
             </label>
             <Select
               value={companySize}
@@ -91,7 +91,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
                 if (errors.companySize) setErrors((p) => ({ ...p, companySize: false }));
               }}
             >
-              <SelectTrigger className={`h-11.5 ${errors.companySize ? 'border-red-50' : ''}`}>
+              <SelectTrigger className={`h-11.5 ${errors.companySize ? 'border-status-destructive' : ''}`}>
                 <SelectValue placeholder="선택 안됨" />
               </SelectTrigger>
               <SelectContent>
@@ -104,8 +104,8 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
             </Select>
             {errors.companySize && (
               <div className="flex items-center gap-0.5">
-                <ErrorIcon className="size-4 shrink-0 text-red-50" />
-                <span className="text-label-xsmall text-red-50">팀 규모를 선택해주세요.</span>
+                <ErrorIcon className="size-4 shrink-0 text-status-destructive" />
+                <span className="text-label-xsmall text-status-destructive">팀 규모를 선택해주세요.</span>
               </div>
             )}
           </div>

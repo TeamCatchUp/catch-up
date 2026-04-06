@@ -134,7 +134,7 @@ const SourceList = ({
               className={cn(
                 'text-body-small flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-full border px-3 py-1.5 leading-none whitespace-nowrap transition',
                 isActive
-                  ? 'border-neutral-80 bg-neutral-80 text-white'
+                  ? 'border-accent-black-lighten bg-accent-black-lighten text-content-inverse'
                   : 'border-edge-neutral text-content-neutral hover:bg-fill-interaction-hover bg-fill-normal',
               )}
             >

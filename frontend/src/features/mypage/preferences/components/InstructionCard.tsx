@@ -37,7 +37,7 @@ export default function InstructionCard({ content, onEdit, onDelete }: Instructi
             맞춤형 지침 수정하기
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onDelete} className="gap-2.5 text-red-50">
+          <DropdownMenuItem onClick={onDelete} className="gap-2.5 text-status-destructive">
             <IconDelete className="size-6 shrink-0" />
             맞춤형 지침 삭제하기
           </DropdownMenuItem>

@@ -53,9 +53,9 @@ export default function MemberProfileCard({ members, selectedMemberId, onSelectM
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2.5">
                 <span className="text-heading-large text-content-normal">{selectedMember.name}</span>
-                <div className="rounded-md2 bg-pink-5 flex items-center gap-1 px-1.5 py-0.5">
-                  <IconError className="text-pink-60 size-4" />
-                  <span className="text-body-xsmall text-pink-60">이용 중지</span>
+                <div className="rounded-md2 bg-accent-pink-lighten flex items-center gap-1 px-1.5 py-0.5">
+                  <IconError className="text-accent-pink size-4" />
+                  <span className="text-body-xsmall text-accent-pink">이용 중지</span>
                 </div>
               </div>
               <span className="text-body-small text-content-alternative">
