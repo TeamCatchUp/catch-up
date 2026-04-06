@@ -3,7 +3,7 @@ from datetime import timedelta
 from typing import TypedDict
 
 from catchup.costs.pricing import calc_token_cost
-from catchup.db.costs import DailyModelTokenUsage
+from catchup.db.token_usages import DailyModelTokenUsage
 
 
 class DailyTokenCost(TypedDict):
@@ -109,3 +109,38 @@ def calculate_user_token_cost_ranking(
         })
 
     return sorted(result, key=lambda x: x["total_usd"], reverse=True)
+
+
+class DailyQuestionCount(TypedDict):
+    from_date: str
+    to_date: str
+    question_count: int
+
+
+class QuestionCountResult(TypedDict):
+    total_count: int
+    daily_avg_count: float
+    by_date: list[DailyQuestionCount]
+
+
+def calculate_question_count(
+    counts: dict[int, int],
+    start_date: datetime,
+    end_date: datetime,
+) -> QuestionCountResult:
+    by_date: list[DailyQuestionCount] = []
+    for i, (from_date, to_date) in enumerate(_generate_date_range(start_date, end_date)):
+        by_date.append({
+            "from_date": from_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "to_date": to_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "question_count": counts.get(i, 0),
+        })
+
+    total_count = sum(d["question_count"] for d in by_date)
+    daily_avg_count = round(total_count / len(by_date), 2) if by_date else 0.0
+
+    return {
+        "total_count": total_count,
+        "daily_avg_count": daily_avg_count,
+        "by_date": by_date,
+    }

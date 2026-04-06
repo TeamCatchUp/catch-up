@@ -87,7 +87,7 @@ def get_user_token_usage_ranking(
     start_date: datetime,
     end_date: datetime,
 ) -> list[dict]:
-    """기간 내 구성원별 토큰 사용량 합계를 USD 내림차순으로 반환한다."""
+    """기간 내 구성원별 토큰 사용량 합계를 반환한다."""
     rows = db.execute(
         text("""
             SELECT

@@ -12,7 +12,6 @@ class DailyTokenCostSchema(BaseModel):
     usd: float
 
 
-
 class ChatTokenUsageResponse(BaseModel):
     total_usd: float = Field(..., description="합산 비용 (USD)")
     daily_avg_usd: float = Field(..., description="일평균 비용 (USD)")
@@ -32,3 +31,17 @@ class UserTokenCostRankingResponse(BaseModel):
     ranking: list[UserTokenCostRankingSchema]
     start_date: datetime | None = Field(None)
     end_date: datetime | None = Field(None)
+
+
+class DailyQuestionCountSchema(BaseModel):
+    from_date: datetime
+    to_date: datetime
+    question_count: int
+
+
+class QuestionCountResponse(BaseModel):
+    total_count: int = Field(..., description="합산 질문 횟수")
+    daily_avg_count: float = Field(..., description="일평균 질문 횟수")
+    by_date: list[DailyQuestionCountSchema] = Field(..., description="일자별 질문 횟수")
+    start_date: datetime | None = Field(None, description="집계 시작일")
+    end_date: datetime | None = Field(None, description="집계 종료일")
