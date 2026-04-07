@@ -57,6 +57,7 @@ export default function DailyUsageBarChart({
               tickLine={false}
               axisLine={false}
               ticks={ticks}
+              interval={0}
               padding={{ left: 10, right: 10 }}
               tickFormatter={(v: string) => {
                 const d = parseISO(v);
