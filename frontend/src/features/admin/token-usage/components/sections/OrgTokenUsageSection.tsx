@@ -44,7 +44,7 @@ export default function OrgTokenUsageSection() {
   const chartTitle = viewMode === 'team' ? '조직 전체 일자별 토큰 사용량' : '개인 일자별 토큰 사용량';
 
   return (
-    <div className={`flex flex-col ${viewMode === 'member' ? 'gap-6' : 'gap-3'}`}>
+    <div className="flex flex-col gap-6">
       {/* 헤더 행 */}
       <div className="flex items-end justify-between">
         <div className="flex flex-col gap-1">
@@ -55,7 +55,7 @@ export default function OrgTokenUsageSection() {
         </div>
         <DateRangePicker value={dateRange} onChange={setDateRange} />
       </div>
-      <div className="flex flex-col gap-3">
+      <div className="-mb-3 flex flex-col gap-3">
         <div className="w-40.25">
           <SegmentedPicker
             options={VIEW_OPTIONS}
