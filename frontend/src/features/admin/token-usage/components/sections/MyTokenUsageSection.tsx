@@ -21,11 +21,22 @@ export default function MyTokenUsageSection() {
     to: startOfToday(),
   });
 
+  const hasDateRange = !!dateRange?.from;
+
   const { data: summary } = useQuery(tokenUsageQueries.summary());
-  const { data: periodCost } = useQuery(tokenUsageQueries.periodCost(dateRange?.from, dateRange?.to));
-  const { data: dailyUsage } = useQuery(tokenUsageQueries.dailyUsage(dateRange?.from, dateRange?.to));
+  const { data: periodCost } = useQuery({
+    ...tokenUsageQueries.periodCost(dateRange?.from, dateRange?.to),
+    enabled: hasDateRange,
+  });
+  const { data: dailyUsage } = useQuery({
+    ...tokenUsageQueries.dailyUsage(dateRange?.from, dateRange?.to),
+    enabled: hasDateRange,
+  });
   const { data: totalTrend } = useQuery(tokenUsageQueries.totalTrend());
-  const { data: questionCounts } = useQuery(tokenUsageQueries.questionCounts(dateRange?.from, dateRange?.to));
+  const { data: questionCounts } = useQuery({
+    ...tokenUsageQueries.questionCounts(dateRange?.from, dateRange?.to),
+    enabled: hasDateRange,
+  });
 
   return (
     <div className="flex flex-col gap-6">

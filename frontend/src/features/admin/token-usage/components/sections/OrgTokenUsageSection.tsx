@@ -34,25 +34,38 @@ export default function OrgTokenUsageSection() {
 
   const selectedUserId = Number(selectedMemberId);
   const isMemberMode = viewMode === 'member';
+  const hasDateRange = !!dateRange?.from;
 
   const { data: members } = useQuery(tokenUsageQueries.orgMembers());
-  const { data: orgDailyUsage } = useQuery(tokenUsageQueries.orgDailyUsage(dateRange?.from, dateRange?.to));
+  const { data: orgDailyUsage } = useQuery({
+    ...tokenUsageQueries.orgDailyUsage(dateRange?.from, dateRange?.to),
+    enabled: hasDateRange,
+  });
   const { data: userDailyUsage } = useQuery({
     ...tokenUsageQueries.userDailyUsage(selectedUserId, dateRange?.from, dateRange?.to),
-    enabled: isMemberMode && !!selectedUserId,
+    enabled: isMemberMode && !!selectedUserId && hasDateRange,
   });
-  const { data: orgQuestions } = useQuery(tokenUsageQueries.orgQuestionCounts(dateRange?.from, dateRange?.to));
+  const { data: orgQuestions } = useQuery({
+    ...tokenUsageQueries.orgQuestionCounts(dateRange?.from, dateRange?.to),
+    enabled: hasDateRange,
+  });
   const { data: userQuestions } = useQuery({
     ...tokenUsageQueries.userQuestionCounts(selectedUserId, dateRange?.from, dateRange?.to),
-    enabled: isMemberMode && !!selectedUserId,
+    enabled: isMemberMode && !!selectedUserId && hasDateRange,
   });
   const { data: userPeriodCost } = useQuery({
     ...tokenUsageQueries.userPeriodCost(selectedUserId, dateRange?.from, dateRange?.to),
-    enabled: isMemberMode && !!selectedUserId,
+    enabled: isMemberMode && !!selectedUserId && hasDateRange,
   });
-  const { data: orgPeriodCost } = useQuery(tokenUsageQueries.orgPeriodCost(dateRange?.from, dateRange?.to));
+  const { data: orgPeriodCost } = useQuery({
+    ...tokenUsageQueries.orgPeriodCost(dateRange?.from, dateRange?.to),
+    enabled: hasDateRange,
+  });
   const { data: totalTrend } = useQuery(tokenUsageQueries.orgTotalTrend());
-  const { data: ranking } = useQuery(tokenUsageQueries.orgRanking(dateRange?.from, dateRange?.to));
+  const { data: ranking } = useQuery({
+    ...tokenUsageQueries.orgRanking(dateRange?.from, dateRange?.to),
+    enabled: hasDateRange,
+  });
 
   const dailyUsage = isMemberMode ? userDailyUsage : orgDailyUsage;
   const questionCounts = isMemberMode ? userQuestions : orgQuestions;
