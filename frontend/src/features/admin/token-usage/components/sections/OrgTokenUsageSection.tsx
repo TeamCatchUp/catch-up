@@ -50,14 +50,14 @@ export default function OrgTokenUsageSection() {
     ...tokenUsageQueries.userPeriodCost(selectedUserId, dateRange?.from, dateRange?.to),
     enabled: isMemberMode && !!selectedUserId,
   });
+  const { data: orgPeriodCost } = useQuery(tokenUsageQueries.orgPeriodCost(dateRange?.from, dateRange?.to));
   const { data: totalTrend } = useQuery(tokenUsageQueries.orgTotalTrend());
   const { data: ranking } = useQuery(tokenUsageQueries.orgRanking(dateRange?.from, dateRange?.to));
-  const { data: orgSummary } = useQuery(tokenUsageQueries.orgSummary());
 
   const dailyUsage = isMemberMode ? userDailyUsage : orgDailyUsage;
   const questionCounts = isMemberMode ? userQuestions : orgQuestions;
-  const periodTotalCost = isMemberMode ? (userPeriodCost?.total_usd ?? 0) : (orgSummary?.total_cost ?? 0);
-  const periodDailyAvg = isMemberMode ? userPeriodCost?.daily_avg_usd : orgSummary?.daily_avg_usd;
+  const periodTotalCost = isMemberMode ? (userPeriodCost?.total_usd ?? 0) : (orgPeriodCost?.total_usd ?? 0);
+  const periodDailyAvg = isMemberMode ? userPeriodCost?.daily_avg_usd : orgPeriodCost?.daily_avg_usd;
 
   const chartTitle = viewMode === 'team' ? '조직 전체 일자별 토큰 사용량' : '개인 일자별 토큰 사용량';
 

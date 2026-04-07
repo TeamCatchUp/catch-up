@@ -133,6 +133,21 @@ export const tokenUsageQueries = {
       },
     }),
 
+  orgPeriodCost: (startDate?: Date, endDate?: Date) =>
+    queryOptions({
+      queryKey: [
+        ...tokenUsageQueries.all(),
+        'orgPeriodCost',
+        startDate,
+        endDate,
+      ] as const,
+      queryFn: async () => {
+        const params = toApiParams(startDate, endDate);
+        const res = await api.get<ChatTokenUsageResponse>(API.stats.orgTokenCost, { params });
+        return { total_usd: res.data.total_usd, daily_avg_usd: res.data.daily_avg_usd };
+      },
+    }),
+
   orgDailyUsage: (startDate?: Date, endDate?: Date) =>
     queryOptions({
       queryKey: [
