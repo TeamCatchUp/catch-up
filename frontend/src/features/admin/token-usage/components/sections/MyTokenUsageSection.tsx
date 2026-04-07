@@ -1,17 +1,14 @@
 'use client';
 
-/** 토큰 사용량 관리 > "나의 토큰 사용량" 탭 — 요약(총 사용량+상태) + 차트 3개(일자별 바·누적 에어리어·질문 횟수 바) + 제한 설정 */
+/** 토큰 사용량 관리 > "나의 토큰 사용량" 탭 — 요약(총 사용량) + 차트 3개(일자별 바·누적 에어리어·질문 횟수 바) + 제한 설정 */
 
 import { useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
 import { startOfMonth, startOfToday } from 'date-fns';
 
-import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
-import { Badge } from '@/shared/components/ui/badge';
 import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
 
-import { DEFAULT_DAILY_LIMIT, STATUS_CONFIG } from '../../constants/tokenUsageConfig';
 import { tokenUsageQueries } from '../../queries/tokenUsage.queries';
 import DailyUsageBarChart from '../charts/DailyUsageBarChart';
 import TotalQuestionBarChart from '../charts/TotalQuestionBarChart';
@@ -24,15 +21,11 @@ export default function MyTokenUsageSection() {
     to: startOfToday(),
   });
 
-  // TODO: summary API 별도 구현 시 교체
   const { data: summary } = useQuery(tokenUsageQueries.summary());
+  const { data: periodCost } = useQuery(tokenUsageQueries.periodCost(dateRange?.from, dateRange?.to));
   const { data: dailyUsage } = useQuery(tokenUsageQueries.dailyUsage(dateRange?.from, dateRange?.to));
-  const { data: totalTrend } = useQuery(tokenUsageQueries.totalTrend(dateRange?.from, dateRange?.to));
-  const { data: questionCounts } = useQuery(tokenUsageQueries.questionCounts());
-
-  if (!summary) return null;
-
-  const statusConfig = STATUS_CONFIG[summary.status];
+  const { data: totalTrend } = useQuery(tokenUsageQueries.totalTrend());
+  const { data: questionCounts } = useQuery(tokenUsageQueries.questionCounts(dateRange?.from, dateRange?.to));
 
   return (
     <div className="flex flex-col gap-6">
@@ -40,13 +33,9 @@ export default function MyTokenUsageSection() {
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1.5">
           <span className="text-heading-small text-content-alternative">전체 사용 토큰량</span>
-          <div className="flex items-center gap-3">
-            <span className="text-heading-xlarge text-content-normal">{summary.total_cost.toFixed(2)} $</span>
-            <Badge variant={statusConfig.variant} size="sm" className="rounded-md2 gap-1 py-0.5">
-              <IconCheckCircle className="size-4" aria-hidden="true" />
-              {statusConfig.label}
-            </Badge>
-          </div>
+          <span className="text-heading-xlarge text-content-normal">
+            {(summary?.total_cost ?? 0).toFixed(2)} $
+          </span>
         </div>
         <DateRangePicker value={dateRange} onChange={setDateRange} />
       </div>
@@ -57,8 +46,8 @@ export default function MyTokenUsageSection() {
         <div className="min-h-0 min-w-0 flex-1">
           <DailyUsageBarChart
             data={dailyUsage ?? []}
-            totalCost={summary.total_cost}
-            dailyLimit={DEFAULT_DAILY_LIMIT}
+            totalCost={periodCost?.total_usd ?? 0}
+            dailyAvg={periodCost?.daily_avg_usd}
           />
         </div>
 

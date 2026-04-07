@@ -5,7 +5,12 @@ import type { AdminUserListResponse } from '@/features/admin/members/types/admin
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { ChatTokenUsageParams, ChatTokenUsageResponse } from '../types/tokenUsageApi';
+import type {
+  ChatTokenUsageParams,
+  ChatTokenUsageResponse,
+  QuestionCountResponse,
+  UserTokenCostRankingResponse,
+} from '../types/tokenUsageApi';
 import type {
   DailyTokenUsage,
   LimitReleaseRequest,
@@ -32,19 +37,24 @@ function toDailyUsage(res: ChatTokenUsageResponse): DailyTokenUsage[] {
   return res.by_date.map((entry) => ({
     date: format(new Date(entry.from_date), 'yyyy-MM-dd'),
     cost: entry.usd,
-    model_name: 'total',
   }));
 }
 
-function toTotalTrend(res: ChatTokenUsageResponse): TotalTokenUsageTrend[] {
-  let cumulative = 0;
-  return res.by_date.map((entry) => {
-    cumulative += entry.input_tokens + entry.output_tokens;
-    return {
-      date: format(new Date(entry.from_date), 'yyyy-MM-dd'),
-      cumulative_tokens: cumulative,
-    };
-  });
+function toQuestionCounts(res: QuestionCountResponse): TotalQuestionCount[] {
+  return res.by_date.map((entry) => ({
+    date: format(new Date(entry.from_date), 'yyyy-MM-dd'),
+    count: entry.question_count,
+  }));
+}
+
+function toRanking(res: UserTokenCostRankingResponse): TokenUsageRankingEntry[] {
+  return res.ranking.map((item, index) => ({
+    rank: index + 1,
+    user_id: item.user_id,
+    user_name: item.user_name,
+    department: item.department,
+    total_usd: item.total_usd,
+  }));
 }
 
 // ── 쿼리 팩토리 ──
@@ -54,16 +64,34 @@ export const tokenUsageQueries = {
 
   /* ── 나의 토큰 사용량 ── */
 
-  // TODO: summary API 별도 구현 시 교체
   summary: () =>
     queryOptions({
       queryKey: [...tokenUsageQueries.all(), 'summary'] as const,
-      queryFn: async (): Promise<TokenUsageSummary> => ({ total_cost: 0, status: 'normal' }),
+      queryFn: async (): Promise<TokenUsageSummary> => {
+        const params: ChatTokenUsageParams = { start_date: '2026-01-01T00:00:00Z' };
+        const res = await api.get<ChatTokenUsageResponse>(API.stats.myTokenCost, { params });
+        return { total_cost: res.data.total_usd, daily_avg_usd: res.data.daily_avg_usd };
+      },
+    }),
+
+  periodCost: (startDate?: Date, endDate?: Date) =>
+    queryOptions({
+      queryKey: [
+        ...tokenUsageQueries.all(),
+        'periodCost',
+        startDate,
+        endDate,
+      ] as const,
+      queryFn: async () => {
+        const params = toApiParams(startDate, endDate);
+        const res = await api.get<ChatTokenUsageResponse>(API.stats.myTokenCost, { params });
+        return { total_usd: res.data.total_usd, daily_avg_usd: res.data.daily_avg_usd };
+      },
     }),
 
   dailyUsage: (startDate?: Date, endDate?: Date) =>
     queryOptions({
-      queryKey: [...tokenUsageQueries.all(), 'dailyUsage', startDate?.toISOString(), endDate?.toISOString()] as const,
+      queryKey: [...tokenUsageQueries.all(), 'dailyUsage', startDate, endDate] as const,
       queryFn: async (): Promise<DailyTokenUsage[]> => {
         const params = toApiParams(startDate, endDate);
         const res = await api.get<ChatTokenUsageResponse>(API.stats.myTokenCost, { params });
@@ -71,30 +99,38 @@ export const tokenUsageQueries = {
       },
     }),
 
-  totalTrend: (startDate?: Date, endDate?: Date) =>
+  // TODO: 누적 토큰 사용량 API 구현 시 교체
+  totalTrend: () =>
     queryOptions({
-      queryKey: [...tokenUsageQueries.all(), 'totalTrend', startDate?.toISOString(), endDate?.toISOString()] as const,
-      queryFn: async (): Promise<TotalTokenUsageTrend[]> => {
-        const params = toApiParams(startDate, endDate);
-        const res = await api.get<ChatTokenUsageResponse>(API.stats.myTokenCost, { params });
-        return toTotalTrend(res.data);
-      },
+      queryKey: [...tokenUsageQueries.all(), 'totalTrend'] as const,
+      queryFn: async (): Promise<TotalTokenUsageTrend[]> => [],
     }),
 
-  // TODO: 백엔드 미구현 — mock 유지
-  questionCounts: () =>
+  questionCounts: (startDate?: Date, endDate?: Date) =>
     queryOptions({
-      queryKey: [...tokenUsageQueries.all(), 'questionCounts'] as const,
-      queryFn: async (): Promise<TotalQuestionCount[]> => [],
+      queryKey: [
+        ...tokenUsageQueries.all(),
+        'questionCounts',
+        startDate,
+        endDate,
+      ] as const,
+      queryFn: async (): Promise<TotalQuestionCount[]> => {
+        const params = toApiParams(startDate, endDate);
+        const res = await api.get<QuestionCountResponse>(API.stats.myQueries, { params });
+        return toQuestionCounts(res.data);
+      },
     }),
 
   /* ── 조직 토큰 사용량 ── */
 
-  // TODO: orgSummary API 별도 구현 시 교체
   orgSummary: () =>
     queryOptions({
       queryKey: [...tokenUsageQueries.all(), 'orgSummary'] as const,
-      queryFn: async (): Promise<TokenUsageSummary> => ({ total_cost: 0, status: 'normal' }),
+      queryFn: async (): Promise<TokenUsageSummary> => {
+        const params: ChatTokenUsageParams = { start_date: '2026-01-01T00:00:00Z' };
+        const res = await api.get<ChatTokenUsageResponse>(API.stats.orgTokenCost, { params });
+        return { total_cost: res.data.total_usd, daily_avg_usd: res.data.daily_avg_usd };
+      },
     }),
 
   orgDailyUsage: (startDate?: Date, endDate?: Date) =>
@@ -102,8 +138,8 @@ export const tokenUsageQueries = {
       queryKey: [
         ...tokenUsageQueries.all(),
         'orgDailyUsage',
-        startDate?.toISOString(),
-        endDate?.toISOString(),
+        startDate,
+        endDate,
       ] as const,
       queryFn: async (): Promise<DailyTokenUsage[]> => {
         const params = toApiParams(startDate, endDate);
@@ -112,26 +148,26 @@ export const tokenUsageQueries = {
       },
     }),
 
-  orgTotalTrend: (startDate?: Date, endDate?: Date) =>
+  // TODO: 누적 토큰 사용량 API 구현 시 교체
+  orgTotalTrend: () =>
+    queryOptions({
+      queryKey: [...tokenUsageQueries.all(), 'orgTotalTrend'] as const,
+      queryFn: async (): Promise<TotalTokenUsageTrend[]> => [],
+    }),
+
+  orgQuestionCounts: (startDate?: Date, endDate?: Date) =>
     queryOptions({
       queryKey: [
         ...tokenUsageQueries.all(),
-        'orgTotalTrend',
-        startDate?.toISOString(),
-        endDate?.toISOString(),
+        'orgQuestionCounts',
+        startDate,
+        endDate,
       ] as const,
-      queryFn: async (): Promise<TotalTokenUsageTrend[]> => {
+      queryFn: async (): Promise<TotalQuestionCount[]> => {
         const params = toApiParams(startDate, endDate);
-        const res = await api.get<ChatTokenUsageResponse>(API.stats.orgTokenCost, { params });
-        return toTotalTrend(res.data);
+        const res = await api.get<QuestionCountResponse>(API.stats.orgQueries, { params });
+        return toQuestionCounts(res.data);
       },
-    }),
-
-  // TODO: 백엔드 미구현 — mock 유지
-  orgQuestionCounts: () =>
-    queryOptions({
-      queryKey: [...tokenUsageQueries.all(), 'orgQuestionCounts'] as const,
-      queryFn: async (): Promise<TotalQuestionCount[]> => [],
     }),
 
   orgMembers: () =>
@@ -145,16 +181,64 @@ export const tokenUsageQueries = {
           team: user.department,
           position: user.jobLevel,
           role: user.role,
-          tokenEnabled: user.status === 'active',
-          cost: 0,
         }));
       },
     }),
 
-  orgRanking: () =>
+  orgRanking: (startDate?: Date, endDate?: Date) =>
     queryOptions({
-      queryKey: [...tokenUsageQueries.all(), 'orgRanking'] as const,
-      queryFn: async (): Promise<TokenUsageRankingEntry[]> => [],
+      queryKey: [
+        ...tokenUsageQueries.all(),
+        'orgRanking',
+        startDate,
+        endDate,
+      ] as const,
+      queryFn: async (): Promise<TokenUsageRankingEntry[]> => {
+        const params = toApiParams(startDate, endDate);
+        const res = await api.get<UserTokenCostRankingResponse>(API.stats.tokenRanking, { params });
+        return toRanking(res.data);
+      },
+    }),
+
+  /* ── 특정 유저 ── */
+
+  userDailyUsage: (userId: number, startDate?: Date, endDate?: Date) =>
+    queryOptions({
+      queryKey: [
+        ...tokenUsageQueries.all(),
+        'userDailyUsage',
+        userId,
+        startDate,
+        endDate,
+      ] as const,
+      queryFn: async (): Promise<DailyTokenUsage[]> => {
+        const params = toApiParams(startDate, endDate);
+        const res = await api.get<ChatTokenUsageResponse>(API.stats.userTokenCost(userId), { params });
+        return toDailyUsage(res.data);
+      },
+    }),
+
+  // TODO: 누적 토큰 사용량 API 구현 시 교체
+  userTotalTrend: () =>
+    queryOptions({
+      queryKey: [...tokenUsageQueries.all(), 'userTotalTrend'] as const,
+      queryFn: async (): Promise<TotalTokenUsageTrend[]> => [],
+    }),
+
+  userQuestionCounts: (userId: number, startDate?: Date, endDate?: Date) =>
+    queryOptions({
+      queryKey: [
+        ...tokenUsageQueries.all(),
+        'userQuestionCounts',
+        userId,
+        startDate,
+        endDate,
+      ] as const,
+      queryFn: async (): Promise<TotalQuestionCount[]> => {
+        const params = toApiParams(startDate, endDate);
+        const res = await api.get<QuestionCountResponse>(API.stats.userQueries(userId), { params });
+        return toQuestionCounts(res.data);
+      },
     }),
 
   /* ── 이용자 관리 ── */

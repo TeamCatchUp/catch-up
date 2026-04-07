@@ -9,7 +9,6 @@ import { startOfMonth, startOfToday } from 'date-fns';
 
 import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
 
-import { DEFAULT_DAILY_LIMIT } from '../../constants/tokenUsageConfig';
 import { tokenUsageQueries } from '../../queries/tokenUsage.queries';
 import DailyUsageBarChart from '../charts/DailyUsageBarChart';
 import TotalQuestionBarChart from '../charts/TotalQuestionBarChart';
@@ -35,9 +34,9 @@ export default function OrgTokenUsageSection() {
 
   const { data: members } = useQuery(tokenUsageQueries.orgMembers());
   const { data: dailyUsage } = useQuery(tokenUsageQueries.orgDailyUsage(dateRange?.from, dateRange?.to));
-  const { data: totalTrend } = useQuery(tokenUsageQueries.orgTotalTrend(dateRange?.from, dateRange?.to));
-  const { data: questionCounts } = useQuery(tokenUsageQueries.orgQuestionCounts());
-  const { data: ranking } = useQuery(tokenUsageQueries.orgRanking());
+  const { data: totalTrend } = useQuery(tokenUsageQueries.orgTotalTrend());
+  const { data: questionCounts } = useQuery(tokenUsageQueries.orgQuestionCounts(dateRange?.from, dateRange?.to));
+  const { data: ranking } = useQuery(tokenUsageQueries.orgRanking(dateRange?.from, dateRange?.to));
 
   // TODO: orgSummary API 별도 구현 시 교체
   const { data: orgSummary } = useQuery(tokenUsageQueries.orgSummary());
@@ -77,7 +76,7 @@ export default function OrgTokenUsageSection() {
             <DailyUsageBarChart
               data={dailyUsage ?? []}
               totalCost={orgSummary?.total_cost ?? 0}
-              dailyLimit={DEFAULT_DAILY_LIMIT}
+              dailyAvg={orgSummary?.daily_avg_usd}
               title={chartTitle}
             />
           </div>
