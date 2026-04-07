@@ -44,7 +44,7 @@ export default function OrgTokenUsageSection() {
   const chartTitle = viewMode === 'team' ? '조직 전체 일자별 토큰 사용량' : '개인 일자별 토큰 사용량';
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className={`flex flex-col ${viewMode === 'member' ? 'gap-6' : 'gap-3'}`}>
       {/* 헤더 행 */}
       <div className="flex items-end justify-between">
         <div className="flex flex-col gap-1">
@@ -53,20 +53,24 @@ export default function OrgTokenUsageSection() {
             조직의 토큰 이용 현황을 확인하고 관리할 수 있습니다.
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
+      </div>
+      <div className="flex flex-col gap-3">
+        <div className="w-40.25">
           <SegmentedPicker
             options={VIEW_OPTIONS}
             value={VIEW_LABEL[viewMode]}
             onChange={(v) => setViewMode(VIEW_MAP[v] ?? 'team')}
           />
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
         </div>
+        {viewMode === 'member' && members ? (
+          <MemberProfileCard
+            members={members}
+            selectedMemberId={selectedMemberId}
+            onSelectMember={setSelectedMemberId}
+          />
+        ) : null}
       </div>
-
-      {/* 멤버 선택 모드 — 프로필 카드 */}
-      {viewMode === 'member' && members ? (
-        <MemberProfileCard members={members} selectedMemberId={selectedMemberId} onSelectMember={setSelectedMemberId} />
-      ) : null}
 
       {/* 차트 3개 + 순위 */}
       <div className="flex h-142 gap-6">
