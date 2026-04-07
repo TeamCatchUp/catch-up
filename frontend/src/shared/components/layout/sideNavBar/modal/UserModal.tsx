@@ -23,6 +23,7 @@ import {
   DropdownMenuSubTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 import { authMutations } from '@/shared/queries/auth.mutations';
+import { useUserStore } from '@/shared/store/userStore';
 
 const THEME_LABELS: Record<string, string> = {
   system: '시스템 (자동)',
@@ -41,6 +42,7 @@ interface UserMenuContentProps {
  */
 export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
   const router = useRouter();
+  const userRole = useUserStore((state) => state.user?.role);
 
   const { theme, setTheme } = useTheme();
 
@@ -73,10 +75,12 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
         <Person className="text-icon-normal size-6" />
         <span>개인 맞춤 설정</span>
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-        <AdminPanelSettings className="text-icon-normal size-6" />
-        <span>권한 관리</span>
-      </DropdownMenuItem>
+      {userRole === 'admin' && (
+        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+          <AdminPanelSettings className="text-icon-normal size-6" />
+          <span>권한 관리</span>
+        </DropdownMenuItem>
+      )}
 
       {/* 화면 모드 서브메뉴 */}
       <DropdownMenuSub>

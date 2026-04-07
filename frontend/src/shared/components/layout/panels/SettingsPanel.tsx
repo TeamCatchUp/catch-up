@@ -37,7 +37,6 @@ const SETTINGS_SECTIONS_BY_ROLE: Record<UserRole, SettingsSection[]> = {
       label: '내 설정',
       items: [
         { name: '계정', href: '/mypage/profile', Icon: Person },
-        { name: '협업툴 연동', href: '/mypage/integrations', Icon: CloudCheck },
         { name: '개인 맞춤 설정', href: '/mypage/preferences', Icon: Explore },
         { name: '질문 히스토리', href: '/mypage/history', Icon: Clock },
         { name: '도움말', href: '/mypage/help', Icon: Help },
@@ -49,7 +48,7 @@ const SETTINGS_SECTIONS_BY_ROLE: Record<UserRole, SettingsSection[]> = {
       label: '내 설정',
       items: [
         { name: '계정', href: '/mypage/profile', Icon: Person },
-        { name: '협업툴 연동', href: '/mypage/integrations', Icon: CloudCheck },
+        { name: '협업툴 연동', href: '/admin/integrations', Icon: CloudCheck },
         { name: '개인 맞춤 설정', href: '/mypage/preferences', Icon: Explore },
         { name: '질문 히스토리', href: '/mypage/history', Icon: Clock },
       ],

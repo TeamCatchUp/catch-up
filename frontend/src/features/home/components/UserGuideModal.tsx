@@ -27,7 +27,7 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
 
   const handleNavigateIntegration = () => {
     onDismiss();
-    router.push('/mypage/integrations');
+    router.push('/');
   };
 
   const changeStep = (next: number) => {
