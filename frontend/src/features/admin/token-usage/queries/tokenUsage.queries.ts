@@ -202,6 +202,22 @@ export const tokenUsageQueries = {
 
   /* ── 특정 유저 ── */
 
+  userPeriodCost: (userId: number, startDate?: Date, endDate?: Date) =>
+    queryOptions({
+      queryKey: [
+        ...tokenUsageQueries.all(),
+        'userPeriodCost',
+        userId,
+        startDate,
+        endDate,
+      ] as const,
+      queryFn: async () => {
+        const params = toApiParams(startDate, endDate);
+        const res = await api.get<ChatTokenUsageResponse>(API.stats.userTokenCost(userId), { params });
+        return { total_usd: res.data.total_usd, daily_avg_usd: res.data.daily_avg_usd };
+      },
+    }),
+
   userDailyUsage: (userId: number, startDate?: Date, endDate?: Date) =>
     queryOptions({
       queryKey: [

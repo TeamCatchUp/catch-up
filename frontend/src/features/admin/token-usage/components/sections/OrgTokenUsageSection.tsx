@@ -32,14 +32,32 @@ export default function OrgTokenUsageSection() {
     to: startOfToday(),
   });
 
-  const { data: members } = useQuery(tokenUsageQueries.orgMembers());
-  const { data: dailyUsage } = useQuery(tokenUsageQueries.orgDailyUsage(dateRange?.from, dateRange?.to));
-  const { data: totalTrend } = useQuery(tokenUsageQueries.orgTotalTrend());
-  const { data: questionCounts } = useQuery(tokenUsageQueries.orgQuestionCounts(dateRange?.from, dateRange?.to));
-  const { data: ranking } = useQuery(tokenUsageQueries.orgRanking(dateRange?.from, dateRange?.to));
+  const selectedUserId = Number(selectedMemberId);
+  const isMemberMode = viewMode === 'member';
 
-  // TODO: orgSummary API 별도 구현 시 교체
+  const { data: members } = useQuery(tokenUsageQueries.orgMembers());
+  const { data: orgDailyUsage } = useQuery(tokenUsageQueries.orgDailyUsage(dateRange?.from, dateRange?.to));
+  const { data: userDailyUsage } = useQuery({
+    ...tokenUsageQueries.userDailyUsage(selectedUserId, dateRange?.from, dateRange?.to),
+    enabled: isMemberMode && !!selectedUserId,
+  });
+  const { data: orgQuestions } = useQuery(tokenUsageQueries.orgQuestionCounts(dateRange?.from, dateRange?.to));
+  const { data: userQuestions } = useQuery({
+    ...tokenUsageQueries.userQuestionCounts(selectedUserId, dateRange?.from, dateRange?.to),
+    enabled: isMemberMode && !!selectedUserId,
+  });
+  const { data: userPeriodCost } = useQuery({
+    ...tokenUsageQueries.userPeriodCost(selectedUserId, dateRange?.from, dateRange?.to),
+    enabled: isMemberMode && !!selectedUserId,
+  });
+  const { data: totalTrend } = useQuery(tokenUsageQueries.orgTotalTrend());
+  const { data: ranking } = useQuery(tokenUsageQueries.orgRanking(dateRange?.from, dateRange?.to));
   const { data: orgSummary } = useQuery(tokenUsageQueries.orgSummary());
+
+  const dailyUsage = isMemberMode ? userDailyUsage : orgDailyUsage;
+  const questionCounts = isMemberMode ? userQuestions : orgQuestions;
+  const periodTotalCost = isMemberMode ? (userPeriodCost?.total_usd ?? 0) : (orgSummary?.total_cost ?? 0);
+  const periodDailyAvg = isMemberMode ? userPeriodCost?.daily_avg_usd : orgSummary?.daily_avg_usd;
 
   const chartTitle = viewMode === 'team' ? '조직 전체 일자별 토큰 사용량' : '개인 일자별 토큰 사용량';
 
@@ -79,8 +97,8 @@ export default function OrgTokenUsageSection() {
           <div className="min-h-0 flex-[2.2]">
             <DailyUsageBarChart
               data={dailyUsage ?? []}
-              totalCost={orgSummary?.total_cost ?? 0}
-              dailyAvg={orgSummary?.daily_avg_usd}
+              totalCost={periodTotalCost}
+              dailyAvg={periodDailyAvg}
               title={chartTitle}
             />
           </div>
