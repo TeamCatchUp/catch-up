@@ -25,6 +25,9 @@ export const toTabSlug = (tab: TokenUsageTab): TokenUsageTabSlug => TAB_TO_SLUG[
 export const fromTabSlug = (slug: string): TokenUsageTab =>
   SLUG_TO_TAB[slug as TokenUsageTabSlug] ?? '나의 토큰 사용량';
 
+/** 전체 기간 조회 시 사용하는 기준 시작일 (서비스 런칭일 기준, 최대 조회 3년 제한) */
+export const STATS_EPOCH_START_DATE = '2026-01-01T00:00:00Z';
+
 /** 설정 기본값 (프론트 고정) */
 export const DEFAULT_DAILY_LIMIT = 5;
 export const DEFAULT_MONTHLY_LIMIT = 100;

@@ -5,6 +5,7 @@ import type { AdminUserListResponse } from '@/features/admin/members/types/admin
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
+import { STATS_EPOCH_START_DATE } from '../constants/tokenUsageConfig';
 import type {
   ChatTokenUsageParams,
   ChatTokenUsageResponse,
@@ -68,7 +69,7 @@ export const tokenUsageQueries = {
     queryOptions({
       queryKey: [...tokenUsageQueries.all(), 'summary'] as const,
       queryFn: async (): Promise<TokenUsageSummary> => {
-        const params: ChatTokenUsageParams = { start_date: '2026-01-01T00:00:00Z' };
+        const params: ChatTokenUsageParams = { start_date: STATS_EPOCH_START_DATE };
         const res = await api.get<ChatTokenUsageResponse>(API.stats.myTokenCost, { params });
         return { total_cost: res.data.total_usd, daily_avg_usd: res.data.daily_avg_usd };
       },
@@ -127,7 +128,7 @@ export const tokenUsageQueries = {
     queryOptions({
       queryKey: [...tokenUsageQueries.all(), 'orgSummary'] as const,
       queryFn: async (): Promise<TokenUsageSummary> => {
-        const params: ChatTokenUsageParams = { start_date: '2026-01-01T00:00:00Z' };
+        const params: ChatTokenUsageParams = { start_date: STATS_EPOCH_START_DATE };
         const res = await api.get<ChatTokenUsageResponse>(API.stats.orgTokenCost, { params });
         return { total_cost: res.data.total_usd, daily_avg_usd: res.data.daily_avg_usd };
       },
