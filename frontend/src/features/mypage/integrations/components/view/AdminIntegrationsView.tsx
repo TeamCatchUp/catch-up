@@ -21,7 +21,7 @@ export default function AdminIntegrationsView() {
 
   const setActiveTab = useCallback(
     (tab: AdminIntegrationTab) => {
-      router.replace(`/mypage/integrations?tab=${tab}`);
+      router.replace(`/admin/integrations?tab=${tab}`);
     },
     [router],
   );
