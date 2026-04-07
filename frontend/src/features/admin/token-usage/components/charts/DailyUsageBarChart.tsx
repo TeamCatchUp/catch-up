@@ -14,7 +14,7 @@ import ChartCustomTooltip from './ChartCustomTooltip';
 interface DailyUsageBarChartProps {
   data: DailyTokenUsage[];
   totalCost: number;
-  dailyLimit: number;
+  dailyAvg?: number;
   title?: string;
 }
 
@@ -28,7 +28,7 @@ const chartConfig = {
 export default function DailyUsageBarChart({
   data,
   totalCost,
-  dailyLimit,
+  dailyAvg,
   title = '일자별 토큰 사용량',
 }: DailyUsageBarChartProps) {
   const ticks = useMemo(() => data.map((d) => d.date), [data]);
@@ -50,7 +50,7 @@ export default function DailyUsageBarChart({
           className="h-full w-full"
           style={data.length > 12 ? { minWidth: data.length * 40 } : undefined}
         >
-          <BarChart data={data} margin={{ top: 8, right: 0, bottom: 0, left: -20 }}>
+          <BarChart data={data} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--color-neutral-3)" />
             <XAxis
               dataKey="date"
@@ -66,7 +66,9 @@ export default function DailyUsageBarChart({
               tickMargin={8}
             />
             <YAxis hide />
-            <ReferenceLine y={dailyLimit} stroke="var(--color-blue-30)" strokeDasharray="5 5" strokeWidth={1} />
+            {dailyAvg != null && dailyAvg > 0 && (
+              <ReferenceLine y={dailyAvg} stroke="var(--color-blue-30)" strokeDasharray="5 5" strokeWidth={1} />
+            )}
             <ChartTooltip
               cursor={false}
               content={
