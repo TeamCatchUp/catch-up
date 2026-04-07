@@ -43,7 +43,6 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
           orientation === 'left' ? <IconArrowLeft className="size-5" /> : <IconArrowRight className="size-5" />,
       }}
       fixedWeeks
-      showOutsideDays
       {...props}
     />
   );
