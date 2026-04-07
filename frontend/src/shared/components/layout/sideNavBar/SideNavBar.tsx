@@ -18,12 +18,13 @@ export default function SideNavBar() {
   const pathname = usePathname();
   const router = useRouter();
   const isRagAnswerPage = pathname.startsWith('/chat');
+  const isSettingsRoute = pathname.startsWith('/mypage') || pathname.startsWith('/admin');
   const { isSidebarOpen, setSidebarOpen } = useSidebarStore();
 
-  // isRagAnswerPage 변경 시 사이드바 상태 동기화
+  // 채팅·설정 페이지 진입 시 사이드바 자동 닫힘
   useEffect(() => {
-    setSidebarOpen(!isRagAnswerPage);
-  }, [isRagAnswerPage, setSidebarOpen]);
+    setSidebarOpen(!isRagAnswerPage && !isSettingsRoute);
+  }, [isRagAnswerPage, isSettingsRoute, setSidebarOpen]);
 
   const isOpen = isSidebarOpen;
 
@@ -42,17 +43,30 @@ export default function SideNavBar() {
             onClick={() => router.push('/')}
             className={cn('flex cursor-pointer items-center gap-2.5', isOpen ? 'px-1' : '')}
           >
-            <div
-              className={cn(
-                'group relative flex h-10 w-10 items-center px-1.25 py-1.5',
-                isOpen ? '' : 'border-edge-neutral rounded-xl border-[0.5px]',
-              )}
-            >
-              <CatchupLogo className="relative left-px h-7.5 w-7" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className={cn(
+                    'group relative flex h-10 w-10 items-center px-1.25 py-1.5',
+                    isOpen
+                      ? ''
+                      : isSettingsRoute
+                        ? 'rounded-xl hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed'
+                        : 'border-edge-neutral rounded-xl border-[0.5px]',
+                  )}
+                  onClick={
+                    !isOpen && isSettingsRoute
+                      ? (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          router.push('/');
+                        }
+                      : undefined
+                  }
+                >
+                  <CatchupLogo className="relative left-px h-7.5 w-7" />
 
-              {!isOpen && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
+                  {!isOpen && !isSettingsRoute && (
                     <button
                       onClick={(e) => {
                         e.preventDefault();
@@ -63,11 +77,15 @@ export default function SideNavBar() {
                     >
                       <Open className="h-6 w-6" />
                     </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">사이드바 열기</TooltipContent>
-                </Tooltip>
+                  )}
+                </div>
+              </TooltipTrigger>
+              {!isOpen && (
+                <TooltipContent side="right">
+                  {isSettingsRoute ? '홈으로' : '사이드바 열기'}
+                </TooltipContent>
               )}
-            </div>
+            </Tooltip>
 
             {isOpen && (
               <div
