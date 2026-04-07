@@ -11,9 +11,15 @@ export default function ContactChannelSection() {
           <h2 className="text-heading-large text-content-normal">Catch Up 문의 채널</h2>
           <div className="flex items-center gap-1">
             <p className="text-body-small text-content-alternative">운영팀과 Slack으로 바로 연결됩니다.</p>
-            <Button type="button" variant="text-primary-blue" size="md" className="text-content-primary gap-1">
-              Slack 으로 문의하기
-              <ArrowForward className="h-5 w-5 shrink-0" />
+            <Button variant="text-primary-blue" size="md" className="text-content-primary gap-1" asChild>
+              <a
+                href="https://app.slack.com/accept-slack-connect-invitation/example"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Slack 으로 문의하기
+                <ArrowForward className="h-5 w-5 shrink-0" />
+              </a>
             </Button>
           </div>
         </div>
