@@ -23,3 +23,38 @@ export interface ChatTokenUsageParams {
   start_date: string;
   end_date?: string;
 }
+
+/** ── 질문 횟수 ── */
+
+/** 일자별 질문 횟수 엔트리 */
+export interface QuestionCountDateEntry {
+  from_date: string;
+  to_date: string;
+  question_count: number;
+}
+
+/** 질문 횟수 응답 */
+export interface QuestionCountResponse {
+  total_count: number;
+  daily_avg_count: number;
+  by_date: QuestionCountDateEntry[];
+  start_date: string | null;
+  end_date: string | null;
+}
+
+/** ── 랭킹 ── */
+
+/** 랭킹 엔트리 */
+export interface UserTokenCostRankingItem {
+  user_id: number;
+  user_name: string;
+  department: string;
+  total_usd: number;
+}
+
+/** 랭킹 응답 */
+export interface UserTokenCostRankingResponse {
+  ranking: UserTokenCostRankingItem[];
+  start_date: string | null;
+  end_date: string | null;
+}
