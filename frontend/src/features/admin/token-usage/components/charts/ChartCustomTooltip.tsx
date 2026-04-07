@@ -15,7 +15,7 @@ export default function ChartCustomTooltip({
   valueFormatter,
   dateFormatter,
 }: ChartCustomTooltipProps) {
-  if (!active || !payload?.length) return null;
+  if (!active || !payload?.length || !label) return null;
 
   const value = payload[0].value as number;
 

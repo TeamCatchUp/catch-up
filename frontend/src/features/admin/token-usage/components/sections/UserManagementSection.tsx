@@ -1,15 +1,14 @@
 'use client';
 
 /** 토큰 사용량 관리 > "이용자 관리" 탭 — 요약 + 정렬/검색 + 테이블 + 페이지네이션 + 토글 모달 */
+// TODO: 이용자 관리 관련 API 구현 시 전면 교체 예정
 
 import { useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-import IconCheckCircle from '@/public/icons/icon/check_circle.svg';
 import IconSearch from '@/public/icons/icon/search.svg';
-import { Badge } from '@/shared/components/ui/badge';
 import { ConfirmDialog } from '@/shared/components/ui/confirm-dialog';
 import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
 import FilterDropdown, { type FilterOption } from '@/shared/components/ui/filter-dropdown';
@@ -17,7 +16,6 @@ import { Input } from '@/shared/components/ui/input';
 import Pagination from '@/shared/components/ui/pagination';
 
 import {
-  STATUS_CONFIG,
   USER_MGMT_SORT_OPTIONS,
   type UserMgmtSortKey,
   USERS_PER_PAGE,
@@ -33,7 +31,6 @@ const sortOptions: FilterOption<UserMgmtSortKey>[] = USER_MGMT_SORT_OPTIONS.map(
 
 export default function UserManagementSection() {
   const { data: members } = useQuery(tokenUsageQueries.userManagement());
-  const { data: summary } = useQuery(tokenUsageQueries.orgSummary());
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortKey, setSortKey] = useState<UserMgmtSortKey>('newest');
@@ -46,25 +43,20 @@ export default function UserManagementSection() {
   // 로컬 토글 상태 (mock용)
   const [localOverrides, setLocalOverrides] = useState<Record<string, boolean>>({});
 
-  const getMemberEnabled = (member: OrgMember) => localOverrides[member.id] ?? member.tokenEnabled;
+  const getMemberEnabled = (member: OrgMember) => localOverrides[member.id] ?? false;
 
   // 검색 → 정렬 → 페이지네이션
   const processed = useMemo(() => {
     if (!members) return [];
     let result = members.map((m) => ({ ...m, tokenEnabled: getMemberEnabled(m) }));
 
-    // 검색
     if (searchTerm) {
       result = result.filter((m) => m.name.includes(searchTerm));
     }
 
-    // 정렬
     switch (sortKey) {
       case 'name':
         result.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-        break;
-      case 'cost':
-        result.sort((a, b) => b.cost - a.cost);
         break;
       default:
         break;
@@ -76,8 +68,6 @@ export default function UserManagementSection() {
 
   const totalPages = Math.max(1, Math.ceil(processed.length / USERS_PER_PAGE));
   const paginated = processed.slice((currentPage - 1) * USERS_PER_PAGE, currentPage * USERS_PER_PAGE);
-
-  const totalCost = useMemo(() => processed.reduce((sum, m) => sum + m.cost, 0), [processed]);
 
   // 토글 핸들러
   const handleToggleToken = (member: OrgMember) => {
@@ -92,7 +82,6 @@ export default function UserManagementSection() {
     setToggleTarget(null);
   };
 
-  // 검색 시 1페이지로 리셋
   const handleSearch = (value: string) => {
     setSearchTerm(value);
     setCurrentPage(1);
@@ -104,19 +93,11 @@ export default function UserManagementSection() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* 헤더 행: 요약 + DateRangePicker */}
+      {/* 헤더 행 */}
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1.5">
           <span className="text-heading-small text-content-alternative">조직 전체 사용 토큰량</span>
-          <div className="flex items-center gap-3">
-            <span className="text-heading-xlarge text-content-normal">{totalCost.toFixed(2)} $</span>
-            {summary ? (
-              <Badge variant={STATUS_CONFIG[summary.status].variant} size="sm" className="rounded-md2 gap-1 py-0.5">
-                <IconCheckCircle className="size-4" aria-hidden="true" />
-                {STATUS_CONFIG[summary.status].label}
-              </Badge>
-            ) : null}
-          </div>
+          <span className="text-heading-xlarge text-content-normal">- $</span>
         </div>
         <DateRangePicker value={dateRange} onChange={setDateRange} />
       </div>

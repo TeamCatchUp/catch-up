@@ -93,6 +93,16 @@ export const API = {
     vendorUpload: (vendor: string) => `${API_PREFIX}/mapping/${vendor}/upload`, // POST 협업툴별 사용자 매핑 CSV/Excel 일괄 업로드
   },
 
+  stats: {
+    myTokenCost: `${API_PREFIX}/stats/costs/tokens/me`, // GET 내 일자별 토큰 사용량(USD)
+    orgTokenCost: `${API_PREFIX}/stats/costs/tokens/org`, // GET 조직 일자별 토큰 사용량(USD) (admin only)
+    tokenRanking: `${API_PREFIX}/stats/costs/tokens/ranking`, // GET 구성원별 토큰 사용량 랭킹 (admin only)
+    userTokenCost: (userId: number) => `${API_PREFIX}/stats/costs/tokens/users/${userId}`, // GET 특정 유저 토큰 사용량 (admin only)
+    myQueries: `${API_PREFIX}/stats/queries/me`, // GET 내 일자별 질문 횟수
+    orgQueries: `${API_PREFIX}/stats/queries/org`, // GET 조직 일자별 질문 횟수 (admin only)
+    userQueries: (userId: number) => `${API_PREFIX}/stats/queries/users/${userId}`, // GET 특정 유저 질문 횟수 (admin only)
+  },
+
   settings: {
     prompts: `${API_PREFIX}/settings/prompts`, // GET & PATCH 커스텀 프롬프트 지침
   },

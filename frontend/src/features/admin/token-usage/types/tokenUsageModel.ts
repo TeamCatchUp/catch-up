@@ -2,7 +2,6 @@
 export interface DailyTokenUsage {
   date: string;
   cost: number;
-  model_name: string;
 }
 
 /** 전체 토큰 사용량 추이 (line chart) */
@@ -20,7 +19,7 @@ export interface TotalQuestionCount {
 /** 나의 토큰 사용 요약 */
 export interface TokenUsageSummary {
   total_cost: number;
-  status: 'normal' | 'warning' | 'exceeded';
+  daily_avg_usd: number;
 }
 
 /** 조직 멤버 정보 */
@@ -31,15 +30,15 @@ export interface OrgMember {
   position: string;
   role: string;
   profileImage?: string;
-  tokenEnabled: boolean;
-  cost: number;
 }
 
 /** 토큰 사용량 순위 항목 */
 export interface TokenUsageRankingEntry {
   rank: number;
-  member: OrgMember;
-  cost: number;
+  user_id: number;
+  user_name: string;
+  department: string;
+  total_usd: number;
 }
 
 /** 제한 해제 요청 */

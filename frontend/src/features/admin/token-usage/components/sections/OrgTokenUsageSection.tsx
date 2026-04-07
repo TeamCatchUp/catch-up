@@ -2,15 +2,13 @@
 
 /** 토큰 사용량 관리 > "조직 토큰 사용량" 탭 — SegmentedPicker(팀 전체/멤버 선택) + 차트 3개 + 순위 + 제한 설정 */
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
-import { parseISO } from 'date-fns';
+import { startOfMonth, startOfToday } from 'date-fns';
 
 import { DateRangePicker } from '@/shared/components/ui/date-range-picker';
 
-import { DEFAULT_DAILY_LIMIT } from '../../constants/tokenUsageConfig';
-import useFilteredByDateRange from '../../hooks/useFilteredByDateRange';
 import { tokenUsageQueries } from '../../queries/tokenUsage.queries';
 import DailyUsageBarChart from '../charts/DailyUsageBarChart';
 import TotalQuestionBarChart from '../charts/TotalQuestionBarChart';
@@ -26,34 +24,55 @@ const VIEW_MAP: Record<string, ViewMode> = { '멤버 선택': 'member', '팀 전
 const VIEW_LABEL: Record<ViewMode, string> = { member: '멤버 선택', team: '팀 전체' };
 
 export default function OrgTokenUsageSection() {
-  const { data: members } = useQuery(tokenUsageQueries.orgMembers());
-  const { data: dailyUsage } = useQuery(tokenUsageQueries.orgDailyUsage());
-  const { data: totalTrend } = useQuery(tokenUsageQueries.orgTotalTrend());
-  const { data: questionCounts } = useQuery(tokenUsageQueries.orgQuestionCounts());
-  const { data: ranking } = useQuery(tokenUsageQueries.orgRanking());
-
   const [viewMode, setViewMode] = useState<ViewMode>('team');
   const [selectedMemberId, setSelectedMemberId] = useState<string>('1');
 
-  // 날짜 범위 초기값: mock 데이터 첫날 ~ 마지막날
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
-    if (!dailyUsage?.length) return undefined;
-    return {
-      from: parseISO(dailyUsage[0].date),
-      to: parseISO(dailyUsage[dailyUsage.length - 1].date),
-    };
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfMonth(startOfToday()),
+    to: startOfToday(),
   });
 
-  // 날짜 범위 필터링
-  const filteredDaily = useFilteredByDateRange(dailyUsage, dateRange);
-  const filteredTrend = useFilteredByDateRange(totalTrend, dateRange);
-  const filteredQuestions = useFilteredByDateRange(questionCounts, dateRange);
+  const selectedUserId = Number(selectedMemberId);
+  const isMemberMode = viewMode === 'member';
+  const hasDateRange = !!dateRange?.from;
 
-  const filteredTotalCost = useMemo(() => filteredDaily.reduce((sum, d) => sum + d.cost, 0), [filteredDaily]);
+  const { data: members } = useQuery(tokenUsageQueries.orgMembers());
+  const { data: orgDailyUsage } = useQuery({
+    ...tokenUsageQueries.orgDailyUsage(dateRange?.from, dateRange?.to),
+    enabled: hasDateRange,
+  });
+  const { data: userDailyUsage } = useQuery({
+    ...tokenUsageQueries.userDailyUsage(selectedUserId, dateRange?.from, dateRange?.to),
+    enabled: isMemberMode && !!selectedUserId && hasDateRange,
+  });
+  const { data: orgQuestions } = useQuery({
+    ...tokenUsageQueries.orgQuestionCounts(dateRange?.from, dateRange?.to),
+    enabled: hasDateRange,
+  });
+  const { data: userQuestions } = useQuery({
+    ...tokenUsageQueries.userQuestionCounts(selectedUserId, dateRange?.from, dateRange?.to),
+    enabled: isMemberMode && !!selectedUserId && hasDateRange,
+  });
+  const { data: userPeriodCost } = useQuery({
+    ...tokenUsageQueries.userPeriodCost(selectedUserId, dateRange?.from, dateRange?.to),
+    enabled: isMemberMode && !!selectedUserId && hasDateRange,
+  });
+  const { data: orgPeriodCost } = useQuery({
+    ...tokenUsageQueries.orgPeriodCost(dateRange?.from, dateRange?.to),
+    enabled: hasDateRange,
+  });
+  const { data: totalTrend } = useQuery(tokenUsageQueries.orgTotalTrend());
+  const { data: ranking } = useQuery({
+    ...tokenUsageQueries.orgRanking(dateRange?.from, dateRange?.to),
+    enabled: hasDateRange,
+  });
+
+  const dailyUsage = isMemberMode ? userDailyUsage : orgDailyUsage;
+  const questionCounts = isMemberMode ? userQuestions : orgQuestions;
+  const periodTotalCost = isMemberMode ? (userPeriodCost?.total_usd ?? 0) : (orgPeriodCost?.total_usd ?? 0);
+  const periodDailyAvg = isMemberMode ? userPeriodCost?.daily_avg_usd : orgPeriodCost?.daily_avg_usd;
 
   const chartTitle = viewMode === 'team' ? '조직 전체 일자별 토큰 사용량' : '개인 일자별 토큰 사용량';
-
-  if (!dailyUsage) return null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,20 +84,24 @@ export default function OrgTokenUsageSection() {
             조직의 토큰 이용 현황을 확인하고 관리할 수 있습니다.
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
+      </div>
+      <div className="-mb-3 flex flex-col gap-3">
+        <div className="w-40.25">
           <SegmentedPicker
             options={VIEW_OPTIONS}
             value={VIEW_LABEL[viewMode]}
             onChange={(v) => setViewMode(VIEW_MAP[v] ?? 'team')}
           />
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
         </div>
+        {viewMode === 'member' && members ? (
+          <MemberProfileCard
+            members={members}
+            selectedMemberId={selectedMemberId}
+            onSelectMember={setSelectedMemberId}
+          />
+        ) : null}
       </div>
-
-      {/* 멤버 선택 모드 — 프로필 카드 */}
-      {viewMode === 'member' && members ? (
-        <MemberProfileCard members={members} selectedMemberId={selectedMemberId} onSelectMember={setSelectedMemberId} />
-      ) : null}
 
       {/* 차트 3개 + 순위 */}
       <div className="flex h-142 gap-6">
@@ -86,18 +109,18 @@ export default function OrgTokenUsageSection() {
         <div className="flex w-150 shrink-0 flex-col gap-3">
           <div className="min-h-0 flex-[2.2]">
             <DailyUsageBarChart
-              data={filteredDaily}
-              totalCost={filteredTotalCost}
-              dailyLimit={DEFAULT_DAILY_LIMIT}
+              data={dailyUsage ?? []}
+              totalCost={periodTotalCost}
+              dailyAvg={periodDailyAvg}
               title={chartTitle}
             />
           </div>
           <div className="flex min-h-0 flex-1 gap-3">
             <div className="min-h-0 flex-1">
-              <TotalTokenLineChart data={filteredTrend} />
+              <TotalTokenLineChart data={totalTrend ?? []} />
             </div>
             <div className="min-h-0 flex-1">
-              <TotalQuestionBarChart data={filteredQuestions} />
+              <TotalQuestionBarChart data={questionCounts ?? []} />
             </div>
           </div>
         </div>

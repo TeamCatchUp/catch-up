@@ -21,10 +21,12 @@ import { Switch } from '@/shared/components/ui/switch';
 import { POSITION_BADGE_CLASS, TEAM_BADGE_CLASS } from '../../constants/tokenUsageConfig';
 import type { OrgMember } from '../../types/tokenUsageModel';
 
+type OrgMemberRow = OrgMember & { tokenEnabled: boolean };
+
 const TAG_BASE = 'text-body-xsmall inline-flex shrink-0 items-center truncate rounded-md2 px-1.5 py-0.5';
 
 interface UserManagementTableProps {
-  data: OrgMember[];
+  data: OrgMemberRow[];
   onToggleToken: (member: OrgMember) => void;
 }
 
@@ -69,7 +71,7 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
           </div>
 
           {/* 사용량 */}
-          <span className="text-body-small text-content-normal">{member.cost.toFixed(1)} $</span>
+          <span className="text-body-small text-content-normal">- $</span>
 
           {/* 직급 */}
           <div>
