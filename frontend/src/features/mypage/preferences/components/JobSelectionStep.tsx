@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import IconCheckCircleFilled from '@/public/icons/icon/check_circle_filled.svg';
 import IconError from '@/public/icons/icon/error.svg';
 import { Chip, ChipGroup } from '@/shared/components/ui/chips';
 import { cn } from '@/shared/utils/cn';
@@ -39,11 +40,20 @@ export default function JobSelectionStep({
         value={selectedJob ?? ''}
         onChange={(val) => onJobChange((val as JobRole) || null)}
       >
-        {JOB_ROLE_OPTIONS.map((opt) => (
-          <Chip key={opt.value} value={opt.value} variant="square">
-            {opt.label}
-          </Chip>
-        ))}
+        {JOB_ROLE_OPTIONS.map((opt) => {
+          const isSelected = selectedJob === opt.value;
+          return (
+            <Chip
+              key={opt.value}
+              value={opt.value}
+              variant="square"
+              leadingIcon={isSelected ? <IconCheckCircleFilled /> : undefined}
+              trailingIcon={isSelected ? <IconCheckCircleFilled /> : undefined}
+            >
+              {opt.label}
+            </Chip>
+          );
+        })}
       </ChipGroup>
 
       {selectedJob === 'custom' && (
