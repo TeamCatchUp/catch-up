@@ -10,7 +10,7 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import ArrowRight from '@/public/icons/icon/arrow_right.svg';
+import ArrowRight2 from '@/public/icons/icon/arrow_right2.svg';
 import Kebeb from '@/public/icons/icon/kebeb 2.svg';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
@@ -24,8 +24,7 @@ interface ChatRoomQuery {
 // 질문 아이템 상태별 스타일
 const defaultClass =
   'border border-transparent hover:bg-fill-interaction-hover hover:border-edge-assistive active:bg-fill-interaction-pressed active:border-edge-neutral';
-const selectedClass =
-  'bg-fill-primary-normal-neutral hover:bg-fill-primary-interaction-hover-assistive';
+const selectedClass = 'bg-fill-primary-normal-neutral hover:bg-fill-primary-interaction-hover-assistive';
 
 export default function SideNavQuestions() {
   const pathname = usePathname();
@@ -72,12 +71,12 @@ export default function SideNavQuestions() {
     <div className="flex min-h-0 flex-1 flex-col gap-0.5">
       <button
         onClick={() => togglePanel('questionsHistory')}
-        className="flex h-10 w-full cursor-pointer items-center gap-0.5 rounded-lg px-2.5 py-2 hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed"
+        className="hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed flex h-10 w-full cursor-pointer items-center gap-0.5 rounded-lg px-2.5 py-2"
       >
         <span className="text-label-small text-content-normal">내 질문</span>
-        <ArrowRight className="text-icon-neutral size-6" />
+        <ArrowRight2 className="text-icon-neutral relative -top-[0.5px] size-6 shrink-0" />
       </button>
-      <div className="custom-scrollbar-hover-only relative flex flex-1 overflow-y-auto">
+      <div className="custom-scrollbar relative flex flex-1 overflow-y-auto">
         <div className="flex flex-1 flex-col">
           {recentChatrooms.map((chatroom) => {
             const isActive = pathname === `/chat/${chatroom.session_id}`;
@@ -102,7 +101,7 @@ export default function SideNavQuestions() {
             <div className="text-body-xsmall text-content-assistive py-2 text-center">불러오는 중...</div>
           )}
           <div ref={sentinelRef} className="h-1" />
-          <div className="bg-linear-to-b from-transparent to-fill-normal pointer-events-none sticky bottom-0 z-10 h-12.5 w-full shrink-0" />
+          <div className="to-fill-normal pointer-events-none sticky bottom-0 z-10 h-12.5 w-full shrink-0 bg-linear-to-b from-transparent" />
         </div>
       </div>
     </div>
