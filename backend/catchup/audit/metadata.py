@@ -7,6 +7,7 @@ from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import model_validator
 
+from catchup.audit.actions import IntegrationAction
 from catchup.audit.base import AuditStatus
 from catchup.audit.base import BaseAuditMetadata
 from catchup.configs.config import settings
@@ -60,13 +61,24 @@ class IntegrationAuditMetadata(BaseAuditMetadata):
     integration_id: str | None = None
     integration_name: str | None = None
     resource_count: int | None = None
-    
-    # Atlassian
     jira_target_count: int | None = None
     confluence_target_count: int | None = None
+    event_name: str | None = None
+    installation_action: str | None = None
+    result_status: str | None = None
 
     @classmethod
     def from_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+    ) -> "IntegrationAuditMetadata":
+        if data.action == IntegrationAction.HANDLE_INSTALLATION:
+            return cls._from_installation_audit(data)
+
+        return cls._from_oauth_callback_audit(data)
+
+    @classmethod
+    def _from_oauth_callback_audit(
         cls,
         data: "AuditLogMetadataInput",
     ) -> "IntegrationAuditMetadata":
@@ -89,6 +101,32 @@ class IntegrationAuditMetadata(BaseAuditMetadata):
             resource_count=len(getattr(result, "resources", [])) if getattr(result, "resources", None) is not None else None,
             jira_target_count=len(getattr(result, "jira_targets", [])) if getattr(result, "jira_targets", None) is not None else None,
             confluence_target_count=len(getattr(result, "confluence_targets", [])) if getattr(result, "confluence_targets", None) is not None else None,
+        )
+
+    @classmethod
+    def _from_installation_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+    ) -> "IntegrationAuditMetadata":
+        payload = data.arguments["data"]
+        result = data.result
+        context = None
+
+        if data.status == AuditStatus.FAILURE:
+            context = (
+                getattr(data.exception, "reason", None)
+                or getattr(data.exception, "code", None)
+                or "internal_error"
+            )
+
+        return cls(
+            context=context,
+            provider="github",
+            integration_id=str(payload.installation.id),
+            integration_name=payload.installation.account.login,
+            event_name="installation",
+            installation_action=payload.action,
+            result_status=getattr(result, "status", None),
         )
 
 
