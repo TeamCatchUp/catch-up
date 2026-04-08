@@ -39,6 +39,7 @@ const SETTINGS_SECTIONS_BY_ROLE: Record<UserRole, SettingsSection[]> = {
         { name: '계정', href: '/mypage/profile', Icon: Person },
         { name: '개인 맞춤 설정', href: '/mypage/preferences', Icon: Explore },
         { name: '질문 히스토리', href: '/mypage/history', Icon: Clock },
+        { name: '토큰 사용량', href: '/mypage/token-usage', Icon: Database },
         { name: '도움말', href: '/mypage/help', Icon: Help },
       ],
     },
