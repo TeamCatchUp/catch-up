@@ -23,7 +23,12 @@ class Environment(StrEnum):
 class Settings(BaseSettings):
     
     #===========================#
-    #     Debug Settings     #
+    #     Swagger Settings      #
+    #===========================#
+    API_DOCS_ENABLED: bool = False
+
+    #===========================#
+    #     Debug Settings        #
     #===========================#
     DEBUGGER_ENABLED: bool = False
     DEBUGGER_PORT: int = 5678
