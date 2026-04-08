@@ -8,6 +8,7 @@ import structlog
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
+from langchain_core.messages import SystemMessage
 from langgraph.graph.message import add_messages
 
 
@@ -27,7 +28,7 @@ def get_latest_query(messages: Annotated[list, add_messages]):
     )
 
 
-def prepare_context_text(documents: list[Document]) -> str:
+def prepare_retrieved_context_text(documents: list[Document]) -> str:
     parts = []
     for i, doc in enumerate(documents, start=1):
         source = doc.metadata.get("source", "unknown")
@@ -35,6 +36,30 @@ def prepare_context_text(documents: list[Document]) -> str:
         temporal = resolve_temporal_context(doc.metadata) 
         parts.append(f"[{i}] (Source: {source})\n{content} {temporal}")
     return "\n\n".join(parts)
+
+
+def build_system_message_with_prompt_caching(
+    static_prompt: str,
+    dynamic_prompts: list[str] | None = None
+) -> SystemMessage:
+    content = [{
+        "type": "text",
+        "text": static_prompt,
+        "cache_control": {
+            "type": "ephemeral",
+            "ttl": "1h"
+        }
+    }]
+    
+    if dynamic_prompts:
+        for prompt in dynamic_prompts:
+            content.append({
+                "type": "text",
+                "text": prompt
+            })
+
+    return SystemMessage(content=content)
+        
 
 
 def resolve_temporal_context(metadata: dict) -> str:
