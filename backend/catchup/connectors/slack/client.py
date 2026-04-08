@@ -14,18 +14,19 @@ Slack SDK의 AsyncWebClient를 래핑하여 동시 요청 제어 및 에러 핸�
 """
 
 import asyncio
-import structlog
-from typing import Any
 from time import monotonic
+from typing import Any
 
+import structlog
+from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_base_client import async_default_handlers
 from slack_sdk.web.async_client import AsyncWebClient
-from slack_sdk.errors import SlackApiError
 
-from catchup.connectors.slack.rate_limiter import get_slack_rate_limiter
-from catchup.connectors.base.exceptions import ConnectorApiError, RateLimitError
-from catchup.connectors.base.retry import parse_retry_after_header
 from catchup.configs.config import settings
+from catchup.connectors.base.exceptions import ConnectorApiError
+from catchup.connectors.base.exceptions import RateLimitError
+from catchup.connectors.base.retry import parse_retry_after_header
+from catchup.connectors.slack.rate_limiter import get_slack_rate_limiter
 
 logger = structlog.getLogger(__name__)
 
@@ -411,6 +412,21 @@ class SlackApiClientWrapper:
                 return message
 
         return None
+
+    async def post_message(
+        self,
+        *,
+        channel: str,
+        text: str,
+        thread_ts: str | None = None,
+    ) -> dict[str, Any]:
+        return await self._call_api(
+            "chat_postMessage",
+            "chat_postMessage",
+            channel=channel,
+            text=text,
+            thread_ts=thread_ts,
+        )
 
     # ================================================================
     # User APIs

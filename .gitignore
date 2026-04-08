@@ -20,3 +20,5 @@ secrets.yaml
 .env.*
 
 Obsidian
+.agents/
+docs/

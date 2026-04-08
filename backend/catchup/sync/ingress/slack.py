@@ -3,10 +3,12 @@ from __future__ import annotations
 import structlog
 
 from catchup.connectors.slack.webhook.metadata import handle_metadata_event
+from catchup.connectors.slack.webhook.responses import accepted_async_response
 from catchup.connectors.slack.webhook.responses import accepted_incremental_response
 from catchup.connectors.slack.webhook.responses import ignored_event_response
 from catchup.connectors.slack.webhook.responses import ignored_wrapper_response
 from catchup.connectors.slack.webhook.responses import url_verification_response
+from catchup.server.connector.slack.app_mention_service import schedule_app_mention
 from catchup.sync.incremental.resolve import resolve_slack_event
 from catchup.sync.incremental.service import get_incremental_service
 from catchup.sync.ingress.types import SlackIgnoredWebhookResponse
@@ -58,6 +60,11 @@ async def handle_slack_webhook(
 
     if request.event_type in SUPPORTED_METADATA_EVENTS:
         return await handle_metadata_event(request)
+
+    if request.event_type == "app_mention":
+        # Timeout 제약 만족을 위해서 즉시 응답 후 답변 생성 스케쥴링
+        schedule_app_mention(request)
+        return accepted_async_response(event_type=request.event_type)
 
     if request.event_type == "message":
         return await _handle_incremental_event(request)
