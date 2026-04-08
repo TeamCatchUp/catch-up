@@ -65,6 +65,7 @@ async def handle_metadata_event(
 
         return await _handle_installation_event(
             data=data,
+            provider="github",
             background_tasks=background_tasks,
         )
 
@@ -107,6 +108,7 @@ async def handle_metadata_event(
 async def _handle_installation_event(
     *,
     data: InstallationWebhookPayload,
+    provider: str,
     background_tasks: BackgroundTasks,
 ) -> GithubWebhookResponse:
     action = data.action
@@ -124,12 +126,9 @@ async def _handle_installation_event(
     if action == "suspended":
         return await run_in_threadpool(_handle_installation_suspended, data)
 
-    if action == "unsuspended":
-        result = await run_in_threadpool(_handle_installation_unsuspended, data)
-        _schedule_metadata_sync(background_tasks, installation_id)
-        return result
-
-    raise ValueError(f"unsupported github installation action: {action}")
+    result = await run_in_threadpool(_handle_installation_unsuspended, data)
+    _schedule_metadata_sync(background_tasks, installation_id)
+    return result
 
 
 async def _handle_installation_created(

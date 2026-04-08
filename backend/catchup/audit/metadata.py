@@ -110,6 +110,7 @@ class IntegrationAuditMetadata(BaseAuditMetadata):
     ) -> "IntegrationAuditMetadata":
         payload = data.arguments["data"]
         result = data.result
+        provider = data.arguments.get("provider", "github")
         context = None
 
         if data.status == AuditStatus.FAILURE:
@@ -121,7 +122,7 @@ class IntegrationAuditMetadata(BaseAuditMetadata):
 
         return cls(
             context=context,
-            provider="github",
+            provider=provider,
             integration_id=str(payload.installation.id),
             integration_name=payload.installation.account.login,
             event_name="installation",

@@ -27,6 +27,7 @@ from catchup.connectors.atlassian.exceptions import AtlassianError
 from catchup.connectors.atlassian.callback_service import (
     AtlassianCallbackService,
     CallbackError,
+    CallbackResult,
 )
 from catchup.connectors.atlassian.token_manager import (
     AtlassianTokenManager,
@@ -186,7 +187,7 @@ async def _handle_atlassian_oauth_callback(
     background_tasks: BackgroundTasks,
     state: str | None,
     atlassian_service: AtlassianOAuthClient,
-):
+) -> CallbackResult:
     callback_service = AtlassianCallbackService(atlassian_service)
     result = await callback_service.handle_callback(
         code=code,
@@ -211,7 +212,7 @@ def _delete_token_db(cloud_id: str) -> bool:
         return atlassian_crud.delete_token(db, cloud_id)
 
 
-async def _register_atlassian_knowledge_sources(result) -> None:
+async def _register_atlassian_knowledge_sources(result: CallbackResult) -> None:
     for cloud_id in result.jira_targets:
         await _register_knowledge_source(cloud_id, SourceType.JIRA)
 
@@ -221,7 +222,7 @@ async def _register_atlassian_knowledge_sources(result) -> None:
 
 def _schedule_atlassian_followups(
     background_tasks: BackgroundTasks,
-    result,
+    result: CallbackResult,
 ) -> None:
     for cloud_id in result.jira_targets:
         background_tasks.add_task(_sync_jira_metadata, cloud_id)

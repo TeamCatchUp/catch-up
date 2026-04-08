@@ -20,6 +20,7 @@ from catchup.connectors.slack.auth import get_slack_oauth_service, SlackOAuthSer
 from catchup.connectors.slack.client import SlackRateLimitError
 from catchup.connectors.slack.schemas import (
     SlackInstallationStatus,
+    SlackOAuthTokenResponse,
     SlackWorkspaceInfo,
 )
 from catchup.configs.config import auth_settings
@@ -251,7 +252,7 @@ async def _validate_slack_callback_request(
         raise SlackCallbackError("invalid_state")
 
 
-async def _persist_slack_installation(tokens) -> None:
+async def _persist_slack_installation(tokens: SlackOAuthTokenResponse) -> None:
     await run_in_threadpool(
         _persist_slack_token_db,
         **_build_slack_token_payload(tokens),
@@ -371,7 +372,7 @@ def _persist_slack_token_db(
             raise
 
 
-def _build_slack_token_payload(tokens) -> dict:
+def _build_slack_token_payload(tokens: SlackOAuthTokenResponse) -> dict[str, object]:
     bot_expires_at = None
     if tokens.expires_in:
         bot_expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens.expires_in)
