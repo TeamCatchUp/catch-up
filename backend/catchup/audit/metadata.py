@@ -130,6 +130,52 @@ class IntegrationAuditMetadata(BaseAuditMetadata):
         )
 
 
+class RegisterWebhookAuditMetadata(BaseAuditMetadata):
+    provider: str | None = None
+    integration_id: str | None = None
+    webhook_source: str | None = None
+    result_status: str | None = None
+    project_key_count: int | None = None
+    created_webhook_count: int | None = None
+    stored_webhook_count: int | None = None
+
+    @classmethod
+    def from_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+    ) -> "RegisterWebhookAuditMetadata":
+        result = data.result if isinstance(data.result, dict) else {}
+        context = None
+        argument_project_keys = data.arguments.get("project_keys")
+
+        if data.status == AuditStatus.FAILURE:
+            context = (
+                getattr(data.exception, "reason", None)
+                or getattr(data.exception, "code", None)
+                or "internal_error"
+            )
+
+        project_keys = result.get("project_keys")
+        created_webhook_ids = result.get("created_webhook_ids")
+
+        return cls(
+            context=context,
+            provider="jira",
+            integration_id=data.arguments["cloud_id"],
+            webhook_source=data.arguments["source"],
+            result_status=result.get("status"),
+            project_key_count=(
+                len(project_keys)
+                if project_keys is not None
+                else len(argument_project_keys)
+                if argument_project_keys is not None
+                else None
+            ),
+            created_webhook_count=len(created_webhook_ids) if created_webhook_ids is not None else None,
+            stored_webhook_count=result.get("stored_webhook_count"),
+        )
+
+
 class FullSyncTriggerMetadata(BaseAuditMetadata):
     connector: SyncConnector
     scope_id: str
