@@ -401,8 +401,9 @@ app = FastAPI(
     lifespan=lifespan,
     redirect_slashes=False,
     version=settings.APP_VERSION,
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/docs" if settings.API_DOCS_ENABLED else None,
+    redoc_url="/api/redoc" if settings.API_DOCS_ENABLED else None,
+    openapi_url="/api/openapi.json" if settings.API_DOCS_ENABLED else None,
 )
 
 register_exception_handlers(app)
