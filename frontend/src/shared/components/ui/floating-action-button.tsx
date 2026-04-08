@@ -8,10 +8,6 @@ import { Button } from './button';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
 export default function FloatingActionButton() {
-  const handleClick = () => {
-    window.open(SLACK_CONNECT_URL, '_blank', 'noopener,noreferrer');
-  };
-
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -19,9 +15,11 @@ export default function FloatingActionButton() {
           variant="fab-primary"
           size="lg"
           className="fixed bottom-5 right-5 z-70 size-13 transition-transform hover:scale-[1.038]"
-          onClick={handleClick}
+          asChild
         >
-          <HeadphoneIcon className="size-6.5" />
+          <a href={SLACK_CONNECT_URL} target="_blank" rel="noopener noreferrer" aria-label="CatchUp 문의하기">
+            <HeadphoneIcon className="size-6.5" />
+          </a>
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" align="end" className="flex max-w-85 flex-col gap-1 px-1.5 py-1.5">
