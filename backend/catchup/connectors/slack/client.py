@@ -437,21 +437,28 @@ class SlackApiClientWrapper:
         thread_ts: str,
         recipient_user_id: str,
         recipient_team_id: str,
-        task_display_mode: str,
-        chunks: list[dict[str, Any]],
+        task_display_mode: str | None = None,
+        markdown_text: str | None = None,
+        chunks: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "channel": channel,
+            "thread_ts": thread_ts,
+            "recipient_user_id": recipient_user_id,
+            "recipient_team_id": recipient_team_id,
+        }
+        if task_display_mode is not None:
+            payload["task_display_mode"] = task_display_mode
+        if markdown_text is not None:
+            payload["markdown_text"] = markdown_text
+        if chunks is not None:
+            payload["chunks"] = chunks
+
         return await self._call_api(
             "chat_startStream",
             "api_call",
             api_method="chat.startStream",
-            json={
-                "channel": channel,
-                "thread_ts": thread_ts,
-                "recipient_user_id": recipient_user_id,
-                "recipient_team_id": recipient_team_id,
-                "task_display_mode": task_display_mode,
-                "chunks": chunks,
-            },
+            json=payload,
         )
 
     async def append_stream(
@@ -483,6 +490,7 @@ class SlackApiClientWrapper:
         *,
         channel: str,
         ts: str,
+        markdown_text: str | None = None,
         chunks: list[dict[str, Any]] | None = None,
         blocks: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
@@ -490,6 +498,8 @@ class SlackApiClientWrapper:
             "channel": channel,
             "ts": ts,
         }
+        if markdown_text is not None:
+            payload["markdown_text"] = markdown_text
         if chunks:
             payload["chunks"] = chunks
         if blocks is not None:
@@ -500,6 +510,19 @@ class SlackApiClientWrapper:
             "api_call",
             api_method="chat.stopStream",
             json=payload,
+        )
+
+    async def delete_message(
+        self,
+        *,
+        channel: str,
+        ts: str,
+    ) -> dict[str, Any]:
+        return await self._call_api(
+            "chat_delete",
+            "chat_delete",
+            channel=channel,
+            ts=ts,
         )
 
     # ================================================================
