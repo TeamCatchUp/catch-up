@@ -5,16 +5,16 @@ Jira Dynamic Webhook 관리 서비스
 - DB에 webhook ID/만료 시각 상태 저장
 """
 
-import logging
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
+import structlog
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel
-from catchup.audit.metadata import IntegrationAuditMetadata
-from catchup.audit.service import emit_audit_event
+from catchup.audit.actions import IntegrationAction
+from catchup.audit.metadata import RegisterWebhookAuditMetadata
+from catchup.audit.utils import audit_log
 from catchup.configs.config import settings
 from catchup.connectors.atlassian.exceptions import (
     AtlassianTokenNotFoundError,
@@ -30,9 +30,8 @@ from catchup.db.atlassian import oauth_repository as atlassian_oauth
 from catchup.db.engine import SessionLocal
 from catchup.db.jira import webhook_repository as jira_webhook
 from catchup.db.jira import domain_repository as jira_domain
-from catchup.events.enums import EventType, IntegrationEventAction
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 DEFAULT_JIRA_WEBHOOK_EVENTS = [
@@ -270,73 +269,65 @@ class JiraDynamicWebhookService:
     async def register_webhook(
         self,
         cloud_id: str,
+        source: str,
         project_keys: list[str] | None = None,
     ) -> dict:
         """
         Dynamic webhook 등록
         """
-        metadata = IntegrationAuditMetadata(
-            context=f"jira_webhook_register:cloud_id={cloud_id}",
-            provider="jira",
+        return await self._register_webhook(
+            cloud_id=cloud_id,
+            source=source,
+            project_keys=project_keys,
         )
-        emit_audit_event(
-            event_type=EventType.INTEGRATION,
-            event_action=IntegrationEventAction.WEBHOOK_REGISTER,
-            event_status=AuditEventStatus.ATTEMPT,
-            level=AuditLevel.INFO,
-            metadata=metadata,
-            immediate=True,
-        )
+
+    @audit_log(
+        IntegrationAction.REGISTER_WEBHOOK,
+        metadata_factory=RegisterWebhookAuditMetadata.from_audit,
+        emit_attempt=True,
+    )
+    async def _register_webhook(
+        self,
+        *,
+        cloud_id: str,
+        source: str,
+        project_keys: list[str] | None = None,
+    ) -> dict:
+        """
+        Dynamic webhook 등록
+        """
 
         client = await self._create_client(cloud_id)
         callback_url = self._build_callback_url(cloud_id)
         resolved_project_keys = await self._resolve_project_keys(cloud_id, project_keys)
         jql_filter = self._build_jql_filter(resolved_project_keys)
         events = DEFAULT_JIRA_WEBHOOK_EVENTS
-        try:
-            response = await client.register_dynamic_webhook(
-                callback_url=callback_url,
-                jql_filter=jql_filter,
-                events=events,
-            )
-
-            registration_results = response.get("webhookRegistrationResult") or []
-            created_webhook_ids = [
-                int(item["createdWebhookId"])
-                for item in registration_results
-                if item.get("createdWebhookId") is not None
-            ]
-
-            subscriptions = await self.sync_webhook_state(cloud_id)
-        except Exception:
-            emit_audit_event(
-                event_type=EventType.INTEGRATION,
-                event_action=IntegrationEventAction.WEBHOOK_REGISTER,
-                event_status=AuditEventStatus.FAIL,
-                level=AuditLevel.ERROR,
-                metadata=metadata,
-                immediate=True,
-            )
-            raise
-
-        emit_audit_event(
-            event_type=EventType.INTEGRATION,
-            event_action=IntegrationEventAction.WEBHOOK_REGISTER,
-            event_status=AuditEventStatus.SUCCESS,
-            level=AuditLevel.INFO,
-            metadata=metadata,
-            immediate=True,
+        response = await client.register_dynamic_webhook(
+            callback_url=callback_url,
+            jql_filter=jql_filter,
+            events=events,
         )
 
+        registration_results = response.get("webhookRegistrationResult") or []
+        created_webhook_ids = [
+            int(item["createdWebhookId"])
+            for item in registration_results
+            if item.get("createdWebhookId") is not None
+        ]
+
+        subscriptions = await self.sync_webhook_state(cloud_id)
+
         logger.info(
-            f"[JIRA][WEBHOOK][DYNAMIC] Registered webhook: "
-            f"cloud_id={cloud_id}, callback_url={callback_url}, "
-            f"project_keys={resolved_project_keys}, created_ids={created_webhook_ids}"
+            "jira_dynamic_webhook_registered",
+            cloud_id=cloud_id,
+            source=source,
+            created_webhook_count=len(created_webhook_ids),
         )
 
         return {
             "status": "registered",
             "cloud_id": cloud_id,
+            "source": source,
             "callback_url": callback_url,
             "project_keys": resolved_project_keys,
             "created_webhook_ids": created_webhook_ids,
@@ -380,8 +371,9 @@ class JiraDynamicWebhookService:
             await self.sync_webhook_state(cloud_id)
 
         logger.info(
-            f"[JIRA][WEBHOOK][DYNAMIC] Refreshed webhooks: "
-            f"cloud_id={cloud_id}, refreshed_ids={target_ids}, expiration={response.get('expirationDate')}"
+            "jira_dynamic_webhook_refreshed",
+            cloud_id=cloud_id,
+            refreshed_webhook_count=len(target_ids),
         )
 
         return {
@@ -395,6 +387,7 @@ class JiraDynamicWebhookService:
     async def ensure_registered(
         self,
         cloud_id: str,
+        source: str,
         project_keys: list[str] | None = None,
     ) -> dict:
         """
@@ -404,6 +397,7 @@ class JiraDynamicWebhookService:
         if not subscriptions:
             register_result = await self.register_webhook(
                 cloud_id=cloud_id,
+                source=source,
                 project_keys=project_keys,
             )
             return {

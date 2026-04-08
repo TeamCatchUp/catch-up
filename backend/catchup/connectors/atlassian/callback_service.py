@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import base64
 import json
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Sequence
 
+import structlog
 from fastapi.concurrency import run_in_threadpool
 
 from catchup.connectors.atlassian.constants import (
@@ -29,7 +29,7 @@ from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.engine import SessionLocal
 from catchup.utils.redis import validate_oauth_state
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # -------------------------
@@ -37,10 +37,10 @@ logger = logging.getLogger(__name__)
 # -------------------------
 
 class CallbackError(Exception):
-    def __init__(self, code: str, detail: str | None = None):
-        self.code = code
+    def __init__(self, reason: str, detail: str | None = None):
+        self.reason = reason
         self.detail = detail
-        super().__init__(detail or code)
+        super().__init__(detail or reason)
 
 
 class StateInvalid(CallbackError):
@@ -78,8 +78,8 @@ def _decode_jwt_payload(token: str) -> dict | None:
         header, payload, sig = token.split(".")
         padding = "=" * ((4 - len(payload) % 4) % 4)
         return json.loads(base64.urlsafe_b64decode(payload + padding).decode("utf-8"))
-    except Exception as e:  # pragma: no cover
-        logger.warning("[ATLASSIAN][AUTH] Failed to decode JWT payload: %s", e)
+    except Exception:  # pragma: no cover
+        logger.warning("atlassian_token_payload_decode_failed", exc_info=True)
         return None
 
 
@@ -115,23 +115,10 @@ def _check_audience(token_payload: dict | None) -> None:
 
     has_allowed = aud_list and any(aud in allowed_audiences for aud in aud_list)
 
-    if not aud_list:
-        logger.info(
-            "[ATLASSIAN][AUTH] Access token has no aud claim; skipping audience check. scope=%s",
-            (token_payload or {}).get("scope"),
-        )
-    elif has_allowed:
-        logger.info(
-            "[ATLASSIAN][AUTH] token_aud=%s, token_scope=%s",
-            aud_claim,
-            (token_payload or {}).get("scope"),
-        )
-    else:
+    if aud_list and not has_allowed:
         logger.warning(
-            "[ATLASSIAN][AUTH] Unexpected audience in access token (하지만 진행은 계속합니다): aud=%s, expected=%s, scope=%s",
-            aud_claim,
-            sorted(allowed_audiences),
-            (token_payload or {}).get("scope"),
+            "atlassian_token_audience_unexpected",
+            aud=aud_claim,
         )
 
 
