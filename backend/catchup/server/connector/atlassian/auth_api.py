@@ -300,7 +300,10 @@ async def _ensure_jira_dynamic_webhook(cloud_id: str) -> None:
 
     try:
         dynamic_webhook_service = get_jira_dynamic_webhook_service()
-        await dynamic_webhook_service.ensure_registered(cloud_id=cloud_id)
+        await dynamic_webhook_service.ensure_registered(
+            cloud_id=cloud_id,
+            source="initial_install",
+        )
         logger.info("jira_dynamic_webhook_ensure_completed", cloud_id=cloud_id)
     except Exception:
         logger.error(

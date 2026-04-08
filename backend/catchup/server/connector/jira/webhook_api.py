@@ -103,6 +103,7 @@ async def register_dynamic_webhook(
     """
     return await dynamic_webhook_service.register_webhook(
         cloud_id=cloud_id,
+        source="manual",
         project_keys=project_keys,
     )
 

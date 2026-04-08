@@ -46,7 +46,10 @@ async def refresh_jira_dynamic_webhooks():
 
     for cloud_id in cloud_ids:
         try:
-            result = await dynamic_webhook_service.ensure_registered(cloud_id=cloud_id)
+            result = await dynamic_webhook_service.ensure_registered(
+                cloud_id=cloud_id,
+                source="cron_job",
+            )
             logger.info(
                 f"[JIRA][WEBHOOK][DYNAMIC] Processed cloud: cloud_id={cloud_id}, result={result}"
             )
