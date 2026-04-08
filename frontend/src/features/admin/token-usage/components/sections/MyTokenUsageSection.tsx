@@ -13,7 +13,8 @@ import { tokenUsageQueries } from '../../queries/tokenUsage.queries';
 import DailyUsageBarChart from '../charts/DailyUsageBarChart';
 import TotalQuestionBarChart from '../charts/TotalQuestionBarChart';
 import TotalTokenLineChart from '../charts/TotalTokenLineChart';
-import TokenLimitSettings from '../settings/TokenLimitSettings';
+// TODO: TokenLimitSettings role별 분기 구현 후 복원
+// import TokenLimitSettings from '../settings/TokenLimitSettings';
 
 export default function MyTokenUsageSection() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -73,8 +74,16 @@ export default function MyTokenUsageSection() {
         </div>
       </div>
 
-      {/* 설정 */}
-      <TokenLimitSettings />
+      {/* TODO: role별 컴포넌트 분리 예정
+       * MyTokenUsageSection을 공통 차트 영역(TokenUsageCharts)으로 분리하고
+       * 페이지 레벨에서 role별 컴포넌트를 조합하는 구조로 전환:
+       *   AdminTokenUsagePage → <TokenUsageCharts /> + <TokenLimitSettingsAdmin />
+       *   MyTokenUsagePage   → <TokenUsageCharts /> + <TokenLimitSettingsUser />
+       * - admin: 직접 input 편집하여 제한값 설정
+       * - user: admin이 설정한 제한값을 읽기전용으로 표시
+       * - API: admin용 설정 API / user용 조회 API 별도 필요
+       */}
+      {/* <TokenLimitSettings /> */}
     </div>
   );
 }
