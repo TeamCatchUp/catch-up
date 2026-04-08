@@ -1772,6 +1772,51 @@ class ChatHistory(Base):
     )
 
 
+class SlackChatThread(Base):
+    __tablename__ = "slack_chat_threads"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    team_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    channel_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    thread_ts: Mapped[str] = mapped_column(String(32), nullable=False)
+    # Slack Thread <-> RAG Session 매핑 키
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    # 답변 생성 이후 chat_room_id가 배정되므로 Nullable
+    chat_room_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chat_rooms.id"),
+        nullable=True,
+        index=True,
+    )
+    # CatchUp User 
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    # Slack User
+    slack_user_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    # 멘션 태그를 포함하는 본문
+    last_raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    # Slack Thread ts 단위 채팅방 관리 (후속질문 처리)
+    __table_args__ = (
+        UniqueConstraint(
+            "team_id",
+            "channel_id",
+            "thread_ts",
+            name="uq_slack_chat_threads_thread",
+        ),
+    )
+
+
 class TokenPurpose(StrEnum):
     SUMMARIZE = "summarize"
     CHAT = "chat"

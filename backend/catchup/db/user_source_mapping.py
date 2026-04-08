@@ -1,11 +1,20 @@
 from typing import Optional
-from sqlalchemy import delete, select, update
+
+from sqlalchemy import delete
+from sqlalchemy import select
+from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from catchup.db.models import ConfluenceUser, GitHubUser, JiraUser, OAuthUser, PreMappingBuffer, SlackUser, SourceType
+from catchup.db.models import ConfluenceUser
+from catchup.db.models import GitHubUser
+from catchup.db.models import JiraUser
+from catchup.db.models import OAuthUser
+from catchup.db.models import PreMappingBuffer
+from catchup.db.models import SlackUser
+from catchup.db.models import SourceType
+from catchup.db.models import UserSourceMapping
 from catchup.mapping.schemas import OAuthUserSchema
-
 
 #(user_model, target, filter, extra_filter, extra_filter_value)
 SOURCE_MAP = {
@@ -108,6 +117,25 @@ def find_premapped_names_by_source_type(
     ).all()
 
     return {external_user_identifier: name for external_user_identifier, name in rows}
+
+
+def find_user_id_by_source_mapping(
+    db: Session,
+    *,
+    source_type: SourceType,
+    external_user_identifier: str,
+) -> int | None:
+    if not external_user_identifier:
+        return None
+
+    stmt = (
+        select(UserSourceMapping.user_id)
+        .where(
+            UserSourceMapping.source_type == source_type,
+            UserSourceMapping.external_user_identifier == external_user_identifier,
+        )
+    )
+    return db.scalar(stmt)
 
 
 def add_new_mapping(

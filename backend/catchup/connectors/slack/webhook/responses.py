@@ -48,6 +48,13 @@ def accepted_incremental_response(
     )
 
 
+def accepted_async_response(*, event_type: str) -> SlackProcessedWebhookResponse:
+    return SlackProcessedWebhookResponse(
+        status="accepted",
+        event_type=event_type,
+    )
+
+
 def processed_metadata_response(*, event_type: str) -> SlackProcessedWebhookResponse:
     return SlackProcessedWebhookResponse(
         status="processed",
