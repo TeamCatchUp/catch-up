@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
-import { MAX_INSTRUCTION_LENGTH } from '../constants/preferencesConfig';
+const MAX_INSTRUCTION_LENGTH = 1500;
 
 interface InstructionInputProps {
   onSave: (value: string) => void;
