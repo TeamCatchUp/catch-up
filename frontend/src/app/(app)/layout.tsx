@@ -7,6 +7,7 @@ import InboxPanel from '@/shared/components/layout/panels/InboxPanel';
 import QuestionsHistoryPanel from '@/shared/components/layout/panels/QuestionsHistoryPanel';
 import SettingsPanel from '@/shared/components/layout/panels/SettingsPanel';
 import SideNavBar from '@/shared/components/layout/sideNavBar/SideNavBar';
+import FloatingActionButton from '@/shared/components/ui/floating-action-button';
 import Toast from '@/shared/components/ui/toast';
 import { TooltipProvider } from '@/shared/components/ui/tooltip';
 import { useCurrentUser } from '@/shared/hooks/useCurrentUser';
@@ -84,6 +85,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
           <main className="flex-1 overflow-auto">{children}</main>
         </div>
       </div>
+      <FloatingActionButton />
       <Toast />
     </TooltipProvider>
   );
