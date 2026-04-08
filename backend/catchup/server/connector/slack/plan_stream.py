@@ -14,7 +14,6 @@ MAX_HEADER_TEXT = 120
 MAX_SECTION_TEXT = 2900
 MAX_SOURCE_ITEMS = 5
 MARKDOWN_FLUSH_SIZE = 120
-STREAMING_NODES = {"generate_final_answer"}
 
 TASK_ORDER = ("route", "rewrite", "search", "rerank", "grade", "answer")
 
@@ -356,8 +355,12 @@ class SlackPlanResponder:
         return responder
 
     async def on_node(self, node: str) -> None:
-        if node in STREAMING_NODES:
-            await self._switch_to_answer_mode()
+        if node == "generate_final_answer":
+            await self._switch_to_answer_mode(self.state.transition_to_answer())
+            return
+
+        if node == "chitchat":
+            await self._switch_to_answer_mode(self.state.apply_node("chitchat"))
             return
 
         await self._append_plan_chunks(self.state.apply_node(node))
@@ -442,11 +445,11 @@ class SlackPlanResponder:
             blocks=[],
         )
 
-    async def _switch_to_answer_mode(self) -> None:
+    async def _switch_to_answer_mode(self, prelude_chunks: list[dict[str, Any]]) -> None:
         if self.answer_mode:
             return
 
-        await self._append_plan_chunks(self.state.transition_to_answer())
+        await self._append_plan_chunks(prelude_chunks)
         await self._close_and_delete_plan_stream()
         self.answer_mode = True
 

@@ -190,7 +190,7 @@ class SlackAppMentionService:
         ):
             if isinstance(chunk, ChatStreamingStatusResponse):
                 await responder.on_node(chunk.node)
-                if chunk.node == "generate_final_answer":
+                if chunk.node in {"generate_final_answer", "chitchat"}:
                     markdown_enabled = True
                 continue
 
