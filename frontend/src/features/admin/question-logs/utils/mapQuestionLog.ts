@@ -1,5 +1,5 @@
 import type { RecentQueryWithSaveStatusResponse } from '@/shared/types/query/api';
-import { formatFullDate, formatRelativeDate } from '@/shared/utils/formatDate';
+import { formatFullDate, formatRelativeTime } from '@/shared/utils/formatDate';
 
 import type { QuestionLogItem } from '../types/questionLogModel';
 
@@ -12,7 +12,7 @@ export const toQuestionLogItem = (item: RecentQueryWithSaveStatusResponse): Ques
   createdAt: item.created_at,
   rawDate: new Date(item.created_at),
   fullDate: formatFullDate(item.created_at),
-  relativeDate: formatRelativeDate(item.created_at),
+  relativeDate: formatRelativeTime(item.created_at),
   isSaved: item.is_answer_saved,
   answerId: item.answer_id ?? null,
 });

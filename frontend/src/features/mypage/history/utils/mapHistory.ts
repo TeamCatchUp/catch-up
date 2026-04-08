@@ -1,7 +1,7 @@
 import type { RecentQueryWithSaveStatusResponse } from '@/shared/types/query/api';
 import type { DatePeriod } from '@/shared/utils/dateGrouping';
 import { getDateGroup, isInPeriod as isInPeriodShared } from '@/shared/utils/dateGrouping';
-import { formatFullDate, formatRelativeDate } from '@/shared/utils/formatDate';
+import { formatFullDate, formatRelativeTime } from '@/shared/utils/formatDate';
 
 import type { HistoryItem } from '../types/historyModel';
 
@@ -21,7 +21,7 @@ export const toHistoryItem = (item: RecentQueryWithSaveStatusResponse): HistoryI
     createdAt: item.created_at,
     rawDate,
     fullDate: formatFullDate(item.created_at),
-    relativeDate: formatRelativeDate(item.created_at),
+    relativeDate: formatRelativeTime(item.created_at),
     isSaved: item.is_answer_saved,
     answerId: item.answer_id ?? null,
   };

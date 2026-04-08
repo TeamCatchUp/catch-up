@@ -24,24 +24,7 @@ export const formatFullDate = (isoString: string): string => {
   return `${y}.${m}.${day}`;
 };
 
-/** ISO 날짜 문자열을 상대적 날짜로 변환 (n일 전) */
-export const formatRelativeDate = (isoString: string): string => {
-  const targetDate = new Date(isoString);
-  const today = new Date();
-
-  // 시간 제거 (날짜만 비교)
-  targetDate.setHours(0, 0, 0, 0);
-  today.setHours(0, 0, 0, 0);
-
-  const diffTime = today.getTime() - targetDate.getTime();
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return '오늘';
-  if (diffDays === 1) return '어제';
-  return `${diffDays}일 전`;
-};
-
-/** ISO 날짜 문자열을 상세 상대 시간으로 변환 (N분 전, N시간 전, N일 전) */
+/** ISO 날짜 문자열을 상대 시간으로 변환 (방금 전, N분 전, N시간 전, 어제, N일 전) */
 export const formatRelativeTime = (isoString: string): string => {
   const now = new Date();
   const target = new Date(isoString);

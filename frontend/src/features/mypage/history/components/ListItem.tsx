@@ -20,9 +20,8 @@ interface HistoryListItemProps {
  * 클릭 시 해당 채팅 세션으로 이동한다.
  */
 export default function HistoryListItem({ item, group }: HistoryListItemProps) {
-  const showDate = group !== 'today';
   const showSavedLabel = item.isSaved;
-  const dateText = group === 'sevenDays' ? item.relativeDate : item.fullDate;
+  const dateText = group === 'older' ? item.fullDate : item.relativeDate;
 
   return (
     <Link
@@ -33,12 +32,10 @@ export default function HistoryListItem({ item, group }: HistoryListItemProps) {
         <ChatIcon className="text-content-alternative size-5" />
       </div>
       <div className="text-body-small text-content-normal min-w-0 flex-1 truncate text-left">{item.query}</div>
-      {(showSavedLabel || showDate) && (
-        <div className="text-body-xsmall text-content-assistive flex shrink-0 items-center gap-2 whitespace-nowrap">
-          {showSavedLabel && <span>저장한 답변</span>}
-          {showDate && <span>{dateText}</span>}
-        </div>
-      )}
+      <div className="text-body-xsmall text-content-assistive flex shrink-0 items-center gap-2 whitespace-nowrap">
+        {showSavedLabel && <span>저장한 답변</span>}
+        <span>{dateText}</span>
+      </div>
     </Link>
   );
 }
