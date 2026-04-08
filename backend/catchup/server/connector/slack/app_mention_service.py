@@ -10,6 +10,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from catchup.chat.factory import get_chat_service
 from catchup.chat.schemas import ChatStreamingSourceResponse
+from catchup.chat.schemas import ChatStreamingStatusResponse
 from catchup.chat.schemas import ChatStreamingTokenResponse
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.db.chat_room import get_chat_room
@@ -23,14 +24,12 @@ from catchup.rag.schemas.context import GlobalCompanyContext
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.context import GlobalUserContext
 from catchup.rag.schemas.context import GlobalWorkspaceContext
+from catchup.server.connector.slack.plan_stream import SlackPlanResponder
 from catchup.sync.ingress.types import SlackWebhookRequest
 
 logger = structlog.get_logger(__name__)
 
 MENTION_PATTERN = re.compile(r"<@[^>]+>")
-
-MAX_SLACK_REPLY_TEXT = 3500
-MAX_SOURCE_LINES = 5
 
 EMPTY_QUERY_MESSAGE = "질문 내용을 함께 보내주세요."
 UNMAPPED_USER_MESSAGE = (
@@ -40,10 +39,11 @@ UNMAPPED_USER_MESSAGE = (
 THREAD_OWNER_MISMATCH_MESSAGE = (
     "이 스레드는 다른 사용자 세션에 연결되어 있어 현재는 이어서 질문할 수 없습니다."
 )
-# TODO : 이건 모얌
+# Global Context Load Failed
 MISSING_CONTEXT_MESSAGE = "CatchUp 사용자 컨텍스트를 찾지 못해 요청을 처리할 수 없습니다."
 # TODO : Internal Server Error
 EMPTY_ANSWER_MESSAGE = "답변을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요."
+STREAM_FAILED_MESSAGE = "답변 생성 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."
 
 
 @dataclass(slots=True, frozen=True)
@@ -139,15 +139,28 @@ class SlackAppMentionService:
             user_id,
         )
 
-        # Slack Thread에 대응되는 Session Id으로 Chat Stream 파이프라인 실행
-        reply_text = await self._run_chat_stream(
-            global_context=global_context,
-            session_id=session_id,
+        responder = await SlackPlanResponder.start(
+            client=client,
+            channel_id=mention.channel_id,
+            thread_ts=mention.thread_ts,
+            team_id=mention.team_id,
+            user_id=mention.slack_user_id,
             query=mention.query,
         )
 
-        # 최종 답변을 Slack Thread에 전송
-        await self._post_thread_reply(client, mention, reply_text)
+        try:
+            # Slack Thread에 대응되는 Session Id으로 Chat Stream 파이프라인 실행
+            reply_text, sources = await self._run_chat_stream(
+                global_context=global_context,
+                session_id=session_id,
+                query=mention.query,
+                responder=responder,
+            )
+            await responder.finish(answer=reply_text, sources=sources)
+        except Exception:
+            await responder.fail(STREAM_FAILED_MESSAGE)
+            raise
+
         # 최종 답변 생성 이후 ChatRoom ID Attach
         await run_in_threadpool(
             self._attach_chat_room_if_ready_sync,
@@ -162,10 +175,12 @@ class SlackAppMentionService:
         global_context: GlobalContext,
         session_id: uuid.UUID,
         query: str,
-    ) -> str:
+        responder: SlackPlanResponder,
+    ) -> tuple[str, list[Any]]:
         answer_parts: list[str] = []
         sources: list[Any] = []
         chat_service = get_chat_service()
+        markdown_enabled = False
 
         async for chunk in chat_service.chat_stream(
             global_context=global_context,
@@ -173,15 +188,23 @@ class SlackAppMentionService:
             query=query,
             tool_filters=[],
         ):
+            if isinstance(chunk, ChatStreamingStatusResponse):
+                await responder.on_node(chunk.node)
+                markdown_enabled = chunk.node == "generate_final_answer"
+                continue
+
             if isinstance(chunk, ChatStreamingTokenResponse):
                 answer_parts.append(chunk.token)
+                if markdown_enabled:
+                    await responder.append_markdown(chunk.token)
                 continue
 
             if isinstance(chunk, ChatStreamingSourceResponse) and chunk.sources:
                 sources = chunk.sources
+                await responder.on_sources(sources)
 
         answer = "".join(answer_parts).strip() or EMPTY_ANSWER_MESSAGE
-        return build_slack_reply_text(answer=answer, sources=sources)
+        return answer, sources
 
     async def _post_thread_reply(
         self,
@@ -338,49 +361,3 @@ def extract_app_mention_query(text: str) -> str:
     without_mentions = MENTION_PATTERN.sub(" ", text or "")
     normalized = " ".join(without_mentions.split())
     return normalized.strip()
-
-
-def build_slack_reply_text(
-    *,
-    answer: str,
-    sources: list[Any],
-) -> str:
-    trimmed_answer = _trim_slack_reply(answer.strip())
-    source_lines = _build_source_lines(sources)
-
-    if not source_lines:
-        return trimmed_answer
-
-    return f"{trimmed_answer}\n\nSources:\n" + "\n".join(source_lines)
-
-
-def _build_source_lines(sources: list[Any]) -> list[str]:
-    lines: list[str] = []
-
-    for source in sources[:MAX_SOURCE_LINES]:
-        title = _read_source_field(source, "title") or "Source"
-        url = _read_source_field(source, "url")
-        if url:
-            lines.append(f"- <{url}|{title}>")
-            continue
-        lines.append(f"- {title}")
-
-    return lines
-
-
-def _read_source_field(source: Any, field: str) -> str | None:
-    if hasattr(source, field):
-        value = getattr(source, field)
-        return str(value) if value else None
-
-    if isinstance(source, dict):
-        value = source.get(field)
-        return str(value) if value else None
-
-    return None
-
-
-def _trim_slack_reply(text: str) -> str:
-    if len(text) <= MAX_SLACK_REPLY_TEXT:
-        return text
-    return text[: MAX_SLACK_REPLY_TEXT - 3].rstrip() + "..."

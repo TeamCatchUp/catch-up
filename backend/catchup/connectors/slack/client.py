@@ -419,6 +419,7 @@ class SlackApiClientWrapper:
         channel: str,
         text: str,
         thread_ts: str | None = None,
+        blocks: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         return await self._call_api(
             "chat_postMessage",
@@ -426,6 +427,79 @@ class SlackApiClientWrapper:
             channel=channel,
             text=text,
             thread_ts=thread_ts,
+            blocks=blocks,
+        )
+
+    async def start_stream(
+        self,
+        *,
+        channel: str,
+        thread_ts: str,
+        recipient_user_id: str,
+        recipient_team_id: str,
+        task_display_mode: str,
+        chunks: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return await self._call_api(
+            "chat_startStream",
+            "api_call",
+            api_method="chat.startStream",
+            json={
+                "channel": channel,
+                "thread_ts": thread_ts,
+                "recipient_user_id": recipient_user_id,
+                "recipient_team_id": recipient_team_id,
+                "task_display_mode": task_display_mode,
+                "chunks": chunks,
+            },
+        )
+
+    async def append_stream(
+        self,
+        *,
+        channel: str,
+        ts: str,
+        markdown_text: str | None = None,
+        chunks: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "channel": channel,
+            "ts": ts,
+        }
+        if chunks is not None:
+            payload["chunks"] = chunks
+        if markdown_text is not None:
+            payload["markdown_text"] = markdown_text
+
+        return await self._call_api(
+            "chat_appendStream",
+            "api_call",
+            api_method="chat.appendStream",
+            json=payload,
+        )
+
+    async def stop_stream(
+        self,
+        *,
+        channel: str,
+        ts: str,
+        chunks: list[dict[str, Any]] | None = None,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "channel": channel,
+            "ts": ts,
+        }
+        if chunks:
+            payload["chunks"] = chunks
+        if blocks is not None:
+            payload["blocks"] = blocks
+
+        return await self._call_api(
+            "chat_stopStream",
+            "api_call",
+            api_method="chat.stopStream",
+            json=payload,
         )
 
     # ================================================================
