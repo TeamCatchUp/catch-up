@@ -7,6 +7,7 @@ import AI from '@/public/icons/icon/ai.svg';
 import Home from '@/public/icons/icon/home.svg';
 import Kebab2 from '@/public/icons/icon/kebeb 2.svg';
 import MyPage from '@/public/icons/icon/person.svg';
+import { Button } from '@/shared/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 
 import { MoreButtonContent } from './MoreButtonModal';
@@ -69,9 +70,9 @@ export default function TopNavbar({ pageType }: TopNavbarProps) {
           <li>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed data-[state=open]:border-edge-normal data-[state=open]:bg-fill-interaction-hover bg-fill-normal cursor-pointer rounded-lg border px-1.5 py-1.5 transition-colors">
+                <Button variant="icon-only-gray" size="md">
                   <Kebab2 className="text-icon-normal h-6 w-6" />
-                </button>
+                </Button>
               </DropdownMenuTrigger>
               <MoreButtonContent />
             </DropdownMenu>
