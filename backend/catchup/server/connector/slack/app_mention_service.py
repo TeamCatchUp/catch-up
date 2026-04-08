@@ -190,13 +190,14 @@ class SlackAppMentionService:
         ):
             if isinstance(chunk, ChatStreamingStatusResponse):
                 await responder.on_node(chunk.node)
-                markdown_enabled = chunk.node == "generate_final_answer"
+                if chunk.node == "generate_final_answer":
+                    markdown_enabled = True
                 continue
 
             if isinstance(chunk, ChatStreamingTokenResponse):
                 answer_parts.append(chunk.token)
                 if markdown_enabled:
-                    await responder.append_markdown(chunk.token)
+                    await responder.append_answer_markdown(chunk.token)
                 continue
 
             if isinstance(chunk, ChatStreamingSourceResponse) and chunk.sources:
