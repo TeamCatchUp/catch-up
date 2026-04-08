@@ -10,6 +10,7 @@ import CatchupLogoLetter from '@/public/icons/logo/logo_catchup_letter.svg';
 import SideNavMenu from '@/shared/components/layout/sideNavBar/SideNavMenu';
 import SideNavQuestions from '@/shared/components/layout/sideNavBar/SideNavQuestions';
 import SideNavUser from '@/shared/components/layout/sideNavBar/SideNavUser';
+import IconButton from '@/shared/components/ui/icon-button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
@@ -32,13 +33,13 @@ export default function SideNavBar() {
     <>
       <nav
         className={cn(
-          'border-edge-neutral bg-fill-normal flex h-screen flex-col gap-5 border-r',
+          'border-edge-neutral bg-fill-normal flex h-screen flex-col border-r',
           'transition-[width,padding] duration-300 ease-out will-change-[width,padding]',
-          isOpen ? 'w-60.25 px-2 py-2.5' : 'w-18 items-center px-3 pt-2.5 pb-5',
+          isOpen ? 'w-60.25 px-2 pb-2.5' : 'w-18 gap-4 items-center px-3 pt-2.5 pb-5',
         )}
       >
         {/* 로고/열림 버튼 */}
-        <div className={cn('flex', isOpen ? 'items-center justify-between' : '')}>
+        <div className={cn('flex', isOpen ? 'mb-1.5 items-center justify-between py-2.5' : '')}>
           <div
             onClick={() => router.push('/')}
             className={cn('flex cursor-pointer items-center gap-2.5', isOpen ? 'px-1' : '')}
@@ -52,7 +53,7 @@ export default function SideNavBar() {
                       ? ''
                       : isSettingsRoute
                         ? 'rounded-xl hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed'
-                        : 'border-edge-neutral rounded-xl border-[0.5px]',
+                        : 'border-edge-neutral rounded-xl border',
                   )}
                   onClick={
                     !isOpen && isSettingsRoute
@@ -73,7 +74,7 @@ export default function SideNavBar() {
                         e.stopPropagation();
                         setSidebarOpen(true);
                       }}
-                      className="bg-fill-interaction-hover active:bg-fill-interaction-pressed border-edge-strong absolute inset-0 cursor-pointer rounded-xl border-[0.5px] p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
+                      className="bg-fill-interaction-hover active:bg-fill-interaction-pressed border-edge-strong absolute inset-0 cursor-pointer rounded-xl border p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
                     >
                       <Open className="h-6 w-6" />
                     </button>
@@ -102,21 +103,29 @@ export default function SideNavBar() {
           {isOpen && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="icon-button-only-gray flex cursor-pointer items-center justify-center rounded-full! p-0.5"
-                >
+                <IconButton onClick={() => setSidebarOpen(false)}>
                   <Close className="text-icon-neutral h-6 w-6" />
-                </button>
+                </IconButton>
               </TooltipTrigger>
               <TooltipContent>사이드바 닫기</TooltipContent>
             </Tooltip>
           )}
         </div>
 
-        <SideNavMenu isOpen={isOpen} />
-        {isOpen && <SideNavQuestions />}
-        <SideNavUser isOpen={isOpen} />
+        {isOpen ? (
+          <>
+            <div className="flex min-h-0 flex-1 flex-col gap-5">
+              <SideNavMenu isOpen={isOpen} />
+              <SideNavQuestions />
+            </div>
+            <SideNavUser isOpen={isOpen} />
+          </>
+        ) : (
+          <>
+            <SideNavMenu isOpen={isOpen} />
+            <SideNavUser isOpen={isOpen} />
+          </>
+        )}
       </nav>
     </>
   );
