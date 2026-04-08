@@ -46,7 +46,8 @@ const buttonVariants = cva(
           'hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed disabled:text-content-assistive text-icon-normal rounded-full',
 
         /* ── FAB ── */
-        'fab-primary': 'bg-neutral-80 shadow-button rounded-full text-white',
+        'fab-primary':
+          'bg-accent-black-lighten hover:bg-accent-black active:bg-accent-black shadow-button rounded-full text-icon-inverse',
         'fab-secondary':
           'hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed text-icon-normal shadow-button border-edge-neutral bg-fill-normal rounded-full border',
       },

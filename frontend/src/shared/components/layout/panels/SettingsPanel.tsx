@@ -6,7 +6,7 @@ import ArticlePerson from '@/public/icons/icon/article_person.svg';
 import Clock from '@/public/icons/icon/clock.svg';
 import CloudCheck from '@/public/icons/icon/cloud_check.svg';
 import Database from '@/public/icons/icon/database.svg';
-import Explore from '@/public/icons/icon/explore.svg';
+import Filter2 from '@/public/icons/icon/filter-2.svg';
 import Group from '@/public/icons/icon/group.svg';
 import Help from '@/public/icons/icon/help.svg';
 import Lock from '@/public/icons/icon/lock.svg';
@@ -37,9 +37,9 @@ const SETTINGS_SECTIONS_BY_ROLE: Record<UserRole, SettingsSection[]> = {
       label: '내 설정',
       items: [
         { name: '계정', href: '/mypage/profile', Icon: Person },
-        { name: '협업툴 연동', href: '/mypage/integrations', Icon: CloudCheck },
-        { name: '개인 맞춤 설정', href: '/mypage/preferences', Icon: Explore },
+        { name: '개인 맞춤 설정', href: '/mypage/preferences', Icon: Filter2 },
         { name: '질문 히스토리', href: '/mypage/history', Icon: Clock },
+        { name: '토큰 사용량', href: '/mypage/token-usage', Icon: Database },
         { name: '도움말', href: '/mypage/help', Icon: Help },
       ],
     },
@@ -49,8 +49,8 @@ const SETTINGS_SECTIONS_BY_ROLE: Record<UserRole, SettingsSection[]> = {
       label: '내 설정',
       items: [
         { name: '계정', href: '/mypage/profile', Icon: Person },
-        { name: '협업툴 연동', href: '/mypage/integrations', Icon: CloudCheck },
-        { name: '개인 맞춤 설정', href: '/mypage/preferences', Icon: Explore },
+        { name: '협업툴 연동', href: '/admin/integrations', Icon: CloudCheck },
+        { name: '개인 맞춤 설정', href: '/mypage/preferences', Icon: Filter2 },
         { name: '질문 히스토리', href: '/mypage/history', Icon: Clock },
       ],
     },
@@ -93,10 +93,10 @@ export default function SettingsPanel() {
     <div className="border-edge-neutral bg-fill-normal flex h-screen w-60 shrink-0 flex-col gap-5 border-r px-2 py-5">
       {SETTINGS_SECTIONS_BY_ROLE[role].map((section) => (
         <div key={section.label} className="flex flex-col gap-1.5">
-          <div className="px-1">
+          <div className="px-2.5">
             <span className="text-body-xsmall text-content-alternative font-medium">{section.label}</span>
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-0">
             {section.items.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
 
@@ -107,8 +107,8 @@ export default function SettingsPanel() {
                   className={cn(
                     'flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 transition-colors',
                     isActive
-                      ? 'border-edge-assistive bg-fill-primary-assistive text-content-primary border'
-                      : 'text-content-normal hover:bg-fill-interaction-hover bg-fill-normal border border-transparent',
+                      ? 'bg-fill-primary-normal-neutral text-content-primary'
+                      : 'text-content-normal hover:bg-fill-interaction-hover',
                   )}
                 >
                   <item.Icon className={cn('h-6 w-6 shrink-0', isActive ? 'text-icon-primary' : 'text-icon-normal')} />

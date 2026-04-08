@@ -6,9 +6,6 @@ import { useMemo } from 'react';
 import Image from 'next/image';
 
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
-import IconError from '@/public/icons/icon/error.svg';
-import IconKebab from '@/public/icons/icon/kebab.svg';
-import { Button } from '@/shared/components/ui/button';
 import FilterDropdown, { type FilterOption } from '@/shared/components/ui/filter-dropdown';
 
 import type { OrgMember } from '../../types/tokenUsageModel';
@@ -53,10 +50,6 @@ export default function MemberProfileCard({ members, selectedMemberId, onSelectM
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2.5">
                 <span className="text-heading-large text-content-normal">{selectedMember.name}</span>
-                <div className="rounded-md2 bg-accent-pink-lighten flex items-center gap-1 px-1.5 py-0.5">
-                  <IconError className="text-accent-pink size-4" />
-                  <span className="text-body-xsmall text-accent-pink">이용 중지</span>
-                </div>
               </div>
               <span className="text-body-small text-content-alternative">
                 {selectedMember.team} · {selectedMember.position}
@@ -64,15 +57,6 @@ export default function MemberProfileCard({ members, selectedMemberId, onSelectM
             </div>
           </div>
 
-          {/* 액션 버튼 */}
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Button variant="capsule-outline-blue" size="sm">
-              이용 중지 해제
-            </Button>
-            <Button variant="icon-only-gray" size="lg" aria-label="더 보기">
-              <IconKebab className="size-6" />
-            </Button>
-          </div>
         </div>
       )}
     </div>

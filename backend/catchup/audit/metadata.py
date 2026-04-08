@@ -7,6 +7,8 @@ from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import model_validator
 
+from catchup.audit.actions import IntegrationAction
+from catchup.audit.base import AuditStatus
 from catchup.audit.base import BaseAuditMetadata
 from catchup.configs.config import settings
 from catchup.db.models import SourceType
@@ -56,6 +58,123 @@ class UserAuditMetadata(BaseAuditMetadata):
 
 class IntegrationAuditMetadata(BaseAuditMetadata):
     provider: str | None = None
+    integration_id: str | None = None
+    integration_name: str | None = None
+    resource_count: int | None = None
+    jira_target_count: int | None = None
+    confluence_target_count: int | None = None
+    event_name: str | None = None
+    installation_action: str | None = None
+    result_status: str | None = None
+
+    @classmethod
+    def from_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+    ) -> "IntegrationAuditMetadata":
+        if data.action == IntegrationAction.HANDLE_INSTALLATION:
+            return cls._from_installation_audit(data)
+
+        return cls._from_oauth_callback_audit(data)
+
+    @classmethod
+    def _from_oauth_callback_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+    ) -> "IntegrationAuditMetadata":
+        provider = data.arguments["provider"]
+        context = None
+        result = data.result
+
+        if data.status == AuditStatus.FAILURE:
+            context = (
+                getattr(data.exception, "reason", None)
+                or getattr(data.exception, "code", None)
+                or "internal_error"
+            )
+
+        return cls(
+            context=context,
+            provider=provider,
+            integration_id=getattr(result, "team_id", None),
+            integration_name=getattr(result, "team_name", None),
+            resource_count=len(getattr(result, "resources", [])) if getattr(result, "resources", None) is not None else None,
+            jira_target_count=len(getattr(result, "jira_targets", [])) if getattr(result, "jira_targets", None) is not None else None,
+            confluence_target_count=len(getattr(result, "confluence_targets", [])) if getattr(result, "confluence_targets", None) is not None else None,
+        )
+
+    @classmethod
+    def _from_installation_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+    ) -> "IntegrationAuditMetadata":
+        payload = data.arguments["data"]
+        result = data.result
+        provider = data.arguments.get("provider", "github")
+        context = None
+
+        if data.status == AuditStatus.FAILURE:
+            context = (
+                getattr(data.exception, "reason", None)
+                or getattr(data.exception, "code", None)
+                or "internal_error"
+            )
+
+        return cls(
+            context=context,
+            provider=provider,
+            integration_id=str(payload.installation.id),
+            integration_name=payload.installation.account.login,
+            event_name="installation",
+            installation_action=payload.action,
+            result_status=getattr(result, "status", None),
+        )
+
+
+class RegisterWebhookAuditMetadata(BaseAuditMetadata):
+    provider: str | None = None
+    integration_id: str | None = None
+    webhook_source: str | None = None
+    result_status: str | None = None
+    project_key_count: int | None = None
+    created_webhook_count: int | None = None
+    stored_webhook_count: int | None = None
+
+    @classmethod
+    def from_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+    ) -> "RegisterWebhookAuditMetadata":
+        result = data.result if isinstance(data.result, dict) else {}
+        context = None
+        argument_project_keys = data.arguments.get("project_keys")
+
+        if data.status == AuditStatus.FAILURE:
+            context = (
+                getattr(data.exception, "reason", None)
+                or getattr(data.exception, "code", None)
+                or "internal_error"
+            )
+
+        project_keys = result.get("project_keys")
+        created_webhook_ids = result.get("created_webhook_ids")
+
+        return cls(
+            context=context,
+            provider="jira",
+            integration_id=data.arguments["cloud_id"],
+            webhook_source=data.arguments["source"],
+            result_status=result.get("status"),
+            project_key_count=(
+                len(project_keys)
+                if project_keys is not None
+                else len(argument_project_keys)
+                if argument_project_keys is not None
+                else None
+            ),
+            created_webhook_count=len(created_webhook_ids) if created_webhook_ids is not None else None,
+            stored_webhook_count=result.get("stored_webhook_count"),
+        )
 
 
 class FullSyncTriggerMetadata(BaseAuditMetadata):

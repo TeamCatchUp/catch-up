@@ -35,6 +35,7 @@ from catchup.rag.checkpoint import close_langgraph_checkpointer
 from catchup.rag.checkpoint import init_langgraph_checkpointer
 from catchup.rag.semaphores import rag_semaphores
 from catchup.server.admin.api import router as admin_router
+from catchup.server.audit.api import router as audit_router
 from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
 from catchup.server.chat_room.api import router as chatroom_router
@@ -401,8 +402,9 @@ app = FastAPI(
     lifespan=lifespan,
     redirect_slashes=False,
     version=settings.APP_VERSION,
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/docs" if settings.API_DOCS_ENABLED else None,
+    redoc_url="/api/redoc" if settings.API_DOCS_ENABLED else None,
+    openapi_url="/api/openapi.json" if settings.API_DOCS_ENABLED else None,
 )
 
 register_exception_handlers(app)
@@ -423,6 +425,7 @@ app.include_router(onboarding_router)
 app.include_router(settings_router)
 app.include_router(sync_runtime_router)
 app.include_router(stats_router)
+app.include_router(audit_router)
 
 
 app.add_middleware(

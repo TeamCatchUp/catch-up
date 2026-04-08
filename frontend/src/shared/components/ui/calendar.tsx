@@ -21,7 +21,7 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         button_next:
           'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-neutral hover:bg-fill-interaction-hover',
         weekdays: 'flex',
-        weekday: 'flex h-6 flex-1 items-center justify-center text-label-xsmall text-content-alternative',
+        weekday: 'flex h-6 flex-1 items-center justify-center text-label-xsmall text-content-neutral',
         week: 'flex',
         day: 'relative flex h-6 flex-1 items-center justify-center text-label-xsmall text-content-neutral',
         day_button:
@@ -33,7 +33,7 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         range_end:
           "rdp-range_end [&>button]:bg-fill-primary [&>button]:text-white [&>button]:hover:bg-fill-primary-interaction-hover before:absolute before:inset-y-0 before:left-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
         range_middle: 'bg-fill-interaction-pressed',
-        outside: 'text-content-assistive',
+        outside: '!text-content-assistive',
         disabled: 'text-content-assistive opacity-50',
         hidden: 'invisible',
         ...classNames,
@@ -42,6 +42,7 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         Chevron: ({ orientation }) =>
           orientation === 'left' ? <IconArrowLeft className="size-5" /> : <IconArrowRight className="size-5" />,
       }}
+      fixedWeeks
       {...props}
     />
   );

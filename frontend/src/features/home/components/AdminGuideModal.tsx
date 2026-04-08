@@ -36,7 +36,7 @@ export default function AdminGuideModal({ onDismiss }: AdminGuideModalProps) {
 
   const handleNavigateIntegration = () => {
     onDismiss();
-    router.push('/mypage/integrations');
+    router.push('/admin/integrations');
   };
 
   const changeStep = (next: number) => {

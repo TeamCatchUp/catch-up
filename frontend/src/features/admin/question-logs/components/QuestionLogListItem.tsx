@@ -13,9 +13,8 @@ interface QuestionLogListItemProps {
 
 /** 질문 로그 리스트 행 */
 export default function QuestionLogListItem({ item, group, userId }: QuestionLogListItemProps) {
-  const showDate = group !== 'today';
   const showSavedLabel = item.isSaved;
-  const dateText = group === 'sevenDays' ? item.relativeDate : item.fullDate;
+  const dateText = group === 'older' ? item.fullDate : item.relativeDate;
 
   return (
     <Link
@@ -26,12 +25,10 @@ export default function QuestionLogListItem({ item, group, userId }: QuestionLog
         <ChatIcon className="text-content-alternative size-5" />
       </div>
       <div className="text-body-small text-content-normal min-w-0 flex-1 truncate text-left">{item.query}</div>
-      {(showSavedLabel || showDate) && (
-        <div className="text-body-xsmall text-content-assistive flex shrink-0 items-center gap-2 whitespace-nowrap">
-          {showSavedLabel && <span>저장한 답변</span>}
-          {showDate && <span>{dateText}</span>}
-        </div>
-      )}
+      <div className="text-body-xsmall text-content-assistive flex shrink-0 items-center gap-2 whitespace-nowrap">
+        {showSavedLabel && <span>저장한 답변</span>}
+        <span>{dateText}</span>
+      </div>
     </Link>
   );
 }

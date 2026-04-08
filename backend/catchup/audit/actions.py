@@ -85,8 +85,6 @@ class IncrementalSyncAction(BaseAuditAction):
 class IntegrationAction(BaseAuditAction):
     HANDLE_OAUTH_CALLBACK = "handle_oauth_callback"
     HANDLE_INSTALLATION = "handle_installation"
-    PERSIST_OAUTH_TOKEN = "persist_oauth_token"
-    REFRESH_OAUTH_TOKEN = "refresh_oauth_token"
     REGISTER_WEBHOOK = "register_webhook"
 
 # ======================= USER AUDIT =======================

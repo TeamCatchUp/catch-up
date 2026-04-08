@@ -33,7 +33,7 @@ export default function FilterDropdown<T extends string>({ options, value, onCha
           type="button"
           className="border-edge-neutral hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed bg-fill-normal flex h-9 max-w-37.5 min-w-9 cursor-pointer items-center gap-1 rounded-lg border px-2.5 py-2"
         >
-          <span className="text-body-small text-content-neutral whitespace-nowrap">{selectedLabel}</span>
+          <span className="text-body-small text-content-neutral truncate whitespace-nowrap">{selectedLabel}</span>
           {open ? (
             <DropdownUp className="text-icon-neutral size-4.5 shrink-0" />
           ) : (
@@ -41,7 +41,7 @@ export default function FilterDropdown<T extends string>({ options, value, onCha
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={4} className="w-35 min-w-0">
+      <DropdownMenuContent align="start" sideOffset={4} className="max-w-37.5 min-w-0">
         {options.map((option) => (
           <DropdownMenuItem
             key={option.value}

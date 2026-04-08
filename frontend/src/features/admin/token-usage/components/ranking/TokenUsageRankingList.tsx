@@ -2,10 +2,7 @@
 
 /** 조직 토큰 사용량 > 토큰 사용량 순위 리스트 (스크롤 가능) */
 
-import Image from 'next/image';
-
 import DefaultProfile from '@/public/icons/icon/default_profile.svg';
-import { Badge } from '@/shared/components/ui/badge';
 
 import type { TokenUsageRankingEntry } from '../../types/tokenUsageModel';
 
@@ -15,47 +12,47 @@ interface TokenUsageRankingListProps {
 
 export default function TokenUsageRankingList({ data }: TokenUsageRankingListProps) {
   return (
-    <div className="border-edge-neutral bg-fill-normal flex h-full flex-col overflow-hidden rounded-xl border">
+    <div className="flex h-full flex-col gap-1">
       {/* 헤더 */}
-      <div className="bg-fill-strong rounded-md px-5 py-1.5">
+      <div className="bg-fill-strong shrink-0 rounded-md px-5 py-1.5">
         <span className="text-heading-small text-content-neutral">토큰 사용량 순위</span>
       </div>
 
       {/* 스크롤 리스트 */}
-      <div className="flex-1 overflow-y-auto">
-        {data.map((entry, index) => (
+      <div className="thin-scrollbar flex-1 overflow-y-auto">
+        {data.map((entry) => (
           <div
-            key={entry.member.id}
-            className={`flex items-center gap-3 px-5 py-3 ${index < data.length - 1 ? 'border-edge-neutral border-b' : ''}`}
+            key={entry.user_id}
+            className="border-edge-neutral flex h-12.5 items-center justify-between border-b px-5 py-3"
           >
-            {/* 순위 */}
-            <span className="text-body-small text-content-alternative w-5 shrink-0 text-center">{entry.rank}</span>
+            {/* 좌측: 순위 + 프로필 + 이름 + 팀 */}
+            <div className="flex items-center gap-4">
+              {/* 순위 */}
+              <span className="text-body-small text-content-alternative w-5 shrink-0 truncate text-center">
+                {entry.rank}
+              </span>
 
-            {/* 프로필 이미지 */}
-            {entry.member.profileImage ? (
-              <Image
-                src={entry.member.profileImage}
-                alt={entry.member.name}
-                width={30}
-                height={30}
-                className="size-7.5 shrink-0 rounded-full object-cover"
-              />
-            ) : (
-              <DefaultProfile className="text-content-assistive size-7.5 shrink-0 rounded-full" />
-            )}
+              {/* 프로필 + 이름 */}
+              <div className="flex items-center gap-3">
+                <DefaultProfile className="border-fill-strong text-content-assistive size-7.5 shrink-0 rounded-full border" />
+                <span className="text-body-small text-content-normal w-15.5 shrink-0 truncate">
+                  {entry.user_name}
+                </span>
+              </div>
 
-            {/* 이름 */}
-            <span className="text-body-small text-content-normal w-15.5 shrink-0 truncate">{entry.member.name}</span>
+              {/* 팀 태그 */}
+              <div className="flex w-21.5 shrink-0 items-center justify-center">
+                <span className="bg-accent-green-neutral text-accent-green rounded-md2 truncate px-1.5 py-0.5 text-body-xsmall">
+                  {entry.department}
+                </span>
+              </div>
+            </div>
 
-            {/* 팀 태그 */}
-            <Badge variant="success" size="sm" className="rounded-md2 shrink-0 px-1.5 py-0.5">
-              {entry.member.team}
-            </Badge>
-
-            {/* 비용 (우측 정렬) */}
-            <span className="text-body-small text-content-normal ml-auto shrink-0 text-right">
-              {entry.cost.toFixed(1)} $
-            </span>
+            {/* 우측: 비용 */}
+            <div className="text-body-small text-content-normal flex min-w-0 flex-1 items-center justify-end gap-0.5">
+              <span className="max-w-20 truncate text-right">{entry.total_usd.toFixed(1)}</span>
+              <span>$</span>
+            </div>
           </div>
         ))}
       </div>

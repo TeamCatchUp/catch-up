@@ -8,6 +8,7 @@ import AI from '@/public/icons/icon/ai.svg';
 import ArrowRight2 from '@/public/icons/icon/arrow_right2.svg';
 import Kebeb from '@/public/icons/icon/kebeb 2.svg';
 import { MoreButtonContent } from '@/shared/components/layout/topNavbar/MoreButtonModal';
+import { Button } from '@/shared/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
@@ -45,7 +46,7 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
 
   return (
     <>
-      <div className="border-r-edge-neutral border-b-edge-neutral border-r-0.5 bg-fill-normal sticky top-0 z-10 flex h-13 justify-between border-b px-6 py-2 lg:px-16">
+      <div className="border-r-edge-neutral border-b-edge-neutral border-r-0.5 bg-fill-normal sticky top-0 z-10 flex h-13 justify-between border-b px-6 py-2">
         {/* 좌측 메뉴 */}
         <div className="relative flex min-w-0 items-center">
           <button
@@ -83,22 +84,19 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
         </div>
 
         {/* 우측 메뉴 */}
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            onClick={handleNewQuestion}
-            className={`border-edge-neutral box-button-outline-gray flex w-29.75 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5`}
-          >
-            <Add className="text-content-neutral flex h-5 w-5" />
-            <span className={`text-body-small text-content-neutral whitespace-nowrap`}>새 업무 질문</span>
-          </button>
+        <div className="flex shrink-0 items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed data-[state=open]:border-edge-normal data-[state=open]:bg-fill-interaction-hover bg-fill-normal cursor-pointer rounded-lg border px-1.5 py-1.5 transition-colors">
+              <Button variant="icon-only-gray" size="md">
                 <Kebeb className="text-icon-normal h-6 w-6" />
-              </button>
+              </Button>
             </DropdownMenuTrigger>
             <MoreButtonContent />
           </DropdownMenu>
+          <Button variant="box-outline-gray" size="md" onClick={handleNewQuestion}>
+            <Add className="text-content-neutral h-5 w-5" />
+            <span className="text-content-neutral whitespace-nowrap">새 업무 질문</span>
+          </Button>
         </div>
       </div>
     </>

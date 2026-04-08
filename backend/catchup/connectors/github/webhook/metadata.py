@@ -7,10 +7,12 @@ from fastapi import BackgroundTasks
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 
+from catchup.audit.actions import IntegrationAction
 from catchup.audit.enums import AuditEventStatus
 from catchup.audit.enums import AuditLevel
 from catchup.audit.metadata import IntegrationAuditMetadata
 from catchup.audit.service import emit_audit_event
+from catchup.audit.utils import audit_log
 from catchup.connectors.github.factory import create_github_ingestion_service
 from catchup.connectors.github.schemas import InstallationRepositoriesWebhookPayload
 from catchup.connectors.github.schemas import InstallationWebhookPayload
@@ -53,7 +55,19 @@ async def handle_metadata_event(
     background_tasks: BackgroundTasks,
 ) -> GithubWebhookResponse:
     if request.event_name == "installation":
-        return await _handle_installation_event(request, background_tasks)
+        data = InstallationWebhookPayload(**request.payload)
+        if not _is_supported_installation_action(data.action):
+            return ignored_event_response(
+                event=request.event_name,
+                reason="unsupported_action",
+                action=data.action,
+            )
+
+        return await _handle_installation_event(
+            data=data,
+            provider="github",
+            background_tasks=background_tasks,
+        )
 
     if request.event_name == "installation_repositories":
         return await run_in_threadpool(
@@ -86,53 +100,25 @@ async def handle_metadata_event(
     )
 
 
+@audit_log(
+    IntegrationAction.HANDLE_INSTALLATION,
+    metadata_factory=IntegrationAuditMetadata.from_audit,
+    emit_attempt=True,
+)
 async def _handle_installation_event(
-    request: GithubWebhookRequest,
+    *,
+    data: InstallationWebhookPayload,
+    provider: str,
     background_tasks: BackgroundTasks,
 ) -> GithubWebhookResponse:
-    data = InstallationWebhookPayload(**request.payload)
     action = data.action
     installation_id = data.installation.id
-    context = f"github_installation_event:installation_id={installation_id}:event_name={request.event_name}"
 
     if action == "created":
-        metadata = IntegrationAuditMetadata(
-            context=context,
-            provider="github",
+        return await _handle_installation_created(
+            data=data,
+            background_tasks=background_tasks,
         )
-        emit_audit_event(
-            event_type=EventType.INTEGRATION,
-            event_action=IntegrationEventAction.INSTALLATION_EVENT_RECEIVED,
-            event_status=AuditEventStatus.ATTEMPT,
-            level=AuditLevel.INFO,
-            metadata=metadata,
-            immediate=True,
-        )
-        try:
-            result = await _handle_installation_created(
-                data=data,
-                background_tasks=background_tasks,
-            )
-        except Exception:
-            emit_audit_event(
-                event_type=EventType.INTEGRATION,
-                event_action=IntegrationEventAction.INSTALLATION_EVENT_RECEIVED,
-                event_status=AuditEventStatus.FAIL,
-                level=AuditLevel.ERROR,
-                metadata=metadata,
-                immediate=True,
-            )
-            raise
-
-        emit_audit_event(
-            event_type=EventType.INTEGRATION,
-            event_action=IntegrationEventAction.INSTALLATION_EVENT_RECEIVED,
-            event_status=AuditEventStatus.SUCCESS,
-            level=AuditLevel.INFO,
-            metadata=metadata,
-            immediate=True,
-        )
-        return result
 
     if action == "deleted":
         return await run_in_threadpool(_handle_installation_deleted, data)
@@ -140,16 +126,9 @@ async def _handle_installation_event(
     if action == "suspended":
         return await run_in_threadpool(_handle_installation_suspended, data)
 
-    if action == "unsuspended":
-        result = await run_in_threadpool(_handle_installation_unsuspended, data)
-        _schedule_metadata_sync(background_tasks, installation_id)
-        return result
-
-    return ignored_event_response(
-        event=request.event_name,
-        reason="unsupported_action",
-        action=action,
-    )
+    result = await run_in_threadpool(_handle_installation_unsuspended, data)
+    _schedule_metadata_sync(background_tasks, installation_id)
+    return result
 
 
 async def _handle_installation_created(
@@ -404,3 +383,7 @@ def _schedule_metadata_sync(
     installation_id: int,
 ) -> None:
     background_tasks.add_task(_sync_installation_metadata, installation_id)
+
+
+def _is_supported_installation_action(action: str) -> bool:
+    return action in {"created", "deleted", "suspended", "unsuspended"}
