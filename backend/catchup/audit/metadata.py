@@ -7,6 +7,7 @@ from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import model_validator
 
+from catchup.audit.base import AuditStatus
 from catchup.audit.base import BaseAuditMetadata
 from catchup.configs.config import settings
 from catchup.db.models import SourceType
@@ -56,6 +57,39 @@ class UserAuditMetadata(BaseAuditMetadata):
 
 class IntegrationAuditMetadata(BaseAuditMetadata):
     provider: str | None = None
+    integration_id: str | None = None
+    integration_name: str | None = None
+    resource_count: int | None = None
+    
+    # Atlassian
+    jira_target_count: int | None = None
+    confluence_target_count: int | None = None
+
+    @classmethod
+    def from_audit(
+        cls,
+        data: "AuditLogMetadataInput",
+    ) -> "IntegrationAuditMetadata":
+        provider = data.arguments["provider"]
+        context = None
+        result = data.result
+
+        if data.status == AuditStatus.FAILURE:
+            context = (
+                getattr(data.exception, "reason", None)
+                or getattr(data.exception, "code", None)
+                or "internal_error"
+            )
+
+        return cls(
+            context=context,
+            provider=provider,
+            integration_id=getattr(result, "team_id", None),
+            integration_name=getattr(result, "team_name", None),
+            resource_count=len(getattr(result, "resources", [])) if getattr(result, "resources", None) is not None else None,
+            jira_target_count=len(getattr(result, "jira_targets", [])) if getattr(result, "jira_targets", None) is not None else None,
+            confluence_target_count=len(getattr(result, "confluence_targets", [])) if getattr(result, "confluence_targets", None) is not None else None,
+        )
 
 
 class FullSyncTriggerMetadata(BaseAuditMetadata):

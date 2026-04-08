@@ -5,18 +5,20 @@ Atlassian OAuth 통합 인증 API 엔드포인트.
 하나의 OAuth 앱으로 Jira + Confluence 접근 권한을 획득한다.
 """
 
-import logging
+from __future__ import annotations
+
 import secrets
 
+import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from httpx import HTTPStatusError, RequestError
 from sqlalchemy import select
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.actions import IntegrationAction
 from catchup.audit.metadata import IntegrationAuditMetadata
-from catchup.audit.service import emit_audit_event
+from catchup.audit.utils import audit_log
 from catchup.connectors.atlassian.oauth_client import (
     AtlassianOAuthClient,
     get_atlassian_oauth_client,
@@ -42,10 +44,9 @@ from catchup.db.atlassian import oauth_repository as atlassian_crud
 from catchup.db.knowledge_source import add_knowledge_source
 from catchup.db.models import KnowledgeSource, SourceType
 from catchup.db.workspaces import get_workspace_limit_one
-from catchup.events.enums import EventType, IntegrationEventAction
 from catchup.utils.redis import store_oauth_state
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/v1/auth/atlassian", tags=["atlassian"])
 
@@ -83,87 +84,34 @@ async def atlassian_oauth_callback(
     - 리소스별 토큰 저장
     - Jira 동기화/Webhook + Confluence 스텁 작업 등록
     """
-    callback_service = AtlassianCallbackService(atlassian_service)
-
-    emit_audit_event(
-        event_type=EventType.INTEGRATION,
-        event_action=IntegrationEventAction.OAUTH_CALLBACK,
-        event_status=AuditEventStatus.ATTEMPT,
-        level=AuditLevel.INFO,
-        metadata=IntegrationAuditMetadata(
-            context="atlassian_oauth_callback",
-            provider="atlassian",
-        ),
-        immediate=True,
-    )
-
     try:
-        result = await callback_service.handle_callback(
-            code=code,
-            state=state,
-        )
-    except CallbackError as e:
-        emit_audit_event(
-            event_type=EventType.INTEGRATION,
-            event_action=IntegrationEventAction.OAUTH_CALLBACK,
-            event_status=AuditEventStatus.FAIL,
-            level=AuditLevel.WARNING,
-            metadata=IntegrationAuditMetadata(
-                context=f"atlassian_oauth_callback:{e.code}",
-                provider="atlassian",
-            ),
-            immediate=True,
-        )
-        logger.warning(f"[ATLASSIAN][AUTH] Callback failed: code={e.code}, detail={e.detail}")
-        return RedirectResponse(
-            url=f"{auth_settings.FRONTEND_REDIRECT_URI}?atlassian_installed=false&reason={e.code}"
-        )
-    except Exception as e:
-        emit_audit_event(
-            event_type=EventType.INTEGRATION,
-            event_action=IntegrationEventAction.OAUTH_CALLBACK,
-            event_status=AuditEventStatus.FAIL,
-            level=AuditLevel.ERROR,
-            metadata=IntegrationAuditMetadata(
-                context="atlassian_oauth_callback:internal_error",
-                provider="atlassian",
-            ),
-            immediate=True,
-        )
-        logger.error(f"[ATLASSIAN][AUTH] Callback unexpected error: {e}", exc_info=True)
-        return RedirectResponse(
-            url=f"{auth_settings.FRONTEND_REDIRECT_URI}?atlassian_installed=false&reason=internal_error"
-        )
-    
-
-    # Background tasks
-    for cloud_id in result.jira_targets:
-        await _register_knowledge_source(cloud_id, SourceType.JIRA)
-        background_tasks.add_task(_sync_jira_metadata, cloud_id)
-        background_tasks.add_task(_ensure_jira_dynamic_webhook, cloud_id)
-
-    for cloud_id in result.confluence_targets:
-        await _register_knowledge_source(cloud_id, SourceType.CONFLUENCE)
-        background_tasks.add_task(_sync_confluence_metadata, cloud_id)
-
-    logger.info(
-        f"[ATLASSIAN][AUTH] 설치 완료: {len(result.resources)}개 사이트 연결 (Jira + Confluence)"
-    )
-
-    emit_audit_event(
-        event_type=EventType.INTEGRATION,
-        event_action=IntegrationEventAction.OAUTH_CALLBACK,
-        event_status=AuditEventStatus.SUCCESS,
-        level=AuditLevel.INFO,
-        metadata=IntegrationAuditMetadata(
-            context="atlassian_oauth_callback:success",
+        result = await _handle_atlassian_oauth_callback(
             provider="atlassian",
-        ),
-        immediate=True,
-    )
+            code=code,
+            background_tasks=background_tasks,
+            state=state,
+            atlassian_service=atlassian_service,
+        )
+    except CallbackError as exc:
+        logger.warning(
+            "atlassian_oauth_callback_failed",
+            reason=exc.reason,
+        )
+        return RedirectResponse(
+            url=_build_atlassian_failure_redirect_url(exc.reason)
+        )
+    except Exception:
+        logger.error(
+            "atlassian_oauth_callback_failed",
+            reason="internal_error",
+            exc_info=True,
+        )
+        return RedirectResponse(
+            url=_build_atlassian_failure_redirect_url("internal_error")
+        )
 
     return RedirectResponse(
-        url=f"{auth_settings.FRONTEND_REDIRECT_URI}?atlassian_installed=true&count={len(result.resources)}"
+        url=_build_atlassian_success_redirect_url(len(result.resources))
     )
 
 
@@ -188,13 +136,25 @@ async def atlassian_installation_status(
         resources = await atlassian_service.get_accessible_resources(valid_token)
         return AtlassianInstallationStatus(installed=True, resources=resources)
     except HTTPException as e:
-        logger.warning(f"[ATLASSIAN][AUTH] 상태 조회 실패: {e.detail}")
+        logger.warning(
+            "atlassian_installation_status_failed",
+            cloud_id=cloud_id,
+            reason=e.detail,
+        )
         return AtlassianInstallationStatus(installed=True, resources=[])
     except AtlassianError as e:
-        logger.warning(f"[ATLASSIAN][AUTH] Atlassian 상태 조회 실패: {e.message}")
+        logger.warning(
+            "atlassian_installation_status_failed",
+            cloud_id=cloud_id,
+            reason=e.message,
+        )
         return AtlassianInstallationStatus(installed=True, resources=[])
-    except (HTTPStatusError, RequestError) as e:
-        logger.warning(f"[ATLASSIAN][AUTH] API 요청 실패: {e}")
+    except (HTTPStatusError, RequestError):
+        logger.warning(
+            "atlassian_installation_status_failed",
+            cloud_id=cloud_id,
+            reason="api_request_failed",
+        )
         return AtlassianInstallationStatus(installed=True, resources=[])
 
 
@@ -214,6 +174,30 @@ async def atlassian_uninstall(
 # =============================================================================
 # Private Helper Functions
 # =============================================================================
+@audit_log(
+    IntegrationAction.HANDLE_OAUTH_CALLBACK,
+    metadata_factory=IntegrationAuditMetadata.from_audit,
+    emit_attempt=True,
+)
+async def _handle_atlassian_oauth_callback(
+    *,
+    provider: str,
+    code: str,
+    background_tasks: BackgroundTasks,
+    state: str | None,
+    atlassian_service: AtlassianOAuthClient,
+):
+    callback_service = AtlassianCallbackService(atlassian_service)
+    result = await callback_service.handle_callback(
+        code=code,
+        state=state,
+    )
+
+    await _register_atlassian_knowledge_sources(result)
+    _schedule_atlassian_followups(background_tasks, result)
+    return result
+
+
 def _load_latest_cloud_id() -> str | None:
     with SessionLocal() as db:
         tokens = atlassian_crud.get_all_tokens(db)
@@ -227,13 +211,38 @@ def _delete_token_db(cloud_id: str) -> bool:
         return atlassian_crud.delete_token(db, cloud_id)
 
 
+async def _register_atlassian_knowledge_sources(result) -> None:
+    for cloud_id in result.jira_targets:
+        await _register_knowledge_source(cloud_id, SourceType.JIRA)
+
+    for cloud_id in result.confluence_targets:
+        await _register_knowledge_source(cloud_id, SourceType.CONFLUENCE)
+
+
+def _schedule_atlassian_followups(
+    background_tasks: BackgroundTasks,
+    result,
+) -> None:
+    for cloud_id in result.jira_targets:
+        background_tasks.add_task(_sync_jira_metadata, cloud_id)
+        background_tasks.add_task(_ensure_jira_dynamic_webhook, cloud_id)
+
+    for cloud_id in result.confluence_targets:
+        background_tasks.add_task(_sync_confluence_metadata, cloud_id)
+
+
 async def _register_knowledge_source(cloud_id: str, source_type: SourceType):
     def _register_knowledge_source_db():
         with SessionLocal() as db:
             workspace = get_workspace_limit_one(db)
             
             if not workspace:
-                logger.error(f"[{source_type.value}] 등록된 워크스페이스가 없습니다.")
+                logger.error(
+                    "atlassian_knowledge_source_register_failed",
+                    source_type=source_type.value,
+                    reason="workspace_missing",
+                    cloud_id=cloud_id,
+                )
                 return
             
             # 중복 등록 방지
@@ -246,7 +255,11 @@ async def _register_knowledge_source(cloud_id: str, source_type: SourceType):
             )
             
             if existing_source:
-                logger.info(f"[{source_type.value}] 이미 등록된 지식 소스입니다. (cloud_id={cloud_id})")
+                logger.info(
+                    "atlassian_knowledge_source_exists",
+                    source_type=source_type.value,
+                    cloud_id=cloud_id,
+                )
                 return
             
             name = "Jira" if source_type == SourceType.JIRA else "Confluence"
@@ -265,21 +278,17 @@ async def _sync_jira_metadata(cloud_id: str) -> None:
     """
     Jira 메타데이터 동기화 (BackgroundTask)
     """
-    logger.info(
-        f"[ATLASSIAN][AUTH] Starting background metadata sync: cloud_id={cloud_id}"
-    )
+    logger.info("jira_metadata_sync_started", cloud_id=cloud_id)
 
     try:
         service = await create_jira_ingestion_service(cloud_id=cloud_id)
-        results = await service.sync_metadata()
-        logger.info(
-            f"[ATLASSIAN][AUTH] Background metadata sync completed: "
-            f"cloud_id={cloud_id}, results={results}"
-        )
-    except Exception as e:
+        await service.sync_metadata()
+        logger.info("jira_metadata_sync_completed", cloud_id=cloud_id)
+    except Exception:
         logger.error(
-            f"[ATLASSIAN][AUTH] Background metadata sync failed: "
-            f"cloud_id={cloud_id}, error={e}"
+            "jira_metadata_sync_failed",
+            cloud_id=cloud_id,
+            exc_info=True,
         )
 
 
@@ -287,28 +296,23 @@ async def _ensure_jira_dynamic_webhook(cloud_id: str) -> None:
     """
     Jira Dynamic Webhook 등록 보장 (BackgroundTask)
     """
-    logger.info(
-        f"[ATLASSIAN][AUTH] Ensuring Jira dynamic webhook: cloud_id={cloud_id}"
-    )
+    logger.info("jira_dynamic_webhook_ensure_started", cloud_id=cloud_id)
 
     try:
         dynamic_webhook_service = get_jira_dynamic_webhook_service()
-        result = await dynamic_webhook_service.ensure_registered(cloud_id=cloud_id)
-        logger.info(
-            f"[ATLASSIAN][AUTH] Jira dynamic webhook ensured: "
-            f"cloud_id={cloud_id}, result={result}"
-        )
-    except Exception as e:
+        await dynamic_webhook_service.ensure_registered(cloud_id=cloud_id)
+        logger.info("jira_dynamic_webhook_ensure_completed", cloud_id=cloud_id)
+    except Exception:
         logger.error(
-            f"[ATLASSIAN][AUTH] Jira dynamic webhook ensure failed: "
-            f"cloud_id={cloud_id}, error={e}",
+            "jira_dynamic_webhook_ensure_failed",
+            cloud_id=cloud_id,
             exc_info=True,
         )
 
 
 async def _sync_confluence_metadata(cloud_id: str) -> None:
     """Confluence Space 메타데이터 동기화 (BackgroundTask)."""
-    logger.info(f"[CONFLUENCE][METADATA] Starting Space Sync : cloud_id={cloud_id}")
+    logger.info("confluence_metadata_sync_started", cloud_id=cloud_id)
 
     try:
         token_manager = AtlassianTokenManager(
@@ -316,12 +320,25 @@ async def _sync_confluence_metadata(cloud_id: str) -> None:
             oauth_repository=atlassian_crud,
         )
         service = ConfluenceMetadataService(token_manager)
-        result = await service.sync_all(cloud_id)
-        logger.info(
-            f"[CONFLUENCE][METADATA] Completed sync: cloud_id={cloud_id}, result={result}"
-        )
-    except Exception as e:
+        await service.sync_all(cloud_id)
+        logger.info("confluence_metadata_sync_completed", cloud_id=cloud_id)
+    except Exception:
         logger.error(
-            f"[CONFLUENCE][METADATA] Sync failed: cloud_id={cloud_id}, error={e}",
+            "confluence_metadata_sync_failed",
+            cloud_id=cloud_id,
             exc_info=True,
         )
+
+
+def _build_atlassian_success_redirect_url(resource_count: int) -> str:
+    return (
+        f"{auth_settings.FRONTEND_REDIRECT_URI}"
+        f"?atlassian_installed=true&count={resource_count}"
+    )
+
+
+def _build_atlassian_failure_redirect_url(reason: str) -> str:
+    return (
+        f"{auth_settings.FRONTEND_REDIRECT_URI}"
+        f"?atlassian_installed=false&reason={reason}"
+    )
