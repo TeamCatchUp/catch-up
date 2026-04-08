@@ -10,7 +10,7 @@ import CatchupLogoLetter from '@/public/icons/logo/logo_catchup_letter.svg';
 import SideNavMenu from '@/shared/components/layout/sideNavBar/SideNavMenu';
 import SideNavQuestions from '@/shared/components/layout/sideNavBar/SideNavQuestions';
 import SideNavUser from '@/shared/components/layout/sideNavBar/SideNavUser';
-import IconButton from '@/shared/components/ui/icon-button';
+import { Button } from '@/shared/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
@@ -103,9 +103,9 @@ export default function SideNavBar() {
           {isOpen && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <IconButton onClick={() => setSidebarOpen(false)}>
+                <Button variant="icon-only-gray" size="md" onClick={() => setSidebarOpen(false)}>
                   <Close className="text-icon-neutral h-6 w-6" />
-                </IconButton>
+                </Button>
               </TooltipTrigger>
               <TooltipContent>사이드바 닫기</TooltipContent>
             </Tooltip>
