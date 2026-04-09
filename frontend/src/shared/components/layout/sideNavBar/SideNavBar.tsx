@@ -35,7 +35,7 @@ export default function SideNavBar() {
         className={cn(
           'border-edge-neutral bg-fill-normal flex h-screen flex-col border-r',
           'transition-[width,padding] duration-300 ease-out will-change-[width,padding]',
-          isOpen ? 'w-60.25 px-2 pb-2.5' : 'w-18 gap-4 items-center px-3 pt-2.5 pb-5',
+          isOpen ? 'w-60.25 px-2 pb-2.5' : 'w-18 items-center gap-4 px-3 pt-2.5 pb-5',
         )}
       >
         {/* 로고/열림 버튼 */}
@@ -52,7 +52,7 @@ export default function SideNavBar() {
                     isOpen
                       ? ''
                       : isSettingsRoute
-                        ? 'rounded-xl hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed'
+                        ? 'hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed rounded-xl'
                         : 'border-edge-neutral rounded-xl border',
                   )}
                   onClick={
@@ -81,11 +81,7 @@ export default function SideNavBar() {
                   )}
                 </div>
               </TooltipTrigger>
-              {!isOpen && (
-                <TooltipContent side="right">
-                  {isSettingsRoute ? '홈으로' : '사이드바 열기'}
-                </TooltipContent>
-              )}
+              {!isOpen && <TooltipContent side="right">{isSettingsRoute ? '홈으로' : '사이드바 열기'}</TooltipContent>}
             </Tooltip>
 
             {isOpen && (

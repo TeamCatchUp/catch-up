@@ -64,7 +64,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
           {/* 회사명 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-heading-medium text-content-normal flex items-center gap-1">
-              <span className="size-1.25 rounded-full bg-status-destructive" />
+              <span className="bg-status-destructive size-1.25 rounded-full" />
               회사명을 알려주세요.
             </label>
             <Input
@@ -82,7 +82,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
           {/* 팀 규모 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-heading-medium text-content-normal flex items-center gap-1">
-              <span className="size-1.25 rounded-full bg-status-destructive" />팀 규모는 어느 정도인가요?
+              <span className="bg-status-destructive size-1.25 rounded-full" />팀 규모는 어느 정도인가요?
             </label>
             <Select
               value={companySize}
@@ -104,7 +104,7 @@ export function OrgInfoStep({ defaultValues, onSubmit, onBack }: OrgInfoStepProp
             </Select>
             {errors.companySize && (
               <div className="flex items-center gap-0.5">
-                <ErrorIcon className="size-4 shrink-0 text-status-destructive" />
+                <ErrorIcon className="text-status-destructive size-4 shrink-0" />
                 <span className="text-label-xsmall text-status-destructive">팀 규모를 선택해주세요.</span>
               </div>
             )}

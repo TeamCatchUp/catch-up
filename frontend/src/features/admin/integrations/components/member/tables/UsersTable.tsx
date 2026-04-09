@@ -74,7 +74,12 @@ const UsersTable = ({
               >
                 {/* Keycloack 사용자 컬럼: dot(10px) + gap-4(16px) + profile(28px) + name */}
                 <div className="flex min-w-0 items-center gap-4">
-                  <div className={cn('size-2.5 shrink-0 rounded-full', isAllLinked ? 'bg-status-positive' : 'bg-accent-red')} />
+                  <div
+                    className={cn(
+                      'size-2.5 shrink-0 rounded-full',
+                      isAllLinked ? 'bg-status-positive' : 'bg-accent-red',
+                    )}
+                  />
                   <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
                   <span className="text-body-small text-content-normal truncate">{row.userName}</span>
                 </div>

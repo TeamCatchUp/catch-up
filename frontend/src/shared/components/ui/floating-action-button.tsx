@@ -14,7 +14,7 @@ export default function FloatingActionButton() {
         <Button
           variant="fab-primary"
           size="lg"
-          className="fixed bottom-5 right-5 z-70 size-13 transition-transform hover:scale-[1.038]"
+          className="fixed right-5 bottom-5 z-70 size-13 transition-transform hover:scale-[1.038]"
           asChild
         >
           <a href={SLACK_CONNECT_URL} target="_blank" rel="noopener noreferrer" aria-label="CatchUp 문의하기">

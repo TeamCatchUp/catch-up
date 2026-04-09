@@ -45,9 +45,7 @@ export default function MyTokenUsageSection() {
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1.5">
           <span className="text-heading-small text-content-alternative">전체 사용 토큰량</span>
-          <span className="text-heading-xlarge text-content-normal">
-            {(summary?.total_cost ?? 0).toFixed(2)} $
-          </span>
+          <span className="text-heading-xlarge text-content-normal">{(summary?.total_cost ?? 0).toFixed(2)} $</span>
         </div>
         <DateRangePicker value={dateRange} onChange={setDateRange} />
       </div>
