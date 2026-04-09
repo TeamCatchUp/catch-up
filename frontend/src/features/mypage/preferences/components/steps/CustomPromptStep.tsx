@@ -13,14 +13,12 @@ interface CustomPromptStepProps {
   customPrompt: string | null;
   onSave: (value: string) => void;
   isLoading?: boolean;
-  isPending?: boolean;
 }
 
 export default function CustomPromptStep({
   customPrompt,
   onSave,
   isLoading = false,
-  isPending = false,
 }: CustomPromptStepProps) {
   const hasPrompt = customPrompt !== null;
   const [isEditing, setIsEditing] = useState(false);
@@ -149,10 +147,10 @@ export default function CustomPromptStep({
                     variant="capsule-solid-primary"
                     size="md"
                     className="h-9"
-                    disabled={isEmpty || isPending}
+                    disabled={isEmpty}
                     onClick={handleSave}
                   >
-                    {isPending ? '저장 중...' : '저장'}
+                    저장
                   </Button>
                 </div>
               </div>

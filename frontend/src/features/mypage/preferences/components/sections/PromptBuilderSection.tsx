@@ -47,7 +47,6 @@ export default function PromptBuilderSection() {
           customPrompt={customPrompt}
           onSave={handleSavePrompt}
           isLoading={isLoading}
-          isPending={updateMutation.isPending}
         />
       </div>
     </div>
