@@ -75,7 +75,7 @@ const eslintConfig = defineConfig([
       ],
     },
     rules: {
-      'boundaries/element-types': [
+      'boundaries/dependencies': [
         'error',
         {
           default: 'disallow',
