@@ -33,11 +33,10 @@ export default function CustomPromptStep({ customPrompt, onSave }: CustomPromptS
 
   useEffect(() => {
     if (isEditing) {
-      setValue(customPrompt ?? '');
       adjustHeight();
       textareaRef.current?.focus();
     }
-  }, [isEditing, customPrompt, adjustHeight]);
+  }, [isEditing, adjustHeight]);
 
   useEffect(() => {
     if (isActive) adjustHeight();
@@ -80,7 +79,10 @@ export default function CustomPromptStep({ customPrompt, onSave }: CustomPromptS
             variant="box-soft-primary"
             size="md"
             className="shrink-0"
-            onClick={() => setIsEditing(true)}
+            onClick={() => {
+              setValue(customPrompt ?? '');
+              setIsEditing(true);
+            }}
           >
             편집하기
           </Button>
