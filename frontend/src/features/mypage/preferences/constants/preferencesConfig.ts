@@ -1,10 +1,10 @@
 import type { ComponentType, SVGProps } from 'react';
 
 import IconHistory from '@/public/icons/icon/history.svg';
-import IconPerson from '@/public/icons/icon/person.svg';
+import IconPerson from '@/public/icons/icon/person2.svg';
 import IconScreen from '@/public/icons/icon/screen.svg';
 import IconStacks from '@/public/icons/icon/stacks.svg';
-import IconTag from '@/public/icons/icon/tag.svg';
+import IconTag from '@/public/icons/icon/tag2.svg';
 import IconTarget from '@/public/icons/icon/target.svg';
 
 import type { AnswerOption, JobRole, ThemeMode } from '../types/preferencesModel';
@@ -73,5 +73,6 @@ export const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
 /* ── 글자수 제한 ── */
 
 export const MAX_JOB_TEXT_LENGTH = 50;
+export const MAX_JOB_DESCRIPTION_LENGTH = 200;
 export const MAX_PROMPT_LENGTH = 500;
 

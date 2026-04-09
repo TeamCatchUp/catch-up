@@ -13,6 +13,7 @@ export type ThemeMode = 'system' | 'light' | 'dark';
 export interface PreferencesFormState {
   selected_job: JobRole | null;
   custom_job_text: string;
+  job_description: string;
   selected_options: AnswerOption[];
   custom_prompt: string | null;
 }

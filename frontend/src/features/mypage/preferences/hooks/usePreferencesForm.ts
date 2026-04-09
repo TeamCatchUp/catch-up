@@ -8,6 +8,7 @@ export function usePreferencesForm() {
   const [state, setState] = useState<PreferencesFormState>({
     selected_job: null,
     custom_job_text: '',
+    job_description: '',
     selected_options: [],
     custom_prompt: null,
   });
@@ -24,6 +25,10 @@ export function usePreferencesForm() {
     setState((prev) => ({ ...prev, custom_job_text: text }));
   }, []);
 
+  const setJobDescription = useCallback((text: string) => {
+    setState((prev) => ({ ...prev, job_description: text }));
+  }, []);
+
   const toggleOption = useCallback((option: AnswerOption) => {
     setState((prev) => ({
       ...prev,
@@ -37,5 +42,5 @@ export function usePreferencesForm() {
     setState((prev) => ({ ...prev, custom_prompt: prompt }));
   }, []);
 
-  return { state, setJob, setCustomJobText, toggleOption, setCustomPrompt };
+  return { state, setJob, setCustomJobText, setJobDescription, toggleOption, setCustomPrompt };
 }
