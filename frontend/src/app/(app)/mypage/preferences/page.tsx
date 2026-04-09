@@ -1,7 +1,7 @@
 'use client';
 
-import DisplayModeSection from '@/features/mypage/preferences/components/DisplayModeSection';
-import PromptBuilderSection from '@/features/mypage/preferences/components/PromptBuilderSection';
+import DisplayModeSection from '@/features/mypage/preferences/components/sections/DisplayModeSection';
+import PromptBuilderSection from '@/features/mypage/preferences/components/sections/PromptBuilderSection';
 
 export default function PreferencesPage() {
   return (
