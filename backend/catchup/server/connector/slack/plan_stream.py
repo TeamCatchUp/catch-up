@@ -9,14 +9,22 @@ from catchup.connectors.slack.client import SlackApiClientWrapper
 
 logger = structlog.get_logger(__name__)
 
+# 최상단 노출 텍스트
 PLAN_TITLE = "답변을 생성중입니다 ..."
-MAX_HEADER_TEXT = 120
+
+# 스트리밍 fallback 렌더링 제약조건
 MAX_SECTION_TEXT = 2900
-MAX_SOURCE_ITEMS = 5
+
+# 최종 응답에 포함시킬 출처 URL 개수
+MAX_SOURCE_ITEMS = 10
+
+# 스트리밍 버퍼링 크기
 MARKDOWN_FLUSH_SIZE = 120
 
+# Plan Block Kit 노출 순서
 TASK_ORDER = ("route", "rewrite", "search", "rerank", "grade", "answer")
 
+# 각 노드에서의 진행중 텍스트
 TASK_TITLES = {
     "route": "질문의 의도를 파악하고 있습니다",
     "rewrite": "검색을 준비하고 있습니다",
@@ -26,6 +34,7 @@ TASK_TITLES = {
     "answer": "최종 답변을 작성중 ...",
 }
 
+# 노드 진입 시 노출 텍스트
 TASK_DETAILS = {
     "route": "질문의 의도를 파악하고 있어요.",
     "rewrite": "검색 질의를 준비하고 있어요.",
@@ -35,6 +44,7 @@ TASK_DETAILS = {
     "answer": "문서를 참고하여 답변을 작성하고 있어요.",
 }
 
+# 노드 완료 시 노출 텍스트
 TASK_OUTPUTS = {
     "route": "질문 의도 파악을 마쳤습니다.",
     "rewrite": "검색 준비를 마쳤습니다.",
@@ -44,6 +54,7 @@ TASK_OUTPUTS = {
     "answer": "최종 답변 생성을 마쳤습니다.",
 }
 
+# search에 해당하는 노드 목록
 SEARCH_NODES = {
     "search_vector_db",
     "expand_graph_context",
@@ -65,14 +76,17 @@ class TaskState:
 class SlackPlanState:
     def __init__(self) -> None:
         self.tasks = {task_id: TaskState() for task_id in TASK_ORDER}
+        # UI 노출 관련도 높은 출처
         self.top_sources: list[dict[str, str]] = []
 
     def build_initial_chunks(self) -> list[dict[str, Any]]:
+        """Initial Plan Block Kit Skeleton"""
         chunks: list[dict[str, Any]] = [{"type": "plan_update", "title": PLAN_TITLE}]
         chunks.extend(self._task_chunk(task_id, status="pending") for task_id in TASK_ORDER)
         return chunks
 
     def apply_node(self, node: str) -> list[dict[str, Any]]:
+        """RAG Pipeline Node -> Task Block"""
         if node == "route":
             return self._start_task("route")
 
@@ -88,6 +102,7 @@ class SlackPlanState:
         if node == "grade":
             return self._move_to("grade", complete_task_ids=("rerank",))
 
+        # chitchat 노드 진입시 모든 Task 완료 처리 
         if node == "chitchat":
             chunks: list[dict[str, Any]] = []
             chunks.extend(self._complete_task("route"))
@@ -101,6 +116,7 @@ class SlackPlanState:
         return []
 
     def apply_sources(self, sources: list[Any]) -> list[dict[str, Any]]:
+        """rerank node 결과를 받아서 MAX_SOURCE_ITEMS만큼 rerank Task Output으로 노출"""
         if not sources:
             return []
 
@@ -113,6 +129,7 @@ class SlackPlanState:
         return updates
 
     def transition_to_answer(self) -> list[dict[str, Any]]:
+        """generate_final_answer 이전에 Task 정리"""
         updates: list[dict[str, Any]] = []
         updates.extend(self._complete_task("search"))
         updates.extend(self._complete_task("rerank", output=f"상위 {len(self.top_sources) or MAX_SOURCE_ITEMS}건을 골랐습니다.", sources=self.top_sources or None))
@@ -140,19 +157,8 @@ class SlackPlanState:
         blocks: list[dict[str, Any]] = []
 
         if include_answer_body:
-            blocks.extend(
-                [
-                    {"type": "divider"},
-                    {
-                        "type": "header",
-                        "block_id": "catchup_answer_header_v1",
-                        "text": {
-                            "type": "plain_text",
-                            "text": trim_text(query, MAX_HEADER_TEXT),
-                        },
-                    },
-                ]
-            )
+            # 스트리밍으로 답변이 나가지 않은 경우 Block에 응답을 추가
+            blocks.append({"type": "divider"})
 
             for index, section_text in enumerate(split_sections(answer), start=1):
                 blocks.append(
@@ -166,7 +172,8 @@ class SlackPlanState:
                     }
                 )
 
-        source_text = build_source_markdown(sources)
+        visible_sources = self.top_sources or sources
+        source_text = build_source_markdown(visible_sources)
         if source_text:
             if not blocks:
                 blocks.append({"type": "divider"})
@@ -454,6 +461,7 @@ class SlackPlanResponder:
         self.answer_mode = True
 
     async def _finish_answer_stream(self, *, answer: str, sources: list[Any]) -> None:
+        visible_sources = self.state.top_sources or sources
         blocks = self.state.build_final_blocks(
             query=self.query,
             answer=answer,
@@ -465,7 +473,7 @@ class SlackPlanResponder:
             await self.client.post_message(
                 channel=self.channel_id,
                 thread_ts=self.thread_ts,
-                text=build_plain_fallback_text(answer=answer, sources=sources),
+                text=build_plain_fallback_text(answer=answer, sources=visible_sources),
                 blocks=blocks,
             )
             return
@@ -477,6 +485,7 @@ class SlackPlanResponder:
         )
 
     async def _finish_plan_stream(self, *, answer: str, sources: list[Any]) -> None:
+        visible_sources = self.state.top_sources or sources
         blocks = self.state.build_final_blocks(
             query=self.query,
             answer=answer,
@@ -488,7 +497,7 @@ class SlackPlanResponder:
             await self.client.post_message(
                 channel=self.channel_id,
                 thread_ts=self.thread_ts,
-                text=build_plain_fallback_text(answer=answer, sources=sources),
+                text=build_plain_fallback_text(answer=answer, sources=visible_sources),
                 blocks=blocks,
             )
             return
@@ -501,6 +510,7 @@ class SlackPlanResponder:
         )
 
     async def _close_and_delete_plan_stream(self) -> None:
+        """generate_final_answer 노드 진입 시 Plan Block Kit 제거"""
         if self.plan_stream_ts is None or self.plan_closed:
             return
 
@@ -582,6 +592,8 @@ def read_source_field(source: Any, field: str) -> str | None:
 
     if isinstance(source, dict):
         value = source.get(field)
+        if value is None and field == "title":
+            value = source.get("text")
         return str(value) if value else None
 
     return None
