@@ -102,7 +102,7 @@ export default function AccountRegisterModal({
               }}
             />
 
-            <p className="text-label-xsmall flex items-center gap-0.5 text-status-destructive">
+            <p className="text-label-xsmall text-status-destructive flex items-center gap-0.5">
               <IconError className="size-4" />
               반드시 본인의 계정을 연동해주세요.
             </p>

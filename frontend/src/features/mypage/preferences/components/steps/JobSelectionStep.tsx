@@ -8,11 +8,7 @@ import IconErrorFilled from '@/public/icons/icon/error_filled.svg';
 import { Chip } from '@/shared/components/ui/chips';
 import { cn } from '@/shared/utils/cn';
 
-import {
-  JOB_ROLE_OPTIONS,
-  MAX_JOB_DESCRIPTION_LENGTH,
-  MAX_JOB_TEXT_LENGTH,
-} from '../../constants/preferencesConfig';
+import { JOB_ROLE_OPTIONS, MAX_JOB_DESCRIPTION_LENGTH, MAX_JOB_TEXT_LENGTH } from '../../constants/preferencesConfig';
 import type { JobRole } from '../../types/preferencesModel';
 import StepHeader from '../StepHeader';
 
@@ -43,11 +39,7 @@ export default function JobSelectionStep({
 
   return (
     <div className="border-edge-neutral flex flex-col gap-5 border-b py-5">
-      <StepHeader
-        stepNumber={1}
-        title="직무 선택"
-        description="어떤 일을 하고 계신가요? 그에 맞게 답해드릴게요."
-      />
+      <StepHeader stepNumber={1} title="직무 선택" description="어떤 일을 하고 계신가요? 그에 맞게 답해드릴게요." />
 
       {/* 칩 그리드 */}
       <div className="flex flex-wrap gap-2.5">
@@ -82,10 +74,10 @@ export default function JobSelectionStep({
                   className={cn(
                     'bg-fill-normal flex h-11.5 items-center rounded-lg p-3',
                     isJobTextAtLimit
-                      ? 'border border-status-destructive'
+                      ? 'border-status-destructive border'
                       : jobFieldFocused
-                        ? 'border-[1.2px] border-edge-primary'
-                        : 'border border-edge-neutral',
+                        ? 'border-edge-primary border-[1.2px]'
+                        : 'border-edge-neutral border',
                   )}
                 >
                   <input
@@ -126,12 +118,12 @@ export default function JobSelectionStep({
                 className={cn(
                   'flex h-11.5 items-center rounded-lg p-3',
                   isDescDisabled
-                    ? 'bg-fill-interaction-disable border border-edge-neutral'
+                    ? 'bg-fill-interaction-disable border-edge-neutral border'
                     : isDescAtLimit
-                      ? 'bg-fill-normal border border-status-destructive'
+                      ? 'bg-fill-normal border-status-destructive border'
                       : descFieldFocused
-                        ? 'bg-fill-normal border-[1.2px] border-edge-primary'
-                        : 'bg-fill-normal border border-edge-neutral',
+                        ? 'bg-fill-normal border-edge-primary border-[1.2px]'
+                        : 'bg-fill-normal border-edge-neutral border',
                 )}
               >
                 <input

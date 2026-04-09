@@ -35,14 +35,12 @@ export default function TokenUsageRankingList({ data }: TokenUsageRankingListPro
               {/* 프로필 + 이름 */}
               <div className="flex items-center gap-3">
                 <DefaultProfile className="border-fill-strong text-content-assistive size-7.5 shrink-0 rounded-full border" />
-                <span className="text-body-small text-content-normal w-15.5 shrink-0 truncate">
-                  {entry.user_name}
-                </span>
+                <span className="text-body-small text-content-normal w-15.5 shrink-0 truncate">{entry.user_name}</span>
               </div>
 
               {/* 팀 태그 */}
               <div className="flex w-21.5 shrink-0 items-center justify-center">
-                <span className="bg-accent-green-neutral text-accent-green rounded-md2 truncate px-1.5 py-0.5 text-body-xsmall">
+                <span className="bg-accent-green-neutral text-accent-green rounded-md2 text-body-xsmall truncate px-1.5 py-0.5">
                   {entry.department}
                 </span>
               </div>

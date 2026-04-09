@@ -77,12 +77,7 @@ export const tokenUsageQueries = {
 
   periodCost: (startDate?: Date, endDate?: Date) =>
     queryOptions({
-      queryKey: [
-        ...tokenUsageQueries.all(),
-        'periodCost',
-        startDate,
-        endDate,
-      ] as const,
+      queryKey: [...tokenUsageQueries.all(), 'periodCost', startDate, endDate] as const,
       queryFn: async () => {
         const params = toApiParams(startDate, endDate);
         const res = await api.get<ChatTokenUsageResponse>(API.stats.myTokenCost, { params });
@@ -109,12 +104,7 @@ export const tokenUsageQueries = {
 
   questionCounts: (startDate?: Date, endDate?: Date) =>
     queryOptions({
-      queryKey: [
-        ...tokenUsageQueries.all(),
-        'questionCounts',
-        startDate,
-        endDate,
-      ] as const,
+      queryKey: [...tokenUsageQueries.all(), 'questionCounts', startDate, endDate] as const,
       queryFn: async (): Promise<TotalQuestionCount[]> => {
         const params = toApiParams(startDate, endDate);
         const res = await api.get<QuestionCountResponse>(API.stats.myQueries, { params });
@@ -136,12 +126,7 @@ export const tokenUsageQueries = {
 
   orgPeriodCost: (startDate?: Date, endDate?: Date) =>
     queryOptions({
-      queryKey: [
-        ...tokenUsageQueries.all(),
-        'orgPeriodCost',
-        startDate,
-        endDate,
-      ] as const,
+      queryKey: [...tokenUsageQueries.all(), 'orgPeriodCost', startDate, endDate] as const,
       queryFn: async () => {
         const params = toApiParams(startDate, endDate);
         const res = await api.get<ChatTokenUsageResponse>(API.stats.orgTokenCost, { params });
@@ -151,12 +136,7 @@ export const tokenUsageQueries = {
 
   orgDailyUsage: (startDate?: Date, endDate?: Date) =>
     queryOptions({
-      queryKey: [
-        ...tokenUsageQueries.all(),
-        'orgDailyUsage',
-        startDate,
-        endDate,
-      ] as const,
+      queryKey: [...tokenUsageQueries.all(), 'orgDailyUsage', startDate, endDate] as const,
       queryFn: async (): Promise<DailyTokenUsage[]> => {
         const params = toApiParams(startDate, endDate);
         const res = await api.get<ChatTokenUsageResponse>(API.stats.orgTokenCost, { params });
@@ -173,12 +153,7 @@ export const tokenUsageQueries = {
 
   orgQuestionCounts: (startDate?: Date, endDate?: Date) =>
     queryOptions({
-      queryKey: [
-        ...tokenUsageQueries.all(),
-        'orgQuestionCounts',
-        startDate,
-        endDate,
-      ] as const,
+      queryKey: [...tokenUsageQueries.all(), 'orgQuestionCounts', startDate, endDate] as const,
       queryFn: async (): Promise<TotalQuestionCount[]> => {
         const params = toApiParams(startDate, endDate);
         const res = await api.get<QuestionCountResponse>(API.stats.orgQueries, { params });
@@ -203,12 +178,7 @@ export const tokenUsageQueries = {
 
   orgRanking: (startDate?: Date, endDate?: Date) =>
     queryOptions({
-      queryKey: [
-        ...tokenUsageQueries.all(),
-        'orgRanking',
-        startDate,
-        endDate,
-      ] as const,
+      queryKey: [...tokenUsageQueries.all(), 'orgRanking', startDate, endDate] as const,
       queryFn: async (): Promise<TokenUsageRankingEntry[]> => {
         const params = toApiParams(startDate, endDate);
         const res = await api.get<UserTokenCostRankingResponse>(API.stats.tokenRanking, { params });
@@ -220,13 +190,7 @@ export const tokenUsageQueries = {
 
   userPeriodCost: (userId: number, startDate?: Date, endDate?: Date) =>
     queryOptions({
-      queryKey: [
-        ...tokenUsageQueries.all(),
-        'userPeriodCost',
-        userId,
-        startDate,
-        endDate,
-      ] as const,
+      queryKey: [...tokenUsageQueries.all(), 'userPeriodCost', userId, startDate, endDate] as const,
       queryFn: async () => {
         const params = toApiParams(startDate, endDate);
         const res = await api.get<ChatTokenUsageResponse>(API.stats.userTokenCost(userId), { params });
@@ -236,13 +200,7 @@ export const tokenUsageQueries = {
 
   userDailyUsage: (userId: number, startDate?: Date, endDate?: Date) =>
     queryOptions({
-      queryKey: [
-        ...tokenUsageQueries.all(),
-        'userDailyUsage',
-        userId,
-        startDate,
-        endDate,
-      ] as const,
+      queryKey: [...tokenUsageQueries.all(), 'userDailyUsage', userId, startDate, endDate] as const,
       queryFn: async (): Promise<DailyTokenUsage[]> => {
         const params = toApiParams(startDate, endDate);
         const res = await api.get<ChatTokenUsageResponse>(API.stats.userTokenCost(userId), { params });
@@ -259,13 +217,7 @@ export const tokenUsageQueries = {
 
   userQuestionCounts: (userId: number, startDate?: Date, endDate?: Date) =>
     queryOptions({
-      queryKey: [
-        ...tokenUsageQueries.all(),
-        'userQuestionCounts',
-        userId,
-        startDate,
-        endDate,
-      ] as const,
+      queryKey: [...tokenUsageQueries.all(), 'userQuestionCounts', userId, startDate, endDate] as const,
       queryFn: async (): Promise<TotalQuestionCount[]> => {
         const params = toApiParams(startDate, endDate);
         const res = await api.get<QuestionCountResponse>(API.stats.userQueries(userId), { params });

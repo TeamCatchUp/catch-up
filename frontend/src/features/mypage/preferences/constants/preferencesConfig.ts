@@ -75,4 +75,3 @@ export const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
 export const MAX_JOB_TEXT_LENGTH = 50;
 export const MAX_JOB_DESCRIPTION_LENGTH = 200;
 export const MAX_PROMPT_LENGTH = 500;
-

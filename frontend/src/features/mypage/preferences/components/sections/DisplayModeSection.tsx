@@ -29,9 +29,7 @@ export default function DisplayModeSection() {
       <div className="flex w-full items-center gap-5 px-4 py-3">
         <div className="flex w-full flex-col gap-1.5">
           <span className="text-heading-small text-content-normal">화면 모드</span>
-          <span className="text-label-small text-content-alternative">
-            이 기기에서 화면 테마를 선택해주세요.
-          </span>
+          <span className="text-label-small text-content-alternative">이 기기에서 화면 테마를 선택해주세요.</span>
         </div>
 
         <DropdownMenu open={open} onOpenChange={setOpen}>

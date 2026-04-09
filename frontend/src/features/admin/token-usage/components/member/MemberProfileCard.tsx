@@ -56,7 +56,6 @@ export default function MemberProfileCard({ members, selectedMemberId, onSelectM
               </span>
             </div>
           </div>
-
         </div>
       )}
     </div>

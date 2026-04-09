@@ -68,7 +68,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
           {/* 이름 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-heading-medium text-content-normal flex items-center gap-1">
-              <span className="size-1.25 rounded-full bg-status-destructive" />
+              <span className="bg-status-destructive size-1.25 rounded-full" />
               이름을 적어주세요.
             </label>
             <Input
@@ -87,7 +87,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-1.5">
               <label className="text-heading-medium text-content-normal flex items-center gap-1">
-                <span className="size-1.25 rounded-full bg-status-destructive" />
+                <span className="bg-status-destructive size-1.25 rounded-full" />
                 직급을 알려주세요.
               </label>
               <Select
@@ -110,7 +110,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
               </Select>
               {errors.jobLevel && (
                 <div className="flex items-center gap-0.5">
-                  <ErrorIcon className="size-4 shrink-0 text-status-destructive" />
+                  <ErrorIcon className="text-status-destructive size-4 shrink-0" />
                   <span className="text-label-xsmall text-status-destructive">직급을 선택해주세요.</span>
                 </div>
               )}
@@ -120,7 +120,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
             {!isAdmin && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-heading-medium text-content-normal flex items-center gap-1">
-                  <span className="size-1.25 rounded-full bg-status-destructive" />
+                  <span className="bg-status-destructive size-1.25 rounded-full" />
                   부서명을 알려주세요.
                 </label>
                 <Select
@@ -149,7 +149,7 @@ export function ProfileStep({ isAdmin, defaultValues, onSubmit, onBack }: Profil
                 </Select>
                 {errors.department && (
                   <div className="flex items-center gap-0.5">
-                    <ErrorIcon className="size-4 shrink-0 text-status-destructive" />
+                    <ErrorIcon className="text-status-destructive size-4 shrink-0" />
                     <span className="text-label-xsmall text-status-destructive">부서명을 선택해주세요.</span>
                   </div>
                 )}

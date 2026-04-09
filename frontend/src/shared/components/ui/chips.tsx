@@ -8,12 +8,12 @@ import { cn } from '@/shared/utils/cn';
 /* ── Chip ── */
 
 const chipVariants = cva(
-  'inline-flex h-9 items-center justify-center border text-body-small font-medium cursor-pointer transition-colors shrink-0',
+  'text-body-small inline-flex h-9 shrink-0 cursor-pointer items-center justify-center border font-medium transition-colors',
   {
     variants: {
       variant: {
-        square: 'rounded-lg px-2 py-1.5 gap-1',
-        capsule: 'rounded-full px-3 py-1.5 gap-1.5',
+        square: 'gap-1 rounded-lg px-2 py-1.5',
+        capsule: 'gap-1.5 rounded-full px-3 py-1.5',
       },
       selected: {
         true: '',
@@ -61,16 +61,7 @@ type ChipProps = ComponentProps<'button'> &
     value?: string;
   };
 
-function Chip({
-  className,
-  variant,
-  selected = false,
-  leadingIcon,
-  trailingIcon,
-  children,
-  ref,
-  ...props
-}: ChipProps) {
+function Chip({ className, variant, selected = false, leadingIcon, trailingIcon, children, ref, ...props }: ChipProps) {
   return (
     <button
       ref={ref}
@@ -112,8 +103,7 @@ function ChipGroup({ mode, value, onChange, children, className }: ChipGroupProp
         if (!isValidElement<ChipProps>(child)) return child;
 
         const chipValue = child.props.value ?? '';
-        const isSelected =
-          mode === 'single' ? value === chipValue : Array.isArray(value) && value.includes(chipValue);
+        const isSelected = mode === 'single' ? value === chipValue : Array.isArray(value) && value.includes(chipValue);
 
         return cloneElement(child, {
           selected: isSelected,

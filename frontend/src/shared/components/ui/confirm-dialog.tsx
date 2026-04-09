@@ -52,7 +52,8 @@ function ConfirmDialog({
             }
             size="lg"
             className={cn(
-              variant === 'danger' && 'border-accent-red hover:bg-accent-red-lighten active:bg-accent-red-lighten text-status-destructive active:border-status-destructive',
+              variant === 'danger' &&
+                'border-accent-red hover:bg-accent-red-lighten active:bg-accent-red-lighten text-status-destructive active:border-status-destructive',
             )}
             onClick={() => {
               onConfirm();

@@ -22,14 +22,8 @@ export default function PromptBuilderSection() {
           onCustomJobTextChange={setCustomJobText}
           onJobDescriptionChange={setJobDescription}
         />
-        <AnswerOptionsStep
-          selectedOptions={state.selected_options}
-          onToggleOption={toggleOption}
-        />
-        <CustomPromptStep
-          customPrompt={state.custom_prompt}
-          onSave={setCustomPrompt}
-        />
+        <AnswerOptionsStep selectedOptions={state.selected_options} onToggleOption={toggleOption} />
+        <CustomPromptStep customPrompt={state.custom_prompt} onSave={setCustomPrompt} />
       </div>
     </div>
   );

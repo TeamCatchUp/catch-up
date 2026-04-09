@@ -15,11 +15,7 @@ import FilterDropdown, { type FilterOption } from '@/shared/components/ui/filter
 import { Input } from '@/shared/components/ui/input';
 import Pagination from '@/shared/components/ui/pagination';
 
-import {
-  USER_MGMT_SORT_OPTIONS,
-  type UserMgmtSortKey,
-  USERS_PER_PAGE,
-} from '../../constants/tokenUsageConfig';
+import { USER_MGMT_SORT_OPTIONS, type UserMgmtSortKey, USERS_PER_PAGE } from '../../constants/tokenUsageConfig';
 import { tokenUsageQueries } from '../../queries/tokenUsage.queries';
 import type { OrgMember } from '../../types/tokenUsageModel';
 import UserManagementTable from '../user-management/UserManagementTable';

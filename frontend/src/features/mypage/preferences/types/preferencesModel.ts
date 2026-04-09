@@ -1,12 +1,6 @@
 export type JobRole = 'pm' | 'developer' | 'designer' | 'cs_ops' | 'business_strategy' | 'sales' | 'custom';
 
-export type AnswerOption =
-  | 'glossary'
-  | 'background'
-  | 'assignee'
-  | 'similar_cases'
-  | 'impact_scope'
-  | 'ux_impact';
+export type AnswerOption = 'glossary' | 'background' | 'assignee' | 'similar_cases' | 'impact_scope' | 'ux_impact';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 

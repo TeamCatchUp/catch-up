@@ -326,7 +326,7 @@ export default function UsersStatusSection({
         {totalPages > 1 && <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={onPageChange} />}
         <div className="flex flex-1 items-center justify-end gap-6">
           <div className="flex items-center gap-2">
-            <div className="h-2.5 w-2.5 rounded-full bg-status-positive" />
+            <div className="bg-status-positive h-2.5 w-2.5 rounded-full" />
             <p className="text-body-small text-content-alternative">모두 연동된 이용자</p>
           </div>
           <div className="flex items-center gap-2">
