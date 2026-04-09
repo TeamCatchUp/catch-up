@@ -37,7 +37,7 @@ export default function AnswerOptionsStep({ selectedOptions, onToggleOption }: A
                     {opt.label}
                   </Chip>
                 </TooltipTrigger>
-                <TooltipContent size="sm" side="top">
+                <TooltipContent size="sm" side="bottom">
                   {opt.tooltip}
                 </TooltipContent>
               </Tooltip>
