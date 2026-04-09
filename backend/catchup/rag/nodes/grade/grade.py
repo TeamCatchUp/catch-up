@@ -31,7 +31,6 @@ async def grade_node(state: AgentState, llm: BaseChatModel):
             "grade_status": "bad",
             "grade_comment": "검색된 문서가 없습니다.",
             "retry_count": current_retry_count + 1,
-            **token_usages,
         }
 
     context_text = prepare_retrieved_context_text(retrieved_docs)

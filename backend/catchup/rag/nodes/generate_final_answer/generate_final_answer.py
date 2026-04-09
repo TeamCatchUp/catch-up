@@ -35,7 +35,6 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
         return {
             "messages": [AIMessage(content=FALLBACK_ANSWER)],
             "sources": [],
-            **token_usages
         }
     retrieved_context = prepare_retrieved_context_text(retrieved_docs)
     global_context = state["global_context"].model_dump()
@@ -88,7 +87,6 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
         return {
             "messages": [AIMessage(content=FALLBACK_ANSWER)],
             "sources": [],
-            **token_usages,
         }
     
     # 최종 답변 및 인용 대상 추출

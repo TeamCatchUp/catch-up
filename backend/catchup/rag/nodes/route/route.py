@@ -38,7 +38,6 @@ async def route_node(state: AgentState, llm: BaseChatModel):
         )
         return {
             "intent": "search_pipeline",
-            **token_usages,
         }
 
     logger.debug(

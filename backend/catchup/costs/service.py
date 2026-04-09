@@ -56,6 +56,8 @@ def _calculate_daily_cost(
             model_arn,
             input_tokens=usage["input_tokens"],
             output_tokens=usage["output_tokens"],
+            cache_read_tokens=usage["cache_read_tokens"],
+            cache_write_tokens=usage["cache_write_tokens"],
         )
 
     return {
@@ -100,6 +102,8 @@ def calculate_user_token_cost_ranking(
                     model_arn,
                     input_tokens=usage.get("input_tokens", 0),
                     output_tokens=usage.get("output_tokens", 0),
+                    cache_read_tokens=usage.get("cache_read_tokens", 0),
+                    cache_write_tokens=usage.get("cache_write_tokens", 0),
                 )
         result.append({
             "user_id": row.user_id,

@@ -46,7 +46,6 @@ async def generate_vector_queries_node(state: AgentState, llm: BaseChatModel):
         )
         return {
             "vector_search_queries": [fallback_query],
-            "token_breakdown": {}
         }
     
     _print_search_plan_log(plan)
