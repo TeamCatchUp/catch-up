@@ -35,7 +35,6 @@ EMPTY_QUERY_MESSAGE = "질문 내용을 함께 보내주세요."
 UNMAPPED_USER_MESSAGE = (
     "CatchUp에 등록되지 않은 사용자입니다."
 )
-# TODO : 생성자가 아닌 사람도 이어서 질문 가능하도록 수정 필요
 THREAD_OWNER_MISMATCH_MESSAGE = (
     "이 스레드는 다른 사용자 세션에 연결되어 있어 현재는 이어서 질문할 수 없습니다."
 )
@@ -69,6 +68,7 @@ class SlackTeamAuth:
     bot_user_id: str
 
 
+# webhook ingress 진입점
 def schedule_app_mention(request: SlackWebhookRequest) -> None:
     task = asyncio.create_task(get_slack_app_mention_service().handle(request))
     task.add_done_callback(_log_background_failure)
@@ -118,27 +118,34 @@ class SlackAppMentionService:
             await self._post_thread_reply(client, mention, EMPTY_QUERY_MESSAGE)
             return
 
+        # Slack User -> CatchUp User / 찾지 못하면 실패 메세지 반환
+        # TODO : 테스트 필요
         user_id = await run_in_threadpool(self._find_internal_user_id_sync, mention.slack_user_id)
         if user_id is None:
             await self._post_thread_reply(client, mention, UNMAPPED_USER_MESSAGE)
             return
 
+        # Thread Message 소유자 확인
+        # TODO : 소유자가 아닌 사람도 스레드 내에서 가능하도록 수정 필요
         existing_binding = await run_in_threadpool(self._load_thread_binding_sync, mention)
         if existing_binding is not None and existing_binding.user_id != user_id:
             await self._post_thread_reply(client, mention, THREAD_OWNER_MISMATCH_MESSAGE)
             return
 
+        # Global Context Loading
         global_context = await run_in_threadpool(self._load_global_context_sync, user_id)
         if global_context is None:
             await self._post_thread_reply(client, mention, MISSING_CONTEXT_MESSAGE)
             return
 
+        # 기존 Session 연결 없으면 Session 생성 / 존재하면 raw_query만 업데이트
         session_id = await run_in_threadpool(
             self._ensure_thread_binding_sync,
             mention,
             user_id,
         )
 
+        # Responer 시작
         responder = await SlackPlanResponder.start(
             client=client,
             channel_id=mention.channel_id,
@@ -156,6 +163,7 @@ class SlackAppMentionService:
                 query=mention.query,
                 responder=responder,
             )
+            # 전체 파이프라인 종료 시점에 Responder 종료
             await responder.finish(answer=reply_text, sources=sources)
         except Exception:
             await responder.fail(STREAM_FAILED_MESSAGE)
@@ -182,6 +190,7 @@ class SlackAppMentionService:
         chat_service = get_chat_service()
         markdown_enabled = False
 
+        # chat_stream 내부 yield 지점마다 chunk 응답 -> Task Event 상태 업데이트
         async for chunk in chat_service.chat_stream(
             global_context=global_context,
             session_id=session_id,
