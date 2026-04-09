@@ -38,19 +38,25 @@ def prepare_retrieved_context_text(documents: list[Document]) -> str:
     return "\n\n".join(parts)
 
 
-def build_system_message_with_prompt_caching(
+def build_system_message(
     static_prompt: str,
-    dynamic_prompts: list[str] | None = None
+    dynamic_prompts: list[str] | None = None,
+    cache_prompt: bool = False,
 ) -> SystemMessage:
-    content = [{
-        "type": "text",
-        "text": static_prompt,
-        "cache_control": {
-            "type": "ephemeral",
-            "ttl": "1h"
-        }
-    }]
     
+    # 정적 프롬프트 (캐싱 대상)
+    static_block: dict = {
+        "type": "text",
+        "text": static_prompt
+    }
+    
+    if cache_prompt:
+        static_block["cache_control"] = {"type": "ephemeral"}
+        # TODO: langchain-aws 지원 시점에 "ttl": "1h" 추가
+
+    content = [static_block]
+    
+    # 동적 프롬프트
     if dynamic_prompts:
         for prompt in dynamic_prompts:
             content.append({

@@ -10,7 +10,7 @@ from langchain_core.messages import HumanMessage
 
 from catchup.costs.utils import extract_token_usages
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.nodes.utils import build_system_message_with_prompt_caching
+from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import prepare_retrieved_context_text
@@ -45,12 +45,13 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
 
     # 시스템 프롬프트 빌드
     prompts = _load_prompts(global_context, retrieved_context)
-    system_message = build_system_message_with_prompt_caching(
+    system_message = build_system_message(
         static_prompt=prompts["system"],
         dynamic_prompts=[
             prompts["global_context"],
             prompts["retrieved_context"]
-        ]
+        ],
+        cache_prompt=False,
     )
     
     # 대화 내역 복원
