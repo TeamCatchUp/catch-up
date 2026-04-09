@@ -1,13 +1,13 @@
 'use client';
 
-import { usePreferencesForm } from '../hooks/usePreferencesForm';
-import AnswerOptionsStep from './AnswerOptionsStep';
-import CustomPromptStep from './CustomPromptStep';
-import JobSelectionStep from './JobSelectionStep';
-import SectionBar from './SectionBar';
+import { usePreferencesForm } from '../../hooks/usePreferencesForm';
+import SectionBar from '../SectionBar';
+import AnswerOptionsStep from '../steps/AnswerOptionsStep';
+import CustomPromptStep from '../steps/CustomPromptStep';
+import JobSelectionStep from '../steps/JobSelectionStep';
 
 export default function PromptBuilderSection() {
-  const { state, setJob, setCustomJobText, toggleOption, setCustomPrompt } = usePreferencesForm();
+  const { state, setJob, setCustomJobText, setJobDescription, toggleOption, setCustomPrompt } = usePreferencesForm();
 
   return (
     <div className="flex flex-col">
@@ -16,8 +16,10 @@ export default function PromptBuilderSection() {
         <JobSelectionStep
           selectedJob={state.selected_job}
           customJobText={state.custom_job_text}
+          jobDescription={state.job_description}
           onJobChange={setJob}
           onCustomJobTextChange={setCustomJobText}
+          onJobDescriptionChange={setJobDescription}
         />
         <AnswerOptionsStep
           selectedOptions={state.selected_options}
@@ -26,7 +28,6 @@ export default function PromptBuilderSection() {
         <CustomPromptStep
           customPrompt={state.custom_prompt}
           onSave={setCustomPrompt}
-          onDelete={() => setCustomPrompt(null)}
         />
       </div>
     </div>
