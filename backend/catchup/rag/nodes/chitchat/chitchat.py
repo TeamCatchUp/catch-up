@@ -51,7 +51,6 @@ async def chitchat_node(state: AgentState, llm: BaseChatModel):
         return {
             "messages": [AIMessage(content=FALLBACK_ANSWER)],
             "sources": [],
-            **token_usages,
         }
 
     return {

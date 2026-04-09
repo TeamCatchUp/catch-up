@@ -7,7 +7,7 @@ from langchain_core.documents import Document
 from catchup.costs.utils import extract_token_usages
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.nodes.utils import prepare_context_text
+from catchup.rag.nodes.utils import prepare_retrieved_context_text
 from catchup.rag.schemas.structures import GradeDocuments
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
@@ -31,10 +31,9 @@ async def grade_node(state: AgentState, llm: BaseChatModel):
             "grade_status": "bad",
             "grade_comment": "검색된 문서가 없습니다.",
             "retry_count": current_retry_count + 1,
-            **token_usages,
         }
 
-    context_text = prepare_context_text(retrieved_docs)
+    context_text = prepare_retrieved_context_text(retrieved_docs)
     prompt = prompt_loader.get_prompt(
         "rag/grade",
         query=query,

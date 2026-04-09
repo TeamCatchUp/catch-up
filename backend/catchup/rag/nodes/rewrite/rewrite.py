@@ -44,7 +44,6 @@ async def rewrite_node(state: AgentState, llm: BaseChatModel):
         )
         return {
             "rewritten_query": original_query,
-            **token_usages,
         }
 
     logger.debug(

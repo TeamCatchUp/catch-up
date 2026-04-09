@@ -15,8 +15,8 @@ def extract_token_usages(
     ctx.add_tokens()에 바로 넘길 수 있는 형태로 반환한다.
     """
     
-    usage = response.usage_metadata
-    if not usage:
+    usages = response.usage_metadata
+    if not usages:
         return {"token_breakdown": {}}
     
     metadata = response.response_metadata
@@ -25,12 +25,16 @@ def extract_token_usages(
         or metadata.get("model_name")
         or "unknown"
     )
-        
+    
+    cache_usages = usages.get("input_token_details") or {}
+
     return {
         "token_breakdown": {
             model: {
-                "input_tokens": usage.get("input_tokens", 0),
-                "output_tokens": usage.get("output_tokens", 0),
+                "input_tokens": usages.get("input_tokens", 0),
+                "output_tokens": usages.get("output_tokens", 0),
+                "cache_read_tokens": cache_usages.get("cache_read", 0),
+                "cache_write_tokens": cache_usages.get("cache_creation", 0),
             }
         }
     }
