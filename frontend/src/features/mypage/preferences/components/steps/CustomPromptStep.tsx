@@ -12,9 +12,16 @@ import StepHeader from '../StepHeader';
 interface CustomPromptStepProps {
   customPrompt: string | null;
   onSave: (value: string) => void;
+  isLoading?: boolean;
+  isPending?: boolean;
 }
 
-export default function CustomPromptStep({ customPrompt, onSave }: CustomPromptStepProps) {
+export default function CustomPromptStep({
+  customPrompt,
+  onSave,
+  isLoading = false,
+  isPending = false,
+}: CustomPromptStepProps) {
   const hasPrompt = customPrompt !== null;
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState('');
@@ -65,6 +72,17 @@ export default function CustomPromptStep({ customPrompt, onSave }: CustomPromptS
   };
 
   const showInput = !hasPrompt || isEditing;
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-5 py-5">
+        <StepHeader stepNumber={3} title="커스텀 프롬프트 입력" description="원하는 답변 방식을 직접 입력해보세요." />
+        <div className="border-edge-neutral bg-fill-normal flex h-11.5 items-center justify-center rounded-xl border">
+          <span className="text-body-small text-content-assistive">불러오는 중...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5 py-5">
@@ -131,10 +149,10 @@ export default function CustomPromptStep({ customPrompt, onSave }: CustomPromptS
                     variant="capsule-solid-primary"
                     size="md"
                     className="h-9"
-                    disabled={isEmpty}
+                    disabled={isEmpty || isPending}
                     onClick={handleSave}
                   >
-                    저장
+                    {isPending ? '저장 중...' : '저장'}
                   </Button>
                 </div>
               </div>
