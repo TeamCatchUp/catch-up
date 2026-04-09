@@ -138,7 +138,7 @@ export default function JobSelectionStep({
                   className={cn(
                     'text-body-small flex-1 bg-transparent outline-none',
                     isDescDisabled
-                      ? 'text-content-normal cursor-not-allowed'
+                      ? 'text-content-assistive cursor-not-allowed'
                       : 'text-content-normal placeholder:text-content-assistive',
                   )}
                   placeholder={isDescDisabled ? '직무를 먼저 입력해주세요.' : '주요 업무를 간단히 입력해주세요.'}

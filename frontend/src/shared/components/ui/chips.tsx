@@ -43,7 +43,7 @@ const chipVariants = cva(
       {
         variant: 'capsule',
         selected: true,
-        class: 'bg-accent-green-lighten border-accent-green-neutral text-green-50',
+        class: 'bg-accent-green-lighten border-accent-green-neutral text-accent-green',
       },
     ],
     defaultVariants: {

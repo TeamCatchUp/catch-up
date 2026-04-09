@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import IconCopy from '@/public/icons/icon/copy.svg';
-import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
@@ -59,7 +58,11 @@ export default function CustomPromptStep({ customPrompt, onSave }: CustomPromptS
 
   const handleCopy = async () => {
     if (!customPrompt) return;
-    await navigator.clipboard.writeText(customPrompt);
+    try {
+      await navigator.clipboard.writeText(customPrompt);
+    } catch {
+      // clipboard API 실패 시 무시 (VPN 환경 등)
+    }
   };
 
   const showInput = !hasPrompt || isEditing;
@@ -69,11 +72,7 @@ export default function CustomPromptStep({ customPrompt, onSave }: CustomPromptS
       {/* 헤더 + 편집하기 버튼 */}
       <div className="flex items-end gap-5">
         <div className="flex-1">
-          <StepHeader
-            stepNumber={3}
-            title="커스텀 프롬프트 입력"
-            description="원하는 답변 방식을 직접 입력해보세요."
-          />
+          <StepHeader stepNumber={3} title="커스텀 프롬프트 입력" description="원하는 답변 방식을 직접 입력해보세요." />
         </div>
         {hasPrompt && !isEditing && (
           <Button
@@ -83,7 +82,6 @@ export default function CustomPromptStep({ customPrompt, onSave }: CustomPromptS
             className="shrink-0"
             onClick={() => setIsEditing(true)}
           >
-            <IconEditPencil className="size-5" />
             편집하기
           </Button>
         )}
@@ -147,16 +145,9 @@ export default function CustomPromptStep({ customPrompt, onSave }: CustomPromptS
       {hasPrompt && !isEditing && (
         <div className="border-edge-neutral bg-fill-normal flex flex-col items-end gap-4 rounded-xl border p-4">
           <div className="max-h-50 w-full overflow-y-auto px-0.5">
-            <p className="text-body-small text-content-normal whitespace-pre-wrap wrap-break-word">
-              {customPrompt}
-            </p>
+            <p className="text-body-small text-content-normal wrap-break-word whitespace-pre-wrap">{customPrompt}</p>
           </div>
-          <Button
-            type="button"
-            variant="box-outline-gray"
-            size="md"
-            onClick={handleCopy}
-          >
+          <Button type="button" variant="box-outline-gray" size="md" onClick={handleCopy}>
             복사하기
             <IconCopy className="size-5" />
           </Button>

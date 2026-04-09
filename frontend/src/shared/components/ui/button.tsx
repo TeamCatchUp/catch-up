@@ -29,7 +29,7 @@ const buttonVariants = cva(
         'box-outline-blue':
           'border-edge-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive disabled:bg-fill-interaction-inactive disabled:text-content-assistive disabled:border-edge-assistive bg-fill-primary-assistive text-content-primary rounded-lg border',
         'box-soft-primary':
-          'bg-fill-primary-neutral border-edge-neutral text-content-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive disabled:bg-fill-interaction-inactive disabled:border-edge-assistive disabled:text-content-assistive rounded-lg border',
+          'bg-fill-primary-normal-neutral border-edge-neutral text-content-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive disabled:bg-fill-interaction-inactive disabled:border-edge-assistive disabled:text-content-assistive rounded-lg border',
 
         /* ── Capsule Buttons ── */
         'capsule-solid-primary':
