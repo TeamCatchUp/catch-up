@@ -2,20 +2,20 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import IconCopy from '@/public/icons/icon/copy.svg';
 import IconEditPencil from '@/public/icons/icon/edit_pencil.svg';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
-import { MAX_PROMPT_LENGTH } from '../constants/preferencesConfig';
-import StepHeader from './StepHeader';
+import { MAX_PROMPT_LENGTH } from '../../constants/preferencesConfig';
+import StepHeader from '../StepHeader';
 
 interface CustomPromptStepProps {
   customPrompt: string | null;
   onSave: (value: string) => void;
-  onDelete: () => void;
 }
 
-export default function CustomPromptStep({ customPrompt, onSave, onDelete }: CustomPromptStepProps) {
+export default function CustomPromptStep({ customPrompt, onSave }: CustomPromptStepProps) {
   const hasPrompt = customPrompt !== null;
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState('');
@@ -57,17 +57,40 @@ export default function CustomPromptStep({ customPrompt, onSave, onDelete }: Cus
     setIsActive(false);
   };
 
+  const handleCopy = async () => {
+    if (!customPrompt) return;
+    await navigator.clipboard.writeText(customPrompt);
+  };
+
   const showInput = !hasPrompt || isEditing;
 
   return (
     <div className="flex flex-col gap-5 py-5">
-      <StepHeader
-        stepNumber={3}
-        title="커스텀 프롬프트 입력"
-        description="원하는 답변 방식을 직접 입력해보세요."
-      />
+      {/* 헤더 + 편집하기 버튼 */}
+      <div className="flex items-end gap-5">
+        <div className="flex-1">
+          <StepHeader
+            stepNumber={3}
+            title="커스텀 프롬프트 입력"
+            description="원하는 답변 방식을 직접 입력해보세요."
+          />
+        </div>
+        {hasPrompt && !isEditing && (
+          <Button
+            type="button"
+            variant="box-soft-primary"
+            size="md"
+            className="shrink-0"
+            onClick={() => setIsEditing(true)}
+          >
+            <IconEditPencil className="size-5" />
+            편집하기
+          </Button>
+        )}
+      </div>
 
-      {showInput ? (
+      {/* 입력 모드 */}
+      {showInput && (
         <div
           className={cn(
             'bg-fill-normal w-full rounded-xl border',
@@ -118,20 +141,24 @@ export default function CustomPromptStep({ customPrompt, onSave, onDelete }: Cus
             )}
           </div>
         </div>
-      ) : (
-        <div className="border-edge-neutral bg-fill-normal flex max-h-50 min-h-11.5 items-start gap-4 overflow-y-auto rounded-xl border p-4">
-          <p className="text-body-small text-content-normal w-full wrap-break-word whitespace-pre-wrap">
-            {customPrompt}
-          </p>
+      )}
+
+      {/* 저장된 상태 */}
+      {hasPrompt && !isEditing && (
+        <div className="border-edge-neutral bg-fill-normal flex flex-col items-end gap-4 rounded-xl border p-4">
+          <div className="max-h-50 w-full overflow-y-auto px-0.5">
+            <p className="text-body-small text-content-normal whitespace-pre-wrap wrap-break-word">
+              {customPrompt}
+            </p>
+          </div>
           <Button
             type="button"
-            variant="box-soft-primary"
+            variant="box-outline-gray"
             size="md"
-            className="sticky top-0 shrink-0"
-            onClick={() => setIsEditing(true)}
+            onClick={handleCopy}
           >
-            <IconEditPencil className="size-5" />
-            편집하기
+            복사하기
+            <IconCopy className="size-5" />
           </Button>
         </div>
       )}
