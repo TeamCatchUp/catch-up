@@ -140,7 +140,6 @@ class User(Base):
         server_default=text(f"'{JobLevel.MEMBER}'")
     )
     status: Mapped[UserStatus] = mapped_column(String(10), nullable=False)
-    custom_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -154,6 +153,51 @@ class User(Base):
     )
     workspaces: Mapped[list["Workspace"]] = association_proxy("workspace_links", "workspace")
     oauth_user: Mapped["OAuthUser"] = relationship(back_populates="user")
+    prompt_settings: Mapped[Optional["UserPromptSetting"]] = relationship(
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class JobRole(StrEnum):
+    PM = "기획자 (PM)"
+    DEVELOPER = "개발자"
+    DESIGNER = "디자이너"
+    CS_OPERATIONS = "CS·운영"
+    MANAGEMENT_STRATEGY = "경영·전략"
+    SALES = "세일즈"
+    CUSTOM = "직접 입력"
+
+
+class ResponseStyleOption(StrEnum):
+    INCLUDE_TERMINOLOGY = "용어 설명 포함"
+    INCLUDE_WORK_CONTEXT = "작업 배경 설명"
+    AUTO_SHOW_ASSIGNEE = "담당자 자동 표시"
+    ATTACH_SIMILAR_CASES = "유사 사례 첨부"
+    SPECIFY_IMPL_SCOPE = "구현 영향 범위 명시"
+    SPECIFY_UX_IMPACT = "화면·UX 영향 명시"
+
+
+class UserPromptSetting(Base):
+    __tablename__ = "user_prompt_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False)
+    
+    job_role: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    custom_job_text: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    job_description: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    selected_options: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
+    custom_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped["User"] = relationship(back_populates="prompt_settings")
 
 
 class UserRoleHistory(Base):
