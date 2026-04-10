@@ -170,7 +170,7 @@ class JobRole(StrEnum):
     CUSTOM = "직접 입력"
 
 
-class ResponseStyleOption(StrEnum):
+class SelectedOption(StrEnum):
     INCLUDE_TERMINOLOGY = "용어 설명 포함"
     INCLUDE_WORK_CONTEXT = "작업 배경 설명"
     AUTO_SHOW_ASSIGNEE = "담당자 자동 표시"
