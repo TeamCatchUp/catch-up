@@ -9,6 +9,7 @@ from langgraph.graph.message import add_messages
 
 from catchup.db.models import SourceType
 from catchup.rag.schemas.context import GlobalContext
+from catchup.rag.schemas.prompt_settings import PromptSettings
 from catchup.rag.schemas.structures import GraphDbSearchQuery
 from catchup.rag.schemas.structures import VectorDbSearchQuery
 
@@ -36,5 +37,7 @@ class AgentState(TypedDict):
     global_context: GlobalContext
     
     tool_filters: Optional[list[SourceType]]
+    
+    prompt_settings: PromptSettings
     
     rerank_count: int
