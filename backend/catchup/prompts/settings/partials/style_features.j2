@@ -1,0 +1,65 @@
+{% macro background_cause() %}
+- Lead with **why it happened and what triggered it**, not how it was built.
+{% endmacro %}
+{% macro inline_jargon() %}
+- Explain jargon inline the first time it appears.
+{% endmacro %}
+{% macro user_impact() %}
+- Reframe every technical change in terms of **user/product impact**.
+{% endmacro %}
+{% macro assignee() %}
+- Show the **assignee** when ownership of a task or domain is relevant.
+{% endmacro %}
+{% macro similar_cases() %}
+- Attach **similar past case references** from the knowledge base where applicable.
+{% endmacro %}
+{% macro similar_cases_cs() %}
+- Surface **similar past incident patterns** and applicable **response templates** from the knowledge base.
+{% endmacro %}
+{% macro similar_cases_sales() %}
+- Connect to **similar customer adoption cases and validated ROI signals** from the knowledge base to strengthen the narrative.
+{% endmacro %}
+{% macro risk_blocker() %}
+- Include **risk/blocker flags** for anything unresolved that could affect users or delivery.
+{% endmacro %}
+{% macro timeline() %}
+- State **timeline and resolution point** prominently.
+{% endmacro %}
+{% macro undocumented_flag() %}
+- Explicitly flag any requirement or decision with **no documented rationale** (mark as "미문서화").
+{% endmacro %}
+{% macro code_links() %}
+- Surface **PR links, commit refs, and affected file paths** before any prose summary.
+{% endmacro %}
+{% macro impl_scope() %}
+- Clearly state **which APIs, components, or data models are affected**.
+{% endmacro %}
+{% macro actionable_only() %}
+- When translating specs or policy docs, extract only **actionable information** — skip rationale unless asked.
+{% endmacro %}
+{% macro trace_to_requirement() %}
+- Trace every technical change back to the originating **Jira issue, product requirement, or user scenario**.
+{% endmacro %}
+{% macro ux_impact() %}
+- Translate every change into **user-flow, interaction-state, and component-behavior** language — not implementation language.
+{% endmacro %}
+{% macro metrics_impact() %}
+- Map every change to its **downstream data impact**: which tracking events, metrics, funnels, or dashboards are affected.
+{% endmacro %}
+{% macro untracked_flag() %}
+- Immediately flag changes where **tracking is missing or instrumentation is absent** (mark as "미트래킹").
+{% endmacro %}
+{% macro summary_compress(style) %}
+{% if style == "executive" %}
+- Open with a **single-sentence bottom line**, followed by a **three-sentence context summary**. No more preamble.
+{% elif style == "sales" %}
+- Open with a **one-sentence customer value statement**, then provide a brief supporting summary (3 sentences max).
+{% endif %}
+{% endmacro %}
+{% macro customer_reposition() %}
+- Reposition all internal information into **customer value and deal-impact language**; lead with **buyer outcomes**, not implementation steps.
+{% endmacro %}
+{% macro deal_blocker() %}
+- Proactively detect and surface potential **deal blockers**: unresolved bugs, slipped timelines, missing features, compliance gaps.
+- If a past sales commitment conflicts with current product capability, **flag it immediately**.
+{% endmacro %}
