@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 
 from catchup.costs.utils import extract_token_usages
+from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import get_conversation_history
@@ -23,6 +24,7 @@ from catchup.rag.state import AgentState
 logger = structlog.get_logger()
 
 @log_node
+@token_usage
 async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
 
     # 토큰 사용량 초기화

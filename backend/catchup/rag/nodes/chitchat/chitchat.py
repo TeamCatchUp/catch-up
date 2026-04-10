@@ -5,6 +5,7 @@ from langchain_core.messages import HumanMessage
 from langchain_core.messages import SystemMessage
 
 from catchup.costs.utils import extract_token_usages
+from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
@@ -15,6 +16,7 @@ from catchup.rag.state import AgentState
 logger = structlog.get_logger()
 
 @log_node
+@token_usage
 async def chitchat_node(state: AgentState, llm: BaseChatModel):
     query = state["original_query"]
     conversation_history = get_conversation_history(state["messages"])

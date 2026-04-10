@@ -1,6 +1,11 @@
+import functools
+from typing import Awaitable
+from typing import Callable
 from typing import TypedDict
 
 from langchain_core.messages import AIMessage
+
+from catchup.costs.contexts.chat import ChatTokenUsageContext
 
 
 class _TokenUsage(TypedDict):
@@ -38,3 +43,14 @@ def extract_token_usages(
             }
         }
     }
+
+
+def token_usage(func: Callable[..., Awaitable[dict]]):
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        result = await func(*args, **kwargs)
+        if token_breakdown := result.pop("token_breakdown", None):
+            if ctx := ChatTokenUsageContext.get():
+                ctx.add_tokens(token_breakdown)
+        return result
+    return wrapper

@@ -13,30 +13,6 @@ from catchup.rag.schemas.structures import GraphDbSearchQuery
 from catchup.rag.schemas.structures import VectorDbSearchQuery
 
 
-def add_tokens(
-    a: dict[str, dict[str, int]],
-    b: dict[str, dict[str, int]],
-) -> dict[str, dict[str, int]]:
-    """
-    토큰 사용량 집계 목적의 reducer.
-    """
-    if not b:
-        return {}
-    
-    result = dict(a)
-    for model, usage in b.items():
-        current = result.get(model, {})
-        
-        # 하위 버전 체크포인트 State 호환을 위해 모든 필드에 .get() 사용
-        result[model] = {
-            "input_tokens": current.get("input_tokens", 0) + usage.get("input_tokens", 0),
-            "output_tokens": current.get("output_tokens", 0) + usage.get("output_tokens", 0),
-            "cache_read_tokens": current.get("cache_read_tokens", 0) + usage.get("cache_read_tokens", 0),
-            "cache_write_tokens": current.get("cache_write_tokens", 0) + usage.get("cache_write_tokens", 0),
-        }
-    return result
-
-
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
     intent: Literal["chitchat", "search_pipeline"]
@@ -60,7 +36,5 @@ class AgentState(TypedDict):
     global_context: GlobalContext
     
     tool_filters: Optional[list[SourceType]]
-    
-    token_breakdown: Annotated[dict[str, dict[str, int]], add_tokens]
     
     rerank_count: int
