@@ -1,3 +1,6 @@
+"""
+Server Side Slack Dispatcher
+"""
 from __future__ import annotations
 
 import structlog
@@ -8,12 +11,12 @@ from catchup.connectors.slack.webhook.responses import accepted_incremental_resp
 from catchup.connectors.slack.webhook.responses import ignored_event_response
 from catchup.connectors.slack.webhook.responses import ignored_wrapper_response
 from catchup.connectors.slack.webhook.responses import url_verification_response
-from catchup.server.connector.slack.app_mention_service import schedule_app_mention
+from catchup.server.connector.slack.app_mention_adapter import schedule_app_mention
+from catchup.server.connector.slack.schemas import SlackIgnoredWebhookResponse
+from catchup.server.connector.slack.schemas import SlackWebhookRequest
+from catchup.server.connector.slack.schemas import SlackWebhookResponse
 from catchup.sync.incremental.resolve import resolve_slack_event
 from catchup.sync.incremental.service import get_incremental_service
-from catchup.sync.ingress.types import SlackIgnoredWebhookResponse
-from catchup.sync.ingress.types import SlackWebhookRequest
-from catchup.sync.ingress.types import SlackWebhookResponse
 
 logger = structlog.get_logger(__name__)
 
@@ -62,7 +65,7 @@ async def handle_slack_webhook(
         return await handle_metadata_event(request)
 
     if request.event_type == "app_mention":
-        # Timeout 제약 만족을 위해서 즉시 응답 후 답변 생성 스케쥴링
+        # Slack Webhook Timeout을 위해 즉시 응답후 답변 생성 스케쥴링
         schedule_app_mention(request)
         return accepted_async_response(event_type=request.event_type)
 

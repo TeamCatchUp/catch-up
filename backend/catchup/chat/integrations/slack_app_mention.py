@@ -1,9 +1,13 @@
-import asyncio
+from __future__ import annotations
+
 import re
 import uuid
+from collections.abc import Awaitable
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
+from typing import Protocol
 
 import structlog
 from fastapi.concurrency import run_in_threadpool
@@ -12,41 +16,33 @@ from catchup.chat.factory import get_chat_service
 from catchup.chat.schemas import ChatStreamingSourceResponse
 from catchup.chat.schemas import ChatStreamingStatusResponse
 from catchup.chat.schemas import ChatStreamingTokenResponse
-from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.db.chat_room import get_chat_room
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
 from catchup.db.slack import bot_repository
-from catchup.db.slack.oauth_repository import get_slack_token_by_team_id
 from catchup.db.user_source_mapping import find_user_id_by_source_mapping
 from catchup.db.users import get_user_with_full_context
 from catchup.rag.schemas.context import GlobalCompanyContext
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.context import GlobalUserContext
 from catchup.rag.schemas.context import GlobalWorkspaceContext
-from catchup.server.connector.slack.plan_stream import SlackPlanResponder
-from catchup.sync.ingress.types import SlackWebhookRequest
 
 logger = structlog.get_logger(__name__)
 
 MENTION_PATTERN = re.compile(r"<@[^>]+>")
 
 EMPTY_QUERY_MESSAGE = "질문 내용을 함께 보내주세요."
-UNMAPPED_USER_MESSAGE = (
-    "CatchUp에 등록되지 않은 사용자입니다."
-)
+UNMAPPED_USER_MESSAGE = "CatchUp에 등록되지 않은 사용자입니다."
 THREAD_OWNER_MISMATCH_MESSAGE = (
     "이 스레드는 다른 사용자 세션에 연결되어 있어 현재는 이어서 질문할 수 없습니다."
 )
-# Global Context Load Failed
 MISSING_CONTEXT_MESSAGE = "CatchUp 사용자 컨텍스트를 찾지 못해 요청을 처리할 수 없습니다."
-# TODO : Internal Server Error
 EMPTY_ANSWER_MESSAGE = "답변을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요."
 STREAM_FAILED_MESSAGE = "답변 생성 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."
 
 
 @dataclass(slots=True, frozen=True)
-class SlackAppMentionCommand:
+class SlackAppMentionRequest:
     team_id: str
     channel_id: str
     thread_ts: str
@@ -56,54 +52,45 @@ class SlackAppMentionCommand:
 
 
 @dataclass(slots=True, frozen=True)
-class SlackThreadBinding:
+class SlackThreadSessionBinding:
     session_id: uuid.UUID
-    chat_room_id: int | None
     user_id: int
 
 
-@dataclass(slots=True, frozen=True)
-class SlackTeamAuth:
-    bot_access_token: str
-    bot_user_id: str
+class SlackAppMentionResponder(Protocol):
+    async def on_node(self, node: str) -> None: ...
+
+    async def append_answer_markdown(self, token: str) -> None: ...
+
+    async def on_sources(self, sources: list[Any]) -> None: ...
+
+    async def finish(self, *, answer: str, sources: list[Any]) -> None: ...
+
+    async def fail(self, message: str) -> None: ...
 
 
-# webhook ingress 진입점
-def schedule_app_mention(request: SlackWebhookRequest) -> None:
-    task = asyncio.create_task(get_slack_app_mention_service().handle(request))
-    task.add_done_callback(_log_background_failure)
-
-
-def _log_background_failure(task: asyncio.Task[None]) -> None:
-    try:
-        task.result()
-    except Exception:
-        logger.exception("slack_app_mention_failed")
+ReplyPoster = Callable[[SlackAppMentionRequest, str], Awaitable[None]]
+ResponderFactory = Callable[
+    [SlackAppMentionRequest],
+    Awaitable[SlackAppMentionResponder],
+]
 
 
 @lru_cache(maxsize=1)
-def get_slack_app_mention_service() -> "SlackAppMentionService":
-    return SlackAppMentionService()
+def get_slack_app_mention_orchestrator() -> "SlackAppMentionOrchestrator":
+    return SlackAppMentionOrchestrator()
 
 
-class SlackAppMentionService:
-    async def handle(self, request: SlackWebhookRequest) -> None:
-        mention = parse_app_mention_event(request.team_id, request.event)
-        if mention is None:
-            logger.info("slack_app_mention_ignored_invalid_payload", team_id=request.team_id)
-            return
-        
-        auth = await run_in_threadpool(self._load_team_auth_sync, mention.team_id)
-        if auth is None:
-            logger.warning(
-                "slack_app_mention_missing_team_token",
-                team_id=mention.team_id,
-                channel_id=mention.channel_id,
-                thread_ts=mention.thread_ts,
-            )
-            return
-
-        if mention.slack_user_id == auth.bot_user_id:
+class SlackAppMentionOrchestrator:
+    async def handle_mention(
+        self,
+        mention: SlackAppMentionRequest,
+        *,
+        bot_user_id: str,
+        post_thread_reply: ReplyPoster,
+        responder_factory: ResponderFactory,
+    ) -> None:
+        if mention.slack_user_id == bot_user_id:
             logger.info(
                 "slack_app_mention_ignored_self",
                 team_id=mention.team_id,
@@ -112,64 +99,54 @@ class SlackAppMentionService:
             )
             return
 
-        client = SlackApiClientWrapper(auth.bot_access_token, mention.team_id)
-
         if not mention.query:
-            await self._post_thread_reply(client, mention, EMPTY_QUERY_MESSAGE)
+            await post_thread_reply(mention, EMPTY_QUERY_MESSAGE)
             return
 
-        # Slack User -> CatchUp User / 찾지 못하면 실패 메세지 반환
-        # TODO : 테스트 필요
-        user_id = await run_in_threadpool(self._find_internal_user_id_sync, mention.slack_user_id)
+        user_id = await run_in_threadpool(
+            self._find_internal_user_id_sync,
+            mention.slack_user_id,
+        )
         if user_id is None:
-            await self._post_thread_reply(client, mention, UNMAPPED_USER_MESSAGE)
+            await post_thread_reply(mention, UNMAPPED_USER_MESSAGE)
             return
 
-        # Thread Message 소유자 확인
-        # TODO : 소유자가 아닌 사람도 스레드 내에서 가능하도록 수정 필요
-        existing_binding = await run_in_threadpool(self._load_thread_binding_sync, mention)
-        if existing_binding is not None and existing_binding.user_id != user_id:
-            await self._post_thread_reply(client, mention, THREAD_OWNER_MISMATCH_MESSAGE)
+        thread_session_binding = await run_in_threadpool(
+            self._load_thread_session_binding_sync,
+            mention,
+        )
+        if (
+            thread_session_binding is not None
+            and thread_session_binding.user_id != user_id
+        ):
+            await post_thread_reply(mention, THREAD_OWNER_MISMATCH_MESSAGE)
             return
 
-        # Global Context Loading
         global_context = await run_in_threadpool(self._load_global_context_sync, user_id)
         if global_context is None:
-            await self._post_thread_reply(client, mention, MISSING_CONTEXT_MESSAGE)
+            await post_thread_reply(mention, MISSING_CONTEXT_MESSAGE)
             return
 
-        # 기존 Session 연결 없으면 Session 생성 / 존재하면 raw_query만 업데이트
         session_id = await run_in_threadpool(
             self._ensure_thread_binding_sync,
             mention,
             user_id,
         )
 
-        # Responer 시작
-        responder = await SlackPlanResponder.start(
-            client=client,
-            channel_id=mention.channel_id,
-            thread_ts=mention.thread_ts,
-            team_id=mention.team_id,
-            user_id=mention.slack_user_id,
-            query=mention.query,
-        )
+        responder = await responder_factory(mention)
 
         try:
-            # Slack Thread에 대응되는 Session Id으로 Chat Stream 파이프라인 실행
             reply_text, sources = await self._run_chat_stream(
                 global_context=global_context,
                 session_id=session_id,
                 query=mention.query,
                 responder=responder,
             )
-            # 전체 파이프라인 종료 시점에 Responder 종료
             await responder.finish(answer=reply_text, sources=sources)
         except Exception:
             await responder.fail(STREAM_FAILED_MESSAGE)
             raise
 
-        # 최종 답변 생성 이후 ChatRoom ID Attach
         await run_in_threadpool(
             self._attach_chat_room_if_ready_sync,
             mention,
@@ -183,14 +160,13 @@ class SlackAppMentionService:
         global_context: GlobalContext,
         session_id: uuid.UUID,
         query: str,
-        responder: SlackPlanResponder,
+        responder: SlackAppMentionResponder,
     ) -> tuple[str, list[Any]]:
         answer_parts: list[str] = []
         sources: list[Any] = []
         chat_service = get_chat_service()
         markdown_enabled = False
 
-        # chat_stream 내부 yield 지점마다 chunk 응답 -> Task Event 상태 업데이트
         async for chunk in chat_service.chat_stream(
             global_context=global_context,
             session_id=session_id,
@@ -216,28 +192,6 @@ class SlackAppMentionService:
         answer = "".join(answer_parts).strip() or EMPTY_ANSWER_MESSAGE
         return answer, sources
 
-    async def _post_thread_reply(
-        self,
-        client: SlackApiClientWrapper,
-        mention: SlackAppMentionCommand,
-        text: str,
-    ) -> None:
-        await client.post_message(
-            channel=mention.channel_id,
-            thread_ts=mention.thread_ts,
-            text=text,
-        )
-
-    def _load_team_auth_sync(self, team_id: str) -> SlackTeamAuth | None:
-        with SessionLocal() as db:
-            token = get_slack_token_by_team_id(db, team_id)
-            if token is None:
-                return None
-            return SlackTeamAuth(
-                bot_access_token=token.bot_access_token,
-                bot_user_id=token.bot_user_id,
-            )
-
     def _find_internal_user_id_sync(self, slack_user_id: str) -> int | None:
         with SessionLocal() as db:
             return find_user_id_by_source_mapping(
@@ -246,10 +200,10 @@ class SlackAppMentionService:
                 external_user_identifier=slack_user_id,
             )
 
-    def _load_thread_binding_sync(
+    def _load_thread_session_binding_sync(
         self,
-        mention: SlackAppMentionCommand,
-    ) -> SlackThreadBinding | None:
+        mention: SlackAppMentionRequest,
+    ) -> SlackThreadSessionBinding | None:
         with SessionLocal() as db:
             thread = bot_repository.get_slack_chat_thread(
                 db,
@@ -259,15 +213,14 @@ class SlackAppMentionService:
             )
             if thread is None:
                 return None
-            return SlackThreadBinding(
+            return SlackThreadSessionBinding(
                 session_id=thread.session_id,
-                chat_room_id=thread.chat_room_id,
                 user_id=thread.user_id,
             )
 
     def _ensure_thread_binding_sync(
         self,
-        mention: SlackAppMentionCommand,
+        mention: SlackAppMentionRequest,
         user_id: int,
     ) -> uuid.UUID:
         with SessionLocal() as db:
@@ -318,7 +271,7 @@ class SlackAppMentionService:
 
     def _attach_chat_room_if_ready_sync(
         self,
-        mention: SlackAppMentionCommand,
+        mention: SlackAppMentionRequest,
         session_id: uuid.UUID,
         user_id: int,
     ) -> None:
@@ -347,7 +300,7 @@ class SlackAppMentionService:
 def parse_app_mention_event(
     team_id: str,
     event: dict[str, Any],
-) -> SlackAppMentionCommand | None:
+) -> SlackAppMentionRequest | None:
     channel_id = str(event.get("channel") or "").strip()
     slack_user_id = str(event.get("user") or "").strip()
     raw_text = str(event.get("text") or "")
@@ -357,7 +310,7 @@ def parse_app_mention_event(
     if not team_id or not channel_id or not slack_user_id or not event_ts:
         return None
 
-    return SlackAppMentionCommand(
+    return SlackAppMentionRequest(
         team_id=team_id,
         channel_id=channel_id,
         thread_ts=thread_ts,

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from catchup.sync.ingress.types import SlackAcceptedWebhookResponse
-from catchup.sync.ingress.types import SlackChallengeWebhookResponse
-from catchup.sync.ingress.types import SlackErrorWebhookResponse
-from catchup.sync.ingress.types import SlackIgnoredWebhookResponse
-from catchup.sync.ingress.types import SlackProcessedWebhookResponse
+from catchup.server.connector.slack.schemas import SlackAcceptedWebhookResponse
+from catchup.server.connector.slack.schemas import SlackChallengeWebhookResponse
+from catchup.server.connector.slack.schemas import SlackErrorWebhookResponse
+from catchup.server.connector.slack.schemas import SlackIgnoredWebhookResponse
+from catchup.server.connector.slack.schemas import SlackStatusWebhookResponse
 
 
 def url_verification_response(*, challenge: str | None) -> SlackChallengeWebhookResponse:
@@ -48,15 +48,15 @@ def accepted_incremental_response(
     )
 
 
-def accepted_async_response(*, event_type: str) -> SlackProcessedWebhookResponse:
-    return SlackProcessedWebhookResponse(
+def accepted_async_response(*, event_type: str) -> SlackStatusWebhookResponse:
+    return SlackStatusWebhookResponse(
         status="accepted",
         event_type=event_type,
     )
 
 
-def processed_metadata_response(*, event_type: str) -> SlackProcessedWebhookResponse:
-    return SlackProcessedWebhookResponse(
+def processed_metadata_response(*, event_type: str) -> SlackStatusWebhookResponse:
+    return SlackStatusWebhookResponse(
         status="processed",
         event_type=event_type,
     )

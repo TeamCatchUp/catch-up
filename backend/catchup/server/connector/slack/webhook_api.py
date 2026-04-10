@@ -1,18 +1,20 @@
 from typing import Optional
 
+import structlog
 from fastapi import APIRouter
 from fastapi import Header
 from fastapi import HTTPException
 from fastapi import Request
 from fastapi import status
 from fastapi.encoders import jsonable_encoder
-import structlog
 
 from catchup.configs.config import settings
 from catchup.connectors.slack.schemas import SlackEventWrapper
+from catchup.server.connector.slack.schemas import SlackWebhookRequest
+from catchup.server.connector.slack.webhook_dispatcher import (
+    handle_slack_webhook as dispatch_slack_webhook,
+)
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
-from catchup.sync.ingress.slack import handle_slack_webhook as handle_slack_webhook_ingress
-from catchup.sync.ingress.types import SlackWebhookRequest
 
 logger = structlog.get_logger(__name__)
 
@@ -30,6 +32,7 @@ async def handle_slack_webhook(
     """
     payload_body = await request.body()
 
+    # 1. Webhook Vefiry
     verify_result = WebhookVerifierProvider.verify_slack(
         payload_body=payload_body,
         signature=x_slack_signature,
@@ -47,6 +50,7 @@ async def handle_slack_webhook(
             detail="Invalid Slack Webhook Signature",
         )
 
+    # 2. Payload Valid Check
     try:
         payload = await request.json()
     except Exception:
@@ -56,9 +60,10 @@ async def handle_slack_webhook(
             detail="Invalid JSON payload",
         )
 
+    # 3. Dipatch Slack Webhook Event (Incremental / Metadata / Chat)
     try:
         event_wrapper = SlackEventWrapper(**payload)
-        response = await handle_slack_webhook_ingress(
+        response = await dispatch_slack_webhook(
             request=SlackWebhookRequest.from_raw(
                 wrapper_type=event_wrapper.type,
                 team_id=event_wrapper.team_id or "",
