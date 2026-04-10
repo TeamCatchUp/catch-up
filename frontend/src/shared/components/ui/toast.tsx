@@ -8,7 +8,7 @@ export default function Toast() {
       position="bottom-center"
       offset={142}
       duration={1000}
-      className="z-9999"
+      className="z-toast"
       toastOptions={{
         unstyled: true,
         classNames: {

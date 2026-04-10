@@ -15,7 +15,7 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         month: 'flex w-55 flex-col',
         month_caption: 'flex h-8.5 items-center justify-center pb-1.5',
         caption_label: 'text-body-small text-content-strong',
-        nav: 'absolute inset-x-0 top-0 z-20 flex items-center justify-between',
+        nav: 'absolute inset-x-0 top-0 z-local flex items-center justify-between',
         button_previous:
           'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-neutral hover:bg-fill-interaction-hover',
         button_next:
@@ -25,7 +25,7 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         week: 'flex',
         day: 'relative flex h-6 flex-1 items-center justify-center text-label-xsmall text-content-neutral',
         day_button:
-          'relative z-10 flex size-6 cursor-pointer items-center justify-center rounded-full hover:bg-fill-interaction-hover',
+          'relative z-base flex size-6 cursor-pointer items-center justify-center rounded-full hover:bg-fill-interaction-hover',
         today: '',
         selected: '',
         range_start:
