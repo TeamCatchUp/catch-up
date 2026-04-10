@@ -79,11 +79,7 @@ def update_custom_prompt(
         settings = upsert_user_prompt_settings(
             db=db,
             user_id=current_user.id,
-            job_role=payload.job_role,
-            custom_job_text=payload.custom_job_text,
-            job_description=payload.job_description,
-            selected_options=payload.selected_options,
-            custom_prompt=payload.custom_prompt,
+            fields=payload.model_dump(include=payload.model_fields_set),
         )
         db.commit()
         logger.info(
