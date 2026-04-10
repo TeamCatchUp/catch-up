@@ -6,11 +6,13 @@ from sqlalchemy.orm import Session
 from catchup.auth.dependencies import get_current_user
 from catchup.db.dependencies import get_db
 from catchup.db.models import User
+from catchup.db.user_prompt_settings import get_user_prompt_settings
 from catchup.db.users import get_user_with_full_context
 from catchup.rag.schemas.context import GlobalCompanyContext
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.context import GlobalUserContext
 from catchup.rag.schemas.context import GlobalWorkspaceContext
+from catchup.rag.schemas.prompt_settings import PromptSettings
 
 
 async def get_rag_global_context(
@@ -46,3 +48,13 @@ async def get_rag_global_context(
         workspace=GlobalWorkspaceContext.model_validate(target_workspace),
         company=GlobalCompanyContext.model_validate(target_workspace.company),
     )
+
+
+async def get_prompt_settings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PromptSettings:
+    settings = get_user_prompt_settings(db=db, user_id=current_user.id)
+    if settings is None:
+        return PromptSettings()
+    return PromptSettings.model_validate(settings)

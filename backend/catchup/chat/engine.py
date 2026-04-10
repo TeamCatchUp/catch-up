@@ -38,6 +38,7 @@ from catchup.observability.langfuse.configs import get_observe
 from catchup.rag.checkpoint import get_langgraph_checkpointer
 from catchup.rag.graph import get_compiled_graph
 from catchup.rag.schemas.context import GlobalContext
+from catchup.rag.schemas.prompt_settings import PromptSettings
 from catchup.rag.schemas.sources import BaseSource
 
 logger = structlog.get_logger()
@@ -68,6 +69,7 @@ class ChatService:
     async def chat_stream(
         self,
         global_context: GlobalContext,
+        prompt_settings: PromptSettings,
         session_id: uuid.UUID,
         tool_filters: Optional[list[SourceType]] = None,
         query: str = None,
@@ -112,6 +114,7 @@ class ChatService:
                 "original_query": query,
                 "global_context": global_context,
                 "tool_filters": tool_filters,
+                "prompt_settings": prompt_settings,
                 
                 # RAG 파이프라인 상태 변수
                 "retry_count": 0,

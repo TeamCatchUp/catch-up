@@ -1,0 +1,15 @@
+<user_job_role>
+{% if prompt_settings.job_role == "직접 입력" %}
+<< prompt_settings.custom_job_text >>
+{% else %}
+<< prompt_settings.job_role >>
+{% endif %}
+</user_job_role>
+
+{% if prompt_settings.job_description %}
+<user_job_description>
+The user has described their role as follows.
+Tailor your answer style to best serve their stated context:
+<< prompt_settings.job_description >>
+</user_job_description>
+{% endif %}

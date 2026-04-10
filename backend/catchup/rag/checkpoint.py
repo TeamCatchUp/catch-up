@@ -18,6 +18,7 @@ _ALLOWED_MSGPACK_MODULES: list[tuple[str, str]] = [
     ("catchup.rag.schemas.sources", "JiraSource"),
     ("catchup.rag.schemas.context", "GlobalContext"),
     ("catchup.rag.schemas.structures", "VectorDbSearchQuery"),
+    ('catchup.rag.schemas.prompt_settings', 'PromptSettings'),
 ]
 
 _checkpointer = None
