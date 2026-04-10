@@ -13,8 +13,8 @@ from catchup.db.models import User
 from catchup.db.models import UserPromptSetting
 from catchup.db.user_prompt_settings import get_user_prompt_settings
 from catchup.db.user_prompt_settings import upsert_user_prompt_settings
-from catchup.server.settings.schemas import PromptSettingResponse
-from catchup.server.settings.schemas import PromptUpdateRequest
+from catchup.server.settings.schemas import PromptSettingsRequest
+from catchup.server.settings.schemas import PromptSettingsResponse
 
 logger = structlog.get_logger()
 
@@ -27,7 +27,7 @@ router = APIRouter(
 
 @router.get(
     path="/prompts",
-    response_model=PromptSettingResponse,
+    response_model=PromptSettingsResponse,
     description="사용자 맞춤형 프롬프트 조회"
 )
 def get_custom_prompt(
@@ -39,13 +39,13 @@ def get_custom_prompt(
         user_id=current_user.id
     )
     if settings is None:
-        return PromptSettingResponse()
-    return PromptSettingResponse.model_validate(settings)
+        return PromptSettingsResponse()
+    return PromptSettingsResponse.model_validate(settings)
 
 
 def _resolve_custom_prompt_action(
     settings: UserPromptSetting | None,
-    payload: PromptUpdateRequest,
+    payload: PromptSettingsRequest,
 ) -> UserCustomPromptAction:
     if settings is None:
         return UserCustomPromptAction.CREATE
@@ -56,12 +56,12 @@ def _resolve_custom_prompt_action(
 
 @router.patch(
     path="/prompts",
-    response_model=PromptSettingResponse,
+    response_model=PromptSettingsResponse,
     description="사용자 맞춤형 프롬프트 수정"
 )
 @audit_log()
 def update_custom_prompt(
-    payload: PromptUpdateRequest,
+    payload: PromptSettingsRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -79,7 +79,11 @@ def update_custom_prompt(
         settings = upsert_user_prompt_settings(
             db=db,
             user_id=current_user.id,
-            payload=payload,
+            job_role=payload.job_role,
+            custom_job_text=payload.custom_job_text,
+            job_description=payload.job_description,
+            selected_options=payload.selected_options,
+            custom_prompt=payload.custom_prompt,
         )
         db.commit()
         logger.info(
@@ -98,4 +102,4 @@ def update_custom_prompt(
             detail="맞춤형 프롬프트 설정 업데이트 실패"
         )
     
-    return PromptSettingResponse.model_validate(settings)
+    return PromptSettingsResponse.model_validate(settings)
