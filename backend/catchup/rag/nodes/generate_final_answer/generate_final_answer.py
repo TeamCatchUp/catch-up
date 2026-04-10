@@ -1,6 +1,7 @@
 import json
 import re
 from re import DOTALL
+from typing import Any
 
 import structlog
 from langchain_core.documents import Document
@@ -46,12 +47,18 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
     query_with_citation_policy = query + CITATION_POLICY_MESSAGE
 
     # 시스템 프롬프트 빌드
-    prompts = _load_prompts(global_context, retrieved_context)
+    prompt_settings = state.get("prompt_settings")
+    prompts = _load_prompts(
+        global_context=global_context,
+        retrieved_context=retrieved_context,
+        prompt_settings=prompt_settings
+    )
     system_message = build_system_message(
         static_prompt=prompts["system"],
         dynamic_prompts=[
             prompts["global_context"],
-            prompts["retrieved_context"]
+            prompts["retrieved_context"],
+            prompts["settings"],
         ],
         cache_prompt=False,
     )
@@ -121,6 +128,7 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
 def _load_prompts(
     global_context: dict,
     retrieved_context: str,
+    prompt_settings: Any,
 ) -> dict:
     return {
         "system": prompt_loader.get_prompt("rag/generate_final_answer"),
@@ -132,6 +140,10 @@ def _load_prompts(
             "common/retrieved_context",
             context=retrieved_context
         ),
+        "settings": prompt_loader.get_prompt(
+            "settings/settings",
+            prompt_settings=prompt_settings
+        )
     }
 
 
