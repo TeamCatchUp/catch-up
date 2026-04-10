@@ -34,7 +34,10 @@ def prepare_retrieved_context_text(documents: list[Document]) -> str:
         source = doc.metadata.get("source", "unknown")
         content = doc.metadata.get("contextual_content", "")
         temporal = resolve_temporal_context(doc.metadata) 
-        parts.append(f"[{i}] (Source: {source})\n{content} {temporal}")
+        part = f"[{i}] (Source: {source})\n{content} {temporal}"
+        if source == "confluence":
+            part = part + f"\nstatus: {doc.metadata.get('status', '')}"
+        parts.append(part)
     return "\n\n".join(parts)
 
 
