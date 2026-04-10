@@ -1,0 +1,50 @@
+/* Z-Index Scale
+ *  한곳에서 레이어 순서를 관리
+ *  사용법: z-base, z-header, z-panel, z-dropdown, z-modal, z-tooltip, z-fab, z-toast
+ *
+ *  base     : sticky header, gradient overlay 등 기본 레이어
+ *  local    : 컴포넌트 내부 로컬 오버레이 (calendar nav, session modal 등)
+ *  header   : TopNavbar (sticky 상단 고정)
+ *  panel    : 사이드 패널 (Inbox, QuestionsHistory)
+ *  dropdown : Dropdown, Popover, Select (Radix Portal)
+ *  modal    : Dialog, GuideModal (전체 화면 오버레이)
+ *  tooltip  : Tooltip (최상위 정보 힌트)
+ *  fab      : Floating Action Button
+ *  toast    : Toast 알림 (최고 우선순위)
+ */
+
+@utility z-base {
+  z-index: 10;
+}
+
+@utility z-local {
+  z-index: 20;
+}
+
+@utility z-header {
+  z-index: 30;
+}
+
+@utility z-panel {
+  z-index: 40;
+}
+
+@utility z-dropdown {
+  z-index: 50;
+}
+
+@utility z-modal {
+  z-index: 60;
+}
+
+@utility z-tooltip {
+  z-index: 70;
+}
+
+@utility z-fab {
+  z-index: 80;
+}
+
+@utility z-toast {
+  z-index: 9999;
+}
