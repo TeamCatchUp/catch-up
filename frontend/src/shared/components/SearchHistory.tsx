@@ -14,7 +14,6 @@ interface RecentlySearchProps {
   onItemClick?: () => void;
 }
 
-
 export function SearchHistory({ querys, isModal = false, onItemClick }: RecentlySearchProps) {
   if (!querys || querys.length === 0) {
     return (

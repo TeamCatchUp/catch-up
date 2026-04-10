@@ -207,11 +207,8 @@ class ChatService:
                 values = lg_current_state.values
 
                 if token_usage_ctx and values:
-                    # langgraph state로부터 토큰 사용량 및 rerank 횟수 추출
-                    token_breakdown = values.get("token_breakdown", {})
+                    # langgraph state로부터 rerank 횟수 추출
                     rerank_count = values.get("rerank_count", 0)
-                    
-                    token_usage_ctx.add_tokens(token_breakdown)
                     token_usage_ctx.rerank_count = rerank_count
                 
                 if (

@@ -20,12 +20,18 @@ TOKEN_PRICING: dict[str, dict[str, float]] = {
         "output": 5.0 / 1_000_000,
         "input_batch": 0.5 / 1_000_000,
         "output_batch": 2.5 / 1_000_000,
+        "cache_write_5m": 1.25 / 1_000_000,
+        "cache_write_1h": 2.0 / 1_000_000,
+        "cache_read": 0.1 / 1_000_000,
     },
     "claude-sonnet-4-5": {
         "input": 3.0 / 1_000_000,
         "output": 15.0 / 1_000_000,
         "input_batch": 1.5 / 1_000_000,
         "output_batch": 7.5 / 1_000_000,
+        "cache_write_5m": 3.75 / 1_000_000,
+        "cache_write_1h": 6.0 / 1_000_000,
+        "cache_read": 0.3 / 1_000_000,
     },
 }
 
@@ -58,14 +64,19 @@ def resolve_pricing_key(model_id: str) -> str:
 
 def calc_token_cost(
     model_id: str,
-    input_tokens: int, 
-    output_tokens: int = 0
+    input_tokens: int,
+    output_tokens: int = 0,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
 ) -> float:
     pricing_key = resolve_pricing_key(model_id)
     pricing = TOKEN_PRICING[pricing_key]
+
     return (
-        input_tokens * pricing.get("input", 0.0) +
-        output_tokens * pricing.get("output", 0.0)
+        input_tokens * pricing.get("input", 0.0)
+        + output_tokens * pricing.get("output", 0.0)
+        + cache_write_tokens * pricing.get("cache_write_5m", 0.0)  # TODO: 현재 5m 고정 정책
+        + cache_read_tokens * pricing.get("cache_read", 0.0)
     )
 
 

@@ -28,6 +28,8 @@ const buttonVariants = cva(
           'border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed disabled:bg-fill-interaction-inactive disabled:text-content-assistive text-icon-normal bg-fill-normal rounded-lg border',
         'box-outline-blue':
           'border-edge-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive disabled:bg-fill-interaction-inactive disabled:text-content-assistive disabled:border-edge-assistive bg-fill-primary-assistive text-content-primary rounded-lg border',
+        'box-soft-primary':
+          'bg-fill-primary-normal-neutral border-edge-neutral text-content-primary hover:bg-fill-primary-interaction-hover-assistive active:bg-fill-primary-interaction-hover-assistive disabled:bg-fill-interaction-inactive disabled:border-edge-assistive disabled:text-content-assistive rounded-lg border',
 
         /* ── Capsule Buttons ── */
         'capsule-solid-primary':
@@ -47,7 +49,7 @@ const buttonVariants = cva(
 
         /* ── FAB ── */
         'fab-primary':
-          'bg-accent-black-lighten hover:bg-accent-black active:bg-accent-black shadow-button rounded-full text-icon-inverse',
+          'bg-accent-black-lighten hover:bg-accent-black active:bg-accent-black shadow-button text-icon-inverse rounded-full',
         'fab-secondary':
           'hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed text-icon-normal shadow-button border-edge-neutral bg-fill-normal rounded-full border',
       },
@@ -98,22 +100,22 @@ const buttonVariants = cva(
 
       /* ── Box sizes ── */
       {
-        variant: ['box-solid-primary', 'box-outline-gray', 'box-outline-blue'],
+        variant: ['box-solid-primary', 'box-outline-gray', 'box-outline-blue', 'box-soft-primary'],
         size: 'lg',
         class: 'text-body-medium gap-1 px-4 py-1.5',
       },
       {
-        variant: ['box-solid-primary', 'box-outline-gray', 'box-outline-blue'],
+        variant: ['box-solid-primary', 'box-outline-gray', 'box-outline-blue', 'box-soft-primary'],
         size: 'md',
         class: 'text-body-small gap-1 px-2.5 py-1.5',
       },
       {
-        variant: ['box-solid-primary', 'box-outline-gray', 'box-outline-blue'],
+        variant: ['box-solid-primary', 'box-outline-gray', 'box-outline-blue', 'box-soft-primary'],
         size: 'sm',
         class: 'text-body-xsmall gap-1 px-2 py-1',
       },
       {
-        variant: ['box-solid-primary', 'box-outline-gray', 'box-outline-blue'],
+        variant: ['box-solid-primary', 'box-outline-gray', 'box-outline-blue', 'box-soft-primary'],
         size: 'xs',
         class: 'rounded-md2 text-body-xsmall gap-1 px-1.5 py-1',
       },

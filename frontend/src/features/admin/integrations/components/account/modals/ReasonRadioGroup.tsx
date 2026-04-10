@@ -57,7 +57,7 @@ const ReasonRadioGroup = ({
   <div className="mt-4 flex w-full flex-col gap-2">
     <div className="text-body-small text-content-normal flex items-center gap-1">
       {title}
-      <span className="block size-1.25 shrink-0 rounded-full bg-status-destructive" />
+      <span className="bg-status-destructive block size-1.25 shrink-0 rounded-full" />
     </div>
 
     <div className="border-edge-assistive flex flex-col gap-4 rounded-xl border px-4 py-4">

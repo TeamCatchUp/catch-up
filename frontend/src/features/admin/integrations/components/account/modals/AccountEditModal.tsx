@@ -110,7 +110,7 @@ export default function AccountEditModal({
             <div className="bg-fill-normal flex flex-col gap-1.5 p-4">
               <div className="text-body-small text-content-normal flex items-center gap-1">
                 새 계정 선택
-                <span className="block size-1.25 shrink-0 rounded-full bg-status-destructive" />
+                <span className="bg-status-destructive block size-1.25 shrink-0 rounded-full" />
               </div>
 
               <AccountSelectorPopover
@@ -127,7 +127,7 @@ export default function AccountEditModal({
                 }}
               />
 
-              <p className="text-label-xsmall flex items-center gap-0.5 text-status-destructive">
+              <p className="text-label-xsmall text-status-destructive flex items-center gap-0.5">
                 <IconError className="size-4" />
                 반드시 본인의 계정을 연동해주세요.
               </p>

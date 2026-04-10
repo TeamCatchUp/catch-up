@@ -1,6 +1,11 @@
+import functools
+from typing import Awaitable
+from typing import Callable
 from typing import TypedDict
 
 from langchain_core.messages import AIMessage
+
+from catchup.costs.contexts.chat import ChatTokenUsageContext
 
 
 class _TokenUsage(TypedDict):
@@ -15,8 +20,8 @@ def extract_token_usages(
     ctx.add_tokens()에 바로 넘길 수 있는 형태로 반환한다.
     """
     
-    usage = response.usage_metadata
-    if not usage:
+    usages = response.usage_metadata
+    if not usages:
         return {"token_breakdown": {}}
     
     metadata = response.response_metadata
@@ -25,12 +30,27 @@ def extract_token_usages(
         or metadata.get("model_name")
         or "unknown"
     )
-        
+    
+    cache_usages = usages.get("input_token_details") or {}
+
     return {
         "token_breakdown": {
             model: {
-                "input_tokens": usage.get("input_tokens", 0),
-                "output_tokens": usage.get("output_tokens", 0),
+                "input_tokens": usages.get("input_tokens", 0),
+                "output_tokens": usages.get("output_tokens", 0),
+                "cache_read_tokens": cache_usages.get("cache_read", 0),
+                "cache_write_tokens": cache_usages.get("cache_creation", 0),
             }
         }
     }
+
+
+def token_usage(func: Callable[..., Awaitable[dict]]):
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        result = await func(*args, **kwargs)
+        if token_breakdown := result.pop("token_breakdown", None):
+            if ctx := ChatTokenUsageContext.get():
+                ctx.add_tokens(token_breakdown)
+        return result
+    return wrapper

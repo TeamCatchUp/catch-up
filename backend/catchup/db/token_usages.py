@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 class DailyModelTokenUsage(TypedDict):
     input_tokens: int
     output_tokens: int
+    cache_read_tokens: int
+    cache_write_tokens: int
 
 
 def get_user_chat_token_usage_by_range(
@@ -25,7 +27,9 @@ def get_user_chat_token_usage_by_range(
                 FLOOR(EXTRACT(EPOCH FROM (created_at - :start_date)) / 86400)::int AS day_index,
                 model_data.key AS model_id,
                 COALESCE(SUM((model_data.value->>'input_tokens')::int), 0) AS input_tokens,
-                COALESCE(SUM((model_data.value->>'output_tokens')::int), 0) AS output_tokens
+                COALESCE(SUM((model_data.value->>'output_tokens')::int), 0) AS output_tokens,
+                COALESCE(SUM((model_data.value->>'cache_read_tokens')::int), 0) AS cache_read_tokens,
+                COALESCE(SUM((model_data.value->>'cache_write_tokens')::int), 0) AS cache_write_tokens
             FROM chat_token_usages,
                  jsonb_each(token_breakdown) AS model_data
             WHERE user_id = :user_id
@@ -43,6 +47,8 @@ def get_user_chat_token_usage_by_range(
         result[row.day_index][row.model_id] = {
             "input_tokens": row.input_tokens,
             "output_tokens": row.output_tokens,
+            "cache_read_tokens": row.cache_read_tokens,
+            "cache_write_tokens": row.cache_write_tokens,
         }
     return result
 
@@ -61,7 +67,9 @@ def get_org_chat_token_usage_by_range(
                 FLOOR(EXTRACT(EPOCH FROM (created_at - :start_date)) / 86400)::int AS day_index,
                 model_data.key AS model_id,
                 COALESCE(SUM((model_data.value->>'input_tokens')::int), 0) AS input_tokens,
-                COALESCE(SUM((model_data.value->>'output_tokens')::int), 0) AS output_tokens
+                COALESCE(SUM((model_data.value->>'output_tokens')::int), 0) AS output_tokens,
+                COALESCE(SUM((model_data.value->>'cache_read_tokens')::int), 0) AS cache_read_tokens,
+                COALESCE(SUM((model_data.value->>'cache_write_tokens')::int), 0) AS cache_write_tokens
             FROM chat_token_usages,
                  jsonb_each(token_breakdown) AS model_data
             WHERE created_at >= :start_date
@@ -78,6 +86,8 @@ def get_org_chat_token_usage_by_range(
         result[row.day_index][row.model_id] = {
             "input_tokens": row.input_tokens,
             "output_tokens": row.output_tokens,
+            "cache_read_tokens": row.cache_read_tokens,
+            "cache_write_tokens": row.cache_write_tokens,
         }
     return result
 
@@ -102,7 +112,9 @@ def get_user_token_usage_ranking(
                     model_data.key AS model_id,
                     jsonb_build_object(
                         'input_tokens', SUM((model_data.value->>'input_tokens')::int),
-                        'output_tokens', SUM((model_data.value->>'output_tokens')::int)
+                        'output_tokens', SUM((model_data.value->>'output_tokens')::int),
+                        'cache_read_tokens', SUM((model_data.value->>'cache_read_tokens')::int),
+                        'cache_write_tokens', SUM((model_data.value->>'cache_write_tokens')::int)
                     ) AS usage
                 FROM chat_token_usages ctu
                 CROSS JOIN LATERAL jsonb_each(ctu.token_breakdown) AS model_data

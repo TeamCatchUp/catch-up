@@ -36,8 +36,7 @@ const navItems = [
 // 메뉴 상태별 스타일
 const defaultClass =
   'border border-transparent hover:bg-fill-interaction-hover hover:border-edge-assistive active:bg-fill-interaction-pressed active:border-edge-neutral';
-const selectedClass =
-  'bg-fill-primary-normal-neutral hover:bg-fill-primary-interaction-hover-assistive';
+const selectedClass = 'bg-fill-primary-normal-neutral hover:bg-fill-primary-interaction-hover-assistive';
 
 interface SideNavMenuProps {
   isOpen: boolean;
@@ -73,9 +72,7 @@ export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
                   className={cn(
                     'relative flex cursor-pointer items-center',
                     isActive ? selectedClass : defaultClass,
-                    isOpen
-                      ? 'h-10 w-full gap-3 rounded-lg px-2.5 py-2'
-                      : 'w-10 justify-center rounded-xl p-1.5',
+                    isOpen ? 'h-10 w-full gap-3 rounded-lg px-2.5 py-2' : 'w-10 justify-center rounded-xl p-1.5',
                   )}
                 >
                   <item.Icon

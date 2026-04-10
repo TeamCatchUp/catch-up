@@ -98,7 +98,7 @@ export default function HistoryPage() {
         )}
 
         {isError && (
-          <div className="text-body-small px-1 py-4 text-status-destructive">
+          <div className="text-body-small text-status-destructive px-1 py-4">
             질문 히스토리를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
           </div>
         )}

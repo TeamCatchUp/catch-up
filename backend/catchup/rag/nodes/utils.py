@@ -8,6 +8,7 @@ import structlog
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
+from langchain_core.messages import SystemMessage
 from langgraph.graph.message import add_messages
 
 
@@ -27,7 +28,7 @@ def get_latest_query(messages: Annotated[list, add_messages]):
     )
 
 
-def prepare_context_text(documents: list[Document]) -> str:
+def prepare_retrieved_context_text(documents: list[Document]) -> str:
     parts = []
     for i, doc in enumerate(documents, start=1):
         source = doc.metadata.get("source", "unknown")
@@ -35,6 +36,36 @@ def prepare_context_text(documents: list[Document]) -> str:
         temporal = resolve_temporal_context(doc.metadata) 
         parts.append(f"[{i}] (Source: {source})\n{content} {temporal}")
     return "\n\n".join(parts)
+
+
+def build_system_message(
+    static_prompt: str,
+    dynamic_prompts: list[str] | None = None,
+    cache_prompt: bool = False,
+) -> SystemMessage:
+    
+    # 정적 프롬프트 (캐싱 대상)
+    static_block: dict = {
+        "type": "text",
+        "text": static_prompt
+    }
+    
+    if cache_prompt:
+        static_block["cache_control"] = {"type": "ephemeral"}
+        # TODO: langchain-aws 지원 시점에 "ttl": "1h" 추가
+
+    content = [static_block]
+    
+    # 동적 프롬프트
+    if dynamic_prompts:
+        for prompt in dynamic_prompts:
+            content.append({
+                "type": "text",
+                "text": prompt
+            })
+
+    return SystemMessage(content=content)
+        
 
 
 def resolve_temporal_context(metadata: dict) -> str:
