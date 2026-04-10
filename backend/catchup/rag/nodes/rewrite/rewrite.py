@@ -4,6 +4,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 
 from catchup.costs.utils import extract_token_usages
+from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
@@ -14,6 +15,7 @@ logger = structlog.get_logger()
 
 
 @log_node
+@token_usage
 async def rewrite_node(state: AgentState, llm: BaseChatModel):
     conversation_history = get_conversation_history(state["messages"])
     history_text = _get_formatted_history_text(conversation_history)

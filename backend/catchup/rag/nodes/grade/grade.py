@@ -5,6 +5,7 @@ from langchain.chat_models import BaseChatModel
 from langchain_core.documents import Document
 
 from catchup.costs.utils import extract_token_usages
+from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import prepare_retrieved_context_text
@@ -16,6 +17,7 @@ logger = structlog.get_logger()
 
 
 @log_node
+@token_usage
 async def grade_node(state: AgentState, llm: BaseChatModel):
     query = state["rewritten_query"]
     retrieved_docs: list[Document] = state.get("retrieved_docs", [])
