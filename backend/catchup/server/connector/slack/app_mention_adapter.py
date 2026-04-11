@@ -1,10 +1,13 @@
 import asyncio
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Any
 
 import structlog
 from fastapi.concurrency import run_in_threadpool
 
+from catchup.chat.integrations.slack_app_mention import BUSY_NOTICE_BODY
+from catchup.chat.integrations.slack_app_mention import BUSY_NOTICE_TITLE
 from catchup.chat.integrations.slack_app_mention import SlackAppMentionRequest
 from catchup.chat.integrations.slack_app_mention import (
     get_slack_app_mention_orchestrator,
@@ -73,6 +76,10 @@ class SlackAppMentionAdapter:
                 mention_request,
                 text,
             ),
+            post_busy_notice=lambda mention_request: self._post_busy_notice(
+                client,
+                mention_request,
+            ),
             responder_factory=lambda mention_request: self._start_responder(
                 client,
                 mention_request,
@@ -90,6 +97,40 @@ class SlackAppMentionAdapter:
             thread_ts=mention.thread_ts,
             text=text,
         )
+
+    async def _post_busy_notice(
+        self,
+        client: SlackApiClientWrapper,
+        mention: SlackAppMentionRequest,
+    ) -> None:
+        await client.post_ephemeral(
+            channel=mention.channel_id,
+            user=mention.slack_user_id,
+            thread_ts=mention.thread_ts,
+            text=BUSY_NOTICE_BODY,
+            blocks=self._build_busy_notice_blocks(),
+        )
+
+    def _build_busy_notice_blocks(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "type": "section",
+                "block_id": "catchup_app_mention_busy_title_v1",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": BUSY_NOTICE_TITLE,
+                },
+            },
+            {
+                "type": "section",
+                "block_id": "catchup_app_mention_busy_body_v1",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": BUSY_NOTICE_BODY,
+                },
+            },
+            {"type": "divider"},
+        ]
 
     async def _start_responder(
         self,

@@ -39,6 +39,11 @@ THREAD_OWNER_MISMATCH_MESSAGE = (
 MISSING_CONTEXT_MESSAGE = "CatchUp 사용자 컨텍스트를 찾지 못해 요청을 처리할 수 없습니다."
 EMPTY_ANSWER_MESSAGE = "답변을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요."
 STREAM_FAILED_MESSAGE = "답변 생성 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."
+BUSY_NOTICE_TITLE = "## :catch-up-logo: 답변을 준비하고 있어요"
+BUSY_NOTICE_BODY = (
+    "이전 답변이 완료되는 대로 바로 이어서 답변드릴게요.\n"
+    "잠시만 기다려주세요!"
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -70,6 +75,7 @@ class SlackAppMentionResponder(Protocol):
 
 
 ReplyPoster = Callable[[SlackAppMentionRequest, str], Awaitable[None]]
+BusyNoticePoster = Callable[[SlackAppMentionRequest], Awaitable[None]]
 ResponderFactory = Callable[
     [SlackAppMentionRequest],
     Awaitable[SlackAppMentionResponder],
@@ -88,6 +94,7 @@ class SlackAppMentionOrchestrator:
         *,
         bot_user_id: str,
         post_thread_reply: ReplyPoster,
+        post_busy_notice: BusyNoticePoster,
         responder_factory: ResponderFactory,
     ) -> None:
         if mention.slack_user_id == bot_user_id:
@@ -127,32 +134,71 @@ class SlackAppMentionOrchestrator:
             await post_thread_reply(mention, MISSING_CONTEXT_MESSAGE)
             return
 
-        session_id = await run_in_threadpool(
-            self._ensure_thread_binding_sync,
+        acquire_result = await run_in_threadpool(
+            self._acquire_thread_session_sync,
             mention,
             user_id,
         )
+        if acquire_result.outcome == "owner_mismatch":
+            await post_thread_reply(mention, THREAD_OWNER_MISMATCH_MESSAGE)
+            return
+        if acquire_result.outcome == "busy":
+            await post_busy_notice(mention)
+            return
+        if acquire_result.session_id is None or acquire_result.lease_started_at is None:
+            raise RuntimeError("slack app mention thread acquisition returned no lease")
+        if acquire_result.reclaimed_stale:
+            logger.info(
+                "slack_app_mention_reclaimed_stale_lease",
+                team_id=mention.team_id,
+                channel_id=mention.channel_id,
+                thread_ts=mention.thread_ts,
+                session_id=str(acquire_result.session_id),
+            )
 
-        responder = await responder_factory(mention)
+        session_id = acquire_result.session_id
+        lease_started_at = acquire_result.lease_started_at
 
         try:
-            reply_text, sources = await self._run_chat_stream(
-                global_context=global_context,
-                session_id=session_id,
-                query=mention.query,
-                responder=responder,
-            )
-            await responder.finish(answer=reply_text, sources=sources)
-        except Exception:
-            await responder.fail(STREAM_FAILED_MESSAGE)
-            raise
+            global_context = await run_in_threadpool(self._load_global_context_sync, user_id)
+            if global_context is None:
+                await post_thread_reply(mention, MISSING_CONTEXT_MESSAGE)
+                return
 
-        await run_in_threadpool(
-            self._attach_chat_room_if_ready_sync,
-            mention,
-            session_id,
-            user_id,
-        )
+            responder = await responder_factory(mention)
+
+            try:
+                reply_text, sources = await self._run_chat_stream(
+                    global_context=global_context,
+                    session_id=session_id,
+                    query=mention.query,
+                    responder=responder,
+                )
+                await responder.finish(answer=reply_text, sources=sources)
+            except Exception:
+                await responder.fail(STREAM_FAILED_MESSAGE)
+                raise
+
+            await run_in_threadpool(
+                self._attach_chat_room_if_ready_sync,
+                mention,
+                session_id,
+                user_id,
+            )
+        finally:
+            released = await run_in_threadpool(
+                self._release_thread_execution_sync,
+                mention,
+                lease_started_at,
+            )
+            if not released:
+                logger.warning(
+                    "slack_app_mention_release_missed",
+                    team_id=mention.team_id,
+                    channel_id=mention.channel_id,
+                    thread_ts=mention.thread_ts,
+                    session_id=str(session_id),
+                )
 
     async def _run_chat_stream(
         self,
@@ -218,40 +264,42 @@ class SlackAppMentionOrchestrator:
                 user_id=thread.user_id,
             )
 
-    def _ensure_thread_binding_sync(
+    def _acquire_thread_session_sync(
         self,
         mention: SlackAppMentionRequest,
         user_id: int,
-    ) -> uuid.UUID:
+    ) -> bot_repository.SlackThreadAcquireResult:
         with SessionLocal() as db:
-            thread = bot_repository.get_slack_chat_thread(
-                db,
+            result = bot_repository.acquire_or_reject_slack_thread(
+                db=db,
                 team_id=mention.team_id,
                 channel_id=mention.channel_id,
                 thread_ts=mention.thread_ts,
-            )
-
-            if thread is None:
-                session_id = uuid.uuid4()
-                bot_repository.create_slack_chat_thread(
-                    db,
-                    team_id=mention.team_id,
-                    channel_id=mention.channel_id,
-                    thread_ts=mention.thread_ts,
-                    session_id=session_id,
-                    user_id=user_id,
-                    slack_user_id=mention.slack_user_id,
-                    last_raw_text=mention.raw_text,
-                )
-                db.commit()
-                return session_id
-
-            bot_repository.touch_slack_chat_thread(
-                thread,
+                user_id=user_id,
+                slack_user_id=mention.slack_user_id,
                 last_raw_text=mention.raw_text,
             )
+            if result.outcome == "acquired":
+                db.commit()
+            else:
+                db.rollback()
+            return result
+
+    def _release_thread_execution_sync(
+        self,
+        mention: SlackAppMentionRequest,
+        lease_started_at: Any,
+    ) -> bool:
+        with SessionLocal() as db:
+            released = bot_repository.release_slack_chat_thread(
+                db=db,
+                team_id=mention.team_id,
+                channel_id=mention.channel_id,
+                thread_ts=mention.thread_ts,
+                lease_started_at=lease_started_at,
+            )
             db.commit()
-            return thread.session_id
+            return released
 
     def _load_global_context_sync(self, user_id: int) -> GlobalContext | None:
         with SessionLocal() as db:
