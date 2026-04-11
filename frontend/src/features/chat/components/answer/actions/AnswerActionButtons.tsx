@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
@@ -34,6 +34,11 @@ export default function AnswerActionButtons({
 
   // 3-state: true(좋아요), false(싫어요 확정), undefined(미평가)
   const [currentLiked, setCurrentLiked] = useState<boolean | undefined>(isLiked);
+
+  // 외부(FeedbackSection 등)에서 isLiked prop이 변경되면 로컬 state 동기화
+  useEffect(() => {
+    setCurrentLiked(isLiked);
+  }, [isLiked]);
 
   // 싫어요 확정 시 피드백 버튼 비활성화
   const isDislikeConfirmed = currentLiked === false;
@@ -131,8 +136,8 @@ export default function AnswerActionButtons({
               }
             }}
             className={cn(
-              'cursor-pointer rounded-lg p-1.5',
-              isFeedbackDisabled ? '' : 'icon-button-only-gray',
+              'rounded-lg p-1.5',
+              isFeedbackDisabled ? 'cursor-default' : 'cursor-pointer icon-button-only-gray',
               isThumbsDownPanelOpen && 'bg-fill-interaction-pressed border-edge-strong',
             )}
           >
