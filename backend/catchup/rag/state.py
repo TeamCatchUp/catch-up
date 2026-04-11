@@ -39,5 +39,7 @@ class AgentState(TypedDict):
     tool_filters: Optional[list[SourceType]]
     
     prompt_settings: PromptSettings
-    
+
     rerank_count: int
+
+    mode: Literal["fast", "standard"]

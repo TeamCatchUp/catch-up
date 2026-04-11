@@ -31,9 +31,10 @@ async def chitchat_node(state: AgentState, llm: BaseChatModel):
     )
     system_message = build_system_message(
         static_prompt=prompts["system"],
-        dynamic_prompts=[
-            prompts["settings"],
-        ],
+        dynamic_prompts=[p for p in [
+            prompts["job_role"],
+            prompts["custom"],
+        ] if p is not None],
         cache_prompt=False,
     )
     messages = (
@@ -83,9 +84,13 @@ def _load_prompts(
             "rag/chitchat",
             **global_context
         ),
-        "settings": prompt_loader.get_prompt(
+        "job_role": prompt_loader.get_prompt(
             "settings/job_role",
             prompt_settings=prompt_settings
-        )
+        ),
+        "custom": prompt_loader.get_prompt(
+            "settings/custom_prompt",
+            prompt_settings=prompt_settings
+        ) if prompt_settings and prompt_settings.custom_prompt else None,
     }
     
