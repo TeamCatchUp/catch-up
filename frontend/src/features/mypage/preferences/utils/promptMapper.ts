@@ -22,7 +22,7 @@ const optionLabelToValue = new Map(ANSWER_OPTIONS.map((o) => [normalize(o.label)
 export function jobRoleToApi(value: JobRole | null): string | null {
   if (value === null) return null;
   const label = jobValueToLabel.get(value);
-  if (label === undefined) return null;
+  if (label === undefined) throw new Error(`Unknown JobRole value: ${value}`);
   return normalize(label);
 }
 
