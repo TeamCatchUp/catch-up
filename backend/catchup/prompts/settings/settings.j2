@@ -3,8 +3,6 @@
 {% include "settings/job_role_style.j2" %}
 {% include "settings/selected_options.j2" %}
 {% if prompt_settings.custom_prompt %}
-<user_custom_instruction>
-<< prompt_settings.custom_prompt >>
-</user_custom_instruction>
+{% include "settings/custom_prompt.j2" %}
 {% endif %}
 {% endif %}
