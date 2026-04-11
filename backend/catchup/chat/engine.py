@@ -3,7 +3,6 @@ import time
 import uuid
 from typing import Any
 from typing import AsyncGenerator
-from typing import Optional
 
 import structlog
 from fastapi.concurrency import run_in_threadpool
@@ -71,8 +70,9 @@ class ChatService:
         global_context: GlobalContext,
         prompt_settings: PromptSettings,
         session_id: uuid.UUID,
-        tool_filters: Optional[list[SourceType]] = None,
+        tool_filters: list[SourceType] | None = None,
         query: str = None,
+        additional_context: str | None = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         
          # 실행 시간 측정 시작
@@ -104,7 +104,8 @@ class ChatService:
                 self._resolve_input_messages,
                 session_id,
                 query,
-                lg_current_state
+                lg_current_state,
+                additional_context,
             )
 
             # 초기 AgentState
@@ -234,9 +235,10 @@ class ChatService:
         self,
         session_id: uuid.UUID,
         query: str,
-        lg_current_state: StateSnapshot
+        lg_current_state: StateSnapshot,
+        additional_context: str | None = None,
     ) -> list[BaseMessage]:
-        
+
         state_values = lg_current_state.values
 
         has_history_in_graph = (
@@ -244,7 +246,7 @@ class ChatService:
             and "messages" in state_values
             and len(state_values["messages"]) > 0
         )
-        
+
         if has_history_in_graph:
             logger.info(
                 "state_retained",
@@ -252,13 +254,25 @@ class ChatService:
                 session_id=str(session_id)
             )
             input_messages = [HumanMessage(content=query)]
+
+        elif additional_context is not None:
+            logger.info(
+                "state_injected_from_context",
+                context="additional_context_provided",
+                session_id=str(session_id)
+            )
+            input_messages = [
+                HumanMessage(content=additional_context),
+                HumanMessage(content=query),
+            ]
+
         else:
             logger.info(
-                "state_restored_from_db", 
+                "state_restored_from_db",
                 context="state_empty",
                 session_id=str(session_id)
             )
-            
+
             with SessionLocal() as db:
                 past_messages = restore_conversation_context(
                     db=db,
@@ -520,7 +534,7 @@ class ChatService:
         room_id: int,
         role: str,
         content: str,
-        sources: Optional[list[dict[str, Any]]] = None,
+        sources: list[dict[str, Any]] | None = None,
         trace_id: str | None = None
     ):
         def _save_sync():
@@ -542,7 +556,7 @@ class ChatService:
         self,
         room_id: int,
         session_id: uuid.UUID,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         마지막 대화 턴을 soft-delete 하고, 해당 세션 id에 대한 Redis Checkpointer를 초기화 한다.
         삭제된 질문 텍스트를 반환한다.
