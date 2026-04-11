@@ -129,11 +129,12 @@ class SlackPlanState:
         return updates
 
     def transition_to_answer(self) -> list[dict[str, Any]]:
-        """generate_final_answer 이전에 Task 정리"""
+        """Plan UI를 유지한 채 answer 단계로 넘어가도록 선행 task를 정리"""
         updates: list[dict[str, Any]] = []
         updates.extend(self._complete_task("search"))
         updates.extend(self._complete_task("rerank", output=f"상위 {len(self.top_sources) or MAX_SOURCE_ITEMS}건을 골랐습니다.", sources=self.top_sources or None))
         updates.extend(self._complete_task("grade"))
+        updates.extend(self._start_task("answer"))
         return updates
 
     def finish(self) -> list[dict[str, Any]]:
@@ -311,7 +312,6 @@ class SlackPlanResponder:
         self.query = query
         self.plan_stream_ts = plan_stream_ts
         self.answer_stream_ts: str | None = None
-        self.plan_closed = False
         self.answer_mode = False
         self.markdown_buffer = ""
         self.has_streamed_answer = False
@@ -393,6 +393,7 @@ class SlackPlanResponder:
         self.markdown_buffer = ""
 
         if self.answer_stream_ts is None:
+            # 기본적으로 plan_steam_ts을 그대로 사용하지만, plan block kit 생성에 실패한 경우에만 Fallback으로 답변 생성용 메세지를 새롭게 생성
             response = await self.client.start_stream(
                 channel=self.channel_id,
                 thread_ts=self.thread_ts,
@@ -423,10 +424,12 @@ class SlackPlanResponder:
         if self.answer_mode:
             await self.flush_answer_markdown()
             if self.answer_stream_ts is not None:
+                # plan UI를 남긴 채 같은 stream에서 answer task를 error로 종료
                 await self.client.stop_stream(
                     channel=self.channel_id,
                     ts=self.answer_stream_ts,
                     markdown_text=message,
+                    chunks=self.state.fail(message),
                 )
                 return
 
@@ -457,7 +460,9 @@ class SlackPlanResponder:
             return
 
         await self._append_plan_chunks(prelude_chunks)
-        await self._close_and_delete_plan_stream()
+        if self.answer_stream_ts is None and self.plan_stream_ts is not None:
+            # generate_final_answer에서 plan stream을 삭제하지 않고, 같은 ts를 answer streaming 대상으로 재사용
+            self.answer_stream_ts = self.plan_stream_ts
         self.answer_mode = True
 
     async def _finish_answer_stream(self, *, answer: str, sources: list[Any]) -> None:
@@ -481,6 +486,7 @@ class SlackPlanResponder:
         await self.client.stop_stream(
             channel=self.channel_id,
             ts=self.answer_stream_ts,
+            chunks=self.state.finish(),
             blocks=blocks,
         )
 
@@ -508,26 +514,6 @@ class SlackPlanResponder:
             chunks=self.state.finish(),
             blocks=blocks,
         )
-
-    async def _close_and_delete_plan_stream(self) -> None:
-        """generate_final_answer 노드 진입 시 Plan Block Kit 제거"""
-        if self.plan_stream_ts is None or self.plan_closed:
-            return
-
-        try:
-            await self.client.stop_stream(
-                channel=self.channel_id,
-                ts=self.plan_stream_ts,
-            )
-        finally:
-            try:
-                await self.client.delete_message(
-                    channel=self.channel_id,
-                    ts=self.plan_stream_ts,
-                )
-            finally:
-                self.plan_closed = True
-                self.plan_stream_ts = None
 
     async def _append_plan_chunks(self, chunks: list[dict[str, Any]]) -> None:
         if self.plan_stream_ts is None or not chunks:
