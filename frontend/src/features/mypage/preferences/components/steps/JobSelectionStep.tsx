@@ -89,6 +89,7 @@ export default function JobSelectionStep({
 
   const handleSave = () => {
     onSaveJob(localJob, localJobText, localDesc);
+    setIsEditing(false);
   };
 
   const handleEdit = () => {
