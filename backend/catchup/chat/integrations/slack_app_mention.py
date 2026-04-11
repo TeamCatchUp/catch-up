@@ -174,7 +174,8 @@ class SlackAppMentionOrchestrator:
             query=query,
             tool_filters=[],
             # TODO: DB에서 user_prompt_settings 불러온 뒤, prompt_settings.platform = "slack" 추가 필요
-            prompt_settings=PromptSettings(platform="slack"), # 임시
+            # TODO: additional_context=additional_context,
+            prompt_settings=PromptSettings(platform="slack"), # TODO: 임시
             mode="fast",
         ):
             if isinstance(chunk, ChatStreamingStatusResponse):
