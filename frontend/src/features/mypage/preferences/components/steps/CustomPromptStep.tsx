@@ -125,6 +125,9 @@ export default function CustomPromptStep({
               maxLength={MAX_PROMPT_LENGTH}
               onChange={(e) => setValue(e.target.value)}
               onFocus={() => setIsActive(true)}
+              onBlur={() => {
+                if (value.trim().length === 0) setIsActive(false);
+              }}
               placeholder="프로젝트 맥락과 업무 스타일을 반영할 수 있어요."
               rows={1}
               className={cn(

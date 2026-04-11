@@ -4,12 +4,12 @@ import type { AxiosResponse } from 'axios';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { CustomPromptRequest, CustomPromptResponse } from '../types/preferencesApi';
+import type { PromptSettingsRequest, PromptSettingsResponse } from '../types/preferencesApi';
 
 export const promptMutations = {
-  updateCustomPrompt: () =>
+  updateSettings: () =>
     ({
       mutationKey: ['settings', 'prompts', 'update'] as const,
-      mutationFn: (body: CustomPromptRequest) => api.patch<CustomPromptResponse>(API.settings.prompts, body),
-    }) satisfies UseMutationOptions<AxiosResponse<CustomPromptResponse>, Error, CustomPromptRequest>,
+      mutationFn: (body: PromptSettingsRequest) => api.patch<PromptSettingsResponse>(API.settings.prompts, body),
+    }) satisfies UseMutationOptions<AxiosResponse<PromptSettingsResponse>, Error, PromptSettingsRequest>,
 };
