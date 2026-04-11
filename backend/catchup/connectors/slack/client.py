@@ -430,6 +430,25 @@ class SlackApiClientWrapper:
             blocks=blocks,
         )
 
+    async def post_ephemeral(
+        self,
+        *,
+        channel: str,
+        user: str,
+        text: str,
+        thread_ts: str | None = None,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        return await self._call_api(
+            "chat_postEphemeral",
+            "chat_postEphemeral",
+            channel=channel,
+            user=user,
+            text=text,
+            thread_ts=thread_ts,
+            blocks=blocks,
+        )
+
     async def start_stream(
         self,
         *,

@@ -1842,6 +1842,16 @@ class SlackChatThread(Base):
     slack_user_id: Mapped[str] = mapped_column(String(20), nullable=False)
     # 멘션 태그를 포함하는 본문
     last_raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_answer_in_progress: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+    in_progress_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
