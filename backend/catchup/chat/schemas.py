@@ -19,6 +19,7 @@ NODE_STATUS_MAP = {
     "fetch_details_after_graph_context_expansion": "확장된 정보의 상세 내용을 불러오고 있습니다...",
     "fallback_cypher_query": "추가적인 그래프 질의(Cypher)를 실행하여 정보를 보완 중입니다...",
     "generate_final_answer": "모든 정보를 종합하여 최종 답변을 작성하고 있습니다...",
+    "generate_final_answer_fast": "모든 정보를 종합하여 최종 답변을 작성하고 있습니다...",
     "chitchat": "답변을 생성하고 있습니다...",
 }
 
@@ -28,6 +29,7 @@ class ChatRequest(BaseModel):
     role: Optional[str] = Field(default=UserRole.USER, description="사용자 역할 (admin 또는 user)")
     session_id: uuid.UUID = Field(default_factory=uuid.uuid4, description="대화 세션 ID")
     tool_filters: list[SourceType] = Field(default_factory=list, description="협업 툴 검색 필터")
+    mode: Literal["fast", "standard"] = Field(default="standard", description="응답 모드 (default: standard)")
     
     @field_validator('tool_filters', mode='before')
     @classmethod

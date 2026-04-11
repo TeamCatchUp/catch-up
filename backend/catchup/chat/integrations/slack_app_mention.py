@@ -26,6 +26,7 @@ from catchup.rag.schemas.context import GlobalCompanyContext
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.context import GlobalUserContext
 from catchup.rag.schemas.context import GlobalWorkspaceContext
+from catchup.rag.schemas.prompt_settings import PromptSettings
 
 logger = structlog.get_logger(__name__)
 
@@ -172,10 +173,13 @@ class SlackAppMentionOrchestrator:
             session_id=session_id,
             query=query,
             tool_filters=[],
+            # TODO: DB에서 user_prompt_settings 불러온 뒤, prompt_settings.platform = "slack" 추가 필요
+            prompt_settings=PromptSettings(platform="slack"), # 임시
+            mode="fast",
         ):
             if isinstance(chunk, ChatStreamingStatusResponse):
                 await responder.on_node(chunk.node)
-                if chunk.node in {"generate_final_answer", "chitchat"}:
+                if chunk.node in {"generate_final_answer_fast", "chitchat"}:
                     markdown_enabled = True
                 continue
 

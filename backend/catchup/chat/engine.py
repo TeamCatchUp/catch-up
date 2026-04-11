@@ -3,6 +3,7 @@ import time
 import uuid
 from typing import Any
 from typing import AsyncGenerator
+from typing import Literal
 
 import structlog
 from fastapi.concurrency import run_in_threadpool
@@ -73,6 +74,7 @@ class ChatService:
         tool_filters: list[SourceType] | None = None,
         query: str = None,
         additional_context: str | None = None,
+        mode: Literal["fast", "standard"] = "standard",
     ) -> AsyncGenerator[StreamEvent, None]:
         
          # 실행 시간 측정 시작
@@ -116,7 +118,8 @@ class ChatService:
                 "global_context": global_context,
                 "tool_filters": tool_filters,
                 "prompt_settings": prompt_settings,
-                
+                "mode": mode,
+
                 # RAG 파이프라인 상태 변수
                 "retry_count": 0,
                 "grade_comment": None,
@@ -124,7 +127,7 @@ class ChatService:
                 "vector_search_queries": [],
                 "graph_search_queries": [],
                 "retrieved_docs": [],
-                
+
                 # 비용 변수
                 "token_breakdown": {},
                 "rerank_count": 0,
@@ -295,7 +298,7 @@ class ChatService:
         # 최종 답변에서 인용구가 발견된 경우 스트리밍 차단
         if stream_state.get("is_citation_reached", False):
             # generate_final_answer 노드 종료 이벤트 외에는 전부 차단
-            if not (kind == "on_chain_end" and name == "generate_final_answer"):
+            if not (kind == "on_chain_end" and name in ("generate_final_answer", "generate_final_answer_fast")):
                 return
 
         # 1. 노드 시작
@@ -327,7 +330,7 @@ class ChatService:
             )
 
         # 답변 생성 노드 시작 시: 초기 출처 후보 목록 전송
-        if name == "generate_final_answer":
+        if name in ("generate_final_answer", "generate_final_answer_fast"):
             input_data = event["data"].get("input", {})
             docs = input_data.get("retrieved_docs", [])
             sources = [
@@ -358,7 +361,7 @@ class ChatService:
         node = event["metadata"].get("langgraph_node")
         
         # 타겟 노드가 아니거나 컨텐츠가 없으면 스킵
-        is_target_node = node in ("chitchat", "generate_final_answer")
+        is_target_node = node in ("chitchat", "generate_final_answer", "generate_final_answer_fast")
         if not (is_target_node and chunk and chunk.content):
             return
         
@@ -408,7 +411,7 @@ class ChatService:
             인용 사유를 포함한 최종 소스를 업데이트한다.
         """
         
-        target_nodes = ("chitchat", "generate_final_answer")
+        target_nodes = ("chitchat", "generate_final_answer", "generate_final_answer_fast")
         
         if event["name"] not in target_nodes:
             return
