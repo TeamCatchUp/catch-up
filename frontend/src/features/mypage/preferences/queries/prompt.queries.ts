@@ -3,16 +3,16 @@ import { queryOptions } from '@tanstack/react-query';
 import api from '@/shared/api/client';
 import { API } from '@/shared/api/endpoints';
 
-import type { CustomPromptResponse } from '../types/preferencesApi';
+import type { PromptSettingsResponse } from '../types/preferencesApi';
 
 export const promptQueries = {
   all: () => ['settings', 'prompts'] as const,
 
-  customPrompt: () =>
+  settings: () =>
     queryOptions({
-      queryKey: [...promptQueries.all(), 'custom'] as const,
-      queryFn: async (): Promise<CustomPromptResponse> => {
-        const res = await api.get<CustomPromptResponse>(API.settings.prompts);
+      queryKey: promptQueries.all(),
+      queryFn: async (): Promise<PromptSettingsResponse> => {
+        const res = await api.get<PromptSettingsResponse>(API.settings.prompts);
         return res.data;
       },
     }),
