@@ -19,7 +19,6 @@ interface JobSelectionStepProps {
   customJobText: string;
   jobDescription: string;
   onSaveJob: (job: JobRole | null, customJobText: string, jobDescription: string) => void;
-  isSaving?: boolean;
 }
 
 export default function JobSelectionStep({
@@ -27,7 +26,6 @@ export default function JobSelectionStep({
   customJobText,
   jobDescription,
   onSaveJob,
-  isSaving = false,
 }: JobSelectionStepProps) {
   // Step 1 전체를 로컬 state로 관리, 저장 버튼 클릭 시에만 서버 전송
   const [localJob, setLocalJob] = useState<JobRole | null>(selectedJob);
@@ -194,7 +192,7 @@ export default function JobSelectionStep({
                   type="button"
                   variant="box-solid-primary"
                   size="md"
-                  disabled={!canSave || isSaving}
+                  disabled={!canSave}
                   onClick={handleSave}
                 >
                   저장
