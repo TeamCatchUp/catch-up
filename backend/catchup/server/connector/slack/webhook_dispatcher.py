@@ -11,6 +11,7 @@ from catchup.connectors.slack.webhook.responses import accepted_incremental_resp
 from catchup.connectors.slack.webhook.responses import ignored_event_response
 from catchup.connectors.slack.webhook.responses import ignored_wrapper_response
 from catchup.connectors.slack.webhook.responses import url_verification_response
+from catchup.server.connector.slack.interaction_handler import handle_block_actions
 from catchup.server.connector.slack.app_mention_adapter import schedule_app_mention
 from catchup.server.connector.slack.schemas import SlackIgnoredWebhookResponse
 from catchup.server.connector.slack.schemas import SlackWebhookRequest
@@ -45,6 +46,9 @@ async def handle_slack_webhook(
     if request.wrapper_type == "url_verification":
         logger.debug("slack_webhook_url_verification")
         return url_verification_response(challenge=request.challenge)
+
+    if request.wrapper_type == "block_actions":
+        return await handle_block_actions(request=request)
 
     if request.wrapper_type != "event_callback":
         logger.warning(

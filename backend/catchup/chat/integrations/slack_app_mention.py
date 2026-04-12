@@ -8,6 +8,9 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 from typing import Protocol
+import json
+from urllib.parse import urlencode
+from urllib.parse import urlsplit
 
 import structlog
 from fastapi.concurrency import run_in_threadpool
@@ -17,12 +20,14 @@ from catchup.chat.schemas import ChatStreamingSourceResponse
 from catchup.chat.schemas import ChatStreamingStatusResponse
 from catchup.chat.schemas import ChatStreamingTokenResponse
 from catchup.db.chat_room import get_chat_room
+from catchup.db.chat_room import get_latest_assistant_message
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
 from catchup.db.slack import bot_repository
 from catchup.db.user_prompt_settings import get_user_prompt_settings
 from catchup.db.user_source_mapping import find_user_id_by_source_mapping
 from catchup.db.users import get_user_with_full_context
+from catchup.configs.config import auth_settings
 from catchup.rag.schemas.context import GlobalCompanyContext
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.context import GlobalUserContext
@@ -65,6 +70,13 @@ class SlackThreadSessionBinding:
     user_id: int
 
 
+@dataclass(slots=True, frozen=True)
+class SlackAppMentionActionLinks:
+    detail_url: str | None = None
+    helpful_value: str | None = None
+    not_helpful_value: str | None = None
+
+
 class SlackAppMentionResponder(Protocol):
     async def on_node(self, node: str) -> None: ...
 
@@ -72,7 +84,13 @@ class SlackAppMentionResponder(Protocol):
 
     async def on_sources(self, sources: list[Any]) -> None: ...
 
-    async def finish(self, *, answer: str, sources: list[Any]) -> None: ...
+    async def finish(
+        self,
+        *,
+        answer: str,
+        sources: list[Any],
+        action_links: SlackAppMentionActionLinks | None = None,
+    ) -> None: ...
 
     async def fail(self, message: str) -> None: ...
 
@@ -186,7 +204,17 @@ class SlackAppMentionOrchestrator:
                     query=mention.query,
                     responder=responder,
                 )
-                await responder.finish(answer=reply_text, sources=sources)
+                # 저장된 assistant 메시지 기준으로 상세보기/피드백 링크 생성
+                action_links = await run_in_threadpool(
+                    self._load_action_links_sync,
+                    session_id,
+                    user_id,
+                )
+                await responder.finish(
+                    answer=reply_text,
+                    sources=sources,
+                    action_links=action_links,
+                )
             except Exception:
                 await responder.fail(STREAM_FAILED_MESSAGE)
                 raise
@@ -371,6 +399,88 @@ class SlackAppMentionOrchestrator:
 
             bot_repository.attach_chat_room(thread, chat_room_id=room.id)
             db.commit()
+
+    def _load_action_links_sync(
+        self,
+        session_id: uuid.UUID,
+        user_id: int,
+    ) -> SlackAppMentionActionLinks | None:
+        with SessionLocal() as db:
+            # 저장된 room/assistant 메시지를 기준으로 Slack 버튼 URL을 확정
+            room = get_chat_room(
+                db=db,
+                session_id=session_id,
+                user_id=user_id,
+            )
+            if room is None:
+                return None
+
+            assistant_message = get_latest_assistant_message(db, room.id)
+            if assistant_message is None:
+                return SlackAppMentionActionLinks(
+                    detail_url=self._build_chat_room_redirect_url(session_id),
+                )
+
+            message_id = assistant_message.id
+            return SlackAppMentionActionLinks(
+                detail_url=self._build_chat_room_redirect_url(
+                    session_id,
+                    scroll_to=message_id,
+                ),
+                helpful_value=self._build_feedback_action_value(
+                    session_id,
+                    message_id=message_id,
+                    is_liked=True,
+                ),
+                not_helpful_value=self._build_feedback_action_value(
+                    session_id,
+                    message_id=message_id,
+                    is_liked=False,
+                ),
+            )
+
+    def _build_chat_room_redirect_url(
+        self,
+        session_id: uuid.UUID,
+        *,
+        scroll_to: int | None = None,
+    ) -> str:
+        frontend_base_url = self._build_frontend_base_url()
+        url = f"{frontend_base_url}/chat/{session_id}"
+        if scroll_to is None:
+            return url
+        return f"{url}?{urlencode({'scrollTo': scroll_to})}"
+
+    def _build_feedback_action_value(
+        self,
+        session_id: uuid.UUID,
+        *,
+        message_id: int,
+        is_liked: bool,
+    ) -> str:
+        return json.dumps(
+            {
+                "session_id": str(session_id),
+                "message_id": message_id,
+                "is_liked": is_liked,
+            },
+            ensure_ascii=False,
+        )
+
+    # TODO : oauth callback url을 임시로 재사용 -> 추후에 base redirect url 설정 필요
+    def _build_frontend_base_url(self) -> str:
+        redirect_uri = auth_settings.FRONTEND_REDIRECT_URI.strip()
+        parts = urlsplit(redirect_uri)
+        if not parts.scheme or not parts.netloc:
+            raise RuntimeError("FRONTEND_REDIRECT_URI must be an absolute URL")
+
+        path = parts.path.rstrip("/")
+        oauth_callback_suffix = "/oauth/callback"
+        if path.endswith(oauth_callback_suffix):
+            path = path[: -len(oauth_callback_suffix)]
+
+        base_url = f"{parts.scheme}://{parts.netloc}{path}"
+        return base_url.rstrip("/")
 
 
 def parse_app_mention_event(
