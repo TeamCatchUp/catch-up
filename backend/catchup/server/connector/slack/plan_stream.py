@@ -5,7 +5,9 @@ from typing import Any
 
 import structlog
 
+from catchup.chat.integrations.slack_app_mention import SlackChatAnswerRef
 from catchup.connectors.slack.client import SlackApiClientWrapper
+from catchup.server.connector.slack.feedback_actions import build_action_blocks
 
 logger = structlog.get_logger(__name__)
 
@@ -169,7 +171,7 @@ class SlackPlanState:
         answer: str,
         sources: list[Any],
         include_answer_body: bool,
-        action_links: dict[str, str] | None = None,
+        answer_ref: SlackChatAnswerRef | None = None,
     ) -> list[dict[str, Any]]:
         del query
         visible_sources = sources or self.top_sources
@@ -180,7 +182,8 @@ class SlackPlanState:
             include_answer_body=include_answer_body,
         )
         blocks: list[dict[str, Any]] = []
-        if not final_markdown and not action_links:
+        action_blocks = build_action_blocks(answer_ref)
+        if not final_markdown and not action_blocks:
             return []
         if len(final_markdown) <= MAX_MARKDOWN_BLOCK_TEXT:
             if final_markdown:
@@ -193,7 +196,7 @@ class SlackPlanState:
                     include_answer_body=include_answer_body,
                 )
             )
-        blocks.extend(build_action_blocks(action_links))
+        blocks.extend(action_blocks)
         return blocks
 
     def _move_to(
@@ -422,7 +425,7 @@ class SlackPlanResponder:
         *,
         answer: str,
         sources: list[Any],
-        action_links: Any = None,
+        answer_ref: SlackChatAnswerRef | None = None,
     ) -> None:
         # answer_mode 여부에 따라 같은 ts를 종료할지, plan-only ts를 종료할지 갈린다.
         if self.answer_mode:
@@ -430,14 +433,14 @@ class SlackPlanResponder:
             await self._finish_answer_stream(
                 answer=answer,
                 sources=sources,
-                action_links=action_links,
+                answer_ref=answer_ref,
             )
             return
 
         await self._finish_plan_stream(
             answer=answer,
             sources=sources,
-            action_links=action_links,
+            answer_ref=answer_ref,
         )
 
     async def fail(self, message: str) -> None:
@@ -490,7 +493,7 @@ class SlackPlanResponder:
         *,
         answer: str,
         sources: list[Any],
-        action_links: Any = None,
+        answer_ref: SlackChatAnswerRef | None = None,
     ) -> None:
         visible_sources = self.state.top_sources or sources
         blocks = self.state.build_final_blocks(
@@ -498,7 +501,7 @@ class SlackPlanResponder:
             answer=answer,
             sources=sources,
             include_answer_body=not self.has_streamed_answer,
-            action_links=normalize_action_links(action_links),
+            answer_ref=answer_ref,
         )
 
         if self.answer_stream_ts is None:
@@ -522,7 +525,7 @@ class SlackPlanResponder:
         *,
         answer: str,
         sources: list[Any],
-        action_links: Any = None,
+        answer_ref: SlackChatAnswerRef | None = None,
     ) -> None:
         visible_sources = self.state.top_sources or sources
         blocks = self.state.build_final_blocks(
@@ -530,7 +533,7 @@ class SlackPlanResponder:
             answer=answer,
             sources=sources,
             include_answer_body=True,
-            action_links=normalize_action_links(action_links),
+            answer_ref=answer_ref,
         )
 
         if self.plan_stream_ts is None:
@@ -590,91 +593,6 @@ def build_section_block(text: str, *, block_id: str) -> dict[str, Any]:
             "text": text,
         },
     }
-
-
-def normalize_action_links(action_links: Any) -> dict[str, str] | None:
-    # orchestrator dataclass/dict 어느 쪽이 와도 renderer가 동일한 형태로 받게 맞춘다.
-    if action_links is None:
-        return None
-    if isinstance(action_links, dict):
-        return {key: value for key, value in action_links.items() if value}
-    normalized: dict[str, str] = {}
-    for key in ("detail_url", "helpful_value", "not_helpful_value"):
-        value = getattr(action_links, key, None)
-        if value:
-            normalized[key] = value
-    return normalized or None
-
-
-def build_action_blocks(action_links: dict[str, str] | None) -> list[dict[str, Any]]:
-    if not action_links:
-        return []
-
-    # 상세보기와 피드백 버튼은 본문 아래의 별도 블록으로 고정 배치한다.
-    blocks: list[dict[str, Any]] = [{"type": "divider"}]
-    detail_url = action_links.get("detail_url")
-    if detail_url:
-        blocks.append(
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "답변이 도움이 됐나요?",
-                },
-                "accessory": {
-                    "type": "button",
-                    "action_id": "view_detail",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "Catch Up에서 자세히 보기",
-                        "emoji": False,
-                    },
-                    "url": detail_url,
-                },
-            }
-        )
-
-    feedback_buttons: list[dict[str, Any]] = []
-    helpful_value = action_links.get("helpful_value")
-    if helpful_value:
-        feedback_buttons.append(
-            {
-                "type": "button",
-                "action_id": "feedback_helpful",
-                "text": {
-                    "type": "plain_text",
-                    "text": "도움됐어요",
-                    "emoji": False,
-                },
-                "style": "primary",
-                "value": helpful_value,
-            }
-        )
-    not_helpful_value = action_links.get("not_helpful_value")
-    if not_helpful_value:
-        feedback_buttons.append(
-            {
-                "type": "button",
-                "action_id": "feedback_not_helpful",
-                "text": {
-                    "type": "plain_text",
-                    "text": "아쉬워요",
-                    "emoji": False,
-                },
-                "style": "danger",
-                "value": not_helpful_value,
-            }
-        )
-
-    if feedback_buttons:
-        blocks.append(
-            {
-                "type": "actions",
-                "elements": feedback_buttons,
-            }
-        )
-
-    return blocks
 
 
 def build_final_markdown(

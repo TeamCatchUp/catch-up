@@ -9,6 +9,7 @@ from fastapi.concurrency import run_in_threadpool
 from catchup.chat.integrations.slack_app_mention import BUSY_NOTICE_BODY
 from catchup.chat.integrations.slack_app_mention import BUSY_NOTICE_TITLE
 from catchup.chat.integrations.slack_app_mention import SlackAppMentionRequest
+from catchup.chat.integrations.slack_app_mention import SlackAppMentionResponder
 from catchup.chat.integrations.slack_app_mention import (
     get_slack_app_mention_orchestrator,
 )
@@ -21,10 +22,73 @@ from catchup.server.connector.slack.schemas import SlackWebhookRequest
 
 logger = structlog.get_logger(__name__)
 
+
 @dataclass(slots=True, frozen=True)
 class SlackTeamBotAuth:
     bot_access_token: str
     bot_user_id: str
+
+
+class SlackAppMentionClientTransport:
+    def __init__(self, client: SlackApiClientWrapper) -> None:
+        self.client = client
+
+    async def post_thread_reply(
+        self,
+        mention: SlackAppMentionRequest,
+        text: str,
+    ) -> None:
+        await self.client.post_message(
+            channel=mention.channel_id,
+            thread_ts=mention.thread_ts,
+            text=text,
+        )
+
+    async def post_busy_notice(
+        self,
+        mention: SlackAppMentionRequest,
+    ) -> None:
+        await self.client.post_ephemeral(
+            channel=mention.channel_id,
+            user=mention.slack_user_id,
+            thread_ts=mention.thread_ts,
+            text=BUSY_NOTICE_BODY,
+            blocks=self._build_busy_notice_blocks(),
+        )
+
+    async def start_responder(
+        self,
+        mention: SlackAppMentionRequest,
+    ) -> SlackAppMentionResponder:
+        return await SlackPlanResponder.start(
+            client=self.client,
+            channel_id=mention.channel_id,
+            thread_ts=mention.thread_ts,
+            team_id=mention.team_id,
+            user_id=mention.slack_user_id,
+            query=mention.query,
+        )
+
+    def _build_busy_notice_blocks(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "type": "section",
+                "block_id": "catchup_app_mention_busy_title_v1",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": BUSY_NOTICE_TITLE,
+                },
+            },
+            {
+                "type": "section",
+                "block_id": "catchup_app_mention_busy_body_v1",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": BUSY_NOTICE_BODY,
+                },
+            },
+            {"type": "divider"},
+        ]
 
 
 def schedule_app_mention(request: SlackWebhookRequest) -> None:
@@ -68,82 +132,11 @@ class SlackAppMentionAdapter:
             return
 
         client = SlackApiClientWrapper(team_bot_auth.bot_access_token, mention.team_id)
+        transport = SlackAppMentionClientTransport(client)
         await get_slack_app_mention_orchestrator().handle_mention(
             mention,
             bot_user_id=team_bot_auth.bot_user_id,
-            post_thread_reply=lambda mention_request, text: self._post_thread_reply(
-                client,
-                mention_request,
-                text,
-            ),
-            post_busy_notice=lambda mention_request: self._post_busy_notice(
-                client,
-                mention_request,
-            ),
-            responder_factory=lambda mention_request: self._start_responder(
-                client,
-                mention_request,
-            ),
-        )
-
-    async def _post_thread_reply(
-        self,
-        client: SlackApiClientWrapper,
-        mention: SlackAppMentionRequest,
-        text: str,
-    ) -> None:
-        await client.post_message(
-            channel=mention.channel_id,
-            thread_ts=mention.thread_ts,
-            text=text,
-        )
-
-    async def _post_busy_notice(
-        self,
-        client: SlackApiClientWrapper,
-        mention: SlackAppMentionRequest,
-    ) -> None:
-        await client.post_ephemeral(
-            channel=mention.channel_id,
-            user=mention.slack_user_id,
-            thread_ts=mention.thread_ts,
-            text=BUSY_NOTICE_BODY,
-            blocks=self._build_busy_notice_blocks(),
-        )
-
-    def _build_busy_notice_blocks(self) -> list[dict[str, Any]]:
-        return [
-            {
-                "type": "section",
-                "block_id": "catchup_app_mention_busy_title_v1",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": BUSY_NOTICE_TITLE,
-                },
-            },
-            {
-                "type": "section",
-                "block_id": "catchup_app_mention_busy_body_v1",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": BUSY_NOTICE_BODY,
-                },
-            },
-            {"type": "divider"},
-        ]
-
-    async def _start_responder(
-        self,
-        client: SlackApiClientWrapper,
-        mention: SlackAppMentionRequest,
-    ) -> SlackPlanResponder:
-        return await SlackPlanResponder.start(
-            client=client,
-            channel_id=mention.channel_id,
-            thread_ts=mention.thread_ts,
-            team_id=mention.team_id,
-            user_id=mention.slack_user_id,
-            query=mention.query,
+            transport=transport,
         )
 
     def _load_team_auth_sync(self, team_id: str) -> SlackTeamBotAuth | None:

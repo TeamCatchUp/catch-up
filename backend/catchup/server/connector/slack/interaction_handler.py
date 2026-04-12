@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import uuid
 from typing import Any
 
 import structlog
@@ -12,6 +10,7 @@ from catchup.chat.chat_room import process_answer_feedback
 from catchup.chat.exceptions import FeedbackImmutableError
 from catchup.chat.exceptions import LikedWithNegativeFeedbackError
 from catchup.chat.schemas import FeedbackRequest
+from catchup.configs.config import settings
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.db.chat_room import get_chat_room
 from catchup.db.chat_room import get_message
@@ -20,24 +19,31 @@ from catchup.db.models import SourceType
 from catchup.db.slack.oauth_repository import get_slack_token_by_team_id
 from catchup.db.user_source_mapping import find_user_id_by_source_mapping
 from catchup.observability.langfuse.feedback import upsert_feedback
-from catchup.configs.config import settings
+from catchup.server.connector.slack.feedback_actions import COMMENT_ACTION_ID
+from catchup.server.connector.slack.feedback_actions import COMMENT_BLOCK_ID
+from catchup.server.connector.slack.feedback_actions import FEEDBACK_REASON_OPTIONS
+from catchup.server.connector.slack.feedback_actions import HELPFUL_ACTION_ID
+from catchup.server.connector.slack.feedback_actions import NOT_HELPFUL_ACTION_ID
+from catchup.server.connector.slack.feedback_actions import REASON_ACTION_ID
+from catchup.server.connector.slack.feedback_actions import REASON_BLOCK_ID
+from catchup.server.connector.slack.feedback_actions import (
+    SUPPORTED_FEEDBACK_ACTION_IDS,
+)
+from catchup.server.connector.slack.feedback_actions import FeedbackProcessResult
+from catchup.server.connector.slack.feedback_actions import SlackFeedbackActionPayload
+from catchup.server.connector.slack.feedback_actions import SlackFeedbackContext
+from catchup.server.connector.slack.feedback_actions import SlackFeedbackModalContext
+from catchup.server.connector.slack.feedback_actions import (
+    parse_feedback_action_payload,
+)
+from catchup.server.connector.slack.feedback_actions import parse_feedback_modal_context
+from catchup.server.connector.slack.feedback_actions import resolve_feedback_context
+from catchup.server.connector.slack.feedback_actions import (
+    serialize_feedback_modal_context,
+)
 from catchup.server.connector.slack.schemas import SlackWebhookRequest
 
 logger = structlog.get_logger(__name__)
-
-HELPFUL_ACTION_ID = "feedback_helpful"
-NOT_HELPFUL_ACTION_ID = "feedback_not_helpful"
-REASON_BLOCK_ID = "feedback_reason_block"
-REASON_ACTION_ID = "feedback_reason_action"
-COMMENT_BLOCK_ID = "feedback_comment_block"
-COMMENT_ACTION_ID = "feedback_comment_action"
-SUPPORTED_FEEDBACK_ACTION_IDS = frozenset({HELPFUL_ACTION_ID, NOT_HELPFUL_ACTION_ID})
-FEEDBACK_REASON_OPTIONS = [
-    ("원하는 답이 아니에요", "IRRELEVANT_ANSWER"),
-    ("출처가 정확하지 않아요", "NO_CITATION"),
-    ("내용이 부족해요", "MISSING_INFO"),
-    ("관련 없는 결과가 포함됐어요", "IRRELEVANT_SOURCE"),
-]
 
 
 async def handle_block_actions(
@@ -46,43 +52,43 @@ async def handle_block_actions(
 ) -> dict[str, Any]:
     action = _extract_first_action(request.event)
     if not action:
-        return _ack_response()
+        return {}
 
     action_id = str(action.get("action_id") or "").strip()
     if action_id not in SUPPORTED_FEEDBACK_ACTION_IDS:
-        return _ack_response()
+        return {}
 
-    action_value = _parse_action_value(action.get("value"))
-    if action_value is None:
+    action_payload = parse_feedback_action_payload(action.get("value"))
+    if action_payload is None:
         await _post_feedback_notice(request, "피드백 정보를 읽지 못했어요.")
-        return _ack_response()
+        return {}
 
     if action_id == NOT_HELPFUL_ACTION_ID:
         preflight_result = await run_in_threadpool(
             _preflight_feedback_sync,
             _read_nested_str(request.event, "user", "id"),
-            action_value,
+            action_payload,
         )
-        if preflight_result != "ready":
+        if preflight_result is not FeedbackProcessResult.READY:
             await _post_feedback_notice(
                 request,
                 _feedback_notice_message(preflight_result, NOT_HELPFUL_ACTION_ID),
             )
-            return _ack_response()
-        handled = await _open_not_helpful_modal_if_possible(request, action_value)
+            return {}
+        handled = await _open_not_helpful_modal_if_possible(request, action_payload)
         if not handled:
             await _post_feedback_notice(request, "의견 입력 창을 열지 못했어요.")
-        return _ack_response()
+        return {}
 
     feedback_result = await run_in_threadpool(
         _process_feedback_sync,
         _read_nested_str(request.event, "user", "id"),
-        action_value,
+        action_payload,
         None,
         None,
     )
     await _handle_feedback_result(request, feedback_result, HELPFUL_ACTION_ID)
-    return _ack_response()
+    return {}
 
 
 async def handle_view_submission(
@@ -90,11 +96,11 @@ async def handle_view_submission(
     request: SlackWebhookRequest,
 ) -> dict[str, Any]:
     payload = request.event
-    private_metadata = _parse_private_metadata(
+    modal_context = parse_feedback_modal_context(
         _read_nested_str(payload, "view", "private_metadata")
     )
-    if private_metadata is None:
-        return _clear_modal_response()
+    if modal_context is None:
+        return {"response_action": "clear"}
 
     reasons, comment = _parse_view_submission_feedback(payload)
     validation_errors = _validate_feedback_submission(reasons, comment)
@@ -107,7 +113,7 @@ async def handle_view_submission(
     feedback_result = await run_in_threadpool(
         _process_feedback_sync,
         _read_nested_str(payload, "user", "id"),
-        private_metadata,
+        modal_context.action_payload,
         reasons,
         comment,
     )
@@ -115,40 +121,35 @@ async def handle_view_submission(
         request,
         feedback_result,
         NOT_HELPFUL_ACTION_ID,
-        fallback_metadata=private_metadata,
+        fallback_context=modal_context.feedback_context,
     )
-    return _clear_modal_response()
+    return {"response_action": "clear"}
 
 
 def _process_feedback_sync(
     slack_user_id: str,
-    payload: dict[str, Any],
+    payload: SlackFeedbackActionPayload,
     reasons: list[str] | None,
     comment: str | None,
-) -> str:
+) -> FeedbackProcessResult:
     preflight_result = _preflight_feedback_sync(slack_user_id, payload)
-    if preflight_result != "ready":
+    if preflight_result is not FeedbackProcessResult.READY:
         return preflight_result
 
-    message_id = _parse_message_id(payload.get("message_id"))
-    is_liked = payload.get("is_liked")
-    if message_id is None or not isinstance(is_liked, bool):
-        return "invalid"
-
     body = FeedbackRequest(
-        is_liked=is_liked,
+        is_liked=payload.is_liked,
         reasons=reasons,
         comment=comment,
     )
     try:
         updated_message = process_answer_feedback(
-            message_id=message_id,
+            message_id=payload.message_id,
             body=body,
         )
     except FeedbackImmutableError:
-        return "already_submitted"
+        return FeedbackProcessResult.ALREADY_SUBMITTED
     except LikedWithNegativeFeedbackError:
-        return "invalid"
+        return FeedbackProcessResult.INVALID
 
     if settings.ENABLE_LANGFUSE:
         trace_id = getattr(updated_message, "trace_id", None)
@@ -160,19 +161,13 @@ def _process_feedback_sync(
                 )
             )
 
-    return "success"
+    return FeedbackProcessResult.SUCCESS
 
 
 def _preflight_feedback_sync(
     slack_user_id: str,
-    payload: dict[str, Any],
-) -> str:
-    session_id = _parse_session_id(payload.get("session_id"))
-    message_id = _parse_message_id(payload.get("message_id"))
-    is_liked = payload.get("is_liked")
-    if session_id is None or message_id is None or not isinstance(is_liked, bool):
-        return "invalid"
-
+    payload: SlackFeedbackActionPayload,
+) -> FeedbackProcessResult:
     with SessionLocal() as db:
         user_id = find_user_id_by_source_mapping(
             db,
@@ -180,48 +175,54 @@ def _preflight_feedback_sync(
             external_user_identifier=slack_user_id,
         )
         if user_id is None:
-            return "not_found"
+            return FeedbackProcessResult.NOT_FOUND
 
         room = get_chat_room(
             db=db,
-            session_id=session_id,
+            session_id=payload.session_id,
             user_id=user_id,
         )
         if room is None:
-            return "not_found"
+            return FeedbackProcessResult.NOT_FOUND
 
         message = get_message(
             db=db,
             room_id=room.id,
-            message_id=message_id,
+            message_id=payload.message_id,
         )
         if message is None:
-            return "not_found"
+            return FeedbackProcessResult.NOT_FOUND
         if message.is_liked is not None:
-            return "already_submitted"
-    return "ready"
+            return FeedbackProcessResult.ALREADY_SUBMITTED
+    return FeedbackProcessResult.READY
 
 
 async def _handle_feedback_result(
     request: SlackWebhookRequest,
-    feedback_result: str,
+    feedback_result: FeedbackProcessResult,
     action_id: str,
     *,
-    fallback_metadata: dict[str, Any] | None = None,
+    fallback_context: SlackFeedbackContext | None = None,
 ) -> None:
-    if feedback_result in {"success", "already_submitted"}:
-        await _remove_feedback_buttons_if_possible(request, fallback_metadata=fallback_metadata)
+    if feedback_result in {
+        FeedbackProcessResult.SUCCESS,
+        FeedbackProcessResult.ALREADY_SUBMITTED,
+    }:
+        await _remove_feedback_buttons_if_possible(
+            request,
+            fallback_context=fallback_context,
+        )
 
     await _post_feedback_notice(
         request,
         _feedback_notice_message(feedback_result, action_id),
-        fallback_metadata=fallback_metadata,
+        fallback_context=fallback_context,
     )
 
 
 async def _open_not_helpful_modal_if_possible(
     request: SlackWebhookRequest,
-    action_value: dict[str, Any],
+    action_payload: SlackFeedbackActionPayload,
 ) -> bool:
     trigger_id = _read_nested_str(request.event, "trigger_id")
     if not trigger_id:
@@ -231,27 +232,32 @@ async def _open_not_helpful_modal_if_possible(
     if client is None:
         return False
 
-    metadata = {
-        "session_id": action_value.get("session_id"),
-        "message_id": action_value.get("message_id"),
-        "is_liked": False,
-        "team_id": request.team_id,
-        "channel_id": _read_nested_str(request.event, "container", "channel_id"),
-        "message_ts": _read_nested_str(request.event, "container", "message_ts") or _read_nested_str(request.event, "message", "ts"),
-        "thread_ts": _read_nested_str(request.event, "message", "thread_ts") or _read_nested_str(request.event, "container", "thread_ts"),
-    }
+    feedback_context = resolve_feedback_context(
+        team_id=request.team_id,
+        payload=request.event,
+    )
+    if feedback_context is None:
+        return False
+
     await client.open_view(
         trigger_id=trigger_id,
-        view=_build_not_helpful_modal(metadata),
+        view=_build_not_helpful_modal(
+            SlackFeedbackModalContext(
+                action_payload=action_payload,
+                feedback_context=feedback_context,
+            )
+        ),
     )
     return True
 
 
-def _build_not_helpful_modal(metadata: dict[str, Any]) -> dict[str, Any]:
+def _build_not_helpful_modal(
+    modal_context: SlackFeedbackModalContext,
+) -> dict[str, Any]:
     return {
         "type": "modal",
         "callback_id": "feedback_not_helpful_modal",
-        "private_metadata": json.dumps(metadata, ensure_ascii=False),
+        "private_metadata": serialize_feedback_modal_context(modal_context),
         "title": {
             "type": "plain_text",
             "text": "아쉬워요",
@@ -332,6 +338,7 @@ def _parse_view_submission_feedback(payload: dict[str, Any]) -> tuple[list[str],
 
 
 def _validate_feedback_submission(reasons: list[str], comment: str | None) -> dict[str, str] | None:
+    del comment
     errors: dict[str, str] = {}
     if not reasons:
         errors[REASON_BLOCK_ID] = "아쉬웠던 이유를 하나 선택해 주세요."
@@ -349,23 +356,17 @@ def _extract_first_action(payload: dict[str, Any]) -> dict[str, Any] | None:
 async def _remove_feedback_buttons_if_possible(
     request: SlackWebhookRequest,
     *,
-    fallback_metadata: dict[str, Any] | None = None,
+    fallback_context: SlackFeedbackContext | None = None,
 ) -> None:
-    metadata = fallback_metadata or {}
-    team_id = request.team_id or str(metadata.get("team_id") or "")
-    channel_id = _read_nested_str(request.event, "container", "channel_id") or str(
-        metadata.get("channel_id") or ""
+    feedback_context = resolve_feedback_context(
+        team_id=request.team_id,
+        payload=request.event,
+        fallback=fallback_context,
     )
-    message_ts = (
-        _read_nested_str(request.event, "container", "message_ts")
-        or _read_nested_str(request.event, "message", "ts")
-        or str(metadata.get("message_ts") or "")
-    )
-
-    if not team_id or not channel_id or not message_ts:
+    if feedback_context is None:
         return
 
-    client = await run_in_threadpool(_build_slack_client_sync, team_id)
+    client = await run_in_threadpool(_build_slack_client_sync, feedback_context.team_id)
     if client is None:
         return
 
@@ -373,7 +374,10 @@ async def _remove_feedback_buttons_if_possible(
     message_text = _read_nested_str(request.event, "message", "text")
     blocks = message_payload.get("blocks") if isinstance(message_payload, dict) else None
     if not isinstance(blocks, list):
-        latest_message = await client.get_message(channel_id, message_ts)
+        latest_message = await client.get_message(
+            feedback_context.channel_id,
+            feedback_context.message_ts,
+        )
         if latest_message is None:
             return
         message_text = str(latest_message.get("text") or message_text or "Catch Up")
@@ -388,17 +392,17 @@ async def _remove_feedback_buttons_if_possible(
 
     try:
         await client.update_message(
-            channel=channel_id,
-            ts=message_ts,
+            channel=feedback_context.channel_id,
+            ts=feedback_context.message_ts,
             text=message_text or "Catch Up",
             blocks=updated_blocks,
         )
     except Exception:
         logger.warning(
             "slack_feedback_button_cleanup_failed",
-            team_id=team_id,
-            channel_id=channel_id,
-            message_ts=message_ts,
+            team_id=feedback_context.team_id,
+            channel_id=feedback_context.channel_id,
+            message_ts=feedback_context.message_ts,
             exc_info=True,
         )
 
@@ -407,38 +411,33 @@ async def _post_feedback_notice(
     request: SlackWebhookRequest,
     text: str,
     *,
-    fallback_metadata: dict[str, Any] | None = None,
+    fallback_context: SlackFeedbackContext | None = None,
 ) -> None:
-    metadata = fallback_metadata or {}
-    team_id = request.team_id or str(metadata.get("team_id") or "")
-    channel_id = _read_nested_str(request.event, "container", "channel_id") or str(
-        metadata.get("channel_id") or ""
+    feedback_context = resolve_feedback_context(
+        team_id=request.team_id,
+        payload=request.event,
+        fallback=fallback_context,
     )
-    thread_ts = _read_nested_str(request.event, "message", "thread_ts") or str(
-        metadata.get("thread_ts") or ""
-    )
-    slack_user_id = _read_nested_str(request.event, "user", "id")
-
-    if not team_id or not channel_id or not slack_user_id:
+    if feedback_context is None or not feedback_context.slack_user_id:
         return
 
-    client = await run_in_threadpool(_build_slack_client_sync, team_id)
+    client = await run_in_threadpool(_build_slack_client_sync, feedback_context.team_id)
     if client is None:
         return
 
     try:
         await client.post_ephemeral(
-            channel=channel_id,
-            user=slack_user_id,
-            thread_ts=thread_ts or None,
+            channel=feedback_context.channel_id,
+            user=feedback_context.slack_user_id,
+            thread_ts=feedback_context.thread_ts,
             text=text,
         )
     except Exception:
         logger.warning(
             "slack_feedback_notice_failed",
-            team_id=team_id,
-            channel_id=channel_id,
-            slack_user_id=slack_user_id,
+            team_id=feedback_context.team_id,
+            channel_id=feedback_context.channel_id,
+            slack_user_id=feedback_context.slack_user_id,
             exc_info=True,
         )
 
@@ -481,29 +480,6 @@ def _strip_feedback_action_blocks(blocks: list[Any]) -> list[dict[str, Any]]:
         filtered_blocks.append(next_block)
     return filtered_blocks
 
-
-def _parse_action_value(value: Any) -> dict[str, Any] | None:
-    if not isinstance(value, str) or not value.strip():
-        return None
-    try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError:
-        logger.warning("slack_block_action_invalid_value", value=value)
-        return None
-    return parsed if isinstance(parsed, dict) else None
-
-
-def _parse_private_metadata(value: str) -> dict[str, Any] | None:
-    if not value:
-        return None
-    try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError:
-        logger.warning("slack_feedback_modal_invalid_private_metadata", value=value)
-        return None
-    return parsed if isinstance(parsed, dict) else None
-
-
 def _read_nested_str(payload: dict[str, Any], *keys: str) -> str:
     current: Any = payload
     for key in keys:
@@ -511,28 +487,6 @@ def _read_nested_str(payload: dict[str, Any], *keys: str) -> str:
             return ""
         current = current.get(key)
     return str(current or "").strip()
-
-
-def _parse_session_id(raw_value: Any) -> uuid.UUID | None:
-    try:
-        return uuid.UUID(str(raw_value))
-    except (ValueError, TypeError, AttributeError):
-        return None
-
-
-def _parse_message_id(raw_value: Any) -> int | None:
-    try:
-        return int(raw_value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _ack_response() -> dict[str, Any]:
-    return {}
-
-
-def _clear_modal_response() -> dict[str, str]:
-    return {"response_action": "clear"}
 
 
 def _success_message_for_action(action_id: str) -> str:
@@ -543,11 +497,11 @@ def _success_message_for_action(action_id: str) -> str:
     return "피드백을 저장했어요."
 
 
-def _feedback_notice_message(feedback_result: str, action_id: str) -> str:
-    if feedback_result == "success":
+def _feedback_notice_message(feedback_result: FeedbackProcessResult, action_id: str) -> str:
+    if feedback_result is FeedbackProcessResult.SUCCESS:
         return _success_message_for_action(action_id)
-    if feedback_result == "already_submitted":
+    if feedback_result is FeedbackProcessResult.ALREADY_SUBMITTED:
         return "이미 피드백이 제출된 답변이에요."
-    if feedback_result == "invalid":
+    if feedback_result is FeedbackProcessResult.INVALID:
         return "피드백을 저장하지 못했어요."
     return "접근 권한이 없거나 답변을 찾지 못했어요."
