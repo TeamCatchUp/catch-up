@@ -62,6 +62,13 @@ SEARCH_NODES = {
 NO_VALUE = object()
 
 
+def build_markdown_text_chunk(text: str) -> dict[str, str]:
+    return {
+        "type": "markdown_text",
+        "text": text,
+    }
+
+
 @dataclass(slots=True)
 class TaskState:
     status: str = "pending"
@@ -383,6 +390,7 @@ class SlackPlanResponder:
 
         markdown_text = self.markdown_buffer
         self.markdown_buffer = ""
+        markdown_chunks = [build_markdown_text_chunk(markdown_text)]
 
         if self.answer_stream_ts is None:
             # 기본적으로 plan_steam_ts을 그대로 사용하지만, plan block kit 생성에 실패한 경우에만 Fallback으로 답변 생성용 메세지를 새롭게 생성
@@ -391,7 +399,7 @@ class SlackPlanResponder:
                 thread_ts=self.thread_ts,
                 recipient_user_id=self.user_id,
                 recipient_team_id=self.team_id,
-                markdown_text=markdown_text,
+                chunks=markdown_chunks,
             )
             self.answer_stream_ts = str(response.get("ts") or "").strip() or None
             self.has_streamed_answer = True
@@ -400,7 +408,7 @@ class SlackPlanResponder:
         await self.client.append_stream(
             channel=self.channel_id,
             ts=self.answer_stream_ts,
-            markdown_text=markdown_text,
+            chunks=markdown_chunks,
         )
         self.has_streamed_answer = True
 
@@ -416,12 +424,12 @@ class SlackPlanResponder:
         if self.answer_mode:
             await self.flush_answer_markdown()
             if self.answer_stream_ts is not None:
+                failure_chunks = [build_markdown_text_chunk(message), *self.state.fail(message)]
                 # plan UI를 남긴 채 같은 stream에서 answer task를 error로 종료
                 await self.client.stop_stream(
                     channel=self.channel_id,
                     ts=self.answer_stream_ts,
-                    markdown_text=message,
-                    chunks=self.state.fail(message),
+                    chunks=failure_chunks,
                 )
                 return
 
