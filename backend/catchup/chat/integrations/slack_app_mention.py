@@ -27,6 +27,7 @@ from catchup.chat.schemas import ChatStreamingSourceResponse
 from catchup.chat.schemas import ChatStreamingStatusResponse
 from catchup.chat.schemas import ChatStreamingTokenResponse
 from catchup.db.chat_room import get_chat_room_by_session_id
+from catchup.db.chat_room import get_latest_assistant_message
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
 from catchup.db.slack import bot_repository
@@ -184,7 +185,6 @@ class SlackAppMentionOrchestrator:
                 answer_ref = await run_in_threadpool(
                     self._load_answer_ref_sync,
                     session_id,
-                    user_id,
                 )
                 await responder.finish(
                     answer=reply_text,
@@ -356,14 +356,13 @@ class SlackAppMentionOrchestrator:
     def _load_answer_ref_sync(
         self,
         session_id: uuid.UUID,
-        user_id: int,
     ) -> SlackChatAnswerRef | None:
         with SessionLocal() as db:
             # 저장된 room/assistant 메시지를 기준으로 Slack 버튼 URL을 확정
-            room = get_chat_room(
+            # Slack 서버 발급 session_id 환경에서는 user_id 검증 없이 조회 (multi-user 지원)
+            room = get_chat_room_by_session_id(
                 db=db,
                 session_id=session_id,
-                user_id=user_id,
             )
             if room is None:
                 return None
