@@ -55,12 +55,11 @@ async def generate_final_answer_fast_node(state: AgentState, llm: BaseChatModel)
     )
     system_message = build_system_message(
         static_prompt=prompts["system"],
-        dynamic_prompts=[p for p in [
+        dynamic_prompts=[
             prompts["global_context"],
             prompts["retrieved_context"],
             prompts["settings"],
-            prompts["platform_instruction"],
-        ] if p is not None],
+        ],
         cache_prompt=False,
     )
 
@@ -131,13 +130,11 @@ def _load_prompts(
     retrieved_context: str,
     prompt_settings: PromptSettings,
 ) -> dict:
-    platform_instruction = (
-        prompt_loader.get_prompt(f"platforms/{prompt_settings.platform}")
-        if prompt_settings and prompt_settings.platform
-        else None
-    )
     return {
-        "system": prompt_loader.get_prompt("rag/generate_final_answer_fast"),
+        "system": prompt_loader.get_prompt(
+            "rag/generate_final_answer_fast",
+            prompt_settings=prompt_settings,
+        ),
         "global_context": prompt_loader.get_prompt(
             "common/global_context",
             **global_context,
@@ -150,5 +147,4 @@ def _load_prompts(
             "settings/settings",
             prompt_settings=prompt_settings,
         ),
-        "platform_instruction": platform_instruction,
     }

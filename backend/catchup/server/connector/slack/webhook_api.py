@@ -1,3 +1,4 @@
+import json
 from typing import Optional
 
 import structlog
@@ -53,23 +54,41 @@ async def handle_slack_webhook(
     # 2. Payload Valid Check
     try:
         payload = await request.json()
+        wrapper_type = str(payload.get("type") or "").strip()
     except Exception:
-        logger.warning("slack_webhook_invalid_json")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid JSON payload",
-        )
+        try:
+            form = await request.form()
+            raw_payload = form.get("payload")
+            if not isinstance(raw_payload, str) or not raw_payload.strip():
+                raise ValueError("missing interactivity payload")
+            payload = json.loads(raw_payload)
+            wrapper_type = str(payload.get("type") or "").strip()
+        except Exception:
+            logger.warning("slack_webhook_invalid_payload")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid Slack payload",
+            )
 
     # 3. Dipatch Slack Webhook Event (Incremental / Metadata / Chat)
     try:
-        event_wrapper = SlackEventWrapper(**payload)
-        response = await dispatch_slack_webhook(
-            request=SlackWebhookRequest.from_raw(
+        if wrapper_type == "event_callback" or wrapper_type == "url_verification":
+            event_wrapper = SlackEventWrapper(**payload)
+            webhook_request = SlackWebhookRequest.from_raw(
                 wrapper_type=event_wrapper.type,
                 team_id=event_wrapper.team_id or "",
                 event=event_wrapper.event,
                 challenge=event_wrapper.challenge,
-            ),
+            )
+        else:
+            webhook_request = SlackWebhookRequest.from_raw(
+                wrapper_type=wrapper_type,
+                team_id=str((payload.get("team") or {}).get("id") or ""),
+                event=payload,
+                challenge=None,
+            )
+        response = await dispatch_slack_webhook(
+            request=webhook_request,
         )
         return jsonable_encoder(response, exclude_none=True)
     except Exception as exc:

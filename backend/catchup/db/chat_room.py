@@ -328,6 +328,23 @@ def get_message(
     return db.scalar(stmt)
 
 
+def get_latest_assistant_message(
+    db: Session,
+    room_id: int,
+) -> ChatHistory | None:
+    stmt = (
+        select(ChatHistory)
+        .where(
+            (ChatHistory.chat_room_id == room_id)
+            & (ChatHistory.sender_type == SenderType.ASSISTANT)
+            & (ChatHistory.is_displayed == True)
+        )
+        .order_by(ChatHistory.created_at.desc(), ChatHistory.id.desc())
+        .limit(1)
+    )
+    return db.scalar(stmt)
+
+
 def update_message_feedback(
     message: ChatHistory,
     is_liked: Optional[bool] = None,

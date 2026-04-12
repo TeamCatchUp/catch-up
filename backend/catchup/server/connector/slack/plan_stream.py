@@ -5,15 +5,20 @@ from typing import Any
 
 import structlog
 
+from catchup.chat.integrations.slack_app_mention import SlackChatAnswerRef
 from catchup.connectors.slack.client import SlackApiClientWrapper
+from catchup.server.connector.slack.feedback_actions import build_action_blocks
 
 logger = structlog.get_logger(__name__)
 
 # 최상단 노출 텍스트
-PLAN_TITLE = "답변을 생성중입니다 ..."
+PLAN_TITLE = "Catch Up이 답변을 준비하고 있어요"
+PLAN_COMPLETED_TITLE = "Catch Up이 답변을 완성했어요 :)"
 
-# 스트리밍 fallback 렌더링 제약조건
+# section fallback 렌더링 제약조건
 MAX_SECTION_TEXT = 2900
+# Slack markdown block 누적 렌더링 제약조건
+MAX_MARKDOWN_BLOCK_TEXT = 12000
 
 # 최종 응답에 포함시킬 출처 URL 개수
 MAX_SOURCE_ITEMS = 10
@@ -22,33 +27,22 @@ MAX_SOURCE_ITEMS = 10
 MARKDOWN_FLUSH_SIZE = 120
 
 # Plan Block Kit 노출 순서
-TASK_ORDER = ("route", "rewrite", "search", "rerank", "answer")
+TASK_ORDER = ("route", "search", "rerank", "answer")
 
 # 각 노드에서의 진행중 텍스트
 TASK_TITLES = {
-    "route": "질문의 의도를 파악하고 있습니다",
-    "rewrite": "검색을 준비하고 있습니다",
-    "search": "사내 지식을 살펴보고 있습니다",
-    "rerank": "중요한 문서만 고르고 있습니다",
+    "route": "질문의 의도를 파악하고 있어요",
+    "search": "사내 기록을 꼼꼼히 살펴보는 중이에요",
+    "rerank": "꼭 필요한 내용만 추려볼게요",
     "answer": "최종 답변을 작성중 ...",
-}
-
-# 노드 진입 시 노출 텍스트
-TASK_DETAILS = {
-    "route": "질문의 의도를 파악하고 있어요.",
-    "rewrite": "검색 질의를 준비하고 있어요.",
-    "search": "관련 문서를 찾고 있어요.",
-    "rerank": "중요한 문서를 추리고 있어요.",
-    "answer": "문서를 참고하여 답변을 작성하고 있어요.",
 }
 
 # 노드 완료 시 노출 텍스트
 TASK_OUTPUTS = {
-    "route": "질문 의도 파악을 마쳤습니다.",
-    "rewrite": "검색 준비를 마쳤습니다.",
-    "search": "후보 문서를 수집했습니다.",
-    "rerank": "상위 5건을 골랐습니다.",
-    "answer": "최종 답변 생성을 마쳤습니다.",
+    "route": "질문을 이해했어요",
+    "search": "관련 기록을 모아왔어요",
+    "rerank": "핵심 5건을 골랐어요",
+    "answer": "답변을 마무리했어요",
 }
 
 # search에 해당하는 노드 목록
@@ -69,6 +63,13 @@ def build_markdown_text_chunk(text: str) -> dict[str, str]:
     }
 
 
+def build_plan_title_chunk(title: str) -> dict[str, str]:
+    return {
+        "type": "plan_update",
+        "title": title,
+    }
+
+
 @dataclass(slots=True)
 class TaskState:
     status: str = "pending"
@@ -81,11 +82,11 @@ class SlackPlanState:
     def __init__(self) -> None:
         self.tasks = {task_id: TaskState() for task_id in TASK_ORDER}
         # UI 노출 관련도 높은 출처
-        self.top_sources: list[dict[str, str]] = []
+        self.top_sources: list[Any] = []
 
     def build_initial_chunks(self) -> list[dict[str, Any]]:
         """Initial Plan Block Kit Skeleton"""
-        chunks: list[dict[str, Any]] = [{"type": "plan_update", "title": PLAN_TITLE}]
+        chunks: list[dict[str, Any]] = [build_plan_title_chunk(PLAN_TITLE)]
         chunks.extend(self._task_chunk(task_id, status="pending") for task_id in TASK_ORDER)
         return chunks
 
@@ -95,10 +96,10 @@ class SlackPlanState:
             return self._start_task("route")
 
         if node in {"rewrite", "generate_vector_queries"}:
-            return self._move_to("rewrite", complete_task_ids=("route",))
+            return self._complete_task("route")
 
         if node in SEARCH_NODES:
-            return self._move_to("search", complete_task_ids=("rewrite",))
+            return self._move_to("search", complete_task_ids=("route",))
 
         if node == "rerank":
             return self._move_to("rerank", complete_task_ids=("search",))
@@ -107,9 +108,8 @@ class SlackPlanState:
         if node == "chitchat":
             chunks: list[dict[str, Any]] = []
             chunks.extend(self._complete_task("route"))
-            chunks.extend(self._complete_task("rewrite", output="검색 단계를 생략했습니다."))
             chunks.extend(self._complete_task("search", output="검색 단계를 생략했습니다."))
-            chunks.extend(self._complete_task("rerank", output="재정렬 단계를 생략했습니다."))
+            chunks.extend(self._complete_task("rerank", output="핵심 문서 선별 단계를 생략했습니다."))
             chunks.extend(self._start_task("answer"))
             return chunks
 
@@ -120,24 +120,42 @@ class SlackPlanState:
         if not sources:
             return []
 
-        self.top_sources = build_task_sources(sources)
-        rerank_output = f"상위 {len(self.top_sources)}건을 골랐습니다."
+        previous_task_sources = build_task_sources(self.top_sources)
+        self.top_sources = list(sources[:MAX_SOURCE_ITEMS])
+        current_task_sources = build_task_sources(self.top_sources)
+        if self.tasks["rerank"].output_sent and current_task_sources == previous_task_sources:
+            return []
+
+        rerank_output = f"핵심 {len(self.top_sources)}건을 골랐어요"
 
         updates: list[dict[str, Any]] = []
         updates.extend(self._complete_task("search"))
-        updates.extend(self._complete_task("rerank", output=rerank_output, sources=self.top_sources))
+        updates.extend(
+            self._complete_task(
+                "rerank",
+                output=rerank_output,
+            )
+        )
         return updates
 
     def transition_to_answer(self) -> list[dict[str, Any]]:
         """Plan UI를 유지한 채 answer 단계로 넘어가도록 선행 task를 정리"""
         updates: list[dict[str, Any]] = []
         updates.extend(self._complete_task("search"))
-        updates.extend(self._complete_task("rerank", output=f"상위 {len(self.top_sources) or MAX_SOURCE_ITEMS}건을 골랐습니다.", sources=self.top_sources or None))
+        if self.top_sources:
+            updates.extend(
+                self._complete_task(
+                    "rerank",
+                    output=f"핵심 {len(self.top_sources)}건을 골랐어요",
+                )
+            )
+        else:
+            updates.extend(self._complete_task_without_output("rerank"))
         updates.extend(self._start_task("answer"))
         return updates
 
     def finish(self) -> list[dict[str, Any]]:
-        return self._complete_task("answer")
+        return [build_plan_title_chunk(PLAN_COMPLETED_TITLE), *self._complete_task("answer")]
 
     def fail(self, message: str) -> list[dict[str, Any]]:
         task = self.tasks["answer"]
@@ -153,51 +171,32 @@ class SlackPlanState:
         answer: str,
         sources: list[Any],
         include_answer_body: bool,
+        answer_ref: SlackChatAnswerRef | None = None,
     ) -> list[dict[str, Any]]:
+        del query
+        visible_sources = sources or self.top_sources
+        # 최종 응답은 "본문 markdown"과 "후속 액션 버튼" 두 덩어리로 조립한다.
+        final_markdown = build_final_markdown(
+            answer=answer,
+            sources=visible_sources,
+            include_answer_body=include_answer_body,
+        )
         blocks: list[dict[str, Any]] = []
-
-        if include_answer_body:
-            # 스트리밍으로 답변이 나가지 않은 경우 Block에 응답을 추가
-            blocks.append({"type": "divider"})
-
-            for index, section_text in enumerate(split_sections(answer), start=1):
-                blocks.append(
-                    {
-                        "type": "section",
-                        "block_id": f"catchup_answer_body_v1_{index}",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": section_text,
-                        },
-                    }
-                )
-
-        visible_sources = self.top_sources or sources
-        source_text = build_source_markdown(visible_sources)
-        if source_text:
-            if not blocks:
-                blocks.append({"type": "divider"})
+        action_blocks = build_action_blocks(answer_ref)
+        if not final_markdown and not action_blocks:
+            return []
+        if len(final_markdown) <= MAX_MARKDOWN_BLOCK_TEXT:
+            if final_markdown:
+                blocks.append(build_markdown_block(final_markdown))
+        else:
             blocks.extend(
-                [
-                    {
-                        "type": "section",
-                        "block_id": "catchup_sources_header_v1",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": "*Sources*",
-                        },
-                    },
-                    {
-                        "type": "section",
-                        "block_id": "catchup_sources_body_v1",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": source_text,
-                        },
-                    },
-                ]
+                build_overflow_final_blocks(
+                    answer=answer,
+                    sources=visible_sources,
+                    include_answer_body=include_answer_body,
+                )
             )
-
+        blocks.extend(action_blocks)
         return blocks
 
     def _move_to(
@@ -218,15 +217,24 @@ class SlackPlanState:
             return []
 
         task.status = "in_progress"
-        details = TASK_DETAILS[task_id] if not task.details_sent else NO_VALUE
         chunk = self._task_chunk(
             task_id,
             status="in_progress",
-            details=details,
         )
-        if details is not NO_VALUE:
-            task.details_sent = True
         return [chunk]
+
+    def _complete_task_without_output(self, task_id: str) -> list[dict[str, Any]]:
+        task = self.tasks[task_id]
+        if task.status == "complete":
+            return []
+
+        task.status = "complete"
+        return [
+            self._task_chunk(
+                task_id,
+                status="complete",
+            )
+        ]
 
     def _complete_task(
         self,
@@ -412,13 +420,28 @@ class SlackPlanResponder:
         )
         self.has_streamed_answer = True
 
-    async def finish(self, *, answer: str, sources: list[Any]) -> None:
+    async def finish(
+        self,
+        *,
+        answer: str,
+        sources: list[Any],
+        answer_ref: SlackChatAnswerRef | None = None,
+    ) -> None:
+        # answer_mode 여부에 따라 같은 ts를 종료할지, plan-only ts를 종료할지 갈린다.
         if self.answer_mode:
             await self.flush_answer_markdown()
-            await self._finish_answer_stream(answer=answer, sources=sources)
+            await self._finish_answer_stream(
+                answer=answer,
+                sources=sources,
+                answer_ref=answer_ref,
+            )
             return
 
-        await self._finish_plan_stream(answer=answer, sources=sources)
+        await self._finish_plan_stream(
+            answer=answer,
+            sources=sources,
+            answer_ref=answer_ref,
+        )
 
     async def fail(self, message: str) -> None:
         if self.answer_mode:
@@ -465,13 +488,20 @@ class SlackPlanResponder:
             self.answer_stream_ts = self.plan_stream_ts
         self.answer_mode = True
 
-    async def _finish_answer_stream(self, *, answer: str, sources: list[Any]) -> None:
+    async def _finish_answer_stream(
+        self,
+        *,
+        answer: str,
+        sources: list[Any],
+        answer_ref: SlackChatAnswerRef | None = None,
+    ) -> None:
         visible_sources = self.state.top_sources or sources
         blocks = self.state.build_final_blocks(
             query=self.query,
             answer=answer,
             sources=sources,
             include_answer_body=not self.has_streamed_answer,
+            answer_ref=answer_ref,
         )
 
         if self.answer_stream_ts is None:
@@ -490,13 +520,20 @@ class SlackPlanResponder:
             blocks=blocks,
         )
 
-    async def _finish_plan_stream(self, *, answer: str, sources: list[Any]) -> None:
+    async def _finish_plan_stream(
+        self,
+        *,
+        answer: str,
+        sources: list[Any],
+        answer_ref: SlackChatAnswerRef | None = None,
+    ) -> None:
         visible_sources = self.state.top_sources or sources
         blocks = self.state.build_final_blocks(
             query=self.query,
             answer=answer,
             sources=sources,
             include_answer_body=True,
+            answer_ref=answer_ref,
         )
 
         if self.plan_stream_ts is None:
@@ -531,10 +568,86 @@ def build_plain_fallback_text(
     answer: str,
     sources: list[Any],
 ) -> str:
-    source_text = build_source_markdown(sources)
+    source_text = build_source_list_markdown(sources)
     if not source_text:
         return answer
-    return f"{answer}\n\nSources:\n{source_text}"
+    if not answer:
+        return source_text
+    return f"{answer}\n\n{source_text}"
+
+
+def build_markdown_block(text: str) -> dict[str, str]:
+    return {
+        "type": "markdown",
+        "text": text,
+    }
+
+
+def build_section_block(text: str, *, block_id: str) -> dict[str, Any]:
+    return {
+        "type": "section",
+        "block_id": block_id,
+        "expand": True,
+        "text": {
+            "type": "mrkdwn",
+            "text": text,
+        },
+    }
+
+
+def build_final_markdown(
+    *,
+    answer: str,
+    sources: list[Any],
+    include_answer_body: bool,
+) -> str:
+    # streamed 경로는 sources만, fallback 경로는 answer + sources를 한 markdown으로 만든다.
+    parts: list[str] = []
+    answer_text = (answer or "").strip()
+    source_text = build_source_list_markdown(sources)
+
+    if include_answer_body and answer_text:
+        parts.append(answer_text)
+    if source_text:
+        if parts:
+            parts.append("---")
+        parts.append(source_text)
+    return "\n\n".join(parts).strip()
+
+
+def build_overflow_final_blocks(
+    *,
+    answer: str,
+    sources: list[Any],
+    include_answer_body: bool,
+) -> list[dict[str, Any]]:
+    # markdown block 한도를 넘는 경우에만 section block으로 안전하게 분리한다.
+    blocks: list[dict[str, Any]] = []
+    answer_text = (answer or "").strip()
+    source_text = build_source_list_markdown(sources)
+
+    if include_answer_body and answer_text:
+        for index, section_text in enumerate(split_sections(answer_text), start=1):
+            blocks.append(
+                build_section_block(
+                    section_text,
+                    block_id=f"catchup_answer_body_overflow_v1_{index}",
+                )
+            )
+
+    if source_text:
+        if len(source_text) <= MAX_MARKDOWN_BLOCK_TEXT:
+            blocks.append(build_markdown_block(source_text))
+        else:
+            for index, section_text in enumerate(split_sections(source_text), start=1):
+                blocks.append(
+                    build_section_block(
+                        section_text,
+                        block_id=f"catchup_sources_overflow_v1_{index}",
+                    )
+                )
+
+    return blocks
 
 
 def build_task_sources(sources: list[Any]) -> list[dict[str, str]]:
@@ -557,18 +670,90 @@ def build_task_sources(sources: list[Any]) -> list[dict[str, str]]:
     return items
 
 
-def build_source_markdown(sources: list[Any]) -> str:
-    lines: list[str] = []
+def build_source_list_markdown(sources: list[Any]) -> str:
+    items = build_source_list_items(sources)
+    if not items:
+        return ""
 
-    for source in sources[:MAX_SOURCE_ITEMS]:
-        title = read_source_field(source, "title") or "Source"
-        url = read_source_field(source, "url")
-        if url:
-            lines.append(f"• <{url}|{title}>")
-            continue
-        lines.append(f"• {title}")
+    return "## Sources\n\n" + "\n\n".join(items)
 
-    return "\n".join(lines)
+
+def build_source_list_items(sources: list[Any]) -> list[str]:
+    items: list[str] = []
+
+    for index, source in enumerate(filter_cited_sources(sources), start=1):
+        tool = format_source_tool(source)
+        link = format_source_link(source)
+        updated = format_source_timestamp(source)
+        items.append(
+            f"{index}. {link}\n{tool} · {updated}"
+        )
+
+    return items
+
+
+def filter_cited_sources(sources: list[Any]) -> list[Any]:
+    cited_sources = [
+        source
+        for source in sources[:MAX_SOURCE_ITEMS]
+        if read_source_bool(source, "is_cited")
+    ]
+    if cited_sources:
+        return cited_sources
+    return list(sources[:MAX_SOURCE_ITEMS])
+
+
+def format_source_tool(source: Any) -> str:
+    source_name = (read_source_field(source, "source") or "").strip().lower()
+    return {
+        "slack": "Slack",
+        "jira": "Jira",
+        "github": "GitHub",
+        "confluence": "Confluence",
+    }.get(source_name, "Source")
+
+
+def format_source_link(source: Any) -> str:
+    title = trim_text(read_source_field(source, "title") or "Source", 75)
+    url = read_source_field(source, "url")
+    if not url:
+        return title
+    return f"[{escape_markdown_link_label(title)}]({url})"
+
+
+def format_source_timestamp(source: Any) -> str:
+    value = (
+        read_source_field(source, "updated_at")
+        or read_source_field(source, "created_at")
+        or ""
+    ).strip()
+    if not value:
+        return "-"
+    if "T" in value and len(value) >= 10:
+        return value[:10]
+    return value
+
+
+def escape_markdown_link_label(text: str) -> str:
+    value = (text or "").strip()
+    if not value:
+        return "Source"
+    return (
+        value.replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+    )
+
+
+def read_source_bool(source: Any, field: str) -> bool:
+    if hasattr(source, field):
+        return bool(getattr(source, field))
+
+    if isinstance(source, dict):
+        return bool(source.get(field))
+
+    return False
 
 
 def read_source_field(source: Any, field: str) -> str | None:

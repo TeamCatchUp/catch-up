@@ -141,10 +141,15 @@ class BaseSource(BaseModel):
 
         # 1. Jira
         if source_str == "jira":
+            issue_title = (
+                metadata.get("title")
+                or metadata.get("summary")
+                or "No Title"
+            )
             return JiraSource(
                 **base_data,
                 source=SourceType.JIRA,
-                title=f"[{metadata.get('issue_key')}] {metadata.get('summary', 'No Title')}",
+                title=f"[{metadata.get('issue_key')}] {issue_title}",
                 author=metadata.get("reporter"),
                 # Jira Specific
                 project_key=metadata.get("project_key"),
