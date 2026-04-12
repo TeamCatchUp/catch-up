@@ -30,6 +30,7 @@ from catchup.costs.emitters import emit_chat_token_usage_event
 from catchup.db.chat_room import add_message
 from catchup.db.chat_room import create_chat_room
 from catchup.db.chat_room import get_chat_room
+from catchup.db.chat_room import get_chat_room_by_session_id
 from catchup.db.chat_room import soft_delete_last_conversation_turn
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
@@ -75,6 +76,7 @@ class ChatService:
         query: str = None,
         additional_context: str | None = None,
         mode: Literal["fast", "standard"] = "standard",
+        is_slack: bool = False,
     ) -> AsyncGenerator[StreamEvent, None]:
         
          # 실행 시간 측정 시작
@@ -90,7 +92,8 @@ class ChatService:
             room_id: int = await self._setup_chat_room(
                 global_context,
                 session_id,
-                query
+                query,
+                is_slack=is_slack,
             )
 
             # Compiled Graph
@@ -158,14 +161,13 @@ class ChatService:
 
         except Exception as e:
             logger.exception("streaming_error")
-            
+
             def _get_chat_room_sync():
                 with SessionLocal() as db:
-                    room = get_chat_room(
-                        db=db,
-                        session_id=session_id,
-                        user_id=global_context.user.id
-                    )
+                    if is_slack:
+                        room = get_chat_room_by_session_id(db=db, session_id=session_id)
+                    else:
+                        room = get_chat_room(db=db, session_id=session_id, user_id=global_context.user.id)
                     return room.id if room else None
             room_id = await run_in_threadpool(_get_chat_room_sync)
             
@@ -484,21 +486,22 @@ class ChatService:
         self,
         global_context: GlobalContext,
         session_id: uuid.UUID,
-        query: str
+        query: str,
+        *,
+        is_slack: bool = False,
     ) -> int:
         """
             채팅방이 없다면 세션을 생성한다.
             사용자 쿼리를 저장한다.
             채팅방 ID를 반환한다.
         """
-        
+
         def _get_chat_room_sync():
             with SessionLocal() as db:
-                room = get_chat_room(
-                    db=db,
-                    session_id=session_id,
-                    user_id=global_context.user.id
-                )
+                if is_slack:
+                    room = get_chat_room_by_session_id(db=db, session_id=session_id)
+                else:
+                    room = get_chat_room(db=db, session_id=session_id, user_id=global_context.user.id)
                 return room.id if room else None
         room_id = await run_in_threadpool(_get_chat_room_sync)
 
@@ -507,7 +510,7 @@ class ChatService:
                 global_context=global_context,
                 query=query
             )
-               
+
             # 새로운 채팅 세션일 경우
             def _create_room_sync():
                 with SessionLocal() as db:
@@ -521,15 +524,16 @@ class ChatService:
                     db.commit()
                     db.refresh(new_room)
                     return new_room.id
-            room_id = await run_in_threadpool(_create_room_sync)     
-               
-        # 사용자 쿼리 저장
+            room_id = await run_in_threadpool(_create_room_sync)
+
+        # 사용자 쿼리 저장 (실제 요청자 귀속)
         await self._save_message_content(
             room_id,
             "user",
-            query
+            query,
+            user_id=global_context.user.id,
         )
-        
+
         return room_id
     
     async def _save_message_content(
@@ -538,7 +542,8 @@ class ChatService:
         role: str,
         content: str,
         sources: list[dict[str, Any]] | None = None,
-        trace_id: str | None = None
+        trace_id: str | None = None,
+        user_id: int | None = None,
     ):
         def _save_sync():
             with SessionLocal() as db:
@@ -548,7 +553,8 @@ class ChatService:
                     role=role,
                     content=content,
                     sources=sources,
-                    trace_id=trace_id
+                    trace_id=trace_id,
+                    user_id=user_id,
                 )
                 db.commit()
                 db.refresh(message)

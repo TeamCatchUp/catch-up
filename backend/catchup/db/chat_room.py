@@ -25,16 +25,26 @@ def get_chat_room(
     user_id: int
 ) -> ChatRoom | None:
     """사용자 권한 확인을 포함한 세션 ID 기반 단일 채팅방 조회"""
-    
+
     # 세션 ID 검증 및 사용자 권한 확인
     filter_query = (
-        (ChatRoom.session_id == session_id) & 
+        (ChatRoom.session_id == session_id) &
         (ChatRoom.user_id == user_id)
     )
-    
+
     return db.scalar(
         select(ChatRoom)
         .where(filter_query)
+    )
+
+
+def get_chat_room_by_session_id(
+    db: Session,
+    session_id: uuid.UUID,
+) -> ChatRoom | None:
+    """서버 발급 session_id 환경(Slack 등) 전용. user_id 검증 없음."""
+    return db.scalar(
+        select(ChatRoom).where(ChatRoom.session_id == session_id)
     )
 
 
@@ -92,7 +102,8 @@ def add_message(
     role: str,
     content: str,
     sources: list[BaseSource] | None = None,
-    trace_id: str | None = None 
+    trace_id: str | None = None,
+    user_id: int | None = None,
 ) -> ChatHistory:
     """채팅 메시지 저장"""
     message = ChatHistory(
@@ -100,10 +111,11 @@ def add_message(
         sender_type=SenderType.HUMAN if role == "user" else SenderType.ASSISTANT,
         content=content,
         sources=sources or [],
-        trace_id=trace_id
+        trace_id=trace_id,
+        user_id=user_id,
     )
     db.add(message)
-    
+
     return message
 
 

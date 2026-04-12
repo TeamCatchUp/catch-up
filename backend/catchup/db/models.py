@@ -1734,12 +1734,18 @@ class FeedbackLiteral(StrEnum):
 
 class ChatHistory(Base):
     __tablename__ = "chat_histories"
-    
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     chat_room_id: Mapped[int] = mapped_column(
-        ForeignKey("chat_rooms.id"), 
+        ForeignKey("chat_rooms.id"),
         nullable=False,
         index=True
+    )
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+        comment="메시지 발신 유저 (Slack 멀티유저 귀속용, 레거시 레코드는 NULL)"
     )
     trace_id: Mapped[str] = mapped_column(
         String(64),
