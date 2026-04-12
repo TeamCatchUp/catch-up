@@ -26,8 +26,7 @@ from catchup.chat.factory import get_chat_service
 from catchup.chat.schemas import ChatStreamingSourceResponse
 from catchup.chat.schemas import ChatStreamingStatusResponse
 from catchup.chat.schemas import ChatStreamingTokenResponse
-from catchup.db.chat_room import get_chat_room
-from catchup.db.chat_room import get_latest_assistant_message
+from catchup.db.chat_room import get_chat_room_by_session_id
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
 from catchup.db.slack import bot_repository
@@ -46,9 +45,6 @@ MENTION_PATTERN = re.compile(r"<@[^>]+>")
 
 EMPTY_QUERY_MESSAGE = "질문 내용을 함께 보내주세요."
 UNMAPPED_USER_MESSAGE = "CatchUp에 등록되지 않은 사용자입니다."
-THREAD_OWNER_MISMATCH_MESSAGE = (
-    "이 스레드는 다른 사용자 세션에 연결되어 있어 현재는 이어서 질문할 수 없습니다."
-)
 MISSING_CONTEXT_MESSAGE = "CatchUp 사용자 컨텍스트를 찾지 못해 요청을 처리할 수 없습니다."
 EMPTY_ANSWER_MESSAGE = "답변을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요."
 STREAM_FAILED_MESSAGE = "답변 생성 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."
@@ -68,12 +64,6 @@ class SlackAppMentionRequest:
     slack_user_id: str
     raw_text: str
     query: str
-
-
-@dataclass(slots=True, frozen=True)
-class SlackThreadSessionBinding:
-    session_id: uuid.UUID
-    user_id: int
 
 
 @dataclass(slots=True, frozen=True)
@@ -144,17 +134,6 @@ class SlackAppMentionOrchestrator:
             await transport.post_thread_reply(mention, UNMAPPED_USER_MESSAGE)
             return
 
-        # TODO : Session 소유주와 다른 Slack User가 요청해도 답변 생성 가능하도록 수정
-        thread_session_binding = await run_in_threadpool(
-            self._load_thread_session_binding_sync,
-            mention,
-        )
-        if (
-            thread_session_binding is not None
-            and thread_session_binding.user_id != user_id
-        ):
-            await transport.post_thread_reply(mention, THREAD_OWNER_MISMATCH_MESSAGE)
-            return
         # Global Context Loading
         global_context = await run_in_threadpool(self._load_global_context_sync, user_id)
         if global_context is None:
@@ -168,9 +147,7 @@ class SlackAppMentionOrchestrator:
             mention,
             user_id,
         )
-        if acquire_result.outcome == "owner_mismatch":
-            await transport.post_thread_reply(mention, THREAD_OWNER_MISMATCH_MESSAGE)
-            return
+        # 이전 답변이 생성 중
         if acquire_result.outcome == "busy":
             await transport.post_busy_notice(mention)
             return
@@ -223,7 +200,6 @@ class SlackAppMentionOrchestrator:
                 self._attach_chat_room_if_ready_sync,
                 mention,
                 session_id,
-                user_id,
             )
         finally:
             # 처리 종료 이후에 lease 해제
@@ -263,6 +239,7 @@ class SlackAppMentionOrchestrator:
             # TODO: additional_context에 app_mention parent message + thread messages 주입
             prompt_settings=prompt_settings,
             mode=APP_MENTION_CHAT_MODE,
+            is_slack=True,
         ):
             if isinstance(chunk, ChatStreamingStatusResponse):
                 await responder.on_node(chunk.node)
@@ -289,24 +266,6 @@ class SlackAppMentionOrchestrator:
                 db,
                 source_type=SourceType.SLACK,
                 external_user_identifier=slack_user_id,
-            )
-
-    def _load_thread_session_binding_sync(
-        self,
-        mention: SlackAppMentionRequest,
-    ) -> SlackThreadSessionBinding | None:
-        with SessionLocal() as db:
-            thread = bot_repository.get_slack_chat_thread(
-                db,
-                team_id=mention.team_id,
-                channel_id=mention.channel_id,
-                thread_ts=mention.thread_ts,
-            )
-            if thread is None:
-                return None
-            return SlackThreadSessionBinding(
-                session_id=thread.session_id,
-                user_id=thread.user_id,
             )
 
     def _acquire_thread_session_sync(
@@ -376,14 +335,9 @@ class SlackAppMentionOrchestrator:
         self,
         mention: SlackAppMentionRequest,
         session_id: uuid.UUID,
-        user_id: int,
     ) -> None:
         with SessionLocal() as db:
-            room = get_chat_room(
-                db=db,
-                session_id=session_id,
-                user_id=user_id,
-            )
+            room = get_chat_room_by_session_id(db=db, session_id=session_id)
             if room is None:
                 return
 

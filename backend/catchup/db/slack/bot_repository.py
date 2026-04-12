@@ -119,11 +119,7 @@ def acquire_or_reject_slack_thread(
     if thread is None:
         raise RuntimeError("slack chat thread disappeared during acquisition")
 
-    # 다른 내부 사용자가 소유한 스레드면 기존 owner mismatch 흐름으로 거절
-    if thread.user_id != user_id:
-        return SlackThreadAcquireResult(outcome="owner_mismatch")
-
-    # 같은 사용자의 활성 lease가 아직 유효하면 중복 실행을 막기 위해 busy를 반환
+    # 활성 lease가 아직 유효하면 중복 실행을 막기 위해 busy를 반환
     if thread.is_answer_in_progress and not _is_stale_in_progress(thread, now_utc):
         return SlackThreadAcquireResult(
             outcome="busy",
