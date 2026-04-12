@@ -58,6 +58,17 @@ async def handle_block_actions(
         return _ack_response()
 
     if action_id == NOT_HELPFUL_ACTION_ID:
+        preflight_result = await run_in_threadpool(
+            _preflight_feedback_sync,
+            _read_nested_str(request.event, "user", "id"),
+            action_value,
+        )
+        if preflight_result != "ready":
+            await _post_feedback_notice(
+                request,
+                _feedback_notice_message(preflight_result, NOT_HELPFUL_ACTION_ID),
+            )
+            return _ack_response()
         handled = await _open_not_helpful_modal_if_possible(request, action_value)
         if not handled:
             await _post_feedback_notice(request, "의견 입력 창을 열지 못했어요.")
@@ -115,6 +126,47 @@ def _process_feedback_sync(
     reasons: list[str] | None,
     comment: str | None,
 ) -> str:
+    preflight_result = _preflight_feedback_sync(slack_user_id, payload)
+    if preflight_result != "ready":
+        return preflight_result
+
+    message_id = _parse_message_id(payload.get("message_id"))
+    is_liked = payload.get("is_liked")
+    if message_id is None or not isinstance(is_liked, bool):
+        return "invalid"
+
+    body = FeedbackRequest(
+        is_liked=is_liked,
+        reasons=reasons,
+        comment=comment,
+    )
+    try:
+        updated_message = process_answer_feedback(
+            message_id=message_id,
+            body=body,
+        )
+    except FeedbackImmutableError:
+        return "already_submitted"
+    except LikedWithNegativeFeedbackError:
+        return "invalid"
+
+    if settings.ENABLE_LANGFUSE:
+        trace_id = getattr(updated_message, "trace_id", None)
+        if trace_id:
+            asyncio.run(
+                upsert_feedback(
+                    trace_id=trace_id,
+                    content=body.model_dump(exclude_none=True),
+                )
+            )
+
+    return "success"
+
+
+def _preflight_feedback_sync(
+    slack_user_id: str,
+    payload: dict[str, Any],
+) -> str:
     session_id = _parse_session_id(payload.get("session_id"))
     message_id = _parse_message_id(payload.get("message_id"))
     is_liked = payload.get("is_liked")
@@ -147,33 +199,7 @@ def _process_feedback_sync(
             return "not_found"
         if message.is_liked is not None:
             return "already_submitted"
-
-    body = FeedbackRequest(
-        is_liked=is_liked,
-        reasons=reasons,
-        comment=comment,
-    )
-    try:
-        updated_message = process_answer_feedback(
-            message_id=message_id,
-            body=body,
-        )
-    except FeedbackImmutableError:
-        return "already_submitted"
-    except LikedWithNegativeFeedbackError:
-        return "invalid"
-
-    if settings.ENABLE_LANGFUSE:
-        trace_id = getattr(updated_message, "trace_id", None)
-        if trace_id:
-            asyncio.run(
-                upsert_feedback(
-                    trace_id=trace_id,
-                    content=body.model_dump(exclude_none=True),
-                )
-            )
-
-    return "success"
+    return "ready"
 
 
 async def _handle_feedback_result(
