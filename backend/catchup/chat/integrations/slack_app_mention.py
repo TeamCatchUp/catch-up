@@ -20,6 +20,7 @@ from catchup.db.chat_room import get_chat_room
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
 from catchup.db.slack import bot_repository
+from catchup.db.user_prompt_settings import get_user_prompt_settings
 from catchup.db.user_source_mapping import find_user_id_by_source_mapping
 from catchup.db.users import get_user_with_full_context
 from catchup.rag.schemas.context import GlobalCompanyContext
@@ -45,6 +46,7 @@ BUSY_NOTICE_BODY = (
     "이전 답변이 완료되는 대로 바로 이어서 답변드릴게요.\n"
     "잠시만 기다려주세요!"
 )
+APP_MENTION_CHAT_MODE = "fast"
 
 
 @dataclass(slots=True, frozen=True)
@@ -98,6 +100,7 @@ class SlackAppMentionOrchestrator:
         post_busy_notice: BusyNoticePoster,
         responder_factory: ResponderFactory,
     ) -> None:
+        # 봇 자신의 멘션은 무시
         if mention.slack_user_id == bot_user_id:
             logger.info(
                 "slack_app_mention_ignored_self",
@@ -111,6 +114,7 @@ class SlackAppMentionOrchestrator:
             await post_thread_reply(mention, EMPTY_QUERY_MESSAGE)
             return
 
+        # Slack User -> CatchUp User
         user_id = await run_in_threadpool(
             self._find_internal_user_id_sync,
             mention.slack_user_id,
@@ -119,6 +123,7 @@ class SlackAppMentionOrchestrator:
             await post_thread_reply(mention, UNMAPPED_USER_MESSAGE)
             return
 
+        # TODO : Session 소유주와 다른 Slack User가 요청해도 답변 생성 가능하도록 수정
         thread_session_binding = await run_in_threadpool(
             self._load_thread_session_binding_sync,
             mention,
@@ -130,11 +135,14 @@ class SlackAppMentionOrchestrator:
             await post_thread_reply(mention, THREAD_OWNER_MISMATCH_MESSAGE)
             return
 
+        # Global Context Loading
         global_context = await run_in_threadpool(self._load_global_context_sync, user_id)
         if global_context is None:
             await post_thread_reply(mention, MISSING_CONTEXT_MESSAGE)
             return
 
+        # 스레드 실행 권한을 확보하고 현재 처리 가능 상태인지 확인한다.
+        # Thread(Session) lease를 확인 및 획득
         acquire_result = await run_in_threadpool(
             self._acquire_thread_session_sync,
             mention,
@@ -143,6 +151,7 @@ class SlackAppMentionOrchestrator:
         if acquire_result.outcome == "owner_mismatch":
             await post_thread_reply(mention, THREAD_OWNER_MISMATCH_MESSAGE)
             return
+        # 이전 답변이 생성 중
         if acquire_result.outcome == "busy":
             await post_busy_notice(mention)
             return
@@ -161,16 +170,18 @@ class SlackAppMentionOrchestrator:
         lease_started_at = acquire_result.lease_started_at
 
         try:
-            global_context = await run_in_threadpool(self._load_global_context_sync, user_id)
-            if global_context is None:
-                await post_thread_reply(mention, MISSING_CONTEXT_MESSAGE)
-                return
+            # User Prompt Settings Loading
+            prompt_settings = await run_in_threadpool(
+                self._load_prompt_settings_sync,
+                user_id,
+            )
 
             responder = await responder_factory(mention)
 
             try:
                 reply_text, sources = await self._run_chat_stream(
                     global_context=global_context,
+                    prompt_settings=prompt_settings,
                     session_id=session_id,
                     query=mention.query,
                     responder=responder,
@@ -180,6 +191,7 @@ class SlackAppMentionOrchestrator:
                 await responder.fail(STREAM_FAILED_MESSAGE)
                 raise
 
+            # 답변이 종료된 이후에 Session을 Chat Room에 연결
             await run_in_threadpool(
                 self._attach_chat_room_if_ready_sync,
                 mention,
@@ -187,6 +199,7 @@ class SlackAppMentionOrchestrator:
                 user_id,
             )
         finally:
+            # 처리 종료 이후에 lease 해제
             released = await run_in_threadpool(
                 self._release_thread_execution_sync,
                 mention,
@@ -205,6 +218,7 @@ class SlackAppMentionOrchestrator:
         self,
         *,
         global_context: GlobalContext,
+        prompt_settings: PromptSettings,
         session_id: uuid.UUID,
         query: str,
         responder: SlackAppMentionResponder,
@@ -219,10 +233,9 @@ class SlackAppMentionOrchestrator:
             session_id=session_id,
             query=query,
             tool_filters=[],
-            # TODO: DB에서 user_prompt_settings 불러온 뒤, prompt_settings.platform = "slack" 추가 필요
-            # TODO: additional_context=additional_context,
-            prompt_settings=PromptSettings(platform="slack"), # TODO: 임시
-            mode="fast",
+            # TODO: additional_context에 app_mention parent message + thread messages 주입
+            prompt_settings=prompt_settings,
+            mode=APP_MENTION_CHAT_MODE,
         ):
             if isinstance(chunk, ChatStreamingStatusResponse):
                 await responder.on_node(chunk.node)
@@ -320,6 +333,16 @@ class SlackAppMentionOrchestrator:
                 user=GlobalUserContext.model_validate(db_user_full),
                 workspace=GlobalWorkspaceContext.model_validate(target_workspace),
                 company=GlobalCompanyContext.model_validate(target_workspace.company),
+            )
+
+    def _load_prompt_settings_sync(self, user_id: int) -> PromptSettings:
+        with SessionLocal() as db:
+            settings = get_user_prompt_settings(db=db, user_id=user_id)
+            if settings is None:
+                return PromptSettings(platform="slack")
+
+            return PromptSettings.model_validate(settings).model_copy(
+                update={"platform": "slack"},
             )
 
     def _attach_chat_room_if_ready_sync(
