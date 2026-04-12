@@ -323,6 +323,7 @@ class AuthSettings(BaseSettings):
     KC_REDIRECT_URI: str
 
     FRONTEND_REDIRECT_URI: str
+    FRONTEND_BASE_URL: str
 
     HTTP_ONLY: bool
     SECURE: bool

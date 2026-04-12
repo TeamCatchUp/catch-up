@@ -1,16 +1,23 @@
+"""
+Slack app_mention 채팅 orchestration.
+
+webhook_api -> webhook_dispatcher -> app_mention_adapter
+-> SlackAppMentionOrchestrator -> chat_service.chat_stream
+-> SlackPlanResponder / SlackApiClientWrapper -> interaction_handler.
+
+이 모듈은 Slack bot 채팅 흐름에서 비즈니스 규칙 중심을 맡는다.
+Slack transport 세부사항은 adapter / responder 경계에 남겨 두고,
+채팅 완료 후 필요한 참조 정보만 responder에 전달
+"""
+
 from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Awaitable
-from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 from typing import Protocol
-import json
-from urllib.parse import urlencode
-from urllib.parse import urlsplit
 
 import structlog
 from fastapi.concurrency import run_in_threadpool
@@ -27,7 +34,6 @@ from catchup.db.slack import bot_repository
 from catchup.db.user_prompt_settings import get_user_prompt_settings
 from catchup.db.user_source_mapping import find_user_id_by_source_mapping
 from catchup.db.users import get_user_with_full_context
-from catchup.configs.config import auth_settings
 from catchup.rag.schemas.context import GlobalCompanyContext
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.context import GlobalUserContext
@@ -71,10 +77,9 @@ class SlackThreadSessionBinding:
 
 
 @dataclass(slots=True, frozen=True)
-class SlackAppMentionActionLinks:
-    detail_url: str | None = None
-    helpful_value: str | None = None
-    not_helpful_value: str | None = None
+class SlackChatAnswerRef:
+    session_id: uuid.UUID
+    assistant_message_id: int | None = None
 
 
 class SlackAppMentionResponder(Protocol):
@@ -89,18 +94,18 @@ class SlackAppMentionResponder(Protocol):
         *,
         answer: str,
         sources: list[Any],
-        action_links: SlackAppMentionActionLinks | None = None,
+        answer_ref: SlackChatAnswerRef | None = None,
     ) -> None: ...
 
     async def fail(self, message: str) -> None: ...
 
 
-ReplyPoster = Callable[[SlackAppMentionRequest, str], Awaitable[None]]
-BusyNoticePoster = Callable[[SlackAppMentionRequest], Awaitable[None]]
-ResponderFactory = Callable[
-    [SlackAppMentionRequest],
-    Awaitable[SlackAppMentionResponder],
-]
+class SlackAppMentionTransport(Protocol):
+    async def post_thread_reply(self, mention: SlackAppMentionRequest, text: str) -> None: ...
+
+    async def post_busy_notice(self, mention: SlackAppMentionRequest) -> None: ...
+
+    async def start_responder(self, mention: SlackAppMentionRequest) -> SlackAppMentionResponder: ...
 
 
 @lru_cache(maxsize=1)
@@ -114,9 +119,7 @@ class SlackAppMentionOrchestrator:
         mention: SlackAppMentionRequest,
         *,
         bot_user_id: str,
-        post_thread_reply: ReplyPoster,
-        post_busy_notice: BusyNoticePoster,
-        responder_factory: ResponderFactory,
+        transport: SlackAppMentionTransport,
     ) -> None:
         # 봇 자신의 멘션은 무시
         if mention.slack_user_id == bot_user_id:
@@ -129,7 +132,7 @@ class SlackAppMentionOrchestrator:
             return
 
         if not mention.query:
-            await post_thread_reply(mention, EMPTY_QUERY_MESSAGE)
+            await transport.post_thread_reply(mention, EMPTY_QUERY_MESSAGE)
             return
 
         # Slack User -> CatchUp User
@@ -138,7 +141,7 @@ class SlackAppMentionOrchestrator:
             mention.slack_user_id,
         )
         if user_id is None:
-            await post_thread_reply(mention, UNMAPPED_USER_MESSAGE)
+            await transport.post_thread_reply(mention, UNMAPPED_USER_MESSAGE)
             return
 
         # TODO : Session 소유주와 다른 Slack User가 요청해도 답변 생성 가능하도록 수정
@@ -150,13 +153,12 @@ class SlackAppMentionOrchestrator:
             thread_session_binding is not None
             and thread_session_binding.user_id != user_id
         ):
-            await post_thread_reply(mention, THREAD_OWNER_MISMATCH_MESSAGE)
+            await transport.post_thread_reply(mention, THREAD_OWNER_MISMATCH_MESSAGE)
             return
-
         # Global Context Loading
         global_context = await run_in_threadpool(self._load_global_context_sync, user_id)
         if global_context is None:
-            await post_thread_reply(mention, MISSING_CONTEXT_MESSAGE)
+            await transport.post_thread_reply(mention, MISSING_CONTEXT_MESSAGE)
             return
 
         # 스레드 실행 권한을 확보하고 현재 처리 가능 상태인지 확인한다.
@@ -167,11 +169,10 @@ class SlackAppMentionOrchestrator:
             user_id,
         )
         if acquire_result.outcome == "owner_mismatch":
-            await post_thread_reply(mention, THREAD_OWNER_MISMATCH_MESSAGE)
+            await transport.post_thread_reply(mention, THREAD_OWNER_MISMATCH_MESSAGE)
             return
-        # 이전 답변이 생성 중
         if acquire_result.outcome == "busy":
-            await post_busy_notice(mention)
+            await transport.post_busy_notice(mention)
             return
         if acquire_result.session_id is None or acquire_result.lease_started_at is None:
             raise RuntimeError("slack app mention thread acquisition returned no lease")
@@ -193,8 +194,7 @@ class SlackAppMentionOrchestrator:
                 self._load_prompt_settings_sync,
                 user_id,
             )
-
-            responder = await responder_factory(mention)
+            responder = await transport.start_responder(mention)
 
             try:
                 reply_text, sources = await self._run_chat_stream(
@@ -204,16 +204,15 @@ class SlackAppMentionOrchestrator:
                     query=mention.query,
                     responder=responder,
                 )
-                # 저장된 assistant 메시지 기준으로 상세보기/피드백 링크 생성
-                action_links = await run_in_threadpool(
-                    self._load_action_links_sync,
+                answer_ref = await run_in_threadpool(
+                    self._load_answer_ref_sync,
                     session_id,
                     user_id,
                 )
                 await responder.finish(
                     answer=reply_text,
                     sources=sources,
-                    action_links=action_links,
+                    answer_ref=answer_ref,
                 )
             except Exception:
                 await responder.fail(STREAM_FAILED_MESSAGE)
@@ -400,11 +399,11 @@ class SlackAppMentionOrchestrator:
             bot_repository.attach_chat_room(thread, chat_room_id=room.id)
             db.commit()
 
-    def _load_action_links_sync(
+    def _load_answer_ref_sync(
         self,
         session_id: uuid.UUID,
         user_id: int,
-    ) -> SlackAppMentionActionLinks | None:
+    ) -> SlackChatAnswerRef | None:
         with SessionLocal() as db:
             # 저장된 room/assistant 메시지를 기준으로 Slack 버튼 URL을 확정
             room = get_chat_room(
@@ -417,70 +416,12 @@ class SlackAppMentionOrchestrator:
 
             assistant_message = get_latest_assistant_message(db, room.id)
             if assistant_message is None:
-                return SlackAppMentionActionLinks(
-                    detail_url=self._build_chat_room_redirect_url(session_id),
-                )
+                return SlackChatAnswerRef(session_id=session_id)
 
-            message_id = assistant_message.id
-            return SlackAppMentionActionLinks(
-                detail_url=self._build_chat_room_redirect_url(
-                    session_id,
-                    scroll_to=message_id,
-                ),
-                helpful_value=self._build_feedback_action_value(
-                    session_id,
-                    message_id=message_id,
-                    is_liked=True,
-                ),
-                not_helpful_value=self._build_feedback_action_value(
-                    session_id,
-                    message_id=message_id,
-                    is_liked=False,
-                ),
+            return SlackChatAnswerRef(
+                session_id=session_id,
+                assistant_message_id=assistant_message.id,
             )
-
-    def _build_chat_room_redirect_url(
-        self,
-        session_id: uuid.UUID,
-        *,
-        scroll_to: int | None = None,
-    ) -> str:
-        frontend_base_url = self._build_frontend_base_url()
-        url = f"{frontend_base_url}/chat/{session_id}"
-        if scroll_to is None:
-            return url
-        return f"{url}?{urlencode({'scrollTo': scroll_to})}"
-
-    def _build_feedback_action_value(
-        self,
-        session_id: uuid.UUID,
-        *,
-        message_id: int,
-        is_liked: bool,
-    ) -> str:
-        return json.dumps(
-            {
-                "session_id": str(session_id),
-                "message_id": message_id,
-                "is_liked": is_liked,
-            },
-            ensure_ascii=False,
-        )
-
-    # TODO : oauth callback url을 임시로 재사용 -> 추후에 base redirect url 설정 필요
-    def _build_frontend_base_url(self) -> str:
-        redirect_uri = auth_settings.FRONTEND_REDIRECT_URI.strip()
-        parts = urlsplit(redirect_uri)
-        if not parts.scheme or not parts.netloc:
-            raise RuntimeError("FRONTEND_REDIRECT_URI must be an absolute URL")
-
-        path = parts.path.rstrip("/")
-        oauth_callback_suffix = "/oauth/callback"
-        if path.endswith(oauth_callback_suffix):
-            path = path[: -len(oauth_callback_suffix)]
-
-        base_url = f"{parts.scheme}://{parts.netloc}{path}"
-        return base_url.rstrip("/")
 
 
 def parse_app_mention_event(

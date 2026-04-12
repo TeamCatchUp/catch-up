@@ -1,5 +1,5 @@
-from typing import Optional
 import json
+from typing import Optional
 
 import structlog
 from fastapi import APIRouter
