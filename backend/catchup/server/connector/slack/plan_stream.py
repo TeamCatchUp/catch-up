@@ -118,7 +118,12 @@ class SlackPlanState:
         if not sources:
             return []
 
+        previous_task_sources = build_task_sources(self.top_sources)
         self.top_sources = list(sources[:MAX_SOURCE_ITEMS])
+        current_task_sources = build_task_sources(self.top_sources)
+        if self.tasks["rerank"].output_sent and current_task_sources == previous_task_sources:
+            return []
+
         rerank_output = f"핵심 {len(self.top_sources)}건을 골랐어요"
 
         updates: list[dict[str, Any]] = []
@@ -135,12 +140,15 @@ class SlackPlanState:
         """Plan UI를 유지한 채 answer 단계로 넘어가도록 선행 task를 정리"""
         updates: list[dict[str, Any]] = []
         updates.extend(self._complete_task("search"))
-        updates.extend(
-            self._complete_task(
-                "rerank",
-                output=f"핵심 {len(self.top_sources) or MAX_SOURCE_ITEMS}건을 골랐어요",
+        if self.top_sources:
+            updates.extend(
+                self._complete_task(
+                    "rerank",
+                    output=f"핵심 {len(self.top_sources)}건을 골랐어요",
+                )
             )
-        )
+        else:
+            updates.extend(self._complete_task_without_output("rerank"))
         updates.extend(self._start_task("answer"))
         return updates
 
@@ -211,6 +219,19 @@ class SlackPlanState:
             status="in_progress",
         )
         return [chunk]
+
+    def _complete_task_without_output(self, task_id: str) -> list[dict[str, Any]]:
+        task = self.tasks[task_id]
+        if task.status == "complete":
+            return []
+
+        task.status = "complete"
+        return [
+            self._task_chunk(
+                task_id,
+                status="complete",
+            )
+        ]
 
     def _complete_task(
         self,

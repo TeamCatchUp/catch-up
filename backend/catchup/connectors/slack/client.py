@@ -449,6 +449,23 @@ class SlackApiClientWrapper:
             blocks=blocks,
         )
 
+    async def update_message(
+        self,
+        *,
+        channel: str,
+        ts: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        return await self._call_api(
+            "chat_update",
+            "chat_update",
+            channel=channel,
+            ts=ts,
+            text=text,
+            blocks=blocks,
+        )
+
     async def start_stream(
         self,
         *,
