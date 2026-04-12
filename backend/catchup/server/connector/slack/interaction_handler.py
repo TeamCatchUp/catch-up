@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from typing import Any
@@ -26,7 +27,17 @@ logger = structlog.get_logger(__name__)
 
 HELPFUL_ACTION_ID = "feedback_helpful"
 NOT_HELPFUL_ACTION_ID = "feedback_not_helpful"
+REASON_BLOCK_ID = "feedback_reason_block"
+REASON_ACTION_ID = "feedback_reason_action"
+COMMENT_BLOCK_ID = "feedback_comment_block"
+COMMENT_ACTION_ID = "feedback_comment_action"
 SUPPORTED_FEEDBACK_ACTION_IDS = frozenset({HELPFUL_ACTION_ID, NOT_HELPFUL_ACTION_ID})
+FEEDBACK_REASON_OPTIONS = [
+    ("원하는 답이 아니에요", "IRRELEVANT_ANSWER"),
+    ("출처가 정확하지 않아요", "NO_CITATION"),
+    ("내용이 부족해요", "MISSING_INFO"),
+    ("관련 없는 결과가 포함됐어요", "IRRELEVANT_SOURCE"),
+]
 
 
 async def handle_block_actions(
@@ -35,43 +46,78 @@ async def handle_block_actions(
 ) -> dict[str, Any]:
     action = _extract_first_action(request.event)
     if not action:
-        return _ephemeral_response("처리할 액션을 찾지 못했어요.")
+        return _ack_response()
 
     action_id = str(action.get("action_id") or "").strip()
     if action_id not in SUPPORTED_FEEDBACK_ACTION_IDS:
-        return _ephemeral_response("지원하지 않는 액션이에요.")
+        return _ack_response()
 
     action_value = _parse_action_value(action.get("value"))
     if action_value is None:
-        return _ephemeral_response("피드백 정보를 읽지 못했어요.")
+        await _post_feedback_notice(request, "피드백 정보를 읽지 못했어요.")
+        return _ack_response()
 
-    slack_user_id = _read_nested_str(request.event, "user", "id")
-    if not slack_user_id:
-        return _ephemeral_response("사용자 정보를 확인하지 못했어요.")
+    if action_id == NOT_HELPFUL_ACTION_ID:
+        handled = await _open_not_helpful_modal_if_possible(request, action_value)
+        if not handled:
+            await _post_feedback_notice(request, "의견 입력 창을 열지 못했어요.")
+        return _ack_response()
 
     feedback_result = await run_in_threadpool(
-        _process_feedback_action_sync,
-        slack_user_id,
+        _process_feedback_sync,
+        _read_nested_str(request.event, "user", "id"),
         action_value,
+        None,
+        None,
     )
-    if feedback_result in {"success", "already_submitted"}:
-        await _remove_feedback_buttons_if_possible(request)
-    if feedback_result == "success":
-        return _ephemeral_response("피드백을 저장했어요.")
-    if feedback_result == "already_submitted":
-        return _ephemeral_response("이미 피드백이 제출된 답변이에요.")
-    if feedback_result == "invalid":
-        return _ephemeral_response("피드백을 저장하지 못했어요.")
-    return _ephemeral_response("접근 권한이 없거나 답변을 찾지 못했어요.")
+    await _handle_feedback_result(request, feedback_result, HELPFUL_ACTION_ID)
+    return _ack_response()
 
 
-def _process_feedback_action_sync(
+async def handle_view_submission(
+    *,
+    request: SlackWebhookRequest,
+) -> dict[str, Any]:
+    payload = request.event
+    private_metadata = _parse_private_metadata(
+        _read_nested_str(payload, "view", "private_metadata")
+    )
+    if private_metadata is None:
+        return _clear_modal_response()
+
+    reasons, comment = _parse_view_submission_feedback(payload)
+    validation_errors = _validate_feedback_submission(reasons, comment)
+    if validation_errors:
+        return {
+            "response_action": "errors",
+            "errors": validation_errors,
+        }
+
+    feedback_result = await run_in_threadpool(
+        _process_feedback_sync,
+        _read_nested_str(payload, "user", "id"),
+        private_metadata,
+        reasons,
+        comment,
+    )
+    await _handle_feedback_result(
+        request,
+        feedback_result,
+        NOT_HELPFUL_ACTION_ID,
+        fallback_metadata=private_metadata,
+    )
+    return _clear_modal_response()
+
+
+def _process_feedback_sync(
     slack_user_id: str,
-    action_value: dict[str, Any],
+    payload: dict[str, Any],
+    reasons: list[str] | None,
+    comment: str | None,
 ) -> str:
-    session_id = _parse_session_id(action_value.get("session_id"))
-    message_id = _parse_message_id(action_value.get("message_id"))
-    is_liked = action_value.get("is_liked")
+    session_id = _parse_session_id(payload.get("session_id"))
+    message_id = _parse_message_id(payload.get("message_id"))
+    is_liked = payload.get("is_liked")
     if session_id is None or message_id is None or not isinstance(is_liked, bool):
         return "invalid"
 
@@ -104,8 +150,8 @@ def _process_feedback_action_sync(
 
     body = FeedbackRequest(
         is_liked=is_liked,
-        reasons=None,
-        comment=None,
+        reasons=reasons,
+        comment=comment,
     )
     try:
         updated_message = process_answer_feedback(
@@ -120,7 +166,6 @@ def _process_feedback_action_sync(
     if settings.ENABLE_LANGFUSE:
         trace_id = getattr(updated_message, "trace_id", None)
         if trace_id:
-            import asyncio
             asyncio.run(
                 upsert_feedback(
                     trace_id=trace_id,
@@ -131,6 +176,142 @@ def _process_feedback_action_sync(
     return "success"
 
 
+async def _handle_feedback_result(
+    request: SlackWebhookRequest,
+    feedback_result: str,
+    action_id: str,
+    *,
+    fallback_metadata: dict[str, Any] | None = None,
+) -> None:
+    if feedback_result in {"success", "already_submitted"}:
+        await _remove_feedback_buttons_if_possible(request, fallback_metadata=fallback_metadata)
+
+    await _post_feedback_notice(
+        request,
+        _feedback_notice_message(feedback_result, action_id),
+        fallback_metadata=fallback_metadata,
+    )
+
+
+async def _open_not_helpful_modal_if_possible(
+    request: SlackWebhookRequest,
+    action_value: dict[str, Any],
+) -> bool:
+    trigger_id = _read_nested_str(request.event, "trigger_id")
+    if not trigger_id:
+        return False
+
+    client = await run_in_threadpool(_build_slack_client_sync, request.team_id)
+    if client is None:
+        return False
+
+    metadata = {
+        "session_id": action_value.get("session_id"),
+        "message_id": action_value.get("message_id"),
+        "is_liked": False,
+        "team_id": request.team_id,
+        "channel_id": _read_nested_str(request.event, "container", "channel_id"),
+        "message_ts": _read_nested_str(request.event, "container", "message_ts") or _read_nested_str(request.event, "message", "ts"),
+        "thread_ts": _read_nested_str(request.event, "message", "thread_ts") or _read_nested_str(request.event, "container", "thread_ts"),
+    }
+    await client.open_view(
+        trigger_id=trigger_id,
+        view=_build_not_helpful_modal(metadata),
+    )
+    return True
+
+
+def _build_not_helpful_modal(metadata: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "modal",
+        "callback_id": "feedback_not_helpful_modal",
+        "private_metadata": json.dumps(metadata, ensure_ascii=False),
+        "title": {
+            "type": "plain_text",
+            "text": "아쉬워요",
+        },
+        "submit": {
+            "type": "plain_text",
+            "text": "보내기",
+        },
+        "close": {
+            "type": "plain_text",
+            "text": "취소",
+        },
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "아쉬웠던 부분을 알려주시면, 더 나은 답을 드릴 수 있도록 개선할게요.",
+                },
+            },
+            {
+                "type": "input",
+                "block_id": REASON_BLOCK_ID,
+                "label": {
+                    "type": "plain_text",
+                    "text": "사유 선택 (단일 선택)",
+                },
+                "element": {
+                    "type": "radio_buttons",
+                    "action_id": REASON_ACTION_ID,
+                    "options": [
+                        {
+                            "text": {
+                                "type": "plain_text",
+                                "text": label,
+                            },
+                            "value": value,
+                        }
+                        for label, value in FEEDBACK_REASON_OPTIONS
+                    ],
+                },
+            },
+            {
+                "type": "input",
+                "block_id": COMMENT_BLOCK_ID,
+                "optional": True,
+                "label": {
+                    "type": "plain_text",
+                    "text": "추가 의견 입력",
+                },
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": COMMENT_ACTION_ID,
+                    "multiline": True,
+                    "placeholder": {
+                        "type": "plain_text",
+                        "text": "구체적으로 작성해 주시면 개선에 큰 도움이 돼요",
+                    },
+                },
+            },
+        ],
+    }
+
+
+def _parse_view_submission_feedback(payload: dict[str, Any]) -> tuple[list[str], str | None]:
+    values = payload.get("view", {}).get("state", {}).get("values", {})
+    reason_state = values.get(REASON_BLOCK_ID, {}).get(REASON_ACTION_ID, {})
+    selected_option = reason_state.get("selected_option")
+    reasons = []
+    if isinstance(selected_option, dict):
+        selected_reason = str(selected_option.get("value") or "").strip()
+        if selected_reason:
+            reasons.append(selected_reason)
+
+    comment_value = values.get(COMMENT_BLOCK_ID, {}).get(COMMENT_ACTION_ID, {}).get("value")
+    comment = str(comment_value or "").strip() or None
+    return reasons, comment
+
+
+def _validate_feedback_submission(reasons: list[str], comment: str | None) -> dict[str, str] | None:
+    errors: dict[str, str] = {}
+    if not reasons:
+        errors[REASON_BLOCK_ID] = "아쉬웠던 이유를 하나 선택해 주세요."
+    return errors or None
+
+
 def _extract_first_action(payload: dict[str, Any]) -> dict[str, Any] | None:
     actions = payload.get("actions")
     if not isinstance(actions, list) or not actions:
@@ -139,29 +320,51 @@ def _extract_first_action(payload: dict[str, Any]) -> dict[str, Any] | None:
     return action if isinstance(action, dict) else None
 
 
-async def _remove_feedback_buttons_if_possible(request: SlackWebhookRequest) -> None:
-    team_id = request.team_id
-    channel_id = _read_nested_str(request.event, "container", "channel_id")
-    message_ts = _read_nested_str(request.event, "container", "message_ts") or _read_nested_str(request.event, "message", "ts")
-    message_text = _read_nested_str(request.event, "message", "text") or "Catch Up"
-    blocks = request.event.get("message", {}).get("blocks") if isinstance(request.event.get("message"), dict) else None
+async def _remove_feedback_buttons_if_possible(
+    request: SlackWebhookRequest,
+    *,
+    fallback_metadata: dict[str, Any] | None = None,
+) -> None:
+    metadata = fallback_metadata or {}
+    team_id = request.team_id or str(metadata.get("team_id") or "")
+    channel_id = _read_nested_str(request.event, "container", "channel_id") or str(
+        metadata.get("channel_id") or ""
+    )
+    message_ts = (
+        _read_nested_str(request.event, "container", "message_ts")
+        or _read_nested_str(request.event, "message", "ts")
+        or str(metadata.get("message_ts") or "")
+    )
 
-    if not team_id or not channel_id or not message_ts or not isinstance(blocks, list):
-        return
-
-    updated_blocks = _strip_feedback_action_blocks(blocks)
-    if updated_blocks == blocks:
+    if not team_id or not channel_id or not message_ts:
         return
 
     client = await run_in_threadpool(_build_slack_client_sync, team_id)
     if client is None:
         return
 
+    message_payload = request.event.get("message") if isinstance(request.event.get("message"), dict) else None
+    message_text = _read_nested_str(request.event, "message", "text")
+    blocks = message_payload.get("blocks") if isinstance(message_payload, dict) else None
+    if not isinstance(blocks, list):
+        latest_message = await client.get_message(channel_id, message_ts)
+        if latest_message is None:
+            return
+        message_text = str(latest_message.get("text") or message_text or "Catch Up")
+        blocks = latest_message.get("blocks")
+
+    if not isinstance(blocks, list):
+        return
+
+    updated_blocks = _strip_feedback_action_blocks(blocks)
+    if updated_blocks == blocks:
+        return
+
     try:
         await client.update_message(
             channel=channel_id,
             ts=message_ts,
-            text=message_text,
+            text=message_text or "Catch Up",
             blocks=updated_blocks,
         )
     except Exception:
@@ -170,6 +373,46 @@ async def _remove_feedback_buttons_if_possible(request: SlackWebhookRequest) -> 
             team_id=team_id,
             channel_id=channel_id,
             message_ts=message_ts,
+            exc_info=True,
+        )
+
+
+async def _post_feedback_notice(
+    request: SlackWebhookRequest,
+    text: str,
+    *,
+    fallback_metadata: dict[str, Any] | None = None,
+) -> None:
+    metadata = fallback_metadata or {}
+    team_id = request.team_id or str(metadata.get("team_id") or "")
+    channel_id = _read_nested_str(request.event, "container", "channel_id") or str(
+        metadata.get("channel_id") or ""
+    )
+    thread_ts = _read_nested_str(request.event, "message", "thread_ts") or str(
+        metadata.get("thread_ts") or ""
+    )
+    slack_user_id = _read_nested_str(request.event, "user", "id")
+
+    if not team_id or not channel_id or not slack_user_id:
+        return
+
+    client = await run_in_threadpool(_build_slack_client_sync, team_id)
+    if client is None:
+        return
+
+    try:
+        await client.post_ephemeral(
+            channel=channel_id,
+            user=slack_user_id,
+            thread_ts=thread_ts or None,
+            text=text,
+        )
+    except Exception:
+        logger.warning(
+            "slack_feedback_notice_failed",
+            team_id=team_id,
+            channel_id=channel_id,
+            slack_user_id=slack_user_id,
             exc_info=True,
         )
 
@@ -224,6 +467,17 @@ def _parse_action_value(value: Any) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def _parse_private_metadata(value: str) -> dict[str, Any] | None:
+    if not value:
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        logger.warning("slack_feedback_modal_invalid_private_metadata", value=value)
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
 def _read_nested_str(payload: dict[str, Any], *keys: str) -> str:
     current: Any = payload
     for key in keys:
@@ -247,8 +501,27 @@ def _parse_message_id(raw_value: Any) -> int | None:
         return None
 
 
-def _ephemeral_response(text: str) -> dict[str, str]:
-    return {
-        "response_type": "ephemeral",
-        "text": text,
-    }
+def _ack_response() -> dict[str, Any]:
+    return {}
+
+
+def _clear_modal_response() -> dict[str, str]:
+    return {"response_action": "clear"}
+
+
+def _success_message_for_action(action_id: str) -> str:
+    if action_id == HELPFUL_ACTION_ID:
+        return "피드백을 남겨주셔서 감사해요! 더 나은 답을 드릴 수 있도록 계속 발전할게요."
+    if action_id == NOT_HELPFUL_ACTION_ID:
+        return "소중한 의견 감사해요. 반영해서 꼭 개선할게요."
+    return "피드백을 저장했어요."
+
+
+def _feedback_notice_message(feedback_result: str, action_id: str) -> str:
+    if feedback_result == "success":
+        return _success_message_for_action(action_id)
+    if feedback_result == "already_submitted":
+        return "이미 피드백이 제출된 답변이에요."
+    if feedback_result == "invalid":
+        return "피드백을 저장하지 못했어요."
+    return "접근 권한이 없거나 답변을 찾지 못했어요."

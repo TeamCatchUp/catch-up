@@ -466,6 +466,22 @@ class SlackApiClientWrapper:
             blocks=blocks,
         )
 
+    async def open_view(
+        self,
+        *,
+        trigger_id: str,
+        view: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self._call_api(
+            "views_open",
+            "api_call",
+            api_method="views.open",
+            json={
+                "trigger_id": trigger_id,
+                "view": view,
+            },
+        )
+
     async def start_stream(
         self,
         *,
