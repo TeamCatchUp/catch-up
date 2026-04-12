@@ -54,6 +54,7 @@ async def chat_response_stream(
     session_id = request.session_id
     query = request.query
     tool_filters = request.tool_filters
+    mode = request.mode
     
     emit_audit_event(
         action=ChatAction.SEND_QUERY,
@@ -73,6 +74,7 @@ async def chat_response_stream(
             tool_filters=tool_filters,
             global_context=global_context,
             prompt_settings=prompt_settings,
+            mode=mode,
         ):
             yield f"data: {chunk.model_dump_json(ensure_ascii=False)}\n\n"
 

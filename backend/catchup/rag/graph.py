@@ -16,8 +16,10 @@ from catchup.components.reranker.factory import get_rerank_service
 from catchup.components.vector_db.factory import get_vector_db_service
 from catchup.components.vector_db.pgvector.constants import VectorDbProvider
 from catchup.rag.conditional_edges import route_after_grade
+from catchup.rag.conditional_edges import route_after_rerank
 from catchup.rag.conditional_edges import route_question
 from catchup.rag.nodes import chitchat_node
+from catchup.rag.nodes import generate_final_answer_fast_node
 from catchup.rag.nodes import generate_final_answer_node
 from catchup.rag.nodes import generate_vector_queries_node
 from catchup.rag.nodes import grade_node
@@ -47,8 +49,8 @@ def get_compiled_graph(
         ModelCapacity.SMALL,
         streaming=True
     ).get_llm()
-    
-    # 최종 답변 생성용 llm (large)
+
+    # 최종 답변 생성용 (large)
     final_llm = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
@@ -93,12 +95,16 @@ def get_compiled_graph(
         action=partial(grade_node, llm=analysis_llm)
     )
     workflow.add_node(
-        node="chitchat", 
+        node="chitchat",
         action=partial(chitchat_node, llm=chitchat_llm)
     )
     workflow.add_node(
-        node="generate_final_answer", 
+        node="generate_final_answer",
         action=partial(generate_final_answer_node, llm=final_llm)
+    )
+    workflow.add_node(
+        node="generate_final_answer_fast",
+        action=partial(generate_final_answer_fast_node, llm=final_llm)
     )
     # workflow.add_node("expand_graph_context", expand_graph_context_node)
     # workflow.add_node("fetch_details_after_graph_context_expansion", fetch_details_after_graph_context_expansion_node)
@@ -118,7 +124,15 @@ def get_compiled_graph(
     workflow.add_edge("rewrite", "generate_vector_queries")
     workflow.add_edge("generate_vector_queries", "search_vector_db")
     workflow.add_edge("search_vector_db", "rerank")
-    workflow.add_edge("rerank", "grade")
+    workflow.add_conditional_edges(
+        "rerank",
+        route_after_rerank,
+        {
+            "generate_final_answer_fast": "generate_final_answer_fast",
+            "grade": "grade",
+        }
+    )
+    workflow.add_edge("generate_final_answer_fast", END)
     workflow.add_conditional_edges(
         "grade",
         route_after_grade,
