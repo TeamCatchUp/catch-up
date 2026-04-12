@@ -1,15 +1,15 @@
 import structlog
 from sqlalchemy.orm import Session
 
-from catchup.db.models import PreMappingBuffer, SourceType
-from catchup.db.user_source_mapping import (
-    add_new_mapping, 
-    find_external_user_id_by_email,
-    find_premapped_user_by_email
-)
-from catchup.db.users import get_all_oauth_users, get_user_by_sub
+from catchup.db.models import PreMappingBuffer
+from catchup.db.models import SourceType
+from catchup.db.user_source_mapping import add_new_mapping
+from catchup.db.user_source_mapping import find_external_user_id_by_email
+from catchup.db.user_source_mapping import find_premapped_user_by_email
+from catchup.db.user_source_mapping import upsert_user_source_mapping
+from catchup.db.users import get_all_oauth_users
+from catchup.db.users import get_user_by_sub
 from catchup.mapping.schemas import OAuthUserSchema
-
 
 logger = structlog.get_logger()
 
@@ -84,6 +84,10 @@ def upsert_pre_mapping(
         if name:
             premapped.name = name
         premapped.sub = sub
+        if premapped.is_registered:
+            existing = get_user_by_sub(db, sub)
+            if existing:
+                upsert_user_source_mapping(db, existing.id, source_type, external_user_id)
         return False
     
     # 새로 생성
@@ -93,6 +97,7 @@ def upsert_pre_mapping(
         is_registered = False
         if existing:
             is_registered = True  # 이미 회원가입이 된 경우 True
+            upsert_user_source_mapping(db, existing.id, source_type, external_user_id)
                 
         new_entry = PreMappingBuffer(
             sub=sub,

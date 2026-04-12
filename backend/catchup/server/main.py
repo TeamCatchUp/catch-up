@@ -25,6 +25,7 @@ from catchup.costs.handlers import chat_token_usage_handler
 from catchup.db.engine import SessionLocal
 from catchup.db.global_state import has_admin_ever_onboarded
 from catchup.db.global_state import has_csv_file_ever_been_uploaded
+from catchup.db.user_source_mapping import reconcile_missing_user_source_mappings
 from catchup.events.bus import bus
 from catchup.events.enums import EventTopic
 from catchup.events.enums import EventType
@@ -272,6 +273,14 @@ async def lifespan(app: FastAPI):
                 "user_list_csv_upload_status_checked",
                 context="server_startup",
                 has_ever_uploaded=state.has_ever_uploaded_user_list_export,
+            )
+            # is_registered=True이지만 UserSourceMapping이 없는 항목 일괄 해소 (임시 조치)
+            resolved_count = reconcile_missing_user_source_mappings(db)
+            db.commit()
+            logger.info(
+                "user_source_mapping_reconciled",
+                context="server_startup",
+                resolved_count=resolved_count,
             )
             
     except Exception as e:

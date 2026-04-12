@@ -147,6 +147,31 @@ def add_new_mapping(
     return new_mapping
 
 
+def upsert_user_source_mapping(
+    db: Session,
+    user_id: int,
+    source_type: SourceType,
+    external_user_identifier: str,
+) -> None:
+    """
+    UserSourceMapping을 upsert한다.
+    (user_id, source_type) 중복 시 external_user_identifier만 갱신.
+    """
+    stmt = (
+        insert(UserSourceMapping)
+        .values(
+            user_id=user_id,
+            source_type=source_type,
+            external_user_identifier=external_user_identifier,
+        )
+        .on_conflict_do_update(
+            constraint="uq_user_source",
+            set_={"external_user_identifier": external_user_identifier},
+        )
+    )
+    db.execute(stmt)
+
+
 def upsert_oauth_users(
     db: Session,
     users: list[OAuthUserSchema]
@@ -199,3 +224,35 @@ def get_pending_source_premappings(
         )
     )
     return db.scalars(stmt).all()
+
+
+def reconcile_missing_user_source_mappings(db: Session) -> int:
+    """
+    is_registered=True인 PreMappingBuffer 중 UserSourceMapping이 없는 항목을 일괄 생성한다.
+    서버 시작 시 한 번 실행하는 멱등성 보장 조치.
+    """
+    stmt = (
+        select(PreMappingBuffer, OAuthUser.user_id)
+        .join(OAuthUser, OAuthUser.sub == PreMappingBuffer.sub)
+        .outerjoin(
+            UserSourceMapping,
+            (UserSourceMapping.user_id == OAuthUser.user_id)
+            & (UserSourceMapping.source_type == PreMappingBuffer.source_type),
+        )
+        .where(
+            PreMappingBuffer.is_registered == True,
+            OAuthUser.user_id.isnot(None),
+            UserSourceMapping.user_id.is_(None),
+        )
+    )
+    rows = db.execute(stmt).all()
+
+    for buffer, user_id in rows:
+        db.add(
+            UserSourceMapping(
+                user_id=user_id,
+                source_type=buffer.source_type,
+                external_user_identifier=buffer.external_user_identifier,
+            )
+        )
+    return len(rows)
