@@ -565,7 +565,7 @@ def build_plain_fallback_text(
     answer: str,
     sources: list[Any],
 ) -> str:
-    source_text = build_source_table_markdown(sources)
+    source_text = build_source_list_markdown(sources)
     if not source_text:
         return answer
     if not answer:
@@ -686,7 +686,7 @@ def build_final_markdown(
     # streamed 경로는 sources만, fallback 경로는 answer + sources를 한 markdown으로 만든다.
     parts: list[str] = []
     answer_text = (answer or "").strip()
-    source_text = build_source_table_markdown(sources)
+    source_text = build_source_list_markdown(sources)
 
     if include_answer_body and answer_text:
         parts.append(answer_text)
@@ -706,7 +706,7 @@ def build_overflow_final_blocks(
     # markdown block 한도를 넘는 경우에만 section block으로 안전하게 분리한다.
     blocks: list[dict[str, Any]] = []
     answer_text = (answer or "").strip()
-    source_text = build_source_table_markdown(sources)
+    source_text = build_source_list_markdown(sources)
 
     if include_answer_body and answer_text:
         for index, section_text in enumerate(split_sections(answer_text), start=1):
@@ -752,37 +752,37 @@ def build_task_sources(sources: list[Any]) -> list[dict[str, str]]:
     return items
 
 
-def build_source_table_markdown(sources: list[Any]) -> str:
-    # Fast/standard 경로 공통 source payload를 Slack markdown table 문자열로 직렬화한다.
-    rows = build_source_table_rows(sources)
-    if not rows:
+def build_source_list_markdown(sources: list[Any]) -> str:
+    items = build_source_list_items(sources)
+    if not items:
         return ""
 
-    lines = [
-        "## Sources",
-        "",
-        "| Tool | Link | Updated |",
-        "| --- | --- | --- |",
-    ]
-    for row in rows:
-        lines.append(f"| {row['tool']} | {row['link']} | {row['updated']} |")
-
-    return "\n".join(lines)
+    return "## Sources\n\n" + "\n\n".join(items)
 
 
-def build_source_table_rows(sources: list[Any]) -> list[dict[str, str]]:
-    rows: list[dict[str, str]] = []
+def build_source_list_items(sources: list[Any]) -> list[str]:
+    items: list[str] = []
 
-    for source in sources[:MAX_SOURCE_ITEMS]:
-        rows.append(
-            {
-                "tool": escape_table_text(format_source_tool(source)),
-                "link": format_source_link(source),
-                "updated": escape_table_text(format_source_timestamp(source)),
-            }
+    for index, source in enumerate(filter_cited_sources(sources), start=1):
+        tool = format_source_tool(source)
+        link = format_source_link(source)
+        updated = format_source_timestamp(source)
+        items.append(
+            f"{index}. {link}\n{tool} · {updated}"
         )
 
-    return rows
+    return items
+
+
+def filter_cited_sources(sources: list[Any]) -> list[Any]:
+    cited_sources = [
+        source
+        for source in sources[:MAX_SOURCE_ITEMS]
+        if read_source_bool(source, "is_cited")
+    ]
+    if cited_sources:
+        return cited_sources
+    return list(sources[:MAX_SOURCE_ITEMS])
 
 
 def format_source_tool(source: Any) -> str:
@@ -799,7 +799,7 @@ def format_source_link(source: Any) -> str:
     title = trim_text(read_source_field(source, "title") or "Source", 75)
     url = read_source_field(source, "url")
     if not url:
-        return escape_table_text(title)
+        return title
     return f"[{escape_markdown_link_label(title)}]({url})"
 
 
@@ -816,21 +816,26 @@ def format_source_timestamp(source: Any) -> str:
     return value
 
 
-def escape_table_text(text: str) -> str:
+def escape_markdown_link_label(text: str) -> str:
     value = (text or "").strip()
     if not value:
-        return "-"
-    return value.replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ")
-
-
-def escape_markdown_link_label(text: str) -> str:
-    value = escape_table_text(text)
+        return "Source"
     return (
         value.replace("[", "\\[")
         .replace("]", "\\]")
         .replace("(", "\\(")
         .replace(")", "\\)")
     )
+
+
+def read_source_bool(source: Any, field: str) -> bool:
+    if hasattr(source, field):
+        return bool(getattr(source, field))
+
+    if isinstance(source, dict):
+        return bool(source.get(field))
+
+    return False
 
 
 def read_source_field(source: Any, field: str) -> str | None:
