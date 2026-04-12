@@ -22,7 +22,7 @@ MAX_SOURCE_ITEMS = 10
 MARKDOWN_FLUSH_SIZE = 120
 
 # Plan Block Kit 노출 순서
-TASK_ORDER = ("route", "rewrite", "search", "rerank", "grade", "answer")
+TASK_ORDER = ("route", "rewrite", "search", "rerank", "answer")
 
 # 각 노드에서의 진행중 텍스트
 TASK_TITLES = {
@@ -30,7 +30,6 @@ TASK_TITLES = {
     "rewrite": "검색을 준비하고 있습니다",
     "search": "사내 지식을 살펴보고 있습니다",
     "rerank": "중요한 문서만 고르고 있습니다",
-    "grade": "검색 품질을 점검하고 있어요",
     "answer": "최종 답변을 작성중 ...",
 }
 
@@ -40,7 +39,6 @@ TASK_DETAILS = {
     "rewrite": "검색 질의를 준비하고 있어요.",
     "search": "관련 문서를 찾고 있어요.",
     "rerank": "중요한 문서를 추리고 있어요.",
-    "grade": "검색 품질을 점검하고 있어요.",
     "answer": "문서를 참고하여 답변을 작성하고 있어요.",
 }
 
@@ -50,7 +48,6 @@ TASK_OUTPUTS = {
     "rewrite": "검색 준비를 마쳤습니다.",
     "search": "후보 문서를 수집했습니다.",
     "rerank": "상위 5건을 골랐습니다.",
-    "grade": "답변에 충분한 문서를 확보했습니다.",
     "answer": "최종 답변 생성을 마쳤습니다.",
 }
 
@@ -99,9 +96,6 @@ class SlackPlanState:
         if node == "rerank":
             return self._move_to("rerank", complete_task_ids=("search",))
 
-        if node == "grade":
-            return self._move_to("grade", complete_task_ids=("rerank",))
-
         # chitchat 노드 진입시 모든 Task 완료 처리 
         if node == "chitchat":
             chunks: list[dict[str, Any]] = []
@@ -109,7 +103,6 @@ class SlackPlanState:
             chunks.extend(self._complete_task("rewrite", output="검색 단계를 생략했습니다."))
             chunks.extend(self._complete_task("search", output="검색 단계를 생략했습니다."))
             chunks.extend(self._complete_task("rerank", output="재정렬 단계를 생략했습니다."))
-            chunks.extend(self._complete_task("grade", output="품질 점검 단계를 생략했습니다."))
             chunks.extend(self._start_task("answer"))
             return chunks
 
@@ -133,7 +126,6 @@ class SlackPlanState:
         updates: list[dict[str, Any]] = []
         updates.extend(self._complete_task("search"))
         updates.extend(self._complete_task("rerank", output=f"상위 {len(self.top_sources) or MAX_SOURCE_ITEMS}건을 골랐습니다.", sources=self.top_sources or None))
-        updates.extend(self._complete_task("grade"))
         updates.extend(self._start_task("answer"))
         return updates
 
@@ -362,7 +354,7 @@ class SlackPlanResponder:
         return responder
 
     async def on_node(self, node: str) -> None:
-        if node == "generate_final_answer":
+        if node in {"generate_final_answer", "generate_final_answer_fast"}:
             await self._switch_to_answer_mode(self.state.transition_to_answer())
             return
 
