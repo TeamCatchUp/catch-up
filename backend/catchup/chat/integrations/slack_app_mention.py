@@ -62,6 +62,7 @@ class SlackAppMentionRequest:
     team_id: str
     channel_id: str
     thread_ts: str
+    event_ts: str
     slack_user_id: str
     raw_text: str
     query: str
@@ -111,6 +112,7 @@ class SlackAppMentionOrchestrator:
         *,
         bot_user_id: str,
         transport: SlackAppMentionTransport,
+        additional_context: str | None = None,
     ) -> None:
         # 봇 자신의 멘션은 무시
         if mention.slack_user_id == bot_user_id:
@@ -180,6 +182,7 @@ class SlackAppMentionOrchestrator:
                     prompt_settings=prompt_settings,
                     session_id=session_id,
                     query=mention.query,
+                    additional_context=additional_context,
                     responder=responder,
                 )
                 answer_ref = await run_in_threadpool(
@@ -224,6 +227,7 @@ class SlackAppMentionOrchestrator:
         prompt_settings: PromptSettings,
         session_id: uuid.UUID,
         query: str,
+        additional_context: str | None,
         responder: SlackAppMentionResponder,
     ) -> tuple[str, list[Any]]:
         answer_parts: list[str] = []
@@ -236,7 +240,7 @@ class SlackAppMentionOrchestrator:
             session_id=session_id,
             query=query,
             tool_filters=[],
-            # TODO: additional_context에 app_mention parent message + thread messages 주입
+            additional_context=additional_context,
             prompt_settings=prompt_settings,
             mode=APP_MENTION_CHAT_MODE,
             is_slack=True,
@@ -397,6 +401,7 @@ def parse_app_mention_event(
         team_id=team_id,
         channel_id=channel_id,
         thread_ts=thread_ts,
+        event_ts=event_ts,
         slack_user_id=slack_user_id,
         raw_text=raw_text,
         query=extract_app_mention_query(

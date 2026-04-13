@@ -17,24 +17,24 @@ PGVector 저장을 위한 LangChain Document로 변환.
 """
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 from typing import Any
 
 from langchain_core.documents import Document
 
-from catchup.connectors.base import format_file_size
 from catchup.configs.config import settings
-from catchup.connectors.slack.schemas import (
-    SlackAttachment,
-    SlackChannel,
-    SlackFileRef,
-    SlackMessage,
-    SlackReaction,
-    SlackThreadReply,
-    SlackUser,
-    SlackUserProfile,
-    SlackWorkspace,
-)
+from catchup.connectors.base import format_file_size
+from catchup.connectors.slack.schemas import SlackAttachment
+from catchup.connectors.slack.schemas import SlackChannel
+from catchup.connectors.slack.schemas import SlackFileRef
+from catchup.connectors.slack.schemas import SlackMessage
+from catchup.connectors.slack.schemas import SlackReaction
+from catchup.connectors.slack.schemas import SlackThreadReply
+from catchup.connectors.slack.schemas import SlackUser
+from catchup.connectors.slack.schemas import SlackUserProfile
+from catchup.connectors.slack.schemas import SlackWorkspace
 
 
 class SlackTransformer:
@@ -54,6 +54,20 @@ class SlackTransformer:
             user_cache: user_id → SlackUser 매핑 딕셔너리
         """
         self.user_cache = user_cache if user_cache is not None else {}
+
+    @classmethod
+    def from_user_names(cls, user_names_by_id: dict[str, str]) -> "SlackTransformer":
+        return cls(
+            {
+                slack_user_id: SlackUser(
+                    id=slack_user_id,
+                    name=user_name,
+                    real_name=user_name,
+                    display_name=user_name,
+                )
+                for slack_user_id, user_name in user_names_by_id.items()
+            }
+        )
 
     # ================================================================
     # Message 변환
@@ -90,6 +104,10 @@ class SlackTransformer:
             metadata=metadata,
             id=doc_id,
         )
+
+    def normalize_text_for_llm(self, text: str) -> str:
+        """Slack 마크다운을 LLM 입력용 평문으로 정규화"""
+        return self._parse_slack_markdown(text)
 
     def _build_semantic_content(self, message: SlackMessage) -> str:
         """
