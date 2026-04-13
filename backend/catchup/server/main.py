@@ -47,7 +47,7 @@ from catchup.server.connector.jira.webhook_api import router as jira_webhook_rou
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.webhook_api import router as slack_webhook_router
 from catchup.server.error_handlers import register_exception_handlers
-from catchup.server.initialization import ensure_pg_indices
+from catchup.server.initialization import ensure_pg_indices, ensure_vector_index
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
@@ -136,6 +136,7 @@ async def lifespan(app: FastAPI):
         ).get_embedder()
         pgvector_repo = get_pgvector_repository(embeddings)  # Ingestion
         await pgvector_repo.initialize(ensure_pg_indices)
+        asyncio.create_task(ensure_vector_index())
         logger.info(
             "pgvector_repository_initialized",
             result="success",
@@ -184,6 +185,7 @@ async def lifespan(app: FastAPI):
             small_model_sema_value=settings.AWS_BEDROCK_SMALL_MODEL_SEMA_VALUE,
             large_model_sema_value=settings.AWS_BEDROCK_LARGE_MODEL_SEMA_VALUE,
             rerank_sema_value=settings.AWS_BEDROCK_RERANK_SEMA_VALUE,
+            chat_thread_pool_size=settings.RAG_CHAT_THREAD_POOL_SIZE,
         )
     except:
         # TODO: emit_audit_event()
