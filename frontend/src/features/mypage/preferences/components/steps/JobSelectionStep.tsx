@@ -149,7 +149,9 @@ export default function JobSelectionStep({
                   <input
                     className={cn(
                       'text-body-small flex-1 bg-transparent outline-none',
-                      isReadOnly ? 'text-content-normal cursor-default' : 'text-content-normal placeholder:text-content-assistive',
+                      isReadOnly
+                        ? 'text-content-normal cursor-default'
+                        : 'text-content-normal placeholder:text-content-assistive',
                     )}
                     placeholder="직무를 입력해주세요."
                     maxLength={MAX_JOB_TEXT_LENGTH}
@@ -189,13 +191,7 @@ export default function JobSelectionStep({
                   수정
                 </Button>
               ) : (
-                <Button
-                  type="button"
-                  variant="box-solid-primary"
-                  size="md"
-                  disabled={!canSave}
-                  onClick={handleSave}
-                >
+                <Button type="button" variant="box-solid-primary" size="md" disabled={!canSave} onClick={handleSave}>
                   저장
                 </Button>
               )}
@@ -249,8 +245,8 @@ export default function JobSelectionStep({
               )}
               {!isReadOnly && (
                 <div className="text-label-xsmall text-content-alternative flex flex-col">
-                  <span>{` 예) "iOS 앱 성능 최적화와 배포 파이프라인을 주로 담당해요"`}</span>
-                  <span>{` 예) "B2B 영업 제안서 작성과 고객사 기술 미팅 대응이 많아요"`}</span>
+                  <span>{` 예) iOS 앱 성능 최적화와 배포 파이프라인을 주로 담당해요`}</span>
+                  <span>{` 예) B2B 영업 제안서 작성과 고객사 기술 미팅 대응이 많아요`}</span>
                 </div>
               )}
             </div>

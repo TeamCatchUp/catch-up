@@ -6,7 +6,14 @@ import { promptMutations } from '../../queries/prompt.mutations';
 import { promptQueries } from '../../queries/prompt.queries';
 import type { PromptSettingsResponse } from '../../types/preferencesApi';
 import type { AnswerOption, JobRole } from '../../types/preferencesModel';
-import { emptyToNull, jobRoleFromApi, jobRoleToApi, nullToEmpty, optionsFromApi, optionsToApi } from '../../utils/promptMapper';
+import {
+  emptyToNull,
+  jobRoleFromApi,
+  jobRoleToApi,
+  nullToEmpty,
+  optionsFromApi,
+  optionsToApi,
+} from '../../utils/promptMapper';
 import SectionBar from '../SectionBar';
 import AnswerOptionsStep from '../steps/AnswerOptionsStep';
 import CustomPromptStep from '../steps/CustomPromptStep';
@@ -72,7 +79,7 @@ export default function PromptBuilderSection() {
 
   /* ── Step 3: 커스텀 프롬프트 콜백 ── */
   const handleSavePrompt = (value: string) => {
-    updateMutation.mutate({ custom_prompt: value });
+    updateMutation.mutate({ custom_prompt: emptyToNull(value) });
   };
 
   return (
