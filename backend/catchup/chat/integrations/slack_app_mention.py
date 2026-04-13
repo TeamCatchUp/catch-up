@@ -95,6 +95,8 @@ class SlackAppMentionResponder(Protocol):
 class SlackAppMentionTransport(Protocol):
     async def post_thread_reply(self, mention: SlackAppMentionRequest, text: str) -> None: ...
 
+    async def post_signup_prompt(self, mention: SlackAppMentionRequest, text: str) -> None: ...
+
     async def post_busy_notice(self, mention: SlackAppMentionRequest) -> None: ...
 
     async def start_responder(self, mention: SlackAppMentionRequest) -> SlackAppMentionResponder: ...
@@ -134,13 +136,13 @@ class SlackAppMentionOrchestrator:
             mention.slack_user_id,
         )
         if user_id is None:
-            await transport.post_thread_reply(mention, UNMAPPED_USER_MESSAGE)
+            await transport.post_signup_prompt(mention, UNMAPPED_USER_MESSAGE)
             return
 
         # Global Context Loading
         global_context = await run_in_threadpool(self._load_global_context_sync, user_id)
         if global_context is None:
-            await transport.post_thread_reply(mention, MISSING_CONTEXT_MESSAGE)
+            await transport.post_signup_prompt(mention, MISSING_CONTEXT_MESSAGE)
             return
 
         # 스레드 실행 권한을 확보하고 현재 처리 가능 상태인지 확인한다.
