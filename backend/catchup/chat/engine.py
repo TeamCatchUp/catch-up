@@ -258,7 +258,10 @@ class ChatService:
                 context="state_not_empty",
                 session_id=str(session_id)
             )
-            input_messages = [HumanMessage(content=query)]
+            input_messages = self._build_current_turn_messages(
+                query=query,
+                additional_context=additional_context,
+            )
 
         elif additional_context is not None:
             logger.info(
@@ -266,10 +269,10 @@ class ChatService:
                 context="additional_context_provided",
                 session_id=str(session_id)
             )
-            input_messages = [
-                HumanMessage(content=additional_context),
-                HumanMessage(content=query),
-            ]
+            input_messages = self._build_current_turn_messages(
+                query=query,
+                additional_context=additional_context,
+            )
 
         else:
             logger.info(
@@ -286,6 +289,18 @@ class ChatService:
                 input_messages = past_messages + [HumanMessage(content=query)]
 
         return input_messages
+
+    def _build_current_turn_messages(
+        self,
+        *,
+        query: str,
+        additional_context: str | None,
+    ) -> list[BaseMessage]:
+        messages: list[BaseMessage] = []
+        if additional_context is not None:
+            messages.append(HumanMessage(content=additional_context))
+        messages.append(HumanMessage(content=query))
+        return messages
 
     async def _parse_stream_event(
         self,
