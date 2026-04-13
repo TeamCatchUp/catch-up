@@ -15,18 +15,13 @@ interface CustomPromptStepProps {
   isLoading?: boolean;
 }
 
-export default function CustomPromptStep({
-  customPrompt,
-  onSave,
-  isLoading = false,
-}: CustomPromptStepProps) {
+export default function CustomPromptStep({ customPrompt, onSave, isLoading = false }: CustomPromptStepProps) {
   const hasPrompt = customPrompt !== null;
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState('');
   const [isActive, setIsActive] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const isEmpty = value.trim().length === 0;
   const isAtLimit = value.length >= MAX_PROMPT_LENGTH;
 
   const adjustHeight = useCallback(() => {
@@ -48,7 +43,6 @@ export default function CustomPromptStep({
   }, [value, isActive, adjustHeight]);
 
   const handleSave = () => {
-    if (isEmpty) return;
     onSave(value.trim());
     setIsEditing(false);
     setIsActive(false);
@@ -145,14 +139,7 @@ export default function CustomPromptStep({
                   <Button type="button" variant="capsule-outline-mono" size="md" className="h-9" onClick={handleCancel}>
                     취소
                   </Button>
-                  <Button
-                    type="button"
-                    variant="capsule-solid-primary"
-                    size="md"
-                    className="h-9"
-                    disabled={isEmpty}
-                    onClick={handleSave}
-                  >
+                  <Button type="button" variant="capsule-solid-primary" size="md" className="h-9" onClick={handleSave}>
                     저장
                   </Button>
                 </div>
