@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
@@ -41,6 +42,8 @@ from catchup.rag.schemas.context import GlobalWorkspaceContext
 from catchup.rag.schemas.prompt_settings import PromptSettings
 
 logger = structlog.get_logger(__name__)
+
+SLACK_USER_MENTION_PATTERN = re.compile(r"<@([A-Z0-9]+)(?:\|[^>]+)?>")
 
 EMPTY_QUERY_MESSAGE = "질문이 비어있어요 🥲 \n 어떤게 궁금하신가요 ?"
 UNMAPPED_USER_MESSAGE = "CatchUp에서 사용자 정보를 찾을 수 없어요 🥲"
@@ -379,6 +382,7 @@ def parse_app_mention_event(
     event: dict[str, Any],
     *,
     bot_user_id: str,
+    mentioned_user_names_by_id: Mapping[str, str] | None = None,
 ) -> SlackAppMentionRequest | None:
     channel_id = str(event.get("channel") or "").strip()
     slack_user_id = str(event.get("user") or "").strip()
@@ -395,15 +399,45 @@ def parse_app_mention_event(
         thread_ts=thread_ts,
         slack_user_id=slack_user_id,
         raw_text=raw_text,
-        query=extract_app_mention_query(raw_text, bot_user_id=bot_user_id),
+        query=extract_app_mention_query(
+            raw_text,
+            bot_user_id=bot_user_id,
+            mentioned_user_names_by_id=mentioned_user_names_by_id,
+        ),
     )
 
 
-def extract_app_mention_query(text: str, *, bot_user_id: str) -> str:
-    without_bot_mentions = re.sub(
-        rf"<@{re.escape(bot_user_id)}(?:\|[^>]+)?>",
-        " ",
-        text or "",
-    )
-    normalized = " ".join(without_bot_mentions.split())
+def extract_mentioned_slack_user_ids(text: str) -> list[str]:
+    mentioned_user_ids: list[str] = []
+    seen_user_ids: set[str] = set()
+
+    for mentioned_user_id in SLACK_USER_MENTION_PATTERN.findall(text or ""):
+        if mentioned_user_id in seen_user_ids:
+            continue
+        seen_user_ids.add(mentioned_user_id)
+        mentioned_user_ids.append(mentioned_user_id)
+
+    return mentioned_user_ids
+
+
+def extract_app_mention_query(
+    text: str,
+    *,
+    bot_user_id: str,
+    mentioned_user_names_by_id: Mapping[str, str] | None = None,
+) -> str:
+    user_names_by_id = mentioned_user_names_by_id or {}
+
+    def replace_mention(match: re.Match[str]) -> str:
+        mentioned_user_id = match.group(1)
+        if mentioned_user_id == bot_user_id:
+            return " "
+
+        resolved_name = user_names_by_id.get(mentioned_user_id)
+        if resolved_name:
+            return resolved_name
+
+        return match.group(0)
+
+    normalized = " ".join(SLACK_USER_MENTION_PATTERN.sub(replace_mention, text or "").split())
     return normalized.strip()

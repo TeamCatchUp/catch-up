@@ -10,13 +10,16 @@ from catchup.chat.integrations.slack_app_mention import BUSY_NOTICE_BODY
 from catchup.chat.integrations.slack_app_mention import BUSY_NOTICE_TITLE
 from catchup.chat.integrations.slack_app_mention import SlackAppMentionRequest
 from catchup.chat.integrations.slack_app_mention import SlackAppMentionResponder
+from catchup.chat.integrations.slack_app_mention import extract_mentioned_slack_user_ids
 from catchup.chat.integrations.slack_app_mention import (
     get_slack_app_mention_orchestrator,
 )
 from catchup.chat.integrations.slack_app_mention import parse_app_mention_event
 from catchup.connectors.slack.client import SlackApiClientWrapper
 from catchup.db.engine import SessionLocal
+from catchup.db.models import SourceType
 from catchup.db.slack.oauth_repository import get_slack_token_by_team_id
+from catchup.db.user_source_mapping import find_user_names_by_source_mappings
 from catchup.server.connector.slack.plan_stream import SlackPlanResponder
 from catchup.server.connector.slack.schemas import SlackWebhookRequest
 
@@ -121,10 +124,16 @@ class SlackAppMentionAdapter:
             )
             return
 
+        mentioned_user_names_by_id = await run_in_threadpool(
+            self._load_mentioned_user_names_sync,
+            str(request.event.get("text") or ""),
+            team_bot_auth.bot_user_id,
+        )
         mention = parse_app_mention_event(
             request.team_id,
             request.event,
             bot_user_id=team_bot_auth.bot_user_id,
+            mentioned_user_names_by_id=mentioned_user_names_by_id,
         )
         if mention is None:
             logger.info(
@@ -149,4 +158,24 @@ class SlackAppMentionAdapter:
             return SlackTeamBotAuth(
                 bot_access_token=token.bot_access_token,
                 bot_user_id=token.bot_user_id,
+            )
+
+    def _load_mentioned_user_names_sync(
+        self,
+        raw_text: str,
+        bot_user_id: str,
+    ) -> dict[str, str]:
+        mentioned_user_ids = [
+            mentioned_user_id
+            for mentioned_user_id in extract_mentioned_slack_user_ids(raw_text)
+            if mentioned_user_id != bot_user_id
+        ]
+        if not mentioned_user_ids:
+            return {}
+
+        with SessionLocal() as db:
+            return find_user_names_by_source_mappings(
+                db,
+                source_type=SourceType.SLACK,
+                external_user_identifiers=mentioned_user_ids,
             )

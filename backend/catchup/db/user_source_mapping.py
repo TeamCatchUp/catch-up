@@ -13,6 +13,7 @@ from catchup.db.models import OAuthUser
 from catchup.db.models import PreMappingBuffer
 from catchup.db.models import SlackUser
 from catchup.db.models import SourceType
+from catchup.db.models import User
 from catchup.db.models import UserSourceMapping
 from catchup.mapping.schemas import OAuthUserSchema
 
@@ -136,6 +137,35 @@ def find_user_id_by_source_mapping(
         )
     )
     return db.scalar(stmt)
+
+
+def find_user_names_by_source_mappings(
+    db: Session,
+    *,
+    source_type: SourceType,
+    external_user_identifiers: list[str],
+) -> dict[str, str]:
+    identifiers = list(dict.fromkeys(identifier for identifier in external_user_identifiers if identifier))
+    if not identifiers:
+        return {}
+
+    rows = db.execute(
+        select(
+            UserSourceMapping.external_user_identifier,
+            User.name,
+        )
+        .join(User, User.id == UserSourceMapping.user_id)
+        .where(
+            UserSourceMapping.source_type == source_type,
+            UserSourceMapping.external_user_identifier.in_(identifiers),
+        )
+    ).all()
+
+    return {
+        external_user_identifier: name
+        for external_user_identifier, name in rows
+        if external_user_identifier and name
+    }
 
 
 def add_new_mapping(
