@@ -42,17 +42,14 @@ from catchup.rag.schemas.prompt_settings import PromptSettings
 
 logger = structlog.get_logger(__name__)
 
-MENTION_PATTERN = re.compile(r"<@[^>]+>")
-
-EMPTY_QUERY_MESSAGE = "질문 내용을 함께 보내주세요."
-UNMAPPED_USER_MESSAGE = "CatchUp에 등록되지 않은 사용자입니다."
-MISSING_CONTEXT_MESSAGE = "CatchUp 사용자 컨텍스트를 찾지 못해 요청을 처리할 수 없습니다."
-EMPTY_ANSWER_MESSAGE = "답변을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요."
-STREAM_FAILED_MESSAGE = "답변 생성 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."
-BUSY_NOTICE_TITLE = "## :catch-up-logo: 답변을 준비하고 있어요"
+EMPTY_QUERY_MESSAGE = "질문이 비어있어요 🥲 \n 어떤게 궁금하신가요 ?"
+UNMAPPED_USER_MESSAGE = "CatchUp에서 사용자 정보를 찾을 수 없어요 🥲"
+MISSING_CONTEXT_MESSAGE = "CatchUp에서 사용자 정보를 찾을 수 없어요 🥲"
+EMPTY_ANSWER_MESSAGE = "죄송합니다 🥲 답변 생성중에 문제가 발생했어요\n잠시 후 다시 시도해 주세요"
+STREAM_FAILED_MESSAGE = "죄송합니다 🥲 답변 생성중에 문제가 발생했어요\n잠시 후 다시 시도해 주세요"
+BUSY_NOTICE_TITLE = "🥲 이전 답변이 아직 생성중이에요"
 BUSY_NOTICE_BODY = (
-    "이전 답변이 완료되는 대로 바로 이어서 답변드릴게요.\n"
-    "잠시만 기다려주세요!"
+    "답변 생성이 완료되면 다시 질문 부탁드려요 🙇"
 )
 APP_MENTION_CHAT_MODE = "fast"
 
@@ -380,6 +377,8 @@ class SlackAppMentionOrchestrator:
 def parse_app_mention_event(
     team_id: str,
     event: dict[str, Any],
+    *,
+    bot_user_id: str,
 ) -> SlackAppMentionRequest | None:
     channel_id = str(event.get("channel") or "").strip()
     slack_user_id = str(event.get("user") or "").strip()
@@ -396,11 +395,15 @@ def parse_app_mention_event(
         thread_ts=thread_ts,
         slack_user_id=slack_user_id,
         raw_text=raw_text,
-        query=extract_app_mention_query(raw_text),
+        query=extract_app_mention_query(raw_text, bot_user_id=bot_user_id),
     )
 
 
-def extract_app_mention_query(text: str) -> str:
-    without_mentions = MENTION_PATTERN.sub(" ", text or "")
-    normalized = " ".join(without_mentions.split())
+def extract_app_mention_query(text: str, *, bot_user_id: str) -> str:
+    without_bot_mentions = re.sub(
+        rf"<@{re.escape(bot_user_id)}(?:\|[^>]+)?>",
+        " ",
+        text or "",
+    )
+    normalized = " ".join(without_bot_mentions.split())
     return normalized.strip()
