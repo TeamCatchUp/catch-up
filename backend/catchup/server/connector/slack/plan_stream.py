@@ -7,7 +7,9 @@ import structlog
 
 from catchup.chat.integrations.slack_app_mention import SlackChatAnswerRef
 from catchup.connectors.slack.client import SlackApiClientWrapper
-from catchup.server.connector.slack.feedback_actions import build_action_blocks
+from catchup.server.connector.slack.feedback_actions import (
+    build_action_blocks_with_requester,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -172,6 +174,7 @@ class SlackPlanState:
         sources: list[Any],
         include_answer_body: bool,
         answer_ref: SlackChatAnswerRef | None = None,
+        requester_slack_user_id: str | None = None,
     ) -> list[dict[str, Any]]:
         del query
         visible_sources = sources or self.top_sources
@@ -182,7 +185,10 @@ class SlackPlanState:
             include_answer_body=include_answer_body,
         )
         blocks: list[dict[str, Any]] = []
-        action_blocks = build_action_blocks(answer_ref)
+        action_blocks = build_action_blocks_with_requester(
+            answer_ref,
+            requester_slack_user_id=requester_slack_user_id,
+        )
         if not final_markdown and not action_blocks:
             return []
         if len(final_markdown) <= MAX_MARKDOWN_BLOCK_TEXT:
@@ -502,6 +508,7 @@ class SlackPlanResponder:
             sources=sources,
             include_answer_body=not self.has_streamed_answer,
             answer_ref=answer_ref,
+            requester_slack_user_id=self.user_id,
         )
 
         if self.answer_stream_ts is None:
@@ -534,6 +541,7 @@ class SlackPlanResponder:
             sources=sources,
             include_answer_body=True,
             answer_ref=answer_ref,
+            requester_slack_user_id=self.user_id,
         )
 
         if self.plan_stream_ts is None:
