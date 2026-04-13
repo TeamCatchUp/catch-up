@@ -72,14 +72,6 @@ class SlackFeedbackModalContext:
 
 
 def build_action_blocks(answer_ref: SlackChatAnswerRef | None) -> list[dict[str, Any]]:
-    return build_action_blocks_with_requester(answer_ref, requester_slack_user_id=None)
-
-
-def build_action_blocks_with_requester(
-    answer_ref: SlackChatAnswerRef | None,
-    *,
-    requester_slack_user_id: str | None,
-) -> list[dict[str, Any]]:
 
     if answer_ref is None:
         return []
@@ -110,17 +102,6 @@ def build_action_blocks_with_requester(
 
     if answer_ref.assistant_message_id is None:
         return blocks
-
-    if requester_slack_user_id:
-        blocks.append(
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"답변 요청자 <@{requester_slack_user_id}>",
-                },
-            }
-        )
 
     payloads = (
         SlackFeedbackActionPayload(

@@ -7,9 +7,7 @@ import structlog
 
 from catchup.chat.integrations.slack_app_mention import SlackChatAnswerRef
 from catchup.connectors.slack.client import SlackApiClientWrapper
-from catchup.server.connector.slack.feedback_actions import (
-    build_action_blocks_with_requester,
-)
+from catchup.server.connector.slack.feedback_actions import build_action_blocks
 
 logger = structlog.get_logger(__name__)
 
@@ -185,10 +183,7 @@ class SlackPlanState:
             include_answer_body=include_answer_body,
         )
         blocks: list[dict[str, Any]] = []
-        action_blocks = build_action_blocks_with_requester(
-            answer_ref,
-            requester_slack_user_id=requester_slack_user_id,
-        )
+        action_blocks = build_action_blocks(answer_ref)
         if not final_markdown and not action_blocks:
             return []
         if len(final_markdown) <= MAX_MARKDOWN_BLOCK_TEXT:
@@ -202,6 +197,12 @@ class SlackPlanState:
                     include_answer_body=include_answer_body,
                 )
             )
+        requester_block = build_requester_markdown_block(
+            requester_slack_user_id=requester_slack_user_id,
+            answer_ref=answer_ref,
+        )
+        if requester_block is not None:
+            blocks.append(requester_block)
         blocks.extend(action_blocks)
         return blocks
 
@@ -589,6 +590,17 @@ def build_markdown_block(text: str) -> dict[str, str]:
         "type": "markdown",
         "text": text,
     }
+
+
+def build_requester_markdown_block(
+    *,
+    requester_slack_user_id: str | None,
+    answer_ref: SlackChatAnswerRef | None,
+) -> dict[str, str] | None:
+    if not requester_slack_user_id or answer_ref is None or answer_ref.assistant_message_id is None:
+        return None
+
+    return build_markdown_block(f"> 답변 요청자 <@{requester_slack_user_id}>")
 
 
 def build_section_block(text: str, *, block_id: str) -> dict[str, Any]:
