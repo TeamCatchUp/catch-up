@@ -4,6 +4,8 @@ from typing import TypedDict
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from catchup.configs.constants import TOKEN_USAGE_RELIABLE_FROM
+
 
 class DailyModelTokenUsage(TypedDict):
     input_tokens: int
@@ -19,7 +21,9 @@ def get_user_chat_token_usage_by_range(
     end_date: datetime,
 ) -> dict[int, dict[str, DailyModelTokenUsage]]:
     """start_date 기준 day_index별 모델별 토큰 사용량을 반환한다."""
-    
+
+    effective_start = max(start_date, TOKEN_USAGE_RELIABLE_FROM)
+
     # start_date 기준 24시간 단위로 그룹화 (타임존과 무관)
     rows = db.execute(
         text("""
@@ -33,11 +37,11 @@ def get_user_chat_token_usage_by_range(
             FROM chat_token_usages,
                  jsonb_each(token_breakdown) AS model_data
             WHERE user_id = :user_id
-              AND created_at >= :start_date
+              AND created_at >= :effective_start
               AND created_at < :end_date
             GROUP BY day_index, model_data.key
         """),
-        {"user_id": user_id, "start_date": start_date, "end_date": end_date},
+        {"user_id": user_id, "start_date": start_date, "effective_start": effective_start, "end_date": end_date},
     ).all()
 
     result: dict[int, dict[str, DailyModelTokenUsage]] = {}
@@ -60,6 +64,8 @@ def get_org_chat_token_usage_by_range(
 ) -> dict[int, dict[str, DailyModelTokenUsage]]:
     """start_date 기준 day_index별 조직 전체 토큰 사용량을 반환한다."""
 
+    effective_start = max(start_date, TOKEN_USAGE_RELIABLE_FROM)
+
     # start_date 기준 24시간 단위로 그룹화 (타임존과 무관)
     rows = db.execute(
         text("""
@@ -72,11 +78,11 @@ def get_org_chat_token_usage_by_range(
                 COALESCE(SUM((model_data.value->>'cache_write_tokens')::int), 0) AS cache_write_tokens
             FROM chat_token_usages,
                  jsonb_each(token_breakdown) AS model_data
-            WHERE created_at >= :start_date
+            WHERE created_at >= :effective_start
               AND created_at < :end_date
             GROUP BY day_index, model_data.key
         """),
-        {"start_date": start_date, "end_date": end_date},
+        {"start_date": start_date, "effective_start": effective_start, "end_date": end_date},
     ).all()
 
     result: dict[int, dict[str, DailyModelTokenUsage]] = {}
@@ -98,6 +104,9 @@ def get_user_token_usage_ranking(
     end_date: datetime,
 ) -> list[dict]:
     """기간 내 구성원별 토큰 사용량 합계를 반환한다."""
+
+    effective_start = max(start_date, TOKEN_USAGE_RELIABLE_FROM)
+
     rows = db.execute(
         text("""
             SELECT
@@ -118,11 +127,11 @@ def get_user_token_usage_ranking(
                     ) AS usage
                 FROM chat_token_usages ctu
                 CROSS JOIN LATERAL jsonb_each(ctu.token_breakdown) AS model_data
-                WHERE ctu.created_at >= :start_date AND ctu.created_at < :end_date
+                WHERE ctu.created_at >= :effective_start AND ctu.created_at < :end_date
                 GROUP BY ctu.user_id, model_data.key
             ) mu ON u.id = mu.user_id
             GROUP BY u.id, u.name, u.department
         """),
-        {"start_date": start_date, "end_date": end_date},
+        {"effective_start": effective_start, "end_date": end_date},
     ).all()
     return rows
