@@ -110,24 +110,26 @@ def get_slack_app_mention_adapter() -> "SlackAppMentionAdapter":
 
 class SlackAppMentionAdapter:
     async def handle(self, request: SlackWebhookRequest) -> None:
-        mention = parse_app_mention_event(request.team_id, request.event)
-        if mention is None:
-            logger.info(
-                "slack_app_mention_ignored_invalid_payload",
-                team_id=request.team_id,
-            )
-            return
-
         team_bot_auth = await run_in_threadpool(
             self._load_team_auth_sync,
-            mention.team_id,
+            request.team_id,
         )
         if team_bot_auth is None:
             logger.warning(
                 "slack_app_mention_missing_team_token",
-                team_id=mention.team_id,
-                channel_id=mention.channel_id,
-                thread_ts=mention.thread_ts,
+                team_id=request.team_id,
+            )
+            return
+
+        mention = parse_app_mention_event(
+            request.team_id,
+            request.event,
+            bot_user_id=team_bot_auth.bot_user_id,
+        )
+        if mention is None:
+            logger.info(
+                "slack_app_mention_ignored_invalid_payload",
+                team_id=request.team_id,
             )
             return
 
