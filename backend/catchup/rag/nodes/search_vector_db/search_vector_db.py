@@ -8,6 +8,7 @@ from catchup.db.models import SourceType
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.filters import build_temporal_filters
 from catchup.rag.schemas.structures import VectorDbSearchQuery
+from catchup.rag.executors import rag_executors
 from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
@@ -64,23 +65,25 @@ async def _get_hybrid_search_results(
     weights: list[float] = [0.5, 0.5],
 ):
     
+    loop = asyncio.get_running_loop()
     tasks = []
-    
+
     for q in queries:
         temporal_filters = build_temporal_filters(
             tool_filters=tool_filters,
             start_date=q.start_date,
             end_date=q.end_date
         )
-        
+
         tasks.append(
-            asyncio.to_thread(
+            loop.run_in_executor(
+                rag_executors.chat,
                 vector_db_service.hybrid_search,
                 q.query,
                 k,
                 weights,
                 tool_filters,
-                temporal_filters
+                temporal_filters,
             )
         )
 

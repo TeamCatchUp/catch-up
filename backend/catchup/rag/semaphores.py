@@ -6,7 +6,7 @@ class RagSemaphores:
     final_answer: Semaphore | None = None
     rerank: Semaphore | None = None
 
-    def init_langgraph_semaphores(
+    def init(
         self,
         small_model_sema_value: int,
         large_model_sema_value: int,

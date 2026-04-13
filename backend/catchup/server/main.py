@@ -34,6 +34,7 @@ from catchup.observability.logging.s3_uploader import audit_log_uploader_task
 from catchup.observability.logging.s3_uploader import graceful_shutdown
 from catchup.rag.checkpoint import close_langgraph_checkpointer
 from catchup.rag.checkpoint import init_langgraph_checkpointer
+from catchup.rag.executors import rag_executors
 from catchup.rag.semaphores import rag_semaphores
 from catchup.server.admin.api import router as admin_router
 from catchup.server.audit.api import router as audit_router
@@ -181,10 +182,12 @@ async def lifespan(app: FastAPI):
         )
         
     try:
-        rag_semaphores.init_langgraph_semaphores(
+        rag_semaphores.init(
             small_model_sema_value=settings.AWS_BEDROCK_SMALL_MODEL_SEMA_VALUE,
             large_model_sema_value=settings.AWS_BEDROCK_LARGE_MODEL_SEMA_VALUE,
             rerank_sema_value=settings.AWS_BEDROCK_RERANK_SEMA_VALUE,
+        )
+        rag_executors.init(
             chat_thread_pool_size=settings.RAG_CHAT_THREAD_POOL_SIZE,
         )
     except:
@@ -341,6 +344,17 @@ async def lifespan(app: FastAPI):
                 error=str(e),
                 exc_info=True,
             )
+
+    try:
+        rag_executors.shutdown(cancel_futures=True)
+        logger.info("rag_executors_shutdown", context="server_shutdown")
+    except Exception as e:
+        logger.error(
+            "rag_executors_shutdown_failed",
+            context="server_shutdown",
+            error=str(e),
+            exc_info=True,
+        )
 
     # Scheduler Shutdown
     try:

@@ -118,6 +118,7 @@ class Settings(BaseSettings):
     AWS_BEDROCK_SMALL_MODEL_SEMA_VALUE: int = 10
     AWS_BEDROCK_LARGE_MODEL_SEMA_VALUE: int = 10
     AWS_BEDROCK_RERANK_SEMA_VALUE: int = 10
+    RAG_CHAT_THREAD_POOL_SIZE: int = 10  # chat 전용 thread pool (sync worker의 기본 executor와 격리)
 
     # Cohere (native)
     COHERE_API_KEY: str
