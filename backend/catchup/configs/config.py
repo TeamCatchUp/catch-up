@@ -188,6 +188,7 @@ class Settings(BaseSettings):
     # PGVector Settings
     PGVECTOR_COLLECTION_NAME: str = "vectorstore"  # 통합 Collection (Jira, Slack, GitHub 등)
     PGVECTOR_EMBEDDING_DIMENSIONS: int = 1536  # Cohere embed-v4.0
+    PGVECTOR_HNSW_INDEX_ENABLED: bool = False  # HNSW 인덱스 활성화 여부 (메모리 비용 및 고객사 RDS 호환성 협의 전까지 비활성화)
 
     # Embedding Settings (Bedrock Codere Embed 4)
     EMBEDDING_MAX_CONCURRENCY: int = 5  # 동시 Embedding API 호출 수
