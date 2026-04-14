@@ -31,6 +31,7 @@ from catchup.server.connector.slack.feedback_actions import (
     SUPPORTED_FEEDBACK_ACTION_IDS,
 )
 from catchup.server.connector.slack.feedback_actions import WARNING_BANNER_BLOCK_ID
+from catchup.server.connector.slack.feedback_actions import WARNING_DIVIDER_BLOCK_ID
 from catchup.server.connector.slack.feedback_actions import FeedbackProcessResult
 from catchup.server.connector.slack.feedback_actions import SlackFeedbackActionPayload
 from catchup.server.connector.slack.feedback_actions import SlackFeedbackContext
@@ -43,6 +44,7 @@ from catchup.server.connector.slack.feedback_actions import (
 )
 from catchup.server.connector.slack.feedback_actions import build_signup_prompt_blocks
 from catchup.server.connector.slack.feedback_actions import build_warning_banner_block
+from catchup.server.connector.slack.feedback_actions import build_warning_divider_block
 from catchup.server.connector.slack.feedback_actions import (
     feedback_reason_requires_delete_policy,
 )
@@ -148,18 +150,9 @@ async def handle_view_submission(
             "errors": validation_errors,
         }
 
-    feedback_result = await run_in_threadpool(
-        _process_feedback_sync,
-        _read_nested_str(payload, "user", "id"),
-        modal_context.action_payload,
-        [submission.reason],
-        None,
-    )
-    await _handle_feedback_result(
-        request,
-        feedback_result,
-        NOT_HELPFUL_ACTION_ID,
-        fallback_context=modal_context.feedback_context,
+    _schedule_view_submission_follow_up(
+        request=request,
+        modal_context=modal_context,
         submission=submission,
     )
     return {"response_action": "clear"}
@@ -429,6 +422,51 @@ def _extract_first_action(payload: dict[str, Any]) -> dict[str, Any] | None:
     return action if isinstance(action, dict) else None
 
 
+def _schedule_view_submission_follow_up(
+    *,
+    request: SlackWebhookRequest,
+    modal_context: SlackFeedbackModalContext,
+    submission: SlackNotHelpfulSubmission,
+) -> None:
+    task = asyncio.create_task(
+        _complete_view_submission(
+            request=request,
+            modal_context=modal_context,
+            submission=submission,
+        )
+    )
+    task.add_done_callback(_log_view_submission_follow_up_failure)
+
+
+async def _complete_view_submission(
+    *,
+    request: SlackWebhookRequest,
+    modal_context: SlackFeedbackModalContext,
+    submission: SlackNotHelpfulSubmission,
+) -> None:
+    feedback_result = await run_in_threadpool(
+        _process_feedback_sync,
+        _read_nested_str(request.event, "user", "id"),
+        modal_context.action_payload,
+        [submission.reason],
+        None,
+    )
+    await _handle_feedback_result(
+        request,
+        feedback_result,
+        NOT_HELPFUL_ACTION_ID,
+        fallback_context=modal_context.feedback_context,
+        submission=submission,
+    )
+
+
+def _log_view_submission_follow_up_failure(task: asyncio.Task[None]) -> None:
+    try:
+        task.result()
+    except Exception:
+        logger.exception("slack_feedback_view_submission_follow_up_failed")
+
+
 async def _post_feedback_signup_prompt(
     request: SlackWebhookRequest,
     *,
@@ -651,9 +689,23 @@ def _prepend_warning_banner(blocks: list[Any]) -> list[dict[str, Any]]:
         deepcopy(block)
         for block in blocks
         if isinstance(block, dict)
-        and str(block.get("block_id") or "").strip() != WARNING_BANNER_BLOCK_ID
+        and str(block.get("block_id") or "").strip()
+        not in {WARNING_BANNER_BLOCK_ID, WARNING_DIVIDER_BLOCK_ID}
     ]
-    return _fit_warning_banner_blocks([build_warning_banner_block(), *updated_blocks])
+    if not updated_blocks:
+        return _fit_warning_banner_blocks(
+            [build_warning_banner_block(), build_warning_divider_block()]
+        )
+
+    first_block, *remaining_blocks = updated_blocks
+    return _fit_warning_banner_blocks(
+        [
+            first_block,
+            build_warning_banner_block(),
+            build_warning_divider_block(),
+            *remaining_blocks,
+        ]
+    )
 
 
 def _fit_warning_banner_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
