@@ -84,19 +84,20 @@ def build_action_blocks(answer_ref: SlackChatAnswerRef | None) -> list[dict[str,
                 "type": "mrkdwn",
                 "text": DETAIL_PROMPT_TEXT,
             },
-            "accessory": {
-                "type": "button",
-                "action_id": VIEW_DETAIL_ACTION_ID,
-                "text": {
-                    "type": "plain_text",
-                    "text": DETAIL_BUTTON_TEXT,
-                    "emoji": False,
-                },
-                "url": build_chat_room_redirect_url(
-                    answer_ref.session_id,
-                    scroll_to=answer_ref.assistant_message_id,
-                ),
-            },
+            # TODO: Slack Bot v0
+            # "accessory": {
+            #     "type": "button",
+            #     "action_id": VIEW_DETAIL_ACTION_ID,
+            #     "text": {
+            #         "type": "plain_text",
+            #         "text": DETAIL_BUTTON_TEXT,
+            #         "emoji": False,
+            #     },
+            #     "url": build_chat_room_redirect_url(
+            #         answer_ref.session_id,
+            #         scroll_to=answer_ref.assistant_message_id,
+            #     ),
+            # },
         }
     )
 
