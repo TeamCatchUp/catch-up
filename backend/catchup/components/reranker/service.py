@@ -1,6 +1,7 @@
 import asyncio
 from abc import ABC
 from abc import abstractmethod
+from copy import copy
 from functools import partial
 
 import structlog
@@ -98,12 +99,14 @@ class AwsBedrockRerankService(BaseRerankService):
 
         self._backup_ids(documents)
 
-        self.reranker.top_n = top_n
+        # self.reranker는 싱글톤 공유 객체이므로 top_n 설정 시 race condition 방지를 위해 copy 사용
+        reranker = copy(self.reranker)
+        reranker.top_n = top_n
 
         loop = asyncio.get_running_loop()
         reranked_docs: list[Document] = await loop.run_in_executor(
             rag_executors.bedrock_rerank,
-            partial(self.reranker.compress_documents, documents=documents, query=query),
+            partial(reranker.compress_documents, documents=documents, query=query),
         )
 
         self._restore_ids(reranked_docs)
