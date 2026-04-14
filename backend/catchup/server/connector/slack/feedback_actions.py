@@ -78,8 +78,6 @@ class SlackFeedbackContext:
     message_ts: str
     slack_user_id: str | None = None
     thread_ts: str | None = None
-    message_text: str | None = None
-    message_blocks: list[dict[str, Any]] | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -303,8 +301,6 @@ def serialize_feedback_context(context: SlackFeedbackContext) -> str:
             "message_ts": context.message_ts,
             "slack_user_id": context.slack_user_id,
             "thread_ts": context.thread_ts,
-            "message_text": context.message_text,
-            "message_blocks": context.message_blocks,
         },
         ensure_ascii=False,
     )
@@ -337,8 +333,6 @@ def serialize_feedback_modal_context(context: SlackFeedbackModalContext) -> str:
                 "message_ts": context.feedback_context.message_ts,
                 "slack_user_id": context.feedback_context.slack_user_id,
                 "thread_ts": context.feedback_context.thread_ts,
-                "message_text": context.feedback_context.message_text,
-                "message_blocks": context.feedback_context.message_blocks,
             },
         },
         ensure_ascii=False,
@@ -375,7 +369,6 @@ def resolve_feedback_context(
     fallback: SlackFeedbackContext | None = None,
 ) -> SlackFeedbackContext | None:
     fallback_data = fallback or SlackFeedbackContext(team_id="", channel_id="", message_ts="")
-    message_payload = payload.get("message") if isinstance(payload.get("message"), dict) else {}
     candidate = {
         "team_id": team_id or fallback_data.team_id,
         "channel_id": _read_nested_str(payload, "container", "channel_id") or fallback_data.channel_id,
@@ -390,12 +383,6 @@ def resolve_feedback_context(
             or fallback_data.thread_ts
         ),
         "slack_user_id": _read_nested_str(payload, "user", "id") or fallback_data.slack_user_id,
-        "message_text": str(message_payload.get("text") or fallback_data.message_text or "").strip() or None,
-        "message_blocks": (
-            message_payload.get("blocks")
-            if isinstance(message_payload.get("blocks"), list)
-            else fallback_data.message_blocks
-        ),
     }
     return _build_feedback_context_from_mapping(candidate)
 
@@ -406,8 +393,6 @@ def _build_feedback_context_from_mapping(mapping: dict[str, Any]) -> SlackFeedba
     message_ts = str(mapping.get("message_ts") or "").strip()
     thread_ts = str(mapping.get("thread_ts") or "").strip() or None
     slack_user_id = str(mapping.get("slack_user_id") or "").strip() or None
-    message_text = str(mapping.get("message_text") or "").strip() or None
-    message_blocks = mapping.get("message_blocks") if isinstance(mapping.get("message_blocks"), list) else None
 
     if not team_id or not channel_id or not message_ts:
         return None
@@ -417,8 +402,6 @@ def _build_feedback_context_from_mapping(mapping: dict[str, Any]) -> SlackFeedba
         message_ts=message_ts,
         slack_user_id=slack_user_id,
         thread_ts=thread_ts,
-        message_text=message_text,
-        message_blocks=message_blocks,
     )
 
 

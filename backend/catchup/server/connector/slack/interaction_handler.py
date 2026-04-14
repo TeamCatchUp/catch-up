@@ -614,7 +614,15 @@ async def _mark_feedback_message_as_inaccurate(
     client: SlackApiClientWrapper,
     feedback_context: SlackFeedbackContext,
 ) -> FeedbackProcessResult:
-    blocks = feedback_context.message_blocks
+    latest_message = await client.get_message(
+        feedback_context.channel_id,
+        feedback_context.message_ts,
+        thread_ts=feedback_context.thread_ts,
+    )
+    if latest_message is None:
+        return FeedbackProcessResult.ANSWER_NOT_FOUND
+
+    blocks = latest_message.get("blocks")
     if not isinstance(blocks, list):
         return FeedbackProcessResult.ANSWER_NOT_FOUND
 
@@ -623,7 +631,7 @@ async def _mark_feedback_message_as_inaccurate(
         await client.update_message(
             channel=feedback_context.channel_id,
             ts=feedback_context.message_ts,
-            text=feedback_context.message_text or "Catch Up",
+            text=str(latest_message.get("text") or "Catch Up"),
             blocks=updated_blocks,
         )
     except Exception:

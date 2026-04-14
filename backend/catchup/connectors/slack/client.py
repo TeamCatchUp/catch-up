@@ -388,6 +388,8 @@ class SlackApiClientWrapper:
         self,
         channel: str,
         ts: str,
+        *,
+        thread_ts: str | None = None,
     ) -> dict[str, Any] | None:
         """
         특정 ts의 메시지 1건 조회
@@ -399,13 +401,23 @@ class SlackApiClientWrapper:
         Returns:
             Slack 메시지 dict 또는 None
         """
-        response = await self.get_conversation_history(
-            channel=channel,
-            oldest=ts,
-            latest=ts,
-            limit=1,
-            inclusive=True,
-        )
+        if thread_ts and thread_ts != ts:
+            response = await self.get_conversation_replies(
+                channel=channel,
+                ts=thread_ts,
+                oldest=ts,
+                latest=ts,
+                limit=2,
+                inclusive=True,
+            )
+        else:
+            response = await self.get_conversation_history(
+                channel=channel,
+                oldest=ts,
+                latest=ts,
+                limit=1,
+                inclusive=True,
+            )
 
         for message in response.get("messages", []):
             if message.get("ts") == ts:
