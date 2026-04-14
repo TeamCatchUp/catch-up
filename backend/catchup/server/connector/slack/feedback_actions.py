@@ -28,6 +28,7 @@ COMMENT_BLOCK_ID = "feedback_comment_block"
 COMMENT_ACTION_ID = "feedback_comment_action"
 WARNING_BANNER_BLOCK_ID = "catchup_feedback_warning_banner_v1"
 WARNING_DIVIDER_BLOCK_ID = "catchup_feedback_warning_divider_v1"
+WARNING_COMMENT_QUOTE_BLOCK_ID = "catchup_feedback_comment_quote_v1"
 
 FEEDBACK_REASON_OPTIONS = [
     ("사실과 다른 내용이 포함되어 있어요", "HALLUCINATION"),
@@ -244,6 +245,18 @@ def build_warning_divider_block() -> dict[str, Any]:
     return {
         "type": "divider",
         "block_id": WARNING_DIVIDER_BLOCK_ID,
+    }
+
+
+def build_feedback_comment_quote_block(
+    *,
+    slack_user_id: str,
+    comment: str,
+) -> dict[str, str]:
+    return {
+        "type": "markdown",
+        "block_id": WARNING_COMMENT_QUOTE_BLOCK_ID,
+        "text": f"> <@{slack_user_id}> : {comment}",
     }
 
 
