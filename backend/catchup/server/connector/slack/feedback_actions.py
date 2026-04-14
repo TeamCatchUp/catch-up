@@ -35,13 +35,15 @@ DETAIL_BUTTON_TEXT = "Catch Up에서 자세히 보기"
 HELPFUL_BUTTON_TEXT = "👍도움됐어요"
 NOT_HELPFUL_BUTTON_TEXT = "👎 아쉬워요"
 DETAIL_PROMPT_TEXT = "답변이 도움이 됐나요?"
+SIGNUP_BUTTON_TEXT = "CatchUp 회원가입"
 
 
 class FeedbackProcessResult(StrEnum):
     READY = "ready"
     SUCCESS = "success"
     INVALID = "invalid"
-    NOT_FOUND = "not_found"
+    NOT_REGISTERED = "not_registered"
+    ANSWER_NOT_FOUND = "answer_not_found"
     ALREADY_SUBMITTED = "already_submitted"
 
 
@@ -162,6 +164,35 @@ def build_chat_room_redirect_url(
 
 def resolve_frontend_base_url() -> str:
     return auth_settings.FRONTEND_BASE_URL.rstrip("/")
+
+
+def build_signup_prompt_blocks(text: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "section",
+            "block_id": "catchup_app_mention_signup_message_v1",
+            "text": {
+                "type": "mrkdwn",
+                "text": text,
+            },
+        },
+        {
+            "type": "actions",
+            "block_id": "catchup_app_mention_signup_actions_v1",
+            "elements": [
+                {
+                    "type": "button",
+                    "action_id": "catchup_signup_redirect_v1",
+                    "text": {
+                        "type": "plain_text",
+                        "text": SIGNUP_BUTTON_TEXT,
+                        "emoji": False,
+                    },
+                    "url": resolve_frontend_base_url(),
+                }
+            ],
+        },
+    ]
 
 
 def serialize_feedback_action_payload(payload: SlackFeedbackActionPayload) -> str:

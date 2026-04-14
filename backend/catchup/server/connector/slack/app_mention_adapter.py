@@ -24,7 +24,7 @@ from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
 from catchup.db.slack.oauth_repository import get_slack_token_by_team_id
 from catchup.db.user_source_mapping import find_user_names_by_source_mappings
-from catchup.server.connector.slack.feedback_actions import resolve_frontend_base_url
+from catchup.server.connector.slack.feedback_actions import build_signup_prompt_blocks
 from catchup.server.connector.slack.plan_stream import SlackPlanResponder
 from catchup.server.connector.slack.schemas import SlackWebhookRequest
 
@@ -68,7 +68,7 @@ class SlackAppMentionClientTransport:
             channel=mention.channel_id,
             thread_ts=mention.thread_ts,
             text=text,
-            blocks=self._build_signup_prompt_blocks(text),
+            blocks=build_signup_prompt_blocks(text),
         )
 
     async def post_busy_notice(
@@ -116,35 +116,6 @@ class SlackAppMentionClientTransport:
             },
             {"type": "divider"},
         ]
-
-    def _build_signup_prompt_blocks(self, text: str) -> list[dict[str, Any]]:
-        return [
-            {
-                "type": "section",
-                "block_id": "catchup_app_mention_signup_message_v1",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": text,
-                },
-            },
-            {
-                "type": "actions",
-                "block_id": "catchup_app_mention_signup_actions_v1",
-                "elements": [
-                    {
-                        "type": "button",
-                        "action_id": "catchup_signup_redirect_v1",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "CatchUp 회원가입",
-                            "emoji": False,
-                        },
-                        "url": resolve_frontend_base_url(),
-                    }
-                ],
-            },
-        ]
-
 
 def schedule_app_mention(request: SlackWebhookRequest) -> None:
     task = asyncio.create_task(get_slack_app_mention_adapter().handle(request))

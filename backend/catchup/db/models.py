@@ -1781,6 +1781,13 @@ class ChatHistory(Base):
         comment="사용자가 직접 작성한 상세 피드백 내용"
     )
     
+    # TODO : 추후에 피드백 테이블을 별도로 분리하여 관리하지만, Slack Bot v0에서는 임시로 해당 테이블에 feedback_user 필드를 추가하여 관리한다.
+    feedback_user: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Slack Bot v0 : 피드백은 답변 생성 요청자 관계 없이 누구나 한번만 피드백을 남길 수 있다."
+    )
+    
     is_displayed: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
