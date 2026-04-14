@@ -24,6 +24,8 @@ REASON_BLOCK_ID = "feedback_reason_block"
 REASON_ACTION_ID = "feedback_reason_action"
 DELETE_POLICY_BLOCK_ID = "feedback_delete_policy_block"
 DELETE_POLICY_ACTION_ID = "feedback_delete_policy_action"
+COMMENT_BLOCK_ID = "feedback_comment_block"
+COMMENT_ACTION_ID = "feedback_comment_action"
 WARNING_BANNER_BLOCK_ID = "catchup_feedback_warning_banner_v1"
 WARNING_DIVIDER_BLOCK_ID = "catchup_feedback_warning_divider_v1"
 
