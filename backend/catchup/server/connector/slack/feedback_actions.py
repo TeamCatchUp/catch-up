@@ -19,23 +19,31 @@ HELPFUL_ACTION_ID = "feedback_helpful"
 NOT_HELPFUL_ACTION_ID = "feedback_not_helpful"
 SUPPORTED_FEEDBACK_ACTION_IDS = frozenset({HELPFUL_ACTION_ID, NOT_HELPFUL_ACTION_ID})
 
+FEEDBACK_MODAL_CALLBACK_ID = "feedback_not_helpful_modal"
 REASON_BLOCK_ID = "feedback_reason_block"
 REASON_ACTION_ID = "feedback_reason_action"
-COMMENT_BLOCK_ID = "feedback_comment_block"
-COMMENT_ACTION_ID = "feedback_comment_action"
+DELETE_POLICY_BLOCK_ID = "feedback_delete_policy_block"
+DELETE_POLICY_ACTION_ID = "feedback_delete_policy_action"
+WARNING_BANNER_BLOCK_ID = "catchup_feedback_warning_banner_v1"
 
 FEEDBACK_REASON_OPTIONS = [
-    ("원하는 답이 아니에요", "IRRELEVANT_ANSWER"),
-    ("출처가 정확하지 않아요", "NO_CITATION"),
-    ("내용이 부족해요", "MISSING_INFO"),
-    ("관련 없는 결과가 포함됐어요", "IRRELEVANT_SOURCE"),
+    ("사실과 다른 내용이 포함되어 있어요", "HALLUCINATION"),
+    ("정보가 오래되었어요", "OUTDATED"),
+    ("질문과 관련 없는 답변이에요", "IRRELEVANT_ANSWER"),
+    ("중요한 내용이 빠져 있어요", "MISSING_INFO"),
 ]
+DELETE_POLICY_OPTIONS = [
+    ("답변을 유지하고, 부정확 표시만 추가할게요", "keep_with_warning"),
+    ("답변을 삭제할게요", "delete_answer"),
+]
+DELETE_POLICY_REQUIRED_REASONS = frozenset({"HALLUCINATION", "OUTDATED"})
 
 DETAIL_BUTTON_TEXT = "Catch Up에서 자세히 보기"
 HELPFUL_BUTTON_TEXT = "👍도움됐어요"
 NOT_HELPFUL_BUTTON_TEXT = "👎 아쉬워요"
 DETAIL_PROMPT_TEXT = "답변이 도움이 됐나요?"
 SIGNUP_BUTTON_TEXT = "CatchUp 회원가입"
+WARNING_BANNER_TEXT = "⚠️ *이 답변은 정확하지 않을 수 있어요*"
 
 
 class FeedbackProcessResult(StrEnum):
@@ -45,6 +53,11 @@ class FeedbackProcessResult(StrEnum):
     NOT_REGISTERED = "not_registered"
     ANSWER_NOT_FOUND = "answer_not_found"
     ALREADY_SUBMITTED = "already_submitted"
+
+
+class SlackFeedbackDeletePolicy(StrEnum):
+    KEEP_WITH_WARNING = "keep_with_warning"
+    DELETE_ANSWER = "delete_answer"
 
 
 @dataclass(slots=True, frozen=True)
@@ -194,6 +207,56 @@ def build_signup_prompt_blocks(text: str) -> list[dict[str, Any]]:
             ],
         },
     ]
+
+
+def build_feedback_reason_options(*, selected_reason: str | None = None) -> list[dict[str, Any]]:
+    del selected_reason
+    return _build_radio_options(FEEDBACK_REASON_OPTIONS)
+
+
+def build_delete_policy_options(
+    *,
+    selected_policy: str | None = None,
+) -> list[dict[str, Any]]:
+    del selected_policy
+    return _build_radio_options(DELETE_POLICY_OPTIONS)
+
+
+def feedback_reason_requires_delete_policy(reason: str | None) -> bool:
+    return str(reason or "").strip() in DELETE_POLICY_REQUIRED_REASONS
+
+
+def build_warning_banner_block() -> dict[str, Any]:
+    return {
+        "type": "section",
+        "block_id": WARNING_BANNER_BLOCK_ID,
+        "text": {
+            "type": "mrkdwn",
+            "text": WARNING_BANNER_TEXT,
+        },
+    }
+
+
+def build_feedback_notice_text(
+    feedback_result: FeedbackProcessResult,
+    *,
+    action_id: str,
+    reason: str | None = None,
+    delete_policy: str | None = None,
+) -> str:
+    if feedback_result is FeedbackProcessResult.SUCCESS:
+        return _build_success_notice_text(
+            action_id=action_id,
+            reason=reason,
+            delete_policy=delete_policy,
+        )
+    if feedback_result is FeedbackProcessResult.ALREADY_SUBMITTED:
+        return "이미 이 답변에 피드백을 남겼어요."
+    if feedback_result is FeedbackProcessResult.INVALID:
+        return "피드백을 저장하지 못했어요."
+    if feedback_result is FeedbackProcessResult.NOT_REGISTERED:
+        return "CatchUp에 등록된 사용자만 피드백을 남길 수 있어요."
+    return "원본 답변을 찾을 수 없어요."
 
 
 def serialize_feedback_action_payload(payload: SlackFeedbackActionPayload) -> str:
@@ -349,6 +412,36 @@ def _read_nested_str(payload: dict[str, Any], *keys: str) -> str:
             return ""
         current = current.get(key)
     return str(current or "").strip()
+
+
+def _build_success_notice_text(
+    *,
+    action_id: str,
+    reason: str | None,
+    delete_policy: str | None,
+) -> str:
+    if action_id == HELPFUL_ACTION_ID:
+        return "피드백을 남겨주셔서 감사해요! 더 나은 답을 드릴 수 있도록 계속 발전할게요."
+    if not feedback_reason_requires_delete_policy(reason):
+        return "🙏 알려주셔서 감사해요. 팀에게 더 정확한 정보를 전달할 수 있게 됐어요."
+    if delete_policy == SlackFeedbackDeletePolicy.DELETE_ANSWER.value:
+        return "🙏 알려주셔서 감사해요. 답변을 삭제했어요."
+    return "🙏 알려주셔서 감사해요. 팀에게 이 답변이 정확하지 않을 수 있다는 점을 표시했어요."
+
+
+def _build_radio_options(
+    options: list[tuple[str, str]],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "text": {
+                "type": "plain_text",
+                "text": label,
+            },
+            "value": value,
+        }
+        for label, value in options
+    ]
 
 
 def _parse_uuid(raw_value: Any) -> uuid.UUID | None:

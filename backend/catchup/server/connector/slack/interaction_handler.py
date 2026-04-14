@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -19,9 +20,9 @@ from catchup.db.models import SourceType
 from catchup.db.slack.oauth_repository import get_slack_token_by_team_id
 from catchup.db.user_source_mapping import find_user_id_by_source_mapping
 from catchup.observability.langfuse.feedback import upsert_feedback
-from catchup.server.connector.slack.feedback_actions import COMMENT_ACTION_ID
-from catchup.server.connector.slack.feedback_actions import COMMENT_BLOCK_ID
-from catchup.server.connector.slack.feedback_actions import FEEDBACK_REASON_OPTIONS
+from catchup.server.connector.slack.feedback_actions import DELETE_POLICY_ACTION_ID
+from catchup.server.connector.slack.feedback_actions import DELETE_POLICY_BLOCK_ID
+from catchup.server.connector.slack.feedback_actions import FEEDBACK_MODAL_CALLBACK_ID
 from catchup.server.connector.slack.feedback_actions import HELPFUL_ACTION_ID
 from catchup.server.connector.slack.feedback_actions import NOT_HELPFUL_ACTION_ID
 from catchup.server.connector.slack.feedback_actions import REASON_ACTION_ID
@@ -29,11 +30,22 @@ from catchup.server.connector.slack.feedback_actions import REASON_BLOCK_ID
 from catchup.server.connector.slack.feedback_actions import (
     SUPPORTED_FEEDBACK_ACTION_IDS,
 )
+from catchup.server.connector.slack.feedback_actions import WARNING_BANNER_BLOCK_ID
 from catchup.server.connector.slack.feedback_actions import FeedbackProcessResult
 from catchup.server.connector.slack.feedback_actions import SlackFeedbackActionPayload
 from catchup.server.connector.slack.feedback_actions import SlackFeedbackContext
+from catchup.server.connector.slack.feedback_actions import SlackFeedbackDeletePolicy
 from catchup.server.connector.slack.feedback_actions import SlackFeedbackModalContext
+from catchup.server.connector.slack.feedback_actions import build_delete_policy_options
+from catchup.server.connector.slack.feedback_actions import build_feedback_notice_text
+from catchup.server.connector.slack.feedback_actions import (
+    build_feedback_reason_options,
+)
 from catchup.server.connector.slack.feedback_actions import build_signup_prompt_blocks
+from catchup.server.connector.slack.feedback_actions import build_warning_banner_block
+from catchup.server.connector.slack.feedback_actions import (
+    feedback_reason_requires_delete_policy,
+)
 from catchup.server.connector.slack.feedback_actions import (
     parse_feedback_action_payload,
 )
@@ -53,6 +65,12 @@ class SlackFeedbackSubmissionTarget:
     message: Any
 
 
+@dataclass(slots=True, frozen=True)
+class SlackNotHelpfulSubmission:
+    reason: str
+    delete_policy: str | None = None
+
+
 async def handle_block_actions(
     *,
     request: SlackWebhookRequest,
@@ -62,12 +80,19 @@ async def handle_block_actions(
         return {}
 
     action_id = str(action.get("action_id") or "").strip()
+    if action_id == REASON_ACTION_ID and _is_not_helpful_modal_interaction(request.event):
+        await _refresh_not_helpful_modal(request)
+        return {}
+
     if action_id not in SUPPORTED_FEEDBACK_ACTION_IDS:
         return {}
 
     action_payload = parse_feedback_action_payload(action.get("value"))
     if action_payload is None:
-        await _post_feedback_notice(request, "피드백 정보를 읽지 못했어요.")
+        await _post_feedback_notice(
+            request,
+            "피드백 정보를 읽지 못했어요.",
+        )
         return {}
 
     if action_id == NOT_HELPFUL_ACTION_ID:
@@ -85,7 +110,10 @@ async def handle_block_actions(
             return {}
         handled = await _open_not_helpful_modal_if_possible(request, action_payload)
         if not handled:
-            await _post_feedback_notice(request, "의견 입력 창을 열지 못했어요.")
+            await _post_feedback_notice(
+                request,
+                "의견 입력 창을 열지 못했어요.",
+            )
         return {}
 
     feedback_result = await run_in_threadpool(
@@ -110,8 +138,8 @@ async def handle_view_submission(
     if modal_context is None:
         return {"response_action": "clear"}
 
-    reasons, comment = _parse_view_submission_feedback(payload)
-    validation_errors = _validate_feedback_submission(reasons, comment)
+    submission = _parse_not_helpful_submission(payload)
+    validation_errors = _validate_feedback_submission(submission)
     if validation_errors:
         return {
             "response_action": "errors",
@@ -122,14 +150,15 @@ async def handle_view_submission(
         _process_feedback_sync,
         _read_nested_str(payload, "user", "id"),
         modal_context.action_payload,
-        reasons,
-        comment,
+        [submission.reason],
+        None,
     )
     await _handle_feedback_result(
         request,
         feedback_result,
         NOT_HELPFUL_ACTION_ID,
         fallback_context=modal_context.feedback_context,
+        submission=submission,
     )
     return {"response_action": "clear"}
 
@@ -196,6 +225,7 @@ async def _handle_feedback_result(
     action_id: str,
     *,
     fallback_context: SlackFeedbackContext | None = None,
+    submission: SlackNotHelpfulSubmission | None = None,
 ) -> None:
     if feedback_result is FeedbackProcessResult.NOT_REGISTERED:
         await _post_feedback_signup_prompt(
@@ -204,9 +234,22 @@ async def _handle_feedback_result(
         )
         return
 
+    if feedback_result is FeedbackProcessResult.SUCCESS:
+        feedback_result = await _apply_feedback_message_effect(
+            request,
+            action_id=action_id,
+            fallback_context=fallback_context,
+            submission=submission,
+        )
+
     await _post_feedback_notice(
         request,
-        _feedback_notice_message(feedback_result, action_id),
+        build_feedback_notice_text(
+            feedback_result,
+            action_id=action_id,
+            reason=submission.reason if submission is not None else None,
+            delete_policy=submission.delete_policy if submission is not None else None,
+        ),
         fallback_context=fallback_context,
     )
 
@@ -236,7 +279,9 @@ async def _open_not_helpful_modal_if_possible(
             SlackFeedbackModalContext(
                 action_payload=action_payload,
                 feedback_context=feedback_context,
-            )
+            ),
+            selected_reason=None,
+            selected_delete_policy=None,
         ),
     )
     return True
@@ -244,14 +289,67 @@ async def _open_not_helpful_modal_if_possible(
 
 def _build_not_helpful_modal(
     modal_context: SlackFeedbackModalContext,
+    *,
+    selected_reason: str | None,
+    selected_delete_policy: str | None,
 ) -> dict[str, Any]:
+    reason_options = build_feedback_reason_options(selected_reason=selected_reason)
+    delete_policy_options = build_delete_policy_options(selected_policy=selected_delete_policy)
+    blocks: list[dict[str, Any]] = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "사유를 알려주시면 팀에게 더 나은 답변을 전달할 수 있어요.",
+            },
+        },
+        {"type": "divider"},
+        {
+            "type": "input",
+            "block_id": REASON_BLOCK_ID,
+            "dispatch_action": True,
+            "label": {
+                "type": "plain_text",
+                "text": "어떤 부분이 아쉬웠나요?",
+            },
+            "element": {
+                "type": "radio_buttons",
+                "action_id": REASON_ACTION_ID,
+                "options": reason_options,
+                **_build_initial_option_field(reason_options, selected_reason),
+            },
+        },
+    ]
+    if feedback_reason_requires_delete_policy(selected_reason):
+        blocks.extend(
+            [
+                {"type": "divider"},
+                {
+                    "type": "input",
+                    "block_id": DELETE_POLICY_BLOCK_ID,
+                    "label": {
+                        "type": "plain_text",
+                        "text": "이 답변을 삭제할까요?",
+                    },
+                    "element": {
+                        "type": "radio_buttons",
+                        "action_id": DELETE_POLICY_ACTION_ID,
+                        "options": delete_policy_options,
+                        **_build_initial_option_field(
+                            delete_policy_options,
+                            selected_delete_policy,
+                        ),
+                    },
+                },
+            ]
+        )
     return {
         "type": "modal",
-        "callback_id": "feedback_not_helpful_modal",
+        "callback_id": FEEDBACK_MODAL_CALLBACK_ID,
         "private_metadata": serialize_feedback_modal_context(modal_context),
         "title": {
             "type": "plain_text",
-            "text": "아쉬워요",
+            "text": "의견 보내기",
         },
         "submit": {
             "type": "plain_text",
@@ -261,78 +359,63 @@ def _build_not_helpful_modal(
             "type": "plain_text",
             "text": "취소",
         },
-        "blocks": [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "아쉬웠던 부분을 알려주시면, 더 나은 답을 드릴 수 있도록 개선할게요.",
-                },
-            },
-            {
-                "type": "input",
-                "block_id": REASON_BLOCK_ID,
-                "label": {
-                    "type": "plain_text",
-                    "text": "사유 선택 (단일 선택)",
-                },
-                "element": {
-                    "type": "radio_buttons",
-                    "action_id": REASON_ACTION_ID,
-                    "options": [
-                        {
-                            "text": {
-                                "type": "plain_text",
-                                "text": label,
-                            },
-                            "value": value,
-                        }
-                        for label, value in FEEDBACK_REASON_OPTIONS
-                    ],
-                },
-            },
-            {
-                "type": "input",
-                "block_id": COMMENT_BLOCK_ID,
-                "optional": True,
-                "label": {
-                    "type": "plain_text",
-                    "text": "추가 의견 입력",
-                },
-                "element": {
-                    "type": "plain_text_input",
-                    "action_id": COMMENT_ACTION_ID,
-                    "multiline": True,
-                    "placeholder": {
-                        "type": "plain_text",
-                        "text": "구체적으로 작성해 주시면 개선에 큰 도움이 돼요",
-                    },
-                },
-            },
-        ],
+        "blocks": blocks,
     }
 
 
-def _parse_view_submission_feedback(payload: dict[str, Any]) -> tuple[list[str], str | None]:
+async def _refresh_not_helpful_modal(request: SlackWebhookRequest) -> None:
+    modal_context = parse_feedback_modal_context(
+        _read_nested_str(request.event, "view", "private_metadata")
+    )
+    if modal_context is None:
+        return
+
+    view_id = _read_nested_str(request.event, "view", "id")
+    view_hash = _read_nested_str(request.event, "view", "hash")
+    if not view_id or not view_hash:
+        return
+
+    client = await run_in_threadpool(_build_slack_client_sync, request.team_id)
+    if client is None:
+        return
+
+    selected_reason, selected_delete_policy = _parse_modal_state(request.event)
+    await client.update_view(
+        view_id=view_id,
+        hash=view_hash,
+        view=_build_not_helpful_modal(
+            modal_context,
+            selected_reason=selected_reason,
+            selected_delete_policy=selected_delete_policy,
+        ),
+    )
+
+
+def _parse_not_helpful_submission(payload: dict[str, Any]) -> SlackNotHelpfulSubmission:
+    selected_reason, selected_delete_policy = _parse_modal_state(payload)
+    return SlackNotHelpfulSubmission(
+        reason=selected_reason,
+        delete_policy=selected_delete_policy,
+    )
+
+
+def _parse_modal_state(payload: dict[str, Any]) -> tuple[str, str | None]:
     values = payload.get("view", {}).get("state", {}).get("values", {})
     reason_state = values.get(REASON_BLOCK_ID, {}).get(REASON_ACTION_ID, {})
-    selected_option = reason_state.get("selected_option")
-    reasons = []
-    if isinstance(selected_option, dict):
-        selected_reason = str(selected_option.get("value") or "").strip()
-        if selected_reason:
-            reasons.append(selected_reason)
-
-    comment_value = values.get(COMMENT_BLOCK_ID, {}).get(COMMENT_ACTION_ID, {}).get("value")
-    comment = str(comment_value or "").strip() or None
-    return reasons, comment
+    selected_reason = _read_selected_option_value(reason_state)
+    delete_policy_state = values.get(DELETE_POLICY_BLOCK_ID, {}).get(DELETE_POLICY_ACTION_ID, {})
+    selected_delete_policy = _read_selected_option_value(delete_policy_state) or None
+    return selected_reason, selected_delete_policy
 
 
-def _validate_feedback_submission(reasons: list[str], comment: str | None) -> dict[str, str] | None:
-    del comment
+def _validate_feedback_submission(
+    submission: SlackNotHelpfulSubmission,
+) -> dict[str, str] | None:
     errors: dict[str, str] = {}
-    if not reasons:
+    if not submission.reason:
         errors[REASON_BLOCK_ID] = "아쉬웠던 이유를 하나 선택해 주세요."
+    if feedback_reason_requires_delete_policy(submission.reason) and not submission.delete_policy:
+        errors[DELETE_POLICY_BLOCK_ID] = "답변 처리 방식을 하나 선택해 주세요."
     return errors or None
 
 
@@ -421,6 +504,7 @@ def _build_slack_client_sync(team_id: str) -> SlackApiClientWrapper | None:
             return None
         return SlackApiClientWrapper(token.bot_access_token, team_id)
 
+
 def _read_nested_str(payload: dict[str, Any], *keys: str) -> str:
     current: Any = payload
     for key in keys:
@@ -430,24 +514,143 @@ def _read_nested_str(payload: dict[str, Any], *keys: str) -> str:
     return str(current or "").strip()
 
 
-def _success_message_for_action(action_id: str) -> str:
-    if action_id == HELPFUL_ACTION_ID:
-        return "피드백을 남겨주셔서 감사해요! 더 나은 답을 드릴 수 있도록 계속 발전할게요."
-    if action_id == NOT_HELPFUL_ACTION_ID:
-        return "소중한 의견 감사해요. 반영해서 꼭 개선할게요."
-    return "피드백을 저장했어요."
+def _is_not_helpful_modal_interaction(payload: dict[str, Any]) -> bool:
+    callback_id = _read_nested_str(payload, "view", "callback_id")
+    return callback_id == FEEDBACK_MODAL_CALLBACK_ID
 
 
-def _feedback_notice_message(feedback_result: FeedbackProcessResult, action_id: str) -> str:
-    if feedback_result is FeedbackProcessResult.SUCCESS:
-        return _success_message_for_action(action_id)
-    if feedback_result is FeedbackProcessResult.ALREADY_SUBMITTED:
-        return "이미 이 답변에 피드백을 남겼어요."
-    if feedback_result is FeedbackProcessResult.INVALID:
-        return "피드백을 저장하지 못했어요."
-    if feedback_result is FeedbackProcessResult.NOT_REGISTERED:
-        return UNMAPPED_USER_MESSAGE
-    return "피드백 대상 답변을 찾지 못했어요."
+def _read_selected_option_value(state: dict[str, Any]) -> str:
+    selected_option = state.get("selected_option")
+    if not isinstance(selected_option, dict):
+        return ""
+    return str(selected_option.get("value") or "").strip()
+
+
+def _build_initial_option_field(
+    options: list[dict[str, Any]],
+    selected_value: str | None,
+) -> dict[str, Any]:
+    if not selected_value:
+        return {}
+    for option in options:
+        if str(option.get("value") or "").strip() == selected_value:
+            return {"initial_option": option}
+    return {}
+
+
+async def _apply_feedback_message_effect(
+    request: SlackWebhookRequest,
+    *,
+    action_id: str,
+    fallback_context: SlackFeedbackContext | None,
+    submission: SlackNotHelpfulSubmission | None,
+) -> FeedbackProcessResult:
+    if action_id != NOT_HELPFUL_ACTION_ID or submission is None:
+        return FeedbackProcessResult.SUCCESS
+    return await _apply_not_helpful_message_effect(
+        request,
+        fallback_context=fallback_context,
+        submission=submission,
+    )
+
+
+async def _apply_not_helpful_message_effect(
+    request: SlackWebhookRequest,
+    *,
+    fallback_context: SlackFeedbackContext | None,
+    submission: SlackNotHelpfulSubmission,
+) -> FeedbackProcessResult:
+    feedback_context = resolve_feedback_context(
+        team_id=request.team_id,
+        payload=request.event,
+        fallback=fallback_context,
+    )
+    if feedback_context is None:
+        return FeedbackProcessResult.ANSWER_NOT_FOUND
+
+    client = await run_in_threadpool(_build_slack_client_sync, feedback_context.team_id)
+    if client is None:
+        return FeedbackProcessResult.INVALID
+
+    if feedback_reason_requires_delete_policy(submission.reason):
+        if submission.delete_policy == SlackFeedbackDeletePolicy.DELETE_ANSWER.value:
+            return await _delete_feedback_message(
+                client=client,
+                feedback_context=feedback_context,
+            )
+        return await _mark_feedback_message_as_inaccurate(
+            client=client,
+            feedback_context=feedback_context,
+        )
+    return FeedbackProcessResult.SUCCESS
+
+
+async def _delete_feedback_message(
+    *,
+    client: SlackApiClientWrapper,
+    feedback_context: SlackFeedbackContext,
+) -> FeedbackProcessResult:
+    try:
+        await client.delete_message(
+            channel=feedback_context.channel_id,
+            ts=feedback_context.message_ts,
+        )
+    except Exception:
+        logger.warning(
+            "slack_feedback_delete_message_failed",
+            team_id=feedback_context.team_id,
+            channel_id=feedback_context.channel_id,
+            message_ts=feedback_context.message_ts,
+            exc_info=True,
+        )
+        return FeedbackProcessResult.ANSWER_NOT_FOUND
+    return FeedbackProcessResult.SUCCESS
+
+
+async def _mark_feedback_message_as_inaccurate(
+    *,
+    client: SlackApiClientWrapper,
+    feedback_context: SlackFeedbackContext,
+) -> FeedbackProcessResult:
+    latest_message = await client.get_message(
+        feedback_context.channel_id,
+        feedback_context.message_ts,
+    )
+    if latest_message is None:
+        return FeedbackProcessResult.ANSWER_NOT_FOUND
+
+    blocks = latest_message.get("blocks")
+    if not isinstance(blocks, list):
+        return FeedbackProcessResult.ANSWER_NOT_FOUND
+
+    updated_blocks = _prepend_warning_banner(blocks)
+    try:
+        await client.update_message(
+            channel=feedback_context.channel_id,
+            ts=feedback_context.message_ts,
+            text=str(latest_message.get("text") or "Catch Up"),
+            blocks=updated_blocks,
+        )
+    except Exception:
+        logger.warning(
+            "slack_feedback_update_message_failed",
+            team_id=feedback_context.team_id,
+            channel_id=feedback_context.channel_id,
+            message_ts=feedback_context.message_ts,
+            exc_info=True,
+        )
+        return FeedbackProcessResult.INVALID
+    return FeedbackProcessResult.SUCCESS
+
+
+def _prepend_warning_banner(blocks: list[Any]) -> list[dict[str, Any]]:
+    updated_blocks = [
+        deepcopy(block)
+        for block in blocks
+        if isinstance(block, dict)
+        and str(block.get("block_id") or "").strip() != WARNING_BANNER_BLOCK_ID
+    ]
+    return [build_warning_banner_block(), *updated_blocks]
 
 
 def _resolve_feedback_submission_target(
