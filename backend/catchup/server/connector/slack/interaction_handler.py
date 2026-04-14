@@ -20,6 +20,8 @@ from catchup.db.models import SourceType
 from catchup.db.slack.oauth_repository import get_slack_token_by_team_id
 from catchup.db.user_source_mapping import find_user_id_by_source_mapping
 from catchup.observability.langfuse.feedback import upsert_feedback
+from catchup.server.connector.slack.feedback_actions import COMMENT_ACTION_ID
+from catchup.server.connector.slack.feedback_actions import COMMENT_BLOCK_ID
 from catchup.server.connector.slack.feedback_actions import DELETE_POLICY_ACTION_ID
 from catchup.server.connector.slack.feedback_actions import DELETE_POLICY_BLOCK_ID
 from catchup.server.connector.slack.feedback_actions import FEEDBACK_MODAL_CALLBACK_ID
@@ -73,6 +75,7 @@ class SlackFeedbackSubmissionTarget:
 class SlackNotHelpfulSubmission:
     reason: str
     delete_policy: str | None = None
+    comment: str | None = None
 
 
 async def handle_block_actions(
@@ -287,6 +290,7 @@ def _build_not_helpful_modal(
     *,
     selected_reason: str | None,
     selected_delete_policy: str | None,
+    comment: str | None = None,
 ) -> dict[str, Any]:
     reason_options = build_feedback_reason_options(selected_reason=selected_reason)
     delete_policy_options = build_delete_policy_options(selected_policy=selected_delete_policy)
@@ -338,6 +342,27 @@ def _build_not_helpful_modal(
                 },
             ]
         )
+    blocks.append(
+        {
+            "type": "input",
+            "block_id": COMMENT_BLOCK_ID,
+            "optional": True,
+            "label": {
+                "type": "plain_text",
+                "text": "추가로 전할 내용을 적어주세요",
+            },
+            "element": {
+                "type": "plain_text_input",
+                "action_id": COMMENT_ACTION_ID,
+                "multiline": True,
+                "placeholder": {
+                    "type": "plain_text",
+                    "text": "선택 사항이에요. 비워둬도 제출할 수 있어요.",
+                },
+                **_build_initial_value_field(comment),
+            },
+        }
+    )
     return {
         "type": "modal",
         "callback_id": FEEDBACK_MODAL_CALLBACK_ID,
@@ -374,7 +399,7 @@ async def _refresh_not_helpful_modal(request: SlackWebhookRequest) -> None:
     if client is None:
         return
 
-    selected_reason, selected_delete_policy = _parse_modal_state(request.event)
+    selected_reason, selected_delete_policy, comment = _parse_modal_state(request.event)
     await client.update_view(
         view_id=view_id,
         hash=view_hash,
@@ -382,25 +407,29 @@ async def _refresh_not_helpful_modal(request: SlackWebhookRequest) -> None:
             modal_context,
             selected_reason=selected_reason,
             selected_delete_policy=selected_delete_policy,
+            comment=comment,
         ),
     )
 
 
 def _parse_not_helpful_submission(payload: dict[str, Any]) -> SlackNotHelpfulSubmission:
-    selected_reason, selected_delete_policy = _parse_modal_state(payload)
+    selected_reason, selected_delete_policy, comment = _parse_modal_state(payload)
     return SlackNotHelpfulSubmission(
         reason=selected_reason,
         delete_policy=selected_delete_policy,
+        comment=comment,
     )
 
 
-def _parse_modal_state(payload: dict[str, Any]) -> tuple[str, str | None]:
+def _parse_modal_state(payload: dict[str, Any]) -> tuple[str, str | None, str | None]:
     values = payload.get("view", {}).get("state", {}).get("values", {})
     reason_state = values.get(REASON_BLOCK_ID, {}).get(REASON_ACTION_ID, {})
     selected_reason = _read_selected_option_value(reason_state)
     delete_policy_state = values.get(DELETE_POLICY_BLOCK_ID, {}).get(DELETE_POLICY_ACTION_ID, {})
     selected_delete_policy = _read_selected_option_value(delete_policy_state) or None
-    return selected_reason, selected_delete_policy
+    comment_state = values.get(COMMENT_BLOCK_ID, {}).get(COMMENT_ACTION_ID, {})
+    comment = str(comment_state.get("value") or "").strip() or None
+    return selected_reason, selected_delete_policy, comment
 
 
 def _validate_feedback_submission(
@@ -449,7 +478,7 @@ async def _complete_view_submission(
         _read_nested_str(request.event, "user", "id"),
         modal_context.action_payload,
         [submission.reason],
-        None,
+        submission.comment,
     )
     await _handle_feedback_result(
         request,
@@ -576,6 +605,12 @@ def _build_initial_option_field(
         if str(option.get("value") or "").strip() == selected_value:
             return {"initial_option": option}
     return {}
+
+
+def _build_initial_value_field(value: str | None) -> dict[str, Any]:
+    if not value:
+        return {}
+    return {"initial_value": value}
 
 
 async def _apply_feedback_message_effect(
