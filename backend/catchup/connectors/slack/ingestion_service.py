@@ -1,35 +1,39 @@
 import asyncio
-from builtins import ExceptionGroup
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
 import logging
 from _collections_abc import AsyncGenerator
+from builtins import ExceptionGroup
+from dataclasses import dataclass
+from dataclasses import field
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 from typing import Any
 
+from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
 from slack_sdk.errors import SlackApiError
 from sqlalchemy.orm import Session
-from fastapi.concurrency import run_in_threadpool
 
-from catchup.connectors.slack.client import (
-    SlackApiClientWrapper,
-    SlackConnectorApiError,
-    SlackRateLimitError,
-)
-from catchup.connectors.slack.schemas import (
-    SlackThreadReply,
-    SlackUser,
-)
-from catchup.connectors.slack.transformers import SlackTransformer
+from catchup.components.summarizer import SummarizeRequest
+from catchup.components.summarizer import SummarizerService
+from catchup.components.summarizer import get_summarizer_service
 from catchup.components.vector_db.pgvector import PGVectorRepository
-from catchup.components.summarizer import SummarizeRequest, SummarizerService, get_summarizer_service
 from catchup.configs.config import settings
+from catchup.connectors.slack.client import SlackApiClientWrapper
+from catchup.connectors.slack.client import SlackConnectorApiError
+from catchup.connectors.slack.client import SlackRateLimitError
+from catchup.connectors.slack.schemas import SlackThreadReply
+from catchup.connectors.slack.schemas import SlackUser
+from catchup.connectors.slack.transformers import SlackTransformer
 from catchup.db.engine import SessionLocal
 from catchup.db.slack import domain_repository
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import TargetSyncResult
 
 logger = logging.getLogger(__name__)
+
+
+CATCH_UP_ANSWER_PLACEHOLDER = "[CATCH_UP_ANSWER]"
 
 
 @dataclass(slots=True, frozen=True)
@@ -80,9 +84,11 @@ class SlackIngestionService:
         repository: PGVectorRepository,
         team_id: str,
         access_token: str,
+        bot_user_id: str | None = None,
         enable_summarization: bool = True,
     ):
         self.team_id = team_id
+        self.bot_user_id = bot_user_id
         self.enable_summarization = enable_summarization
         self.client = SlackApiClientWrapper(access_token, team_id)
         self.transformer: SlackTransformer | None = None
@@ -165,6 +171,20 @@ class SlackIngestionService:
             return True
         text = msg_data.get("text", "")
         return len(text) <= 10
+
+    def _sanitize_message_payload(
+        self,
+        msg_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not self.bot_user_id or msg_data.get("user") != self.bot_user_id:
+            return msg_data
+
+        sanitized = dict(msg_data)
+        sanitized["text"] = CATCH_UP_ANSWER_PLACEHOLDER
+        sanitized["blocks"] = []
+        sanitized["attachments"] = []
+        sanitized["files"] = []
+        return sanitized
 
     def _build_permalink(self, channel_id: str, ts: str) -> str | None:
         if not self.workspace_domain:
@@ -317,15 +337,16 @@ class SlackIngestionService:
         batch_latest_synced_ts: str | None = None
 
         for msg_data in messages:
-            if self._should_skip_message(msg_data):
+            sanitized_msg_data = self._sanitize_message_payload(msg_data)
+            if self._should_skip_message(sanitized_msg_data):
                 continue
 
             try:
-                message_ts = msg_data.get("ts")
-                replies = reply_map.get(msg_data.get("ts"), [])
-                permalink = self._build_permalink(channel_id, msg_data.get("ts"))
+                message_ts = sanitized_msg_data.get("ts")
+                replies = reply_map.get(sanitized_msg_data.get("ts"), [])
+                permalink = self._build_permalink(channel_id, sanitized_msg_data.get("ts"))
                 doc = self._transform_message_document_blocking(
-                    msg_data,
+                    sanitized_msg_data,
                     channel_id,
                     channel_name,
                     permalink,
@@ -666,7 +687,10 @@ class SlackIngestionService:
                 limit=settings.SLACK_MESSAGE_BATCH_SIZE,
             )
 
-            messages = response.get("messages", [])
+            messages = [
+                self._sanitize_message_payload(message)
+                for message in response.get("messages", [])
+            ]
             thread_messages = [
                 msg
                 for msg in messages
@@ -727,9 +751,10 @@ class SlackIngestionService:
             )
 
             for message in response.get("messages", []):
-                if self._should_skip_message(message):
+                sanitized_message = self._sanitize_message_payload(message)
+                if self._should_skip_message(sanitized_message):
                     continue
-                message_ts = message.get("ts")
+                message_ts = sanitized_message.get("ts")
                 if message_ts:
                     message_ids.append(message_ts)
 
@@ -794,11 +819,15 @@ class SlackIngestionService:
             channel=channel_id,
             ts=message_id,
         )
-        if not message_data or self._should_skip_message(message_data):
+        if not message_data:
+            return None
+
+        sanitized_message_data = self._sanitize_message_payload(message_data)
+        if self._should_skip_message(sanitized_message_data):
             return None
 
         replies: list[SlackThreadReply] = []
-        if message_data.get("reply_count", 0) > 0:
+        if sanitized_message_data.get("reply_count", 0) > 0:
             replies = await self._fetch_thread_replies(
                 channel_id=channel_id,
                 thread_ts=message_id,
@@ -806,7 +835,7 @@ class SlackIngestionService:
 
         return await run_in_threadpool(
             self._transform_message_document_blocking,
-            message_data,
+            sanitized_message_data,
             channel_id,
             channel_name,
             self._build_permalink(channel_id, message_id),
@@ -832,9 +861,10 @@ class SlackIngestionService:
 
             # 첫 번째 메시지는 parent이므로 skip
             for msg in messages[1:]:
-                if self._should_skip_message(msg):
+                sanitized_reply = self._sanitize_message_payload(msg)
+                if self._should_skip_message(sanitized_reply):
                     continue
-                replies.append(self.transformer.parse_reply(msg))
+                replies.append(self.transformer.parse_reply(sanitized_reply))
 
             cursor = response.get("response_metadata", {}).get("next_cursor")
             if not cursor:
