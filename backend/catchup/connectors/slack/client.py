@@ -482,6 +482,24 @@ class SlackApiClientWrapper:
             },
         )
 
+    async def update_view(
+        self,
+        *,
+        view_id: str,
+        hash: str,
+        view: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self._call_api(
+            "views_update",
+            "api_call",
+            api_method="views.update",
+            json={
+                "view_id": view_id,
+                "hash": hash,
+                "view": view,
+            },
+        )
+
     async def start_stream(
         self,
         *,
