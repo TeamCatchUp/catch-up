@@ -757,8 +757,6 @@ def _prepend_warning_banner(
     next_blocks = [
         first_block,
         build_warning_banner_block(),
-        build_warning_divider_block(),
-        *remaining_blocks,
     ]
     if slack_user_id and comment:
         next_blocks.append(
@@ -767,6 +765,12 @@ def _prepend_warning_banner(
                 comment=comment,
             )
         )
+    next_blocks.extend(
+        [
+            build_warning_divider_block(),
+            *remaining_blocks,
+        ]
+    )
     return _fit_warning_banner_blocks(next_blocks)
 
 
