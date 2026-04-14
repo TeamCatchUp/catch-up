@@ -189,6 +189,7 @@ async def lifespan(app: FastAPI):
         )
         rag_executors.init(
             chat_thread_pool_size=settings.RAG_CHAT_THREAD_POOL_SIZE,
+            bedrock_rerank_size=settings.RAG_BEDROCK_RERANK_THREAD_POOL_SIZE,
         )
     except:
         # TODO: emit_audit_event()
