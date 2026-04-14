@@ -25,6 +25,7 @@ REASON_ACTION_ID = "feedback_reason_action"
 DELETE_POLICY_BLOCK_ID = "feedback_delete_policy_block"
 DELETE_POLICY_ACTION_ID = "feedback_delete_policy_action"
 WARNING_BANNER_BLOCK_ID = "catchup_feedback_warning_banner_v1"
+WARNING_DIVIDER_BLOCK_ID = "catchup_feedback_warning_divider_v1"
 
 FEEDBACK_REASON_OPTIONS = [
     ("사실과 다른 내용이 포함되어 있어요", "HALLUCINATION"),
@@ -234,6 +235,13 @@ def build_warning_banner_block() -> dict[str, Any]:
             "type": "mrkdwn",
             "text": WARNING_BANNER_TEXT,
         },
+    }
+
+
+def build_warning_divider_block() -> dict[str, Any]:
+    return {
+        "type": "divider",
+        "block_id": WARNING_DIVIDER_BLOCK_ID,
     }
 
 
