@@ -203,14 +203,6 @@ async def _handle_feedback_result(
             fallback_context=fallback_context,
         )
         return
-    if feedback_result in {
-        FeedbackProcessResult.SUCCESS,
-        FeedbackProcessResult.ALREADY_SUBMITTED,
-    }:
-        await _remove_feedback_buttons_if_possible(
-            request,
-            fallback_context=fallback_context,
-        )
 
     await _post_feedback_notice(
         request,
@@ -352,60 +344,6 @@ def _extract_first_action(payload: dict[str, Any]) -> dict[str, Any] | None:
     return action if isinstance(action, dict) else None
 
 
-async def _remove_feedback_buttons_if_possible(
-    request: SlackWebhookRequest,
-    *,
-    fallback_context: SlackFeedbackContext | None = None,
-) -> None:
-    feedback_context = resolve_feedback_context(
-        team_id=request.team_id,
-        payload=request.event,
-        fallback=fallback_context,
-    )
-    if feedback_context is None:
-        return
-
-    client = await run_in_threadpool(_build_slack_client_sync, feedback_context.team_id)
-    if client is None:
-        return
-
-    message_payload = request.event.get("message") if isinstance(request.event.get("message"), dict) else None
-    message_text = _read_nested_str(request.event, "message", "text")
-    blocks = message_payload.get("blocks") if isinstance(message_payload, dict) else None
-    if not isinstance(blocks, list):
-        latest_message = await client.get_message(
-            feedback_context.channel_id,
-            feedback_context.message_ts,
-        )
-        if latest_message is None:
-            return
-        message_text = str(latest_message.get("text") or message_text or "Catch Up")
-        blocks = latest_message.get("blocks")
-
-    if not isinstance(blocks, list):
-        return
-
-    updated_blocks = _strip_feedback_action_blocks(blocks)
-    if updated_blocks == blocks:
-        return
-
-    try:
-        await client.update_message(
-            channel=feedback_context.channel_id,
-            ts=feedback_context.message_ts,
-            text=message_text or "Catch Up",
-            blocks=updated_blocks,
-        )
-    except Exception:
-        logger.warning(
-            "slack_feedback_button_cleanup_failed",
-            team_id=feedback_context.team_id,
-            channel_id=feedback_context.channel_id,
-            message_ts=feedback_context.message_ts,
-            exc_info=True,
-        )
-
-
 async def _post_feedback_signup_prompt(
     request: SlackWebhookRequest,
     *,
@@ -482,37 +420,6 @@ def _build_slack_client_sync(team_id: str) -> SlackApiClientWrapper | None:
         if token is None:
             return None
         return SlackApiClientWrapper(token.bot_access_token, team_id)
-
-
-def _strip_feedback_action_blocks(blocks: list[Any]) -> list[dict[str, Any]]:
-    filtered_blocks: list[dict[str, Any]] = []
-    for block in blocks:
-        if not isinstance(block, dict):
-            continue
-        if block.get("type") != "actions":
-            filtered_blocks.append(block)
-            continue
-
-        elements = block.get("elements")
-        if not isinstance(elements, list):
-            filtered_blocks.append(block)
-            continue
-
-        filtered_elements = [
-            element
-            for element in elements
-            if not (
-                isinstance(element, dict)
-                and str(element.get("action_id") or "").strip() in SUPPORTED_FEEDBACK_ACTION_IDS
-            )
-        ]
-        if not filtered_elements:
-            continue
-
-        next_block = dict(block)
-        next_block["elements"] = filtered_elements
-        filtered_blocks.append(next_block)
-    return filtered_blocks
 
 def _read_nested_str(payload: dict[str, Any], *keys: str) -> str:
     current: Any = payload
