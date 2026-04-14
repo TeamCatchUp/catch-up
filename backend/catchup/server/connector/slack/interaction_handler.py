@@ -58,6 +58,8 @@ from catchup.server.connector.slack.schemas import SlackWebhookRequest
 
 logger = structlog.get_logger(__name__)
 
+SLACK_MESSAGE_BLOCK_LIMIT = 50
+
 
 @dataclass(slots=True)
 class SlackFeedbackSubmissionTarget:
@@ -612,14 +614,7 @@ async def _mark_feedback_message_as_inaccurate(
     client: SlackApiClientWrapper,
     feedback_context: SlackFeedbackContext,
 ) -> FeedbackProcessResult:
-    latest_message = await client.get_message(
-        feedback_context.channel_id,
-        feedback_context.message_ts,
-    )
-    if latest_message is None:
-        return FeedbackProcessResult.ANSWER_NOT_FOUND
-
-    blocks = latest_message.get("blocks")
+    blocks = feedback_context.message_blocks
     if not isinstance(blocks, list):
         return FeedbackProcessResult.ANSWER_NOT_FOUND
 
@@ -628,7 +623,7 @@ async def _mark_feedback_message_as_inaccurate(
         await client.update_message(
             channel=feedback_context.channel_id,
             ts=feedback_context.message_ts,
-            text=str(latest_message.get("text") or "Catch Up"),
+            text=feedback_context.message_text or "Catch Up",
             blocks=updated_blocks,
         )
     except Exception:
@@ -650,7 +645,13 @@ def _prepend_warning_banner(blocks: list[Any]) -> list[dict[str, Any]]:
         if isinstance(block, dict)
         and str(block.get("block_id") or "").strip() != WARNING_BANNER_BLOCK_ID
     ]
-    return [build_warning_banner_block(), *updated_blocks]
+    return _fit_warning_banner_blocks([build_warning_banner_block(), *updated_blocks])
+
+
+def _fit_warning_banner_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if len(blocks) <= SLACK_MESSAGE_BLOCK_LIMIT:
+        return blocks
+    return blocks[:SLACK_MESSAGE_BLOCK_LIMIT]
 
 
 def _resolve_feedback_submission_target(
