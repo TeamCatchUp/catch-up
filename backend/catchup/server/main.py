@@ -137,7 +137,8 @@ async def lifespan(app: FastAPI):
         ).get_embedder()
         pgvector_repo = get_pgvector_repository(embeddings)  # Ingestion
         await pgvector_repo.initialize(ensure_pg_indices)
-        asyncio.create_task(ensure_vector_index())
+        if settings.PGVECTOR_HNSW_INDEX_ENABLED:
+            asyncio.create_task(ensure_vector_index())
         logger.info(
             "pgvector_repository_initialized",
             result="success",
@@ -189,6 +190,7 @@ async def lifespan(app: FastAPI):
         )
         rag_executors.init(
             chat_thread_pool_size=settings.RAG_CHAT_THREAD_POOL_SIZE,
+            bedrock_rerank_size=settings.RAG_BEDROCK_RERANK_THREAD_POOL_SIZE,
         )
     except:
         # TODO: emit_audit_event()

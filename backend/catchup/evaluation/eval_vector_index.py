@@ -50,7 +50,7 @@ def embed_query(embedder, query: str) -> list[float]:
 
 
 def run_similarity_search(
-    conn: psycopg.AsyncConnection,
+    conn: psycopg.Connection,
     embedding: list[float],
     k: int,
     *,

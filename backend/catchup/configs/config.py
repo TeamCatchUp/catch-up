@@ -118,7 +118,8 @@ class Settings(BaseSettings):
     AWS_BEDROCK_SMALL_MODEL_SEMA_VALUE: int = 10
     AWS_BEDROCK_LARGE_MODEL_SEMA_VALUE: int = 10
     AWS_BEDROCK_RERANK_SEMA_VALUE: int = 10
-    RAG_CHAT_THREAD_POOL_SIZE: int = 10  # chat 전용 thread pool (sync worker의 기본 executor와 격리)
+    RAG_CHAT_THREAD_POOL_SIZE: int = 10          # chat 전용 thread pool (sync worker의 기본 executor와 격리)
+    RAG_BEDROCK_RERANK_THREAD_POOL_SIZE: int = 3  # rerank 전용 thread pool (Bedrock API 동시 호출 수 제한)
 
     # Cohere (native)
     COHERE_API_KEY: str
@@ -187,6 +188,7 @@ class Settings(BaseSettings):
     # PGVector Settings
     PGVECTOR_COLLECTION_NAME: str = "vectorstore"  # 통합 Collection (Jira, Slack, GitHub 등)
     PGVECTOR_EMBEDDING_DIMENSIONS: int = 1536  # Cohere embed-v4.0
+    PGVECTOR_HNSW_INDEX_ENABLED: bool = False  # HNSW 인덱스 활성화 여부 (메모리 비용 및 고객사 RDS 호환성 협의 전까지 비활성화)
 
     # Embedding Settings (Bedrock Codere Embed 4)
     EMBEDDING_MAX_CONCURRENCY: int = 5  # 동시 Embedding API 호출 수
