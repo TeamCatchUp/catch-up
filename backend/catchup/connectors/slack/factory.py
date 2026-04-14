@@ -14,12 +14,14 @@ from catchup.components.embedder.constants import EmbeddingProvider
 from catchup.components.embedder.factory import get_embedding_service
 from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.connectors.slack.auth import get_slack_oauth_service
-from catchup.connectors.slack.client import SlackConnectorApiError, SlackRateLimitError
+from catchup.connectors.slack.client import SlackConnectorApiError
+from catchup.connectors.slack.client import SlackRateLimitError
 from catchup.connectors.slack.ingestion_service import SlackIngestionService
 from catchup.connectors.slack.metadata_service import SlackMetadataService
 from catchup.db.engine import SessionLocal
 from catchup.db.slack import oauth_repository as slack_crud
-from catchup.sync.common.exceptions import SyncConnectorException, SyncInternalException
+from catchup.sync.common.exceptions import SyncConnectorException
+from catchup.sync.common.exceptions import SyncInternalException
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +33,10 @@ def _load_token_db(team_id: str):
 
 async def _resolve_access_token(
     team_id: str,
+    token_record=None,
 ) -> str:
-    token_record = await run_in_threadpool(_load_token_db, team_id)
+    if token_record is None:
+        token_record = await run_in_threadpool(_load_token_db, team_id)
     if not token_record:
         raise SyncConnectorException(
             f"Slack 연결을 찾을 수 없습니다: {team_id}",
@@ -81,7 +85,14 @@ async def _resolve_access_token(
 async def create_slack_ingestion_service(
     team_id: str,
 ) -> SlackIngestionService:
-    access_token = await _resolve_access_token(team_id)
+    token_record = await run_in_threadpool(_load_token_db, team_id)
+    if not token_record:
+        raise SyncConnectorException(
+            f"Slack 연결을 찾을 수 없습니다: {team_id}",
+            metadata={"team_id": team_id},
+        )
+
+    access_token = await _resolve_access_token(team_id, token_record=token_record)
 
     try:
         repository = get_pgvector_repository(
@@ -93,6 +104,7 @@ async def create_slack_ingestion_service(
             repository=repository,
             team_id=team_id,
             access_token=access_token,
+            bot_user_id=token_record.bot_user_id,
         )
         await service.initialize()
         return service
