@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import Any
 
 import structlog
 from fastapi.concurrency import run_in_threadpool
 
-from catchup.chat.chat_room import process_answer_feedback
-from catchup.chat.exceptions import FeedbackImmutableError
 from catchup.chat.exceptions import LikedWithNegativeFeedbackError
+from catchup.chat.integrations.slack_app_mention import UNMAPPED_USER_MESSAGE
 from catchup.chat.schemas import FeedbackRequest
 from catchup.configs.config import settings
 from catchup.connectors.slack.client import SlackApiClientWrapper
-from catchup.db.chat_room import get_chat_room
+from catchup.db.chat_room import get_chat_room_by_session_id
 from catchup.db.chat_room import get_message
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
@@ -33,6 +33,7 @@ from catchup.server.connector.slack.feedback_actions import FeedbackProcessResul
 from catchup.server.connector.slack.feedback_actions import SlackFeedbackActionPayload
 from catchup.server.connector.slack.feedback_actions import SlackFeedbackContext
 from catchup.server.connector.slack.feedback_actions import SlackFeedbackModalContext
+from catchup.server.connector.slack.feedback_actions import build_signup_prompt_blocks
 from catchup.server.connector.slack.feedback_actions import (
     parse_feedback_action_payload,
 )
@@ -44,6 +45,12 @@ from catchup.server.connector.slack.feedback_actions import (
 from catchup.server.connector.slack.schemas import SlackWebhookRequest
 
 logger = structlog.get_logger(__name__)
+
+
+@dataclass(slots=True)
+class SlackFeedbackSubmissionTarget:
+    catchup_user_id: int
+    message: Any
 
 
 async def handle_block_actions(
@@ -70,9 +77,10 @@ async def handle_block_actions(
             action_payload,
         )
         if preflight_result is not FeedbackProcessResult.READY:
-            await _post_feedback_notice(
+            await _handle_feedback_result(
                 request,
-                _feedback_notice_message(preflight_result, NOT_HELPFUL_ACTION_ID),
+                preflight_result,
+                NOT_HELPFUL_ACTION_ID,
             )
             return {}
         handled = await _open_not_helpful_modal_if_possible(request, action_payload)
@@ -132,24 +140,27 @@ def _process_feedback_sync(
     reasons: list[str] | None,
     comment: str | None,
 ) -> FeedbackProcessResult:
-    preflight_result = _preflight_feedback_sync(slack_user_id, payload)
-    if preflight_result is not FeedbackProcessResult.READY:
-        return preflight_result
-
     body = FeedbackRequest(
         is_liked=payload.is_liked,
         reasons=reasons,
         comment=comment,
     )
-    try:
-        updated_message = process_answer_feedback(
-            message_id=payload.message_id,
-            body=body,
+    with SessionLocal() as db:
+        submission_target = _resolve_feedback_submission_target(
+            db=db,
+            slack_user_id=slack_user_id,
+            payload=payload,
         )
-    except FeedbackImmutableError:
-        return FeedbackProcessResult.ALREADY_SUBMITTED
-    except LikedWithNegativeFeedbackError:
-        return FeedbackProcessResult.INVALID
+        if isinstance(submission_target, FeedbackProcessResult):
+            return submission_target
+        try:
+            updated_message = _save_feedback_submission(
+                db=db,
+                submission_target=submission_target,
+                body=body,
+            )
+        except LikedWithNegativeFeedbackError:
+            return FeedbackProcessResult.INVALID
 
     if settings.ENABLE_LANGFUSE:
         trace_id = getattr(updated_message, "trace_id", None)
@@ -169,31 +180,13 @@ def _preflight_feedback_sync(
     payload: SlackFeedbackActionPayload,
 ) -> FeedbackProcessResult:
     with SessionLocal() as db:
-        user_id = find_user_id_by_source_mapping(
-            db,
-            source_type=SourceType.SLACK,
-            external_user_identifier=slack_user_id,
-        )
-        if user_id is None:
-            return FeedbackProcessResult.NOT_FOUND
-
-        room = get_chat_room(
+        result = _resolve_feedback_submission_target(
             db=db,
-            session_id=payload.session_id,
-            user_id=user_id,
+            slack_user_id=slack_user_id,
+            payload=payload,
         )
-        if room is None:
-            return FeedbackProcessResult.NOT_FOUND
-
-        message = get_message(
-            db=db,
-            room_id=room.id,
-            message_id=payload.message_id,
-        )
-        if message is None:
-            return FeedbackProcessResult.NOT_FOUND
-        if message.is_liked is not None:
-            return FeedbackProcessResult.ALREADY_SUBMITTED
+        if isinstance(result, FeedbackProcessResult):
+            return result
     return FeedbackProcessResult.READY
 
 
@@ -204,6 +197,12 @@ async def _handle_feedback_result(
     *,
     fallback_context: SlackFeedbackContext | None = None,
 ) -> None:
+    if feedback_result is FeedbackProcessResult.NOT_REGISTERED:
+        await _post_feedback_signup_prompt(
+            request,
+            fallback_context=fallback_context,
+        )
+        return
     if feedback_result in {
         FeedbackProcessResult.SUCCESS,
         FeedbackProcessResult.ALREADY_SUBMITTED,
@@ -407,6 +406,41 @@ async def _remove_feedback_buttons_if_possible(
         )
 
 
+async def _post_feedback_signup_prompt(
+    request: SlackWebhookRequest,
+    *,
+    fallback_context: SlackFeedbackContext | None = None,
+) -> None:
+    feedback_context = resolve_feedback_context(
+        team_id=request.team_id,
+        payload=request.event,
+        fallback=fallback_context,
+    )
+    if feedback_context is None or not feedback_context.slack_user_id:
+        return
+
+    client = await run_in_threadpool(_build_slack_client_sync, feedback_context.team_id)
+    if client is None:
+        return
+
+    try:
+        await client.post_ephemeral(
+            channel=feedback_context.channel_id,
+            user=feedback_context.slack_user_id,
+            thread_ts=feedback_context.thread_ts,
+            text=UNMAPPED_USER_MESSAGE,
+            blocks=build_signup_prompt_blocks(UNMAPPED_USER_MESSAGE),
+        )
+    except Exception:
+        logger.warning(
+            "slack_feedback_signup_prompt_failed",
+            team_id=feedback_context.team_id,
+            channel_id=feedback_context.channel_id,
+            slack_user_id=feedback_context.slack_user_id,
+            exc_info=True,
+        )
+
+
 async def _post_feedback_notice(
     request: SlackWebhookRequest,
     text: str,
@@ -501,7 +535,99 @@ def _feedback_notice_message(feedback_result: FeedbackProcessResult, action_id: 
     if feedback_result is FeedbackProcessResult.SUCCESS:
         return _success_message_for_action(action_id)
     if feedback_result is FeedbackProcessResult.ALREADY_SUBMITTED:
-        return "이미 피드백이 제출된 답변이에요."
+        return "이미 이 답변에 피드백을 남겼어요."
     if feedback_result is FeedbackProcessResult.INVALID:
         return "피드백을 저장하지 못했어요."
-    return "접근 권한이 없거나 답변을 찾지 못했어요."
+    if feedback_result is FeedbackProcessResult.NOT_REGISTERED:
+        return UNMAPPED_USER_MESSAGE
+    return "피드백 대상 답변을 찾지 못했어요."
+
+
+def _resolve_feedback_submission_target(
+    *,
+    db: Any,
+    slack_user_id: str,
+    payload: SlackFeedbackActionPayload,
+) -> SlackFeedbackSubmissionTarget | FeedbackProcessResult:
+    catchup_user_id = find_user_id_by_source_mapping(
+        db,
+        source_type=SourceType.SLACK,
+        external_user_identifier=slack_user_id,
+    )
+    if catchup_user_id is None:
+        return FeedbackProcessResult.NOT_REGISTERED
+
+    room = get_chat_room_by_session_id(
+        db=db,
+        session_id=payload.session_id,
+    )
+    if room is None:
+        return FeedbackProcessResult.ANSWER_NOT_FOUND
+
+    message = get_message(
+        db=db,
+        room_id=room.id,
+        message_id=payload.message_id,
+    )
+    if message is None:
+        return FeedbackProcessResult.ANSWER_NOT_FOUND
+
+    if _feedback_already_submitted(message):
+        return FeedbackProcessResult.ALREADY_SUBMITTED
+
+    return SlackFeedbackSubmissionTarget(
+        catchup_user_id=catchup_user_id,
+        message=message,
+    )
+
+
+def _save_feedback_submission(
+    *,
+    db: Any,
+    submission_target: SlackFeedbackSubmissionTarget,
+    body: FeedbackRequest,
+) -> Any:
+    if body.is_liked is True and (body.reasons or body.comment):
+        raise LikedWithNegativeFeedbackError("긍정 피드백에 부정 피드백 사유를 포함할 수 없습니다.")
+
+    message = submission_target.message
+    message.is_liked = body.is_liked
+    if body.is_liked is False:
+        message.feedback_reasons = body.reasons
+        message.feedback_comment = body.comment
+    else:
+        message.feedback_reasons = []
+        message.feedback_comment = None
+
+    _set_feedback_user_id(
+        message=message,
+        catchup_user_id=submission_target.catchup_user_id,
+    )
+    db.commit()
+    db.refresh(message)
+    return message
+
+
+def _feedback_already_submitted(message: Any) -> bool:
+    if getattr(message, "is_liked", None) is not None:
+        return True
+    return _read_feedback_user_id(message) is not None
+
+
+def _read_feedback_user_id(message: Any) -> int | None:
+    raw_value = getattr(message, "feedback_user", getattr(message, "feeback_user", None))
+    try:
+        return int(raw_value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _set_feedback_user_id(
+    *,
+    message: Any,
+    catchup_user_id: int,
+) -> None:
+    if hasattr(message, "feedback_user"):
+        message.feedback_user = str(catchup_user_id)
+        return
+    setattr(message, "feeback_user", str(catchup_user_id))
