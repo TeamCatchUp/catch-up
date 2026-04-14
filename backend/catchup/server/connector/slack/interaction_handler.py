@@ -33,6 +33,9 @@ from catchup.server.connector.slack.feedback_actions import (
     SUPPORTED_FEEDBACK_ACTION_IDS,
 )
 from catchup.server.connector.slack.feedback_actions import WARNING_BANNER_BLOCK_ID
+from catchup.server.connector.slack.feedback_actions import (
+    WARNING_COMMENT_QUOTE_BLOCK_ID,
+)
 from catchup.server.connector.slack.feedback_actions import WARNING_DIVIDER_BLOCK_ID
 from catchup.server.connector.slack.feedback_actions import FeedbackProcessResult
 from catchup.server.connector.slack.feedback_actions import SlackFeedbackActionPayload
@@ -40,6 +43,9 @@ from catchup.server.connector.slack.feedback_actions import SlackFeedbackContext
 from catchup.server.connector.slack.feedback_actions import SlackFeedbackDeletePolicy
 from catchup.server.connector.slack.feedback_actions import SlackFeedbackModalContext
 from catchup.server.connector.slack.feedback_actions import build_delete_policy_options
+from catchup.server.connector.slack.feedback_actions import (
+    build_feedback_comment_quote_block,
+)
 from catchup.server.connector.slack.feedback_actions import build_feedback_notice_text
 from catchup.server.connector.slack.feedback_actions import (
     build_feedback_reason_options,
@@ -349,7 +355,7 @@ def _build_not_helpful_modal(
             "optional": True,
             "label": {
                 "type": "plain_text",
-                "text": "추가로 전할 내용을 적어주세요",
+                "text": "피드백 내용을 구체적으로 알려주세요",
             },
             "element": {
                 "type": "plain_text_input",
@@ -357,7 +363,7 @@ def _build_not_helpful_modal(
                 "multiline": True,
                 "placeholder": {
                     "type": "plain_text",
-                    "text": "선택 사항이에요. 비워둬도 제출할 수 있어요.",
+                    "text": "남겨주신 코멘트는 CatchUp이 남긴 답변에 함께 표시돼요",
                 },
                 **_build_initial_value_field(comment),
             },
@@ -656,6 +662,7 @@ async def _apply_not_helpful_message_effect(
         return await _mark_feedback_message_as_inaccurate(
             client=client,
             feedback_context=feedback_context,
+            submission=submission,
         )
     return FeedbackProcessResult.SUCCESS
 
@@ -686,6 +693,7 @@ async def _mark_feedback_message_as_inaccurate(
     *,
     client: SlackApiClientWrapper,
     feedback_context: SlackFeedbackContext,
+    submission: SlackNotHelpfulSubmission,
 ) -> FeedbackProcessResult:
     latest_message = await client.get_message(
         feedback_context.channel_id,
@@ -699,7 +707,11 @@ async def _mark_feedback_message_as_inaccurate(
     if not isinstance(blocks, list):
         return FeedbackProcessResult.ANSWER_NOT_FOUND
 
-    updated_blocks = _prepend_warning_banner(blocks)
+    updated_blocks = _prepend_warning_banner(
+        blocks,
+        slack_user_id=feedback_context.slack_user_id,
+        comment=submission.comment,
+    )
     try:
         await client.update_message(
             channel=feedback_context.channel_id,
@@ -719,13 +731,22 @@ async def _mark_feedback_message_as_inaccurate(
     return FeedbackProcessResult.SUCCESS
 
 
-def _prepend_warning_banner(blocks: list[Any]) -> list[dict[str, Any]]:
+def _prepend_warning_banner(
+    blocks: list[Any],
+    *,
+    slack_user_id: str | None = None,
+    comment: str | None = None,
+) -> list[dict[str, Any]]:
     updated_blocks = [
         deepcopy(block)
         for block in blocks
         if isinstance(block, dict)
         and str(block.get("block_id") or "").strip()
-        not in {WARNING_BANNER_BLOCK_ID, WARNING_DIVIDER_BLOCK_ID}
+        not in {
+            WARNING_BANNER_BLOCK_ID,
+            WARNING_DIVIDER_BLOCK_ID,
+            WARNING_COMMENT_QUOTE_BLOCK_ID,
+        }
     ]
     if not updated_blocks:
         return _fit_warning_banner_blocks(
@@ -733,14 +754,20 @@ def _prepend_warning_banner(blocks: list[Any]) -> list[dict[str, Any]]:
         )
 
     first_block, *remaining_blocks = updated_blocks
-    return _fit_warning_banner_blocks(
-        [
-            first_block,
-            build_warning_banner_block(),
-            build_warning_divider_block(),
-            *remaining_blocks,
-        ]
-    )
+    next_blocks = [
+        first_block,
+        build_warning_banner_block(),
+        build_warning_divider_block(),
+        *remaining_blocks,
+    ]
+    if slack_user_id and comment:
+        next_blocks.append(
+            build_feedback_comment_quote_block(
+                slack_user_id=slack_user_id,
+                comment=comment,
+            )
+        )
+    return _fit_warning_banner_blocks(next_blocks)
 
 
 def _fit_warning_banner_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
