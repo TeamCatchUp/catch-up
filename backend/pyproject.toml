@@ -59,6 +59,10 @@ dev = [
     "ruff",
 ]
 
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+testpaths = ["catchup/tests"]
+
 [tool.uv]
 package = false
 
