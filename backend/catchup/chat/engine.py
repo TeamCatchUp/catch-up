@@ -9,7 +9,7 @@ import structlog
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
-from langgraph.pregel.types import StateSnapshot
+from langgraph.types import StateSnapshot
 
 from catchup.audit.actions import ChatAction
 from catchup.audit.base import AuditLevel

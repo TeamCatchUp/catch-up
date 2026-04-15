@@ -32,8 +32,8 @@ class VectorDbSearchQuery(BaseSearchQuery):
 class VectorDbSearchPlan(BaseModel):
     queries: list[VectorDbSearchQuery] = Field(
         default=[],
-        min_items=0,
-        max_items=3,
+        min_length=0,
+        max_length=3,
         description="사용자의 의도를 분석하여 생성된 독립적인 검색 쿼리 목록",
     )
 
@@ -45,8 +45,8 @@ class GraphDbSearchQuery(BaseSearchQuery):
 class GraphDbSearchPlan(BaseModel):
     cyphers: list[GraphDbSearchQuery] = Field(
         default=[],
-        min_items=0,
-        max_items=3,
+        min_length=0,
+        max_length=3,
         description="사용자의 의도를 분석하여 생성된 독립적인 Cypher 목록",
     )
 
