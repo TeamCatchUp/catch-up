@@ -1,12 +1,16 @@
-from abc import ABC, abstractmethod
-from langchain_core.messages import trim_messages
-from langchain_core.language_models import BaseChatModel
-from langchain_openai import ChatOpenAI
-from langchain_aws import ChatBedrock
+from abc import ABC
+from abc import abstractmethod
+
 from botocore.config import Config
+from langchain_aws import ChatBedrock
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import trim_messages
+from langchain_openai import ChatOpenAI
 
 from catchup.components.llm.constants import ModelCapacity
+from catchup.components.llm.isolated_chat_bedrock import IsolatedChatBedrock
 from catchup.configs.config import settings
+
 
 class BaseLlmService(ABC):
     def __init__(
@@ -69,6 +73,17 @@ class OpenAiLlmService(BaseLlmService):
 
 
 class AwsBedrockLlmService(BaseLlmService):
+    def __init__(
+        self,
+        model_capacity: ModelCapacity,
+        streaming: bool = True,
+        isolated: bool = False,
+    ):
+        # isolated=True면 rag_executors.llm 전용 pool 사용 (chat 파이프라인용)
+        # isolated=False면 default pool 사용 (ingestion 등 일반 용도)
+        self._isolated = isolated
+        super().__init__(model_capacity, streaming)
+
     def _create_llm(
             self,
             streaming: bool
@@ -89,7 +104,8 @@ class AwsBedrockLlmService(BaseLlmService):
             retries = {"max_attempts": 5, "mode": "adaptive"},
         )
         
-        return ChatBedrock(
+        cls = IsolatedChatBedrock if self._isolated else ChatBedrock
+        return cls(
             model_id=model_id,
             provider=provider,
             region_name=settings.AWS_REGION,

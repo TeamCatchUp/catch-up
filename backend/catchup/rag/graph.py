@@ -36,25 +36,28 @@ def get_compiled_graph(
     checkpointer: Optional[BaseCheckpointSaver] = None
 ):
     
-    # 분석용 (small)
+    # 분석용 (small) — ingestion default pool과 격리
     analysis_llm = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
-        streaming=False
+        streaming=False,
+        isolated=True,
     ).get_llm()
-    
-    # 일상 대화용 (small)
+
+    # 일상 대화용 (small) — ingestion default pool과 격리
     chitchat_llm = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
-        streaming=True
+        streaming=True,
+        isolated=True,
     ).get_llm()
 
-    # 최종 답변 생성용 (large)
+    # 최종 답변 생성용 (large) — ingestion default pool과 격리
     final_llm = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
-        streaming=True
+        streaming=True,
+        isolated=True,
     ).get_llm()
     
     # Vector DB 서비스
