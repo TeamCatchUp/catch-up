@@ -9,7 +9,7 @@ import Profile from '@/public/icons/icon/profile.svg';
 import UnfoldMore from '@/public/icons/icon/unfold_more.svg';
 import { UserMenuContent } from '@/shared/components/layout/sideNavBar/modal/UserModal';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { useUserStore } from '@/shared/store/userStore';
 import { cn } from '@/shared/utils/cn';
 
@@ -36,7 +36,12 @@ export default function SideNavUser({ isOpen }: SideNavUserProps) {
                 )}
               >
                 <div className={cn('flex gap-4', isOpen ? 'mt-auto' : '')}>
-                  <Profile className="border-edge-assistive h-10 w-10 rounded-xl border-[0.5px]" />
+                  <Profile
+                    className={cn(
+                      'border-edge-neutral h-10 w-10 rounded-xl border',
+                      !isOpen && 'hover:shadow-[0_0_0_5px_var(--fill-interaction-hover)]',
+                    )}
+                  />
                   {isOpen && (
                     <div className="relative top-px max-w-31 text-left">
                       <div className="text-heading-small text-content-normal truncate">{user?.name ?? '이름없음'}</div>

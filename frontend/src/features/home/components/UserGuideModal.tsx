@@ -27,7 +27,7 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
 
   const handleNavigateIntegration = () => {
     onDismiss();
-    router.push('/mypage/integrations');
+    router.push('/');
   };
 
   const changeStep = (next: number) => {
@@ -54,8 +54,8 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
     <Dialog open onOpenChange={() => {}}>
       <DialogPortal>
         <DialogOverlay />
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="shadow-modal border-edge-strong bg-fill-normal flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border p-6">
+        <div className="fixed inset-0 z-modal flex items-center justify-center">
+          <div className="shadow-modal border-edge-strong bg-fill-normal flex h-135.75 w-108.75 flex-col overflow-clip rounded-2xl border p-6">
             {/* 콘텐츠 영역 */}
             <div
               className={`flex min-h-0 flex-1 flex-col gap-5 overflow-hidden transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}
@@ -108,7 +108,7 @@ export default function UserGuideModal({ onDismiss }: UserGuideModalProps) {
                 {Array.from({ length: USER_GUIDE_TOTAL_STEPS }).map((_, i) => (
                   <div
                     key={i}
-                    className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-fill-interaction-hover'}`}
+                    className={`size-2.5 rounded-full ${i === step ? 'bg-edge-primary' : 'bg-fill-interaction-hover'}`}
                   />
                 ))}
               </div>

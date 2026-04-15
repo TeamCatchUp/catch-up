@@ -4,259 +4,14 @@
 @import './font.css';
 @import './button.css';
 @import './color.css';
+@import './semantic.css';
 @import './radius.css';
 @import './shadow.css';
+@import './z-index.css';
+@import './animation.css';
 @import './markdown.css';
 
 @layer base {
-  :root {
-    /* shadcn semantic tokens → CatchUp design tokens */
-    --background: var(--color-white);
-    --foreground: var(--color-gray-90);
-    --card: var(--color-white);
-    --card-foreground: var(--color-gray-90);
-    --popover: var(--color-white);
-    --popover-foreground: var(--color-gray-90);
-    --primary: var(--color-blue-50);
-    --primary-foreground: var(--color-white);
-    --secondary: var(--color-neutral-2);
-    --secondary-foreground: var(--color-gray-90);
-    --muted: var(--color-neutral-2);
-    --muted-foreground: var(--color-gray-50);
-    --accent: var(--color-neutral-2);
-    --accent-foreground: var(--color-gray-90);
-    --destructive: var(--color-red-50);
-    --destructive-foreground: var(--color-white);
-    --border: var(--color-neutral-3);
-    --input: var(--color-neutral-3);
-    --ring: var(--color-blue-50);
-    --radius: 0.5rem;
-
-    /* shadcn chart tokens */
-    --chart-1: var(--color-blue-30);
-    --chart-2: var(--color-pink-40);
-    --chart-3: var(--color-blue-50);
-    --chart-4: var(--color-green-60);
-    --chart-5: var(--color-red-50);
-
-    /* === Figma 시맨틱 토큰 (Light) === */
-
-    /* Fill */
-    --fill-normal: #ffffff;
-    --fill-strong: #f7f7f8;
-    --fill-primary: #0066ff;
-    --fill-primary-assistive: #f7fbff;
-    --fill-interaction-hover: #f4f4f5;
-    --fill-interaction-pressed: #eaebec;
-    --fill-interaction-pressed-hover: #e1e2e4;
-    --fill-interaction-inactive: #f7f7f8;
-    --fill-interaction-disable: #eaebec;
-    --fill-primary-interaction-hover: #005eeb;
-    --fill-primary-interaction-pressed: #0054d1;
-    --fill-primary-interaction-inactive: #c9defe;
-    --fill-primary-interaction-disable: #e1e2e4;
-    --fill-primary-interaction-hover-assistive: #eaf2fe;
-    --fill-primary-normal-neutral: #eaf2fe;
-
-    /* Text */
-    --text-strong: #1e2124;
-    --text-normal: #33363d;
-    --text-neutral: #464c53;
-    --text-alternative: #6d7882;
-    --text-assistive: #b1b8be;
-    --text-inverse: #ffffff;
-    --text-primary-strong: #003e9c;
-    --text-primary-normal: #005eeb;
-    --text-primary-assistive: #3385ff;
-
-    /* Icon */
-    --icon-strong: #1e2124;
-    --icon-normal: #464c53;
-    --icon-neutral: #6d7882;
-    --icon-alternative: #b1b8be;
-    --icon-assistive: #cdd1d5;
-    --icon-inverse: #ffffff;
-    --icon-primary-strong: #0054d1;
-    --icon-primary-normal: #0066ff;
-    --icon-primary-assistive: #3385ff;
-
-    /* Line */
-    --line-strong: #dbdcdf;
-    --line-normal: #e1e2e4;
-    --line-neutral: #eaebec;
-    --line-assistive: #f4f4f5;
-    --line-inverse: #ffffff;
-    --line-primary-strong: #1a75ff;
-    --line-primary-normal: #69a5ff;
-
-    /* Background */
-    --bg-normal: #ffffff;
-    --bg-alternative: #f7f7f8;
-
-    /* Accent */
-    --accent-green: #00985a;
-    --accent-green-neutral: #d9f7eb;
-    --accent-green-lighten: #e6faf2;
-    --accent-red-orange: #ff5e00;
-    --accent-red-orange-neutral: #fed9c4;
-    --accent-red-orange-lighten: #feeee5;
-    --accent-violet: #6541f2;
-    --accent-violet-lighten: #f0ecfe;
-    --accent-violet-lighter: #fbfaff;
-    --accent-light-blue: #00aeff;
-    --accent-light-blue-lighten: #e5f6fe;
-    --accent-pink: #f04588;
-    --accent-pink-lighten: #fff4f8;
-    --accent-red-lighten: #fffafa;
-    --accent-information: #0b78cb;
-    --accent-information-lighten: #e7f4fe;
-    --accent-black: #171719;
-    --accent-black-lighten: #292a2d;
-
-    /* Status */
-    --status-positive: #00a260;
-    --status-cautionary: #ff9200;
-    --status-destructive: #ff4242;
-
-    /* Dim/Alpha */
-    --dim-black-75: rgba(0, 0, 0, 0.75);
-    --dim-black-50: rgba(0, 0, 0, 0.5);
-    --dim-black-25: rgba(0, 0, 0, 0.25);
-    --dim-black-10: rgba(0, 0, 0, 0.1);
-    --dim-black-0: rgba(0, 0, 0, 0);
-    --dim-white-75: rgba(255, 255, 255, 0.75);
-    --dim-white-50: rgba(255, 255, 255, 0.5);
-    --dim-white-25: rgba(255, 255, 255, 0.25);
-    --dim-white-10: rgba(255, 255, 255, 0.1);
-    --dim-white-0: rgba(255, 255, 255, 0);
-
-    /* Material */
-    --material-scrim: rgba(255, 255, 255, 0.5);
-
-    /* Shadow */
-    --rag-bar-shadow: 1px 1px 30px 0 rgba(181, 199, 228, 0.4);
-  }
-
-  .dark {
-    /* === shadcn 토큰 다크 오버라이드 === */
-    --background: #131416;
-    --foreground: #f4f5f6;
-    --card: #1e2124;
-    --card-foreground: #f4f5f6;
-    --popover: #1e2124;
-    --popover-foreground: #f4f5f6;
-    --primary: #3385ff;
-    --primary-foreground: #ffffff;
-    --secondary: #292a2d;
-    --secondary-foreground: #f4f5f6;
-    --muted: #1b1c1e;
-    --muted-foreground: #b1b8be;
-    --accent: #292a2d;
-    --accent-foreground: #f4f5f6;
-    --destructive: #ff6363;
-    --destructive-foreground: #ffffff;
-    --border: #37383c;
-    --input: #37383c;
-    --ring: #3385ff;
-
-    /* === Figma 시맨틱 토큰 (Dark) === */
-
-    /* Fill */
-    --fill-normal: #1e2124;
-    --fill-strong: #1b1c1e;
-    --fill-primary: #3385ff;
-    --fill-primary-assistive: #001536;
-    --fill-interaction-hover: #292a2d;
-    --fill-interaction-pressed: #37383c;
-    --fill-interaction-pressed-hover: #46474c;
-    --fill-interaction-inactive: #1b1c1e;
-    --fill-interaction-disable: #37383c;
-    --fill-primary-interaction-hover: #0066ff;
-    --fill-primary-interaction-pressed: #005eeb;
-    --fill-primary-interaction-inactive: #46474c;
-    --fill-primary-interaction-disable: #dbdcdf;
-    --fill-primary-interaction-hover-assistive: rgba(0, 41, 102, 0.5);
-    --fill-primary-normal-neutral: #002966;
-
-    /* Text */
-    --text-strong: #ffffff;
-    --text-normal: #f4f5f6;
-    --text-neutral: #e6e8ea;
-    --text-alternative: rgba(230, 232, 234, 0.75);
-    --text-assistive: rgba(177, 184, 190, 0.6);
-    --text-inverse: #1e2124;
-    --text-primary-strong: #69a5ff;
-    --text-primary-normal: #3385ff;
-    --text-primary-assistive: #1a75ff;
-
-    /* Icon */
-    --icon-strong: #e6e8ea;
-    --icon-normal: #cdd1d5;
-    --icon-neutral: #b1b8be;
-    --icon-alternative: #8a949e;
-    --icon-assistive: #464c53;
-    --icon-inverse: #131416;
-    --icon-primary-strong: #9ec5ff;
-    --icon-primary-normal: #3385ff;
-    --icon-primary-assistive: #005eeb;
-
-    /* Line */
-    --line-strong: #5a5c63;
-    --line-normal: #46474c;
-    --line-neutral: #37383c;
-    --line-assistive: #1b1c1e;
-    --line-inverse: #131416;
-    --line-primary-strong: #69a5ff;
-    --line-primary-normal: #3385ff;
-
-    /* Background */
-    --bg-normal: #131416;
-    --bg-alternative: #1b1c1e;
-
-    /* Accent */
-    --accent-green: #00b66c;
-    --accent-green-neutral: #00331d;
-    --accent-green-lighten: #00240c;
-    --accent-red-orange: #ff7b2e;
-    --accent-red-orange-neutral: rgba(89, 33, 0, 0.8);
-    --accent-red-orange-lighten: rgba(54, 30, 0, 0.8);
-    --accent-violet: #b3a1f7;
-    --accent-violet-lighten: #312361;
-    --accent-violet-lighter: #1e163b;
-    --accent-light-blue: #00aeff;
-    --accent-light-blue-lighten: #004261;
-    --accent-pink: #ff6b9e;
-    --accent-pink-lighten: #3b1222;
-    --accent-red-lighten: #3b0101;
-    --accent-information: #205691;
-    --accent-information-lighten: #7abfff;
-    --accent-black: #ffffff;
-    --accent-black-lighten: #f7f7f8;
-
-    /* Status */
-    --status-positive: #00ca78;
-    --status-cautionary: #ffa938;
-    --status-destructive: #ff6363;
-
-    /* Dim/Alpha (black↔white 스왑) */
-    --dim-black-75: rgba(255, 255, 255, 0.75);
-    --dim-black-50: rgba(255, 255, 255, 0.5);
-    --dim-black-25: rgba(255, 255, 255, 0.25);
-    --dim-black-10: rgba(255, 255, 255, 0.1);
-    --dim-black-0: rgba(255, 255, 255, 0);
-    --dim-white-75: rgba(0, 0, 0, 0.75);
-    --dim-white-50: rgba(0, 0, 0, 0.5);
-    --dim-white-25: rgba(0, 0, 0, 0.25);
-    --dim-white-10: rgba(0, 0, 0, 0.1);
-    --dim-white-0: rgba(0, 0, 0, 0);
-
-    /* Material */
-    --material-scrim: rgba(23, 23, 25, 0.5);
-
-    /* Shadow */
-    --rag-bar-shadow: 1px 1px 30px 0 rgba(0, 0, 0, 0.5);
-  }
-
   ::-webkit-scrollbar {
     width: 0px;
     height: 0px;
@@ -270,7 +25,8 @@
     padding: 0;
 
     font-family: Pretendard, Arial, sans-serif;
-    letter-spacing: var(--tracking-tight);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   input,
@@ -280,69 +36,6 @@
 }
 
 @layer utilities {
-  @property --skeleton-border-angle {
-    syntax: '<angle>';
-    inherits: false;
-    initial-value: 0deg;
-  }
-
-  @keyframes panel-slide-down {
-    from {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes skeleton-border-flow {
-    to {
-      --skeleton-border-angle: 360deg;
-    }
-  }
-
-  .skeleton-loading-card {
-    position: relative;
-    isolation: isolate;
-    overflow: hidden;
-    background: #f7fbff;
-    box-shadow:
-      0 4px 4px 0 rgba(157, 142, 252, 0.1),
-      0 2px 10.9px 0 rgba(105, 165, 255, 0.3);
-  }
-
-  .skeleton-loading-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: conic-gradient(
-      from var(--skeleton-border-angle),
-      rgba(30, 105, 255, 0.12) 0deg,
-      rgba(30, 105, 255, 0.92) 52deg,
-      rgba(105, 165, 255, 0.42) 96deg,
-      rgba(157, 142, 252, 0.2) 140deg,
-      rgba(30, 105, 255, 0.12) 220deg,
-      rgba(30, 105, 255, 0.08) 360deg
-    );
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    animation: skeleton-border-flow 3.2s linear infinite;
-    pointer-events: none;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .skeleton-loading-card::before {
-      animation: none;
-    }
-  }
-
   .bg-home-gradient {
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 55%, rgba(241, 244, 250, 0.5) 100%),
@@ -358,13 +51,44 @@
 
   .thin-scrollbar::-webkit-scrollbar {
     width: 8px;
+    height: 8px;
   }
   .thin-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
+    background: var(--color-background-alternative, #f7f7f8);
+    border-radius: 1000px;
+    margin: 2px;
   }
   .thin-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1);
+    background: var(--color-fill-interaction-pressed, #dbdcdf);
     border-radius: 16px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--color-fill-interaction-pressed-hover, #dbdcdf);
+    border-radius: 16px;
+  }
+  .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+    background: var(--dim-black-25, rgba(0, 0, 0, 0.25));
+  }
+
+  .custom-scrollbar-hover-only::-webkit-scrollbar {
+    width: 8px;
+  }
+  .custom-scrollbar-hover-only::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar-hover-only::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 16px;
+  }
+  .custom-scrollbar-hover-only:hover::-webkit-scrollbar-thumb {
+    background: var(--color-fill-interaction-pressed-hover, #dbdcdf);
   }
 
   .bg-rag-github-pr-mcp {
@@ -399,15 +123,20 @@
     background: linear-gradient(180deg, #1e2124 30.97%, #001536 100%);
   }
 
-  .dark .skeleton-loading-card {
-    background: #001536;
-    box-shadow:
-      0 4px 4px 0 rgba(0, 41, 102, 0.15),
-      0 2px 10.9px 0 rgba(51, 133, 255, 0.2);
+  .dark .thin-scrollbar::-webkit-scrollbar-track {
+    background: var(--color-background-alternative);
   }
-
   .dark .thin-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-fill-interaction-pressed);
+  }
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--color-fill-interaction-pressed-hover);
+  }
+  .dark .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+    background: var(--dim-black-25);
+  }
+  .dark .custom-scrollbar-hover-only:hover::-webkit-scrollbar-thumb {
+    background: var(--color-fill-interaction-pressed-hover);
   }
 }
 

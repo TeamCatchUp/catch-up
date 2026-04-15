@@ -4,7 +4,7 @@ import Error from '@/public/icons/icon/error.svg';
 import AnswerActionButtons from './AnswerActionButtons';
 import FeedbackSection from './FeedbackSection';
 
-const AnswerError = ({
+export default function AnswerError({
   icons,
   messageId,
   sessionId,
@@ -12,7 +12,7 @@ const AnswerError = ({
   setFeedbackVisibleMap,
   hasFeedback,
   onFeedbackSubmitted,
-}: ErrorResponseProps) => {
+}: ErrorResponseProps) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-8">
@@ -43,6 +43,4 @@ const AnswerError = ({
       )}
     </div>
   );
-};
-
-export default AnswerError;
+}

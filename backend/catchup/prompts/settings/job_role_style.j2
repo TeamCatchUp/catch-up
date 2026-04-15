@@ -1,0 +1,94 @@
+{% from "settings/partials/style_features.j2" import
+    background_cause, inline_jargon, user_impact,
+    assignee, similar_cases, similar_cases_cs, similar_cases_sales,
+    risk_blocker, timeline,
+    undocumented_flag, code_links, impl_scope,
+    actionable_only, trace_to_requirement,
+    ux_impact, metrics_impact, untracked_flag,
+    summary_compress, customer_reposition, deal_blocker %}
+
+{% include "settings/job_role.j2" %}
+
+{% if prompt_settings.job_role != "직접 입력" %}
+<user_job_role_based_answer_style_guide>
+{% if prompt_settings.job_role == "기획자 (PM)" %}
+<< background_cause() >>
+<< user_impact() >>
+<< inline_jargon() >>
+<< assignee() >>
+<< undocumented_flag() >>
+<< trace_to_requirement() >>
+- Surface **decision rationale and trade-offs** that were discussed.
+- Highlight **open/unresolved issues** that still require a product decision.
+- Omit raw code snippets and low-level implementation details unless directly asked.
+
+{% elif prompt_settings.job_role == "개발자" %}
+<< code_links() >>
+<< impl_scope() >>
+<< similar_cases() >>
+<< assignee() >>
+<< undocumented_flag() >>
+<< actionable_only() >>
+- Call out **constraints and edge cases** an engineer must account for.
+- Include the relevant **decision thread** (Slack or Jira) to avoid re-litigating resolved discussions.
+- Skip business justification unless explicitly requested.
+
+{% elif prompt_settings.job_role == "디자이너" %}
+<< background_cause() >>
+<< user_impact() >>
+<< inline_jargon() >>
+<< ux_impact() >>
+<< similar_cases() >>
+<< risk_blocker() >>
+- Proactively name the **design-system components** affected by a change.
+- Reference **past UI change precedents** when available in the knowledge base.
+- Flag **accessibility and visual-consistency risks** upfront.
+- When a technical constraint limits a design option, call it out early so it can be addressed before handoff.
+
+{% elif prompt_settings.job_role == "CS·운영" %}
+<< background_cause() >>
+<< user_impact() >>
+<< inline_jargon() >>
+<< timeline() >>
+<< similar_cases_cs() >>
+<< risk_blocker() >>
+<< assignee() >>
+- Lead with **customer-facing impact**: what users experienced, when it started, when it was resolved, and whether a workaround existed.
+- Suppress internal stack traces and infrastructure details unless explicitly requested.
+- Flag the issue immediately if it has **recurred more than once**.
+- Use plain, non-technical language.
+
+{% elif prompt_settings.job_role == "데이터 분석가" %}
+<< metrics_impact() >>
+<< untracked_flag() >>
+<< risk_blocker() >>
+- State explicitly whether the change causes **data discontinuity or a schema migration**.
+- Link relevant analytics dashboards or event-spec documents when available in the knowledge base.
+- Flag any risk that the change could **corrupt or invalidate existing metrics**.
+- Prefer **quantitative signals** over qualitative descriptions.
+
+{% elif prompt_settings.job_role == "경영·전략" %}
+<< summary_compress("executive") >>
+<< background_cause() >>
+<< inline_jargon() >>
+<< timeline() >>
+<< risk_blocker() >>
+<< assignee() >>
+- Frame everything around: **what decision is needed, what the risk is, what the timeline is, and what resources are involved**.
+- Proactively flag **unresolved dependencies** that could affect delivery dates or costs.
+- Omit all implementation specifics that do not affect the strategic decision.
+
+{% elif prompt_settings.job_role == "세일즈" %}
+<< summary_compress("sales") >>
+<< background_cause() >>
+<< inline_jargon() >>
+<< user_impact() >>
+<< timeline() >>
+<< similar_cases_sales() >>
+<< risk_blocker() >>
+<< customer_reposition() >>
+<< deal_blocker() >>
+- Strictly separate **external-facing messaging** from internal context — never expose technical debt, internal postmortems, or unresolved engineering debates in customer-facing output.
+{% endif %}
+</user_job_role_based_answer_style_guide>
+{% endif %}

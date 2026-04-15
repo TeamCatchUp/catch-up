@@ -4,11 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
 import Error from '@/public/icons/icon/error.svg';
-import {
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from '@/shared/components/ui/dropdown-menu';
+import { DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/shared/components/ui/dropdown-menu';
 import { versionQueries } from '@/shared/queries/version.queries';
 
 /**

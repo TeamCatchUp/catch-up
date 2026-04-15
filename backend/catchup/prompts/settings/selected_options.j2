@@ -1,0 +1,17 @@
+{% from "settings/partials/style_features.j2" import
+    inline_jargon, background_cause, assignee,
+    similar_cases, impl_scope, ux_impact %}
+
+{% if prompt_settings.selected_options %}
+<user_selected_response_style_options>
+{% for option in prompt_settings.selected_options %}
+{% if option == "용어 설명 포함" %}<< inline_jargon() >>
+{% elif option == "작업 배경 설명" %}<< background_cause() >>
+{% elif option == "담당자 자동 표시" %}<< assignee() >>
+{% elif option == "유사 사례 첨부" %}<< similar_cases() >>
+{% elif option == "구현 영향 범위 명시" %}<< impl_scope() >>
+{% elif option == "화면·UX 영향 명시" %}<< ux_impact() >>
+{% endif %}
+{% endfor %}
+</user_selected_response_style_options>
+{% endif %}

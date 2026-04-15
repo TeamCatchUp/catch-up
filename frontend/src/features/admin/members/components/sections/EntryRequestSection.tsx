@@ -17,10 +17,10 @@ import { cn } from '@/shared/utils/cn';
 import { REJECTION_REASONS, ROLE_BADGE_CLASS, ROLE_LABEL, SORT_OPTIONS } from '../../constants/memberTableConfig';
 import { useDecideRequestMutation } from '../../queries/adminMembers.mutations';
 import { adminMembersQueries } from '../../queries/adminMembers.queries';
-import type { AdminSortKey, EntryRequest, MemberTableRow } from '../../types/adminMember';
+import type { AdminSortKey, EntryRequest, MemberTableRow } from '../../types/adminMemberModel';
 import MemberDetailPanel from '../shared/MemberDetailPanel';
 import MemberTable from '../shared/MemberTable';
-import ReasonPopover from '../shared/ReasonPopover';
+import ReasonDialog from '../shared/ReasonPopover';
 import SectionHeader from '../shared/SectionHeader';
 
 interface EntryRequestSectionProps {
@@ -28,11 +28,12 @@ interface EntryRequestSectionProps {
 }
 
 /** 입장 신청 목록 섹션 */
-const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
+export default function EntryRequestSection({ searchTerm }: EntryRequestSectionProps) {
   const { data: requests = [] } = useQuery(adminMembersQueries.requests());
   const decideMutation = useDecideRequestMutation();
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<AdminSortKey>('newest');
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 
@@ -108,7 +109,7 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
               <Button
                 variant="text-secondary-mono"
                 size="md"
-                className="text-green-40"
+                className="text-status-positive"
                 onClick={() =>
                   handleDecide(
                     filtered.map((r) => r.requestId),
@@ -177,12 +178,12 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
           actionButtons={
             selectedRequest && (
               <>
-                <ReasonPopover
-                  trigger={
-                    <Button variant="box-outline-gray" size="md">
-                      반려
-                    </Button>
-                  }
+                <Button variant="box-outline-gray" size="md" onClick={() => setRejectDialogOpen(true)}>
+                  반려
+                </Button>
+                <ReasonDialog
+                  open={rejectDialogOpen}
+                  onOpenChange={setRejectDialogOpen}
                   title="반려 사유"
                   reasonLabel="반려 사유를 선택해주세요."
                   reasons={REJECTION_REASONS}
@@ -191,7 +192,7 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
                 <Button
                   variant="box-outline-gray"
                   size="md"
-                  className="text-green-40"
+                  className="text-status-positive"
                   onClick={() => handleDecide([selectedRequest.requestId], 'approve')}
                 >
                   승인
@@ -203,6 +204,4 @@ const EntryRequestSection = ({ searchTerm }: EntryRequestSectionProps) => {
       </div>
     </section>
   );
-};
-
-export default EntryRequestSection;
+}

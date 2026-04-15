@@ -25,7 +25,7 @@ const cardData = [
   },
 ];
 
-const HowToUse = () => {
+export default function HowToUse() {
   return (
     <section className="flex w-268 flex-col gap-4">
       <header className="flex items-center gap-3">
@@ -59,7 +59,7 @@ const HowToUse = () => {
 
               <Link
                 href={`/mypage/help/tutorial/${card.tutorialId}`}
-                className="border-edge-neutral active:border-edge-strong active:bg-fill-interaction-pressed hover:border-edge-normal hover:bg-fill-interaction-hover bg-fill-normal ml-auto flex h-[30px] cursor-pointer items-center gap-1 rounded-lg border px-2 py-1"
+                className="border-edge-neutral active:border-edge-strong active:bg-fill-interaction-pressed hover:border-edge-normal hover:bg-fill-interaction-hover bg-fill-normal ml-auto flex h-7.5 cursor-pointer items-center gap-1 rounded-lg border px-2 py-1"
               >
                 <span className="text-body-xsmall text-content-normal whitespace-nowrap">더 알아보기</span>
                 <ArrowRight className="text-icon-normal h-6 w-6" />
@@ -70,6 +70,4 @@ const HowToUse = () => {
       </ul>
     </section>
   );
-};
-
-export default HowToUse;
+}

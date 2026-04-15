@@ -8,7 +8,7 @@ import type {
   RecentQueryWithSaveStatusResponse,
 } from '@/shared/types/query/api';
 
-import type { AdminQueryParams } from '../types/questionLog';
+import type { AdminQueryParams } from '../types/questionLogModel';
 
 const PAGE_SIZE = 50;
 

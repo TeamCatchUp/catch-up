@@ -1,19 +1,20 @@
 import asyncio
 import glob
 import logging
-from logging.handlers import TimedRotatingFileHandler
 import os
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 import structlog
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.enums import AuditEventStatus
+from catchup.audit.enums import AuditLevel
 from catchup.audit.metadata import AwsS3AuditMetadata
 from catchup.audit.service import emit_audit_event
-from catchup.components.aws.s3 import S3Uploader
+from catchup.components.aws.s3 import S3Client
 from catchup.configs.config import settings
-from catchup.events.enums import AwsS3EventAction, EventType
-
+from catchup.events.enums import AwsS3EventAction
+from catchup.events.enums import EventType
 
 logger = structlog.get_logger()
 
@@ -28,14 +29,14 @@ def _process_audit_logs() -> None:
     if not rolled_files:
         return
 
-    uploader = S3Uploader()
+    client = S3Client()
 
     for file_path in rolled_files:
         file_name = os.path.basename(file_path)
         s3_key = f"{settings.AWS_S3_AUDIT_PREFIX.strip('/')}/{file_name}"
         
         try:
-            uploader.upload_file(
+            client.upload_file(
                 file_path=file_path,
                 bucket=settings.AWS_S3_AUDIT_BUCKET_NAME,
                 object_key=s3_key

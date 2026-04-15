@@ -38,7 +38,7 @@ const CommandInput = React.forwardRef<
 
   return (
     <div
-      className="bg-fill-strong focus-within:border-edge-primary flex min-h-[40px] items-center gap-1.5 rounded-lg border border-transparent px-3 py-2"
+      className="bg-fill-strong focus-within:border-edge-primary flex min-h-10 items-center gap-1.5 rounded-lg border border-transparent px-3 py-2"
       cmdk-input-wrapper=""
     >
       <CommandPrimitive.Input
@@ -46,7 +46,7 @@ const CommandInput = React.forwardRef<
         value={value}
         onValueChange={handleValueChange}
         className={cn(
-          'text-body-small text-content-normal placeholder:text-content-assistive flex w-full bg-transparent tracking-tight outline-none disabled:cursor-not-allowed disabled:opacity-50',
+          'text-body-small text-content-normal placeholder:text-content-assistive flex w-full bg-transparent outline-none disabled:cursor-not-allowed disabled:opacity-50',
           className,
         )}
         {...props}
@@ -72,7 +72,7 @@ const CommandList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.List
     ref={ref}
-    className={cn('max-h-[300px] overflow-x-hidden overflow-y-auto px-1.5 py-2', className)}
+    className={cn('max-h-75 overflow-x-hidden overflow-y-auto px-1.5 py-2', className)}
     {...props}
   />
 ));

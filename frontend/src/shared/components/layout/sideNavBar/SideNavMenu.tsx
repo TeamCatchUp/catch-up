@@ -12,7 +12,7 @@ import Home from '@/public/icons/icon/home.svg';
 // TODO: 수신함 기능 활성화 시 Inbox import 복원
 // import Inbox from '@/public/icons/icon/inbox.svg';
 import Settings from '@/public/icons/icon/settings.svg';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
 
@@ -35,9 +35,8 @@ const navItems = [
 
 // 메뉴 상태별 스타일
 const defaultClass =
-  'bg-fill-normal hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed active:ring-1 active:ring-edge-neutral';
-const selectedClass =
-  'ring-1 ring-edge-assistive bg-fill-primary-assistive hover:bg-fill-primary-interaction-hover-assistive';
+  'border border-transparent hover:bg-fill-interaction-hover hover:border-edge-assistive active:bg-fill-interaction-pressed active:border-edge-neutral';
+const selectedClass = 'bg-fill-primary-normal-neutral hover:bg-fill-primary-interaction-hover-assistive';
 
 interface SideNavMenuProps {
   isOpen: boolean;
@@ -49,7 +48,7 @@ export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
   const { activePanel, setActivePanel } = useSidebarStore();
 
   return (
-    <div className={`flex flex-col ${isOpen ? 'gap-1' : 'gap-2'}`}>
+    <div className={`flex flex-col ${isOpen ? 'gap-0' : 'gap-1.5'}`}>
       {navItems.map((item) => {
         const isActive = item.href ? pathname === item.href : activePanel === item.panel;
 
@@ -71,14 +70,14 @@ export default function SideNavMenu({ isOpen }: SideNavMenuProps) {
                 <button
                   onClick={handleClick}
                   className={cn(
-                    'relative flex h-10 cursor-pointer items-center rounded-lg',
+                    'relative flex cursor-pointer items-center',
                     isActive ? selectedClass : defaultClass,
-                    isOpen ? 'w-full gap-3 px-2.5 py-2' : 'w-10 items-center justify-center',
+                    isOpen ? 'h-10 w-full gap-3 rounded-lg px-2.5 py-2' : 'w-10 justify-center rounded-xl p-1.5',
                   )}
                 >
                   <item.Icon
                     className={cn(
-                      'size-5.5',
+                      isOpen ? 'size-5.5' : 'size-7',
                       isActive ? 'text-icon-primary group-hover:text-icon-primary' : 'text-icon-normal',
                     )}
                   />

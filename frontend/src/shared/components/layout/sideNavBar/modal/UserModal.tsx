@@ -4,15 +4,15 @@ import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 
-import AdminPanelSettings from '@/public/icons/icon/admin_panel_settings.svg';
-import ArrowDown from '@/public/icons/icon/arrow_down.svg';
+import ArrowRight from '@/public/icons/icon/arrow_right.svg';
+import Check from '@/public/icons/icon/check.svg';
 import Contrast from '@/public/icons/icon/contrast.svg';
-import DarkMode from '@/public/icons/icon/dark_mode.svg';
-import LightMode from '@/public/icons/icon/light_mode.svg';
+import Filter2 from '@/public/icons/icon/filter-2.svg';
+import Help from '@/public/icons/icon/help.svg';
+import Lock from '@/public/icons/icon/lock.svg';
 import Logout from '@/public/icons/icon/logout.svg';
 import Person from '@/public/icons/icon/person.svg';
 import DefaultProfile from '@/public/icons/icon/profile.svg';
-import Screen from '@/public/icons/icon/screen.svg';
 import {
   DropdownMenuContent,
   DropdownMenuItem,
@@ -23,6 +23,8 @@ import {
   DropdownMenuSubTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 import { authMutations } from '@/shared/queries/auth.mutations';
+import { useUserStore } from '@/shared/store/userStore';
+import { cn } from '@/shared/utils/cn';
 
 const THEME_LABELS: Record<string, string> = {
   system: '시스템 (자동)',
@@ -41,8 +43,10 @@ interface UserMenuContentProps {
  */
 export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
   const router = useRouter();
+  const userRole = useUserStore((state) => state.user?.role);
 
   const { theme, setTheme } = useTheme();
+  const currentTheme = theme ?? 'system';
 
   const logoutMutation = useMutation({
     ...authMutations.logout(),
@@ -56,7 +60,7 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
       side="top"
       align="start"
       sideOffset={8}
-      className="w-62.5"
+      className="flex w-62.5 flex-col gap-3 p-2"
       onCloseAutoFocus={(e) => e.preventDefault()}
     >
       {/* 프로필 헤더 */}
@@ -68,47 +72,75 @@ export function UserMenuContent({ userName, userEmail }: UserMenuContentProps) {
         </div>
       </DropdownMenuLabel>
 
-      {/* 메뉴 */}
-      <DropdownMenuItem onSelect={() => router.push('/mypage/preferences')}>
-        <Person className="text-icon-normal size-6" />
-        <span>개인 맞춤 설정</span>
-      </DropdownMenuItem>
-      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-        <AdminPanelSettings className="text-icon-normal size-6" />
-        <span>권한 관리</span>
-      </DropdownMenuItem>
-
-      {/* 화면 모드 서브메뉴 */}
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger>
-          <Contrast className="text-icon-normal size-6" />
-          <span className="flex-1">화면 모드</span>
-          <span className="text-body-xsmall text-content-alternative">{THEME_LABELS[theme ?? 'system']}</span>
-          <ArrowDown className="text-icon-normal size-6" />
-        </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent>
-          <DropdownMenuItem onSelect={() => setTheme('system')}>
-            <Screen className="text-icon-normal size-6" />
-            <span>시스템 모드</span>
+      {/* 메뉴 리스트 */}
+      <div className="flex flex-col gap-1">
+        {/* 상단 그룹 */}
+        <div className="flex flex-col gap-0.5">
+          <DropdownMenuItem onSelect={() => router.push('/mypage/profile')}>
+            <Person className="text-icon-normal size-6" />
+            <span>계정</span>
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setTheme('light')}>
-            <LightMode className="text-icon-normal size-6" />
-            <span>라이트 모드</span>
+          <DropdownMenuItem onSelect={() => router.push('/mypage/preferences')}>
+            <Filter2 className="text-icon-normal size-6" />
+            <span>개인 맞춤 설정</span>
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setTheme('dark')}>
-            <DarkMode className="text-icon-normal size-6" />
-            <span>다크 모드</span>
+          {userRole === 'admin' && (
+            <DropdownMenuItem onSelect={() => router.push('/admin/permissions')}>
+              <Lock className="text-icon-normal size-6" />
+              <span>권한 정보</span>
+            </DropdownMenuItem>
+          )}
+
+          {/* 화면 모드 서브메뉴 */}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Contrast className="text-icon-normal size-6" />
+              <span className="flex-1">화면 모드</span>
+              <div className="flex items-center">
+                <span className="text-body-xsmall text-content-alternative">{THEME_LABELS[theme ?? 'system']}</span>
+                <ArrowRight className="text-icon-alternative relative -top-[0.5px] size-6" />
+              </div>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem
+                onSelect={() => setTheme('system')}
+                className={cn(currentTheme === 'system' && 'bg-fill-interaction-hover')}
+              >
+                <span className="flex-1">시스템</span>
+                {currentTheme === 'system' && <Check className="text-icon-normal size-6" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => setTheme('light')}
+                className={cn(currentTheme === 'light' && 'bg-fill-interaction-hover')}
+              >
+                <span className="flex-1">라이트 모드</span>
+                {currentTheme === 'light' && <Check className="text-icon-normal size-6" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => setTheme('dark')}
+                className={cn(currentTheme === 'dark' && 'bg-fill-interaction-hover')}
+              >
+                <span className="flex-1">다크 모드</span>
+                {currentTheme === 'dark' && <Check className="text-icon-normal size-6" />}
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        </div>
+
+        <DropdownMenuSeparator />
+
+        {/* 하단 그룹 */}
+        <div className="flex flex-col gap-0.5">
+          <DropdownMenuItem onSelect={() => router.push('/mypage/help')}>
+            <Help className="text-icon-normal size-6" />
+            <span>도움말</span>
           </DropdownMenuItem>
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
-
-      <DropdownMenuSeparator />
-
-      {/* 로그아웃 */}
-      <DropdownMenuItem onSelect={() => logoutMutation.mutate()}>
-        <Logout className="text-icon-normal size-6" />
-        <span>로그아웃</span>
-      </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => logoutMutation.mutate()}>
+            <Logout className="text-icon-normal size-6" />
+            <span>로그아웃</span>
+          </DropdownMenuItem>
+        </div>
+      </div>
     </DropdownMenuContent>
   );
 }

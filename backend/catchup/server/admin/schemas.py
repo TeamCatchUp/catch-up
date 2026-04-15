@@ -156,13 +156,28 @@ class AdminUserDetailResponse(BaseModel):
 # Admin user state change
 # =====================
 class DeactivateUserRequest(BaseModel):
+    userId: int
+    reason: str
+
+
+class DeleteUserRequest(BaseModel):
+    userId: int
+    reason: str
+
+
+class PromoteUserRequest(BaseModel):
+    userId: int
+    reason: str
+
+
+class RevokeUserRequest(BaseModel):
+    userId: int
     reason: str
 
 
 class DeactivateUserResponse(BaseModel):
     userId: int
     status: UserStatus
-    inactiveRecordId: int
     deactivatedAt: str
     reason: str
 
@@ -170,6 +185,8 @@ class DeactivateUserResponse(BaseModel):
 class DeleteUserResponse(BaseModel):
     userId: int
     status: UserStatus
+    deletedAt: str
+    reason: str
 
 
 class PromoteUserResponse(BaseModel):

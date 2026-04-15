@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 from catchup.db.models import SyncConnector, SyncEventStatus, SyncJobStatus, SyncType
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.schemas import (
     FullSyncDispatchRequest,
     SyncDispatchResult,
@@ -70,19 +71,6 @@ class SyncJobSnapshotResponse(BaseModel):
         return cls.model_validate(asdict(result))
 
 
-class SyncStreamEventResponse(BaseModel):
-    """
-    Sync 상태 스트림 SSE payload 포맷
-    """
-
-    connector: SyncConnector
-    job_id: str
-    scope_id: str
-    event_type: str
-    timestamp: str
-    payload: dict[str, Any] = Field(default_factory=dict)
-
-
 class FullSyncRequest(BaseModel):
     """
     공통 Full Sync 요청
@@ -133,7 +121,10 @@ class FullSyncRequest(BaseModel):
     ) -> FullSyncDispatchRequest:
         sync_days = self.sync_days if self.sync_days is not None else default_sync_days
         if sync_days < 1:
-            raise ValueError("sync_days must be greater than or equal to 1")
+            raise SyncRequestException(
+                "sync_days must be greater or equal to 1",
+                code = "invalid_sync_days"
+            )
 
         current_time = now or datetime.now(timezone.utc)
         sync_from_ts = f"{(current_time - timedelta(days=sync_days)).timestamp():.6f}"
@@ -179,14 +170,6 @@ class SyncAcceptedResponse(BaseModel):
     )
 
     message: str | None = None
-    snapshot_url: str | None = Field(
-        default=None,
-        description="job snapshot endpoint for the created or conflicting job",
-    )
-    stream_url: str | None = Field(
-        default=None,
-        description="job status stream endpoint for the created or conflicting job",
-    )
 
     @classmethod
     def from_dispatch_result(cls, result: SyncDispatchResult) -> "SyncAcceptedResponse":

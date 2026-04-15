@@ -229,7 +229,7 @@ export default function TemplateInput({ tip, input, submitButtonRef, onSubmitRea
   );
 
   return (
-    <div className="text-body-medium min-h-10 cursor-text leading-[1.7]" onClick={() => input.setIsFocused(true)}>
+    <div className="text-body-medium min-h-10 cursor-text leading-[1.9]" onClick={() => input.setIsFocused(true)}>
       <LexicalComposer initialConfig={initialConfig}>
         <TemplateFieldContext.Provider value={contextWithSubmit}>
           <PlainTextPlugin

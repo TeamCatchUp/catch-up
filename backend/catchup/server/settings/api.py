@@ -1,14 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
 import structlog
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
-from catchup.audit.enums import AuditEventStatus
-from catchup.audit.service import emit_audit_event
+from catchup.audit.actions import UserCustomPromptAction
+from catchup.audit.contexts import AuditContext
+from catchup.audit.utils import audit_log
 from catchup.auth.dependencies import get_current_user
 from catchup.db.dependencies import get_db
 from catchup.db.models import User
-from catchup.events.enums import EventType, UserCustomPromptEventAction
+from catchup.db.models import UserPromptSetting
+from catchup.db.user_prompt_settings import get_user_prompt_settings
+from catchup.db.user_prompt_settings import upsert_user_prompt_settings
+from catchup.server.settings.schemas import PromptSettingsRequest
+from catchup.server.settings.schemas import PromptSettingsResponse
 
 logger = structlog.get_logger()
 
@@ -18,68 +24,78 @@ router = APIRouter(
     tags=["settings"]
 )
 
-class PromptUpdate(BaseModel):
-    custom_prompt: str | None
 
 @router.get(
     path="/prompts",
+    response_model=PromptSettingsResponse,
     description="사용자 맞춤형 프롬프트 조회"
 )
 def get_custom_prompt(
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    logger.info("user_custom_prompt_read")
-    return {"custom_prompt": current_user.custom_prompt}
+    settings = get_user_prompt_settings(
+        db=db,
+        user_id=current_user.id
+    )
+    if settings is None:
+        return PromptSettingsResponse()
+    return PromptSettingsResponse.model_validate(settings)
+
+
+def _resolve_custom_prompt_action(
+    settings: UserPromptSetting | None,
+    payload: PromptSettingsRequest,
+) -> UserCustomPromptAction:
+    if settings is None:
+        return UserCustomPromptAction.CREATE
+    if payload.custom_prompt is None:
+        return UserCustomPromptAction.DELETE
+    return UserCustomPromptAction.EDIT
 
 
 @router.patch(
     path="/prompts",
+    response_model=PromptSettingsResponse,
     description="사용자 맞춤형 프롬프트 수정"
 )
+@audit_log()
 def update_custom_prompt(
-    payload: PromptUpdate,
+    payload: PromptSettingsRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    prompt = current_user.custom_prompt
+    settings = get_user_prompt_settings(
+        db=db, 
+        user_id=current_user.id
+    )
     
-    audit_event_type = EventType.USER_SETTINGS
-    audit_event_action = None
-    if prompt is None:
-        audit_event_action = UserCustomPromptEventAction.CREATED
-    else:
-        if payload.custom_prompt is None:
-            audit_event_action = UserCustomPromptEventAction.DELETED
-        else:
-            audit_event_action = UserCustomPromptEventAction.EDITED
+    AuditContext.get().action = _resolve_custom_prompt_action(
+        settings=settings,
+        payload=payload,
+    )
+    
     try:
-        current_user.custom_prompt = payload.custom_prompt
-        db.commit()  # Dirty check
-        
-        logger.info(
-            "user_custom_prompt_update",
-            status="success"
+        settings = upsert_user_prompt_settings(
+            db=db,
+            user_id=current_user.id,
+            fields=payload.model_dump(include=payload.model_fields_set),
         )
-        emit_audit_event(
-            event_type=audit_event_type,
-            event_action=audit_event_action,
-            event_status=AuditEventStatus.SUCCESS
+        db.commit()
+        logger.info(
+            "user_prompt_settings_update",
+            status="success"
         )
     except Exception as e:
         db.rollback()
         logger.error(
-            "user_custom_prompt_update",
+            "user_prompt_settings_update",
             status="failed",
             error=str(e)
         )
-        emit_audit_event(
-            event_type=audit_event_type,
-            event_action=audit_event_action,
-            event_status=AuditEventStatus.FAIL
-        )
         raise HTTPException(
             status_code=500,
-            detail="custom_prompt 업데이트 실패"
+            detail="맞춤형 프롬프트 설정 업데이트 실패"
         )
     
-    return {"custom_prompt": current_user.custom_prompt}
+    return PromptSettingsResponse.model_validate(settings)

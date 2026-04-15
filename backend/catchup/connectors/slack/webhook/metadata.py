@@ -1,20 +1,21 @@
 from __future__ import annotations
 
-import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
+import structlog
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from catchup.connectors.slack import webhook_service
+from catchup.connectors.slack.webhook.responses import ignored_event_response
+from catchup.connectors.slack.webhook.responses import metadata_error_response
+from catchup.connectors.slack.webhook.responses import processed_metadata_response
 from catchup.db.engine import SessionLocal
+from catchup.server.connector.slack.schemas import SlackWebhookRequest
+from catchup.server.connector.slack.schemas import SlackWebhookResponse
 
-from .responses import (
-    ignored_event_response,
-    metadata_error_response,
-    processed_metadata_response,
-)
-
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 CHANNEL_UPSERT_EVENTS = frozenset(
     {"channel_created", "channel_rename", "group_created", "group_rename"}
@@ -26,14 +27,6 @@ CHANNEL_ARCHIVE_EVENTS = frozenset(
 MEMBER_EVENTS = frozenset({"member_joined_channel", "member_left_channel"})
 USER_EVENTS = frozenset({"team_join", "user_change"})
 
-SUPPORTED_METADATA_EVENTS = frozenset().union(
-    CHANNEL_UPSERT_EVENTS,
-    CHANNEL_DELETE_EVENTS,
-    CHANNEL_ARCHIVE_EVENTS,
-    MEMBER_EVENTS,
-    USER_EVENTS,
-)
-
 
 def is_supported_channel_membership_event(event: dict[str, Any]) -> bool:
     channel_type = str(event.get("channel_type") or "").strip().upper()
@@ -44,65 +37,72 @@ def is_supported_channel_membership_event(event: dict[str, Any]) -> bool:
     return channel_id.startswith(("C", "G"))
 
 
-def handle_metadata_event(
-    *,
-    team_id: str,
-    event_type: str,
-    event: dict[str, Any],
-) -> dict[str, Any]:
-    if event_type in MEMBER_EVENTS:
-        if not is_supported_channel_membership_event(event):
+async def handle_metadata_event(
+    request: SlackWebhookRequest,
+) -> SlackWebhookResponse:
+    if request.event_type in MEMBER_EVENTS:
+        if not is_supported_channel_membership_event(request.event):
             return ignored_event_response(
-                event_type=event_type,
+                event_type=request.event_type,
                 reason="unsupported_channel",
             )
 
-    resolved = _resolve_metadata_handler(event_type)
+    resolved = _resolve_metadata_handler(request.event_type)
     if resolved is None:
         return ignored_event_response(
-            event_type=event_type,
+            event_type=request.event_type,
             reason="unsupported_event",
         )
 
-    handler, label = resolved
+    return await run_in_threadpool(
+        _handle_metadata_event_sync,
+        request,
+        resolved,
+    )
+
+
+def _handle_metadata_event_sync(
+    request: SlackWebhookRequest,
+    handler: Callable[[Session, str, dict[str, Any]], None],
+) -> SlackWebhookResponse:
     with SessionLocal() as db:
         try:
             _run_metadata_handler(
                 db=db,
-                team_id=team_id,
-                event=event,
+                team_id=request.team_id,
+                event=request.event,
                 handler=handler,
             )
             db.commit()
-            return processed_metadata_response(event_type=event_type)
+            return processed_metadata_response(event_type=request.event_type)
         except Exception as exc:
             db.rollback()
             logger.error(
-                "[SLACK][WEBHOOK][METADATA] %s failed: team_id=%s, error=%s",
-                label,
-                team_id,
-                exc,
+                "slack_metadata_sync_failed",
+                team_id=request.team_id,
+                event_type=request.event_type,
+                error=str(exc),
             )
             return metadata_error_response()
 
 
 def _resolve_metadata_handler(
     event_type: str,
-) -> tuple[Callable[[Session, str, dict[str, Any]], None], str] | None:
+) -> Callable[[Session, str, dict[str, Any]], None] | None:
     if event_type in CHANNEL_UPSERT_EVENTS:
-        return webhook_service.handle_channel_upsert, "Channel upsert"
+        return webhook_service.handle_channel_upsert
 
     if event_type in CHANNEL_DELETE_EVENTS:
-        return webhook_service.handle_channel_delete, "Channel delete"
+        return webhook_service.handle_channel_delete
 
     if event_type in CHANNEL_ARCHIVE_EVENTS:
-        return webhook_service.handle_channel_archive, "Channel archive"
+        return webhook_service.handle_channel_archive
 
     if event_type in MEMBER_EVENTS:
-        return webhook_service.handle_member_event, "Member event"
+        return webhook_service.handle_member_event
 
     if event_type in USER_EVENTS:
-        return webhook_service.handle_user_event, "User event"
+        return webhook_service.handle_user_event
 
     return None
 

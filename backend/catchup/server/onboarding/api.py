@@ -1,20 +1,41 @@
 from typing import Optional
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+
+from fastapi import APIRouter
+from fastapi import BackgroundTasks
+from fastapi import Depends
+from fastapi import HTTPException
+from fastapi import status
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from catchup.auth.dependencies import get_current_user, get_pending_signup_user
-from catchup.connectors.atlassian import oauth_client
+from catchup.audit.actions import UserOnboardingAction
+from catchup.audit.contexts import AuditContext
+from catchup.audit.metadata import UserOnboardingAuditMetadata
+from catchup.audit.utils import audit_log
+from catchup.auth.dependencies import get_current_user
+from catchup.auth.dependencies import get_pending_signup_user
 from catchup.db.dependencies import get_db
-from catchup.db.engine import SessionLocal
-from catchup.db.models import ConfluenceUser, GitHubUser, JiraUser, KnowledgeSource, PreMappingBuffer, SlackUser, SourceType, User
-from catchup.onboarding.oauth import sync_initial_keycloak_users
+from catchup.db.models import ConfluenceUser
+from catchup.db.models import GitHubUser
+from catchup.db.models import JiraUser
+from catchup.db.models import KnowledgeSource
+from catchup.db.models import PreMappingBuffer
+from catchup.db.models import SlackUser
+from catchup.db.models import SourceType
+from catchup.db.models import User
+from catchup.db.models import UserRole
 from catchup.onboarding.admin import register_admin_from_oauth
-from catchup.onboarding.schemas import AdminSignUpRequest, AdminSignUpSchema, CandidateItem, MappingCandidates, UserSignUpRequest, SignUpResponse, UserSignUpSchema
+from catchup.onboarding.oauth import sync_initial_keycloak_users
+from catchup.onboarding.schemas import AdminSignUpRequest
+from catchup.onboarding.schemas import AdminSignUpSchema
+from catchup.onboarding.schemas import CandidateItem
+from catchup.onboarding.schemas import MappingCandidates
+from catchup.onboarding.schemas import SignUpResponse
+from catchup.onboarding.schemas import UserSignUpRequest
+from catchup.onboarding.schemas import UserSignUpSchema
 from catchup.onboarding.user import register_user_from_oauth
 from catchup.server.state import state
-
 
 router = APIRouter(
     prefix="/api/v1/onboarding",
@@ -27,11 +48,16 @@ router = APIRouter(
     status_code=status.HTTP_201_CREATED,
     summary="OAuth 유저 최초 회원가입 및 정보 매핑",
 )
+@audit_log(UserOnboardingAction.SUBMIT)
 def signup_oauth_user(
     payload: UserSignUpRequest,
     pending_user: dict = Depends(get_pending_signup_user),
     db: Session = Depends(get_db)
 ):
+    AuditContext.get().metadata = UserOnboardingAuditMetadata(
+        role=UserRole.USER
+    )
+    
     if not state.is_admin_initiated:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -58,12 +84,17 @@ def signup_oauth_user(
     summary="루트 어드민 온보딩",
     description="루트 어드민이 회사를 등록하고 워크스페이스를 생성한다."
 )
+@audit_log(UserOnboardingAction.SUBMIT)
 async def signup_oauth_admin(
     payload: AdminSignUpRequest,
     background_tasks: BackgroundTasks,
     pending_user: dict = Depends(get_pending_signup_user),
     db: Session = Depends(get_db)
 ):
+    AuditContext.get().metadata = UserOnboardingAuditMetadata(
+        role=UserRole.ADMIN
+    )
+    
     if state.is_admin_initiated:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

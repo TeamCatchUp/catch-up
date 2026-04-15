@@ -9,24 +9,9 @@ from langgraph.graph.message import add_messages
 
 from catchup.db.models import SourceType
 from catchup.rag.schemas.context import GlobalContext
+from catchup.rag.schemas.prompt_settings import PromptSettings
 from catchup.rag.schemas.structures import GraphDbSearchQuery
 from catchup.rag.schemas.structures import VectorDbSearchQuery
-
-
-def add_tokens(
-    a: dict[str, dict[str, int]],
-    b: dict[str, dict[str, int]],
-) -> dict[str, dict[str, int]]:
-    """
-    토큰 사용량 집계 목적의 reducer.
-    """
-    result = dict(a)
-    for model, usage in b.items():
-        if model not in result:
-            result[model] = {"input_tokens": 0, "output_tokens": 0}
-        result[model]["input_tokens"] += usage.get("input_tokens", 0)
-        result[model]["output_tokens"] += usage.get("output_tokens", 0)
-    return result
 
 
 class AgentState(TypedDict):
@@ -53,6 +38,8 @@ class AgentState(TypedDict):
     
     tool_filters: Optional[list[SourceType]]
     
-    token_breakdown: Annotated[dict[str, dict[str, int]], add_tokens]
-    
+    prompt_settings: PromptSettings
+
     rerank_count: int
+
+    mode: Literal["fast", "standard"]

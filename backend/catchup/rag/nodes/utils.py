@@ -1,7 +1,8 @@
-# llm 호출 Rate Limit 방어
-import asyncio
 import functools
+import json
+import re
 import time
+from re import DOTALL
 from typing import Annotated
 from typing import Awaitable
 from typing import Callable
@@ -10,11 +11,14 @@ import structlog
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
+from langchain_core.messages import SystemMessage
 from langgraph.graph.message import add_messages
 
-# Semaphores (Rate limit 방어용)
-llm_semaphore = asyncio.Semaphore(10)
-rerank_semaphore = asyncio.Semaphore(10)
+from catchup.rag.policies import FALLBACK_ANSWER
+from catchup.rag.schemas.sources import BaseSource
+
+# node 로깅 데코레이터
+logger = structlog.get_logger("catchup.graph")
 
 
 # 사용자-어시스턴트 대화 전처리 함수들
@@ -33,14 +37,46 @@ def get_latest_query(messages: Annotated[list, add_messages]):
     )
 
 
-def prepare_context_text(documents: list[Document]) -> str:
+def prepare_retrieved_context_text(documents: list[Document]) -> str:
     parts = []
     for i, doc in enumerate(documents, start=1):
         source = doc.metadata.get("source", "unknown")
         content = doc.metadata.get("contextual_content", "")
         temporal = resolve_temporal_context(doc.metadata) 
-        parts.append(f"[{i}] (Source: {source})\n{content} {temporal}")
+        part = f"[{i}] (Source: {source})\n{content} {temporal}"
+        if source == "confluence":
+            part = part + f"\nstatus: {doc.metadata.get('status', '')}"
+        parts.append(part)
     return "\n\n".join(parts)
+
+
+def build_system_message(
+    static_prompt: str,
+    dynamic_prompts: list[str] | None = None,
+    cache_prompt: bool = False,
+) -> SystemMessage:
+    
+    # 정적 프롬프트 (캐싱 대상)
+    static_block: dict = {
+        "type": "text",
+        "text": static_prompt
+    }
+    
+    if cache_prompt:
+        static_block["cache_control"] = {"type": "ephemeral"}
+        # TODO: langchain-aws 지원 시점에 "ttl": "1h" 추가
+
+    content = [static_block]
+    
+    # 동적 프롬프트
+    if dynamic_prompts:
+        for prompt in dynamic_prompts:
+            content.append({
+                "type": "text",
+                "text": prompt
+            })
+
+    return SystemMessage(content=content)
 
 
 def resolve_temporal_context(metadata: dict) -> str:
@@ -69,8 +105,50 @@ def extract_anchor_ids(documents: list[Document]) -> list[str]:
     return list(dict.fromkeys(anchors))  # 중복 제거 & 순서 유지
 
 
-# node 로깅 데코레이터
-logger = structlog.get_logger("catchup.graph")
+def parse_citations(full_answer: str) -> tuple[str, dict[str, str]]:
+    body_part = full_answer
+    citation_dict = {}
+
+    # 정상 동작: 태그가 완전히 닫힘. (<citations>...</citations>)
+    match = re.search(r"<citations>(.*?)</citations>", full_answer, DOTALL)
+    if match:
+        body_part = full_answer[:match.start()].strip()
+        try:
+            citation_dict = json.loads(match.group(1).strip())
+        except json.JSONDecodeError:
+            logger.warning("citations_parsing_failed")
+
+    # 비정상 동작: 태그가 열리거나 불완전함. (<citations>...)
+    elif open_tag_match := re.search(r"<citations>", full_answer):
+        logger.warning(
+            "citations_block_truncated",
+            context="token_overflow",
+        )
+        body_part = full_answer[:open_tag_match.start()].strip()
+        if not body_part:
+            body_part = FALLBACK_ANSWER
+
+    return body_part, citation_dict
+
+
+def mark_citations(
+    candidate_sources: list[BaseSource],
+    citations: dict[str, str],
+) -> list[BaseSource]:
+
+    final_sources = []
+
+    for source in candidate_sources:
+        idx = str(source.index)  # JSON Key -> str
+        if idx in citations:
+            source.is_cited = True
+            source.citation_rationale = citations[idx]
+        else:
+            source.is_cited = False
+
+        final_sources.append(source)
+
+    return final_sources
 
 
 def log_node(func: Callable[..., Awaitable[dict]]):

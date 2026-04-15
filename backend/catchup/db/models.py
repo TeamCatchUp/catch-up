@@ -70,6 +70,16 @@ class UserStatus(StrEnum):
     DELETED = "deleted" # 관리자에 의해 삭제된 상태
 
 
+class UserRoleHistoryAction(StrEnum):
+    PROMOTE = "promote"
+    REVOKE = "revoke"
+
+
+class UserStatusHistoryAction(StrEnum):
+    DEACTIVATE = "deactivate"
+    DELETE = "delete"
+
+
 class Company(Base):
     __tablename__ = "companies"
     
@@ -130,7 +140,6 @@ class User(Base):
         server_default=text(f"'{JobLevel.MEMBER}'")
     )
     status: Mapped[UserStatus] = mapped_column(String(10), nullable=False)
-    custom_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -144,23 +153,88 @@ class User(Base):
     )
     workspaces: Mapped[list["Workspace"]] = association_proxy("workspace_links", "workspace")
     oauth_user: Mapped["OAuthUser"] = relationship(back_populates="user")
+    prompt_settings: Mapped[Optional["UserPromptSetting"]] = relationship(
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
 
-class InactiveUser(Base):
-    __tablename__ = "inactive_users"
+class JobRole(StrEnum):
+    PM = "기획자 (PM)"
+    DEVELOPER = "개발자"
+    DESIGNER = "디자이너"
+    CS_OPERATIONS = "CS·운영"
+    MANAGEMENT_STRATEGY = "경영·전략"
+    SALES = "세일즈"
+    CUSTOM = "직접 입력"
+
+
+class SelectedOption(StrEnum):
+    INCLUDE_TERMINOLOGY = "용어 설명 포함"
+    INCLUDE_WORK_CONTEXT = "작업 배경 설명"
+    AUTO_SHOW_ASSIGNEE = "담당자 자동 표시"
+    ATTACH_SIMILAR_CASES = "유사 사례 첨부"
+    SPECIFY_IMPL_SCOPE = "구현 영향 범위 명시"
+    SPECIFY_UX_IMPACT = "화면·UX 영향 명시"
+
+
+class UserPromptSetting(Base):
+    __tablename__ = "user_prompt_settings"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    reason: Mapped[str] = mapped_column(Text, nullable=False)
-    deactivated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False)
+    
+    job_role: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    custom_job_text: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    job_description: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    selected_options: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
     )
-    reactivated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
-    admin_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    custom_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped["User"] = relationship(back_populates="prompt_settings")
+
+
+class UserRoleHistory(Base):
+    __tablename__ = "user_role_histories"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    action: Mapped[UserRoleHistoryAction] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    before_role: Mapped[UserRole] = mapped_column(String(20), nullable=False)
+    after_role: Mapped[UserRole] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
     __table_args__ = (
-        UniqueConstraint("user_id", "deactivated_at", name="uq_inactive_user_timestamp"),
-        Index("idx_inactive_users_user_id", "user_id"),
+        Index("idx_user_role_histories_user_created_at", "user_id", "created_at"),
+    )
+
+
+class UserStatusHistory(Base):
+    __tablename__ = "user_status_histories"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    actor_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    action: Mapped[UserStatusHistoryAction] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    before_status: Mapped[UserStatus] = mapped_column(String(20), nullable=False)
+    after_status: Mapped[UserStatus] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_user_status_histories_user_created_at", "user_id", "created_at"),
     )
 
 class UserWorkspace(Base):
@@ -1660,12 +1734,18 @@ class FeedbackLiteral(StrEnum):
 
 class ChatHistory(Base):
     __tablename__ = "chat_histories"
-    
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     chat_room_id: Mapped[int] = mapped_column(
-        ForeignKey("chat_rooms.id"), 
+        ForeignKey("chat_rooms.id"),
         nullable=False,
         index=True
+    )
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+        comment="메시지 발신 유저 (Slack 멀티유저 귀속용, 레거시 레코드는 NULL)"
     )
     trace_id: Mapped[str] = mapped_column(
         String(64),
@@ -1699,6 +1779,13 @@ class ChatHistory(Base):
         Text,
         nullable=True,
         comment="사용자가 직접 작성한 상세 피드백 내용"
+    )
+    
+    # TODO : 추후에 피드백 테이블을 별도로 분리하여 관리하지만, Slack Bot v0에서는 임시로 해당 테이블에 feedback_user 필드를 추가하여 관리한다.
+    feedback_user: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Slack Bot v0 : 피드백은 답변 생성 요청자 관계 없이 누구나 한번만 피드백을 남길 수 있다."
     )
     
     is_displayed: Mapped[bool] = mapped_column(
@@ -1742,10 +1829,65 @@ class ChatHistory(Base):
     )
 
 
+class SlackChatThread(Base):
+    __tablename__ = "slack_chat_threads"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    team_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    channel_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    thread_ts: Mapped[str] = mapped_column(String(32), nullable=False)
+    # Slack Thread <-> RAG Session 매핑 키
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    # 답변 생성 이후 chat_room_id가 배정되므로 Nullable
+    chat_room_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chat_rooms.id"),
+        nullable=True,
+        index=True,
+    )
+    # CatchUp User 
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    # Slack User
+    slack_user_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    # 멘션 태그를 포함하는 본문
+    last_raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_answer_in_progress: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+    in_progress_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    # Slack Thread ts 단위 채팅방 관리 (후속질문 처리)
+    __table_args__ = (
+        UniqueConstraint(
+            "team_id",
+            "channel_id",
+            "thread_ts",
+            name="uq_slack_chat_threads_thread",
+        ),
+    )
+
+
 class TokenPurpose(StrEnum):
     SUMMARIZE = "summarize"
-    EMBEDDING = "embedding"
     CHAT = "chat"
+    TITLE_GENERATION = "title_generation"
 
 
 class ChatTokenUsage(Base):
@@ -1756,7 +1898,9 @@ class ChatTokenUsage(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id"), nullable=False)
     company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"), nullable=False)
-    message_id: Mapped[int] = mapped_column(ForeignKey("chat_histories.id"), nullable=False)
+    message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chat_histories.id"), nullable=True, comment="purpose가 title_generation인 경우 NULL 허용"
+    )
     
     purpose: Mapped[TokenPurpose] = mapped_column(String(50), nullable=False)
     

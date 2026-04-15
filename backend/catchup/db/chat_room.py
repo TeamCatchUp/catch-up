@@ -8,6 +8,7 @@ from sqlalchemy import and_
 from sqlalchemy import func
 from sqlalchemy import or_
 from sqlalchemy import select
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm import joinedload
@@ -24,16 +25,26 @@ def get_chat_room(
     user_id: int
 ) -> ChatRoom | None:
     """사용자 권한 확인을 포함한 세션 ID 기반 단일 채팅방 조회"""
-    
+
     # 세션 ID 검증 및 사용자 권한 확인
     filter_query = (
-        (ChatRoom.session_id == session_id) & 
+        (ChatRoom.session_id == session_id) &
         (ChatRoom.user_id == user_id)
     )
-    
+
     return db.scalar(
         select(ChatRoom)
         .where(filter_query)
+    )
+
+
+def get_chat_room_by_session_id(
+    db: Session,
+    session_id: uuid.UUID,
+) -> ChatRoom | None:
+    """서버 발급 session_id 환경(Slack 등) 전용. user_id 검증 없음."""
+    return db.scalar(
+        select(ChatRoom).where(ChatRoom.session_id == session_id)
     )
 
 
@@ -91,7 +102,8 @@ def add_message(
     role: str,
     content: str,
     sources: list[BaseSource] | None = None,
-    trace_id: str | None = None 
+    trace_id: str | None = None,
+    user_id: int | None = None,
 ) -> ChatHistory:
     """채팅 메시지 저장"""
     message = ChatHistory(
@@ -99,10 +111,11 @@ def add_message(
         sender_type=SenderType.HUMAN if role == "user" else SenderType.ASSISTANT,
         content=content,
         sources=sources or [],
-        trace_id=trace_id
+        trace_id=trace_id,
+        user_id=user_id,
     )
     db.add(message)
-    
+
     return message
 
 
@@ -315,6 +328,23 @@ def get_message(
     return db.scalar(stmt)
 
 
+def get_latest_assistant_message(
+    db: Session,
+    room_id: int,
+) -> ChatHistory | None:
+    stmt = (
+        select(ChatHistory)
+        .where(
+            (ChatHistory.chat_room_id == room_id)
+            & (ChatHistory.sender_type == SenderType.ASSISTANT)
+            & (ChatHistory.is_displayed == True)
+        )
+        .order_by(ChatHistory.created_at.desc(), ChatHistory.id.desc())
+        .limit(1)
+    )
+    return db.scalar(stmt)
+
+
 def update_message_feedback(
     message: ChatHistory,
     is_liked: Optional[bool] = None,
@@ -453,3 +483,54 @@ def get_user_message_with_ownership(
         )
         
     return db.scalar(stmt)
+
+
+def get_user_question_count_by_range(
+    db: Session,
+    user_id: int,
+    start_date: datetime,
+    end_date: datetime,
+) -> dict[int, int]:
+    """start_date 기준 day_index별 유저의 질문 횟수를 반환한다."""
+    rows = db.execute(
+        text("""
+            SELECT
+                FLOOR(EXTRACT(EPOCH FROM (ch.created_at - :start_date)) / 86400)::int AS day_index,
+                COUNT(*) AS question_count
+            FROM chat_histories ch
+            JOIN chat_rooms cr ON ch.chat_room_id = cr.id
+            WHERE cr.user_id = :user_id
+              AND ch.sender_type = 'human'
+              AND ch.is_displayed = true
+              AND ch.created_at >= :start_date
+              AND ch.created_at < :end_date
+            GROUP BY day_index
+        """),
+        {"user_id": user_id, "start_date": start_date, "end_date": end_date},
+    ).all()
+
+    return {row.day_index: row.question_count for row in rows}
+
+
+def get_org_question_count_by_range(
+    db: Session,
+    start_date: datetime,
+    end_date: datetime,
+) -> dict[int, int]:
+    """start_date 기준 day_index별 조직 전체 질문 횟수를 반환한다."""
+    rows = db.execute(
+        text("""
+            SELECT
+                FLOOR(EXTRACT(EPOCH FROM (created_at - :start_date)) / 86400)::int AS day_index,
+                COUNT(*) AS question_count
+            FROM chat_histories
+            WHERE sender_type = 'human'
+              AND is_displayed = true
+              AND created_at >= :start_date
+              AND created_at < :end_date
+            GROUP BY day_index
+        """),
+        {"start_date": start_date, "end_date": end_date},
+    ).all()
+
+    return {row.day_index: row.question_count for row in rows}

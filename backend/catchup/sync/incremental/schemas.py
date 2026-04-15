@@ -45,6 +45,14 @@ class RecordChange:
         )
 
 
+@dataclass(slots=True, frozen=True)
+class IncrementalIngestResult:
+    record_keys: list[str]
+    blocked_count: int
+    blocked_target_keys: list[str]
+    first_allowed_change: RecordChange | None = None
+
+
 def to_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)

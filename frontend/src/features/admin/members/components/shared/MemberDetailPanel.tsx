@@ -7,7 +7,7 @@ import { INTEGRATION_ACCOUNTS } from '@/shared/constants/integrationAccounts';
 import type { IntegrationService } from '@/shared/types/integrationService';
 import { cn } from '@/shared/utils/cn';
 
-import type { UserIntegrations } from '../../types/adminMember';
+import type { UserIntegrations } from '../../types/adminMemberModel';
 
 /** 프로필 아바타 (avatarUrl이 있으면 img, 없으면 DefaultProfile SVG) */
 const Avatar = ({ src, size = 'sm' }: { src?: string | null; size?: 'sm' | 'xs' }) => {
@@ -56,7 +56,7 @@ const getAccountIdentifier = (service: IntegrationService, integrations: UserInt
 };
 
 /** 우측 상세 패널 (입장 신청 / 이용자 목록 공통) */
-const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) => {
+export default function MemberDetailPanel({ member, actionButtons }: MemberDetailPanelProps) {
   if (!member) {
     return (
       <section className="bg-fill-normal overflow-clip pt-5 pb-5 pl-6">
@@ -86,7 +86,7 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
 
         <div className="flex flex-col gap-9">
           {/* 기본 정보 */}
-          <div className="text-body-small flex flex-col gap-2 tracking-tight">
+          <div className="text-body-small flex flex-col gap-2">
             <div className="flex w-full items-center gap-14">
               <span className="text-content-alternative w-19.75 shrink-0">메일</span>
               <span className="text-content-neutral min-w-0 flex-1 truncate">{member.email}</span>
@@ -151,7 +151,7 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
                           </span>
                         </div>
                       ) : (
-                        <div className="bg-fill-strong flex w-[259px] shrink-0 items-center justify-center self-stretch rounded-lg">
+                        <div className="bg-fill-strong flex w-64.75 shrink-0 items-center justify-center self-stretch rounded-lg">
                           <div className="flex items-center gap-1">
                             <IconCloudOff className="text-content-assistive size-5" />
                             <span className="text-body-xsmall text-content-alternative">연동 안됨</span>
@@ -168,6 +168,4 @@ const MemberDetailPanel = ({ member, actionButtons }: MemberDetailPanelProps) =>
       </div>
     </section>
   );
-};
-
-export default MemberDetailPanel;
+}

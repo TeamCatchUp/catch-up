@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 import { GUIDE_CARDS } from '@/features/mypage/help/constants/helpSections';
 
-const GuideTutorialSection = () => {
+export default function GuideTutorialSection() {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
@@ -31,6 +31,4 @@ const GuideTutorialSection = () => {
       </ul>
     </section>
   );
-};
-
-export default GuideTutorialSection;
+}

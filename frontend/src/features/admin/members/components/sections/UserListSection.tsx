@@ -23,10 +23,10 @@ import {
 } from '../../constants/memberTableConfig';
 import { useDeactivateUserMutation, useDeleteUserMutation } from '../../queries/adminMembers.mutations';
 import { adminMembersQueries } from '../../queries/adminMembers.queries';
-import type { AdminSortKey, MemberTableRow } from '../../types/adminMember';
+import type { AdminSortKey, MemberTableRow } from '../../types/adminMemberModel';
 import MemberDetailPanel from '../shared/MemberDetailPanel';
 import MemberTable from '../shared/MemberTable';
-import ReasonPopover from '../shared/ReasonPopover';
+import ReasonDialog from '../shared/ReasonPopover';
 import SectionHeader from '../shared/SectionHeader';
 
 interface UserListSectionProps {
@@ -34,7 +34,7 @@ interface UserListSectionProps {
 }
 
 /** 이용자 목록 섹션 */
-const UserListSection = ({ searchTerm }: UserListSectionProps) => {
+export default function UserListSection({ searchTerm }: UserListSectionProps) {
   const { data } = useQuery(adminMembersQueries.list());
 
   const deactivateMutation = useDeactivateUserMutation();
@@ -42,6 +42,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
 
   const [activeUserId, setActiveUserId] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<AdminSortKey>('newest');
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   /* 검색 필터 */
@@ -126,12 +127,12 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
           actionButtons={
             selectedUser && !isAdmin ? (
               <>
-                <ReasonPopover
-                  trigger={
-                    <Button variant="box-outline-gray" size="md">
-                      비활성화
-                    </Button>
-                  }
+                <Button variant="box-outline-gray" size="md" onClick={() => setDeactivateDialogOpen(true)}>
+                  비활성화
+                </Button>
+                <ReasonDialog
+                  open={deactivateDialogOpen}
+                  onOpenChange={setDeactivateDialogOpen}
                   title="비활성화 사유"
                   reasonLabel="비활성화 사유를 선택해주세요."
                   reasons={DEACTIVATION_REASONS}
@@ -140,7 +141,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
                 <Button
                   variant="box-outline-gray"
                   size="md"
-                  className="text-red-50"
+                  className="text-status-destructive"
                   onClick={() => setDeleteDialogOpen(true)}
                 >
                   계정 삭제
@@ -152,7 +153,7 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
                   description="계정을 삭제하면 모든 데이터가 영구 삭제되며 복구할 수 없습니다."
                   confirmLabel="삭제"
                   variant="danger"
-                  onConfirm={() => deleteMutation.mutate(selectedUser.id)}
+                  onConfirm={() => deleteMutation.mutate({ userId: selectedUser.id, reason: '' })}
                 />
               </>
             ) : null
@@ -161,6 +162,4 @@ const UserListSection = ({ searchTerm }: UserListSectionProps) => {
       </div>
     </section>
   );
-};
-
-export default UserListSection;
+}

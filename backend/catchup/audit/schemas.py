@@ -2,7 +2,8 @@ from pydantic import BaseModel
 
 
 class AuditActor(BaseModel):
-    user_id: str | None = None
+    sub: str | None = None
+    user_id: int | None = None
     email: str | None = None
     role: str | None = None
     department: str | None = None
@@ -16,11 +17,14 @@ class AuditActor(BaseModel):
         if not data or not isinstance(data, dict):
             return None
         
-        obj_type = data.get("__type__")        
-        user_id = data.get("sub") or str(data.get("id") or "")
+        obj_type = data.get("__type__")
+        
+        sub = data.get("sub", "")
+        user_id = data.get("user_id") or data.get("id")
         
         if obj_type == "User":
             return cls(
+                sub=sub,
                 user_id=user_id,
                 email=data.get("email"),
                 role=data.get("role"),
@@ -29,12 +33,14 @@ class AuditActor(BaseModel):
 
         if obj_type == "OAuthUser":
             return cls(
-                user_id=data.get("sub"),
+                sub=sub,
+                user_id=user_id,
                 email=data.get("email")
             )
             
         # case) data: dict | None
         return cls(
+            sub=sub,
             user_id=user_id,
             email=data.get("email"),
             role=data.get("role"),
@@ -47,7 +53,8 @@ class AuditActor(BaseModel):
         payload: dict[str, str]
     ):
         return cls(
-            user_id=payload.get("sub"),
+            sub=payload.get("sub"),
+            user_id=payload.get("id") or payload.get("user_id"),
             email=payload.get("email"),
             role=payload.get("role")
         )

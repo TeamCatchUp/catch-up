@@ -7,14 +7,12 @@ const DotDivider = () => (
 );
 
 /** 협업 툴 계정 관리 */
-const Support2Content = () => {
+export default function Support2Content() {
   return (
     <div className="flex w-full flex-col gap-16">
       {/* 도입부 */}
       <section className="flex flex-col gap-5">
-        <h2 className="text-heading-xlarge text-content-strong">
-          나의 모든 이름을 하나로, Catch Up에게 알려주세요
-        </h2>
+        <h2 className="text-heading-xlarge text-content-strong">나의 모든 이름을 하나로, Catch Up에게 알려주세요</h2>
         <div className="text-label-medium text-content-normal">
           <p>
             우리는 업무 도구마다 조금씩 다른 이름을 씁니다.
@@ -35,11 +33,9 @@ const Support2Content = () => {
           <p>새로운 도구를 본격적으로 쓰기 전에, 여기서 &apos;나의 이름표&apos;를 먼저 달아주세요.</p>
           <br />
           <p>
-            신규 입사자라면 회사에서 발급받은 계정들을 <strong>Catch Up에 가장 먼저 등록</strong>해두는 게
-            좋습니다.
+            신규 입사자라면 회사에서 발급받은 계정들을 <strong>Catch Up에 가장 먼저 등록</strong>해두는 게 좋습니다.
             <br />
-            등록하지 않은 상태로 다른 협업 툴을 이용한다면, 해당 기간 동안의 데이터는 Catch Up이 찾기 어려울 수
-            있어요.
+            등록하지 않은 상태로 다른 협업 툴을 이용한다면, 해당 기간 동안의 데이터는 Catch Up이 찾기 어려울 수 있어요.
           </p>
           <br />
           <p>
@@ -78,28 +74,24 @@ const Support2Content = () => {
           <p>
             이 과정은 단순한 등록 절차가 아니에요.
             <br />
-            도구마다 흩어진 &apos;나&apos;를 하나로 묶어, AI가 &apos;이 모든 게 한 사람의 일&apos;임을 이해하게
-            만드는 과정입니다.
+            도구마다 흩어진 &apos;나&apos;를 하나로 묶어, AI가 &apos;이 모든 게 한 사람의 일&apos;임을 이해하게 만드는
+            과정입니다.
             <br />이 연결이 정확할수록 데이터의 맥락을 읽는 <strong>임베딩(Embedding)</strong> 품질이 좋아집니다.
           </p>
         </div>
 
         <div className="bg-fill-strong border-edge-assistive flex flex-col gap-3 rounded-xl border px-5 py-4">
-          <p className="text-label-medium text-content-normal">
-            &quot;내가 지난주에 수정한 코드 보여줘&quot;
-          </p>
+          <p className="text-label-medium text-content-normal">&quot;내가 지난주에 수정한 코드 보여줘&quot;</p>
           <p className="text-label-medium text-content-normal">&quot;나한테 멘션된 이슈 찾아줘&quot;</p>
         </div>
 
         <div className="text-label-medium text-content-normal">
           <p>
-            Catch Up이 이런 질문에 헤매지 않고, 진짜 &apos;나&apos;를 위한 답을 내놓을 수 있도록 여러분의 모든
-            이름을 알려주세요.
+            Catch Up이 이런 질문에 헤매지 않고, 진짜 &apos;나&apos;를 위한 답을 내놓을 수 있도록 여러분의 모든 이름을
+            알려주세요.
           </p>
         </div>
       </section>
     </div>
   );
-};
-
-export default Support2Content;
+}

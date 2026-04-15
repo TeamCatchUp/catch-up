@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { chatMutations } from '@/features/chat/mutations';
 import type { AnswerActionButtonsProps } from '@/features/chat/types/props/actionProps';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { chatQueries } from '@/shared/queries/chatroom.queries';
 import { cn } from '@/shared/utils/cn';
 
@@ -16,7 +16,7 @@ const TOOLTIP_LABELS: Record<string, string> = {
   Rotate: '다시 시도하기',
 };
 
-const AnswerActionButtons = ({
+export default function AnswerActionButtons({
   icons,
   messageId,
   answerContent,
@@ -28,12 +28,17 @@ const AnswerActionButtons = ({
   setFeedbackVisibleMap,
   onRetry,
   onFeedbackSubmitted,
-}: AnswerActionButtonsProps) => {
+}: AnswerActionButtonsProps) {
   const queryClient = useQueryClient();
   const [bookmarked, setBookmarked] = useState(isSaved ?? false);
 
   // 3-state: true(좋아요), false(싫어요 확정), undefined(미평가)
   const [currentLiked, setCurrentLiked] = useState<boolean | undefined>(isLiked);
+
+  // 외부(FeedbackSection 등)에서 isLiked prop이 변경되면 로컬 state 동기화
+  useEffect(() => {
+    setCurrentLiked(isLiked);
+  }, [isLiked]);
 
   // 싫어요 확정 시 피드백 버튼 비활성화
   const isDislikeConfirmed = currentLiked === false;
@@ -131,8 +136,8 @@ const AnswerActionButtons = ({
               }
             }}
             className={cn(
-              'cursor-pointer rounded-lg p-1.5',
-              isFeedbackDisabled ? '' : 'icon-button-only-gray',
+              'rounded-lg p-1.5',
+              isFeedbackDisabled ? 'cursor-default' : 'cursor-pointer icon-button-only-gray',
               isThumbsDownPanelOpen && 'bg-fill-interaction-pressed border-edge-strong',
             )}
           >
@@ -160,6 +165,4 @@ const AnswerActionButtons = ({
       })}
     </div>
   );
-};
-
-export default AnswerActionButtons;
+}

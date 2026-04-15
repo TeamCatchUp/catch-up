@@ -6,6 +6,7 @@ from catchup.db.models import UserRole, UserStatus
 
 
 class CurrentUserInfo(BaseModel):
+    user_id: int | None = None
     email: EmailStr
     name: str
     role: str

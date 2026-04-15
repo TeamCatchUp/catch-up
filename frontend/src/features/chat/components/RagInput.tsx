@@ -28,7 +28,7 @@ interface RagInputProps {
   onNewMessage: () => void;
 }
 
-const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: RagInputProps) => {
+export default function RagInput({ filters, isLoading, onSendMessage, onStop, onNewMessage }: RagInputProps) {
   const [newInput, setNewInput] = useState('');
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -63,7 +63,7 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
 
   return (
     <div className="to-fill-normal bg-gradient-to-b from-transparent px-6 py-8 backdrop-blur-[10px] lg:px-24">
-      <div className="shadow-rag-bar border-edge-normal bg-fill-normal mx-auto flex w-full max-w-[776px] flex-none flex-col rounded-3xl border px-3 py-4">
+      <div className="shadow-rag-bar border-edge-normal bg-fill-normal mx-auto flex w-full max-w-194 flex-none flex-col rounded-3xl border px-3 py-4">
         {/* Filter Bar (카드 내부 상단) */}
         <div
           className={cn(
@@ -237,6 +237,4 @@ const RagInput = ({ filters, isLoading, onSendMessage, onStop, onNewMessage }: R
       </div>
     </div>
   );
-};
-
-export default RagInput;
+}

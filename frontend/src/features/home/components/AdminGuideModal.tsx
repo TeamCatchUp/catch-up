@@ -36,7 +36,7 @@ export default function AdminGuideModal({ onDismiss }: AdminGuideModalProps) {
 
   const handleNavigateIntegration = () => {
     onDismiss();
-    router.push('/mypage/integrations');
+    router.push('/admin/integrations');
   };
 
   const changeStep = (next: number) => {
@@ -63,7 +63,7 @@ export default function AdminGuideModal({ onDismiss }: AdminGuideModalProps) {
     <Dialog open onOpenChange={() => {}}>
       <DialogPortal>
         <DialogOverlay />
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-modal flex items-center justify-center">
           {showCloseConfirm ? (
             <CloseConfirmContent onDismiss={handleConfirmDismiss} onNavigate={handleNavigateIntegration} />
           ) : (
@@ -105,7 +105,7 @@ function GuideContent({
   onPrev: () => void;
 }) {
   return (
-    <div className="shadow-modal border-edge-strong bg-fill-normal flex h-[543px] w-[435px] flex-col overflow-clip rounded-2xl border p-6">
+    <div className="shadow-modal border-edge-strong bg-fill-normal flex h-135.75 w-108.75 flex-col overflow-clip rounded-2xl border p-6">
       {/* 콘텐츠 영역 */}
       <div
         className={`flex min-h-0 flex-1 flex-col gap-5 overflow-hidden transition-opacity duration-200 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}
@@ -153,7 +153,7 @@ function GuideContent({
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
             <div
               key={i}
-              className={`size-2.5 rounded-full ${i === step ? 'bg-blue-30' : 'bg-fill-interaction-hover'}`}
+              className={`size-2.5 rounded-full ${i === step ? 'bg-edge-primary' : 'bg-fill-interaction-hover'}`}
             />
           ))}
         </div>
@@ -175,10 +175,10 @@ function GuideContent({
 /** 닫기 확인 모달 본문 */
 function CloseConfirmContent({ onDismiss, onNavigate }: { onDismiss: () => void; onNavigate: () => void }) {
   return (
-    <div className="shadow-modal border-edge-strong bg-fill-normal flex w-[400px] flex-col gap-3 overflow-clip rounded-2xl border p-5">
+    <div className="shadow-modal border-edge-strong bg-fill-normal flex w-100 flex-col gap-3 overflow-clip rounded-2xl border p-5">
       {/* 텍스트 */}
       <div className="flex flex-col gap-3">
-        <p className="text-heading-medium text-orange-60">
+        <p className="text-heading-medium text-status-cautionary">
           원활한 캐치업 이용을 위해선
           <br />
           최소 1개 이상의 협업 툴을 연동해야 해요.

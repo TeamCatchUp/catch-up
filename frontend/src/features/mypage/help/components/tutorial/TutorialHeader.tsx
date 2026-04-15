@@ -14,11 +14,11 @@ interface TutorialHeaderProps {
   currentLabel: string;
 }
 
-const TutorialHeader = ({ prevLabel, prevHref, currentLabel }: TutorialHeaderProps) => {
+export default function TutorialHeader({ prevLabel, prevHref, currentLabel }: TutorialHeaderProps) {
   const router = useRouter();
 
   return (
-    <div className="border-b-edge-neutral bg-fill-normal sticky top-0 z-10 flex h-13 shrink-0 items-center justify-between border-b px-16 py-2">
+    <div className="border-b-edge-neutral bg-fill-normal sticky top-0 z-base flex h-13 shrink-0 items-center justify-between border-b px-16 py-2">
       {/* 좌측: 브레드크럼 */}
       <div className="flex items-center justify-center">
         <Link
@@ -52,6 +52,4 @@ const TutorialHeader = ({ prevLabel, prevHref, currentLabel }: TutorialHeaderPro
       </div>
     </div>
   );
-};
-
-export default TutorialHeader;
+}

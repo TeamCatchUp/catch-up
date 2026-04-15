@@ -14,18 +14,19 @@ Slack SDK의 AsyncWebClient를 래핑하여 동시 요청 제어 및 에러 핸�
 """
 
 import asyncio
-import structlog
-from typing import Any
 from time import monotonic
+from typing import Any
 
+import structlog
+from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_base_client import async_default_handlers
 from slack_sdk.web.async_client import AsyncWebClient
-from slack_sdk.errors import SlackApiError
 
-from catchup.connectors.slack.rate_limiter import get_slack_rate_limiter
-from catchup.connectors.base.exceptions import ConnectorApiError, RateLimitError
-from catchup.connectors.base.retry import parse_retry_after_header
 from catchup.configs.config import settings
+from catchup.connectors.base.exceptions import ConnectorApiError
+from catchup.connectors.base.exceptions import RateLimitError
+from catchup.connectors.base.retry import parse_retry_after_header
+from catchup.connectors.slack.rate_limiter import get_slack_rate_limiter
 
 logger = structlog.getLogger(__name__)
 
@@ -387,6 +388,8 @@ class SlackApiClientWrapper:
         self,
         channel: str,
         ts: str,
+        *,
+        thread_ts: str | None = None,
     ) -> dict[str, Any] | None:
         """
         특정 ts의 메시지 1건 조회
@@ -398,19 +401,211 @@ class SlackApiClientWrapper:
         Returns:
             Slack 메시지 dict 또는 None
         """
-        response = await self.get_conversation_history(
-            channel=channel,
-            oldest=ts,
-            latest=ts,
-            limit=1,
-            inclusive=True,
-        )
+        if thread_ts and thread_ts != ts:
+            response = await self.get_conversation_replies(
+                channel=channel,
+                ts=thread_ts,
+                oldest=ts,
+                latest=ts,
+                limit=2,
+                inclusive=True,
+            )
+        else:
+            response = await self.get_conversation_history(
+                channel=channel,
+                oldest=ts,
+                latest=ts,
+                limit=1,
+                inclusive=True,
+            )
 
         for message in response.get("messages", []):
             if message.get("ts") == ts:
                 return message
 
         return None
+
+    async def post_message(
+        self,
+        *,
+        channel: str,
+        text: str,
+        thread_ts: str | None = None,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        return await self._call_api(
+            "chat_postMessage",
+            "chat_postMessage",
+            channel=channel,
+            text=text,
+            thread_ts=thread_ts,
+            blocks=blocks,
+        )
+
+    async def post_ephemeral(
+        self,
+        *,
+        channel: str,
+        user: str,
+        text: str,
+        thread_ts: str | None = None,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        return await self._call_api(
+            "chat_postEphemeral",
+            "chat_postEphemeral",
+            channel=channel,
+            user=user,
+            text=text,
+            thread_ts=thread_ts,
+            blocks=blocks,
+        )
+
+    async def update_message(
+        self,
+        *,
+        channel: str,
+        ts: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        return await self._call_api(
+            "chat_update",
+            "chat_update",
+            channel=channel,
+            ts=ts,
+            text=text,
+            blocks=blocks,
+        )
+
+    async def open_view(
+        self,
+        *,
+        trigger_id: str,
+        view: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self._call_api(
+            "views_open",
+            "api_call",
+            api_method="views.open",
+            json={
+                "trigger_id": trigger_id,
+                "view": view,
+            },
+        )
+
+    async def update_view(
+        self,
+        *,
+        view_id: str,
+        hash: str,
+        view: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self._call_api(
+            "views_update",
+            "api_call",
+            api_method="views.update",
+            json={
+                "view_id": view_id,
+                "hash": hash,
+                "view": view,
+            },
+        )
+
+    async def start_stream(
+        self,
+        *,
+        channel: str,
+        thread_ts: str,
+        recipient_user_id: str,
+        recipient_team_id: str,
+        task_display_mode: str | None = None,
+        markdown_text: str | None = None,
+        chunks: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "channel": channel,
+            "thread_ts": thread_ts,
+            "recipient_user_id": recipient_user_id,
+            "recipient_team_id": recipient_team_id,
+        }
+        if task_display_mode is not None:
+            payload["task_display_mode"] = task_display_mode
+        if markdown_text is not None:
+            payload["markdown_text"] = markdown_text
+        if chunks is not None:
+            payload["chunks"] = chunks
+
+        return await self._call_api(
+            "chat_startStream",
+            "api_call",
+            api_method="chat.startStream",
+            json=payload,
+        )
+
+    async def append_stream(
+        self,
+        *,
+        channel: str,
+        ts: str,
+        markdown_text: str | None = None,
+        chunks: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "channel": channel,
+            "ts": ts,
+        }
+        if chunks is not None:
+            payload["chunks"] = chunks
+        if markdown_text is not None:
+            payload["markdown_text"] = markdown_text
+
+        return await self._call_api(
+            "chat_appendStream",
+            "api_call",
+            api_method="chat.appendStream",
+            json=payload,
+        )
+
+    async def stop_stream(
+        self,
+        *,
+        channel: str,
+        ts: str,
+        markdown_text: str | None = None,
+        chunks: list[dict[str, Any]] | None = None,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "channel": channel,
+            "ts": ts,
+        }
+        if markdown_text is not None:
+            payload["markdown_text"] = markdown_text
+        if chunks:
+            payload["chunks"] = chunks
+        if blocks is not None:
+            payload["blocks"] = blocks
+
+        return await self._call_api(
+            "chat_stopStream",
+            "api_call",
+            api_method="chat.stopStream",
+            json=payload,
+        )
+
+    async def delete_message(
+        self,
+        *,
+        channel: str,
+        ts: str,
+    ) -> dict[str, Any]:
+        return await self._call_api(
+            "chat_delete",
+            "chat_delete",
+            channel=channel,
+            ts=ts,
+        )
 
     # ================================================================
     # User APIs

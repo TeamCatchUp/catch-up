@@ -9,7 +9,7 @@ interface TutorialPaginationProps {
   currentId: number;
 }
 
-const TutorialPagination = ({ currentId }: TutorialPaginationProps) => {
+export default function TutorialPagination({ currentId }: TutorialPaginationProps) {
   const currentIndex = TUTORIALS.findIndex((t) => t.id === currentId);
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < TUTORIALS.length - 1;
@@ -69,6 +69,4 @@ const TutorialPagination = ({ currentId }: TutorialPaginationProps) => {
       </Link>
     </div>
   );
-};
-
-export default TutorialPagination;
+}

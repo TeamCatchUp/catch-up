@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
 from typing import Protocol, Sequence
 
 from catchup.audit.enums import AuditEventStatus, AuditLevel
@@ -9,22 +7,14 @@ from catchup.db.models import SyncConnector, SyncType
 from catchup.events.enums import SyncTriggerEventAction
 from catchup.sync.audit import SyncAuditContext, emit_sync_trigger_audit
 from catchup.sync.common.schemas import SyncEventSeed
-
-
-@dataclass(slots=True, frozen=True)
-class DispatchObserverContext:
-    connector: SyncConnector
-    sync_type: SyncType
-    scope_id: str
-    job_id: str
-    requested_at: datetime
+from catchup.sync.dispatch.types import DispatchContext
 
 
 class SyncDispatchObserver(Protocol):
     def on_dispatch_requested(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         event_seeds: Sequence[SyncEventSeed],
     ) -> None: ...
@@ -32,7 +22,7 @@ class SyncDispatchObserver(Protocol):
     def on_db_persisted(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         event_seeds: Sequence[SyncEventSeed],
     ) -> None: ...
@@ -40,7 +30,7 @@ class SyncDispatchObserver(Protocol):
     def on_db_persist_failed(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         event_seeds: Sequence[SyncEventSeed],
         error: Exception,
@@ -49,7 +39,7 @@ class SyncDispatchObserver(Protocol):
     def on_stream_published(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         target_count: int,
         published_count: int,
@@ -58,7 +48,7 @@ class SyncDispatchObserver(Protocol):
     def on_stream_publish_failed(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         target_count: int,
         error: Exception | None = None,
@@ -71,7 +61,7 @@ class NullSyncDispatchObserver:
     def on_dispatch_requested(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         event_seeds: Sequence[SyncEventSeed],
     ) -> None:
@@ -80,7 +70,7 @@ class NullSyncDispatchObserver:
     def on_db_persisted(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         event_seeds: Sequence[SyncEventSeed],
     ) -> None:
@@ -89,7 +79,7 @@ class NullSyncDispatchObserver:
     def on_db_persist_failed(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         event_seeds: Sequence[SyncEventSeed],
         error: Exception,
@@ -99,7 +89,7 @@ class NullSyncDispatchObserver:
     def on_stream_published(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         target_count: int,
         published_count: int,
@@ -109,7 +99,7 @@ class NullSyncDispatchObserver:
     def on_stream_publish_failed(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         target_count: int,
         error: Exception | None = None,
@@ -123,7 +113,7 @@ class FullSyncDispatchObserver(NullSyncDispatchObserver):
     def on_dispatch_requested(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         event_seeds: Sequence[SyncEventSeed],
     ) -> None:
@@ -136,7 +126,7 @@ class FullSyncDispatchObserver(NullSyncDispatchObserver):
     def on_db_persisted(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         event_seeds: Sequence[SyncEventSeed],
     ) -> None:
@@ -149,7 +139,7 @@ class FullSyncDispatchObserver(NullSyncDispatchObserver):
     def on_db_persist_failed(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         event_seeds: Sequence[SyncEventSeed],
         error: Exception,
@@ -167,7 +157,7 @@ class FullSyncDispatchObserver(NullSyncDispatchObserver):
     def on_stream_published(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         target_count: int,
         published_count: int,
@@ -184,7 +174,7 @@ class FullSyncDispatchObserver(NullSyncDispatchObserver):
     def on_stream_publish_failed(
         self,
         *,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         trigger: str,
         target_count: int,
         error: Exception | None = None,
@@ -209,7 +199,7 @@ class FullSyncDispatchObserver(NullSyncDispatchObserver):
         self,
         *,
         status: AuditEventStatus,
-        context: DispatchObserverContext,
+        context: DispatchContext,
         context_text: str,
         level: AuditLevel = AuditLevel.INFO,
     ) -> None:

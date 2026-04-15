@@ -1,12 +1,12 @@
 import { cn } from '@/shared/utils/cn';
 
 import { CATEGORY_LABEL, RESOURCE_LABEL } from '../../constants/auditLogConfig';
-import type { AuditIntegrationLog } from '../../types/auditIntegrationLog';
+import type { AuditIntegrationLog } from '../../types/auditIntegrationLogModel';
 import { formatDate } from '../../utils/formatDate';
-import { getServiceIconCls, InfoRow, ResourceIcon, SERVICE_NAMES, ServiceIcon, StatusBadgeRow } from './helpers';
+import { getServiceIconCls, InfoRow, ResourceIcon, SERVICE_NAMES, ServiceIcon, StatusBadgeRow } from './Helpers';
 
 /** 동기화/연동 상세 패널 */
-const SyncIntegrationDetail = ({ log }: { log: AuditIntegrationLog }) => {
+export default function SyncIntegrationDetail({ log }: { log: AuditIntegrationLog }) {
   const iconCls = getServiceIconCls(log.service);
 
   return (
@@ -19,7 +19,7 @@ const SyncIntegrationDetail = ({ log }: { log: AuditIntegrationLog }) => {
 
       <div className="flex flex-col gap-9">
         {/* 기본 정보 */}
-        <div className="flex flex-col gap-2 tracking-tight">
+        <div className="flex flex-col gap-2">
           <InfoRow label="일자" value={formatDate(log.executedAt)} />
           <InfoRow label="구분" value={CATEGORY_LABEL[log.category]} />
           <StatusBadgeRow status={log.status} />
@@ -63,6 +63,4 @@ const SyncIntegrationDetail = ({ log }: { log: AuditIntegrationLog }) => {
       </div>
     </div>
   );
-};
-
-export default SyncIntegrationDetail;
+}

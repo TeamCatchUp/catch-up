@@ -1,80 +1,94 @@
-from enum import StrEnum
 import logging
+from enum import StrEnum
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query
-from sqlalchemy import and_, delete, func, or_, select
-from sqlalchemy.orm import Session, aliased
+from fastapi import APIRouter
+from fastapi import Body
+from fastapi import Depends
+from fastapi import HTTPException
+from fastapi import Path
+from fastapi import Query
+from sqlalchemy import and_
+from sqlalchemy import delete
+from sqlalchemy import func
+from sqlalchemy import or_
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from sqlalchemy.orm import aliased
 
-from catchup.user.role_service import promote_admin_role
-from catchup.user.role_service import revoke_admin_role
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.actions import UserRoleAction
+from catchup.audit.enums import AuditEventStatus
+from catchup.audit.enums import AuditLevel
 from catchup.audit.metadata import AdminOAuthAuditMetadata
+from catchup.audit.metadata import UserAuditMetadata
 from catchup.audit.service import emit_audit_event
+from catchup.audit.utils import audit_log
 from catchup.auth.dependencies import require_admin_user
 from catchup.chat.schemas import UserQueryWithSaveStatusResponse
 from catchup.db.chat_room import get_all_queries_for_admin
 from catchup.db.dependencies import get_db
-from catchup.db.models import (
-    ConfluenceSpace,
-    ConfluenceUser,
-    GitHubUser,
-    GithubRepository,
-    InactiveUser,
-    JiraAccountType,
-    JiraProject,
-    JiraUser,
-    PreMappingBuffer,
-    SyncConnector,
-    SlackUser,
-    SourceType,
-    User,
-    UserStatus,
-    UserRole,
+from catchup.db.models import ConfluenceSpace
+from catchup.db.models import ConfluenceUser
+from catchup.db.models import GithubRepository
+from catchup.db.models import GitHubUser
+from catchup.db.models import JiraAccountType
+from catchup.db.models import JiraProject
+from catchup.db.models import JiraUser
+from catchup.db.models import PreMappingBuffer
+from catchup.db.models import SlackUser
+from catchup.db.models import SourceType
+from catchup.db.models import SyncConnector
+from catchup.db.models import User
+from catchup.db.sync.admin_connector_status import (
+    list_admin_connector_target_range_rows,
 )
-from catchup.db.sync.admin_connector_status import list_admin_connector_target_range_rows
 from catchup.db.user_source_mapping import SOURCE_MAP
-from catchup.db.users import get_all_oauth_users_for_admin, get_all_users_for_admin
-from catchup.events.enums import AdminOAuthAction, EventType
+from catchup.db.users import get_all_oauth_users_for_admin
+from catchup.db.users import get_all_users_for_admin
+from catchup.events.enums import AdminOAuthAction
+from catchup.events.enums import EventType
 from catchup.onboarding.oauth import sync_initial_keycloak_users
-from catchup.server.auth.schemas import (
-    ConfluenceSyncableResponse,
-    ConfluenceSyncableSpace,
-    GithubSyncableRepository,
-    GithubSyncableResponse,
-    JiraSyncableProject,
-    JiraSyncableResponse,
-)
-from catchup.server.admin.schemas import (
-    AdminConnectorStatusResponse,
-    AdminConnectorTargetRangeResponse,
-    OAuthUserResponse,
-    PreMappingBulkUpdateRequest,
-    PreMappingInfo,
-    SyncStatusCounts,
-    ToolUserResponse,
-    UserResponse,
-    UserSyncMapping,
-    UserSyncStatusResponse,
-    SourceUserCount,
-    AdminUserListResponse,
-    AdminUserListItem,
-    AdminUserDetailResponse,
-    DeactivateUserRequest,
-    DeactivateUserResponse,
-    DeleteUserResponse,
-    PromoteUserResponse,
-    RevokeUserResponse,
-    UserIntegrations,
-    JiraAccount,
-    GithubAccount,
-    SlackAccount,
-    ConfluenceAccount,
-    ConfluenceCloudIdListResponse,
-    ConnectorResourceType,
-    ConnectorStatusSource,
-)
-from catchup.server.schemas import BasePagination, calculate_skip
+from catchup.server.admin.schemas import AdminConnectorStatusResponse
+from catchup.server.admin.schemas import AdminConnectorTargetRangeResponse
+from catchup.server.admin.schemas import AdminUserDetailResponse
+from catchup.server.admin.schemas import AdminUserListItem
+from catchup.server.admin.schemas import AdminUserListResponse
+from catchup.server.admin.schemas import ConfluenceAccount
+from catchup.server.admin.schemas import ConfluenceCloudIdListResponse
+from catchup.server.admin.schemas import ConnectorResourceType
+from catchup.server.admin.schemas import ConnectorStatusSource
+from catchup.server.admin.schemas import DeactivateUserRequest
+from catchup.server.admin.schemas import DeactivateUserResponse
+from catchup.server.admin.schemas import DeleteUserRequest
+from catchup.server.admin.schemas import DeleteUserResponse
+from catchup.server.admin.schemas import GithubAccount
+from catchup.server.admin.schemas import JiraAccount
+from catchup.server.admin.schemas import OAuthUserResponse
+from catchup.server.admin.schemas import PreMappingBulkUpdateRequest
+from catchup.server.admin.schemas import PreMappingInfo
+from catchup.server.admin.schemas import PromoteUserRequest
+from catchup.server.admin.schemas import PromoteUserResponse
+from catchup.server.admin.schemas import RevokeUserRequest
+from catchup.server.admin.schemas import RevokeUserResponse
+from catchup.server.admin.schemas import SlackAccount
+from catchup.server.admin.schemas import SourceUserCount
+from catchup.server.admin.schemas import SyncStatusCounts
+from catchup.server.admin.schemas import ToolUserResponse
+from catchup.server.admin.schemas import UserIntegrations
+from catchup.server.admin.schemas import UserResponse
+from catchup.server.admin.schemas import UserSyncMapping
+from catchup.server.auth.schemas import ConfluenceSyncableResponse
+from catchup.server.auth.schemas import ConfluenceSyncableSpace
+from catchup.server.auth.schemas import GithubSyncableRepository
+from catchup.server.auth.schemas import GithubSyncableResponse
+from catchup.server.auth.schemas import JiraSyncableProject
+from catchup.server.auth.schemas import JiraSyncableResponse
+from catchup.server.schemas import BasePagination
+from catchup.server.schemas import calculate_skip
+from catchup.user.role_service import promote_admin_role
+from catchup.user.role_service import revoke_admin_role
+from catchup.user.status_service import deactivate_user as deactivate_user_service
+from catchup.user.status_service import delete_user as delete_user_service
 
 logger = logging.getLogger(__name__)
 
@@ -153,105 +167,6 @@ def get_connector_status(
     _admin_user: User = Depends(require_admin_user),
 ):
     return _get_connector_status(db, source=source)
-
-
-# ============================
-# Admin - User state change
-# ============================
-def _deactivate_user(
-    db: Session,
-    admin_user: User,
-    user_id: int,
-    reason: str,
-):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        logger.info("[ADMIN][USER_DEACTIVATE] user not found (user_id=%s)", user_id)
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if user.role == UserRole.ADMIN:
-        logger.info(
-            "[ADMIN][USER_DEACTIVATE] cannot deactivate admin user (user_id=%s)",
-            user_id,
-        )
-        raise HTTPException(status_code=403, detail="Cannot deactivate admin user")
-
-    if user.status == UserStatus.DELETED:
-        logger.info(
-            "[ADMIN][USER_DEACTIVATE] cannot deactivate deleted user (user_id=%s)",
-            user_id,
-        )
-        raise HTTPException(status_code=409, detail="User already deleted")
-
-    if user.status == UserStatus.INACTIVE:
-        logger.info(
-            "[ADMIN][USER_DEACTIVATE] already inactive (user_id=%s)", user_id
-        )
-        raise HTTPException(status_code=409, detail="User already inactive")
-
-    inactive = InactiveUser(
-        user_id=user.id,
-        reason=reason,
-        admin_id=admin_user.id,
-    )
-
-    user.status = UserStatus.INACTIVE
-    db.add(inactive)
-    db.commit()
-    db.refresh(user)
-    db.refresh(inactive)
-
-    logger.info(
-        "[ADMIN][USER_DEACTIVATE] action=deactivate user_id=%s admin_id=%s reason=%s",
-        user_id,
-        admin_user.id,
-        reason,
-    )
-
-    return DeactivateUserResponse(
-        userId=user.id,
-        status=user.status,
-        inactiveRecordId=inactive.id,
-        deactivatedAt=inactive.deactivated_at.isoformat(),
-        reason=inactive.reason,
-    )
-
-
-def _delete_user(db: Session, admin_user: User, user_id: int):
-    # 비활성 로그 없이 상태만 DELETED로 전환한다.
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        logger.info("[ADMIN][USER_DELETE] user not found (user_id=%s)", user_id)
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if user.role == UserRole.ADMIN:
-        logger.info("[ADMIN][USER_DELETE] cannot delete admin user (user_id=%s)", user_id)
-        raise HTTPException(status_code=403, detail="Cannot delete admin user")
-
-    if user.status == UserStatus.DELETED:
-        logger.info("[ADMIN][USER_DELETE] already deleted (user_id=%s)", user_id)
-        raise HTTPException(status_code=409, detail="User already deleted")
-
-    # 기존 비활성화 기록은 삭제한다 (상태 삭제 시 남기지 않음).
-    removed_logs = (
-        db.query(InactiveUser)
-        .filter(InactiveUser.user_id == user.id)
-        .delete(synchronize_session=False)
-    )
-
-    user.status = UserStatus.DELETED
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    logger.info(
-        "[ADMIN][USER_DELETE] action=delete user_id=%s admin_id=%s removed_inactive_logs=%s",
-        user_id,
-        admin_user.id,
-        removed_logs,
-    )
-
-    return DeleteUserResponse(userId=user.id, status=user.status)
 
 # ============================
 # Admin - User management
@@ -605,78 +520,97 @@ def get_user_sync_status(
 
 
 @router.post(
-    path="/users/deactivate/{user_id}",
+    path="/users/deactivate",
     description="관리자용 사용자 비활성화",
     response_model=DeactivateUserResponse,
 )
 def deactivate_user(
-    user_id: int,
     payload: DeactivateUserRequest,
-    db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin_user),
 ):
-    return _deactivate_user(
-        db=db,
-        admin_user=admin_user,
-        user_id=user_id,
+    result = deactivate_user_service(
+        admin_user_id=admin_user.id,
+        user_id=payload.userId,
         reason=payload.reason,
+    )
+    return DeactivateUserResponse(
+        userId=result.user_id,
+        status=result.status,
+        deactivatedAt=result.deactivated_at,
+        reason=result.reason,
     )
 
 
 @router.post(
-    path="/users/delete/{user_id}",
+    path="/users/delete",
     description="관리자용 사용자 삭제",
     response_model=DeleteUserResponse,
 )
 def delete_user(
-    user_id: int,
-    db: Session = Depends(get_db),
+    payload: DeleteUserRequest,
     admin_user: User = Depends(require_admin_user),
 ):
-    return _delete_user(db=db, admin_user=admin_user, user_id=user_id)
+    result = delete_user_service(
+        admin_user_id=admin_user.id,
+        user_id=payload.userId,
+        reason=payload.reason,
+    )
+    return DeleteUserResponse(
+        userId=result.user_id,
+        status=result.status,
+        deletedAt=result.deleted_at,
+        reason=result.reason,
+    )
 
 
 @router.post(
-    path="/users/promote/{user_id}",
+    path="/users/promote",
     description="관리자용 사용자 Admin 승격",
     response_model=PromoteUserResponse,
 )
-def promote_user_to_admin(
-    user_id: int,
-    db: Session = Depends(get_db),
-    _admin_user: User = Depends(require_admin_user),
-):
-    user = promote_admin_role(
-        db,
-        user_id=user_id,
-    )
-
-    return PromoteUserResponse(
-        user_id=user.id,
-        role=user.role,
-    )
-
-
-@router.post(
-    path="/users/revoke/{user_id}",
-    description="관리자용 사용자 Admin 권한 회수",
-    response_model=RevokeUserResponse,
+@audit_log(
+    UserRoleAction.PROMOTE,
+    metadata_factory=UserAuditMetadata.from_audit,
+    emit_attempt=True,
 )
-def revoke_admin_role_from_user(
-    user_id: int,
+def promote_user_to_admin(
+    payload: PromoteUserRequest,
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin_user),
 ):
-    user = revoke_admin_role(
+    result = promote_admin_role(
         db,
-        user_id=user_id,
+        user_id=payload.userId,
         actor_user_id=admin_user.id,
+        reason=payload.reason,
     )
 
-    return RevokeUserResponse(
-        user_id=user.id,
-        role=user.role,
+    return result
+
+
+@router.post(
+    path="/users/revoke",
+    description="관리자용 사용자 Admin 권한 회수",
+    response_model=RevokeUserResponse,
+)
+@audit_log(
+    UserRoleAction.REVOKE_ADMIN,
+    metadata_factory=UserAuditMetadata.from_audit,
+    emit_attempt=True,
+)
+def revoke_admin_role_from_user(
+    payload: RevokeUserRequest,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin_user),
+):
+    result = revoke_admin_role(
+        db,
+        user_id=payload.userId,
+        actor_user_id=admin_user.id,
+        reason=payload.reason,
     )
+
+    return result
 
 def _get_syncable_jira_projects(db: Session) -> JiraSyncableResponse:
     rows = (

@@ -7,7 +7,7 @@ from langchain_core.documents import Document
 from catchup.components.reranker.service import BaseRerankService
 from catchup.configs.config import settings
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.nodes.utils import rerank_semaphore
+from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
@@ -31,7 +31,7 @@ async def rerank_node(state: AgentState, rerank_service: BaseRerankService):
     retrieved_docs = _validate_retrieved_docs(retrieved_docs)
     final_docs = retrieved_docs
     try:
-        async with rerank_semaphore:
+        async with rag_semaphores.rerank:
             reranked_docs = await rerank_service.rerank(
                 query=query,
                 documents=retrieved_docs,

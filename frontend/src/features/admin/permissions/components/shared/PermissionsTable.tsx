@@ -10,15 +10,16 @@ import {
   ROLE_LABEL,
   TAG_BASE_CLASS,
 } from '../../constants/permissionsConfig';
-import type { PermissionMember } from '../../types/adminPermission';
+import type { PermissionMember } from '../../types/adminPermissionModel';
 
 interface PermissionsTableProps {
   rows: PermissionMember[];
   onChangeRoleClick: (member: PermissionMember) => void;
+  onRoleChangeClick: (member: PermissionMember) => void;
 }
 
 /** 권한 목록 테이블 */
-const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) => {
+export default function PermissionsTable({ rows, onChangeRoleClick, onRoleChangeClick }: PermissionsTableProps) {
   return (
     <section className="border-edge-neutral bg-fill-normal flex min-h-0 flex-1 flex-col overflow-hidden border-y">
       <div className="border-edge-neutral bg-fill-strong flex h-9 shrink-0 items-center border-b px-6 lg:px-9">
@@ -27,7 +28,7 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
           <span className="text-body-xsmall text-content-alternative text-center">직급</span>
           <span className="text-body-xsmall text-content-alternative text-center">부서</span>
           <span className="text-body-xsmall text-content-alternative text-center">권한</span>
-          <span aria-hidden className="block w-[110px]" />
+          <span aria-hidden className="block w-27.5" />
         </div>
       </div>
 
@@ -87,15 +88,24 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
                     <span className={cn(TAG_BASE_CLASS, ROLE_BADGE_CLASS[roleLabel])}>{roleLabel}</span>
                   </div>
 
-                  <div className="flex w-[110px] items-center justify-end">
-                    {member.role !== 'admin' && (
+                  <div className="flex w-27.5 items-center justify-end">
+                    {member.role !== 'admin' ? (
                       <Button
                         variant="box-outline-gray"
                         size="sm"
-                        className="h-7.5 w-[110px]"
+                        className="h-7.5 w-27.5"
                         onClick={() => onChangeRoleClick(member)}
                       >
                         Admin 권한 부여
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="box-outline-gray"
+                        size="sm"
+                        className="h-7.5 w-27.5"
+                        onClick={() => onRoleChangeClick(member)}
+                      >
+                        권한 변경
                       </Button>
                     )}
                   </div>
@@ -107,6 +117,4 @@ const PermissionsTable = ({ rows, onChangeRoleClick }: PermissionsTableProps) =>
       )}
     </section>
   );
-};
-
-export default PermissionsTable;
+}

@@ -12,7 +12,7 @@ import { Input } from '@/shared/components/ui/input';
 import { Separator } from '@/shared/components/ui/separator';
 
 import { DEFAULT_DAILY_LIMIT, DEFAULT_MONTHLY_LIMIT } from '../../constants/tokenUsageConfig';
-import type { LimitReleaseRequest } from '../../types/tokenUsage';
+import type { LimitReleaseRequest } from '../../types/tokenUsageModel';
 
 /** 정보 행 (label w-28 = 112px, gap-14 = 56px) */
 const InfoRow = ({ label, value }: { label: string; value: string }) => (
@@ -28,7 +28,7 @@ interface LimitReleaseDetailPanelProps {
   onReject: (id: string) => void;
 }
 
-const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseDetailPanelProps) => {
+export default function LimitReleaseDetailPanel({ request, onApprove, onReject }: LimitReleaseDetailPanelProps) {
   const [grantAmount, setGrantAmount] = useState('');
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
@@ -62,7 +62,7 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
         </div>
 
         {/* 정보 섹션 */}
-        <div className="text-body-small flex flex-col gap-4 tracking-tight">
+        <div className="text-body-small flex flex-col gap-4">
           {/* 기본 정보 */}
           <div className="flex flex-col gap-2">
             <InfoRow label="메일" value={request.email} />
@@ -109,7 +109,7 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
             </Link>
           </div>
           <Separator />
-          <div className="text-body-small flex flex-col gap-1 tracking-tight">
+          <div className="text-body-small flex flex-col gap-1">
             <div className="flex items-center justify-between">
               <span className="text-content-alternative">하루 최대 토큰 비용</span>
               <span className="text-content-neutral">
@@ -165,6 +165,4 @@ const LimitReleaseDetailPanel = ({ request, onApprove, onReject }: LimitReleaseD
       />
     </div>
   );
-};
-
-export default LimitReleaseDetailPanel;
+}

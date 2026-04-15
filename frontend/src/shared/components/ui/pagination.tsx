@@ -28,7 +28,7 @@ const getVisiblePages = (currentPage: number, totalPages: number) => {
 };
 
 /** 공통 숫자 페이지네이션 */
-const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) => {
+export default function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) {
   const visiblePages = getVisiblePages(currentPage, totalPages);
 
   return (
@@ -52,7 +52,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) 
               type="button"
               onClick={() => onPageChange(page)}
               className={cn(
-                'text-body-small rounded-md2 flex size-7.5 cursor-pointer items-center justify-center tracking-tight',
+                'text-body-small rounded-md2 flex size-7.5 cursor-pointer items-center justify-center',
                 isActive ? 'bg-dim-black-10 text-content-normal' : 'hover:bg-dim-black-10 text-content-alternative',
               )}
             >
@@ -73,6 +73,4 @@ const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) 
       </button>
     </div>
   );
-};
-
-export default Pagination;
+}

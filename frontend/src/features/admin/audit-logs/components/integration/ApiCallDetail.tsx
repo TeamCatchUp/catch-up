@@ -1,10 +1,10 @@
 import { CATEGORY_LABEL } from '../../constants/auditLogConfig';
-import type { AuditIntegrationLog } from '../../types/auditIntegrationLog';
+import type { AuditIntegrationLog } from '../../types/auditIntegrationLogModel';
 import { formatDate } from '../../utils/formatDate';
-import { getServiceIconCls, InfoRow, SERVICE_NAMES, ServiceIcon } from './helpers';
+import { getServiceIconCls, InfoRow, SERVICE_NAMES, ServiceIcon } from './Helpers';
 
 /** API 호출 상세 패널 */
-const ApiCallDetail = ({ log }: { log: AuditIntegrationLog }) => {
+export default function ApiCallDetail({ log }: { log: AuditIntegrationLog }) {
   const iconCls = getServiceIconCls(log.service);
 
   return (
@@ -17,7 +17,7 @@ const ApiCallDetail = ({ log }: { log: AuditIntegrationLog }) => {
 
       <div className="flex flex-col gap-9">
         {/* 기본 정보 (상태 없음) */}
-        <div className="flex flex-col gap-2 tracking-tight">
+        <div className="flex flex-col gap-2">
           <InfoRow label="일자" value={formatDate(log.executedAt)} />
           <InfoRow label="구분" value={CATEGORY_LABEL[log.category]} />
         </div>
@@ -49,6 +49,4 @@ const ApiCallDetail = ({ log }: { log: AuditIntegrationLog }) => {
       </div>
     </div>
   );
-};
-
-export default ApiCallDetail;
+}

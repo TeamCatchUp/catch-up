@@ -11,7 +11,7 @@ import Pagination from '@/shared/components/ui/pagination';
 import { cn } from '@/shared/utils/cn';
 
 import { ROLE_FILTER_OPTIONS, type RoleFilter } from '../../constants/permissionsConfig';
-import type { PermissionMember } from '../../types/adminPermission';
+import type { PermissionMember } from '../../types/adminPermissionModel';
 import PermissionsTable from '../shared/PermissionsTable';
 
 interface PermissionsListSectionProps {
@@ -27,10 +27,11 @@ interface PermissionsListSectionProps {
   isError: boolean;
   onRetry: () => void;
   onChangeRoleClick: (member: PermissionMember) => void;
+  onRoleChangeClick: (member: PermissionMember) => void;
 }
 
 /** 권한 목록 섹션 */
-const PermissionsListSection = ({
+export default function PermissionsListSection({
   searchTerm,
   onSearchTermChange,
   roleFilter,
@@ -43,7 +44,8 @@ const PermissionsListSection = ({
   isError,
   onRetry,
   onChangeRoleClick,
-}: PermissionsListSectionProps) => {
+  onRoleChangeClick,
+}: PermissionsListSectionProps) {
   return (
     <section className="flex w-full flex-col gap-3">
       <div className="flex items-end justify-between">
@@ -85,7 +87,7 @@ const PermissionsListSection = ({
         </div>
       </div>
 
-      <div className="bg-fill-normal flex h-[872px] flex-col overflow-hidden">
+      <div className="bg-fill-normal flex h-218 flex-col overflow-hidden">
         {isLoading ? (
           <div className="flex h-full flex-col gap-3 p-5">
             <div className="bg-fill-interaction-hover h-9 animate-pulse rounded-lg" />
@@ -102,7 +104,7 @@ const PermissionsListSection = ({
           </div>
         ) : (
           <>
-            <PermissionsTable rows={rows} onChangeRoleClick={onChangeRoleClick} />
+            <PermissionsTable rows={rows} onChangeRoleClick={onChangeRoleClick} onRoleChangeClick={onRoleChangeClick} />
             <div className="flex h-21 shrink-0 items-center justify-center">
               <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={onPageChange} />
             </div>
@@ -111,6 +113,4 @@ const PermissionsListSection = ({
       </div>
     </section>
   );
-};
-
-export default PermissionsListSection;
+}

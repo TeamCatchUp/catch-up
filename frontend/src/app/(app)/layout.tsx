@@ -7,8 +7,9 @@ import InboxPanel from '@/shared/components/layout/panels/InboxPanel';
 import QuestionsHistoryPanel from '@/shared/components/layout/panels/QuestionsHistoryPanel';
 import SettingsPanel from '@/shared/components/layout/panels/SettingsPanel';
 import SideNavBar from '@/shared/components/layout/sideNavBar/SideNavBar';
-import Toast from '@/shared/components/ui/Toast';
-import { TooltipProvider } from '@/shared/components/ui/ToolTip';
+import FloatingActionButton from '@/shared/components/ui/floating-action-button';
+import Toast from '@/shared/components/ui/toast';
+import { TooltipProvider } from '@/shared/components/ui/tooltip';
 import { useCurrentUser } from '@/shared/hooks/useCurrentUser';
 import { useSidebarStore } from '@/shared/store/sidebarStore';
 import { cn } from '@/shared/utils/cn';
@@ -56,7 +57,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         </aside>
         <div
           className={cn(
-            'absolute top-0 z-60 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
+            'absolute top-0 z-panel h-full overflow-hidden transition-[width,left] duration-300 ease-out',
             isSidebarOpen ? 'left-60.25' : 'left-18',
             activePanel === 'inbox' ? 'w-104.5' : 'w-0',
           )}
@@ -73,7 +74,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
         </div>
         <div
           className={cn(
-            'absolute top-0 z-60 h-full overflow-hidden transition-[width,left] duration-300 ease-out',
+            'absolute top-0 z-panel h-full overflow-hidden transition-[width,left] duration-300 ease-out',
             isSidebarOpen ? 'left-60.25' : 'left-18',
             activePanel === 'questionsHistory' ? 'w-95' : 'w-0',
           )}
@@ -84,6 +85,7 @@ export default function AfterLoginLayout({ children }: { children: React.ReactNo
           <main className="flex-1 overflow-auto">{children}</main>
         </div>
       </div>
+      <FloatingActionButton />
       <Toast />
     </TooltipProvider>
   );

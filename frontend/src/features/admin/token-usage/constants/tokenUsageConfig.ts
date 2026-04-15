@@ -1,5 +1,3 @@
-import type { TokenUsageSummary } from '../types/tokenUsage';
-
 /** 탭 목록 */
 export const TOKEN_USAGE_TABS = ['나의 토큰 사용량', '조직 토큰 사용량', '이용자 관리', '제한 해제 요청'] as const;
 export type TokenUsageTab = (typeof TOKEN_USAGE_TABS)[number];
@@ -27,15 +25,8 @@ export const toTabSlug = (tab: TokenUsageTab): TokenUsageTabSlug => TAB_TO_SLUG[
 export const fromTabSlug = (slug: string): TokenUsageTab =>
   SLUG_TO_TAB[slug as TokenUsageTabSlug] ?? '나의 토큰 사용량';
 
-/** 상태 Badge 매핑 */
-export const STATUS_CONFIG: Record<
-  TokenUsageSummary['status'],
-  { label: string; variant: 'success' | 'orange' | 'red' }
-> = {
-  normal: { label: '정상', variant: 'success' },
-  warning: { label: '주의', variant: 'orange' },
-  exceeded: { label: '초과', variant: 'red' },
-};
+/** 전체 기간 조회 시 사용하는 기준 시작일 (서비스 런칭일 기준, 최대 조회 3년 제한) */
+export const STATS_EPOCH_START_DATE = '2026-01-01T00:00:00Z';
 
 /** 설정 기본값 (프론트 고정) */
 export const DEFAULT_DAILY_LIMIT = 5;
@@ -53,7 +44,7 @@ export const USER_MGMT_SORT_OPTIONS: { key: UserMgmtSortKey; label: string }[] =
 /** 직급 Badge 색상 (members RANK_BADGE_CLASS 동일) */
 export const POSITION_BADGE_CLASS: Record<string, string> = {
   경영진: 'bg-accent-red-orange-neutral text-accent-red-orange',
-  팀장: 'bg-accent-violet-lighten text-accent-violet',
+  팀장: 'bg-accent-violet-neutral text-accent-violet',
   팀원: 'bg-fill-primary-normal-neutral text-content-primary',
 };
 

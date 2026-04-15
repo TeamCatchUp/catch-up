@@ -1,10 +1,26 @@
 import structlog
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from psycopg_pool import AsyncConnectionPool
 
 from catchup.configs.config import settings
 
 logger = structlog.get_logger(__name__)
+
+# langgraph-checkpoint v4 보안 정책으로 인해
+# AgentState 내 커스텀 타입을 allowlist 등록해야 함.
+_ALLOWED_MSGPACK_MODULES: list[tuple[str, str]] = [
+    ("catchup.rag.schemas.sources", "SourceType"),
+    ("catchup.rag.schemas.sources", "EntityType"),
+    ("catchup.rag.schemas.sources", "ConfluenceSource"),
+    ("catchup.rag.schemas.sources", "SlackSource"),
+    ("catchup.rag.schemas.sources", "GithubSource"),
+    ("catchup.rag.schemas.sources", "JiraSource"),
+    ("catchup.rag.schemas.context", "GlobalContext"),
+    ("catchup.rag.schemas.structures", "VectorDbSearchQuery"),
+    ('catchup.db.models', 'SourceType'),
+    ('catchup.rag.schemas.prompt_settings', 'PromptSettings'),
+]
 
 _checkpointer = None
 _pool = None
@@ -29,7 +45,8 @@ async def init_langgraph_checkpointer():
         )
         await _pool.open()
         
-        _checkpointer = AsyncPostgresSaver(conn=_pool)
+        serde = JsonPlusSerializer(allowed_msgpack_modules=_ALLOWED_MSGPACK_MODULES)
+        _checkpointer = AsyncPostgresSaver(conn=_pool, serde=serde)
         await _checkpointer.setup()
         
         logger.info(

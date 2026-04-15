@@ -1,11 +1,21 @@
 from typing import Optional
-from sqlalchemy import delete, select, update
+
+from sqlalchemy import delete
+from sqlalchemy import select
+from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from catchup.db.models import ConfluenceUser, GitHubUser, JiraUser, OAuthUser, PreMappingBuffer, SlackUser, SourceType
+from catchup.db.models import ConfluenceUser
+from catchup.db.models import GitHubUser
+from catchup.db.models import JiraUser
+from catchup.db.models import OAuthUser
+from catchup.db.models import PreMappingBuffer
+from catchup.db.models import SlackUser
+from catchup.db.models import SourceType
+from catchup.db.models import User
+from catchup.db.models import UserSourceMapping
 from catchup.mapping.schemas import OAuthUserSchema
-
 
 #(user_model, target, filter, extra_filter, extra_filter_value)
 SOURCE_MAP = {
@@ -110,6 +120,54 @@ def find_premapped_names_by_source_type(
     return {external_user_identifier: name for external_user_identifier, name in rows}
 
 
+def find_user_id_by_source_mapping(
+    db: Session,
+    *,
+    source_type: SourceType,
+    external_user_identifier: str,
+) -> int | None:
+    if not external_user_identifier:
+        return None
+
+    stmt = (
+        select(UserSourceMapping.user_id)
+        .where(
+            UserSourceMapping.source_type == source_type,
+            UserSourceMapping.external_user_identifier == external_user_identifier,
+        )
+    )
+    return db.scalar(stmt)
+
+
+def find_user_names_by_source_mappings(
+    db: Session,
+    *,
+    source_type: SourceType,
+    external_user_identifiers: list[str],
+) -> dict[str, str]:
+    identifiers = list(dict.fromkeys(identifier for identifier in external_user_identifiers if identifier))
+    if not identifiers:
+        return {}
+
+    rows = db.execute(
+        select(
+            UserSourceMapping.external_user_identifier,
+            User.name,
+        )
+        .join(User, User.id == UserSourceMapping.user_id)
+        .where(
+            UserSourceMapping.source_type == source_type,
+            UserSourceMapping.external_user_identifier.in_(identifiers),
+        )
+    ).all()
+
+    return {
+        external_user_identifier: name
+        for external_user_identifier, name in rows
+        if external_user_identifier and name
+    }
+
+
 def add_new_mapping(
     db: Session,
     new_mapping: PreMappingBuffer
@@ -117,6 +175,31 @@ def add_new_mapping(
     """새로운 pre-mapping 정보를 추가한다."""
     db.add(new_mapping)
     return new_mapping
+
+
+def upsert_user_source_mapping(
+    db: Session,
+    user_id: int,
+    source_type: SourceType,
+    external_user_identifier: str,
+) -> None:
+    """
+    UserSourceMapping을 upsert한다.
+    (user_id, source_type) 중복 시 external_user_identifier만 갱신.
+    """
+    stmt = (
+        insert(UserSourceMapping)
+        .values(
+            user_id=user_id,
+            source_type=source_type,
+            external_user_identifier=external_user_identifier,
+        )
+        .on_conflict_do_update(
+            constraint="uq_user_source",
+            set_={"external_user_identifier": external_user_identifier},
+        )
+    )
+    db.execute(stmt)
 
 
 def upsert_oauth_users(
@@ -171,3 +254,35 @@ def get_pending_source_premappings(
         )
     )
     return db.scalars(stmt).all()
+
+
+def reconcile_missing_user_source_mappings(db: Session) -> int:
+    """
+    is_registered=True인 PreMappingBuffer 중 UserSourceMapping이 없는 항목을 일괄 생성한다.
+    서버 시작 시 한 번 실행하는 멱등성 보장 조치.
+    """
+    stmt = (
+        select(PreMappingBuffer, OAuthUser.user_id)
+        .join(OAuthUser, OAuthUser.sub == PreMappingBuffer.sub)
+        .outerjoin(
+            UserSourceMapping,
+            (UserSourceMapping.user_id == OAuthUser.user_id)
+            & (UserSourceMapping.source_type == PreMappingBuffer.source_type),
+        )
+        .where(
+            PreMappingBuffer.is_registered == True,
+            OAuthUser.user_id.isnot(None),
+            UserSourceMapping.user_id.is_(None),
+        )
+    )
+    rows = db.execute(stmt).all()
+
+    for buffer, user_id in rows:
+        db.add(
+            UserSourceMapping(
+                user_id=user_id,
+                source_type=buffer.source_type,
+                external_user_identifier=buffer.external_user_identifier,
+            )
+        )
+    return len(rows)

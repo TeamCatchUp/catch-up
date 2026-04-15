@@ -15,7 +15,7 @@ import AuditLogFilterBar from '../AuditLogFilterBar';
 const PAGE_SIZE = 15;
 
 /** 감사 로그 — 질문 탭 섹션 */
-const QuestionLogSection = () => {
+export default function QuestionLogSection() {
   const { data: logs = [] } = useQuery(auditLogsQueries.questions());
 
   const sort = useAuditQuestionFilterStore((s) => s.sort);
@@ -134,6 +134,4 @@ const QuestionLogSection = () => {
       </div>
     </div>
   );
-};
-
-export default QuestionLogSection;
+}

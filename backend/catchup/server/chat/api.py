@@ -1,22 +1,24 @@
-import logging
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
+from fastapi import Depends
 from fastapi.responses import StreamingResponse
 
-from catchup.audit.enums import AuditEventStatus, AuditLevel
+from catchup.audit.actions import ChatAction
+from catchup.audit.base import AuditLevel
+from catchup.audit.base import AuditStatus
+from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import ChatAuditMetadata
-from catchup.audit.service import emit_audit_event
 from catchup.chat.dependencies import get_valid_chat_room
-from catchup.chat.factory import get_chat_service
-from catchup.chat.schemas import ChatRequest, ChatResponse
 from catchup.chat.engine import ChatService
+from catchup.chat.factory import get_chat_service
+from catchup.chat.schemas import ChatRequest
+from catchup.chat.schemas import ChatResponse
 from catchup.db.models import ChatRoom
-from catchup.events.enums import ChatEventAction, EventType
-from catchup.rag.schemas.context import GlobalContext
+from catchup.rag.dependencies import get_prompt_settings
 from catchup.rag.dependencies import get_rag_global_context
-
-logger = logging.getLogger()
+from catchup.rag.schemas.context import GlobalContext
+from catchup.rag.schemas.prompt_settings import PromptSettings
 
 router = APIRouter(
     prefix="/api/v1/chat",
@@ -46,23 +48,23 @@ async def chat_response(
 async def chat_response_stream(
     request: ChatRequest,
     service: ChatService = Depends(get_chat_service),
-    global_context: GlobalContext = Depends(get_rag_global_context)
+    global_context: GlobalContext = Depends(get_rag_global_context),
+    prompt_settings: PromptSettings = Depends(get_prompt_settings),
 ):    
     session_id = request.session_id
     query = request.query
     tool_filters = request.tool_filters
+    mode = request.mode
     
     emit_audit_event(
-        event_type=EventType.CHAT,
-        event_action=ChatEventAction.USER_QUERY_SENT,
-        event_status=AuditEventStatus.SUCCESS,
+        action=ChatAction.SEND_QUERY,
+        status=AuditStatus.SUCCESS,
         level=AuditLevel.INFO,
         metadata=ChatAuditMetadata(
             session_id=session_id,
             query=query,
             tool_filters=tool_filters
         ),
-        immediate=True
     )
     
     async def event_generator():
@@ -70,7 +72,9 @@ async def chat_response_stream(
             query=query,
             session_id=session_id,
             tool_filters=tool_filters,
-            global_context=global_context
+            global_context=global_context,
+            prompt_settings=prompt_settings,
+            mode=mode,
         ):
             yield f"data: {chunk.model_dump_json(ensure_ascii=False)}\n\n"
 

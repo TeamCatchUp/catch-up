@@ -19,7 +19,7 @@ import {
 
 import { adminQueriesQueries } from '../../queries/adminQueries.queries';
 import { useQuestionLogFilterStore } from '../../store/questionLogFilterStore';
-import { toQuestionLogItem } from '../../utils/transformers';
+import { toQuestionLogItem } from '../../utils/mapQuestionLog';
 import QuestionLogListItem from '../QuestionLogListItem';
 
 /** DatePeriod → API period 변환 (서버 사전 필터용) */
@@ -40,7 +40,7 @@ interface QuestionLogListSectionProps {
 }
 
 /** 이용자 질문 기록 — 서버사이드 필터 + 무한 스크롤 + 날짜별 그룹 리스트 섹션 */
-const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
+export default function QuestionLogListSection({ userId }: QuestionLogListSectionProps) {
   const sort = useQuestionLogFilterStore((s) => s.sort);
   const setSort = useQuestionLogFilterStore((s) => s.setSort);
   const period = useQuestionLogFilterStore((s) => s.period);
@@ -116,7 +116,7 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
             type="button"
             onClick={handleSavedOnlyToggle}
             className={cn(
-              'flex h-9 max-w-[145px] min-w-9 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1.5',
+              'flex h-9 max-w-36.25 min-w-9 cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-1.5',
               savedOnly
                 ? 'border-edge-primary bg-fill-primary-assistive'
                 : 'border-edge-neutral hover:bg-fill-interaction-hover active:bg-fill-interaction-pressed bg-fill-normal',
@@ -134,7 +134,7 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
           </button>
         </div>
 
-        <label className="border-edge-assistive bg-fill-strong focus-within:border-edge-neutral flex h-10 w-[280px] items-center gap-1.5 rounded-lg border px-3 py-2">
+        <label className="border-edge-assistive bg-fill-strong focus-within:border-edge-neutral flex h-10 w-70 items-center gap-1.5 rounded-lg border px-3 py-2">
           <SearchIcon className="text-content-assistive size-5 shrink-0" />
           <input
             type="text"
@@ -182,6 +182,4 @@ const QuestionLogListSection = ({ userId }: QuestionLogListSectionProps) => {
       )}
     </div>
   );
-};
-
-export default QuestionLogListSection;
+}

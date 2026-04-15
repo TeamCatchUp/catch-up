@@ -1,17 +1,23 @@
-import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import Header
+from fastapi import HTTPException
+from fastapi import Query
+from fastapi import Request
+from fastapi import status
+from fastapi.encoders import jsonable_encoder
+import structlog
 
 from catchup.configs.config import settings
-from catchup.connectors.jira.dynamic_webhook_service import (
-    JiraDynamicWebhookService,
-    get_jira_dynamic_webhook_service,
-)
-from catchup.connectors.jira.webhook import handle_webhook as handle_jira_webhook_ingress
+from catchup.connectors.jira.dynamic_webhook_service import JiraDynamicWebhookService
+from catchup.connectors.jira.dynamic_webhook_service import get_jira_dynamic_webhook_service
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
+from catchup.sync.ingress.jira import handle_jira_webhook as handle_jira_webhook_ingress
+from catchup.sync.ingress.types import JiraWebhookRequest
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/jira", tags=["jira-webhook"])
 
@@ -33,51 +39,48 @@ async def handle_jira_webhook(
     )
     if not verify_result.ok:
         logger.warning(
-            f"[JIRA][WEBHOOK] Webhook verify failed: cloud_id={cloud_id}, reason={verify_result.reason}"
+            "jira_webhook_verify_failed",
+            cloud_id=cloud_id,
+            reason=verify_result.reason,
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Jira Webhook Sender",
         )
 
-    raw_body = await request.body()
-
     try:
         payload = await request.json()
     except Exception as exc:
         logger.warning(
-            "[JIRA][WEBHOOK] Invalid JSON payload: cloud_id=%s, content_type=%s, content_length=%s, body_size=%s, error=%s",
-            cloud_id,
-            request.headers.get("content-type"),
-            request.headers.get("content-length"),
-            len(raw_body),
-            bool(authorization),
-            exc.__class__.__name__,
+            "jira_webhook_invalid_json",
+            cloud_id=cloud_id,
+            error_type=exc.__class__.__name__,
         )
         payload = {}
 
     if not isinstance(payload, dict):
         logger.warning(
-            "[JIRA][WEBHOOK] Unexpected JSON payload type: cloud_id=%s, payload_type=%s, content_type=%s, body_size=%s",
-            cloud_id,
-            type(payload).__name__,
-            request.headers.get("content-type"),
-            len(raw_body),
+            "jira_webhook_invalid_payload_type",
+            cloud_id=cloud_id,
+            payload_type=type(payload).__name__,
         )
         payload = {}
 
     try:
-        return await handle_jira_webhook_ingress(
-            cloud_id=cloud_id,
-            payload=payload,
+        response = await handle_jira_webhook_ingress(
+            request=JiraWebhookRequest.from_raw(
+                cloud_id=cloud_id,
+                payload=payload,
+            ),
         )
+        return jsonable_encoder(response, exclude_none=True)
     except Exception as exc:
         event_type = str(payload.get("webhookEvent") or "").strip()
         logger.error(
-            "[JIRA][WEBHOOK] Failed: cloud_id=%s, event_type=%s, error=%s",
-            cloud_id,
-            event_type,
-            exc,
+            "jira_webhook_dispatch_failed",
+            cloud_id=cloud_id,
+            event_type=event_type,
+            error=str(exc),
             exc_info=True,
         )
         raise HTTPException(
@@ -100,6 +103,7 @@ async def register_dynamic_webhook(
     """
     return await dynamic_webhook_service.register_webhook(
         cloud_id=cloud_id,
+        source="manual",
         project_keys=project_keys,
     )
 

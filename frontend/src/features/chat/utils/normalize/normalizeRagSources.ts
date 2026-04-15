@@ -1,5 +1,5 @@
 import type { ChatSource, SourceResponse } from '@/features/chat/types';
-import { formatFullDate, formatRelativeDate } from '@/shared/utils/formatDate';
+import { formatFullDate, formatRelativeTime } from '@/shared/utils/formatDate';
 
 type NormalizeSourceMode = 'stream' | 'history';
 const JIRA_NO_TITLE_PATTERN = /\bno\s*title\b/i;
@@ -54,7 +54,7 @@ const formatCreatedAt = (createdAt?: string | null) => {
   const diffDays = Math.floor((Date.now() - parsed.getTime()) / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) return formatFullDate(iso);
-  if (diffDays <= RELATIVE_DATE_THRESHOLD_DAYS) return `${formatRelativeDate(iso)} 변경`;
+  if (diffDays <= RELATIVE_DATE_THRESHOLD_DAYS) return `${formatRelativeTime(iso)} 변경`;
   return formatFullDate(iso);
 };
 

@@ -12,7 +12,7 @@ const SOURCE_LOGO: Record<SourceType, React.FC<React.SVGProps<SVGElement>>> = {
   confluence: Confluence,
 };
 
-const SourceBadge = ({ n, sourceType }: { n: string; sourceType: SourceType }) => {
+export default function SourceBadge({ n, sourceType }: { n: string; sourceType: SourceType }) {
   const Logo = SOURCE_LOGO[sourceType];
 
   return (
@@ -21,6 +21,4 @@ const SourceBadge = ({ n, sourceType }: { n: string; sourceType: SourceType }) =
       <span className="text-body-xsmall text-content-normal">{n}</span>
     </span>
   );
-};
-
-export default SourceBadge;
+}

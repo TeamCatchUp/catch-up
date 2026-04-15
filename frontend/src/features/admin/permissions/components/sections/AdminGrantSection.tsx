@@ -3,7 +3,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 
-import type { PermissionMember } from '../../types/adminPermission';
+import type { PermissionMember } from '../../types/adminPermissionModel';
 
 interface AdminGrantSectionProps {
   members: PermissionMember[];
@@ -34,7 +34,7 @@ const AdminGrantSection = ({
         <Button
           variant="box-solid-primary"
           size="md"
-          className="text-heading-small h-9 w-[99px]"
+          className="text-heading-small h-9 w-24.75"
           onClick={onOpenGrantModal}
           disabled={isSubmitDisabled}
         >
@@ -44,14 +44,14 @@ const AdminGrantSection = ({
       </div>
 
       <div className="border-edge-neutral flex items-start gap-5 rounded-xl border px-5 py-5">
-        <div className="flex w-[470px] flex-col gap-1.5">
+        <div className="flex w-117.5 flex-col gap-1.5">
           <span className="text-body-small text-content-normal">멤버</span>
           <Select
             value={selectedMemberId != null ? String(selectedMemberId) : ''}
             onValueChange={(v) => onMemberChange(Number(v))}
             disabled={disabled}
           >
-            <SelectTrigger className="h-[46px]">
+            <SelectTrigger className="h-11.5">
               <SelectValue placeholder="멤버 선택" />
             </SelectTrigger>
             <SelectContent>
@@ -64,13 +64,13 @@ const AdminGrantSection = ({
           </Select>
         </div>
 
-        <div className="flex w-[470px] flex-col gap-1.5">
+        <div className="flex w-117.5 flex-col gap-1.5">
           <span className="text-body-small text-content-normal">부여 사유</span>
           <Input
             value={reason}
             onChange={(event) => onReasonChange(event.target.value)}
             placeholder="부여 사유를 작성해주세요."
-            className="h-[46px]"
+            className="h-11.5"
             disabled={disabled}
           />
         </div>

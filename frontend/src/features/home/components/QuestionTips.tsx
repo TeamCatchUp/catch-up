@@ -13,7 +13,7 @@ interface QuestionTipsProps {
   onTipClick: (index: number) => void;
 }
 
-const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
+export default function QuestionTips({ onTipClick }: QuestionTipsProps) {
   const {
     scrollRef,
     canScrollLeft,
@@ -51,9 +51,9 @@ const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
               key={tip.title}
               type="button"
               onClick={() => onCardClick(idx)}
-              className="border-edge-neutral bg-fill-normal flex h-[226px] w-60 shrink-0 cursor-pointer flex-col overflow-hidden rounded-2xl border text-left"
+              className="border-edge-neutral bg-fill-normal flex h-56.5 w-60 shrink-0 cursor-pointer flex-col overflow-hidden rounded-2xl border text-left"
             >
-              <div className="relative h-[119px] w-full overflow-hidden">
+              <div className="relative h-29.75 w-full overflow-hidden">
                 <Image src={tip.image} alt={tip.title} fill draggable={false} className="object-cover dark:hidden" />
                 <Image
                   src={tip.image.replace('/light/', '/dark/')}
@@ -99,6 +99,4 @@ const QuestionTips = ({ onTipClick }: QuestionTipsProps) => {
       </div>
     </section>
   );
-};
-
-export default QuestionTips;
+}

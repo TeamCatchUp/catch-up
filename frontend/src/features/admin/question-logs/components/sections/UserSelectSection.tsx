@@ -23,7 +23,7 @@ interface UserSelectSectionProps {
 }
 
 /** 이용자 질문 기록 — 이용자 선택 섹션 */
-const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSectionProps) => {
+export default function UserSelectSection({ users, selectedUserId, onUserChange }: UserSelectSectionProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -42,7 +42,7 @@ const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSe
   };
 
   return (
-    <div className="flex w-[500px] flex-col gap-1.5">
+    <div className="flex w-125 flex-col gap-1.5">
       <h2 className="text-heading-small text-content-neutral">이용자 선택</h2>
 
       <Popover open={open} onOpenChange={setOpen}>
@@ -50,7 +50,7 @@ const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSe
           <button
             type="button"
             className={cn(
-              'border-edge-neutral text-body-small bg-fill-normal flex h-9 w-full cursor-pointer items-center justify-between rounded-lg border px-2.5 py-1.5 tracking-tight transition-colors',
+              'border-edge-neutral text-body-small bg-fill-normal flex h-9 w-full cursor-pointer items-center justify-between rounded-lg border px-2.5 py-1.5 transition-colors',
               'hover:bg-fill-interaction-hover data-[state=open]:bg-fill-interaction-pressed data-[state=open]:border-edge-normal',
               selectedUser ? 'text-content-normal' : 'text-content-assistive',
             )}
@@ -65,7 +65,7 @@ const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSe
         <PopoverContent
           align="start"
           sideOffset={2}
-          className="border-edge-strong flex h-[380px] w-[var(--radix-popover-trigger-width)] flex-col gap-3 rounded-xl p-2.5"
+          className="border-edge-strong flex h-95 w-[var(--radix-popover-trigger-width)] flex-col gap-3 rounded-xl p-2.5"
         >
           {/* 검색 */}
           <label className="bg-fill-interaction-hover border-edge-primary flex h-10 items-center gap-1.5 rounded-lg border px-3">
@@ -92,10 +92,10 @@ const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSe
                 )}
               >
                 <DefaultProfile className="text-content-assistive size-7 shrink-0 rounded-full" />
-                <span className="text-body-small text-content-neutral min-w-0 flex-1 truncate text-left tracking-tight">
+                <span className="text-body-small text-content-neutral min-w-0 flex-1 truncate text-left">
                   {user.name}
                 </span>
-                <span className="text-body-xsmall text-content-assistive max-w-[72px] shrink-0 truncate tracking-tight">
+                <span className="text-body-xsmall text-content-assistive max-w-18 shrink-0 truncate">
                   {user.department}
                 </span>
               </button>
@@ -113,6 +113,4 @@ const UserSelectSection = ({ users, selectedUserId, onUserChange }: UserSelectSe
       <p className="text-label-xsmall text-content-alternative">선택한 이용자의 활동 내역이 표시됩니다.</p>
     </div>
   );
-};
-
-export default UserSelectSection;
+}

@@ -15,14 +15,14 @@ interface FeedbackDetailInputProps {
   entered: boolean;
 }
 
-const FeedbackDetailInput = ({
+export default function FeedbackDetailInput({
   detailText,
   onDetailChange,
   onSubmit,
   onCancel,
   isSubmitting,
   entered,
-}: FeedbackDetailInputProps) => {
+}: FeedbackDetailInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const resizeTextarea = useCallback(() => {
@@ -85,6 +85,4 @@ const FeedbackDetailInput = ({
       </div>
     </div>
   );
-};
-
-export default FeedbackDetailInput;
+}

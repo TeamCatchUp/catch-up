@@ -25,12 +25,8 @@ from catchup.db.atlassian.oauth_repository import (
 from catchup.db.engine import SessionLocal
 from catchup.connectors.jira.dynamic_webhook_service import get_jira_dynamic_webhook_service
 from catchup.events.enums import EventType, IntegrationEventAction
-from catchup.sync.incremental import (
-    poll_confluence_incremental_changes,
-    promote_incremental_records,
-    publish_incremental_outbox,
-)
 from catchup.db.incremental import recover_stale_processing_records
+from catchup.sync.incremental import get_incremental_service
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +46,10 @@ async def refresh_jira_dynamic_webhooks():
 
     for cloud_id in cloud_ids:
         try:
-            result = await dynamic_webhook_service.ensure_registered(cloud_id=cloud_id)
+            result = await dynamic_webhook_service.ensure_registered(
+                cloud_id=cloud_id,
+                source="cron_job",
+            )
             logger.info(
                 f"[JIRA][WEBHOOK][DYNAMIC] Processed cloud: cloud_id={cloud_id}, result={result}"
             )
@@ -148,8 +147,9 @@ async def run_incremental_runtime_jobs():
             db,
             stale_seconds=max(1, int(settings.SYNC_LOCK_CHANNEL_TTL_SECONDS)),
         )
-    promote_result = promote_incremental_records()
-    publish_result = await publish_incremental_outbox()
+    service = get_incremental_service()
+    promote_result = service.promote_records()
+    publish_result = await service.publish_outbox()
     logger.info(
         "[INCREMENTAL][SCHEDULER] Runtime cycle completed: recovered_processing=%s promote=%s publish=%s",
         recovered_processing,
@@ -160,7 +160,7 @@ async def run_incremental_runtime_jobs():
 
 async def poll_confluence_incremental():
     logger.info("[CONFLUENCE][POLL] Starting incremental poll")
-    result = await poll_confluence_incremental_changes()
+    result = await get_incremental_service().poll_confluence_changes()
     logger.info("[CONFLUENCE][POLL] Incremental poll completed: result=%s", result)
 
 

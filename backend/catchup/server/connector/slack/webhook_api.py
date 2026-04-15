@@ -1,14 +1,23 @@
-import logging
+import json
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Request, status
-from fastapi.concurrency import run_in_threadpool
+import structlog
+from fastapi import APIRouter
+from fastapi import Header
+from fastapi import HTTPException
+from fastapi import Request
+from fastapi import status
+from fastapi.encoders import jsonable_encoder
 
 from catchup.configs.config import settings
-from catchup.connectors.slack.webhook import handle_webhook as handle_slack_webhook_ingress
+from catchup.connectors.slack.schemas import SlackEventWrapper
+from catchup.server.connector.slack.schemas import SlackWebhookRequest
+from catchup.server.connector.slack.webhook_dispatcher import (
+    handle_slack_webhook as dispatch_slack_webhook,
+)
 from catchup.server.connector.webhook_verifier import WebhookVerifierProvider
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/slack", tags=["slack-webhook"])
 
@@ -24,6 +33,7 @@ async def handle_slack_webhook(
     """
     payload_body = await request.body()
 
+    # 1. Webhook Vefiry
     verify_result = WebhookVerifierProvider.verify_slack(
         payload_body=payload_body,
         signature=x_slack_signature,
@@ -33,24 +43,58 @@ async def handle_slack_webhook(
     )
     if not verify_result.ok:
         logger.warning(
-            "[SLACK][WEBHOOK][VERIFY] Failed: reason=%s",
-            verify_result.reason,
+            "slack_webhook_verify_failed",
+            reason=verify_result.reason,
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Slack Webhook Signature",
         )
 
-    payload = await request.json()
+    # 2. Payload Valid Check
     try:
-        return await run_in_threadpool(
-            handle_slack_webhook_ingress,
-            payload=payload,
+        payload = await request.json()
+        wrapper_type = str(payload.get("type") or "").strip()
+    except Exception:
+        try:
+            form = await request.form()
+            raw_payload = form.get("payload")
+            if not isinstance(raw_payload, str) or not raw_payload.strip():
+                raise ValueError("missing interactivity payload")
+            payload = json.loads(raw_payload)
+            wrapper_type = str(payload.get("type") or "").strip()
+        except Exception:
+            logger.warning("slack_webhook_invalid_payload")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid Slack payload",
+            )
+
+    # 3. Dipatch Slack Webhook Event (Incremental / Metadata / Chat)
+    try:
+        if wrapper_type == "event_callback" or wrapper_type == "url_verification":
+            event_wrapper = SlackEventWrapper(**payload)
+            webhook_request = SlackWebhookRequest.from_raw(
+                wrapper_type=event_wrapper.type,
+                team_id=event_wrapper.team_id or "",
+                event=event_wrapper.event,
+                challenge=event_wrapper.challenge,
+            )
+        else:
+            webhook_request = SlackWebhookRequest.from_raw(
+                wrapper_type=wrapper_type,
+                team_id=str((payload.get("team") or {}).get("id") or ""),
+                event=payload,
+                challenge=None,
+            )
+        response = await dispatch_slack_webhook(
+            request=webhook_request,
         )
+        return jsonable_encoder(response, exclude_none=True)
     except Exception as exc:
         logger.error(
-            "[SLACK][WEBHOOK] Failed to process event: error=%s",
-            exc,
+            "slack_webhook_dispatch_failed",
+            error=str(exc),
             exc_info=True,
         )
         raise HTTPException(

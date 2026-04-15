@@ -9,7 +9,7 @@ import { authQueries } from '@/shared/queries/auth.queries';
 import type { AuthUser } from '@/shared/queries/auth.types';
 
 import { useAdminSignUp, useUserSignUp } from '../mutations';
-import type { OnboardingSteps } from '../types/onboarding';
+import type { OnboardingSteps } from '../types/onboardingModel';
 
 interface CompleteStepProps {
   data: OnboardingSteps['Complete'];
@@ -70,25 +70,23 @@ export function CompleteStep({ data, isAdmin }: CompleteStepProps) {
       <div className="flex flex-col items-center gap-4 text-center">
         {isPending && (
           <>
-            <div className="text-display-large text-content-normal tracking-tight">온보딩을 완료하고 있습니다...</div>
-            <p className="text-body-large text-content-alternative tracking-tight">잠시만 기다려 주세요.</p>
+            <div className="text-display-large text-content-normal">온보딩을 완료하고 있습니다...</div>
+            <p className="text-body-large text-content-alternative">잠시만 기다려 주세요.</p>
           </>
         )}
         {isError && (
           <>
-            <div className="text-display-large text-content-normal tracking-tight">온보딩 완료에 실패했습니다.</div>
-            <p className="text-body-large text-content-alternative tracking-tight">
-              네트워크 상태를 확인하고 다시 시도해주세요.
-            </p>
-            <Button variant="box-solid-primary" size="lg" className="mt-4 h-[46px]" onClick={submitOnboarding}>
+            <div className="text-display-large text-content-normal">온보딩 완료에 실패했습니다.</div>
+            <p className="text-body-large text-content-alternative">네트워크 상태를 확인하고 다시 시도해주세요.</p>
+            <Button variant="box-solid-primary" size="lg" className="mt-4 h-11.5" onClick={submitOnboarding}>
               다시 시도
             </Button>
           </>
         )}
         {!isPending && !isError && (
           <>
-            <div className="text-display-large text-content-normal tracking-tight">완료!</div>
-            <p className="text-body-large text-content-alternative tracking-tight">잠시만 기다려 주세요.</p>
+            <div className="text-display-large text-content-normal">완료!</div>
+            <p className="text-body-large text-content-alternative">잠시만 기다려 주세요.</p>
           </>
         )}
       </div>

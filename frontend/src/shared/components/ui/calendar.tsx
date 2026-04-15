@@ -12,20 +12,20 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
       className={cn('p-5', className)}
       classNames={{
         months: 'relative flex gap-9',
-        month: 'flex w-[220px] flex-col',
-        month_caption: 'flex h-[34px] items-center justify-center pb-1.5',
+        month: 'flex w-55 flex-col',
+        month_caption: 'flex h-8.5 items-center justify-center pb-1.5',
         caption_label: 'text-body-small text-content-strong',
-        nav: 'absolute inset-x-0 top-0 z-20 flex items-center justify-between',
+        nav: 'absolute inset-x-0 top-0 z-local flex items-center justify-between',
         button_previous:
           'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-neutral hover:bg-fill-interaction-hover',
         button_next:
           'flex size-7 cursor-pointer items-center justify-center rounded-full text-icon-neutral hover:bg-fill-interaction-hover',
         weekdays: 'flex',
-        weekday: 'flex h-6 flex-1 items-center justify-center text-label-xsmall text-content-alternative',
+        weekday: 'flex h-6 flex-1 items-center justify-center text-label-xsmall text-content-neutral',
         week: 'flex',
         day: 'relative flex h-6 flex-1 items-center justify-center text-label-xsmall text-content-neutral',
         day_button:
-          'relative z-10 flex size-6 cursor-pointer items-center justify-center rounded-full hover:bg-fill-interaction-hover',
+          'relative z-base flex size-6 cursor-pointer items-center justify-center rounded-full hover:bg-fill-interaction-hover',
         today: '',
         selected: '',
         range_start:
@@ -33,7 +33,7 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         range_end:
           "rdp-range_end [&>button]:bg-fill-primary [&>button]:text-white [&>button]:hover:bg-fill-primary-interaction-hover before:absolute before:inset-y-0 before:left-0 before:w-1/2 before:bg-fill-interaction-pressed before:content-['']",
         range_middle: 'bg-fill-interaction-pressed',
-        outside: 'text-content-assistive',
+        outside: '!text-content-assistive',
         disabled: 'text-content-assistive opacity-50',
         hidden: 'invisible',
         ...classNames,
@@ -42,6 +42,7 @@ function Calendar({ className, classNames, ...props }: DayPickerProps) {
         Chevron: ({ orientation }) =>
           orientation === 'left' ? <IconArrowLeft className="size-5" /> : <IconArrowRight className="size-5" />,
       }}
+      fixedWeeks
       {...props}
     />
   );

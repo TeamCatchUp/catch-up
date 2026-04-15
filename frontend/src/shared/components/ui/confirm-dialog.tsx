@@ -31,7 +31,7 @@ function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent hideClose className="border-edge-neutral flex max-w-[491px] flex-col gap-3 border p-5">
+      <DialogContent hideClose className="border-edge-neutral flex max-w-122.75 flex-col gap-3 border p-5">
         <div className="flex flex-col gap-3">
           <DialogTitle className="text-heading-medium text-content-normal">{title}</DialogTitle>
           {description && <DialogDescription className="whitespace-pre-line">{description}</DialogDescription>}
@@ -52,7 +52,8 @@ function ConfirmDialog({
             }
             size="lg"
             className={cn(
-              variant === 'danger' && 'border-red-40 hover:bg-red-5 active:bg-red-10 text-red-50 active:border-red-50',
+              variant === 'danger' &&
+                'border-accent-red hover:bg-accent-red-lighten active:bg-accent-red-lighten text-status-destructive active:border-status-destructive',
             )}
             onClick={() => {
               onConfirm();

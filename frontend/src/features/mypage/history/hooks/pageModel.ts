@@ -9,8 +9,8 @@ import type { DatePeriod, GroupedSection, SortOrder } from '@/shared/utils/dateG
 import { groupItemsByDate, isInPeriod as isInPeriodShared } from '@/shared/utils/dateGrouping';
 
 import { useHistoryFilterStore } from '../store/historyFilterStore';
-import type { HistoryItem } from '../types/models';
-import { toHistoryItem } from '../utils/transformers';
+import type { HistoryItem } from '../types/historyModel';
+import { toHistoryItem } from '../utils/mapHistory';
 
 /** {@link usePageModel} 훅의 반환 타입 */
 interface UsePageModelReturn {

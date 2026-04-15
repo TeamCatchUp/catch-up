@@ -12,6 +12,13 @@ def route_question(state: AgentState):
         return "rewrite"
 
 
+def route_after_rerank(state: AgentState):
+    mode = state.get("mode", "standard")
+    if mode == "fast":
+        return "generate_final_answer_fast"
+    return "grade"
+
+
 def route_after_grade(state: AgentState):
     status = state.get("grade_status")
     retry_count = state.get("retry_count", 0)

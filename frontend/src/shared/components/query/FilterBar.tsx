@@ -45,7 +45,7 @@ export default function FilterBar({ filters, inputRef }: FilterBarProps) {
         />
       </div>
       {/* TODO: 백엔드 API 준비 시 담당자/부서/프로젝트 필터 드롭다운 활성화
-      <IconDivider className="text-gray-5 h-6 w-6 shrink-0" />
+      <IconDivider className="text-edge-strong h-6 w-6 shrink-0" />
       <div className="flex items-center gap-2.5">
         <FilterDropdown ...>
           <FilterOptionList title="담당자 선택" options={personOptions} ... />

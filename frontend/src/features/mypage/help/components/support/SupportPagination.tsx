@@ -9,7 +9,7 @@ interface SupportPaginationProps {
   currentId: number;
 }
 
-const SupportPagination = ({ currentId }: SupportPaginationProps) => {
+export default function SupportPagination({ currentId }: SupportPaginationProps) {
   const currentIndex = SUPPORTS.findIndex((s) => s.id === currentId);
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < SUPPORTS.length - 1;
@@ -67,6 +67,4 @@ const SupportPagination = ({ currentId }: SupportPaginationProps) => {
       </Link>
     </div>
   );
-};
-
-export default SupportPagination;
+}

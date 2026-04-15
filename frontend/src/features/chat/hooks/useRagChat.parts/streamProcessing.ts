@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 
-import { NODE_TO_UI_STEP } from '@/features/chat/constants/config';
+import { NODE_TO_UI_STEP } from '@/features/chat/constants/chatConfig';
 import {
   appendStreamingToken,
   deriveCitedFromAnswerContent,

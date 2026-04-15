@@ -1,6 +1,6 @@
 import IconHelp from '@/public/icons/icon/help.svg';
 import IconInfo from '@/public/icons/icon/info.svg';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/ToolTip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 
 import {
   ADMIN_OWNER_LABEL,
@@ -10,7 +10,7 @@ import {
 } from '../../constants/permissionsConfig';
 
 /** Admin 권한 소유자 안내 태그 + 툴팁 */
-const AdminOwnerInfoTag = () => {
+export default function AdminOwnerInfoTag() {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -22,8 +22,8 @@ const AdminOwnerInfoTag = () => {
         </span>
       </TooltipTrigger>
 
-      <TooltipContent side="bottom" align="start" size="lg" className="w-[360px] gap-1">
-        <div className="flex items-center gap-1.5 text-white">
+      <TooltipContent side="bottom" align="start" size="lg" className="w-90 gap-1">
+        <div className="flex h-7 items-center gap-2 self-stretch text-white">
           <IconHelp className="size-5 shrink-0 text-white" />
           <span className="text-body-small">{ADMIN_OWNER_LINE_1}</span>
         </div>
@@ -31,6 +31,4 @@ const AdminOwnerInfoTag = () => {
       </TooltipContent>
     </Tooltip>
   );
-};
-
-export default AdminOwnerInfoTag;
+}

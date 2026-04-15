@@ -5,13 +5,13 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/shared/utils/cn';
 
-const badgeVariants = cva('inline-flex items-center rounded-full tracking-tight transition-colors', {
+const badgeVariants = cva('inline-flex items-center rounded-full whitespace-nowrap transition-colors', {
   variants: {
     variant: {
       default: 'bg-fill-primary-normal-neutral text-content-primary',
       secondary: 'bg-fill-interaction-hover text-content-alternative',
       success: 'bg-accent-green-neutral text-accent-green',
-      violet: 'bg-accent-violet-lighten text-accent-violet',
+      violet: 'bg-accent-violet-neutral text-accent-violet',
       orange: 'bg-accent-red-orange-neutral text-accent-red-orange',
       pink: 'bg-accent-pink-lighten text-accent-pink',
       red: 'bg-accent-red-lighten text-status-destructive',

@@ -1,0 +1,8 @@
+{% if prompt_settings is defined and prompt_settings %}
+{% include "settings/job_role.j2" %}
+{% include "settings/job_role_style.j2" %}
+{% include "settings/selected_options.j2" %}
+{% if prompt_settings.custom_prompt %}
+{% include "settings/custom_prompt.j2" %}
+{% endif %}
+{% endif %}

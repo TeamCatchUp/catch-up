@@ -22,7 +22,7 @@ import AnswerActionButtons from './actions/AnswerActionButtons';
 import AnswerError from './actions/AnswerError';
 import FeedbackSection from './actions/FeedbackSection';
 import { MarkDownComponents } from './markdown/MarkDownComponents';
-import { getCitationDisplayOrderMap } from './markdown/renderWithBadges';
+import { getCitationDisplayOrderMap } from './markdown/RenderWithBadges';
 
 const ANSWER_ICONS = [
   { name: 'Copy', icon: Copy },
@@ -42,7 +42,7 @@ interface RagAnswerProps {
   onRetry?: (questionId: string, questionContent: string) => void;
 }
 
-const RagAnswer = ({
+export default function RagAnswer({
   currentQA,
   sessionId,
   isLoading,
@@ -50,7 +50,7 @@ const RagAnswer = ({
   currentStep,
   onFeedbackSubmitted,
   onRetry,
-}: RagAnswerProps) => {
+}: RagAnswerProps) {
   // 섹션 로컬 UI 상태
   const [feedbackVisibleMap, setFeedbackVisibleMap] = useState<Record<string, boolean>>({});
   const formattedAnswerContent = useMemo(
@@ -142,6 +142,4 @@ const RagAnswer = ({
       )}
     </div>
   );
-};
-
-export default RagAnswer;
+}

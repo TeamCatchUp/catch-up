@@ -1,7 +1,7 @@
 import type { IntegrationService } from '@/shared/types/integrationService';
 
-import type { IntegrationLogCategory } from '../types/auditIntegrationLog';
-import type { AuditAction, AuditSortKey, AuditStatus } from '../types/auditLog';
+import type { IntegrationLogCategory } from '../types/auditIntegrationLogModel';
+import type { AuditAction, AuditSortKey, AuditStatus } from '../types/auditLogModel';
 
 /** 정렬 옵션 */
 export const SORT_OPTIONS: { key: AuditSortKey; label: string }[] = [
@@ -26,8 +26,8 @@ export const STATUS_LABEL: Record<AuditStatus, string> = {
 
 /** 상태 배지 스타일 */
 export const STATUS_BADGE_CLASS: Record<string, string> = {
-  성공: 'bg-green-10 text-green-60',
-  실패: 'bg-neutral-2 text-gray-50',
+  성공: 'bg-accent-green-neutral text-accent-green',
+  실패: 'bg-neutral-2 text-content-alternative',
 };
 
 /** 연동 로그 구분 라벨 */

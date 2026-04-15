@@ -78,9 +78,10 @@ export const API = {
       list: `${API_PREFIX}/admin/users`, // GET 이용자 목록
       detail: (userId: number) => `${API_PREFIX}/admin/users/${userId}/detail`, // GET 이용자 상세
       syncStatus: `${API_PREFIX}/admin/users/sync-status`, // GET 서비스별 사용자 매핑 현황
-      deactivate: (userId: number) => `${API_PREFIX}/admin/users/deactivate/${userId}`, // POST 비활성화
-      delete: (userId: number) => `${API_PREFIX}/admin/users/delete/${userId}`, // POST 삭제
-      promote: (userId: number) => `${API_PREFIX}/admin/users/promote/${userId}`, // POST Admin 승격
+      deactivate: `${API_PREFIX}/admin/users/deactivate`, // POST 비활성화 (body: { userId, reason })
+      delete: `${API_PREFIX}/admin/users/delete`, // POST 삭제 (body: { userId, reason })
+      promote: `${API_PREFIX}/admin/users/promote`, // POST Admin 승격 (body: { userId, reason })
+      revoke: `${API_PREFIX}/admin/users/revoke`, // POST Admin 권한 회수 (body: { userId, reason })
       syncOAuthUsers: `${API_PREFIX}/admin/oauth-users`, // POST SSO 유저 동기화
     },
     vendorUsers: (vendorType: string) => `${API_PREFIX}/admin/${vendorType}/users`, // GET 툴별 사용자 목록 (드롭다운)
@@ -90,6 +91,16 @@ export const API = {
   mapping: {
     upload: `${API_PREFIX}/mapping/upload`, // POST GitHub 매핑 CSV/Excel 일괄 업로드 (multipart/form-data)
     vendorUpload: (vendor: string) => `${API_PREFIX}/mapping/${vendor}/upload`, // POST 협업툴별 사용자 매핑 CSV/Excel 일괄 업로드
+  },
+
+  stats: {
+    myTokenCost: `${API_PREFIX}/stats/costs/tokens/me`, // GET 내 일자별 토큰 사용량(USD)
+    orgTokenCost: `${API_PREFIX}/stats/costs/tokens/org`, // GET 조직 일자별 토큰 사용량(USD) (admin only)
+    tokenRanking: `${API_PREFIX}/stats/costs/tokens/ranking`, // GET 구성원별 토큰 사용량 랭킹 (admin only)
+    userTokenCost: (userId: number) => `${API_PREFIX}/stats/costs/tokens/users/${userId}`, // GET 특정 유저 토큰 사용량 (admin only)
+    myQueries: `${API_PREFIX}/stats/queries/me`, // GET 내 일자별 질문 횟수
+    orgQueries: `${API_PREFIX}/stats/queries/org`, // GET 조직 일자별 질문 횟수 (admin only)
+    userQueries: (userId: number) => `${API_PREFIX}/stats/queries/users/${userId}`, // GET 특정 유저 질문 횟수 (admin only)
   },
 
   settings: {

@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import logging
 
+from catchup.audit.actions import FullSyncAction
+from catchup.audit.metadata import FullSyncEventAuditMetadata
+from catchup.audit.utils import audit_log
 from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext, TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
-
-logger = logging.getLogger(__name__)
-
 
 class JiraFullSyncHandler(BaseFullSyncHandler):
     connector = "jira"
@@ -28,6 +27,11 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
         cache[cache_key] = service
         return service
 
+    @audit_log(
+        FullSyncAction.EVENT,
+        metadata_factory=FullSyncEventAuditMetadata.from_audit,
+        emit_attempt=True,
+    )
     async def handle(
         self,
         *,
@@ -62,12 +66,4 @@ class JiraFullSyncHandler(BaseFullSyncHandler):
                 "[JIRA][FULL SYNC][WORKER] Target sync failed: "
                 f"scope_id={context.scope_id}, project_key={project_key}, errors={result.error_count}"
             )
-
-        logger.info(
-            "[JIRA][FULL SYNC][WORKER] Target synced: scope_id=%s, project_key=%s, synced=%s, sync_from_ts=%s",
-            context.scope_id,
-            project_key,
-            result.synced_count,
-            context.sync_from_ts,
-        )
         return result

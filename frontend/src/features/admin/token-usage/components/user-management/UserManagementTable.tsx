@@ -19,12 +19,14 @@ import {
 import { Switch } from '@/shared/components/ui/switch';
 
 import { POSITION_BADGE_CLASS, TEAM_BADGE_CLASS } from '../../constants/tokenUsageConfig';
-import type { OrgMember } from '../../types/tokenUsage';
+import type { OrgMember } from '../../types/tokenUsageModel';
+
+type OrgMemberRow = OrgMember & { tokenEnabled: boolean };
 
 const TAG_BASE = 'text-body-xsmall inline-flex shrink-0 items-center truncate rounded-md2 px-1.5 py-0.5';
 
 interface UserManagementTableProps {
-  data: OrgMember[];
+  data: OrgMemberRow[];
   onToggleToken: (member: OrgMember) => void;
 }
 
@@ -61,15 +63,15 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
             )}
             <span className="text-body-small text-content-normal truncate">{member.name}</span>
             {!member.tokenEnabled && (
-              <div className="rounded-md2 bg-pink-5 flex shrink-0 items-center gap-0.5 px-1.5 py-0.5">
-                <IconError className="text-pink-60 size-3.5" />
-                <span className="text-body-xsmall text-pink-60">이용 중지</span>
+              <div className="rounded-md2 bg-accent-pink-lighten flex shrink-0 items-center gap-0.5 px-1.5 py-0.5">
+                <IconError className="text-accent-pink size-3.5" />
+                <span className="text-body-xsmall text-accent-pink">이용 중지</span>
               </div>
             )}
           </div>
 
           {/* 사용량 */}
-          <span className="text-body-small text-content-normal">{member.cost.toFixed(1)} $</span>
+          <span className="text-body-small text-content-normal">- $</span>
 
           {/* 직급 */}
           <div>
@@ -94,7 +96,7 @@ export default function UserManagementTable({ data, onToggleToken }: UserManagem
                   <IconKebab className="size-5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={4} className="min-w-[260px]">
+              <DropdownMenuContent align="end" sideOffset={4} className="min-w-65">
                 <DropdownMenuItem>
                   <IconGraph className="text-content-alternative size-6" />
                   토큰 이용 대시보드 바로가기

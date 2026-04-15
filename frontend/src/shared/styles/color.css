@@ -24,6 +24,8 @@
   --color-neutral-85: #1b1c1e;
   --color-neutral-80: #292a2d;
   --color-neutral-75: #37383c;
+  --color-neutral-70: #46474c;
+  --color-neutral-60: #5a5c63;
   --color-neutral-50: #70737c;
   --color-neutral-40: #878a93;
   --color-neutral-30: #989ba2;
@@ -74,7 +76,7 @@
   --color-pink-20: #f694ba;
   --color-pink-10: #f9b7d1;
   --color-pink-5: #fde8f0;
-  --color-pink-1: #fffafa;
+  --color-pink-1: #fff4f8;
 
   /* Red */
   --color-red-90: #3b0101;
@@ -90,17 +92,17 @@
   --color-red-1: #fffafa;
 
   /* Success */
-  --color-success-90: #0e2012;
-  --color-success-80: #122b18;
-  --color-success-70: #1f4727;
-  --color-success-60: #285d33;
-  --color-success-50: #267337;
-  --color-success-40: #228738;
-  --color-success-30: #3fa654;
-  --color-success-20: #7ec88e;
-  --color-success-10: #a9dab4;
-  --color-success-5: #d8eedd;
-  --color-success-1: #eaf6ec;
+  --color-success-95: #0e2012;
+  --color-success-90: #122b18;
+  --color-success-80: #1f4727;
+  --color-success-70: #285d33;
+  --color-success-60: #267337;
+  --color-success-50: #228738;
+  --color-success-40: #3fa654;
+  --color-success-30: #7ec88e;
+  --color-success-20: #a9dab4;
+  --color-success-10: #d8eedd;
+  --color-success-5: #eaf6ec;
 
   /* Information */
   --color-information-95: #021a2c;
@@ -167,6 +169,87 @@
   --color-light-blue-5: #e5f6fe;
   --color-light-blue-1: #f7fdff;
 
+  /* High Contrast */
+  --color-hc-green-1: #fafefc;
+  --color-hc-green-5: #f2fcf7;
+  --color-hc-green-10: #e6f9ef;
+  --color-hc-green-20: #ccf2df;
+  --color-hc-green-30: #99e6c2;
+  --color-hc-green-40: #66d9a6;
+  --color-hc-green-50: #33cc8a;
+  --color-hc-green-60: #00a35c;
+  --color-hc-green-70: #007a45;
+  --color-hc-green-80: #00552e;
+  --color-hc-green-90: #00331d;
+  --color-hc-green-95: #001f12;
+  --color-hc-information-1: #fafdff;
+  --color-hc-information-5: #f2faff;
+  --color-hc-information-10: #e6f4ff;
+  --color-hc-information-20: #cce8ff;
+  --color-hc-information-30: #a3d5ff;
+  --color-hc-information-40: #7abfff;
+  --color-hc-information-50: #4da6ff;
+  --color-hc-information-60: #2d78c9;
+  --color-hc-information-70: #205691;
+  --color-hc-information-80: #163c66;
+  --color-hc-information-90: #0d2540;
+  --color-hc-information-95: #09182b;
+  --color-hc-orange-1: #fffcfa;
+  --color-hc-orange-5: #fff8f0;
+  --color-hc-orange-10: #fff2e0;
+  --color-hc-orange-20: #ffe6c7;
+  --color-hc-orange-30: #ffd7a3;
+  --color-hc-orange-40: #ffc57f;
+  --color-hc-orange-50: #ffb057;
+  --color-hc-orange-60: #a6631e;
+  --color-hc-orange-70: #7a4916;
+  --color-hc-orange-80: #54320f;
+  --color-hc-orange-90: #36200a;
+  --color-hc-pink-1: #fffafc;
+  --color-hc-pink-5: #fff2f7;
+  --color-hc-pink-10: #ffe8f0;
+  --color-hc-pink-20: #ffd1e1;
+  --color-hc-pink-30: #ffb0cc;
+  --color-hc-pink-40: #ff8eb6;
+  --color-hc-pink-50: #ff6b9e;
+  --color-hc-pink-60: #c73b72;
+  --color-hc-pink-70: #8f2b52;
+  --color-hc-pink-80: #611d38;
+  --color-hc-pink-90: #3b1222;
+  --color-hc-red-1: #fff9f9;
+  --color-hc-red-5: #fff2f2;
+  --color-hc-red-10: #ffe6e6;
+  --color-hc-red-20: #ffcccc;
+  --color-hc-red-30: #ffb3b3;
+  --color-hc-red-40: #ff9999;
+  --color-hc-red-50: #ff7a7a;
+  --color-hc-red-60: #c74040;
+  --color-hc-red-70: #8f2e2e;
+  --color-hc-red-80: #611f1f;
+  --color-hc-red-90: #3d1414;
+  --color-hc-red-orange-1: #fffbf9;
+  --color-hc-red-orange-5: #fff7f2;
+  --color-hc-red-orange-10: #fff0e6;
+  --color-hc-red-orange-20: #ffd9c2;
+  --color-hc-red-orange-30: #ffc099;
+  --color-hc-red-orange-40: #ffa775;
+  --color-hc-red-orange-50: #ff8b4d;
+  --color-hc-red-orange-60: #b85120;
+  --color-hc-red-orange-70: #873b17;
+  --color-hc-red-orange-80: #5e2910;
+  --color-hc-red-orange-90: #3b1a0a;
+  --color-hc-violet-1: #fdfbff;
+  --color-hc-violet-5: #f8f6ff;
+  --color-hc-violet-10: #f2eefe;
+  --color-hc-violet-20: #e1d9fc;
+  --color-hc-violet-30: #cabdf9;
+  --color-hc-violet-40: #b3a1f7;
+  --color-hc-violet-50: #9b82f3;
+  --color-hc-violet-60: #6548c7;
+  --color-hc-violet-70: #49348f;
+  --color-hc-violet-80: #312361;
+  --color-hc-violet-90: #1e163b;
+
   /* Alpha */
   --color-alpha-black-75: rgba(0, 0, 0, 0.75);
   --color-alpha-black-50: rgba(0, 0, 0, 0.5);
@@ -182,9 +265,10 @@
   /* normal */
   --color-normal-alternative: #6d7882;
   --color-normal-normal: #33363d;
+}
 
-  /* === 시맨틱 컬러 (dark 자동 전환) === */
-
+/* === 시맨틱 컬러 (dark 자동 전환, inline으로 유틸리티에 직접 인라인) === */
+@theme inline {
   /* Fill */
   --color-fill-normal: var(--fill-normal);
   --color-fill-strong: var(--fill-strong);
@@ -201,6 +285,14 @@
   --color-fill-primary-interaction-disable: var(--fill-primary-interaction-disable);
   --color-fill-primary-interaction-hover-assistive: var(--fill-primary-interaction-hover-assistive);
   --color-fill-primary-normal-neutral: var(--fill-primary-normal-neutral);
+
+  /* Fill/Overlay */
+  --color-fill-overlay-base: var(--fill-overlay-base);
+  --color-fill-overlay-high: var(--fill-overlay-high);
+  --color-fill-overlay-low: var(--fill-overlay-low);
+  --color-fill-overlay-point: var(--fill-overlay-point);
+  --color-fill-overlay-background: var(--fill-overlay-background);
+  --color-fill-overlay-background-transparent: var(--fill-overlay-background-transparent);
 
   /* Text → content (text-text-* 회피) */
   --color-content-strong: var(--text-strong);
@@ -232,6 +324,7 @@
   --color-edge-inverse: var(--line-inverse);
   --color-edge-primary-strong: var(--line-primary-strong);
   --color-edge-primary: var(--line-primary-normal);
+  --color-edge-primary-assistive: var(--line-primary-assistive);
 
   /* Background → surface */
   --color-surface-normal: var(--bg-normal);
@@ -245,12 +338,13 @@
   --color-accent-red-orange-neutral: var(--accent-red-orange-neutral);
   --color-accent-red-orange-lighten: var(--accent-red-orange-lighten);
   --color-accent-violet: var(--accent-violet);
+  --color-accent-violet-neutral: var(--accent-violet-neutral);
   --color-accent-violet-lighten: var(--accent-violet-lighten);
-  --color-accent-violet-lighter: var(--accent-violet-lighter);
   --color-accent-light-blue: var(--accent-light-blue);
   --color-accent-light-blue-lighten: var(--accent-light-blue-lighten);
   --color-accent-pink: var(--accent-pink);
   --color-accent-pink-lighten: var(--accent-pink-lighten);
+  --color-accent-red: var(--accent-red);
   --color-accent-red-lighten: var(--accent-red-lighten);
   --color-accent-information: var(--accent-information);
   --color-accent-information-lighten: var(--accent-information-lighten);
@@ -276,4 +370,6 @@
 
   /* Material */
   --color-material-scrim: var(--material-scrim);
+  --color-material-alert-modal: var(--material-alert-modal);
+  --color-material-tooltip: var(--material-tooltip);
 }

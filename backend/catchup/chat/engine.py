@@ -3,7 +3,7 @@ import time
 import uuid
 from typing import Any
 from typing import AsyncGenerator
-from typing import Optional
+from typing import Literal
 
 import structlog
 from fastapi.concurrency import run_in_threadpool
@@ -11,10 +11,11 @@ from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
 from langgraph.pregel.types import StateSnapshot
 
-from catchup.audit.enums import AuditEventStatus
-from catchup.audit.enums import AuditLevel
+from catchup.audit.actions import ChatAction
+from catchup.audit.base import AuditLevel
+from catchup.audit.base import AuditStatus
+from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import ChatAuditMetadata
-from catchup.audit.service import emit_audit_event
 from catchup.chat.chat_room import generate_chat_room_title
 from catchup.chat.schemas import NODE_STATUS_MAP
 from catchup.chat.schemas import ChatResponse
@@ -29,16 +30,16 @@ from catchup.costs.emitters import emit_chat_token_usage_event
 from catchup.db.chat_room import add_message
 from catchup.db.chat_room import create_chat_room
 from catchup.db.chat_room import get_chat_room
+from catchup.db.chat_room import get_chat_room_by_session_id
 from catchup.db.chat_room import soft_delete_last_conversation_turn
 from catchup.db.engine import SessionLocal
 from catchup.db.models import SourceType
-from catchup.events.enums import ChatEventAction
-from catchup.events.enums import EventType
 from catchup.observability.langfuse.configs import get_langfuse_client
 from catchup.observability.langfuse.configs import get_observe
 from catchup.rag.checkpoint import get_langgraph_checkpointer
 from catchup.rag.graph import get_compiled_graph
 from catchup.rag.schemas.context import GlobalContext
+from catchup.rag.schemas.prompt_settings import PromptSettings
 from catchup.rag.schemas.sources import BaseSource
 
 logger = structlog.get_logger()
@@ -69,20 +70,30 @@ class ChatService:
     async def chat_stream(
         self,
         global_context: GlobalContext,
+        prompt_settings: PromptSettings,
         session_id: uuid.UUID,
-        tool_filters: Optional[list[SourceType]] = None,
+        tool_filters: list[SourceType] | None = None,
         query: str = None,
+        additional_context: str | None = None,
+        mode: Literal["fast", "standard"] = "standard",
+        is_slack: bool = False,
     ) -> AsyncGenerator[StreamEvent, None]:
         
          # 실행 시간 측정 시작
         start = time.perf_counter()
+        
+        # 채팅 토큰 사용량 컨텍스트 초기화
+        ChatTokenUsageContext.init()
+        
+        base_config = None
             
         try:            
             # 채팅 세션 획득
             room_id: int = await self._setup_chat_room(
                 global_context,
                 session_id,
-                query
+                query,
+                is_slack=is_slack,
             )
 
             # Compiled Graph
@@ -98,7 +109,8 @@ class ChatService:
                 self._resolve_input_messages,
                 session_id,
                 query,
-                lg_current_state
+                lg_current_state,
+                additional_context,
             )
 
             # 초기 AgentState
@@ -108,7 +120,9 @@ class ChatService:
                 "original_query": query,
                 "global_context": global_context,
                 "tool_filters": tool_filters,
-                
+                "prompt_settings": prompt_settings,
+                "mode": mode,
+
                 # RAG 파이프라인 상태 변수
                 "retry_count": 0,
                 "grade_comment": None,
@@ -116,7 +130,7 @@ class ChatService:
                 "vector_search_queries": [],
                 "graph_search_queries": [],
                 "retrieved_docs": [],
-                
+
                 # 비용 변수
                 "token_breakdown": {},
                 "rerank_count": 0,
@@ -135,25 +149,25 @@ class ChatService:
 
         except asyncio.CancelledError:
             emit_audit_event(
-                event_type=EventType.CHAT,
-                event_action=ChatEventAction.ASSISTANT_RESPONSE_GENERATED,
-                event_status=AuditEventStatus.FAIL,
+                action=ChatAction.GENERATE_RESPONSE,
+                status=AuditStatus.FAILURE,
                 level=AuditLevel.WARNING,
-                metadata=ChatAuditMetadata(session_id=session_id),
-                immediate=True
+                metadata=ChatAuditMetadata(
+                    context="connection_cancelled",
+                    session_id=session_id,
+                )
             )
             raise
 
         except Exception as e:
             logger.exception("streaming_error")
-            
+
             def _get_chat_room_sync():
                 with SessionLocal() as db:
-                    room = get_chat_room(
-                        db=db,
-                        session_id=session_id,
-                        user_id=global_context.user.id
-                    )
+                    if is_slack:
+                        room = get_chat_room_by_session_id(db=db, session_id=session_id)
+                    else:
+                        room = get_chat_room(db=db, session_id=session_id, user_id=global_context.user.id)
                     return room.id if room else None
             room_id = await run_in_threadpool(_get_chat_room_sync)
             
@@ -171,22 +185,21 @@ class ChatService:
                 )
                 
             emit_audit_event(
-                event_type=EventType.CHAT,
-                event_action=ChatEventAction.ASSISTANT_RESPONSE_GENERATED,
-                event_status=AuditEventStatus.FAIL,
+                action=ChatAction.GENERATE_RESPONSE,
+                status=AuditStatus.FAILURE,
                 level=AuditLevel.ERROR,
-                metadata=ChatAuditMetadata(session_id=session_id),
-                immediate=True
+                metadata=ChatAuditMetadata(
+                    session_id=session_id,
+                    context="streaming_error",
+                ),
             )
 
         else:
             emit_audit_event(
-                event_type=EventType.CHAT,
-                event_action=ChatEventAction.ASSISTANT_RESPONSE_GENERATED,
-                event_status=AuditEventStatus.SUCCESS,
+                action=ChatAction.GENERATE_RESPONSE,
+                status=AuditStatus.SUCCESS,
                 level=AuditLevel.INFO,
                 metadata=ChatAuditMetadata(session_id=session_id),
-                immediate=True
             )
 
         finally:
@@ -197,28 +210,26 @@ class ChatService:
                 duration=round(elapsed, 4)
             )
             
-            token_usage_ctx = ChatTokenUsageContext.get()
-            lg_current_state = await self._app.aget_state(base_config)
-            values = lg_current_state.values
+            if base_config is not None:
+                token_usage_ctx = ChatTokenUsageContext.get()
+                lg_current_state = await self._app.aget_state(base_config)
+                values = lg_current_state.values
 
-            if token_usage_ctx and values:
-                # langgraph state로부터 토큰 사용량 및 rerank 횟수 추출
-                token_breakdown = values.get("token_breakdown", {})
-                rerank_count = values.get("rerank_count", 0)
+                if token_usage_ctx and values:
+                    # langgraph state로부터 rerank 횟수 추출
+                    rerank_count = values.get("rerank_count", 0)
+                    token_usage_ctx.rerank_count = rerank_count
                 
-                token_usage_ctx.add_tokens(token_breakdown)
-                token_usage_ctx.rerank_count = rerank_count
-            
-            if (
-                token_usage_ctx
-                and token_usage_ctx.token_breakdown
-                and token_usage_ctx.message_id
-            ):
-                emit_chat_token_usage_event(
-                    user_id=global_context.user.id,
-                    workspace_id=global_context.workspace.id,
-                    company_id=global_context.company.id,
-                )
+                if (
+                    token_usage_ctx
+                    and token_usage_ctx.token_breakdown
+                    and token_usage_ctx.message_id
+                ):
+                    emit_chat_token_usage_event(
+                        user_id=global_context.user.id,
+                        workspace_id=global_context.workspace.id,
+                        company_id=global_context.company.id,
+                    )
             
             if settings.ENABLE_LANGFUSE:
                 client = get_langfuse_client()
@@ -229,9 +240,10 @@ class ChatService:
         self,
         session_id: uuid.UUID,
         query: str,
-        lg_current_state: StateSnapshot
+        lg_current_state: StateSnapshot,
+        additional_context: str | None = None,
     ) -> list[BaseMessage]:
-        
+
         state_values = lg_current_state.values
 
         has_history_in_graph = (
@@ -239,21 +251,36 @@ class ChatService:
             and "messages" in state_values
             and len(state_values["messages"]) > 0
         )
-        
+
         if has_history_in_graph:
             logger.info(
                 "state_retained",
                 context="state_not_empty",
                 session_id=str(session_id)
             )
-            input_messages = [HumanMessage(content=query)]
+            input_messages = self._build_current_turn_messages(
+                query=query,
+                additional_context=additional_context,
+            )
+
+        elif additional_context is not None:
+            logger.info(
+                "state_injected_from_context",
+                context="additional_context_provided",
+                session_id=str(session_id)
+            )
+            input_messages = self._build_current_turn_messages(
+                query=query,
+                additional_context=additional_context,
+            )
+
         else:
             logger.info(
-                "state_restored_from_db", 
+                "state_restored_from_db",
                 context="state_empty",
                 session_id=str(session_id)
             )
-            
+
             with SessionLocal() as db:
                 past_messages = restore_conversation_context(
                     db=db,
@@ -262,6 +289,18 @@ class ChatService:
                 input_messages = past_messages + [HumanMessage(content=query)]
 
         return input_messages
+
+    def _build_current_turn_messages(
+        self,
+        *,
+        query: str,
+        additional_context: str | None,
+    ) -> list[BaseMessage]:
+        messages: list[BaseMessage] = []
+        if additional_context is not None:
+            messages.append(HumanMessage(content=additional_context))
+        messages.append(HumanMessage(content=query))
+        return messages
 
     async def _parse_stream_event(
         self,
@@ -276,7 +315,7 @@ class ChatService:
         # 최종 답변에서 인용구가 발견된 경우 스트리밍 차단
         if stream_state.get("is_citation_reached", False):
             # generate_final_answer 노드 종료 이벤트 외에는 전부 차단
-            if not (kind == "on_chain_end" and name == "generate_final_answer"):
+            if not (kind == "on_chain_end" and name in ("generate_final_answer", "generate_final_answer_fast")):
                 return
 
         # 1. 노드 시작
@@ -308,7 +347,7 @@ class ChatService:
             )
 
         # 답변 생성 노드 시작 시: 초기 출처 후보 목록 전송
-        if name == "generate_final_answer":
+        if name in ("generate_final_answer", "generate_final_answer_fast"):
             input_data = event["data"].get("input", {})
             docs = input_data.get("retrieved_docs", [])
             sources = [
@@ -316,16 +355,14 @@ class ChatService:
                 for i, doc in enumerate(docs, start=1)
             ]
             emit_audit_event(
-                event_type=EventType.CHAT,
-                event_action=ChatEventAction.SOURCES_PROVIDED,
-                event_status=AuditEventStatus.SUCCESS,
+                action=ChatAction.PROVIDE_SOURCES,
+                status=AuditStatus.SUCCESS,
                 level=AuditLevel.INFO,
                 metadata=ChatAuditMetadata(
                     session_id=session_id,
                     provided_sources_count=len(sources),
                     provided_source_ids=[src.id for src in sources]
                 ),
-                immediate=True
             )
             
             yield ChatStreamingSourceResponse(session_id=session_id, sources=sources)
@@ -341,7 +378,7 @@ class ChatService:
         node = event["metadata"].get("langgraph_node")
         
         # 타겟 노드가 아니거나 컨텐츠가 없으면 스킵
-        is_target_node = node in ("chitchat", "generate_final_answer")
+        is_target_node = node in ("chitchat", "generate_final_answer", "generate_final_answer_fast")
         if not (is_target_node and chunk and chunk.content):
             return
         
@@ -391,7 +428,7 @@ class ChatService:
             인용 사유를 포함한 최종 소스를 업데이트한다.
         """
         
-        target_nodes = ("chitchat", "generate_final_answer")
+        target_nodes = ("chitchat", "generate_final_answer", "generate_final_answer_fast")
         
         if event["name"] not in target_nodes:
             return
@@ -464,27 +501,31 @@ class ChatService:
         self,
         global_context: GlobalContext,
         session_id: uuid.UUID,
-        query: str
+        query: str,
+        *,
+        is_slack: bool = False,
     ) -> int:
         """
             채팅방이 없다면 세션을 생성한다.
             사용자 쿼리를 저장한다.
             채팅방 ID를 반환한다.
         """
-        
+
         def _get_chat_room_sync():
             with SessionLocal() as db:
-                room = get_chat_room(
-                    db=db,
-                    session_id=session_id,
-                    user_id=global_context.user.id
-                )
+                if is_slack:
+                    room = get_chat_room_by_session_id(db=db, session_id=session_id)
+                else:
+                    room = get_chat_room(db=db, session_id=session_id, user_id=global_context.user.id)
                 return room.id if room else None
         room_id = await run_in_threadpool(_get_chat_room_sync)
 
         if not room_id:
-            initial_title = await generate_chat_room_title(query)
-               
+            initial_title = await generate_chat_room_title(
+                global_context=global_context,
+                query=query
+            )
+
             # 새로운 채팅 세션일 경우
             def _create_room_sync():
                 with SessionLocal() as db:
@@ -498,15 +539,16 @@ class ChatService:
                     db.commit()
                     db.refresh(new_room)
                     return new_room.id
-            room_id = await run_in_threadpool(_create_room_sync)     
-               
-        # 사용자 쿼리 저장
+            room_id = await run_in_threadpool(_create_room_sync)
+
+        # 사용자 쿼리 저장 (실제 요청자 귀속)
         await self._save_message_content(
             room_id,
             "user",
-            query
+            query,
+            user_id=global_context.user.id,
         )
-        
+
         return room_id
     
     async def _save_message_content(
@@ -514,8 +556,9 @@ class ChatService:
         room_id: int,
         role: str,
         content: str,
-        sources: Optional[list[dict[str, Any]]] = None,
-        trace_id: str | None = None
+        sources: list[dict[str, Any]] | None = None,
+        trace_id: str | None = None,
+        user_id: int | None = None,
     ):
         def _save_sync():
             with SessionLocal() as db:
@@ -525,7 +568,8 @@ class ChatService:
                     role=role,
                     content=content,
                     sources=sources,
-                    trace_id=trace_id
+                    trace_id=trace_id,
+                    user_id=user_id,
                 )
                 db.commit()
                 db.refresh(message)
@@ -536,7 +580,7 @@ class ChatService:
         self,
         room_id: int,
         session_id: uuid.UUID,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         마지막 대화 턴을 soft-delete 하고, 해당 세션 id에 대한 Redis Checkpointer를 초기화 한다.
         삭제된 질문 텍스트를 반환한다.

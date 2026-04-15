@@ -28,14 +28,14 @@ const FEEDBACK_CHIPS: { id: number; label: string; reason: FeedbackReason }[] = 
 const DETAIL_ID = 8;
 const ANIM_MS = 200;
 
-const FeedbackSection = ({
+export default function FeedbackSection({
   messageId,
   sessionId,
   chatHistoryId,
   feedbackVisibleMap,
   setFeedbackVisibleMap,
   onFeedbackSubmitted,
-}: FeedbackSectionProps) => {
+}: FeedbackSectionProps) {
   const feedbackRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
 
@@ -184,7 +184,9 @@ const FeedbackSection = ({
         ))}
       </div>
 
-      {submitError && <p className="text-xsmall text-red-500">피드백 제출에 실패했습니다. 다시 시도해주세요.</p>}
+      {submitError && (
+        <p className="text-xsmall text-status-destructive">피드백 제출에 실패했습니다. 다시 시도해주세요.</p>
+      )}
 
       {detail.mounted && (
         <div ref={detailRef}>
@@ -200,6 +202,4 @@ const FeedbackSection = ({
       )}
     </div>
   );
-};
-
-export default FeedbackSection;
+}

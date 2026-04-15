@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from catchup.audit.actions import IncrementalSyncAction
+from catchup.audit.metadata import IncrementalRecordAuditMetadata
+from catchup.audit.utils import audit_log
 from catchup.connectors.jira.factory import create_jira_ingestion_service
 from catchup.sync.audit import SyncAuditContext
-from catchup.sync.common.exceptions import SyncInternalError
+from catchup.sync.common.exceptions import SyncInternalException
 from catchup.sync.common.schemas import IncrementalSyncContext, TargetSyncResult
 from catchup.worker.handlers.base_incremental_handler import BaseIncrementalHandler
 
@@ -24,6 +27,11 @@ class JiraIncrementalHandler(BaseIncrementalHandler):
         cache[cache_key] = service
         return service
 
+    @audit_log(
+        IncrementalSyncAction.RECORD,
+        metadata_factory=IncrementalRecordAuditMetadata.from_audit,
+        emit_attempt=True,
+    )
     async def handle(
         self,
         *,
@@ -51,7 +59,7 @@ class JiraIncrementalHandler(BaseIncrementalHandler):
 
         error_count = int(result.get("errors", 0))
         if error_count > 0:
-            raise SyncInternalError(
+            raise SyncInternalException(
                 "jira incremental sync failed",
                 metadata={"record_key": context.record_key},
             )

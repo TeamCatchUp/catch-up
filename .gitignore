@@ -18,3 +18,8 @@ secrets.yaml
 
 .env
 .env.*
+
+Obsidian
+.agents/
+docs/
+.omx/

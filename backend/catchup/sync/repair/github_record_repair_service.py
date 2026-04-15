@@ -17,7 +17,7 @@ from catchup.server.sync.schemas import (
     SyncRecordRetryRequest,
     SyncRecordRetryResponse,
 )
-from catchup.sync.common.exceptions import SyncRequestError
+from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.repair.context import RecordRepairContext
 
 
@@ -42,14 +42,14 @@ def _load_github_target_ref(
     normalized_target_id = target_id.strip()
 
     if not normalized_scope_id:
-        raise SyncRequestError("scope_id is required", code="invalid_scope_id")
+        raise SyncRequestException("scope_id is required", code="invalid_scope_id")
     if not normalized_target_id:
-        raise SyncRequestError("target_id is required", code="invalid_target_id")
+        raise SyncRequestException("target_id is required", code="invalid_target_id")
 
     try:
         installation_id = int(normalized_scope_id)
     except ValueError as exc:
-        raise SyncRequestError(
+        raise SyncRequestException(
             "scope_id must be a github installation_id",
             code="invalid_scope_id",
             metadata={"scope_id": scope_id},
@@ -58,7 +58,7 @@ def _load_github_target_ref(
     try:
         repo_id = int(normalized_target_id)
     except ValueError as exc:
-        raise SyncRequestError(
+        raise SyncRequestException(
             "target_id must be a github repository_id",
             code="invalid_target_id",
             metadata={"target_id": target_id},
@@ -78,7 +78,7 @@ def _load_github_target_ref(
                 full_name=repo.full_name,
             )
 
-    raise SyncRequestError(
+    raise SyncRequestException(
         "github repository not found in installation",
         code="target_not_found",
         metadata={
@@ -100,7 +100,7 @@ def _index_retry_records(
         elif item.record_type == "pull_request":
             pull_request_ids = list(item.record_ids)
         else:
-            raise SyncRequestError(
+            raise SyncRequestException(
                 "unsupported github record_type",
                 code="unsupported_record_type",
                 metadata={"record_type": item.record_type},

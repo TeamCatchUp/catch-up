@@ -79,7 +79,7 @@ def include_object(object, name, type_, reflected, compare_to):
         "checkpoints",  # AsyncPostgresSaver
     ]
     
-    include = any(name.startswith(p) for p in prefixes)
+    include = name is not None and any(name.startswith(p) for p in prefixes)
     if type_ == "table" and include:
         return False
         

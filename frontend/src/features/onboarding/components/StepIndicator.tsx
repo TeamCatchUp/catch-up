@@ -17,11 +17,11 @@ export function StepIndicator({ totalSteps, currentStep }: StepIndicatorProps) {
           <div
             key={stepNum}
             className={cn(
-              'border-blue-5 flex size-[38px] items-center justify-center overflow-hidden rounded-full border-[5px]',
-              isActive ? 'bg-blue-50' : 'bg-blue-10',
+              'border-edge-primary-assistive flex size-9.5 items-center justify-center overflow-hidden rounded-full border-[5px]',
+              isActive ? 'bg-fill-primary' : 'bg-fill-primary-interaction-inactive',
             )}
           >
-            <span className="text-heading-medium tracking-tight text-white">{stepNum}</span>
+            <span className="text-heading-medium text-white">{stepNum}</span>
           </div>
         );
       })}

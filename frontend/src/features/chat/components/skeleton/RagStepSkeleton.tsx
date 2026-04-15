@@ -6,7 +6,7 @@ interface RagStepSkeletonProps {
   Icon: React.ComponentType<{ className?: string }>;
 }
 
-const RagStepSkeleton = ({ stepKey, label, Icon }: RagStepSkeletonProps) => {
+export default function RagStepSkeleton({ stepKey, label, Icon }: RagStepSkeletonProps) {
   const isGenerate = stepKey === 'generate';
 
   return (
@@ -26,6 +26,4 @@ const RagStepSkeleton = ({ stepKey, label, Icon }: RagStepSkeletonProps) => {
       )}
     </div>
   );
-};
-
-export default RagStepSkeleton;
+}

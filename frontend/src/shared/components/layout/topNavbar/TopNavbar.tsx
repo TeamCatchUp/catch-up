@@ -7,6 +7,7 @@ import AI from '@/public/icons/icon/ai.svg';
 import Home from '@/public/icons/icon/home.svg';
 import Kebab2 from '@/public/icons/icon/kebeb 2.svg';
 import MyPage from '@/public/icons/icon/person.svg';
+import { Button } from '@/shared/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 
 import { MoreButtonContent } from './MoreButtonModal';
@@ -52,12 +53,12 @@ interface TopNavbarProps {
 /**
  * 화면 타입에 맞는 상단 네비게이션을 렌더링한다.
  */
-const TopNavbar = ({ pageType }: TopNavbarProps) => {
+export default function TopNavbar({ pageType }: TopNavbarProps) {
   const config = pageConfigs[pageType];
   const IconComponent = config.icon;
 
   return (
-    <nav aria-label="메인 네비게이션" className="border-edge-neutral bg-fill-normal sticky top-0 z-50 w-full border-b">
+    <nav aria-label="메인 네비게이션" className="border-edge-neutral bg-fill-normal sticky top-0 z-header w-full border-b">
       <div className="flex justify-between px-16 py-2">
         <div className="flex items-center justify-center">
           <Link href={config.href} className="text-content-normal flex cursor-pointer gap-2">
@@ -69,9 +70,9 @@ const TopNavbar = ({ pageType }: TopNavbarProps) => {
           <li>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="border-edge-neutral hover:border-edge-normal hover:bg-fill-interaction-hover active:border-edge-strong active:bg-fill-interaction-pressed data-[state=open]:border-edge-normal data-[state=open]:bg-fill-interaction-hover bg-fill-normal cursor-pointer rounded-lg border px-1.5 py-1.5 transition-colors">
+                <Button variant="icon-only-gray" size="md">
                   <Kebab2 className="text-icon-normal h-6 w-6" />
-                </button>
+                </Button>
               </DropdownMenuTrigger>
               <MoreButtonContent />
             </DropdownMenu>
@@ -80,6 +81,4 @@ const TopNavbar = ({ pageType }: TopNavbarProps) => {
       </div>
     </nav>
   );
-};
-
-export default TopNavbar;
+}

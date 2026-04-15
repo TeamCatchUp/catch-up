@@ -5,14 +5,12 @@ from catchup.observability.logging import configure_logging
 configure_logging()
 
 import asyncio
-import time
 from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import inspect
 
 from catchup.audit.enums import AuditEventStatus
 from catchup.audit.enums import AuditLevel
@@ -25,10 +23,9 @@ from catchup.components.vector_db.factory import get_pgvector_repository
 from catchup.configs.config import settings
 from catchup.costs.handlers import chat_token_usage_handler
 from catchup.db.engine import SessionLocal
-from catchup.db.engine import engine
 from catchup.db.global_state import has_admin_ever_onboarded
 from catchup.db.global_state import has_csv_file_ever_been_uploaded
-from catchup.db.models import Base
+from catchup.db.user_source_mapping import reconcile_missing_user_source_mappings
 from catchup.events.bus import bus
 from catchup.events.enums import EventTopic
 from catchup.events.enums import EventType
@@ -37,7 +34,10 @@ from catchup.observability.logging.s3_uploader import audit_log_uploader_task
 from catchup.observability.logging.s3_uploader import graceful_shutdown
 from catchup.rag.checkpoint import close_langgraph_checkpointer
 from catchup.rag.checkpoint import init_langgraph_checkpointer
+from catchup.rag.executors import rag_executors
+from catchup.rag.semaphores import rag_semaphores
 from catchup.server.admin.api import router as admin_router
+from catchup.server.audit.api import router as audit_router
 from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
 from catchup.server.chat_room.api import router as chatroom_router
@@ -48,12 +48,13 @@ from catchup.server.connector.jira.webhook_api import router as jira_webhook_rou
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.webhook_api import router as slack_webhook_router
 from catchup.server.error_handlers import register_exception_handlers
-from catchup.server.initialization import ensure_pg_indices
+from catchup.server.initialization import ensure_pg_indices, ensure_vector_index
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
 from catchup.server.settings.api import router as settings_router
 from catchup.server.state import state
+from catchup.server.stats.api import router as stats_router
 from catchup.server.sync.api import router as sync_runtime_router
 from catchup.utils.client import _shared_client
 from catchup.utils.redis import check_all_redis_health
@@ -128,206 +129,16 @@ async def lifespan(app: FastAPI):
         )
         uploader_task = asyncio.create_task(audit_log_uploader_task())
 
-    try:
-        db_init_started_at = time.perf_counter()
-
-        # 1) 메타데이터 기준 테이블 목록 수집
-        metadata_table_names = sorted(Base.metadata.tables.keys())
-        emit_audit_event(
-            event_type=EventType.SYSTEM,
-            event_action=SystemEventAction.STARTUP_DB_INIT,
-            event_status=AuditEventStatus.ATTEMPT,
-            level=AuditLevel.INFO,
-            metadata=SystemAuditMetadata(
-                context="startup_db_initialization",
-                result="start",
-                message="starting_db_initialization",
-                metadata_table_count=len(metadata_table_names),
-            ),
-            immediate=True,
-        )
-
-        logger.debug(
-            "metadata_tables_loaded",
-            context="server_startup",
-            count=len(metadata_table_names),
-            tables=metadata_table_names,
-        )
-
-        # 2) create_all 이전 DB 상태 확인
-        with engine.connect() as connection:
-            db_inspector_before = inspect(connection)
-            db_table_names_before = sorted(db_inspector_before.get_table_names())
-
-        missing_tables_before = sorted(
-            set(metadata_table_names) - set(db_table_names_before)
-        )
-        logger.debug(
-            "db_tables_before_create_all",
-            context="server_startup",
-            count=len(db_table_names_before),
-            tables=db_table_names_before,
-        )
-        logger.debug(
-            "missing_tables_before_create_all",
-            context="server_startup",
-            count=len(missing_tables_before),
-            tables=missing_tables_before,
-        )
-
-        # 3) SQLAlchemy create_all 실행
-        create_all_started_at = time.perf_counter()
-        Base.metadata.create_all(bind=engine)
-        create_all_elapsed_ms = (time.perf_counter() - create_all_started_at) * 1000
-        logger.debug(
-            "create_all_completed",
-            context="server_startup",
-            elapsed_ms=create_all_elapsed_ms,
-        )
-
-        # 4) create_all 이후 DB 상태 확인 및 스키마 드리프트 탐지
-        with engine.connect() as connection:
-            db_inspector_after = inspect(connection)
-            db_table_names_after = sorted(db_inspector_after.get_table_names())
-
-            missing_columns_by_table: dict[str, list[str]] = {}
-            extra_columns_by_table: dict[str, list[str]] = {}
-            for table_name in metadata_table_names:
-                if table_name not in db_table_names_after:
-                    continue
-
-                model_columns = sorted(Base.metadata.tables[table_name].c.keys())
-                db_columns = sorted(
-                    column["name"] for column in db_inspector_after.get_columns(table_name)
-                )
-                missing_columns = sorted(set(model_columns) - set(db_columns))
-                extra_columns = sorted(set(db_columns) - set(model_columns))
-                if missing_columns:
-                    missing_columns_by_table[table_name] = missing_columns
-                if extra_columns:
-                    extra_columns_by_table[table_name] = extra_columns
-
-        created_tables = sorted(set(db_table_names_after) - set(db_table_names_before))
-        missing_tables_after = sorted(set(metadata_table_names) - set(db_table_names_after))
-
-        logger.debug(
-            "db_tables_after_create_all",
-            context="server_startup",
-            count=len(db_table_names_after),
-            tables=db_table_names_after,
-        )
-        logger.debug(
-            "tables_created_in_startup",
-            context="server_startup",
-            count=len(created_tables),
-            tables=created_tables,
-        )
-
-        if missing_tables_after:
-            emit_audit_event(
-                event_type=EventType.SYSTEM,
-                event_action=SystemEventAction.STARTUP_DB_INIT,
-                event_status=AuditEventStatus.FAIL,
-                level=AuditLevel.WARNING,
-                metadata=SystemAuditMetadata(
-                    context="startup_db_initialization",
-                    result="partial_failure",
-                    message="missing_tables_after_create_all",
-                    missing_tables_count=len(missing_tables_after),
-                    missing_tables=missing_tables_after,
-                ),
-                immediate=True,
-            )
-
-        if extra_columns_by_table:
-            for table_name, extra_columns in extra_columns_by_table.items():
-                emit_audit_event(
-                    event_type=EventType.SYSTEM,
-                    event_action=SystemEventAction.STARTUP_DB_SCHEMA_DRIFT,
-                    event_status=AuditEventStatus.FAIL,
-                    level=AuditLevel.WARNING,
-                    metadata=SystemAuditMetadata(
-                        context="startup_db_schema_drift",
-                        result="partial_failure",
-                        table_name=table_name,
-                        extra_columns=extra_columns,
-                    ),
-                    immediate=True,
-                )
-        else:
-            logger.debug(
-                "no_extra_db_columns_detected",
-                context="server_startup",
-            )
-
-        if missing_columns_by_table:
-            for table_name, missing_columns in missing_columns_by_table.items():
-                emit_audit_event(
-                    event_type=EventType.SYSTEM,
-                    event_action=SystemEventAction.STARTUP_DB_SCHEMA_DRIFT,
-                    event_status=AuditEventStatus.FAIL,
-                    level=AuditLevel.ERROR,
-                    metadata=SystemAuditMetadata(
-                        context="startup_db_schema_drift",
-                        result="failure",
-                        table_name=table_name,
-                        missing_columns=missing_columns,
-                    ),
-                    immediate=True,
-                )
-
-            missing_columns_summary = ", ".join(
-                f"{table_name}: {', '.join(columns)}"
-                for table_name, columns in sorted(missing_columns_by_table.items())
-            )
-            raise RuntimeError(
-                "DB schema drift detected; missing columns: "
-                f"{missing_columns_summary}"
-            )
-
-        logger.debug(
-            "no_missing_db_columns_detected",
-            context="server_startup",
-        )
-
-        db_init_elapsed_ms = (time.perf_counter() - db_init_started_at) * 1000
-        emit_audit_event(
-            event_type=EventType.SYSTEM,
-            event_action=SystemEventAction.STARTUP_DB_INIT,
-            event_status=AuditEventStatus.SUCCESS,
-            level=AuditLevel.INFO,
-            metadata=SystemAuditMetadata(
-                context="startup_db_initialization",
-                result="success",
-                elapsed_ms=round(db_init_elapsed_ms, 2),
-                metadata_tables=len(metadata_table_names),
-                db_tables_before=len(db_table_names_before),
-                db_tables_after=len(db_table_names_after),
-            ),
-            immediate=True,
-        )
-
-    except Exception as e:
-        emit_audit_event(
-            event_type=EventType.SYSTEM,
-            event_action=SystemEventAction.STARTUP_DB_INIT,
-            event_status=AuditEventStatus.FAIL,
-            level=AuditLevel.ERROR,
-            metadata=SystemAuditMetadata(
-                context="startup_db_initialization",
-                result="failure",
-                error=str(e),
-            ),
-            immediate=True,
-        )
-        raise
-
+    # TODO: depenendcy-injector 기반으로 생명 주기 관리 검토
+    # Ingestion용 pgvector_repo 생성
     try:
         embeddings = get_embedding_service(
             EmbeddingProvider.AWS_BEDROCK
         ).get_embedder()
         pgvector_repo = get_pgvector_repository(embeddings)  # Ingestion
         await pgvector_repo.initialize(ensure_pg_indices)
+        if settings.PGVECTOR_HNSW_INDEX_ENABLED:
+            asyncio.create_task(ensure_vector_index())
         logger.info(
             "pgvector_repository_initialized",
             result="success",
@@ -342,7 +153,6 @@ async def lifespan(app: FastAPI):
             error=str(e),
         )
         raise
-
 
     # Langgraph Checkpoint INIT
     try:
@@ -371,6 +181,20 @@ async def lifespan(app: FastAPI):
             ),
             immediate=True,
         )
+        
+    try:
+        rag_semaphores.init(
+            small_model_sema_value=settings.AWS_BEDROCK_SMALL_MODEL_SEMA_VALUE,
+            large_model_sema_value=settings.AWS_BEDROCK_LARGE_MODEL_SEMA_VALUE,
+            rerank_sema_value=settings.AWS_BEDROCK_RERANK_SEMA_VALUE,
+        )
+        rag_executors.init(
+            chat_thread_pool_size=settings.RAG_CHAT_THREAD_POOL_SIZE,
+            bedrock_rerank_size=settings.RAG_BEDROCK_RERANK_THREAD_POOL_SIZE,
+        )
+    except:
+        # TODO: emit_audit_event()
+        logger.error("langgraph_semaphore_init_failed", exc_info=True)
         raise
 
     # Scheduler 초기화
@@ -457,6 +281,14 @@ async def lifespan(app: FastAPI):
                 context="server_startup",
                 has_ever_uploaded=state.has_ever_uploaded_user_list_export,
             )
+            # is_registered=True이지만 UserSourceMapping이 없는 항목 일괄 해소 (임시 조치)
+            resolved_count = reconcile_missing_user_source_mappings(db)
+            db.commit()
+            logger.info(
+                "user_source_mapping_reconciled",
+                context="server_startup",
+                resolved_count=resolved_count,
+            )
             
     except Exception as e:
         logger.critical(
@@ -514,6 +346,17 @@ async def lifespan(app: FastAPI):
                 error=str(e),
                 exc_info=True,
             )
+
+    try:
+        rag_executors.shutdown(cancel_futures=True)
+        logger.info("rag_executors_shutdown", context="server_shutdown")
+    except Exception as e:
+        logger.error(
+            "rag_executors_shutdown_failed",
+            context="server_shutdown",
+            error=str(e),
+            exc_info=True,
+        )
 
     # Scheduler Shutdown
     try:
@@ -586,8 +429,9 @@ app = FastAPI(
     lifespan=lifespan,
     redirect_slashes=False,
     version=settings.APP_VERSION,
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/docs" if settings.API_DOCS_ENABLED else None,
+    redoc_url="/api/redoc" if settings.API_DOCS_ENABLED else None,
+    openapi_url="/api/openapi.json" if settings.API_DOCS_ENABLED else None,
 )
 
 register_exception_handlers(app)
@@ -607,6 +451,8 @@ app.include_router(github_mapping_csv_router)
 app.include_router(onboarding_router)
 app.include_router(settings_router)
 app.include_router(sync_runtime_router)
+app.include_router(stats_router)
+app.include_router(audit_router)
 
 
 app.add_middleware(

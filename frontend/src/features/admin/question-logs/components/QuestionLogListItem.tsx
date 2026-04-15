@@ -3,7 +3,7 @@ import Link from 'next/link';
 import ChatIcon from '@/public/icons/icon/chat.svg';
 import type { DateGroup } from '@/shared/utils/dateGrouping';
 
-import type { QuestionLogItem } from '../types/questionLog';
+import type { QuestionLogItem } from '../types/questionLogModel';
 
 interface QuestionLogListItemProps {
   item: QuestionLogItem;
@@ -12,10 +12,9 @@ interface QuestionLogListItemProps {
 }
 
 /** 질문 로그 리스트 행 */
-const QuestionLogListItem = ({ item, group, userId }: QuestionLogListItemProps) => {
-  const showDate = group !== 'today';
+export default function QuestionLogListItem({ item, group, userId }: QuestionLogListItemProps) {
   const showSavedLabel = item.isSaved;
-  const dateText = group === 'sevenDays' ? item.relativeDate : item.fullDate;
+  const dateText = group === 'older' ? item.fullDate : item.relativeDate;
 
   return (
     <Link
@@ -26,14 +25,10 @@ const QuestionLogListItem = ({ item, group, userId }: QuestionLogListItemProps) 
         <ChatIcon className="text-content-alternative size-5" />
       </div>
       <div className="text-body-small text-content-normal min-w-0 flex-1 truncate text-left">{item.query}</div>
-      {(showSavedLabel || showDate) && (
-        <div className="text-body-xsmall text-content-assistive flex shrink-0 items-center gap-2 whitespace-nowrap">
-          {showSavedLabel && <span>저장한 답변</span>}
-          {showDate && <span>{dateText}</span>}
-        </div>
-      )}
+      <div className="text-body-xsmall text-content-assistive flex shrink-0 items-center gap-2 whitespace-nowrap">
+        {showSavedLabel && <span>저장한 답변</span>}
+        <span>{dateText}</span>
+      </div>
     </Link>
   );
-};
-
-export default QuestionLogListItem;
+}
