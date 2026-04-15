@@ -1,4 +1,3 @@
-from enum import StrEnum
 from functools import lru_cache
 
 from catchup.components.llm.constants import LlmProvider
@@ -14,17 +13,19 @@ def get_llm_service(
     provider: LlmProvider,
     model_capacity: ModelCapacity,
     streaming: bool = True,
+    isolated: bool = False,
 ) -> BaseLlmService:
     if provider == LlmProvider.OPENAI:
         return OpenAiLlmService(
             model_capacity=model_capacity,
             streaming=streaming
         )
-    
+
     if provider == LlmProvider.AWS_BEDROCK:
         return AwsBedrockLlmService(
             model_capacity=model_capacity,
-            streaming=streaming
+            streaming=streaming,
+            isolated=isolated,
         )
-    
+
     raise ValueError(f"Unknown provider: {provider}")

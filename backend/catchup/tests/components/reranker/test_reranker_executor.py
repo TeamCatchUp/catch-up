@@ -127,16 +127,18 @@ class TestRagExecutorsLifecycle(IsolatedAsyncioTestCase):
         except Exception as e:
             self.fail(f"초기화 전 shutdown()이 예외를 발생시켰습니다: {e}")
 
-    def test_init_creates_both_executors(self):
-        """`init()` 호출 후 chat, bedrock_rerank 모두 생성되는지 확인"""
+    def test_init_creates_all_executors(self):
+        """`init()` 호출 후 vector_search, bedrock_rerank, llm 모두 생성되는지 확인"""
         from catchup.rag.executors import RagExecutors
         executors = RagExecutors()
-        executors.init(chat_thread_pool_size=5, bedrock_rerank_size=2)
+        executors.init(vector_search_size=5, bedrock_rerank_size=2, llm_size=10)
 
-        self.assertIsInstance(executors.chat, ThreadPoolExecutor)
+        self.assertIsInstance(executors.vector_search, ThreadPoolExecutor)
         self.assertIsInstance(executors.bedrock_rerank, ThreadPoolExecutor)
+        self.assertIsInstance(executors.llm, ThreadPoolExecutor)
 
-        self.assertEqual(executors.chat._thread_name_prefix, "rag-chat")
+        self.assertEqual(executors.vector_search._thread_name_prefix, "vector-search")
         self.assertEqual(executors.bedrock_rerank._thread_name_prefix, "bedrock-rerank")
+        self.assertEqual(executors.llm._thread_name_prefix, "rag-llm")
 
         executors.shutdown(wait=False)

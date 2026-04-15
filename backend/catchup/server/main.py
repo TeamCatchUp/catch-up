@@ -48,7 +48,8 @@ from catchup.server.connector.jira.webhook_api import router as jira_webhook_rou
 from catchup.server.connector.slack.auth_api import router as slack_auth_router
 from catchup.server.connector.slack.webhook_api import router as slack_webhook_router
 from catchup.server.error_handlers import register_exception_handlers
-from catchup.server.initialization import ensure_pg_indices, ensure_vector_index
+from catchup.server.initialization import ensure_pg_indices
+from catchup.server.initialization import ensure_vector_index
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
@@ -189,8 +190,9 @@ async def lifespan(app: FastAPI):
             rerank_sema_value=settings.AWS_BEDROCK_RERANK_SEMA_VALUE,
         )
         rag_executors.init(
-            chat_thread_pool_size=settings.RAG_CHAT_THREAD_POOL_SIZE,
+            vector_search_size=settings.RAG_VECTOR_SEARCH_THREAD_POOL_SIZE,
             bedrock_rerank_size=settings.RAG_BEDROCK_RERANK_THREAD_POOL_SIZE,
+            llm_size=settings.RAG_LLM_THREAD_POOL_SIZE,
         )
     except:
         # TODO: emit_audit_event()

@@ -26,9 +26,10 @@ async def generate_chat_room_title(
 ) -> str:
     """채팅방 제목 생성"""
     llm = get_llm_service(
-        LlmProvider.AWS_BEDROCK, 
+        LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
-        streaming=False
+        streaming=False,
+        isolated=True,
     ).get_llm()
     
     prompt = prompt_loader.get_prompt(
