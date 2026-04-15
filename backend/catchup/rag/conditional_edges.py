@@ -16,6 +16,9 @@ def route_after_rerank(state: AgentState):
     mode = state.get("mode", "standard")
     if mode == "fast":
         return "generate_final_answer_fast"
+    retry_count = state.get("retry_count", 0)
+    if retry_count >= 1:
+        return "generate_final_answer"
     return "grade"
 
 
