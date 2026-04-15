@@ -6,6 +6,7 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+from pgvector.sqlalchemy import Vector
 
 # 프로젝트 경로 설정
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
