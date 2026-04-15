@@ -129,6 +129,7 @@ def get_compiled_graph(
         route_after_rerank,
         {
             "generate_final_answer_fast": "generate_final_answer_fast",
+            "generate_final_answer": "generate_final_answer",
             "grade": "grade",
         }
     )

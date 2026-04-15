@@ -8,6 +8,11 @@ Your sole purpose is to decide whether the [RETRIEVED CONTEXT] is sufficient to 
 - **NO:** The documents are irrelevant or empty. **Trigger a query rewrite.**
 </audit_objective>
 
+<output_instructions>
+- If your decision is **YES**: set `explanation` to an empty string `""`.
+- If your decision is **NO**: write a concise 1–2 sentence reason (e.g., "문서에 관련 키워드는 있으나 구체적인 해결책이 없음").
+</output_instructions>
+
 <grading_criteria>
 1. **Semantic Relevance (Not just Keywords):**
    - **PASS ('yes'):** The context discusses the **same topic** and **intent** as the query.
