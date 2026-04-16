@@ -10,6 +10,7 @@ import type { IntegrationService } from '@/shared/types/integrationService';
 import type { MemberIntegrationCardItem } from '../../../types/integrationModel';
 import type { EmbeddingButtonState, SyncConnector } from '../../../types/syncModel';
 import EmbeddingModal from '../modals/EmbeddingModal';
+import RecoveryCardSection from './RecoveryCardSection';
 
 interface StatusCardsSectionProps {
   cards: MemberIntegrationCardItem[];
@@ -89,6 +90,8 @@ export default function StatusCardsSection({
         <h2 className="text-heading-large text-content-normal">계정 등록 상태</h2>
         <p className="text-body-small text-content-alternative">팀의 매핑 등록 상태를 확인할 수 있어요.</p>
       </div>
+
+      <RecoveryCardSection />
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-5">
         {cards.map((card) => {
