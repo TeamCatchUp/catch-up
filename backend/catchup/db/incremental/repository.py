@@ -46,26 +46,35 @@ _ALLOWED_RECORD_TRANSITIONS: dict[IncrementalRecordStatus, set[IncrementalRecord
     IncrementalRecordStatus.DEBOUNCING: {
         IncrementalRecordStatus.QUEUED,
         IncrementalRecordStatus.DEBOUNCING,
+        IncrementalRecordStatus.RECOVERED,
     },
     IncrementalRecordStatus.QUEUED: {
         IncrementalRecordStatus.PROCESSING,
         IncrementalRecordStatus.DEBOUNCING,
         IncrementalRecordStatus.DEAD,
+        IncrementalRecordStatus.RECOVERED,
     },
     IncrementalRecordStatus.PROCESSING: {
         IncrementalRecordStatus.SYNCED,
         IncrementalRecordStatus.RETRY_WAIT,
         IncrementalRecordStatus.DEAD,
+        IncrementalRecordStatus.RECOVERED,
     },
     IncrementalRecordStatus.RETRY_WAIT: {
         IncrementalRecordStatus.QUEUED,
         IncrementalRecordStatus.DEBOUNCING,
         IncrementalRecordStatus.DEAD,
+        IncrementalRecordStatus.RECOVERED,
     },
     IncrementalRecordStatus.DEAD: {
         IncrementalRecordStatus.DEBOUNCING,
+        IncrementalRecordStatus.RECOVERED,
     },
     IncrementalRecordStatus.SYNCED: {
+        IncrementalRecordStatus.DEBOUNCING,
+        IncrementalRecordStatus.RECOVERED,
+    },
+    IncrementalRecordStatus.RECOVERED: {
         IncrementalRecordStatus.DEBOUNCING,
     },
 }
@@ -398,6 +407,46 @@ def mark_parent_cohort_synced(
             queued_generation=None,
             processing_generation=None,
             last_synced_at=synced_at,
+            last_error=None,
+            lease_owner=None,
+            lease_until=None,
+            updated_at=_utc_now(),
+        )
+    )
+    try:
+        result = db.execute(stmt)
+        db.commit()
+        return result.rowcount or 0
+    except Exception:
+        db.rollback()
+        raise
+
+
+def mark_record_keys_recovered(
+    db: Session,
+    *,
+    record_keys: Sequence[str],
+    last_synced_at: datetime | None = None,
+) -> int:
+    normalized_record_keys = [
+        _normalize_text(record_key, "record_key")
+        for record_key in record_keys
+        if str(record_key).strip()
+    ]
+    if not normalized_record_keys:
+        return 0
+
+    recovered_at = _to_utc(last_synced_at or _utc_now())
+    stmt = (
+        update(IncrementalRecordState)
+        .where(IncrementalRecordState.record_key.in_(normalized_record_keys))
+        .values(
+            status=IncrementalRecordStatus.RECOVERED,
+            attempt=0,
+            next_retry_at=None,
+            queued_generation=None,
+            processing_generation=None,
+            last_synced_at=recovered_at,
             last_error=None,
             lease_owner=None,
             lease_until=None,
