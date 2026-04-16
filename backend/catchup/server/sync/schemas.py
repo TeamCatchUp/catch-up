@@ -348,3 +348,10 @@ class SyncRecordRetryResponse(BaseModel):
     event_id: str | None = None
     event_status: SyncEventStatus | None = None
     records: list[SyncRecordRetryItemResponse] = Field(default_factory=list)
+
+
+class SlackIncrementalRecoveryResponse(BaseModel):
+    connector: SyncConnector = SyncConnector.SLACK
+    total_incremental_records_before_recovery: int = 0
+    succeeded_records: int = 0
+    failed_records: int = 0

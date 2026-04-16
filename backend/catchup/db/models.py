@@ -1398,6 +1398,7 @@ class IncrementalRecordStatus(StrEnum):
     RETRY_WAIT = "retry_wait"
     DEAD = "dead"
     SYNCED = "synced"
+    RECOVERED = "recovered"
 
 
 class IncrementalOutboxStatus(StrEnum):
@@ -1624,7 +1625,7 @@ class IncrementalRecordState(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('debouncing', 'queued', 'processing', 'retry_wait', 'dead', 'synced')",
+            "status IN ('debouncing', 'queued', 'processing', 'retry_wait', 'dead', 'synced', 'recovered')",
             name="ck_incremental_record_states_status",
         ),
         CheckConstraint("generation >= 1", name="ck_incremental_record_states_generation_positive"),

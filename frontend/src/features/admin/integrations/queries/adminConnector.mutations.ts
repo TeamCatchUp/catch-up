@@ -19,4 +19,10 @@ export const adminConnectorMutations = {
       mutationFn: () => api.post<{ message: string }>(API.admin.users.syncOAuthUsers),
       meta: { invalidates: [['admin', 'users', 'syncStatus']] },
     }) satisfies UseMutationOptions<AxiosResponse<{ message: string }>, Error, void>,
+
+  slackIncrementalRecovery: () =>
+    ({
+      mutationKey: ['admin', 'sync', 'slack-incremental-recovery'] as const,
+      mutationFn: () => api.post(API.sync.slackIncrementalRecovery),
+    }) satisfies UseMutationOptions<AxiosResponse, Error, void>,
 };
