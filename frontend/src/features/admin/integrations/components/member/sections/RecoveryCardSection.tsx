@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 
-import IconCancel from '@/public/icons/icon/cancel.svg';
 import IconError from '@/public/icons/icon/error_filled.svg';
 import { Button } from '@/shared/components/ui/button';
 
@@ -11,15 +10,16 @@ import { adminConnectorMutations } from '../../../queries/adminConnector.mutatio
 
 const DISMISS_KEY = 'slack-recovery-dismissed';
 
-/** Slack 증분 동기화 복구 카드 (hotfix — 제거 시 이 파일 삭제 + IntegrationsSection import 제거) */
+/** Slack 증분 동기화 복구 카드 (hotfix — 제거 시 이 파일 삭제 + StatusCardsSection import 제거) */
 export default function RecoveryCardSection() {
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISS_KEY) === 'true');
 
-  const { mutate, isPending, isSuccess } = useMutation(adminConnectorMutations.slackIncrementalRecovery());
+  const { mutate } = useMutation(adminConnectorMutations.slackIncrementalRecovery());
 
-  const handleDismiss = () => {
+  const handleRetry = () => {
     localStorage.setItem(DISMISS_KEY, 'true');
     setDismissed(true);
+    mutate();
   };
 
   if (dismissed) return null;
@@ -37,23 +37,9 @@ export default function RecoveryCardSection() {
         </span>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        {isPending ? (
-          <Button variant="box-outline-gray" size="md" disabled>
-            재시도 진행중...
-          </Button>
-        ) : (
-          <Button variant="box-solid-primary" size="md" onClick={() => mutate()}>
-            재시도하기
-          </Button>
-        )}
-
-        {isSuccess && (
-          <Button variant="icon-only-gray" size="sm" onClick={handleDismiss}>
-            <IconCancel className="size-5" />
-          </Button>
-        )}
-      </div>
+      <Button variant="box-solid-primary" size="md" className="shrink-0" onClick={handleRetry}>
+        재시도하기
+      </Button>
     </div>
   );
 }
