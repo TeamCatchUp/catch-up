@@ -889,6 +889,53 @@ class SlackOAuthToken(Base):
     )
 
 
+class ChannelTalkCredentials(Base):
+    __tablename__ = "channel_talk_credentials"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    channel_id: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        comment="Validated Channel Talk channel ID",
+    )
+    channel_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        comment="Validated Channel Talk channel name",
+    )
+    access_key: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+        comment="Channel Talk access key",
+    )
+    access_secret: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+        comment="Channel Talk access secret",
+    )
+    webhook_token: Mapped[str] = mapped_column(
+        String(1024),
+        nullable=False,
+        comment="CatchUp-managed webhook token",
+    )
+    credential_last_verified_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        comment="Last successful credential validation time",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class JiraSyncStatus(StrEnum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
