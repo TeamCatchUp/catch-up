@@ -12,6 +12,7 @@ from catchup.configs.config import settings
 from catchup.db.models import SyncConnector
 from catchup.server.sync.schemas import (
     FullSyncRequest,
+    SlackIncrementalRecoveryResponse,
     SyncAcceptedResponse,
     SyncErrorResponse,
     SyncJobSnapshotResponse,
@@ -23,6 +24,7 @@ from catchup.server.sync.schemas import (
 )
 from catchup.sync.common.exceptions import BaseSyncException, SyncRequestException
 from catchup.sync.full.service import get_full_sync_service
+from catchup.sync.repair.slack_incremental_recovery_service import get_slack_incremental_recovery_service
 from catchup.sync.repair.record_repair_service import get_record_repair_service
 from catchup.sync.query_service import get_sync_query_service
 
@@ -241,6 +243,48 @@ async def retry_records(
                 metadata={
                     "event_id": retry_request.event_id,
                 },
+            ),
+        ) from exc
+
+
+@router.post(
+    "/slack/incremental-recovery",
+    response_model=SlackIncrementalRecoveryResponse,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": SyncErrorResponse},
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": SyncErrorResponse},
+    },
+)
+async def recover_slack_incremental_records(
+):
+    recovery_service = get_slack_incremental_recovery_service()
+
+    try:
+        return await recovery_service.recover()
+    except SyncRequestException as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_build_error_detail(
+                code=exc.code,
+                message=exc.message,
+                connector=SyncConnector.SLACK,
+                metadata=exc.metadata,
+            ),
+        ) from exc
+    except BaseSyncException:
+        raise
+    except Exception as exc:
+        logger.error(
+            "[SYNC][SLACK][INCREMENTAL_RECOVERY][API] Request failed: error=%s",
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_build_error_detail(
+                code="internal_error",
+                message="slack incremental recovery request failed",
+                connector=SyncConnector.SLACK,
             ),
         ) from exc
 
