@@ -9,7 +9,7 @@ import structlog
 from fastapi.concurrency import run_in_threadpool
 from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
-from langgraph.pregel.types import StateSnapshot
+from langgraph.types import StateSnapshot
 
 from catchup.audit.actions import ChatAction
 from catchup.audit.base import AuditLevel
@@ -17,12 +17,9 @@ from catchup.audit.base import AuditStatus
 from catchup.audit.emitters import emit_audit_event
 from catchup.audit.metadata import ChatAuditMetadata
 from catchup.chat.chat_room import generate_chat_room_title
-from catchup.chat.schemas import NODE_STATUS_MAP
 from catchup.chat.schemas import ChatResponse
-from catchup.chat.schemas import ChatStreamingSourceResponse
-from catchup.chat.schemas import ChatStreamingStatusResponse
-from catchup.chat.schemas import ChatStreamingTokenResponse
 from catchup.chat.schemas import StreamEvent
+from catchup.chat.stream_processor import ChatStreamProcessor
 from catchup.chat.utils import restore_conversation_context
 from catchup.configs.config import settings
 from catchup.costs.contexts.chat import ChatTokenUsageContext
@@ -40,7 +37,6 @@ from catchup.rag.checkpoint import get_langgraph_checkpointer
 from catchup.rag.graph import get_compiled_graph
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.prompt_settings import PromptSettings
-from catchup.rag.schemas.sources import BaseSource
 
 logger = structlog.get_logger()
 
@@ -48,10 +44,9 @@ logger = structlog.get_logger()
 observe = get_observe()
 
 class ChatService:
-    # Compiled Graph
-    _app = None
-
     def __init__(self):
+        self._app = None
+
         if settings.ENABLE_LANGFUSE:
             logger.info(
                 "langfuse_initialized",
@@ -59,12 +54,11 @@ class ChatService:
                 active=True
             )
 
-    async def _get_app(self):
-        # 싱글톤
-        if ChatService._app is None:
+    def _get_app(self):
+        if self._app is None:
             checkpointer = get_langgraph_checkpointer()
-            ChatService._app = get_compiled_graph(checkpointer)
-        return ChatService._app
+            self._app = get_compiled_graph(checkpointer)
+        return self._app
 
     @observe(name="chat-stream")
     async def chat_stream(
@@ -78,15 +72,16 @@ class ChatService:
         mode: Literal["fast", "standard"] = "standard",
         is_slack: bool = False,
     ) -> AsyncGenerator[StreamEvent, None]:
-        
+
          # 실행 시간 측정 시작
         start = time.perf_counter()
-        
+
         # 채팅 토큰 사용량 컨텍스트 초기화
         ChatTokenUsageContext.init()
-        
+
         base_config = None
-            
+        processor = None
+        
         try:            
             # 채팅 세션 획득
             room_id: int = await self._setup_chat_room(
@@ -97,7 +92,7 @@ class ChatService:
             )
 
             # Compiled Graph
-            app = await self._get_app()
+            app = self._get_app()
 
             # Checkpointer 설정
             base_config, invoke_config, trace_id = self._setup_config(session_id)
@@ -136,18 +131,25 @@ class ChatService:
                 "rerank_count": 0,
             }
             
-            stream_state = {
-                "buffer": "",
-                "is_citation_reached": False,
-                "has_streamed": False,
-                "langfuse_trace_id": trace_id
-            }
+            processor = ChatStreamProcessor(
+                session_id=session_id,
+                room_id=room_id,
+                save_message=self._save_message_content,
+                langfuse_trace_id=trace_id,
+            )
 
             async for event in app.astream_events(inputs, invoke_config, version="v2"):
-                async for parsed_event in self._parse_stream_event(event, session_id, room_id, stream_state):
+                async for parsed_event in processor.process(event):
                     yield parsed_event
 
         except asyncio.CancelledError:
+            elapsed = time.perf_counter() - start
+            logger.warning(
+                "stream_cancelled",
+                session_id=str(session_id),
+                elapsed_seconds=round(elapsed, 2),
+                cancelled_at_node=processor.context.current_node if processor is not None else None,
+            )
             emit_audit_event(
                 action=ChatAction.GENERATE_RESPONSE,
                 status=AuditStatus.FAILURE,
@@ -302,201 +304,6 @@ class ChatService:
         messages.append(HumanMessage(content=query))
         return messages
 
-    async def _parse_stream_event(
-        self,
-        event: dict[str, Any],
-        session_id: uuid.UUID,
-        room_id: int,
-        stream_state: dict[str, Any],
-    ) -> AsyncGenerator[StreamEvent, None]:
-        kind = event["event"]  # 이벤트 종류
-        name = event["name"]  # 이벤트 이름
-        
-        # 최종 답변에서 인용구가 발견된 경우 스트리밍 차단
-        if stream_state.get("is_citation_reached", False):
-            # generate_final_answer 노드 종료 이벤트 외에는 전부 차단
-            if not (kind == "on_chain_end" and name in ("generate_final_answer", "generate_final_answer_fast")):
-                return
-
-        # 1. 노드 시작
-        if kind == "on_chain_start":
-            async for res in self._handle_node_start(event, session_id):
-                yield res
-                
-        # 2. 토큰 스트리밍 처리
-        elif kind == "on_chat_model_stream":
-            async for res in self._handle_token_stream(event, session_id, stream_state):
-                yield res
-
-        # 3. 노드 종료 (현재는 최종 답변 생성 노드만 관여)
-        elif kind == "on_chain_end":
-            async for res in self._handle_node_end(event, session_id, room_id, stream_state):
-                yield res
-    
-    async def _handle_node_start(
-        self,
-        event: dict,
-        session_id: uuid.UUID
-    ):
-        """노드 단위 답변 생성 과정 스트리밍"""
-        name = event["name"]
-        
-        if name in NODE_STATUS_MAP:
-            yield ChatStreamingStatusResponse(
-                session_id=session_id, node=name, message=NODE_STATUS_MAP[name]
-            )
-
-        # 답변 생성 노드 시작 시: 초기 출처 후보 목록 전송
-        if name in ("generate_final_answer", "generate_final_answer_fast"):
-            input_data = event["data"].get("input", {})
-            docs = input_data.get("retrieved_docs", [])
-            sources = [
-                BaseSource.from_document(index=i, doc=doc)
-                for i, doc in enumerate(docs, start=1)
-            ]
-            emit_audit_event(
-                action=ChatAction.PROVIDE_SOURCES,
-                status=AuditStatus.SUCCESS,
-                level=AuditLevel.INFO,
-                metadata=ChatAuditMetadata(
-                    session_id=session_id,
-                    provided_sources_count=len(sources),
-                    provided_source_ids=[src.id for src in sources]
-                ),
-            )
-            
-            yield ChatStreamingSourceResponse(session_id=session_id, sources=sources)
-            
-    async def _handle_token_stream(
-        self,
-        event: dict,
-        session_id: uuid.UUID,
-        stream_state: dict
-    ): 
-        """토큰 스트리밍"""
-        chunk = event["data"].get("chunk")
-        node = event["metadata"].get("langgraph_node")
-        
-        # 타겟 노드가 아니거나 컨텐츠가 없으면 스킵
-        is_target_node = node in ("chitchat", "generate_final_answer", "generate_final_answer_fast")
-        if not (is_target_node and chunk and chunk.content):
-            return
-        
-        stream_state["has_streamed"] = True
-
-        token = chunk.content
-        
-        # 사용자에게 출처 인용 정보가 담긴 XML 태그가 노출되지 않도록 검증하기 위한 토큰 버퍼
-        current_buffer = stream_state.get("buffer", "") + token
-        TARGET_TAG = "<citations>"
-
-        # case 1: <citations 태그 발견 -> 즉시 스트리밍 중단 및 앞부분만 전송
-        if "<citations" in current_buffer:
-            stream_state["is_citation_reached"] = True
-            clean_content = current_buffer.split("<citations")[0]
-            if clean_content:
-                yield ChatStreamingTokenResponse(session_id=session_id, token=clean_content)
-            return
-
-        # case 2: '<' 포함 -> 버퍼링 여부 결정
-        if "<" in current_buffer:
-            last_angle_idx = current_buffer.rfind("<")
-            safe_part = current_buffer[:last_angle_idx]
-            suspicious_part = current_buffer[last_angle_idx:]
-
-            # 의심되는 부분이 태그의 앞 부분과 일치하는지 여부 확인 "<c", "<cit"
-            if TARGET_TAG.startswith(suspicious_part):
-                if safe_part:
-                    yield ChatStreamingTokenResponse(session_id=session_id, token=safe_part)
-                # 의심스러운 뒷부분만 버퍼에 남김
-                stream_state["buffer"] = suspicious_part
-                return
-
-        # case 3: 일반 텍스트 -> 전송 & 버퍼 초기화 
-        yield ChatStreamingTokenResponse(session_id=session_id, token=current_buffer)
-        stream_state["buffer"] = ""
-        
-    async def _handle_node_end(
-            self,
-            event: dict,
-            session_id: uuid.UUID,
-            room_id: int,
-            stream_state: dict,
-        ):
-        """
-            그래프 종료 시점.
-            인용 사유를 포함한 최종 소스를 업데이트한다.
-        """
-        
-        target_nodes = ("chitchat", "generate_final_answer", "generate_final_answer_fast")
-        
-        if event["name"] not in target_nodes:
-            return
-        
-        output = event["data"].get("output")
-        if not (output and isinstance(output, dict)):
-            return
-        
-        messages = output.get("messages", [])
-        sources = output.get("sources", [])
-        
-        last_msg = messages[-1] if messages else None
-        final_content = last_msg.content if last_msg and hasattr(last_msg, "content") else str(last_msg)
-        
-        final_sources_data = [
-            source.model_dump(mode='json') if hasattr(source, "model_dump") else source
-            for source in sources
-        ]
-        
-        trace_id = stream_state.get("langfuse_trace_id")
-        
-        if final_content:
-            message_id = await self._save_message_content(
-                room_id,
-                "assistant",
-                final_content,
-                final_sources_data,
-                trace_id
-            )
-            
-            token_usage_ctx = ChatTokenUsageContext.get()
-            if token_usage_ctx and message_id:
-                token_usage_ctx.message_id = message_id
-            
-            logger.info(
-                "final_contents_saved", 
-                session_id=str(session_id)
-            )
-        
-        # case 1: Fallback 처리: 모델 자체 스트리밍 없이 종료된 경우 메시지 내용 전송
-        if not stream_state.get("has_streamed", False):
-            messages = output.get("messages", [])
-            if messages:
-                last_msg = messages[-1]
-                fallback_content = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
-                logger.warning(
-                    "fallback_answer_sent", 
-                    context="no_streaming_event",
-                    session_id=str(session_id)
-                )
-                
-                yield ChatStreamingTokenResponse(
-                    session_id=session_id,
-                    token=fallback_content
-                )
-        
-        # case 2: 인용 사유를 포함한 최종 소스 전송
-        if "sources" in output:
-            final_sources = output["sources"]
-            if final_sources:
-                logger.info(
-                    "final_sources_sent",
-                    session_id=str(session_id)
-                )
-                yield ChatStreamingSourceResponse(
-                    session_id=session_id, sources=final_sources
-                )
-                        
     async def _setup_chat_room(
         self,
         global_context: GlobalContext,
@@ -640,7 +447,7 @@ class ChatService:
             session_id: uuid.UUID,
     ) -> ChatResponse:
         """Deprecated"""
-        app = await self._get_app()
+        app = self._get_app()
 
         base_config, invoke_config, _ = self._setup_config(session_id)
 

@@ -5,10 +5,10 @@ from langchain_core.documents import Document
 
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.db.models import SourceType
+from catchup.rag.executors import rag_executors
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.filters import build_temporal_filters
 from catchup.rag.schemas.structures import VectorDbSearchQuery
-from catchup.rag.executors import rag_executors
 from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
@@ -77,7 +77,7 @@ async def _get_hybrid_search_results(
 
         tasks.append(
             loop.run_in_executor(
-                rag_executors.chat,
+                rag_executors.vector_search,
                 vector_db_service.hybrid_search,
                 q.query,
                 k,

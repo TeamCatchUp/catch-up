@@ -76,7 +76,7 @@ async def grade_node(state: AgentState, llm: BaseChatModel):
 
     return {
         "grade_status": status,
-        "grade_comment": grade_result.explanation,
+        "grade_comment": grade_result.explanation if status == "bad" else "",
         "retry_count": retry_count,
         **token_usages,
     }
