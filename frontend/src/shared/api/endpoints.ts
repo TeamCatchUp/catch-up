@@ -57,6 +57,7 @@ export const API = {
     jobStream: (jobId: string) => `${API_PREFIX}/sync/jobs/${jobId}/stream`, // GET SSE 실시간 이벤트 스트림
     recordGaps: `${API_PREFIX}/sync/records/gaps`, // GET 누락 레코드 조회 (?event_id=)
     retryRecords: `${API_PREFIX}/sync/records/retry`, // POST 누락 레코드 재시도
+    slackIncrementalRecovery: `${API_PREFIX}/sync/slack/incremental-recovery`, // POST Slack 증분 동기화 복구
   },
 
   // 관리자 — 이용자 관리
