@@ -263,6 +263,11 @@ class Settings(BaseSettings):
     INCREMENTAL_RUNTIME_INTERVAL_MINUTES: int = 1
     CONFLUENCE_INCREMENTAL_POLL_INTERVAL_MINUTES: int = 15
     CONFLUENCE_INCREMENTAL_POLL_LOOKBACK_MINUTES: int = 35
+    
+    #=======================================#
+    #               MCP Server              #
+    #=======================================#
+    MCP_SERVER_ENABLED: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",
