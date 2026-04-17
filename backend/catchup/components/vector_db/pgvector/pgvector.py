@@ -92,11 +92,8 @@ class PostgresFTSRetriever(BaseRetriever):
         params: dict
     ):
         with self.session_factory() as session:
-            results = session.execute(
-                search_sql,
-                params
-            )
-            return results
+            results = session.execute(search_sql, params)
+            return results.fetchall()
 
     def _get_documents_from_results(self, results):
         docs = []
