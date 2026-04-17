@@ -57,14 +57,17 @@ class PostgresFTSRetriever(BaseRetriever):
         else:
             sql_conditions = []
             for i, tf in enumerate(self.temporal_filters):
-                tools_param_name = f"tools_{i}"  # 키 값이 덮어띄워지지 않도록 보장
+                tools_param_name = f"tools_{i}"
+                start_param_name = f"start_date_{i}"
+                end_param_name   = f"end_date_{i}"
                 params[tools_param_name] = [t.value for t in tf.tools]
-                params.update({"start_date": tf.start_date, "end_date": tf.end_date})
-                    
+                params[start_param_name] = tf.start_date
+                params[end_param_name]   = tf.end_date
+
                 sql_conditions.append(
                     f"(e.cmetadata ->> 'source' = ANY(:{tools_param_name}) "
                     f"AND (e.cmetadata ->> '{tf.time_field}')::timestamp "
-                    f"BETWEEN :start_date AND :end_date)"
+                    f"BETWEEN :{start_param_name} AND :{end_param_name})"
                 )
                             
             filter_clause = f" AND ({' OR '.join(sql_conditions)})"
