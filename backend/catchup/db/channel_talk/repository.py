@@ -103,3 +103,6 @@ class ChannelTalkCredentialsRepository:
 
     def delete_connection(self) -> bool:
         return delete_channel_talk_credentials(db=self.db)
+
+    def commit(self) -> None:
+        self.db.commit()

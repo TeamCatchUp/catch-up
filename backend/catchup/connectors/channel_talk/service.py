@@ -30,6 +30,8 @@ class ChannelTalkCredentialsStore(Protocol):
 
     def delete_connection(self) -> bool: ...
 
+    def commit(self) -> None: ...
+
 
 StoreReturnT = TypeVar("StoreReturnT")
 
@@ -62,11 +64,15 @@ class ChannelTalkCredentialsService:
             credential_last_verified_at=verified_at,
         )
 
-        # 4. 저장소에 upsert 한 뒤, 저장 결과를 API 응답용 상태 DTO로 변환한다.
+        # 4. 저장소에 upsert 한 뒤, service가 트랜잭션 commit을 확정한다.
         stored_record = await self._run_store(
             self.store.upsert_connection,
             payload,
             action="persist Channel Talk credentials",
+        )
+        await self._run_store(
+            self.store.commit,
+            action="commit Channel Talk credentials",
         )
         return ChannelTalkCredentialsStatus.from_record(stored_record or payload.to_record())
 
@@ -87,6 +93,10 @@ class ChannelTalkCredentialsService:
         removed = await self._run_store(
             self.store.delete_connection,
             action="delete Channel Talk credentials",
+        )
+        await self._run_store(
+            self.store.commit,
+            action="commit Channel Talk credentials deletion",
         )
         return ChannelTalkUninstallResult(removed=bool(removed))
 
