@@ -165,6 +165,13 @@ class SlackIngestionService:
             "group_leave",
         }
     )
+    _SKIPPABLE_ERRORS = frozenset(
+        {
+            "not_in_channel",
+            "channel_not_found",
+            "missing_scope",
+        }
+    )
 
     def _should_skip_message(self, msg_data: dict[str, Any]) -> bool:
         if msg_data.get("subtype") in self._SKIP_SUBTYPES:
@@ -525,8 +532,6 @@ class SlackIngestionService:
         sync_ctx: SlackSyncContext,
     ) -> TargetSyncResult:
         """단일 이벤트 단위: fetch -> summarize -> embed -> store."""
-        skippable_errors = {"not_in_channel", "channel_not_found", "missing_scope"}
-
         fetch_q: asyncio.Queue = asyncio.Queue(maxsize=2)
         embed_q: asyncio.Queue = asyncio.Queue(maxsize=2)
         store_q: asyncio.Queue = asyncio.Queue(maxsize=2)
@@ -624,7 +629,7 @@ class SlackIngestionService:
             return self._handle_pipeline_exception_group(
                 eg,
                 sync_ctx=sync_ctx,
-                skippable_errors=skippable_errors,
+                skippable_errors=set(self._SKIPPABLE_ERRORS),
             )
 
         logger.debug(
@@ -659,6 +664,31 @@ class SlackIngestionService:
             self._load_channel_context_db,
             channel_id,
         )
+        normalized_record_id = record_id.strip()
+        if normalized_record_id:
+            try:
+                exact_refresh_result = await self._sync_single_message_document(
+                    channel_id=channel_id,
+                    channel_name=channel_name,
+                    message_id=normalized_record_id,
+                    audit_context=audit_context,
+                )
+            except Exception as exc:
+                error_code = self._extract_slack_error_code(exc)
+                if error_code in self._SKIPPABLE_ERRORS:
+                    logger.info(
+                        "[SLACK][INGESTION] Skipped exact refresh: team_id=%s, channel=%s(%s), ts=%s, reason=%s",
+                        self.team_id,
+                        channel_name,
+                        channel_id,
+                        normalized_record_id,
+                        error_code,
+                    )
+                    return TargetSyncResult(skipped=True)
+                raise
+            if exact_refresh_result is not None:
+                return exact_refresh_result
+
         sync_ctx = SlackSyncContext(
             channel_id=channel_id,
             channel_name=channel_name,
@@ -871,6 +901,42 @@ class SlackIngestionService:
                 break
 
         return replies
+
+    async def _sync_single_message_document(
+        self,
+        *,
+        channel_id: str,
+        channel_name: str,
+        message_id: str,
+        audit_context: SyncAuditContext | None = None,
+    ) -> TargetSyncResult | None:
+        document = await self._fetch_message_document(
+            channel_id=channel_id,
+            channel_name=channel_name,
+            message_id=message_id,
+        )
+        if document is None:
+            return None
+
+        upsert_documents = [document]
+        if self.summarizer:
+            upsert_documents = await self._summarize_documents(
+                upsert_documents,
+                channel_name=channel_name,
+                audit_context=audit_context,
+            )
+
+        upsert_ids = [doc.id for doc in upsert_documents]
+        await self.repository.upsert_documents(
+            upsert_documents,
+            upsert_ids,
+            audit_context=audit_context,
+            context=(
+                f"entity_type=message,channel={channel_name},"
+                f"mode=incremental_exact_refresh,doc_count={len(upsert_documents)}"
+            ),
+        )
+        return TargetSyncResult(synced_count=len(upsert_documents))
 
     async def _summarize_documents(
         self,
