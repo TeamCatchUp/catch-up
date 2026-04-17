@@ -14,6 +14,7 @@ from catchup.connectors.channel_talk.exceptions import ChannelTalkTimeoutError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkUpstreamError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
 from catchup.connectors.channel_talk.schemas import ChannelTalkCurrentChannel
+from catchup.utils.client import get_global_async_client
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class ChannelTalkApiClient:
 
         self.base_url = str(base_url or default_base_url).rstrip("/")
         self.timeout_seconds = float(timeout_seconds or default_timeout)
-        self._http_client = http_client
+        self._http_client = http_client or get_global_async_client()
 
     async def get_current_channel(
         self,
@@ -79,20 +80,12 @@ class ChannelTalkApiClient:
     ) -> Any:
         url = f"{self.base_url}{path}"
         try:
-            if self._http_client is not None:
-                response = await self._http_client.request(
-                    method,
-                    url,
-                    headers=headers,
-                    timeout=self.timeout_seconds,
-                )
-            else:
-                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                    response = await client.request(
-                        method,
-                        url,
-                        headers=headers,
-                    )
+            response = await self._http_client.request(
+                method,
+                url,
+                headers=headers,
+                timeout=self.timeout_seconds,
+            )
         except httpx.TimeoutException as exc:
             logger.warning("channel_talk_request_timed_out", url=url)
             raise ChannelTalkTimeoutError("Channel Talk API request timed out") from exc
