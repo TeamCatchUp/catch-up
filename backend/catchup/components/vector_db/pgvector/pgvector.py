@@ -45,7 +45,6 @@ class PostgresFTSRetriever(BaseRetriever):
         params = {
             "collection_name": self.collection_name,
             "query": query,
-            "like_query": f"%{query}%",
             "k": self.k
         }
         
@@ -78,7 +77,6 @@ class PostgresFTSRetriever(BaseRetriever):
             JOIN langchain_pg_collection c ON e.collection_id = c.uuid
             WHERE c.name = :collection_name
               {filter_clause}
-              AND e.document LIKE :like_query
             ORDER BY bigm_similarity(e.document, :query) DESC
             LIMIT :k
         """)
