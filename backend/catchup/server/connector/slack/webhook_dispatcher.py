@@ -40,6 +40,33 @@ SUPPORTED_METADATA_EVENTS = frozenset({
 })
 
 
+def _is_direct_message_chat_event(event: dict[str, object]) -> bool:
+    if str(event.get("type") or "").strip() != "message":
+        # DM 채널에서 발생하는 Message 이외의 이벤트를 무시한다
+        return False
+
+    if str(event.get("channel_type") or "").strip() != "im":
+        # 공개 채널 / 비공개 Group 채널은 제외한다 (mpim)
+        return False
+
+    if "bot_id" in event:
+        # Bot이 생성한 이벤트는 무시한다 (채널 초대, 자동 메세지 등 ...)
+        return False
+
+    if str(event.get("subtype") or "").strip():        
+        # 수정, 삭제 이벤트로 트리거 되지 않도록 방지
+        return False
+
+    channel_id = str(event.get("channel") or "").strip()
+    slack_user_id = str(event.get("user") or "").strip()
+    text = str(event.get("text") or "").strip()
+    timestamp = str(event.get("ts") or "").strip()
+    if not channel_id or not slack_user_id or not text or not timestamp:
+        return False
+
+    return channel_id.startswith("D")
+
+
 async def handle_slack_webhook(
     *,
     request: SlackWebhookRequest,
@@ -78,6 +105,17 @@ async def handle_slack_webhook(
         return accepted_async_response(event_type=request.event_type)
 
     if request.event_type == "message":
+        # DM Messages는 Incremental Sync 경로를 타지 않게 방어 / app_mention 생성을 스케쥴링
+        if _is_direct_message_chat_event(request.event):
+            logger.info(
+                "slack_direct_message_routed_to_chat",
+                team_id=request.team_id,
+                channel_id=str(request.event.get("channel") or "").strip(),
+                slack_user_id=str(request.event.get("user") or "").strip(),
+            )
+            schedule_app_mention(request)
+            return accepted_async_response(event_type=request.event_type)
+
         return await _handle_incremental_event(request)
 
     logger.warning(
