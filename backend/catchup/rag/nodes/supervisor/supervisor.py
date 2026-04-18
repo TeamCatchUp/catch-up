@@ -62,6 +62,8 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
             "supervisor_decision",
             pipeline_type=pipeline_plan.pipeline_type,
             max_iterations=pipeline_plan.max_iterations,
+            retrieved_docs_count=len(retrieved_docs),
+            history_len=len(history),
         )
 
         result: dict = {

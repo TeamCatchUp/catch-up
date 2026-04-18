@@ -54,6 +54,14 @@ async def complex_planner_node(state: AgentState, llm: BaseChatModel):
         "complex_plan_created",
         step_count=len(plan.steps) if plan else 0,
     )
+    if plan:
+        logger.debug(
+            "complex_plan_steps",
+            steps=[
+                {"step": s.step, "intent": s.intent, "queries": s.queries, "parallel": s.parallel}
+                for s in plan.steps
+            ],
+        )
 
     return {
         "search_plan": plan.steps if plan else None,
@@ -106,11 +114,19 @@ async def complex_agent_node(state: AgentState, llm: BaseChatModel):
         logger.warning("complex_agent_node_failed", error=str(e), exc_info=True)
         return {"agent_iteration": agent_iteration + 1}
 
+    tool_calls = getattr(response, "tool_calls", None) or []
     logger.info(
         "complex_agent_decision",
         iteration=agent_iteration + 1,
-        has_tool_calls=bool(getattr(response, "tool_calls", None)),
+        accumulated_docs_count=len(accumulated_docs),
+        has_tool_calls=bool(tool_calls),
+        tool_names=[tc["name"] for tc in tool_calls],
     )
+    if tool_calls:
+        logger.debug(
+            "complex_agent_tool_calls",
+            calls=[{"name": tc["name"], "args": tc["args"]} for tc in tool_calls],
+        )
 
     return {
         "messages": [response],
@@ -157,7 +173,14 @@ async def gap_analysis_node(state: AgentState, llm: BaseChatModel):
         "gap_analysis_result",
         is_sufficient=analysis.is_sufficient if analysis else True,
         gap_count=len(analysis.gaps) if analysis else 0,
+        suggested_query_count=len(analysis.suggested_queries) if analysis else 0,
     )
+    if analysis and not analysis.is_sufficient:
+        logger.debug(
+            "gap_analysis_detail",
+            gaps=analysis.gaps,
+            suggested_queries=analysis.suggested_queries,
+        )
 
     return {
         "gap_analysis": analysis,
