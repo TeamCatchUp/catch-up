@@ -12,8 +12,10 @@ from .rerank import rerank_node
 from .rewrite import rewrite_node
 from .route import route_node
 from .search_vector_db import search_vector_db_node
+from .supervisor import supervisor_node
 
 __all__ = [
+    "supervisor_node",
     "route_node",
     "chitchat_node",
     "rewrite_node",
