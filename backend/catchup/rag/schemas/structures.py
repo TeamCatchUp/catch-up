@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import Field
@@ -48,6 +49,75 @@ class GraphDbSearchPlan(BaseModel):
         min_length=0,
         max_length=3,
         description="사용자의 의도를 분석하여 생성된 독립적인 Cypher 목록",
+    )
+
+
+# Supervisor가 결정하는 파이프라인 실행 계획
+class PipelinePlan(BaseModel):
+    pipeline_type: Literal["chitchat", "reuse", "simple", "standard", "complex"] = Field(
+        description="실행할 파이프라인 타입"
+    )
+    max_iterations: int = Field(
+        default=3,
+        description="ReAct 루프 최대 반복 횟수. simple=0, standard=3, complex=7"
+    )
+    use_extended_thinking: bool = Field(
+        default=False,
+        description="Extended thinking 활성화 여부. complex 파이프라인에서만 True"
+    )
+    thinking_budget_tokens: int = Field(
+        default=0,
+        description="Extended thinking에 할당할 최대 토큰 수. use_extended_thinking=True 시 유효"
+    )
+    initial_rewrite: bool = Field(
+        default=True,
+        description="검색 전 rewrite 단계 실행 여부. simple/chitchat/reuse=False"
+    )
+    reasoning: str = Field(
+        default="",
+        description="이 파이프라인을 선택한 이유 (로깅/디버깅용)"
+    )
+
+
+# Complex 파이프라인 planner가 생성하는 검색 단계
+class SearchStep(BaseModel):
+    step: int = Field(description="실행 순서")
+    intent: str = Field(description="이 단계에서 찾으려는 정보의 의도")
+    queries: list[str] = Field(description="실행할 검색 쿼리 목록")
+    parallel: bool = Field(
+        default=False,
+        description="True면 queries를 병렬 실행 (parallel_search_tool 사용)"
+    )
+    depends_on: list[int] = Field(
+        default=[],
+        description="이 단계를 실행하기 전에 완료되어야 하는 선행 step 번호 목록"
+    )
+
+
+# Complex 파이프라인 gap_analysis_node의 분석 결과
+class GapAnalysis(BaseModel):
+    is_sufficient: bool = Field(
+        description="현재까지 수집된 정보가 질문에 답하기 충분한지 여부"
+    )
+    gaps: list[str] = Field(
+        default=[],
+        description="부족한 정보 목록"
+    )
+    suggested_queries: list[str] = Field(
+        default=[],
+        description="gap을 메우기 위한 추가 검색 쿼리 제안"
+    )
+    reasoning: str = Field(
+        default="",
+        description="분석 근거 (extended thinking 결과 요약)"
+    )
+
+
+# Complex planner LLM 응답 스키마
+class SearchPlan(BaseModel):
+    steps: list[SearchStep] = Field(
+        default=[],
+        description="순서대로 실행할 검색 단계 목록"
     )
 
 
