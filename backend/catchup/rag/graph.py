@@ -30,24 +30,23 @@ logger = logging.getLogger(__name__)
 def get_compiled_graph(
     checkpointer: Optional[BaseCheckpointSaver] = None,
 ):
-    # 분석용 (SMALL, non-streaming)
-    # rewrite, generate_vector_queries, standard_agent
-    analysis_llm = get_llm_service(
+    # SMALL, non-streaming — rewrite, generate_vector_queries, standard_agent
+    small_llm = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
         streaming=False,
         isolated=True,
     ).get_llm()
 
-    # 잡담용 (SMALL, streaming)
-    chitchat_llm = get_llm_service(
+    # SMALL, streaming — chitchat
+    small_stream_llm = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
         streaming=True,
         isolated=True,
     ).get_llm()
 
-    # Supervisor + complex_agent (LARGE, non-streaming) — structured output / tool calling
+    # LARGE, non-streaming — supervisor, complex_agent (structured output / tool calling)
     large_llm = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
@@ -55,23 +54,22 @@ def get_compiled_graph(
         isolated=True,
     ).get_llm()
 
-    # 최종 답변 생성용 (LARGE, streaming)
-    final_llm = get_llm_service(
+    # LARGE, streaming — 모든 최종 답변 생성 (reuse / simple / standard / complex)
+    large_stream_llm = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
         streaming=True,
         isolated=True,
     ).get_llm()
 
-    # Extended Thinking (LARGE, non-streaming)
-    # complex_planner, gap_analysis
+    # LARGE, non-streaming, extended thinking — complex_planner, gap_analysis
     thinking_llm = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
         streaming=False,
         isolated=True,
         extended_thinking=True,
-        thinking_budget_tokens=8000,
+        thinking_budget_tokens=2048,
     ).get_llm()
 
     # Common
@@ -79,36 +77,36 @@ def get_compiled_graph(
     vector_db_service = get_vector_db_service(VectorDbProvider.PGVECTOR, embeddings)
     rerank_service = get_rerank_service(RerankerProvider.AWS_BEDROCK)
 
-    # Subgraph 빌드
-    reuse_subgraph = build_reuse_subgraph(llm_large=final_llm)
+    # Subgraphs
+    reuse_subgraph = build_reuse_subgraph(llm_large=large_stream_llm)
 
     simple_subgraph = build_simple_subgraph(
-        llm_small=analysis_llm,
-        llm_fast=final_llm,
+        llm_small=small_llm,
+        llm_fast=large_stream_llm,
         vector_db_service=vector_db_service,
         rerank_service=rerank_service,
     )
 
     standard_subgraph = build_standard_react_subgraph(
-        llm_small=analysis_llm,
-        llm_large=final_llm,
+        llm_small=small_llm,
+        llm_large=large_stream_llm,
         vector_db_service=vector_db_service,
         rerank_service=rerank_service,
     )
 
     complex_subgraph = build_complex_react_subgraph(
         llm_agent=large_llm,
-        llm_final=final_llm,
+        llm_final=large_stream_llm,
         llm_thinking=thinking_llm,
         vector_db_service=vector_db_service,
         rerank_service=rerank_service,
     )
 
-    # ---- 메인 그래프 ----
+    # Main Graph
     workflow = StateGraph(AgentState)
 
     workflow.add_node("supervisor", partial(supervisor_node, llm=large_llm))
-    workflow.add_node("chitchat", partial(chitchat_node, llm=chitchat_llm))
+    workflow.add_node("chitchat", partial(chitchat_node, llm=small_stream_llm))
     workflow.add_node("reuse", reuse_subgraph)
     workflow.add_node("simple", simple_subgraph)
     workflow.add_node("standard", standard_subgraph)
