@@ -59,3 +59,7 @@ class AgentState(TypedDict):
     search_plan: Optional[list[SearchStep]]  # complex planner 출력
 
     gap_analysis: Optional[GapAnalysis]  # complex gap_analysis_node 출력
+
+    turn_number: int  # supervisor가 매 턴 시작 시 +1. engine.py에서 초기화 안 함 (체크포인터 유지)
+
+    last_search_turn: int  # 마지막 실제 검색이 수행된 턴 번호. 0 = 미검색
