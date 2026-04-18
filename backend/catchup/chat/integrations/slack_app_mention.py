@@ -249,7 +249,7 @@ class SlackAppMentionOrchestrator:
         ):
             if isinstance(chunk, ChatStreamingStatusResponse):
                 await responder.on_node(chunk.node)
-                if chunk.node in {"generate_final_answer_fast", "chitchat"}:
+                if chunk.node in {"generate_final_answer_fast", "generate_final_answer", "chitchat"}:
                     markdown_enabled = True
                 continue
 

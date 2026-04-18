@@ -17,6 +17,10 @@ from catchup.rag.state import AgentState
 logger = structlog.get_logger()
 
 _MAX_DOCS_SUMMARY = 20
+_PIPELINE_ORDER = ["chitchat", "reuse", "simple", "standard", "complex"]
+_DEFAULT_MAX_ITERATIONS: dict[str, int] = {
+    "chitchat": 0, "reuse": 0, "simple": 0, "standard": 3, "complex": 7
+}
 
 
 @log_node
@@ -65,6 +69,19 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
             retrieved_docs_count=len(retrieved_docs),
             history_len=len(history),
         )
+
+        # max_pipeline_type 상한 적용 (engine.py에서 mode → max_pipeline_type 변환)
+        max_pipeline_type = state.get("max_pipeline_type", "complex")
+        if _PIPELINE_ORDER.index(pipeline_plan.pipeline_type) > _PIPELINE_ORDER.index(max_pipeline_type):
+            logger.info(
+                "pipeline_type_capped",
+                original=pipeline_plan.pipeline_type,
+                capped_to=max_pipeline_type,
+            )
+            pipeline_plan = pipeline_plan.model_copy(update={
+                "pipeline_type": max_pipeline_type,
+                "max_iterations": _DEFAULT_MAX_ITERATIONS[max_pipeline_type],
+            })
 
         result: dict = {
             "intent": intent,

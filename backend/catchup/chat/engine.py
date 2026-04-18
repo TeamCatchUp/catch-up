@@ -43,6 +43,12 @@ logger = structlog.get_logger()
 # Langfuse
 observe = get_observe()
 
+_MODE_CEILING: dict[str, str] = {
+    "fast":     "standard",
+    "standard": "complex",
+    # "deep": "complex",  # 추후: max_iterations 증가 별도 설계
+}
+
 class ChatService:
     def __init__(self):
         self._app = None
@@ -116,7 +122,7 @@ class ChatService:
                 "global_context": global_context,
                 "tool_filters": tool_filters,
                 "prompt_settings": prompt_settings,
-                "mode": mode,
+                "max_pipeline_type": _MODE_CEILING.get(mode, "complex"),
 
                 # RAG 파이프라인 상태 변수
                 "retry_count": 0,

@@ -46,7 +46,7 @@ class AgentState(TypedDict):
 
     rerank_count: int
 
-    mode: Literal["fast", "standard"]
+    max_pipeline_type: Literal["simple", "standard", "complex"]
 
     # --- Agentic RAG 신규 필드 ---
 
