@@ -61,22 +61,6 @@ class PipelinePlan(BaseModel):
         default=3,
         description="ReAct 루프 최대 반복 횟수. simple=0, standard=3, complex=7"
     )
-    use_extended_thinking: bool = Field(
-        default=False,
-        description="Extended thinking 활성화 여부. complex 파이프라인에서만 True"
-    )
-    thinking_budget_tokens: int = Field(
-        default=0,
-        description="Extended thinking에 할당할 최대 토큰 수. use_extended_thinking=True 시 유효"
-    )
-    initial_rewrite: bool = Field(
-        default=True,
-        description="검색 전 rewrite 단계 실행 여부. simple/chitchat/reuse=False"
-    )
-    reasoning: str = Field(
-        default="",
-        description="이 파이프라인을 선택한 이유 (로깅/디버깅용)"
-    )
 
 
 # Complex 파이프라인 planner가 생성하는 검색 단계

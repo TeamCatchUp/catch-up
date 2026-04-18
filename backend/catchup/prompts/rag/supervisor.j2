@@ -13,30 +13,27 @@ You must select exactly one of five pipeline types and provide the associated pa
 1. **chitchat**
    - Use when: greetings, thanks, pleasantries, questions answerable purely from the provided Global Context (e.g., "What is my company name?", "Who am I?", "What time is it?").
    - No retrieval needed.
-   - Parameters: max_iterations=0, initial_rewrite=false, use_extended_thinking=false
+   - Parameters: max_iterations=0
 
 2. **reuse**
    - Use when: the current question is a direct follow-up to the previous turn, AND the previously retrieved documents (shown below) already contain sufficient information to answer the question, AND those documents are recent (fetched within the last 3 conversation turns).
    - No new retrieval needed — reuse existing docs.
    - Disqualifiers: empty previous docs, question shifts to a completely different topic, docs are stale.
-   - Parameters: max_iterations=0, initial_rewrite=false, use_extended_thinking=false
-
+   - Parameters: max_iterations=0
 3. **simple**
    - Use when ALL of the following conditions are met:
      a. The question refers to a single, clearly identified entity (ticket ID, file name, PR number, person name with no ambiguity).
      b. No conversation history or context is required to understand the question (self-contained).
      c. No time range or temporal analysis is needed.
      d. No indexical/referential expressions (e.g., "이거", "저거", "그것", "이 사람", "그 PR", "방금", "그때", "이전에").
-   - Parameters: max_iterations=0, initial_rewrite=false, use_extended_thinking=false
-
+   - Parameters: max_iterations=0
 4. **standard**
    - Use for: general knowledge retrieval questions that don't meet the strict criteria for simple, and aren't complex multi-faceted analysis.
    - Includes: questions with indexical expressions (must be rewritten using history), single-topic summaries, "who worked on X", "what happened with Y".
-   - Parameters: max_iterations=3, initial_rewrite=true, use_extended_thinking=false
-
+   - Parameters: max_iterations=3
 5. **complex**
    - Use when: the question requires multi-faceted analysis, cross-source synthesis, causal reasoning ("왜", "어떻게", "비교"), multi-hop retrieval (finding A which leads to B), or spans multiple time periods or sources simultaneously.
-   - Parameters: max_iterations=7, initial_rewrite=true, use_extended_thinking=true, thinking_budget_tokens=8000
+   - Parameters: max_iterations=7
 </pipeline_definitions>
 
 {% if retrieved_docs_summary %}
