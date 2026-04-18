@@ -458,6 +458,10 @@ app.include_router(sync_runtime_router)
 app.include_router(stats_router)
 app.include_router(audit_router)
 
+if settings.MCP_SERVER_ENABLED:
+    from catchup.mcp.server import mcp as mcp_server
+    app.mount("/api/mcp", mcp_server.sse_app())
+
 
 app.add_middleware(
     CORSMiddleware,
