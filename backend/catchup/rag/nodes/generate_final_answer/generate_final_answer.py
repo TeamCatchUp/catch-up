@@ -129,10 +129,17 @@ def _load_prompts(
     retrieved_context: str,
     prompt_settings: Any,
 ) -> dict:
+    # Slack 플랫폼은 citations XML을 렌더링할 수 없으므로 fast 프롬프트 템플릿 사용
+    is_slack = prompt_settings and getattr(prompt_settings, "platform", None) == "slack"
+    if is_slack:
+        system = prompt_loader.get_prompt("rag/generate_final_answer_fast", prompt_settings=prompt_settings)
+    else:
+        system = prompt_loader.get_prompt("rag/generate_final_answer")
+
     return {
-        "system": prompt_loader.get_prompt("rag/generate_final_answer"),
+        "system": system,
         "global_context": prompt_loader.get_prompt(
-            "common/global_context", 
+            "common/global_context",
             **global_context
         ),
         "retrieved_context": prompt_loader.get_prompt(

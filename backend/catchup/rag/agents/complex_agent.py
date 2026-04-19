@@ -7,6 +7,7 @@ from catchup.costs.utils import extract_token_usages
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.agents.standard_agent import _build_docs_summary
+from catchup.rag.agents.standard_agent import _drop_orphaned_tool_calls
 from catchup.rag.agents.tools.search_tools import REACT_TOOLS
 from catchup.rag.nodes.utils import build_system_message
 from catchup.rag.nodes.utils import log_node
@@ -104,10 +105,11 @@ async def complex_agent_node(state: AgentState, llm: BaseChatModel):
     llm_with_tools = llm.bind_tools(REACT_TOOLS)
     token_usages = {"token_breakdown": {}}
 
+    existing_messages = _drop_orphaned_tool_calls(state.get("messages", []))
     try:
         async with rag_semaphores.final_answer:
             response: AIMessage = await llm_with_tools.ainvoke(
-                input=[system_message, HumanMessage(content=query)]
+                input=[system_message, HumanMessage(content=query)] + existing_messages
             )
             token_usages = extract_token_usages(response)
     except Exception as e:

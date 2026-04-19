@@ -78,7 +78,7 @@ def get_compiled_graph(
     rerank_service = get_rerank_service(RerankerProvider.AWS_BEDROCK)
 
     # Subgraphs
-    reuse_subgraph = build_reuse_subgraph(llm_large=large_stream_llm)
+    reuse_subgraph = build_reuse_subgraph(llm_large=large_stream_llm, rerank_service=rerank_service)
 
     simple_subgraph = build_simple_subgraph(
         llm_small=small_llm,

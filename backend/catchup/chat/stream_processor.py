@@ -238,14 +238,14 @@ class ChatStreamProcessor:
                     token=fallback_content,
                 )
 
-        # case 2: 인용 사유를 포함한 최종 소스 전송
+        # case 2: 인용 사유를 포함한 최종 소스 전송 (빈 목록도 전송해 프론트엔드 상태 동기화)
         if "sources" in output:
             final_sources = output["sources"]
-            if final_sources:
-                logger.info(
-                    "final_sources_sent",
-                    session_id=str(self.session_id),
-                )
-                yield ChatStreamingSourceResponse(
-                    session_id=self.session_id, sources=final_sources
-                )
+            logger.info(
+                "final_sources_sent",
+                session_id=str(self.session_id),
+                count=len(final_sources),
+            )
+            yield ChatStreamingSourceResponse(
+                session_id=self.session_id, sources=final_sources
+            )

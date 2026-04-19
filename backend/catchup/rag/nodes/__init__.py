@@ -1,4 +1,6 @@
 from .chitchat import chitchat_node
+from .doc_cache import merge_cache_node
+from .doc_cache import prepare_cache_node
 from .expand_graph_context import expand_graph_context_node
 from .fallback_cypher_query import fallback_cypher_query_node
 from .fetch_details_after_graph_context_expansion import (
@@ -28,4 +30,6 @@ __all__ = [
     "expand_graph_context_node",
     "fetch_details_after_graph_context_expansion_node",
     "fallback_cypher_query_node",
+    "merge_cache_node",
+    "prepare_cache_node",
 ]

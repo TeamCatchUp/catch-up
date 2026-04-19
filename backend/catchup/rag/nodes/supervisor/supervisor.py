@@ -17,7 +17,10 @@ from catchup.rag.state import AgentState
 logger = structlog.get_logger()
 
 _MAX_DOCS_SUMMARY = 20
-
+_PIPELINE_ORDER = ["chitchat", "reuse", "simple", "standard", "complex"]
+_DEFAULT_MAX_ITERATIONS: dict[str, int] = {
+    "chitchat": 0, "reuse": 0, "simple": 0, "standard": 3, "complex": 7
+}
 
 @log_node
 @token_usage
@@ -25,12 +28,14 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
     query = state["original_query"]
     global_context = state["global_context"].model_dump()
     messages = state.get("messages", [])
-    retrieved_docs = state.get("retrieved_docs", [])
 
-    # reuse 판단은 "얼마나 오래됐는가"가 아니라 "현재 질문과 맥락이 이어지는가"의 문제.
-    # 턴 카운트나 타임스탬프 기반 필터링 없이 항상 supervisor LLM에게 문서 요약을 제공하고,
-    # LLM이 대화 이력과 함께 보고 의미적으로 직접 판단한다.
-    retrieved_docs_summary = _build_docs_summary(retrieved_docs)
+    # turn_number는 supervisor가 항상 첫 번째로 실행되므로 여기서 증가시킨다.
+    # engine.py에서 초기화하지 않으므로 체크포인터를 통해 턴 간 누적된다.
+    current_turn = state.get("turn_number", 0) + 1
+
+    # doc_cache는 세션 내 누적 검색 결과 전체. retrieved_docs(최근 1턴)보다 넓은 맥락을 제공한다.
+    doc_cache = state.get("doc_cache", [])
+    retrieved_docs_summary = _build_docs_summary(doc_cache)
 
     system_prompt = prompt_loader.get_prompt(
         "rag/supervisor",
@@ -62,13 +67,27 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
             "supervisor_decision",
             pipeline_type=pipeline_plan.pipeline_type,
             max_iterations=pipeline_plan.max_iterations,
-            retrieved_docs_count=len(retrieved_docs),
+            doc_cache_size=len(doc_cache),
             history_len=len(history),
         )
+
+        # max_pipeline_type 상한 적용 (engine.py에서 mode → max_pipeline_type 변환)
+        max_pipeline_type = state.get("max_pipeline_type", "complex")
+        if _PIPELINE_ORDER.index(pipeline_plan.pipeline_type) > _PIPELINE_ORDER.index(max_pipeline_type):
+            logger.info(
+                "pipeline_type_capped",
+                original=pipeline_plan.pipeline_type,
+                capped_to=max_pipeline_type,
+            )
+            pipeline_plan = pipeline_plan.model_copy(update={
+                "pipeline_type": max_pipeline_type,
+                "max_iterations": _DEFAULT_MAX_ITERATIONS[max_pipeline_type],
+            })
 
         result: dict = {
             "intent": intent,
             "pipeline_plan": pipeline_plan,
+            "turn_number": current_turn,
             **token_usages,
         }
 
@@ -90,6 +109,7 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
         return {
             "intent": "search_pipeline",
             "pipeline_plan": None,
+            "turn_number": state.get("turn_number", 0) + 1,
         }
 
 
