@@ -7,6 +7,7 @@ from catchup.rag.agents.standard_agent import collect_docs_node
 from catchup.rag.agents.standard_agent import standard_agent_node
 from catchup.rag.agents.tools.search_tools import search_tool_executor_node
 from catchup.rag.nodes import generate_final_answer_node
+from catchup.rag.nodes import merge_cache_node
 from catchup.rag.nodes import rerank_node
 from catchup.rag.nodes import rewrite_node
 from catchup.rag.state import AgentState
@@ -42,6 +43,7 @@ def build_standard_react_subgraph(llm_small, llm_large, vector_db_service, reran
     )
     graph.add_node("collect_docs", collect_docs_node)
     graph.add_node("rerank", partial(rerank_node, rerank_service=rerank_service))
+    graph.add_node("merge_cache", merge_cache_node)
     graph.add_node("generate_final_answer", partial(generate_final_answer_node, llm=llm_large))
 
     graph.set_entry_point("rewrite")
@@ -56,7 +58,8 @@ def build_standard_react_subgraph(llm_small, llm_large, vector_db_service, reran
     )
     graph.add_edge("tool_executor", "standard_agent")
     graph.add_edge("collect_docs", "rerank")
-    graph.add_edge("rerank", "generate_final_answer")
+    graph.add_edge("rerank", "merge_cache")
+    graph.add_edge("merge_cache", "generate_final_answer")
     graph.add_edge("generate_final_answer", END)
 
     return graph.compile()

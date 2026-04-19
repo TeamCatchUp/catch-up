@@ -59,3 +59,5 @@ class AgentState(TypedDict):
     gap_analysis: GapAnalysis | None  # complex gap_analysis_node 출력
 
     turn_number: int  # supervisor가 매 턴 시작 시 +1. engine.py에서 초기화 안 함 (체크포인터 유지)
+
+    doc_cache: list[Document]  # 세션 내 누적 문서 캐시. dedup + window cap 100. 검색 파이프라인이 rerank 후 병합

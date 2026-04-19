@@ -28,13 +28,14 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
     query = state["original_query"]
     global_context = state["global_context"].model_dump()
     messages = state.get("messages", [])
-    retrieved_docs = state.get("retrieved_docs", [])
 
     # turn_number는 supervisor가 항상 첫 번째로 실행되므로 여기서 증가시킨다.
     # engine.py에서 초기화하지 않으므로 체크포인터를 통해 턴 간 누적된다.
     current_turn = state.get("turn_number", 0) + 1
 
-    retrieved_docs_summary = _build_docs_summary(retrieved_docs)
+    # doc_cache는 세션 내 누적 검색 결과 전체. retrieved_docs(최근 1턴)보다 넓은 맥락을 제공한다.
+    doc_cache = state.get("doc_cache", [])
+    retrieved_docs_summary = _build_docs_summary(doc_cache)
 
     system_prompt = prompt_loader.get_prompt(
         "rag/supervisor",
@@ -66,7 +67,7 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
             "supervisor_decision",
             pipeline_type=pipeline_plan.pipeline_type,
             max_iterations=pipeline_plan.max_iterations,
-            retrieved_docs_count=len(retrieved_docs),
+            doc_cache_size=len(doc_cache),
             history_len=len(history),
         )
 
