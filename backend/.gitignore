@@ -8,3 +8,5 @@ __pycache__/
 Claude.md
 .cladue/
 *.csv
+
+**/data/

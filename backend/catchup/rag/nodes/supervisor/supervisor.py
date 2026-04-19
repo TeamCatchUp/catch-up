@@ -62,8 +62,8 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
             "supervisor_decision",
             pipeline_type=pipeline_plan.pipeline_type,
             max_iterations=pipeline_plan.max_iterations,
-            use_extended_thinking=pipeline_plan.use_extended_thinking,
-            reasoning=pipeline_plan.reasoning,
+            retrieved_docs_count=len(retrieved_docs),
+            history_len=len(history),
         )
 
         result: dict = {
@@ -72,10 +72,10 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
             **token_usages,
         }
 
-        # initial_rewrite=False인 파이프라인(simple/reuse/chitchat)은 rewrite_node를 건너뜀.
-        # generate_vector_queries_node 등 후속 노드가 rewritten_query를 참조하므로
+        # rewrite 노드가 없는 파이프라인은 후속 노드가 rewritten_query를 참조하므로
         # supervisor에서 미리 original_query 값으로 채워둔다.
-        if not pipeline_plan.initial_rewrite:
+        _NO_REWRITE_PIPELINES = {"chitchat", "reuse", "simple"}
+        if pipeline_plan.pipeline_type in _NO_REWRITE_PIPELINES:
             result["rewritten_query"] = query
 
         return result

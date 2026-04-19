@@ -56,11 +56,19 @@ async def standard_agent_node(state: AgentState, llm: BaseChatModel):
         logger.warning("standard_agent_node_failed", error=str(e), exc_info=True)
         return {"agent_iteration": agent_iteration + 1}
 
+    tool_calls = getattr(response, "tool_calls", None) or []
     logger.info(
         "standard_agent_decision",
         iteration=agent_iteration + 1,
-        has_tool_calls=bool(getattr(response, "tool_calls", None)),
+        accumulated_docs_count=len(accumulated_docs),
+        has_tool_calls=bool(tool_calls),
+        tool_names=[tc["name"] for tc in tool_calls],
     )
+    if tool_calls:
+        logger.debug(
+            "standard_agent_tool_calls",
+            calls=[{"name": tc["name"], "args": tc["args"]} for tc in tool_calls],
+        )
 
     return {
         "messages": [response],
@@ -76,7 +84,14 @@ async def collect_docs_node(state: AgentState):
     """accumulated_docs를 retrieved_docs로 복사해 rerank → generate 노드가 참조할 수 있게 한다.
     reranker 입력 크기를 _RERANK_INPUT_WINDOW 이내로 제한한다."""
     accumulated = state.get("accumulated_docs", [])
-    return {"retrieved_docs": accumulated[:_RERANK_INPUT_WINDOW]}
+    capped = accumulated[:_RERANK_INPUT_WINDOW]
+    logger.info(
+        "collect_docs",
+        total_accumulated=len(accumulated),
+        passed_to_reranker=len(capped),
+        capped=len(accumulated) > _RERANK_INPUT_WINDOW,
+    )
+    return {"retrieved_docs": capped}
 
 
 def _build_docs_summary(docs: list[Document]) -> str:

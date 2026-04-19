@@ -131,6 +131,13 @@ async def search_tool_executor_node(
 
         try:
             if tool_name == "search_and_rerank":
+                logger.debug(
+                    "tool_executing",
+                    tool=tool_name,
+                    query=args["query"],
+                    start_date=args.get("start_date"),
+                    end_date=args.get("end_date"),
+                )
                 docs, summary = await _run_search(
                     query=args["query"],
                     tool_filters=tool_filters,
@@ -140,6 +147,7 @@ async def search_tool_executor_node(
                 )
             elif tool_name == "parallel_search":
                 queries: list[str] = args["queries"]
+                logger.debug("tool_executing", tool=tool_name, query_count=len(queries), queries=queries)
                 tasks = [
                     _run_search(
                         query=q,
