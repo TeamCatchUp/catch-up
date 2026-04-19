@@ -1,5 +1,4 @@
 from typing import Annotated
-from typing import Any
 from typing import Literal
 from typing import Optional
 from typing import TypedDict
@@ -10,6 +9,7 @@ from langgraph.graph.message import add_messages
 from catchup.db.models import SourceType
 from catchup.rag.schemas.context import GlobalContext
 from catchup.rag.schemas.prompt_settings import PromptSettings
+from catchup.rag.schemas.sources import BaseSource
 from catchup.rag.schemas.structures import GapAnalysis
 from catchup.rag.schemas.structures import GraphDbSearchQuery
 from catchup.rag.schemas.structures import PipelinePlan
@@ -33,7 +33,7 @@ class AgentState(TypedDict):
 
     grade_status: Literal["good", "bad", "no_relationship", "max_retries"]
 
-    sources: list[dict[str, Any]]  # 최종 출처 목록
+    sources: list[BaseSource]  # 최종 출처 목록
 
     retry_count: int  # 최대 2회 제한용
 
