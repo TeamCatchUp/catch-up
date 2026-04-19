@@ -14,7 +14,9 @@ def create_channel_talk_credentials_service(
     client: ChannelTalkApiClient | None = None,
     store: ChannelTalkCredentialsStore | None = None,
 ) -> ChannelTalkCredentialsService:
+    # 기본 DB repository를 한 번만 해석해 두고, 이후 service wiring이 adapter/application 분리 이후에도 동일한 저장소 인스턴스를 재사용하도록 고정한다.
+    resolved_store = store or ChannelTalkCredentialsRepository(db)
     return ChannelTalkCredentialsService(
-        store=store or ChannelTalkCredentialsRepository(db),
+        store=resolved_store,
         client=client,
     )
