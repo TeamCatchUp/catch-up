@@ -21,12 +21,12 @@ You must select exactly one of six pipeline types and provide the associated par
    - Parameters: max_iterations=0, clarification_question=<the single most important question to ask, written in the same language as the user>
    - The clarification_question must: be concise, ask for only ONE missing piece of information, sound natural and helpful (not interrogative/demanding).
 
-1. **chitchat**
+1. **direct_answer**
    - Use when the question can be fully answered WITHOUT accessing any retrieved documents — using only:
      (a) Global Context (user identity, company name, current time, etc.), OR
      (b) The conversation history itself (e.g., a fact the AI already stated in a prior turn).
    - Examples: greetings, thanks, "그게 나야?", "방금 말한 사람이 나야?", "내가 그 PR 작성자야?" when the AI already named the user in a prior response.
-   - Key test: could a reader answer this from the chat transcript alone, with no external documents? If yes → chitchat.
+   - Key test: could a reader answer this from the chat transcript alone, with no external documents? If yes → direct_answer.
    - Parameters: max_iterations=0
 
 2. **reuse**
@@ -65,7 +65,7 @@ The current user question is in the final Human message.
 Select the most appropriate pipeline_type and fill in all required parameters.
 
 Decision order (follow this sequence):
-1. Can the question be answered from the conversation transcript alone (Global Context + prior AI responses), with no document content needed? → chitchat
+1. Can the question be answered from the conversation transcript alone (Global Context + prior AI responses), with no document content needed? → direct_answer
 2. Can the question be answered using previously retrieved document content (details beyond what the AI already said)? → reuse
 3. Is a specific entity (person, ticket ID, PR, document name, feature, etc.) identifiable from the question AND history combined?
    - YES and question is searchable → simple / standard / complex

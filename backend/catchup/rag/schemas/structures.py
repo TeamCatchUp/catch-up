@@ -54,7 +54,7 @@ class GraphDbSearchPlan(BaseModel):
 
 # Supervisor가 결정하는 파이프라인 실행 계획
 class PipelinePlan(BaseModel):
-    pipeline_type: Literal["chitchat", "reuse", "simple", "standard", "complex", "clarify"] = Field(
+    pipeline_type: Literal["direct_answer", "reuse", "simple", "standard", "complex", "clarify"] = Field(
         description="실행할 파이프라인 타입"
     )
     max_iterations: int = Field(

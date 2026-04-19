@@ -143,7 +143,7 @@ class ChatStreamProcessor:
 
         # 타겟 노드가 아니거나 컨텐츠가 없으면 스킵
         # clarify는 LLM 호출이 없으므로 이 분기에 진입하지 않음 (on_chain_end fallback으로 처리)
-        is_target_node = node in ("chitchat", "generate_final_answer", "generate_final_answer_fast")
+        is_target_node = node in ("direct_answer", "generate_final_answer", "generate_final_answer_fast")
         if not (is_target_node and chunk and chunk.content):
             return
 
@@ -189,7 +189,7 @@ class ChatStreamProcessor:
         그래프 종료 시점.
         인용 사유를 포함한 최종 소스를 업데이트한다.
         """
-        target_nodes = ("clarify", "chitchat", "generate_final_answer", "generate_final_answer_fast")
+        target_nodes = ("clarify", "direct_answer", "generate_final_answer", "generate_final_answer_fast")
 
         if event["name"] not in target_nodes:
             return
