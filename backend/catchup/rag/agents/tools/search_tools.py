@@ -1,7 +1,6 @@
 import asyncio
 from collections import Counter
 from datetime import datetime
-from typing import Optional
 
 import structlog
 from langchain_core.documents import Document
