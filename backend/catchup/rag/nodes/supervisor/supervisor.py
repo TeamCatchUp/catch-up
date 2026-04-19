@@ -17,9 +17,9 @@ from catchup.rag.state import AgentState
 logger = structlog.get_logger()
 
 _MAX_DOCS_SUMMARY = 20
-_PIPELINE_ORDER = ["chitchat", "reuse", "simple", "standard", "complex"]
+_PIPELINE_ORDER = ["clarify", "direct_answer", "reuse", "simple", "standard", "complex"]
 _DEFAULT_MAX_ITERATIONS: dict[str, int] = {
-    "chitchat": 0, "reuse": 0, "simple": 0, "standard": 3, "complex": 7
+    "direct_answer": 0, "reuse": 0, "simple": 0, "standard": 3, "complex": 7
 }
 
 @log_node
@@ -61,7 +61,8 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
             token_usages = extract_token_usages(raw_response.get("raw"))
             pipeline_plan: PipelinePlan = raw_response.get("parsed")
 
-        intent = "chitchat" if pipeline_plan.pipeline_type == "chitchat" else "search_pipeline"
+        _NO_RETRIEVAL = {"direct_answer", "clarify"}
+        intent = "chitchat" if pipeline_plan.pipeline_type in _NO_RETRIEVAL else "search_pipeline"
 
         logger.info(
             "supervisor_decision",
@@ -93,7 +94,7 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
 
         # rewrite 노드가 없는 파이프라인은 후속 노드가 rewritten_query를 참조하므로
         # supervisor에서 미리 original_query 값으로 채워둔다.
-        _NO_REWRITE_PIPELINES = {"chitchat", "reuse", "simple"}
+        _NO_REWRITE_PIPELINES = {"clarify", "direct_answer", "reuse", "simple"}
         if pipeline_plan.pipeline_type in _NO_REWRITE_PIPELINES:
             result["rewritten_query"] = query
 

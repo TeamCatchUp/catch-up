@@ -104,8 +104,8 @@ class SlackPlanState:
         if node == "rerank":
             return self._move_to("rerank", complete_task_ids=("search",))
 
-        # chitchat 노드 진입시 모든 Task 완료 처리 
-        if node == "chitchat":
+        # direct_answer 노드 진입시 모든 Task 완료 처리
+        if node == "direct_answer":
             chunks: list[dict[str, Any]] = []
             chunks.extend(self._complete_task("route"))
             chunks.extend(self._complete_task("search", output="검색 단계를 생략했습니다."))
@@ -380,8 +380,8 @@ class SlackPlanResponder:
             await self._switch_to_answer_mode(self.state.transition_to_answer())
             return
 
-        if node == "chitchat":
-            await self._switch_to_answer_mode(self.state.apply_node("chitchat"))
+        if node == "direct_answer":
+            await self._switch_to_answer_mode(self.state.apply_node("direct_answer"))
             return
 
         await self._append_plan_chunks(self.state.apply_node(node))

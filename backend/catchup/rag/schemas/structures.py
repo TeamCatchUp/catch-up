@@ -5,7 +5,6 @@ from pydantic import BaseModel
 from pydantic import Field
 
 
-# Search Plan
 class BaseSearchQuery(BaseModel):
     reasoning: str = Field(default="", description="이 검색이 필요한 이유")
     start_date: datetime | None = Field(
@@ -39,27 +38,21 @@ class VectorDbSearchPlan(BaseModel):
     )
 
 
-class GraphDbSearchQuery(BaseSearchQuery):
-    cypher: str = Field(..., description="Graph DB에 검색할 최적화된 Cypher")
-
-
-class GraphDbSearchPlan(BaseModel):
-    cyphers: list[GraphDbSearchQuery] = Field(
-        default=[],
-        min_length=0,
-        max_length=3,
-        description="사용자의 의도를 분석하여 생성된 독립적인 Cypher 목록",
-    )
-
-
 # Supervisor가 결정하는 파이프라인 실행 계획
 class PipelinePlan(BaseModel):
-    pipeline_type: Literal["chitchat", "reuse", "simple", "standard", "complex"] = Field(
+    pipeline_type: Literal["direct_answer", "reuse", "simple", "standard", "complex", "clarify"] = Field(
         description="실행할 파이프라인 타입"
     )
     max_iterations: int = Field(
         default=3,
         description="ReAct 루프 최대 반복 횟수. simple=0, standard=3, complex=7"
+    )
+    clarification_question: str | None = Field(
+        default=None,
+        description=(
+            "clarify 타입일 때만 채운다. "
+            "사용자에게 보낼 명확화 질문 (사용자 언어와 동일한 언어로 작성)."
+        ),
     )
 
 
@@ -70,7 +63,7 @@ class SearchStep(BaseModel):
     queries: list[str] = Field(description="실행할 검색 쿼리 목록")
     parallel: bool = Field(
         default=False,
-        description="True면 queries를 병렬 실행 (parallel_search_tool 사용)"
+        description="True면 queries를 병렬 실행 (multi_query_search 사용)"
     )
     depends_on: list[int] = Field(
         default=[],
@@ -102,14 +95,4 @@ class SearchPlan(BaseModel):
     steps: list[SearchStep] = Field(
         default=[],
         description="순서대로 실행할 검색 단계 목록"
-    )
-
-
-# 검색 결과에 대한 평가 담당 LLM 응답 양식
-class GradeDocuments(BaseModel):
-    binary_score: str = Field(
-        description="문서들이 질문에 답변하는 데 유용한지 여부. 'yes' 또는 'no'"
-    )
-    explanation: str = Field(
-        description="이 점수를 부여한 이유에 대한 간략한 설명 (예: '문서에 관련 키워드는 있으나 구체적인 해결책이 없음')"
     )

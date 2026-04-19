@@ -124,11 +124,7 @@ class ChatService:
                 "max_pipeline_type": _MODE_CEILING.get(mode, "complex"),
 
                 # RAG 파이프라인 상태 변수
-                "retry_count": 0,
-                "grade_comment": None,
-                "grade_status": None,
                 "vector_search_queries": [],
-                "graph_search_queries": [],
                 # retrieved_docs는 의도적으로 초기화하지 않음.
                 # reuse 파이프라인이 이전 턴의 retrieved_docs를 재사용해야 하므로
                 # 각 서브그래프(simple/standard/complex)에서 직접 덮어쓴다.

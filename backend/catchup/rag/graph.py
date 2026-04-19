@@ -16,7 +16,8 @@ from catchup.components.reranker.factory import get_rerank_service
 from catchup.components.vector_db.factory import get_vector_db_service
 from catchup.components.vector_db.pgvector.constants import VectorDbProvider
 from catchup.rag.conditional_edges import route_after_supervisor
-from catchup.rag.nodes import chitchat_node
+from catchup.rag.nodes import clarify_node
+from catchup.rag.nodes import direct_answer_node
 from catchup.rag.nodes import supervisor_node
 from catchup.rag.state import AgentState
 from catchup.rag.subgraphs import build_complex_react_subgraph
@@ -38,7 +39,7 @@ def get_compiled_graph(
         isolated=True,
     ).get_llm()
 
-    # SMALL, streaming — chitchat
+    # SMALL, streaming — direct_answer
     small_stream_llm = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
@@ -106,7 +107,8 @@ def get_compiled_graph(
     workflow = StateGraph(AgentState)
 
     workflow.add_node("supervisor", partial(supervisor_node, llm=large_llm))
-    workflow.add_node("chitchat", partial(chitchat_node, llm=small_stream_llm))
+    workflow.add_node("direct_answer", partial(direct_answer_node, llm=small_stream_llm))
+    workflow.add_node("clarify", clarify_node)
     workflow.add_node("reuse", reuse_subgraph)
     workflow.add_node("simple", simple_subgraph)
     workflow.add_node("standard", standard_subgraph)
@@ -117,14 +119,16 @@ def get_compiled_graph(
         "supervisor",
         route_after_supervisor,
         {
-            "chitchat": "chitchat",
+            "clarify": "clarify",
+            "direct_answer": "direct_answer",
             "reuse": "reuse",
             "simple": "simple",
             "standard": "standard",
             "complex": "complex",
         },
     )
-    workflow.add_edge("chitchat", END)
+    workflow.add_edge("clarify", END)
+    workflow.add_edge("direct_answer", END)
     workflow.add_edge("reuse", END)
     workflow.add_edge("simple", END)
     workflow.add_edge("standard", END)
