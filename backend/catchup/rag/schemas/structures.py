@@ -54,12 +54,19 @@ class GraphDbSearchPlan(BaseModel):
 
 # Supervisor가 결정하는 파이프라인 실행 계획
 class PipelinePlan(BaseModel):
-    pipeline_type: Literal["chitchat", "reuse", "simple", "standard", "complex"] = Field(
+    pipeline_type: Literal["chitchat", "reuse", "simple", "standard", "complex", "clarify"] = Field(
         description="실행할 파이프라인 타입"
     )
     max_iterations: int = Field(
         default=3,
         description="ReAct 루프 최대 반복 횟수. simple=0, standard=3, complex=7"
+    )
+    clarification_question: str | None = Field(
+        default=None,
+        description=(
+            "clarify 타입일 때만 채운다. "
+            "사용자에게 보낼 명확화 질문 (사용자 언어와 동일한 언어로 작성)."
+        ),
     )
 
 
@@ -70,7 +77,7 @@ class SearchStep(BaseModel):
     queries: list[str] = Field(description="실행할 검색 쿼리 목록")
     parallel: bool = Field(
         default=False,
-        description="True면 queries를 병렬 실행 (parallel_search_tool 사용)"
+        description="True면 queries를 병렬 실행 (multi_query_search 사용)"
     )
     depends_on: list[int] = Field(
         default=[],

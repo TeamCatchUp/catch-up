@@ -30,7 +30,7 @@ Previous gap analysis identified these missing pieces — prioritize filling the
 
 <instructions>
 - Execute the search plan steps in order, respecting step dependencies.
-- Use parallel_search when a step has parallel=true or when queries are clearly independent.
+- Use multi_query_search when a step has parallel=true or when queries are clearly independent.
 - When you find entity references (ticket IDs, PR numbers, usernames), use them in follow-up targeted searches.
 - Stop and return without a tool call when you have completed all plan steps or gathered enough information.
 </instructions>

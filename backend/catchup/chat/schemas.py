@@ -33,6 +33,7 @@ NODE_STATUS_MAP = {
     "generate_final_answer": "모든 정보를 종합하여 최종 답변을 작성하고 있습니다...",
     "generate_final_answer_fast": "모든 정보를 종합하여 최종 답변을 작성하고 있습니다...",
     "chitchat": "답변을 생성하고 있습니다...",
+    "clarify": "질문을 보다 정확하게 이해하기 위해 확인이 필요합니다...",
 
     # Agentic RAG
     "supervisor": "질문 유형을 파악하고 처리 전략을 결정하고 있습니다...",

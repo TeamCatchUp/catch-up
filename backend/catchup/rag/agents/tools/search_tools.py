@@ -28,7 +28,7 @@ logger = structlog.get_logger()
 
 
 @tool
-def search_and_rerank(
+def single_query_search(
     query: str,
     reason: str,
     start_date: str | None = None,
@@ -40,7 +40,7 @@ def search_and_rerank(
 
 
 @tool
-def parallel_search(
+def multi_query_search(
     queries: list[str],
     reason: str,
 ) -> str:
@@ -49,7 +49,7 @@ def parallel_search(
     raise NotImplementedError
 
 
-REACT_TOOLS = [search_and_rerank, parallel_search]
+REACT_TOOLS = [single_query_search, multi_query_search]
 
 # 헬퍼
 async def _run_search(
@@ -124,7 +124,7 @@ async def search_tool_executor_node(
         call_id = tool_call["id"]
 
         try:
-            if tool_name == "search_and_rerank":
+            if tool_name == "single_query_search":
                 logger.debug(
                     "tool_executing",
                     tool=tool_name,
@@ -139,7 +139,7 @@ async def search_tool_executor_node(
                     start_date=args.get("start_date"),
                     end_date=args.get("end_date"),
                 )
-            elif tool_name == "parallel_search":
+            elif tool_name == "multi_query_search":
                 queries: list[str] = args["queries"]
                 logger.debug("tool_executing", tool=tool_name, query_count=len(queries), queries=queries)
                 tasks = [
@@ -155,7 +155,7 @@ async def search_tool_executor_node(
                 summaries = []
                 for q, result in zip(queries, results_list):
                     if isinstance(result, Exception):
-                        logger.warning("parallel_search_query_failed", query=q, error=str(result))
+                        logger.warning("multi_queyr_search_failed", query=q, error=str(result))
                         summaries.append(f"쿼리='{q}': 실패")
                     else:
                         d, s = result

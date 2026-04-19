@@ -1,4 +1,5 @@
 from .chitchat import chitchat_node
+from .clarify import clarify_node
 from .doc_cache import merge_cache_node
 from .doc_cache import prepare_cache_node
 from .expand_graph_context import expand_graph_context_node
@@ -20,6 +21,7 @@ __all__ = [
     "supervisor_node",
     "route_node",
     "chitchat_node",
+    "clarify_node",
     "rewrite_node",
     "generate_vector_queries_node",
     "search_vector_db_node",
