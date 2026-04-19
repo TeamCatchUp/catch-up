@@ -17,16 +17,17 @@ from catchup.rag.state import AgentState
 
 def _route_after_complex_agent(state: AgentState) -> str:
     """tool_calls 있으면 executor, 없으면 gap_analysis로 라우팅.
-    max_iterations 도달 시 collect_docs로 강제 이동."""
+    tool_calls 체크를 max_iterations보다 먼저 수행해 orphaned tool_use 메시지를 방지한다."""
+    messages = state.get("messages", [])
+    last = messages[-1] if messages else None
+    if last and getattr(last, "tool_calls", None):
+        return "tool_executor"
+
     pipeline_plan = state.get("pipeline_plan")
     max_iterations = pipeline_plan.max_iterations if pipeline_plan else 7
     if state.get("agent_iteration", 0) >= max_iterations:
         return "collect_docs"
 
-    messages = state.get("messages", [])
-    last = messages[-1] if messages else None
-    if last and getattr(last, "tool_calls", None):
-        return "tool_executor"
     return "gap_analysis"
 
 

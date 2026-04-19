@@ -4,6 +4,7 @@ import structlog
 from langchain.chat_models import BaseChatModel
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
+from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
 
 from catchup.costs.utils import extract_token_usages
@@ -46,10 +47,11 @@ async def standard_agent_node(state: AgentState, llm: BaseChatModel):
     llm_with_tools = llm.bind_tools(REACT_TOOLS)
     token_usages = {"token_breakdown": {}}
 
+    existing_messages = _drop_orphaned_tool_calls(state.get("messages", []))
     try:
         async with rag_semaphores.analysis:
             response: AIMessage = await llm_with_tools.ainvoke(
-                input=[system_message, HumanMessage(content=query)]
+                input=[system_message, HumanMessage(content=query)] + existing_messages
             )
             token_usages = extract_token_usages(response)
     except Exception as e:
@@ -92,6 +94,19 @@ async def collect_docs_node(state: AgentState):
         capped=len(accumulated) > _RERANK_INPUT_WINDOW,
     )
     return {"retrieved_docs": capped}
+
+
+def _drop_orphaned_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
+    """마지막 AIMessage에 tool_calls가 있지만 ToolMessage가 없는 경우 제거한다.
+    라우터 버그나 이전 오류로 인해 state에 남은 orphaned tool_use 블록을 정리해
+    Bedrock ValidationException을 예방한다."""
+    if not messages:
+        return messages
+    last = messages[-1]
+    if isinstance(last, AIMessage) and getattr(last, "tool_calls", None):
+        logger.warning("dropping_orphaned_tool_call_message", message_id=getattr(last, "id", None))
+        return list(messages[:-1])
+    return messages
 
 
 def _build_docs_summary(docs: list[Document]) -> str:

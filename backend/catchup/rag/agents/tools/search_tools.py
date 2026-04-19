@@ -31,8 +31,8 @@ logger = structlog.get_logger()
 def search_and_rerank(
     query: str,
     reason: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> str:
     """벡터 DB에서 문서를 검색합니다.
     이전 검색 결과가 부족하거나, 다른 각도의 쿼리가 필요할 때 호출하세요."""
@@ -51,19 +51,15 @@ def parallel_search(
 
 REACT_TOOLS = [search_and_rerank, parallel_search]
 
-
-# ---- 검색 실행 헬퍼 ----
-# rerank는 모든 tool 호출이 끝난 뒤 collect_docs → rerank_node에서 한 번만 실행한다.
-
-
+# 헬퍼
 async def _run_search(
     query: str,
     tool_filters: list,
     vector_db_service: BaseVectorDbService,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> tuple[list[Document], str]:
-    """단일 쿼리 벡터 검색 (rerank 없음)."""
+    """단일 쿼리 벡터 검색"""
     search_query = VectorDbSearchQuery(
         query=query,
         start_date=datetime.fromisoformat(start_date) if start_date else None,
@@ -98,9 +94,7 @@ def _build_search_summary(query: str, docs: list[Document]) -> str:
     return "\n".join(lines)
 
 
-# ---- 실행 노드 ----
-
-
+# 실행 노드
 @log_node
 async def search_tool_executor_node(
     state: AgentState,
