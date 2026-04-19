@@ -21,14 +21,6 @@ _PIPELINE_ORDER = ["chitchat", "reuse", "simple", "standard", "complex"]
 _DEFAULT_MAX_ITERATIONS: dict[str, int] = {
     "chitchat": 0, "reuse": 0, "simple": 0, "standard": 3, "complex": 7
 }
-_MAX_REUSE_TURNS = 3  # 마지막 검색으로부터 이 턴 수를 초과하면 reuse 불가
-
-
-def _is_reuse_stale(current_turn: int, last_search_turn: int) -> bool:
-    if last_search_turn == 0:
-        return True  # 한 번도 검색하지 않았으면 reuse 불가
-    return (current_turn - last_search_turn) > _MAX_REUSE_TURNS
-
 
 @log_node
 @token_usage
@@ -41,13 +33,8 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
     # turn_number는 supervisor가 항상 첫 번째로 실행되므로 여기서 증가시킨다.
     # engine.py에서 초기화하지 않으므로 체크포인터를 통해 턴 간 누적된다.
     current_turn = state.get("turn_number", 0) + 1
-    last_search_turn = state.get("last_search_turn", 0)
 
-    # stale 문서는 LLM에게 보여주지 않는다.
-    # stale 상태에서 docs_summary를 제공하면 LLM이 reuse로 오분류할 수 있으므로,
-    # 임계값 초과 시 빈 요약을 전달해 새 검색을 유도한다.
-    stale = _is_reuse_stale(current_turn, last_search_turn)
-    retrieved_docs_summary = "" if stale else _build_docs_summary(retrieved_docs)
+    retrieved_docs_summary = _build_docs_summary(retrieved_docs)
 
     system_prompt = prompt_loader.get_prompt(
         "rag/supervisor",
@@ -82,19 +69,6 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
             retrieved_docs_count=len(retrieved_docs),
             history_len=len(history),
         )
-
-        # stale 문서인데 reuse로 분류된 경우 hard override
-        if pipeline_plan.pipeline_type == "reuse" and stale:
-            logger.info(
-                "reuse_blocked_stale",
-                last_search_turn=last_search_turn,
-                current_turn=current_turn,
-                delta=current_turn - last_search_turn,
-            )
-            pipeline_plan = pipeline_plan.model_copy(update={
-                "pipeline_type": "standard",
-                "max_iterations": _DEFAULT_MAX_ITERATIONS["standard"],
-            })
 
         # max_pipeline_type 상한 적용 (engine.py에서 mode → max_pipeline_type 변환)
         max_pipeline_type = state.get("max_pipeline_type", "complex")

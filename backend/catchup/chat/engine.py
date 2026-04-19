@@ -46,7 +46,6 @@ observe = get_observe()
 _MODE_CEILING: dict[str, str] = {
     "fast":     "standard",
     "standard": "complex",
-    # "deep": "complex",  # 추후: max_iterations 증가 별도 설계
 }
 
 class ChatService:

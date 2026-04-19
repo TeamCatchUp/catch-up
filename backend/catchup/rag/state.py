@@ -17,7 +17,6 @@ from catchup.rag.schemas.structures import SearchStep
 from catchup.rag.schemas.structures import VectorDbSearchQuery
 
 
-
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
     intent: Literal["chitchat", "search_pipeline"]
@@ -48,18 +47,15 @@ class AgentState(TypedDict):
 
     max_pipeline_type: Literal["simple", "standard", "complex"]
 
-    # --- Agentic RAG 신규 필드 ---
-
-    pipeline_plan: Optional[PipelinePlan]  # Supervisor 출력. None이면 legacy 경로 fallback
+    # Agentic RAG
+    pipeline_plan: PipelinePlan | None  # Supervisor 출력. None이면 legacy 경로 fallback
 
     agent_iteration: int  # ReAct 루프 현재 반복 수
 
     accumulated_docs: list[Document]  # ReAct 반복 간 누적 문서 (search_tool_executor_node에서 직접 dedup)
 
-    search_plan: Optional[list[SearchStep]]  # complex planner 출력
+    search_plan: list[SearchStep] | None  # complex planner 출력
 
-    gap_analysis: Optional[GapAnalysis]  # complex gap_analysis_node 출력
+    gap_analysis: GapAnalysis | None  # complex gap_analysis_node 출력
 
     turn_number: int  # supervisor가 매 턴 시작 시 +1. engine.py에서 초기화 안 함 (체크포인터 유지)
-
-    last_search_turn: int  # 마지막 실제 검색이 수행된 턴 번호. 0 = 미검색

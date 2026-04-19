@@ -85,15 +85,13 @@ async def collect_docs_node(state: AgentState):
     reranker 입력 크기를 _RERANK_INPUT_WINDOW 이내로 제한한다."""
     accumulated = state.get("accumulated_docs", [])
     capped = accumulated[:_RERANK_INPUT_WINDOW]
-    current_turn = state.get("turn_number", 0)
     logger.info(
         "collect_docs",
         total_accumulated=len(accumulated),
         passed_to_reranker=len(capped),
         capped=len(accumulated) > _RERANK_INPUT_WINDOW,
-        last_search_turn=current_turn,
     )
-    return {"retrieved_docs": capped, "last_search_turn": current_turn}
+    return {"retrieved_docs": capped}
 
 
 def _build_docs_summary(docs: list[Document]) -> str:

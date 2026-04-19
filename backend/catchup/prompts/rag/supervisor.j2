@@ -16,9 +16,9 @@ You must select exactly one of five pipeline types and provide the associated pa
    - Parameters: max_iterations=0
 
 2. **reuse**
-   - Use when: the current question is a direct follow-up to the previous turn, AND the previously retrieved documents (shown below) already contain sufficient information to answer the question, AND those documents are recent (fetched within the last 3 conversation turns).
+   - Use when: the current question can be fully answered using the previously retrieved documents shown below, without requiring new retrieval.
    - No new retrieval needed — reuse existing docs.
-   - Disqualifiers: empty previous docs, question shifts to a completely different topic, docs are stale.
+   - Disqualifiers: no previously retrieved documents shown above, question introduces a new topic or entity not covered by the existing documents, existing documents do not contain enough information to answer the question.
    - Parameters: max_iterations=0
 3. **simple**
    - Use when ALL of the following conditions are met:
