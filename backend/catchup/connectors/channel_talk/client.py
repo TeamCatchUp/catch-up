@@ -209,24 +209,7 @@ class ChannelTalkApiClient:
         )
 
     @staticmethod
-    def _build_page_params(*, since: str | None, limit: int) -> dict[str, Any]:
-        normalized_limit = max(1, min(int(limit), 500))
-        params: dict[str, Any] = {"limit": normalized_limit}
-        normalized_since = str(since or "").strip()
-        if normalized_since:
-            params["since"] = normalized_since
-        return params
-
-    @staticmethod
-    def _normalize_path_value(value: str, *, field_name: str) -> str:
-        normalized = str(value or "").strip()
-        if not normalized:
-            raise ChannelTalkValidationError(f"{field_name} is required")
-        return normalized
-
-    @staticmethod
     def _extract_error_metadata(response: httpx.Response) -> dict[str, Any]:
-        # 상위 레이어에서 관찰 가능한 metadata만 추려서 예외 metadata로 넘긴다.
         request_id = (
             response.headers.get("x-request-id")
             or response.headers.get("x-correlation-id")

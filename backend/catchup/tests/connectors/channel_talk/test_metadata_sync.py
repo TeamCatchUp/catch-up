@@ -5,6 +5,8 @@ from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
 
 from catchup.connector_core.domain.structure import ConnectorKey
+from catchup.connectors.channel_talk.exceptions import ChannelTalkConflictError
+from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
 from catchup.connectors.channel_talk.schemas import ChannelTalkChannel
 from catchup.connectors.channel_talk.schemas import ChannelTalkChannelMetadata
 from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
@@ -30,6 +32,7 @@ class ChannelTalkMetadataSchemaTests(IsolatedAsyncioTestCase):
                         "channelId": "channel-123",
                         "name": "Kim",
                         "email": "kim@example.com",
+                        "roleId": "role-1",
                         "displayAsChannel": True,
                         "createdAt": 1713492788000,
                     }
@@ -46,8 +49,10 @@ class ChannelTalkMetadataSchemaTests(IsolatedAsyncioTestCase):
                 "updatedAt": 1713492799000,
             }
         )
+        # role_id alias를 추가한 뒤에도 manager payload 정규화 결과가 그대로 읽히는지 잠근다.
         self.assertEqual(manager_page.next_page_token, "next@example.com")
         self.assertEqual(manager_page.managers[0].manager_id, "manager-1")
+        self.assertEqual(manager_page.managers[0].role_id, "role-1")
         self.assertTrue(manager_page.managers[0].display_as_channel)
         self.assertEqual(group.group_id, "group-1")
         self.assertEqual(group.manager_ids, ("manager-1", "manager-2"))
@@ -178,3 +183,33 @@ class ChannelTalkMetadataSyncServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(result.managers_synced, 2)
         self.assertEqual(result.groups_synced, 1)
         self.assertEqual(result.group_manager_links_synced, 2)
+
+    async def test_sync_channel_requires_installed_credentials(self) -> None:
+        self.store.get_connection = lambda: None
+
+        # 설치되지 않은 credential은 sync 시작 전에 바로 막혀야 한다.
+        with self.assertRaisesRegex(
+            ChannelTalkValidationError,
+            "Channel Talk credentials are not installed",
+        ):
+            await self.service.sync_metadata(
+                ChannelTalkMetadataSyncRequest(channel_id="channel-123")
+            )
+
+    async def test_sync_channel_rejects_requested_channel_mismatch(self) -> None:
+        self.store.get_connection = lambda: ChannelTalkCredentialsRecord(
+            channel_id="channel-999",
+            channel_name="Other",
+            access_key="access-key",
+            access_secret="access-secret",
+            webhook_token="webhook-token",
+        )
+
+        # 다른 채널 credential 재사용으로 cross-tenant write가 나지 않게 mismatch를 고정한다.
+        with self.assertRaisesRegex(
+            ChannelTalkConflictError,
+            "Stored Channel Talk credentials do not match the requested channel",
+        ):
+            await self.service.sync_metadata(
+                ChannelTalkMetadataSyncRequest(channel_id="channel-123")
+            )
