@@ -68,6 +68,7 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
             "supervisor_decision",
             pipeline_type=pipeline_plan.pipeline_type,
             max_iterations=pipeline_plan.max_iterations,
+            inferred_tool_filters=[f.value for f in pipeline_plan.inferred_tool_filters] if pipeline_plan.inferred_tool_filters else None,
             doc_cache_size=len(doc_cache),
             history_len=len(history),
         )
@@ -97,6 +98,15 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
         _NO_REWRITE_PIPELINES = {"clarify", "direct_answer", "reuse", "simple"}
         if pipeline_plan.pipeline_type in _NO_REWRITE_PIPELINES:
             result["rewritten_query"] = query
+
+        # 사용자가 명시적 필터를 설정하지 않은 경우에만 LLM 추론 필터를 state에 적용
+        user_tool_filters = state.get("tool_filters") or []
+        if not user_tool_filters and pipeline_plan.inferred_tool_filters:
+            result["tool_filters"] = pipeline_plan.inferred_tool_filters
+            logger.info(
+                "dynamic_tool_filters_applied",
+                inferred_filters=[f.value for f in pipeline_plan.inferred_tool_filters],
+            )
 
         return result
 
