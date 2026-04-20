@@ -4,6 +4,8 @@ from collections.abc import Mapping
 from datetime import datetime
 from datetime import timezone
 from typing import Any
+from typing import Callable
+from typing import TypeVar
 
 from pydantic import AliasChoices
 from pydantic import BaseModel
@@ -15,6 +17,8 @@ from pydantic import field_validator
 from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
 from catchup.connector_core.ports.metadata_sync import MetadataSyncResult
+
+ParsedMetadataItem = TypeVar("ParsedMetadataItem")
 
 
 class ChannelTalkConnectRequest(BaseModel):
@@ -279,7 +283,7 @@ class ChannelTalkManagerMetadata(BaseModel):
     description: str | None = None
     email: str | None = None
     mobile_number: str | None = None
-    role: str | None = None
+    role_id: str | None = None
     removed: bool | None = None
     display_as_channel: bool | None = None
     avatar_url: str | None = None
@@ -309,7 +313,7 @@ class ChannelTalkManagerMetadata(BaseModel):
             description=reader.text("description"),
             email=reader.text("email"),
             mobile_number=reader.text("mobileNumber", "mobile_number"),
-            role=reader.text("role"),
+            role_id=reader.text("roleId", "role_id", "role"),
             removed=reader.boolean("removed"),
             display_as_channel=reader.boolean("displayAsChannel", "display_as_channel"),
             avatar_url=reader.text("avatarUrl", "avatarURL", "avatar_url"),
@@ -322,23 +326,15 @@ class ChannelTalkManagerMetadataPage(BaseModel):
 
     @classmethod
     def from_api_payload(cls, payload: Any) -> "ChannelTalkManagerMetadataPage":
-
-        if isinstance(payload, list):
-            items = payload
-            next_page_token = None
-        elif isinstance(payload, Mapping):
-            reader = _PayloadReader(payload)
-            items = reader.items("managers", "results", "items")
-            next_page_token = reader.text("next", "nextId", "nextCursor")
-        else:
-            raise ValueError("manager list payload must be an object or list")
+        managers, next_page_token = _parse_metadata_page(
+            payload,
+            item_keys=("managers", "results", "items"),
+            parse_item=ChannelTalkManagerMetadata.from_api_payload,
+            error_message="manager list payload must be an object or list",
+        )
 
         return cls(
-            managers=[
-                ChannelTalkManagerMetadata.from_api_payload(item)
-                for item in items
-                if isinstance(item, Mapping)
-            ],
+            managers=managers,
             next_page_token=next_page_token,
         )
 
@@ -364,7 +360,6 @@ class ChannelTalkGroupMetadata(BaseModel):
 
     @classmethod
     def from_api_payload(cls, payload: Any) -> "ChannelTalkGroupMetadata":
-
         if not isinstance(payload, Mapping):
             raise ValueError("group payload must be an object")
 
@@ -372,15 +367,6 @@ class ChannelTalkGroupMetadata(BaseModel):
         group_id = reader.text("id", "groupId", "group_id")
         if group_id is None:
             raise ValueError("group payload missing group id")
-
-        manager_ids: list[str] = []
-        for value in reader.items("managerIds", "manager_ids", "managers"):
-            if isinstance(value, Mapping):
-                manager_id = _PayloadReader(value).text("id", "managerId", "manager_id")
-            else:
-                manager_id = str(value).strip() or None
-            if manager_id is not None:
-                manager_ids.append(manager_id)
 
         return cls(
             channel_id=reader.text("channelId", "channel_id"),
@@ -392,7 +378,7 @@ class ChannelTalkGroupMetadata(BaseModel):
             active=reader.boolean("active"),
             remote_created_at=reader.moment("createdAt", "remoteCreatedAt", "remote_created_at"),
             remote_updated_at=reader.moment("updatedAt", "remoteUpdatedAt", "remote_updated_at"),
-            manager_ids=tuple(manager_ids),
+            manager_ids=_parse_manager_ids(reader),
         )
 
     def to_memberships(self, channel_id: str) -> tuple[ChannelTalkGroupManagerMembership, ...]:
@@ -413,22 +399,15 @@ class ChannelTalkGroupMetadataPage(BaseModel):
 
     @classmethod
     def from_api_payload(cls, payload: Any) -> "ChannelTalkGroupMetadataPage":
-        if isinstance(payload, list):
-            items = payload
-            next_page_token = None
-        elif isinstance(payload, Mapping):
-            reader = _PayloadReader(payload)
-            items = reader.items("groups", "results", "items")
-            next_page_token = reader.text("next", "nextId", "nextCursor")
-        else:
-            raise ValueError("group list payload must be an object or list")
+        groups, next_page_token = _parse_metadata_page(
+            payload,
+            item_keys=("groups", "results", "items"),
+            parse_item=ChannelTalkGroupMetadata.from_api_payload,
+            error_message="group list payload must be an object or list",
+        )
 
         return cls(
-            groups=[
-                ChannelTalkGroupMetadata.from_api_payload(item)
-                for item in items
-                if isinstance(item, Mapping)
-            ],
+            groups=groups,
             next_page_token=next_page_token,
         )
 
@@ -507,6 +486,45 @@ def _require_text(value: str, field_name: str) -> str:
     if not text:
         raise ValueError(f"{field_name} is required")
     return text
+
+
+def _parse_metadata_page(
+    payload: Any,
+    *,
+    item_keys: tuple[str, ...],
+    parse_item: Callable[[Mapping[str, Any]], ParsedMetadataItem],
+    error_message: str,
+) -> tuple[list[ParsedMetadataItem], str | None]:
+    if isinstance(payload, list):
+        items = payload
+        next_page_token = None
+    elif isinstance(payload, Mapping):
+        reader = _PayloadReader(payload)
+        items = reader.items(*item_keys)
+        next_page_token = reader.text("next", "nextId", "nextCursor")
+    else:
+        raise ValueError(error_message)
+
+    return (
+        [parse_item(item) for item in items if isinstance(item, Mapping)],
+        next_page_token,
+    )
+
+
+def _parse_manager_ids(reader: "_PayloadReader") -> tuple[str, ...]:
+    manager_ids: list[str] = []
+    for value in reader.items("managerIds", "manager_ids", "managers"):
+        manager_id = _read_manager_id(value)
+        if manager_id is not None:
+            manager_ids.append(manager_id)
+    return tuple(manager_ids)
+
+
+def _read_manager_id(value: Any) -> str | None:
+    if isinstance(value, Mapping):
+        return _PayloadReader(value).text("id", "managerId", "manager_id")
+
+    return str(value).strip() or None
 
 
 class _PayloadReader:
