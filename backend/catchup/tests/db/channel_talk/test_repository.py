@@ -66,7 +66,8 @@ class _ChannelTalkManager(_Base):
     description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     mobile_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    role: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # 실제 모델 rename과 같은 이름을 써서 repository round-trip을 같은 계약으로 검증한다.
+    role_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     removed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     display_as_channel: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -107,11 +108,11 @@ class ChannelTalkRepositoryTests(TestCase):
         _Base.metadata.create_all(self.engine)
         self.db = Session(self.engine)
         self.model_patchers = [
-            patch.object(repository_module, "ChannelTalkCredentials", _ChannelTalkCredentials),
-            patch.object(repository_module, "ChannelTalkChannelRow", _ChannelTalkChannel),
-            patch.object(repository_module, "ChannelTalkManagerRow", _ChannelTalkManager),
-            patch.object(repository_module, "ChannelTalkGroupRow", _ChannelTalkGroup),
-            patch.object(repository_module, "ChannelTalkGroupManagerRow", _ChannelTalkGroupManager),
+            patch.object(repository_module.db_models, "ChannelTalkCredentials", _ChannelTalkCredentials),
+            patch.object(repository_module.db_models, "ChannelTalkChannel", _ChannelTalkChannel),
+            patch.object(repository_module.db_models, "ChannelTalkManager", _ChannelTalkManager),
+            patch.object(repository_module.db_models, "ChannelTalkGroup", _ChannelTalkGroup),
+            patch.object(repository_module.db_models, "ChannelTalkGroupManager", _ChannelTalkGroupManager),
         ]
         for patcher in self.model_patchers:
             patcher.start()
@@ -142,11 +143,13 @@ class ChannelTalkRepositoryTests(TestCase):
                     manager_id="manager-1",
                     name="Kim",
                     email="kim@example.com",
+                    role_id="role-1",
                 ),
                 ChannelTalkManagerMetadata(
                     channel_id="channel-123",
                     manager_id="manager-2",
                     name="Park",
+                    role_id="role-2",
                 ),
             ]
         )
@@ -190,9 +193,11 @@ class ChannelTalkRepositoryTests(TestCase):
         groups = self.metadata_repo.list_groups_by_channel("channel-123")
         memberships = self.metadata_repo.list_group_manager_memberships(channel_id="channel-123")
 
+        # bulk upsert 리팩터링 뒤에도 manager role_id가 손실되지 않는지 함께 확인한다.
         self.assertIsNotNone(channel)
         self.assertEqual(channel.channel_name, "Support")
         self.assertCountEqual([item.manager_id for item in managers], ["manager-1", "manager-2"])
+        self.assertCountEqual([item.role_id for item in managers], ["role-1", "role-2"])
         self.assertEqual([item.group_id for item in groups], ["group-1"])
         self.assertEqual(
             [(item.group_id, item.manager_id) for item in memberships],
