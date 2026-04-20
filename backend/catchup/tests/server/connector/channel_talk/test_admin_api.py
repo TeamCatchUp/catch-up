@@ -12,6 +12,9 @@ from catchup.connectors.channel_talk.exceptions import ChannelTalkAuthentication
 from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsStatus
 from catchup.connectors.channel_talk.schemas import ChannelTalkUninstallResult
 from catchup.server.connector.channel_talk.admin_api import router
+from catchup.server.connector.channel_talk.dependencies import (
+    get_channel_talk_metadata_task_runner,
+)
 from catchup.server.connector.channel_talk.dependencies import get_channel_talk_service
 from catchup.server.error_handlers.channel_talk import (
     register_channel_talk_exception_handlers,
@@ -42,11 +45,17 @@ class StubChannelTalkService:
 class ChannelTalkAdminApiTests(TestCase):
     def setUp(self) -> None:
         self.service = StubChannelTalkService()
+        self.background_sync_calls: list[str] = []
+
+        async def background_runner(channel_id: str) -> None:
+            self.background_sync_calls.append(channel_id)
+
         self.app = FastAPI()
         self.app.include_router(router)
         register_channel_talk_exception_handlers(self.app)
         self.app.dependency_overrides[require_admin_user] = lambda: object()
         self.app.dependency_overrides[get_channel_talk_service] = lambda: self.service
+        self.app.dependency_overrides[get_channel_talk_metadata_task_runner] = lambda: background_runner
         self.client = TestClient(self.app)
 
     def tearDown(self) -> None:
@@ -88,6 +97,7 @@ class ChannelTalkAdminApiTests(TestCase):
         self.assertEqual(self.service.last_connect_request.access_key, "access-key")
         self.assertEqual(self.service.last_connect_request.access_secret, "access-secret")
         self.assertEqual(self.service.last_connect_request.webhook_token, "webhook-token")
+        self.assertEqual(self.background_sync_calls, ["channel-123"])
 
     def test_get_credentials_returns_disconnected_payload(self) -> None:
         self.service.status_result = ChannelTalkCredentialsStatus.disconnected()
@@ -174,3 +184,4 @@ class ChannelTalkAdminApiTests(TestCase):
                 }
             },
         )
+        self.assertEqual(self.background_sync_calls, [])
