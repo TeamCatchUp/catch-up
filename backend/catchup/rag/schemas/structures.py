@@ -4,6 +4,8 @@ from typing import Literal
 from pydantic import BaseModel
 from pydantic import Field
 
+from catchup.db.models import SourceType
+
 
 class BaseSearchQuery(BaseModel):
     reasoning: str = Field(default="", description="이 검색이 필요한 이유")
@@ -52,6 +54,14 @@ class PipelinePlan(BaseModel):
         description=(
             "clarify 타입일 때만 채운다. "
             "사용자에게 보낼 명확화 질문 (사용자 언어와 동일한 언어로 작성)."
+        ),
+    )
+    inferred_tool_filters: list[SourceType] | None = Field(
+        default=None,
+        description=(
+            "쿼리가 특정 협업 툴 소스를 명시적으로 지정할 때만 채운다 "
+            "(예: 'Jira에서', 'Slack에서'). "
+            "소스가 불명확하거나 ID·토픽 기반 쿼리처럼 cross-source 가능성이 있으면 null."
         ),
     )
 

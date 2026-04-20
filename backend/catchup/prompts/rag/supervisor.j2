@@ -83,4 +83,14 @@ Key signals that clarify is needed (even with history present):
 
 Be conservative: when in doubt between simple and standard, choose standard.
 Be very precise about complex: only use it for genuinely multi-faceted or causal questions.
+
+Source filter inference:
+Set inferred_tool_filters ONLY when the query explicitly names a source with a locative/restrictive phrase ("Jira에서", "Slack에서", "GitHub에서", "Confluence 문서에서") or asks for source-exclusive artifacts ("내 Jira 티켓 목록", "슬랙 메시지 찾아줘").
+
+DO NOT infer a filter when:
+- The query references a topic or ID (e.g., "CATDEV-123") that could appear across multiple sources (Jira descriptions, GitHub PR titles, Slack messages).
+- The query asks about an event or outcome that may span sources (e.g., "배포 이슈 뭐가 있었어?").
+- You are uncertain whether the user intends to restrict to one source.
+
+If in doubt, set inferred_tool_filters to null. A missed filter is better than a missed result.
 </classification_task>
