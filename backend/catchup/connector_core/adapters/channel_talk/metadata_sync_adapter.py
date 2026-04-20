@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from collections.abc import Awaitable
 from collections.abc import Callable
 from collections.abc import Mapping
 from functools import partial
@@ -20,7 +22,9 @@ from catchup.connectors.channel_talk.schemas import ChannelTalkChannel
 from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
 from catchup.connectors.channel_talk.schemas import ChannelTalkGroupManagerMembership
 from catchup.connectors.channel_talk.schemas import ChannelTalkGroupMetadata
+from catchup.connectors.channel_talk.schemas import ChannelTalkGroupMetadataPage
 from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadata
+from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadataPage
 
 
 class ChannelTalkMetadataStore:
@@ -164,18 +168,15 @@ class ChannelTalkMetadataSyncAdapter:
         connection: ChannelTalkCredentialsRecord,
     ) -> MetadataSyncStepResult:
         synced = 0
-        since: str | None = None
 
-        while True:
-            page = await self.client.list_managers(
+        async for page in self._iter_pages(
+            lambda since: self.client.list_managers(
                 access_key=connection.access_key or "",
                 access_secret=connection.access_secret or "",
                 since=since,
             )
-            payloads = [
-                manager.model_copy(update={"channel_id": request.tenant_id})
-                for manager in page.managers
-            ]
+        ):
+            payloads = self._with_channel_id(page.managers, request.tenant_id)
             if payloads:
                 stored = await self._store_and_commit(
                     self.store.bulk_upsert_managers,
@@ -183,10 +184,6 @@ class ChannelTalkMetadataSyncAdapter:
                     error_message="Failed to persist Channel Talk manager metadata",
                 )
                 synced += len(stored)
-
-            if not page.next_page_token or page.next_page_token == since:
-                break
-            since = page.next_page_token
 
         return MetadataSyncStepResult(synced_count=synced)
 
@@ -199,18 +196,15 @@ class ChannelTalkMetadataSyncAdapter:
     ) -> MetadataSyncStepResult:
         synced = 0
         memberships: list[ChannelTalkGroupManagerMembership] = []
-        since: str | None = None
 
-        while True:
-            page = await self.client.list_groups(
+        async for page in self._iter_pages(
+            lambda since: self.client.list_groups(
                 access_key=connection.access_key or "",
                 access_secret=connection.access_secret or "",
                 since=since,
             )
-            payloads = [
-                group.model_copy(update={"channel_id": request.tenant_id})
-                for group in page.groups
-            ]
+        ):
+            payloads = self._with_channel_id(page.groups, request.tenant_id)
             if payloads:
                 stored = await self._store_and_commit(
                     self.store.bulk_upsert_groups,
@@ -219,10 +213,6 @@ class ChannelTalkMetadataSyncAdapter:
                 )
                 synced += len(stored)
                 memberships.extend(self._collect_group_memberships(payloads, request.tenant_id))
-
-            if not page.next_page_token or page.next_page_token == since:
-                break
-            since = page.next_page_token
 
         return MetadataSyncStepResult(
             synced_count=synced,
@@ -262,6 +252,31 @@ class ChannelTalkMetadataSyncAdapter:
                 "Stored Channel Talk credentials do not match the requested channel",
             )
         return record
+
+    @staticmethod
+    async def _iter_pages(
+        fetch_page: Callable[[str | None], Awaitable[ChannelTalkManagerMetadataPage | ChannelTalkGroupMetadataPage]],
+    ) -> AsyncIterator[ChannelTalkManagerMetadataPage | ChannelTalkGroupMetadataPage]:
+        since: str | None = None
+
+        while True:
+            page = await fetch_page(since)
+            yield page
+
+            next_page_token = page.next_page_token
+            if not next_page_token or next_page_token == since:
+                break
+            since = next_page_token
+
+    @staticmethod
+    def _with_channel_id(
+        payloads: list[ChannelTalkManagerMetadata] | list[ChannelTalkGroupMetadata],
+        channel_id: str,
+    ) -> list[ChannelTalkManagerMetadata] | list[ChannelTalkGroupMetadata]:
+        return [
+            payload.model_copy(update={"channel_id": channel_id})
+            for payload in payloads
+        ]
 
     @staticmethod
     def _collect_group_memberships(
