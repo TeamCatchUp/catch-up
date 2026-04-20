@@ -1044,10 +1044,10 @@ class ChannelTalkManager(Base):
         nullable=True,
         comment="Manager mobile number",
     )
-    role: Mapped[str | None] = mapped_column(
+    role_id: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
-        comment="Manager role such as owner or member",
+        comment="Manager role ID",
     )
     removed: Mapped[bool | None] = mapped_column(
         Boolean,
