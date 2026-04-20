@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter
+from fastapi import BackgroundTasks
 from fastapi import Depends
 
 from catchup.auth.dependencies import require_admin_user
@@ -11,6 +12,12 @@ from catchup.connectors.channel_talk.schemas import ChannelTalkConnectRequest
 from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsStatus
 from catchup.connectors.channel_talk.schemas import ChannelTalkUninstallResult
 from catchup.connectors.channel_talk.service import ChannelTalkCredentialsService
+from catchup.server.connector.channel_talk.dependencies import (
+    ChannelTalkMetadataTaskRunner,
+)
+from catchup.server.connector.channel_talk.dependencies import (
+    get_channel_talk_metadata_task_runner,
+)
 from catchup.server.connector.channel_talk.dependencies import get_channel_talk_service
 from catchup.server.connector.channel_talk.schemas import ChannelTalkConnectResponse
 from catchup.server.connector.channel_talk.schemas import ChannelTalkStatusResponse
@@ -29,9 +36,16 @@ router = APIRouter(
 )
 async def upsert_channel_talk_credentials(
     connect_request: ChannelTalkConnectRequest,
+    background_tasks: BackgroundTasks,
     service: Annotated[ChannelTalkCredentialsService, Depends(get_channel_talk_service)],
+    metadata_task_runner: Annotated[
+        ChannelTalkMetadataTaskRunner,
+        Depends(get_channel_talk_metadata_task_runner),
+    ],
 ):
     result = await service.connect(request=connect_request)
+    if result.installed and result.channel_id:
+        background_tasks.add_task(metadata_task_runner, result.channel_id)
     return _build_connect_response(result)
 
 
@@ -57,7 +71,6 @@ async def delete_channel_talk_credentials(
     return _build_uninstall_response(result)
 
 
-# Review item 4: service 반환 타입을 그대로 사용해 Any/_read_value 기반 동적 응답 구성을 제거한다.
 def _build_connect_response(result: ChannelTalkCredentialsStatus) -> ChannelTalkConnectResponse:
     return ChannelTalkConnectResponse(
         installed=result.installed,

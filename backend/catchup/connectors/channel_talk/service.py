@@ -6,13 +6,24 @@ from catchup.connector_core.adapters.channel_talk.install_auth_adapter import (
 from catchup.connector_core.adapters.channel_talk.install_auth_adapter import (
     ChannelTalkInstallAuthAdapter,
 )
+from catchup.connector_core.adapters.channel_talk.metadata_sync_adapter import (
+    ChannelTalkMetadataStore,
+)
+from catchup.connector_core.adapters.channel_talk.metadata_sync_adapter import (
+    ChannelTalkMetadataSyncAdapter,
+)
 from catchup.connector_core.application.install_auth import (
     ConnectorInstallAuthApplication,
+)
+from catchup.connector_core.application.metadata_sync import (
+    ConnectorMetadataSyncApplication,
 )
 from catchup.connectors.channel_talk.client import ChannelTalkApiClient
 from catchup.connectors.channel_talk.schemas import ChannelTalkConnectRequest
 from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsStatus
 from catchup.connectors.channel_talk.schemas import ChannelTalkCurrentChannel
+from catchup.connectors.channel_talk.schemas import ChannelTalkMetadataSyncRequest
+from catchup.connectors.channel_talk.schemas import ChannelTalkMetadataSyncResult
 from catchup.connectors.channel_talk.schemas import ChannelTalkUninstallResult
 
 
@@ -56,3 +67,35 @@ class ChannelTalkCredentialsService:
 
     async def uninstall(self) -> ChannelTalkUninstallResult:
         return await self.application.uninstall()
+
+
+class ChannelTalkMetadataSyncService:
+    """Channel Talk post-connect metadata 동기화를 전담하는 facade."""
+
+    def __init__(
+        self,
+        store: ChannelTalkMetadataStore,
+        client: ChannelTalkApiClient | None = None,
+        application: ConnectorMetadataSyncApplication | None = None,
+    ) -> None:
+        self.application = application or ConnectorMetadataSyncApplication(
+            port=ChannelTalkMetadataSyncAdapter(
+                store=store,
+                client=client,
+            )
+        )
+
+    async def sync_metadata(
+        self,
+        request: ChannelTalkMetadataSyncRequest,
+    ) -> ChannelTalkMetadataSyncResult:
+        result = await self.application.sync_metadata(request.to_core_request())
+        return ChannelTalkMetadataSyncResult.from_core_result(result)
+
+    async def sync_channel(
+        self,
+        channel_id: str,
+    ) -> ChannelTalkMetadataSyncResult:
+        return await self.sync_metadata(
+            ChannelTalkMetadataSyncRequest(channel_id=channel_id)
+        )

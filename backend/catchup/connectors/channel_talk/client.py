@@ -14,6 +14,8 @@ from catchup.connectors.channel_talk.exceptions import ChannelTalkTimeoutError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkUpstreamError
 from catchup.connectors.channel_talk.exceptions import ChannelTalkValidationError
 from catchup.connectors.channel_talk.schemas import ChannelTalkCurrentChannel
+from catchup.connectors.channel_talk.schemas import ChannelTalkGroupMetadataPage
+from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadataPage
 from catchup.utils.client import get_global_async_client
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,52 @@ class ChannelTalkApiClient:
             logger.error("channel_talk_invalid_payload", exc_info=True)
             raise ChannelTalkPayloadError("Channel Talk returned an invalid channel payload") from exc
 
+    async def list_managers(
+        self,
+        access_key: str,
+        access_secret: str,
+        *,
+        since: str | None = None,
+        limit: int = 500,
+    ) -> ChannelTalkManagerMetadataPage:
+        payload = await self._request(
+            method="GET",
+            path="/open/v5/managers",
+            headers=self._build_headers(
+                access_key=access_key,
+                access_secret=access_secret,
+            ),
+            params=self._build_list_params(since=since, limit=limit),
+        )
+        try:
+            return ChannelTalkManagerMetadataPage.from_api_payload(payload)
+        except ValueError as exc:
+            logger.error("channel_talk_invalid_manager_list_payload", exc_info=True)
+            raise ChannelTalkPayloadError("Channel Talk returned an invalid manager list payload") from exc
+
+    async def list_groups(
+        self,
+        access_key: str,
+        access_secret: str,
+        *,
+        since: str | None = None,
+        limit: int = 500,
+    ) -> ChannelTalkGroupMetadataPage:
+        payload = await self._request(
+            method="GET",
+            path="/open/v5/groups",
+            headers=self._build_headers(
+                access_key=access_key,
+                access_secret=access_secret,
+            ),
+            params=self._build_list_params(since=since, limit=limit),
+        )
+        try:
+            return ChannelTalkGroupMetadataPage.from_api_payload(payload)
+        except ValueError as exc:
+            logger.error("channel_talk_invalid_group_list_payload", exc_info=True)
+            raise ChannelTalkPayloadError("Channel Talk returned an invalid group list payload") from exc
+
     def _build_headers(
         self,
         *,
@@ -71,19 +119,37 @@ class ChannelTalkApiClient:
             "x-access-secret": normalized_access_secret,
         }
 
+    def _build_list_params(
+        self,
+        *,
+        since: str | None,
+        limit: int,
+    ) -> dict[str, Any]:
+        normalized_limit = min(max(int(limit), 1), 500)
+        params: dict[str, Any] = {"limit": normalized_limit}
+        if since is not None and str(since).strip():
+            params["since"] = str(since).strip()
+        return params
+
     async def _request(
         self,
         *,
         method: str,
         path: str,
         headers: dict[str, str],
+        params: dict[str, Any] | None = None,
     ) -> Any:
+        # 공통 HTTP 진입점:
+        # - 실제 요청 실행
+        # - timeout / transport error 처리
+        # - status code별 에러 변환은 _decode_response로 위임
         url = f"{self.base_url}{path}"
         try:
             response = await self._http_client.request(
                 method,
                 url,
                 headers=headers,
+                params=params,
                 timeout=self.timeout_seconds,
             )
         except httpx.TimeoutException as exc:
@@ -99,6 +165,7 @@ class ChannelTalkApiClient:
         return self._decode_response(response)
 
     def _decode_response(self, response: httpx.Response) -> Any:
+
         if 200 <= response.status_code < 300:
             try:
                 return response.json()
@@ -142,7 +209,24 @@ class ChannelTalkApiClient:
         )
 
     @staticmethod
+    def _build_page_params(*, since: str | None, limit: int) -> dict[str, Any]:
+        normalized_limit = max(1, min(int(limit), 500))
+        params: dict[str, Any] = {"limit": normalized_limit}
+        normalized_since = str(since or "").strip()
+        if normalized_since:
+            params["since"] = normalized_since
+        return params
+
+    @staticmethod
+    def _normalize_path_value(value: str, *, field_name: str) -> str:
+        normalized = str(value or "").strip()
+        if not normalized:
+            raise ChannelTalkValidationError(f"{field_name} is required")
+        return normalized
+
+    @staticmethod
     def _extract_error_metadata(response: httpx.Response) -> dict[str, Any]:
+        # 상위 레이어에서 관찰 가능한 metadata만 추려서 예외 metadata로 넘긴다.
         request_id = (
             response.headers.get("x-request-id")
             or response.headers.get("x-correlation-id")
