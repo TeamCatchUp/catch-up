@@ -130,9 +130,15 @@ async def complex_agent_node(state: AgentState, llm: BaseChatModel):
             calls=[{"name": tc["name"], "args": tc["args"]} for tc in tool_calls],
         )
 
+    # 에이전트가 더 이상 도구를 호출하지 않으면(루프 종료), 자신의 판단을 state에 기록해 답변 노드에 전달한다.
+    reasoning_update = {}
+    if not tool_calls:
+        reasoning_update = {"agent_reasoning": response.content}
+
     return {
         "messages": [response],
         "agent_iteration": agent_iteration + 1,
+        **reasoning_update,
         **token_usages,
     }
 

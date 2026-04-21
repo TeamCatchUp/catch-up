@@ -48,18 +48,33 @@ async def generate_final_answer_fast_node(state: AgentState, llm: BaseChatModel)
 
     # 시스템 프롬프트 빌드
     prompt_settings: PromptSettings = state.get("prompt_settings")
+    agent_reasoning = state.get("agent_reasoning")
+
     prompts = _load_prompts(
         global_context=global_context,
         retrieved_context=retrieved_context,
         prompt_settings=prompt_settings,
     )
+
+    dynamic_prompts = [
+        prompts["global_context"],
+        prompts["retrieved_context"],
+        prompts["settings"],
+    ]
+
+    # 에이전트의 중간 추론 결과나 Gap Analysis 결과가 있다면 별도의 동적 프롬프트 블록으로 추가한다.
+    gap_analysis = state.get("gap_analysis")
+    if agent_reasoning or gap_analysis:
+        agent_research_prompt = prompt_loader.get_prompt(
+            "rag/agent_research_summary",
+            agent_reasoning=agent_reasoning,
+            gap_analysis_reasoning=gap_analysis.reasoning if gap_analysis else None
+        )
+        dynamic_prompts.append(agent_research_prompt)
+
     system_message = build_system_message(
         static_prompt=prompts["system"],
-        dynamic_prompts=[
-            prompts["global_context"],
-            prompts["retrieved_context"],
-            prompts["settings"],
-        ],
+        dynamic_prompts=dynamic_prompts,
         cache_prompt=False,
     )
 

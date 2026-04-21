@@ -189,9 +189,10 @@ class ChatStreamProcessor:
         그래프 종료 시점.
         인용 사유를 포함한 최종 소스를 업데이트한다.
         """
-        target_nodes = ("clarify", "direct_answer", "generate_final_answer", "generate_final_answer_fast")
+        tags = event.get("metadata", {}).get("tags", [])
+        is_stream_target = "stream_target" in tags
 
-        if event["name"] not in target_nodes:
+        if not is_stream_target:
             return
 
         output = event["data"].get("output")
@@ -249,6 +250,15 @@ class ChatStreamProcessor:
         # case 2: 인용 사유를 포함한 최종 소스 전송 (빈 목록도 전송해 프론트엔드 상태 동기화)
         if "sources" in output:
             final_sources = output["sources"]
+            logger.info(
+                "final_sources_sent",
+                session_id=str(self.session_id),
+                count=len(final_sources),
+            )
+            yield ChatStreamingSourceResponse(
+                session_id=self.session_id, sources=final_sources
+            )
+
             logger.info(
                 "final_sources_sent",
                 session_id=str(self.session_id),

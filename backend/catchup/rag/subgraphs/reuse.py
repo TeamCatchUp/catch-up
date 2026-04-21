@@ -23,6 +23,7 @@ def build_reuse_subgraph(llm_large, rerank_service):
     graph.add_node(
         "generate_final_answer",
         partial(generate_final_answer_node, llm=llm_large),
+        metadata={"tags": ["stream_target", "has_citations"]},
     )
 
     graph.set_entry_point("prepare_cache")
