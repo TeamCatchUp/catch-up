@@ -35,4 +35,9 @@ def weighted_reciprocal_rank(
     # 점수 내림차순 정렬
     sorted_docs = sorted(doc_scores.items(), key=lambda item: item[1], reverse=True)
     
-    return [doc_map[doc_key] for doc_key, score in sorted_docs]
+    final_results = []
+    for doc_key, score in sorted_docs:
+        doc = doc_map[doc_key]
+        doc.metadata["score"] = score
+        final_results.append(doc)
+    return final_results
