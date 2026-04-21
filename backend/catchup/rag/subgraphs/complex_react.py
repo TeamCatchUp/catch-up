@@ -65,7 +65,11 @@ def build_complex_react_subgraph(llm_agent, llm_final, llm_thinking, vector_db_s
     graph.add_node("collect_docs", collect_docs_node)
     graph.add_node("rerank", partial(rerank_node, rerank_service=rerank_service))
     graph.add_node("merge_cache", merge_cache_node)
-    graph.add_node("generate_final_answer", partial(generate_final_answer_node, llm=llm_final))
+    graph.add_node(
+        "generate_final_answer",
+        partial(generate_final_answer_node, llm=llm_final),
+        metadata={"tags": ["stream_target", "has_citations"]},
+    )
 
     graph.set_entry_point("rewrite")
     graph.add_edge("rewrite", "complex_planner")

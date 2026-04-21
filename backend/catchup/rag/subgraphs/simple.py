@@ -34,6 +34,7 @@ def build_simple_subgraph(llm_small, llm_fast, vector_db_service, rerank_service
     graph.add_node(
         "generate_final_answer",
         partial(generate_final_answer_fast_node, llm=llm_fast),
+        metadata={"tags": ["stream_target", "has_citations"]},
     )
 
     graph.set_entry_point("generate_vector_queries")

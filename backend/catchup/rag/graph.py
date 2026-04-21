@@ -107,8 +107,16 @@ def get_compiled_graph(
     workflow = StateGraph(AgentState)
 
     workflow.add_node("supervisor", partial(supervisor_node, llm=large_llm))
-    workflow.add_node("direct_answer", partial(direct_answer_node, llm=small_stream_llm))
-    workflow.add_node("clarify", clarify_node)
+    workflow.add_node(
+        "direct_answer",
+        partial(direct_answer_node, llm=small_stream_llm),
+        metadata={"tags": ["stream_target"]},
+    )
+    workflow.add_node(
+        "clarify",
+        clarify_node,
+        metadata={"tags": ["stream_target"]},
+    )
     workflow.add_node("reuse", reuse_subgraph)
     workflow.add_node("simple", simple_subgraph)
     workflow.add_node("standard", standard_subgraph)
