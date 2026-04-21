@@ -93,6 +93,8 @@ class PostgresFTSRetriever(BaseRetriever):
         params: dict
     ):
         with self.session_factory() as session:
+            # HNSW 검색 품질 향상을 위해 ef_search 설정 적용
+            session.execute(text("SET LOCAL hnsw.ef_search = 80"))
             results = session.execute(search_sql, params)
             return results.fetchall()
 
