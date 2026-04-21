@@ -121,6 +121,7 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
             "intent": "search_pipeline",
             "pipeline_plan": None,
             "turn_number": state.get("turn_number", 0) + 1,
+            **token_usages,
         }
 
 
