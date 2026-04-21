@@ -59,10 +59,15 @@ async def _run_search(
     end_date: str | None = None,
 ) -> tuple[list[Document], str]:
     """단일 쿼리 벡터 검색"""
+    end_dt = datetime.fromisoformat(end_date) if end_date else None
+    # date-only 문자열("YYYY-MM-DD")은 자정으로 파싱되어 start==end==00:00:00이 되므로 하루 끝으로 보정
+    if end_dt and end_dt.hour == 0 and end_dt.minute == 0 and end_dt.second == 0 and end_dt.microsecond == 0:
+        end_dt = end_dt.replace(hour=23, minute=59, second=59)
+
     search_query = VectorDbSearchQuery(
         query=query,
         start_date=datetime.fromisoformat(start_date) if start_date else None,
-        end_date=datetime.fromisoformat(end_date) if end_date else None,
+        end_date=end_dt,
     )
     results = await _get_hybrid_search_results(
         vector_db_service=vector_db_service,
