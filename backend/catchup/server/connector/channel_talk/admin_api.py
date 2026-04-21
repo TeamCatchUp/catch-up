@@ -2,13 +2,22 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Annotated
-from typing import Any
 
 from fastapi import APIRouter
+from fastapi import BackgroundTasks
 from fastapi import Depends
 
 from catchup.auth.dependencies import require_admin_user
 from catchup.connectors.channel_talk.schemas import ChannelTalkConnectRequest
+from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsStatus
+from catchup.connectors.channel_talk.schemas import ChannelTalkUninstallResult
+from catchup.connectors.channel_talk.service import ChannelTalkCredentialsService
+from catchup.server.connector.channel_talk.dependencies import (
+    ChannelTalkMetadataTaskRunner,
+)
+from catchup.server.connector.channel_talk.dependencies import (
+    get_channel_talk_metadata_task_runner,
+)
 from catchup.server.connector.channel_talk.dependencies import get_channel_talk_service
 from catchup.server.connector.channel_talk.schemas import ChannelTalkConnectResponse
 from catchup.server.connector.channel_talk.schemas import ChannelTalkStatusResponse
@@ -27,9 +36,16 @@ router = APIRouter(
 )
 async def upsert_channel_talk_credentials(
     connect_request: ChannelTalkConnectRequest,
-    service: Annotated[Any, Depends(get_channel_talk_service)],
+    background_tasks: BackgroundTasks,
+    service: Annotated[ChannelTalkCredentialsService, Depends(get_channel_talk_service)],
+    metadata_task_runner: Annotated[
+        ChannelTalkMetadataTaskRunner,
+        Depends(get_channel_talk_metadata_task_runner),
+    ],
 ):
     result = await service.connect(request=connect_request)
+    if result.installed and result.channel_id:
+        background_tasks.add_task(metadata_task_runner, result.channel_id)
     return _build_connect_response(result)
 
 
@@ -38,7 +54,7 @@ async def upsert_channel_talk_credentials(
     response_model=ChannelTalkStatusResponse,
 )
 async def get_channel_talk_credentials(
-    service: Annotated[Any, Depends(get_channel_talk_service)],
+    service: Annotated[ChannelTalkCredentialsService, Depends(get_channel_talk_service)],
 ):
     result = await service.get_status()
     return _build_status_response(result)
@@ -46,122 +62,55 @@ async def get_channel_talk_credentials(
 
 @router.delete(
     "/credentials",
-    response_model=ChannelTalkUninstallResponse
+    response_model=ChannelTalkUninstallResponse,
 )
 async def delete_channel_talk_credentials(
-    service: Annotated[Any, Depends(get_channel_talk_service)],
+    service: Annotated[ChannelTalkCredentialsService, Depends(get_channel_talk_service)],
 ):
     result = await service.uninstall()
     return _build_uninstall_response(result)
 
 
-def _build_connect_response(result: Any) -> ChannelTalkConnectResponse:
+def _build_connect_response(result: ChannelTalkCredentialsStatus) -> ChannelTalkConnectResponse:
     return ChannelTalkConnectResponse(
-        **_build_status_payload(result, installed_default=True),
-        status=str(_read_value(result, "status", "connected") or "connected"),
-        message=str(
-            _read_value(
-                result,
-                "message",
-                "Channel Talk credentials saved.",
-            )
-            or "Channel Talk credentials saved."
-        ),
+        installed=result.installed,
+        channel_id=result.channel_id,
+        channel_name=result.channel_name,
+        credential_last_verified_at=_stringify_datetime(result.credential_last_verified_at),
+        webhook_token_configured=result.webhook_token_configured,
+        status_reason=None,
+        status="connected",
+        message="Channel Talk credentials saved.",
     )
 
 
-def _build_status_response(result: Any) -> ChannelTalkStatusResponse:
-    return ChannelTalkStatusResponse(**_build_status_payload(result))
-
-
-def _build_status_payload(
-    result: Any,
-    *,
-    installed_default: bool = False,
-) -> dict[str, Any]:
-    installed = _read_bool(
-        result,
-        "installed",
-        "is_installed",
-        "connected",
-        default=installed_default,
-    )
-    webhook_configured = _read_bool(
-        result,
-        "webhook_token_configured",
-        "has_webhook_token",
-        default=bool(_read_value(result, "webhook_token")),
+def _build_status_response(result: ChannelTalkCredentialsStatus) -> ChannelTalkStatusResponse:
+    return ChannelTalkStatusResponse(
+        installed=result.installed,
+        channel_id=result.channel_id,
+        channel_name=result.channel_name,
+        credential_last_verified_at=_stringify_datetime(result.credential_last_verified_at),
+        webhook_token_configured=result.webhook_token_configured,
+        status_reason=None,
     )
 
-    return {
-        "installed": installed,
-        "channel_id": _stringify(_read_value(result, "channel_id", "scope_id")),
-        "channel_name": _stringify(_read_value(result, "channel_name", "name")),
-        "credential_last_verified_at": _stringify_datetime(
-            _read_value(
-                result,
-                "credential_last_verified_at",
-                "last_verified_at",
-                "verified_at",
-            )
-        ),
-        "webhook_token_configured": webhook_configured,
-        "status_reason": _stringify(_read_value(result, "status_reason", "reason")),
-    }
 
-
-def _build_uninstall_response(result: Any) -> ChannelTalkUninstallResponse:
-    removed = _read_bool(result, "removed", default=False)
-    response_status = str(
-        _read_value(result, "status", "success" if removed else "not_found")
-        or ("success" if removed else "not_found")
-    )
-    message = str(
-        _read_value(
-            result,
-            "message",
-            "Channel Talk credentials removed." if removed
-            else "Channel Talk credentials were not installed.",
+def _build_uninstall_response(result: ChannelTalkUninstallResult) -> ChannelTalkUninstallResponse:
+    if result.removed:
+        return ChannelTalkUninstallResponse(
+            status="success",
+            message="Channel Talk credentials removed.",
+            installed=False,
         )
-        or ""
-    )
 
     return ChannelTalkUninstallResponse(
-        status=response_status,
-        message=message,
+        status="not_found",
+        message="Channel Talk credentials were not installed.",
         installed=False,
     )
 
 
-def _read_value(result: Any, *names: str) -> Any:
-    if isinstance(result, dict):
-        for name in names:
-            if name in result:
-                return result[name]
-        return None
-
-    for name in names:
-        if hasattr(result, name):
-            return getattr(result, name)
-    return None
-
-
-def _read_bool(result: Any, *names: str, default: bool = False) -> bool:
-    value = _read_value(result, *names)
-    if value is None:
-        return default
-    return bool(value)
-
-
-def _stringify(value: Any) -> str | None:
+def _stringify_datetime(value: datetime | None) -> str | None:
     if value is None:
         return None
-    return str(value)
-
-
-def _stringify_datetime(value: Any) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value.isoformat()
-    return str(value)
+    return value.isoformat()

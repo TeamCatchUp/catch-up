@@ -15,145 +15,126 @@ from catchup.components.reranker.constants import RerankerProvider
 from catchup.components.reranker.factory import get_rerank_service
 from catchup.components.vector_db.factory import get_vector_db_service
 from catchup.components.vector_db.pgvector.constants import VectorDbProvider
-from catchup.rag.conditional_edges import route_after_grade
-from catchup.rag.conditional_edges import route_after_rerank
-from catchup.rag.conditional_edges import route_question
-from catchup.rag.nodes import chitchat_node
-from catchup.rag.nodes import generate_final_answer_fast_node
-from catchup.rag.nodes import generate_final_answer_node
-from catchup.rag.nodes import generate_vector_queries_node
-from catchup.rag.nodes import grade_node
-from catchup.rag.nodes import rerank_node
-from catchup.rag.nodes import rewrite_node
-from catchup.rag.nodes import route_node
-from catchup.rag.nodes import search_vector_db_node
+from catchup.rag.conditional_edges import route_after_supervisor
+from catchup.rag.nodes import clarify_node
+from catchup.rag.nodes import direct_answer_node
+from catchup.rag.nodes import supervisor_node
 from catchup.rag.state import AgentState
+from catchup.rag.subgraphs import build_complex_react_subgraph
+from catchup.rag.subgraphs import build_reuse_subgraph
+from catchup.rag.subgraphs import build_simple_subgraph
+from catchup.rag.subgraphs import build_standard_react_subgraph
 
 logger = logging.getLogger(__name__)
 
 
 def get_compiled_graph(
-    checkpointer: Optional[BaseCheckpointSaver] = None
+    checkpointer: Optional[BaseCheckpointSaver] = None,
 ):
-    
-    # 분석용 (small) — ingestion default pool과 격리
-    analysis_llm = get_llm_service(
+    # SMALL, non-streaming — rewrite, generate_vector_queries, standard_agent
+    small_llm = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
         streaming=False,
         isolated=True,
     ).get_llm()
 
-    # 일상 대화용 (small) — ingestion default pool과 격리
-    chitchat_llm = get_llm_service(
+    # SMALL, streaming — direct_answer
+    small_stream_llm = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.SMALL,
         streaming=True,
         isolated=True,
     ).get_llm()
 
-    # 최종 답변 생성용 (large) — ingestion default pool과 격리
-    final_llm = get_llm_service(
+    # LARGE, non-streaming — supervisor, complex_agent (structured output / tool calling)
+    large_llm = get_llm_service(
+        LlmProvider.AWS_BEDROCK,
+        ModelCapacity.LARGE,
+        streaming=False,
+        isolated=True,
+    ).get_llm()
+
+    # LARGE, streaming — 모든 최종 답변 생성 (reuse / simple / standard / complex)
+    large_stream_llm = get_llm_service(
         LlmProvider.AWS_BEDROCK,
         ModelCapacity.LARGE,
         streaming=True,
         isolated=True,
     ).get_llm()
-    
-    # Vector DB 서비스
+
+    # LARGE, non-streaming, extended thinking — complex_planner, gap_analysis
+    thinking_llm = get_llm_service(
+        LlmProvider.AWS_BEDROCK,
+        ModelCapacity.LARGE,
+        streaming=False,
+        isolated=True,
+        extended_thinking=True,
+        thinking_budget_tokens=2048,
+    ).get_llm()
+
+    # Common
     embeddings = get_embedding_service(EmbeddingProvider.AWS_BEDROCK).get_embedder()
     vector_db_service = get_vector_db_service(VectorDbProvider.PGVECTOR, embeddings)
-    
-    # Reranker 서비스
-    # Bedrock Rerank는 async API를 제공하지 않으므로,
-    # Service 레벨에서 sync 호출을 executor로 감싸
-    # 상위 Node/Graph에서는 항상 await 가능한 인터페이스만 사용하도록 한다.
     rerank_service = get_rerank_service(RerankerProvider.AWS_BEDROCK)
 
+    # Subgraphs
+    reuse_subgraph = build_reuse_subgraph(llm_large=large_stream_llm, rerank_service=rerank_service)
+
+    simple_subgraph = build_simple_subgraph(
+        llm_small=small_llm,
+        llm_fast=large_stream_llm,
+        vector_db_service=vector_db_service,
+        rerank_service=rerank_service,
+    )
+
+    standard_subgraph = build_standard_react_subgraph(
+        llm_small=small_llm,
+        llm_large=large_stream_llm,
+        vector_db_service=vector_db_service,
+        rerank_service=rerank_service,
+    )
+
+    complex_subgraph = build_complex_react_subgraph(
+        llm_agent=large_llm,
+        llm_final=large_stream_llm,
+        llm_thinking=thinking_llm,
+        vector_db_service=vector_db_service,
+        rerank_service=rerank_service,
+    )
+
+    # Main Graph
     workflow = StateGraph(AgentState)
 
-    # Nodes
-    workflow.add_node(
-        node="route", 
-        action=partial(route_node, llm=analysis_llm)
-    )
-    workflow.add_node(
-        node="rewrite", 
-        action=partial(rewrite_node, llm=analysis_llm)
-    )
-    workflow.add_node(
-        node="generate_vector_queries",
-        action=partial(generate_vector_queries_node, llm=analysis_llm)
-    )
-    workflow.add_node(
-        node="search_vector_db", 
-        action=partial(search_vector_db_node, vector_db_service=vector_db_service)
-    )
-    workflow.add_node(
-        node="rerank", 
-        action=partial(rerank_node, rerank_service=rerank_service)
-    )
-    workflow.add_node(
-        node="grade",
-        action=partial(grade_node, llm=analysis_llm)
-    )
-    workflow.add_node(
-        node="chitchat",
-        action=partial(chitchat_node, llm=chitchat_llm)
-    )
-    workflow.add_node(
-        node="generate_final_answer",
-        action=partial(generate_final_answer_node, llm=final_llm)
-    )
-    workflow.add_node(
-        node="generate_final_answer_fast",
-        action=partial(generate_final_answer_fast_node, llm=final_llm)
-    )
-    # workflow.add_node("expand_graph_context", expand_graph_context_node)
-    # workflow.add_node("fetch_details_after_graph_context_expansion", fetch_details_after_graph_context_expansion_node)
-    # workflow.add_node("fallback_cypher_query", fallback_cypher_query_node)
+    workflow.add_node("supervisor", partial(supervisor_node, llm=large_llm))
+    workflow.add_node("direct_answer", partial(direct_answer_node, llm=small_stream_llm))
+    workflow.add_node("clarify", clarify_node)
+    workflow.add_node("reuse", reuse_subgraph)
+    workflow.add_node("simple", simple_subgraph)
+    workflow.add_node("standard", standard_subgraph)
+    workflow.add_node("complex", complex_subgraph)
 
-    # Edges
-    workflow.set_entry_point("route")
+    workflow.set_entry_point("supervisor")
     workflow.add_conditional_edges(
-        "route",
-        route_question,
+        "supervisor",
+        route_after_supervisor,
         {
-            "rewrite": "rewrite",
-            "chitchat": "chitchat"
-        }
+            "clarify": "clarify",
+            "direct_answer": "direct_answer",
+            "reuse": "reuse",
+            "simple": "simple",
+            "standard": "standard",
+            "complex": "complex",
+        },
     )
-    workflow.add_edge("chitchat", END)
-    workflow.add_edge("rewrite", "generate_vector_queries")
-    workflow.add_edge("generate_vector_queries", "search_vector_db")
-    workflow.add_edge("search_vector_db", "rerank")
-    workflow.add_conditional_edges(
-        "rerank",
-        route_after_rerank,
-        {
-            "generate_final_answer_fast": "generate_final_answer_fast",
-            "generate_final_answer": "generate_final_answer",
-            "grade": "grade",
-        }
-    )
-    workflow.add_edge("generate_final_answer_fast", END)
-    workflow.add_conditional_edges(
-        "grade",
-        route_after_grade,
-        {
-            "generate_final_answer": "generate_final_answer",
-            "rewrite": "rewrite",
-            # "expand_graph_context": "expand_graph_context",
-            # "fallback_cypher_query": "fallback_cypher_query"
-        }
-    )
-    # workflow.add_edge("expand_graph_context", "fetch_details_after_graph_context_expansion")
-    # workflow.add_edge("fetch_details_after_graph_context_expansion", "generate_final_answer")
-    # workflow.add_edge("fallback_cypher_query", "generate_final_answer")
-    workflow.add_edge("generate_final_answer", END)
+    workflow.add_edge("clarify", END)
+    workflow.add_edge("direct_answer", END)
+    workflow.add_edge("reuse", END)
+    workflow.add_edge("simple", END)
+    workflow.add_edge("standard", END)
+    workflow.add_edge("complex", END)
 
-    # Thread(session)-level 단기 영속성
     if checkpointer is not None:
         return workflow.compile(checkpointer=checkpointer)
-    
+
     return workflow.compile()

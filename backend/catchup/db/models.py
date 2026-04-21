@@ -936,6 +936,360 @@ class ChannelTalkCredentials(Base):
     )
 
 
+class ChannelTalkChannel(Base):
+    __tablename__ = "channel_talk_channels"
+
+    channel_id: Mapped[str] = mapped_column(
+        String(128),
+        primary_key=True,
+        comment="Channel Talk channel ID",
+    )
+    channel_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        comment="Channel Talk channel name",
+    )
+    description: Mapped[str | None] = mapped_column(
+        String(2000),
+        nullable=True,
+        comment="Channel description",
+    )
+    bot_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Default bot display name",
+    )
+    homepage_url: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Channel homepage URL",
+    )
+    domain: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Channel custom domain",
+    )
+    subdomain: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Channel subdomain",
+    )
+    avatar_url: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Channel avatar URL",
+    )
+    country: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="Channel country code or country label",
+    )
+    time_zone: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="Channel time zone",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="Metadata row creation time",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="Metadata row last update time",
+    )
+
+
+class ChannelTalkManager(Base):
+    __tablename__ = "channel_talk_managers"
+
+
+    channel_id: Mapped[str] = mapped_column(
+        String(128),
+        primary_key=True,
+        comment="Owning Channel Talk channel ID",
+    )
+    manager_id: Mapped[str] = mapped_column(
+        String(128),
+        primary_key=True,
+        comment="Channel Talk manager ID",
+    )
+    account_id: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        comment="Account ID linked to the manager",
+    )
+    name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Manager display name",
+    )
+    description: Mapped[str | None] = mapped_column(
+        String(2000),
+        nullable=True,
+        comment="Manager description",
+    )
+    email: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+        comment="Manager email address",
+    )
+    mobile_number: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="Manager mobile number",
+    )
+    role_id: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Manager role ID",
+    )
+    removed: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+        comment="Whether the manager has been removed",
+    )
+    display_as_channel: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+        comment="Whether the manager is displayed as the channel",
+    )
+    avatar_url: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Manager avatar URL",
+    )
+    remote_created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Manager created timestamp from Channel Talk",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="Metadata row creation time",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="Metadata row last update time",
+    )
+
+
+class ChannelTalkGroup(Base):
+    __tablename__ = "channel_talk_groups"
+
+    channel_id: Mapped[str] = mapped_column(
+        String(128),
+        primary_key=True,
+        comment="Owning Channel Talk channel ID",
+    )
+    group_id: Mapped[str] = mapped_column(
+        String(128),
+        primary_key=True,
+        comment="Channel Talk group ID",
+    )
+    group_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        comment="Group name",
+    )
+    scope: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Group scope returned by Channel Talk",
+    )
+    description: Mapped[str | None] = mapped_column(
+        String(2000),
+        nullable=True,
+        comment="Group description",
+    )
+    icon_url: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Group icon URL",
+    )
+    active: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+        comment="Whether the group is active",
+    )
+    remote_created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Group created timestamp from Channel Talk",
+    )
+    remote_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Group updated timestamp from Channel Talk",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="Metadata row creation time",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="Metadata row last update time",
+    )
+
+
+class ChannelTalkGroupManager(Base):
+    __tablename__ = "channel_talk_group_managers"
+
+    channel_id: Mapped[str] = mapped_column(
+        String(128),
+        primary_key=True,
+        comment="Owning Channel Talk channel ID",
+    )
+    group_id: Mapped[str] = mapped_column(
+        String(128),
+        primary_key=True,
+        comment="Channel Talk group ID",
+    )
+    manager_id: Mapped[str] = mapped_column(
+        String(128),
+        primary_key=True,
+        comment="Channel Talk manager ID",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="Relation row creation time",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="Relation row last update time",
+    )
+
+
+class ChannelTalkUser(Base):
+    __tablename__ = "channel_talk_users"
+
+    channel_id: Mapped[str] = mapped_column(
+        String(128),
+        primary_key=True,
+        comment="Owning Channel Talk channel ID",
+    )
+    external_user_id: Mapped[str] = mapped_column(
+        String(128),
+        primary_key=True,
+        comment="Channel Talk userId",
+    )
+    veil_id: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        comment="Veil ID returned by Channel Talk",
+    )
+    unified_id: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        comment="Unified ID returned by Channel Talk",
+    )
+    member_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+        comment="External memberId tied to the customer",
+    )
+    user_type: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Channel Talk user type such as member",
+    )
+    name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Customer display name",
+    )
+    email: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+        comment="Customer email address",
+    )
+    mobile_number: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="Customer mobile number",
+    )
+    avatar_url: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Customer avatar URL",
+    )
+    blocked: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+        comment="Whether the user is blocked",
+    )
+    language: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Preferred language",
+    )
+    country: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="Country",
+    )
+    city: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        comment="City",
+    )
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Last seen timestamp from Channel Talk",
+    )
+    remote_created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="User created timestamp from Channel Talk",
+    )
+    remote_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="User updated timestamp from Channel Talk",
+    )
+    profile: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Raw or normalized customer profile payload",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="Metadata row creation time",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="Metadata row last update time",
+    )
+
+
 class JiraSyncStatus(StrEnum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"

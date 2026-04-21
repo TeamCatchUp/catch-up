@@ -5,6 +5,12 @@
 name: Catch Up CI/CD - Build & Deploy
 
 on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: '배포 사유'
+        required: false
+        default: ''
   push:
     branches:
       - "develop"
@@ -82,7 +88,7 @@ jobs:
     name: Deploy to QA Server (EC2)
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/hotfix/')
+    if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/hotfix/') || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Deploy via SSH

@@ -1,7 +1,8 @@
 import structlog
 from langchain.chat_models import BaseChatModel
 
-from catchup.costs.utils import extract_token_usages, token_usage
+from catchup.costs.utils import extract_token_usages
+from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.structures import VectorDbSearchPlan
@@ -49,10 +50,15 @@ async def generate_vector_queries_node(state: AgentState, llm: BaseChatModel):
             "vector_search_queries": [fallback_query],
         }
     
+    # simple 파이프라인은 단일 쿼리만 사용
+    pipeline_plan = state.get("pipeline_plan")
+    max_q = 1 if (pipeline_plan and pipeline_plan.pipeline_type == "simple") else len(plan.queries)
+    queries = plan.queries[:max_q]
+
     _print_search_plan_log(plan)
 
     return {
-        "vector_search_queries": plan.queries,
+        "vector_search_queries": queries,
         **token_usages,
     }
 

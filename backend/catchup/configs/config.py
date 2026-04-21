@@ -178,7 +178,7 @@ class Settings(BaseSettings):
     SLACK_CLIENT_ID: str
     SLACK_CLIENT_SECRET: str
     SLACK_REDIRECT_URI: str
-    SLACK_BOT_SCOPES: str = "channels:read channels:history groups:read groups:history users:read users:read.email users.profile:read usergroups:read team:read app_mentions:read assistant:write chat:write chat:write.customize commands reactions:read reactions:write emoji:read files:read links:read"
+    SLACK_BOT_SCOPES: str = "channels:read channels:history groups:read groups:history im:history users:read users:read.email users.profile:read usergroups:read team:read app_mentions:read assistant:write chat:write chat:write.customize commands reactions:read reactions:write emoji:read files:read links:read"
     SLACK_SIGNING_SECRET: str
 
     # Slack API URLs
@@ -263,6 +263,11 @@ class Settings(BaseSettings):
     INCREMENTAL_RUNTIME_INTERVAL_MINUTES: int = 1
     CONFLUENCE_INCREMENTAL_POLL_INTERVAL_MINUTES: int = 15
     CONFLUENCE_INCREMENTAL_POLL_LOOKBACK_MINUTES: int = 35
+    
+    #=======================================#
+    #               MCP Server              #
+    #=======================================#
+    MCP_SERVER_ENABLED: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

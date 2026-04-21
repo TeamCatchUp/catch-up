@@ -43,6 +43,11 @@ logger = structlog.get_logger()
 # Langfuse
 observe = get_observe()
 
+_MODE_CEILING: dict[str, str] = {
+    "fast":     "standard",
+    "standard": "complex",
+}
+
 class ChatService:
     def __init__(self):
         self._app = None
@@ -116,15 +121,17 @@ class ChatService:
                 "global_context": global_context,
                 "tool_filters": tool_filters,
                 "prompt_settings": prompt_settings,
-                "mode": mode,
+                "max_pipeline_type": _MODE_CEILING.get(mode, "complex"),
 
                 # RAG 파이프라인 상태 변수
-                "retry_count": 0,
-                "grade_comment": None,
-                "grade_status": None,
                 "vector_search_queries": [],
-                "graph_search_queries": [],
-                "retrieved_docs": [],
+                # retrieved_docs는 의도적으로 초기화하지 않음.
+                # reuse 파이프라인이 이전 턴의 retrieved_docs를 재사용해야 하므로
+                # 각 서브그래프(simple/standard/complex)에서 직접 덮어쓴다.
+
+                # Agentic RAG 상태 변수
+                "agent_iteration": 0,
+                "accumulated_docs": [],
 
                 # 비용 변수
                 "token_breakdown": {},

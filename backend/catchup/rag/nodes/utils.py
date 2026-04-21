@@ -27,8 +27,39 @@ def filter_conversation(messages: Annotated[list, add_messages]):
 
 
 def get_conversation_history(messages: Annotated[list, add_messages]):
-    filtered_messages = filter_conversation(messages)
-    return filtered_messages[:-1][-6:]
+    """현재 턴 이전의 대화 이력만 반환한다.
+
+    에이전트 루프 후에는 state["messages"]에 AIMessage(tool_calls)와 ToolMessage가
+    섞이므로, 단순 [:-1] 트릭 대신 마지막 HumanMessage 기준으로 현재 턴을 분리한다.
+    이전 턴에서도 tool_calls AIMessage와 ToolMessage를 제외하고, 연속된 AIMessage는
+    마지막 것만 유지해 최종 답변만 히스토리에 포함시킨다.
+    """
+    # 마지막 HumanMessage = 현재 턴 시작점
+    last_human_idx = next(
+        (i for i in range(len(messages) - 1, -1, -1) if isinstance(messages[i], HumanMessage)),
+        -1,
+    )
+    if last_human_idx <= 0:
+        return []
+
+    past = messages[:last_human_idx]
+
+    # tool_calls 있는 AIMessage(에이전트 검색 결정)와 ToolMessage는 파이프라인 내부 메시지 → 제외
+    filtered = [
+        m for m in past
+        if isinstance(m, HumanMessage)
+        or (isinstance(m, AIMessage) and not getattr(m, "tool_calls", None))
+    ]
+
+    # 연속된 AIMessage → 마지막 것만 유지 (에이전트 stop 메시지 대신 최종 답변만 남김)
+    condensed: list = []
+    for m in filtered:
+        if isinstance(m, AIMessage) and condensed and isinstance(condensed[-1], AIMessage):
+            condensed[-1] = m
+        else:
+            condensed.append(m)
+
+    return condensed[-6:]
 
 
 def get_latest_query(messages: Annotated[list, add_messages]):

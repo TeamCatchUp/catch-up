@@ -13,13 +13,15 @@ class _TokenUsage(TypedDict):
 
 
 def extract_token_usages(
-    response: AIMessage
+    response: AIMessage | None
 ) -> _TokenUsage:
     """
     AIMessage로부터 추론 모델과 토큰 사용량 (input/output)을 추출하는 유틸 함수.
     ctx.add_tokens()에 바로 넘길 수 있는 형태로 반환한다.
     """
-    
+    if response is None:
+        return {"token_breakdown": {}}
+
     usages = response.usage_metadata
     if not usages:
         return {"token_breakdown": {}}

@@ -1,113 +1,101 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import datetime
-from datetime import timezone
-from typing import Any
-from typing import Protocol
-from typing import TypeVar
-
-from fastapi.concurrency import run_in_threadpool
-
+from catchup.connector_core.adapters.channel_talk.install_auth_adapter import (
+    ChannelTalkCredentialsStore,
+)
+from catchup.connector_core.adapters.channel_talk.install_auth_adapter import (
+    ChannelTalkInstallAuthAdapter,
+)
+from catchup.connector_core.adapters.channel_talk.metadata_sync_adapter import (
+    ChannelTalkMetadataStore,
+)
+from catchup.connector_core.adapters.channel_talk.metadata_sync_adapter import (
+    ChannelTalkMetadataSyncAdapter,
+)
+from catchup.connector_core.application.install_auth import (
+    ConnectorInstallAuthApplication,
+)
+from catchup.connector_core.application.metadata_sync import (
+    ConnectorMetadataSyncApplication,
+)
 from catchup.connectors.channel_talk.client import ChannelTalkApiClient
-from catchup.connectors.channel_talk.exceptions import ChannelTalkError
-from catchup.connectors.channel_talk.exceptions import ChannelTalkPersistenceError
 from catchup.connectors.channel_talk.schemas import ChannelTalkConnectRequest
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsRecord
 from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsStatus
-from catchup.connectors.channel_talk.schemas import ChannelTalkCredentialsUpsert
 from catchup.connectors.channel_talk.schemas import ChannelTalkCurrentChannel
+from catchup.connectors.channel_talk.schemas import ChannelTalkMetadataSyncRequest
+from catchup.connectors.channel_talk.schemas import ChannelTalkMetadataSyncResult
 from catchup.connectors.channel_talk.schemas import ChannelTalkUninstallResult
 
 
-class ChannelTalkCredentialsStore(Protocol):
-    def get_connection(self) -> ChannelTalkCredentialsRecord | None: ...
-
-    def upsert_connection(
-        self,
-        payload: ChannelTalkCredentialsUpsert,
-    ) -> ChannelTalkCredentialsRecord | None: ...
-
-    def delete_connection(self) -> bool: ...
-
-
-StoreReturnT = TypeVar("StoreReturnT")
-
-
 class ChannelTalkCredentialsService:
+    """Channel Talk 설치 인증 흐름을 generic connector application에 위임하는 얇은 facade."""
+
     def __init__(
         self,
         store: ChannelTalkCredentialsStore,
         client: ChannelTalkApiClient | None = None,
+        application: ConnectorInstallAuthApplication[
+            ChannelTalkConnectRequest,
+            ChannelTalkCurrentChannel,
+            ChannelTalkCredentialsStatus,
+            ChannelTalkUninstallResult,
+        ]
+        | None = None,
     ) -> None:
-        self.store = store
-        self.client = client or ChannelTalkApiClient()
+        # 실제 검증/저장/삭제 orchestration은 connector_core의 공통 application + adapter 조합으로 이동시켜 재사용 기반을 만든다.
+        self.application = application or ConnectorInstallAuthApplication(
+            port=ChannelTalkInstallAuthAdapter(
+                store=store,
+                client=client,
+            )
+        )
 
     async def connect(
         self,
         request: ChannelTalkConnectRequest,
     ) -> ChannelTalkCredentialsStatus:
-        # 1. 저장된 credential을 검증한다.
-        current_channel = await self._get_current_channel(request)
-
-        # 2. 마지막 검증 시각을 기록한다.
-        verified_at = datetime.now(timezone.utc)
-
-        # 3. 검증된 channel 정보와 입력한 토큰을 저장용 payload로 묶는다.
-        payload = ChannelTalkCredentialsUpsert(
-            access_key=request.access_key,
-            access_secret=request.access_secret,
-            webhook_token=request.webhook_token,
-            current_channel=current_channel,
-            credential_last_verified_at=verified_at,
-        )
-
-        # 4. 저장소에 upsert 한 뒤, 저장 결과를 API 응답용 상태 DTO로 변환한다.
-        stored_record = await self._run_store(
-            self.store.upsert_connection,
-            payload,
-            action="persist Channel Talk credentials",
-        )
-        return ChannelTalkCredentialsStatus.from_record(stored_record or payload.to_record())
+        return await self.application.connect(request)
 
     async def validate_credentials(
         self,
         request: ChannelTalkConnectRequest,
     ) -> ChannelTalkCurrentChannel:
-        return await self._get_current_channel(request)
+        return await self.application.validate_credentials(request)
 
     async def get_status(self) -> ChannelTalkCredentialsStatus:
-        record = await self._run_store(
-            self.store.get_connection,
-            action="load Channel Talk credentials",
-        )
-        return ChannelTalkCredentialsStatus.from_record(record)
+        return await self.application.get_status()
 
     async def uninstall(self) -> ChannelTalkUninstallResult:
-        removed = await self._run_store(
-            self.store.delete_connection,
-            action="delete Channel Talk credentials",
-        )
-        return ChannelTalkUninstallResult(removed=bool(removed))
+        return await self.application.uninstall()
 
-    async def _get_current_channel(
+
+class ChannelTalkMetadataSyncService:
+    """Channel Talk post-connect metadata 동기화를 전담하는 facade."""
+
+    def __init__(
         self,
-        connect_request: ChannelTalkConnectRequest,
-    ) -> ChannelTalkCurrentChannel:
-        return await self.client.get_current_channel(
-            access_key=connect_request.access_key,
-            access_secret=connect_request.access_secret,
+        store: ChannelTalkMetadataStore,
+        client: ChannelTalkApiClient | None = None,
+        application: ConnectorMetadataSyncApplication | None = None,
+    ) -> None:
+        self.application = application or ConnectorMetadataSyncApplication(
+            port=ChannelTalkMetadataSyncAdapter(
+                store=store,
+                client=client,
+            )
         )
 
-    async def _run_store(
+    async def sync_metadata(
         self,
-        operation: Callable[..., StoreReturnT],
-        *args: Any,
-        action: str,
-    ) -> StoreReturnT:
-        try:
-            return await run_in_threadpool(operation, *args)
-        except ChannelTalkError:
-            raise
-        except Exception as exc:
-            raise ChannelTalkPersistenceError(f"Failed to {action}") from exc
+        request: ChannelTalkMetadataSyncRequest,
+    ) -> ChannelTalkMetadataSyncResult:
+        result = await self.application.sync_metadata(request.to_core_request())
+        return ChannelTalkMetadataSyncResult.from_core_result(result)
+
+    async def sync_channel(
+        self,
+        channel_id: str,
+    ) -> ChannelTalkMetadataSyncResult:
+        return await self.sync_metadata(
+            ChannelTalkMetadataSyncRequest(channel_id=channel_id)
+        )

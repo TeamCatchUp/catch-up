@@ -89,6 +89,97 @@ class HandleSlackWebhookTests(IsolatedAsyncioTestCase):
         self.assertEqual(response.status, "accepted")
         self.assertEqual(response.event_type, "app_mention")
 
+    async def test_schedules_direct_message_chat_and_skips_incremental(self) -> None:
+        schedule_app_mention = Mock()
+        handle_incremental_event = AsyncMock()
+
+        with (
+            patch.object(dispatcher, "schedule_app_mention", schedule_app_mention),
+            patch.object(dispatcher, "_handle_incremental_event", handle_incremental_event),
+        ):
+            request = _make_request(
+                event={
+                    "type": "message",
+                    "channel": "D123",
+                    "channel_type": "im",
+                    "user": "U123",
+                    "text": "hello from dm",
+                    "ts": "1712741200.000100",
+                }
+            )
+            response = await dispatcher.handle_slack_webhook(request=request)
+
+        schedule_app_mention.assert_called_once_with(request)
+        handle_incremental_event.assert_not_awaited()
+        self.assertEqual(response.status, "accepted")
+        self.assertEqual(response.event_type, "message")
+
+    async def test_non_chat_direct_messages_stay_out_of_chat_diversion(self) -> None:
+        cases = [
+            (
+                "message_changed",
+                {
+                    "type": "message",
+                    "channel": "D123",
+                    "channel_type": "im",
+                    "subtype": "message_changed",
+                    "user": "U123",
+                    "text": "edited",
+                    "ts": "1712741200.000100",
+                },
+            ),
+            (
+                "missing_text",
+                {
+                    "type": "message",
+                    "channel": "D123",
+                    "channel_type": "im",
+                    "user": "U123",
+                    "ts": "1712741200.000100",
+                },
+            ),
+            (
+                "mpim",
+                {
+                    "type": "message",
+                    "channel": "D123",
+                    "channel_type": "mpim",
+                    "user": "U123",
+                    "text": "hello group",
+                    "ts": "1712741200.000100",
+                },
+            ),
+            (
+                "bot_message",
+                {
+                    "type": "message",
+                    "channel": "D123",
+                    "channel_type": "im",
+                    "user": "U123",
+                    "bot_id": "B123",
+                    "text": "hello from bot",
+                    "ts": "1712741200.000100",
+                },
+            ),
+        ]
+
+        for label, event in cases:
+            with self.subTest(label=label):
+                schedule_app_mention = Mock()
+                expected = SimpleNamespace(status="ignored", reason=label)
+                handle_incremental_event = AsyncMock(return_value=expected)
+
+                with (
+                    patch.object(dispatcher, "schedule_app_mention", schedule_app_mention),
+                    patch.object(dispatcher, "_handle_incremental_event", handle_incremental_event),
+                ):
+                    request = _make_request(event=event)
+                    response = await dispatcher.handle_slack_webhook(request=request)
+
+                schedule_app_mention.assert_not_called()
+                handle_incremental_event.assert_awaited_once_with(request)
+                self.assertIs(response, expected)
+
     async def test_dispatches_message_events_to_incremental_service(self) -> None:
         dispatch_changes = AsyncMock(
             return_value=SimpleNamespace(record_keys=["slack:C123:1712741200.000100"], blocked_count=0)

@@ -86,7 +86,14 @@ class ChatStreamProcessor:
             async for res in self._handle_token_stream(event):
                 yield res
 
-        # 3. 노드 종료 (현재는 최종 답변 생성 노드만 관여)
+        # 3. clarify 노드 단어 단위 가짜 스트리밍 (LLM 없이 adispatch_custom_event로 발송)
+        elif kind == "on_custom_event" and name == "clarify_token":
+            token = event["data"].get("token", "")
+            if token:
+                self.context.has_streamed = True
+                yield ChatStreamingTokenResponse(session_id=self.session_id, token=token)
+
+        # 4. 노드 종료 (현재는 최종 답변 생성 노드만 관여)
         elif kind == "on_chain_end":
             async for res in self._handle_node_end(event):
                 yield res
@@ -135,7 +142,8 @@ class ChatStreamProcessor:
         node = event["metadata"].get("langgraph_node")
 
         # 타겟 노드가 아니거나 컨텐츠가 없으면 스킵
-        is_target_node = node in ("chitchat", "generate_final_answer", "generate_final_answer_fast")
+        # clarify는 LLM 호출이 없으므로 이 분기에 진입하지 않음 (on_chain_end fallback으로 처리)
+        is_target_node = node in ("direct_answer", "generate_final_answer", "generate_final_answer_fast")
         if not (is_target_node and chunk and chunk.content):
             return
 
@@ -181,7 +189,7 @@ class ChatStreamProcessor:
         그래프 종료 시점.
         인용 사유를 포함한 최종 소스를 업데이트한다.
         """
-        target_nodes = ("chitchat", "generate_final_answer", "generate_final_answer_fast")
+        target_nodes = ("clarify", "direct_answer", "generate_final_answer", "generate_final_answer_fast")
 
         if event["name"] not in target_nodes:
             return
@@ -238,14 +246,14 @@ class ChatStreamProcessor:
                     token=fallback_content,
                 )
 
-        # case 2: 인용 사유를 포함한 최종 소스 전송
+        # case 2: 인용 사유를 포함한 최종 소스 전송 (빈 목록도 전송해 프론트엔드 상태 동기화)
         if "sources" in output:
             final_sources = output["sources"]
-            if final_sources:
-                logger.info(
-                    "final_sources_sent",
-                    session_id=str(self.session_id),
-                )
-                yield ChatStreamingSourceResponse(
-                    session_id=self.session_id, sources=final_sources
-                )
+            logger.info(
+                "final_sources_sent",
+                session_id=str(self.session_id),
+                count=len(final_sources),
+            )
+            yield ChatStreamingSourceResponse(
+                session_id=self.session_id, sources=final_sources
+            )
