@@ -28,6 +28,12 @@ Previous gap analysis identified these missing pieces — prioritize filling the
 </additional_searches_needed>
 {% endif %}
 
+<date_search_rules>
+- When calling single_query_search or multi_query_search with date filters, always convert Korean (KST, UTC+9) dates to UTC by subtracting 9 hours.
+- For a full KST day (e.g., "4월 19일"): start_date="2026-04-18T15:00:00", end_date="2026-04-19T14:59:59"
+- Always use full datetime format "YYYY-MM-DDTHH:MM:SS", never date-only "YYYY-MM-DD".
+</date_search_rules>
+
 <instructions>
 - Execute the search plan steps in order, respecting step dependencies.
 - Use multi_query_search when a step has parallel=true or when queries are clearly independent.
