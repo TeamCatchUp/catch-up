@@ -68,9 +68,28 @@ async def ensure_vector_index() -> None:
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_embedding_hnsw
                 ON langchain_pg_embedding
                 USING hnsw ((embedding::vector({settings.PGVECTOR_EMBEDDING_DIMENSIONS})) vector_cosine_ops)
-                WITH (m = 16, ef_construction = 64)
+                WITH (m = 16, ef_construction = 128)
             """)
-            logger.info("vector_index_creation_completed", context="server_startup")
+            
+            # 최종 상태 확인 (인덱스가 실제로 생성되었고 VALID한지)
+            verify_row = await (await conn.execute("""
+                SELECT indisvalid FROM pg_index
+                JOIN pg_class ON pg_index.indexrelid = pg_class.oid
+                WHERE relname = 'idx_embedding_hnsw'
+            """)).fetchone()
+
+            if verify_row is not None and verify_row[0]:
+                logger.info(
+                    "vector_index_creation_completed",
+                    context="server_startup",
+                    status="valid"
+                )
+            else:
+                logger.error(
+                    "vector_index_creation_failed_verification",
+                    context="server_startup",
+                    status="invalid_or_missing"
+                )
 
     except Exception as e:
         logger.error(
