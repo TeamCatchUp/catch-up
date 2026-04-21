@@ -71,18 +71,20 @@ async def ensure_vector_index() -> None:
                 WITH (m = 16, ef_construction = 128)
             """)
             
-            # 최종 상태 확인 (인덱스가 실제로 생성되었고 VALID한지)
-            verify_row = await (await conn.execute("""
-                SELECT indisvalid FROM pg_index
-                JOIN pg_class ON pg_index.indexrelid = pg_class.oid
+            # 최종 상태 및 파라미터 재검증
+            final_check = await (await conn.execute("""
+                SELECT pg_get_indexdef(pg_class.oid), pg_index.indisvalid 
+                FROM pg_class 
+                JOIN pg_index ON pg_class.oid = pg_index.indexrelid
                 WHERE relname = 'idx_embedding_hnsw'
             """)).fetchone()
 
-            if verify_row is not None and verify_row[0]:
+            if final_check and final_check[1]:
                 logger.info(
                     "vector_index_creation_completed",
                     context="server_startup",
-                    status="valid"
+                    status="valid",
+                    index_definition=final_check[0]
                 )
             else:
                 logger.error(
