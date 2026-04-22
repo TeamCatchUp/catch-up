@@ -31,7 +31,7 @@ class PostgresFTSRetriever(BaseRetriever):
     @override
     def _get_relevant_documents(
         self,
-        query: str,
+        query: str | list[str],
         *,
         run_manager: CallbackManagerForRetrieverRun,  # BaseRetriever 시그니처
     ) -> list[Document]:
@@ -42,9 +42,13 @@ class PostgresFTSRetriever(BaseRetriever):
         # 동적 쿼리 필터
         filter_clause = ""
         
+        # pg_bigm similarity 정렬을 위한 원본 쿼리 (리스트일 경우 공백으로 병합)
+        original_query = " ".join(query) if isinstance(query, list) else query
+        tokens = query if isinstance(query, list) else [query]
+
         params = {
             "collection_name": self.collection_name,
-            "query": query,
+            "query": original_query,
             "k": self.k
         }
         
@@ -71,20 +75,53 @@ class PostgresFTSRetriever(BaseRetriever):
                             
             filter_clause = f" AND ({' OR '.join(sql_conditions)})"
 
-        search_sql = text(f"""
-            SELECT e.document, e.cmetadata
+        # keyword_tokens가 있으면 LIKE likequery() 필터 생성
+        token_conditions = []
+        for idx, token in enumerate(tokens):
+            param_name = f"keyword_{idx}"
+            token_conditions.append(f"(e.cmetadata ->> 'contextual_content') LIKE likequery(:{param_name})")
+            params[param_name] = token
+
+        # 1차 검색 (AND 조건)
+        and_filter = f" AND ({' AND '.join(token_conditions)})" if token_conditions else ""
+        
+        search_sql_template = """
+            SELECT e.document, e.cmetadata, e.id
             FROM langchain_pg_embedding e
             JOIN langchain_pg_collection c ON e.collection_id = c.uuid
             WHERE c.name = :collection_name
               {filter_clause}
-            ORDER BY bigm_similarity(e.document, :query) DESC
+              {keyword_filter}
+            ORDER BY bigm_similarity(e.cmetadata ->> 'contextual_content', :query) DESC
             LIMIT :k
-        """)
+        """
+
+        search_sql_and = text(search_sql_template.format(
+            filter_clause=filter_clause,
+            keyword_filter=and_filter
+        ))
         
+        results = list(self._do_query(search_sql_and, params))
+        
+        # 2차 검색 (Fallback: 결과가 k개 미만이면 OR 조건으로 추가 검색)
+        if len(results) < self.k and len(tokens) > 1:
+            or_filter = f" AND ({' OR '.join(token_conditions)})"
+            search_sql_or = text(search_sql_template.format(
+                filter_clause=filter_clause,
+                keyword_filter=or_filter
+            ))
+            
+            or_results = self._do_query(search_sql_or, params)
+            
+            # 중복 제거 (이미 AND 결과에 포함된 문서 제외)
+            existing_ids = {row[2] for row in results}
+            for row in or_results:
+                if row[2] not in existing_ids:
+                    results.append(row)
+                    if len(results) >= self.k:
+                        break
 
-        results = self._do_query(search_sql, params)
-        docs = self._get_documents_from_results(results)
-
+        docs = self._get_documents_from_results(results[:self.k])
         return docs
 
     def _do_query(
@@ -103,7 +140,11 @@ class PostgresFTSRetriever(BaseRetriever):
 
         for row in results:
             docs.append(
-                Document(page_content=row[0], metadata=row[1] if row[1] else {})
+                Document(
+                    page_content=row[0],
+                    metadata=row[1] if row[1] else {},
+                    id=row[2]
+                )
             )
 
         return docs
@@ -156,6 +197,7 @@ class PGVectorService(BaseVectorDbService):
         weights: list[float] = [0.5, 0.5],
         tool_filters: list[SourceType] | None = None,
         temporal_filters: list[TemporalFilter] | None = None,
+        keyword_tokens: list[str] | None = None,
     ) -> list[Document]:
         """
         Langchain 기반 Hybrid Search를 수행한다.
@@ -167,7 +209,10 @@ class PGVectorService(BaseVectorDbService):
             weights=weights
         )
         
-        return hybrid_search_chain.invoke(query)
+        return hybrid_search_chain.invoke({
+            "semantic_query": query,
+            "keyword_tokens": keyword_tokens or [query]
+        })
 
     def _hybrid_search_chain(
         self,
@@ -210,8 +255,8 @@ class PGVectorService(BaseVectorDbService):
         )
         
         retriever_parallel = RunnableParallel(
-            vector_docs=vector_retriever,
-            keyword_docs=keyword_retriever
+            vector_docs=RunnableLambda(lambda x: vector_retriever.invoke(x["semantic_query"])),
+            keyword_docs=RunnableLambda(lambda x: keyword_retriever.invoke(x["keyword_tokens"]))
         )
         
         def apply_rrf(results):
