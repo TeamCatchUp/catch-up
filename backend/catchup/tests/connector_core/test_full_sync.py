@@ -109,10 +109,10 @@ class ChannelTalkFullSyncContractTests(TestCase):
         self.assertEqual(checkpoint.target, "user_chat")
         self.assertNotIn("stage", checkpoint.model_dump())
 
-    def test_descriptor_keeps_runtime_full_sync_disabled_while_contract_lands(self) -> None:
+    def test_descriptor_enables_runtime_full_sync_for_user_chat_contract(self) -> None:
         descriptor = CHANNEL_TALK_DESCRIPTOR
 
-        self.assertFalse(descriptor.runtime.supports_full_sync)
+        self.assertTrue(descriptor.runtime.supports_full_sync)
         self.assertEqual(descriptor.runtime.targets[0], "user_chat")
 
 
