@@ -24,15 +24,12 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
         return ChannelTalkUserChatLogicalMetadata(
             base=DocumentBaseMetadata(
                 source="channel_talk",
-                entity_type="user_chat",
                 record_id="chat-123",
-                document_id="channel_talk:user_chat:channel-1:chat-123:0",
-                summary="고객 질문과 운영 답변이 포함된 열린 상담",
                 created_at=now,
                 updated_at=now,
                 synced_at=now,
+                contextual_content="Conversation transcript",
             ),
-            contextual_content="Conversation transcript",
             user_chat_core=ChannelTalkUserChatCoreMetadata(
                 chat=ChannelTalkUserChatChatMetadata(
                     channel_id="channel-1",
@@ -78,8 +75,8 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
         contract = self._build_contract()
 
         self.assertEqual(contract.base.source, "channel_talk")
-        self.assertEqual(contract.base.entity_type, "user_chat")
         self.assertEqual(contract.base.record_id, "chat-123")
+        self.assertEqual(contract.base.contextual_content, "Conversation transcript")
         self.assertEqual(contract.user_chat_core.chat.user_chat_id, "chat-123")
 
     def test_storage_projection_keeps_flat_shared_keys_and_nested_payload(self) -> None:
@@ -89,6 +86,7 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
 
         self.assertEqual(storage["source"], "channel_talk")
         self.assertEqual(storage["entity_type"], "user_chat")
+        self.assertEqual(storage["contextual_content"], "Conversation transcript")
         self.assertEqual(storage["record_id"], "chat-123")
         self.assertEqual(storage["channel_id"], "channel-1")
         self.assertEqual(storage["user_chat_id"], "chat-123")
@@ -109,15 +107,12 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
             ChannelTalkUserChatLogicalMetadata(
                 base=DocumentBaseMetadata(
                     source="channel_talk",
-                    entity_type="user_chat",
                     record_id="chat-999",
-                    document_id="channel_talk:user_chat:channel-1:chat-123:0",
-                    summary="summary",
                     created_at=now,
                     updated_at=now,
                     synced_at=now,
+                    contextual_content="Conversation transcript",
                 ),
-                contextual_content="Conversation transcript",
                 user_chat_core=ChannelTalkUserChatCoreMetadata(
                     chat=ChannelTalkUserChatChatMetadata(
                         channel_id="channel-1",
@@ -144,15 +139,12 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
             ChannelTalkUserChatLogicalMetadata(
                 base=DocumentBaseMetadata(
                     source="slack",
-                    entity_type="user_chat",
                     record_id="chat-123",
-                    document_id="channel_talk:user_chat:channel-1:chat-123:0",
-                    summary="summary",
                     created_at=now,
                     updated_at=now,
                     synced_at=now,
+                    contextual_content="Conversation transcript",
                 ),
-                contextual_content="Conversation transcript",
                 user_chat_core=ChannelTalkUserChatCoreMetadata(
                     chat=ChannelTalkUserChatChatMetadata(
                         channel_id="channel-1",

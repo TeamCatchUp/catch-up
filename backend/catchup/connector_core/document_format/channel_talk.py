@@ -168,30 +168,16 @@ class ChannelTalkUserChatLogicalMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     base: DocumentBaseMetadata
-    contextual_content: str
     user_chat_core: ChannelTalkUserChatCoreMetadata
-
-    @field_validator("contextual_content")
-    @classmethod
-    def _validate_contextual_content(cls, value: str) -> str:
-        return _require_text(value, "contextual_content")
 
     @model_validator(mode="after")
     def _validate_cross_field_consistency(self) -> "ChannelTalkUserChatLogicalMetadata":
         chat = self.user_chat_core.chat
-        chunk = self.user_chat_core.chunk
 
         if self.base.source != "channel_talk":
             raise ValueError("base.source must be channel_talk")
-        if self.base.entity_type != "user_chat":
-            raise ValueError("base.entity_type must be user_chat")
         if self.base.record_id != chat.user_chat_id:
             raise ValueError("base.record_id must match user_chat_core.chat.user_chat_id")
-
-        if chunk.chunk_count > 1 and f":{chunk.chunk_index}" not in self.base.document_id:
-            raise ValueError(
-                "multi-chunk document_id must encode the chunk index suffix"
-            )
 
         return self
 
@@ -214,7 +200,7 @@ class ChannelTalkUserChatLogicalMetadata(BaseModel):
 
         storage = {
             **base,
-            "contextual_content": self.contextual_content,
+            "entity_type": "user_chat",
             "channel_id": chat["channel_id"],
             "user_chat_id": chat["user_chat_id"],
             "state": chat["state"],
