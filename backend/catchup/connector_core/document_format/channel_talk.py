@@ -1,0 +1,236 @@
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel
+from pydantic import ConfigDict
+from pydantic import Field
+from pydantic import field_validator
+from pydantic import model_validator
+
+from catchup.connector_core.document_format.base import DocumentBaseMetadata
+
+
+def _require_text(value: str, field_name: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError(f"{field_name} is required")
+    return text
+
+
+class ChannelTalkUserChatChatMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    channel_id: str
+    user_chat_id: str
+    state: str
+    managed: bool | None = None
+    priority: str | None = None
+    name: str | None = None
+    goal_state: str | None = None
+
+    @field_validator("channel_id", "user_chat_id", "state")
+    @classmethod
+    def _validate_required_text(cls, value: str, info) -> str:
+        return _require_text(value, info.field_name)
+
+
+class ChannelTalkUserChatCustomerMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str
+    member_id: str | None = None
+    veil_id: str | None = None
+    unified_id: str | None = None
+    type: str | None = None
+    name: str | None = None
+    email: str | None = None
+    mobile_number: str | None = None
+    avatar_url: str | None = None
+    language: str | None = None
+    country: str | None = None
+    city: str | None = None
+    time_zone: str | None = None
+
+    @field_validator("user_id")
+    @classmethod
+    def _validate_user_id(cls, value: str) -> str:
+        return _require_text(value, "user_id")
+
+
+class ChannelTalkUserChatAssignmentMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    manager_ids: list[str] = Field(default_factory=list)
+    assignee_id: str | None = None
+    assignee_name: str | None = None
+    assignee_email: str | None = None
+    first_assignee_id_after_open: str | None = None
+    manager_names: list[str] = Field(default_factory=list)
+    manager_role_ids: list[str] = Field(default_factory=list)
+
+
+class ChannelTalkUserChatMessageMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    message_ids: list[str] = Field(default_factory=list)
+    last_message_at: datetime | None = None
+    included_message_count: int = 0
+    excluded_message_count: int = 0
+    author_types: list[str] = Field(default_factory=list)
+    contains_bot_messages: bool = False
+    contains_private_events: bool = False
+    contains_form_messages: bool = False
+
+
+class ChannelTalkUserChatTimingMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    first_opened_at: datetime | None = None
+    opened_at: datetime | None = None
+    first_asked_at: datetime | None = None
+    first_replied_at: datetime | None = None
+    first_replied_at_after_open: datetime | None = None
+    front_updated_at: datetime | None = None
+    desk_updated_at: datetime | None = None
+    follow_up_triggered_at: datetime | None = None
+    closed_at: datetime | None = None
+    snoozed_at: datetime | None = None
+
+
+class ChannelTalkUserChatMetricsMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    waiting_time: int | None = None
+    avg_reply_time: int | None = None
+    total_reply_time: int | None = None
+    reply_count: int | None = None
+    operation_waiting_time: int | None = None
+    operation_avg_reply_time: int | None = None
+    operation_total_reply_time: int | None = None
+    operation_reply_count: int | None = None
+
+
+class ChannelTalkUserChatAnchorsMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    front_message_id: str | None = None
+    desk_message_id: str | None = None
+    user_last_message_id: str | None = None
+
+
+class ChannelTalkUserChatTagsMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    keys: list[str] = Field(default_factory=list)
+    names: list[str] = Field(default_factory=list)
+
+
+class ChannelTalkUserChatChunkMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    chunk_index: int = 0
+    chunk_count: int = 1
+
+    @model_validator(mode="after")
+    def _validate_chunk_bounds(self) -> "ChannelTalkUserChatChunkMetadata":
+        if self.chunk_index < 0:
+            raise ValueError("chunk_index must be non-negative")
+        if self.chunk_count < 1:
+            raise ValueError("chunk_count must be greater than zero")
+        if self.chunk_index >= self.chunk_count:
+            raise ValueError("chunk_index must be less than chunk_count")
+        return self
+
+
+class ChannelTalkUserChatCoreMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    chat: ChannelTalkUserChatChatMetadata
+    customer: ChannelTalkUserChatCustomerMetadata
+    assignment: ChannelTalkUserChatAssignmentMetadata
+    messages: ChannelTalkUserChatMessageMetadata
+    timing: ChannelTalkUserChatTimingMetadata
+    metrics: ChannelTalkUserChatMetricsMetadata
+    anchors: ChannelTalkUserChatAnchorsMetadata
+    tags: ChannelTalkUserChatTagsMetadata
+    chunk: ChannelTalkUserChatChunkMetadata
+
+
+class ChannelTalkUserChatLogicalMetadata(BaseModel):
+    """
+    Logical contract only.
+
+    Storage remains free to project these fields into the current flat pg_embedding
+    metadata shape until a later full-data rewrite migrates the physical layout.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    base: DocumentBaseMetadata
+    contextual_content: str
+    user_chat_core: ChannelTalkUserChatCoreMetadata
+
+    @field_validator("contextual_content")
+    @classmethod
+    def _validate_contextual_content(cls, value: str) -> str:
+        return _require_text(value, "contextual_content")
+
+    @model_validator(mode="after")
+    def _validate_cross_field_consistency(self) -> "ChannelTalkUserChatLogicalMetadata":
+        chat = self.user_chat_core.chat
+        chunk = self.user_chat_core.chunk
+
+        if self.base.source != "channel_talk":
+            raise ValueError("base.source must be channel_talk")
+        if self.base.entity_type != "user_chat":
+            raise ValueError("base.entity_type must be user_chat")
+        if self.base.record_id != chat.user_chat_id:
+            raise ValueError("base.record_id must match user_chat_core.chat.user_chat_id")
+
+        if chunk.chunk_count > 1 and f":{chunk.chunk_index}" not in self.base.document_id:
+            raise ValueError(
+                "multi-chunk document_id must encode the chunk index suffix"
+            )
+
+        return self
+
+    def to_storage_metadata(self) -> dict[str, object]:
+        """
+        Current physical-storage projection for the existing flat pg_embedding layout.
+
+        The logical contract remains nested, but shared read paths can continue to
+        use top-level keys until the later all-data rewrite adopts nested storage.
+        """
+        base = self.base.model_dump(mode="json")
+        core = self.user_chat_core.model_dump(mode="json")
+        chat = core["chat"]
+        customer = core["customer"]
+        assignment = core["assignment"]
+        messages = core["messages"]
+        timing = core["timing"]
+        tags = core["tags"]
+        chunk = core["chunk"]
+
+        storage = {
+            **base,
+            "contextual_content": self.contextual_content,
+            "channel_id": chat["channel_id"],
+            "user_chat_id": chat["user_chat_id"],
+            "state": chat["state"],
+            "user_id": customer["user_id"],
+            "assignee_id": assignment["assignee_id"],
+            "last_message_at": messages["last_message_at"],
+            "chunk_index": chunk["chunk_index"],
+            "chunk_count": chunk["chunk_count"],
+            "tag_keys": tags["keys"],
+            "tag_names": tags["names"],
+            "base": base,
+            "user_chat_core": core,
+        }
+
+        updated_at = base.get("updated_at")
+        if updated_at is None and timing.get("desk_updated_at") is not None:
+            storage["updated_at"] = timing["desk_updated_at"]
+
+        return storage
