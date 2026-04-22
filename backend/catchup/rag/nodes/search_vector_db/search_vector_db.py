@@ -84,6 +84,7 @@ async def _get_hybrid_search_results(
                 weights,
                 tool_filters,
                 temporal_filters,
+                q.keyword_tokens,
             )
         )
 

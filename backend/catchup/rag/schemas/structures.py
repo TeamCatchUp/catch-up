@@ -29,14 +29,28 @@ class BaseSearchQuery(BaseModel):
 
 class VectorDbSearchQuery(BaseSearchQuery):
     query: str = Field(..., description="Vector 검색 엔진에 전달할 최적화된 검색어")
+    keyword_tokens: list[str] = Field(default_factory=list, description="키워드 검색을 위한 핵심 키워드 목록")
 
 
 class VectorDbSearchPlan(BaseModel):
     queries: list[VectorDbSearchQuery] = Field(
-        default=[],
+        default_factory=list,
         min_length=0,
         max_length=3,
         description="사용자의 의도를 분석하여 생성된 독립적인 검색 쿼리 목록",
+    )
+
+
+class MultiSearchRequest(BaseModel):
+    query: str = Field(description="벡터 DB에 전달할 시맨틱 검색어")
+    keyword_tokens: list[str] | None = Field(default=None, description="쿼리에 매칭되는 1-3개의 핵심 키워드 리스트")
+    start_date: str | None = Field(
+        default=None, 
+        description="Vector 검색 대상 문서의 발생(생성/수정) 기준 시작일. 반드시 'YYYY-MM-DDTHH:MM:SS' 형식의 UTC ISO 8601 포맷으로 작성할 것."
+    )
+    end_date: str | None = Field(
+        default=None, 
+        description="Vector 검색 대상 문서의 발생(생성/수정) 기준 종료일. 반드시 'YYYY-MM-DDTHH:MM:SS' 형식의 UTC ISO 8601 포맷으로 작성할 것."
     )
 
 
@@ -71,12 +85,13 @@ class SearchStep(BaseModel):
     step: int = Field(description="실행 순서")
     intent: str = Field(description="이 단계에서 찾으려는 정보의 의도")
     queries: list[str] = Field(description="실행할 검색 쿼리 목록")
+    keyword_tokens: list[str] = Field(default_factory=list, description="키워드 검색을 위한 핵심 키워드 목록")
     parallel: bool = Field(
         default=False,
         description="True면 queries를 병렬 실행 (multi_query_search 사용)"
     )
     depends_on: list[int] = Field(
-        default=[],
+        default_factory=list,
         description="이 단계를 실행하기 전에 완료되어야 하는 선행 step 번호 목록"
     )
 
@@ -87,11 +102,11 @@ class GapAnalysis(BaseModel):
         description="현재까지 수집된 정보가 질문에 답하기 충분한지 여부"
     )
     gaps: list[str] = Field(
-        default=[],
+        default_factory=list,
         description="부족한 정보 목록"
     )
     suggested_queries: list[str] = Field(
-        default=[],
+        default_factory=list,
         description="gap을 메우기 위한 추가 검색 쿼리 제안"
     )
     reasoning: str = Field(
@@ -103,6 +118,6 @@ class GapAnalysis(BaseModel):
 # Complex planner LLM 응답 스키마
 class SearchPlan(BaseModel):
     steps: list[SearchStep] = Field(
-        default=[],
+        default_factory=list,
         description="순서대로 실행할 검색 단계 목록"
     )
