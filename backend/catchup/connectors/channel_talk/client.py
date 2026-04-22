@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 from typing import Callable
 from typing import TypeVar
 
 import httpx
+import structlog
 
 from catchup.configs.config import settings
 from catchup.connectors.base.retry import parse_retry_after_header
@@ -24,7 +24,7 @@ from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessagePa
 from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatState
 from catchup.utils.client import get_global_async_client
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 ParsedPayloadT = TypeVar("ParsedPayloadT")
 
@@ -308,7 +308,7 @@ class ChannelTalkApiClient:
             logger.warning("channel_talk_request_timed_out", url=url)
             raise ChannelTalkTimeoutError("Channel Talk API request timed out") from exc
         except httpx.HTTPError as exc:
-            logger.error("channel_talk_request_failed", url=url, exc_info=True)
+            logger.exception("channel_talk_request_failed", url=url)
             raise ChannelTalkUpstreamError(
                 "Failed to reach Channel Talk API",
                 metadata={"reason": str(exc)},
@@ -391,7 +391,7 @@ class ChannelTalkApiClient:
         try:
             return parser(payload)
         except ValueError as exc:
-            logger.error(log_event, exc_info=True)
+            logger.exception(log_event)
             raise ChannelTalkPayloadError(error_message) from exc
 
 
