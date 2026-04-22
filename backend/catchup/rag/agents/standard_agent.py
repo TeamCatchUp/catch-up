@@ -72,9 +72,15 @@ async def standard_agent_node(state: AgentState, llm: BaseChatModel):
             calls=[{"name": tc["name"], "args": tc["args"]} for tc in tool_calls],
         )
 
+    # 에이전트가 더 이상 도구를 호출하지 않으면(루프 종료), 자신의 판단을 state에 기록해 답변 노드에 전달한다.
+    reasoning_update = {}
+    if not tool_calls:
+        reasoning_update = {"agent_reasoning": response.content}
+
     return {
         "messages": [response],
         "agent_iteration": agent_iteration + 1,
+        **reasoning_update,
         **token_usages,
     }
 
@@ -84,9 +90,17 @@ _RERANK_INPUT_WINDOW = 300  # reranker 입력 상한
 
 async def collect_docs_node(state: AgentState):
     """accumulated_docs를 retrieved_docs로 복사해 rerank → generate 노드가 참조할 수 있게 한다.
-    reranker 입력 크기를 _RERANK_INPUT_WINDOW 이내로 제한한다."""
+    reranker 입력 크기를 _RERANK_INPUT_WINDOW 이내로 제한하며, 점수(score) 기반으로 상위 문서를 우선 선발한다."""
     accumulated = state.get("accumulated_docs", [])
-    capped = accumulated[:_RERANK_INPUT_WINDOW]
+
+    # 점수 내림차순 정렬 (점수가 없는 경우 0.0으로 처리)
+    sorted_docs = sorted(
+        accumulated,
+        key=lambda d: d.metadata.get("score", 0.0),
+        reverse=True
+    )
+
+    capped = sorted_docs[:_RERANK_INPUT_WINDOW]
     logger.info(
         "collect_docs",
         total_accumulated=len(accumulated),

@@ -73,7 +73,7 @@ async def _run_search(
         vector_db_service=vector_db_service,
         queries=[search_query],
         tool_filters=tool_filters or [],
-        k=100,
+        k=40,
         weights=[0.6, 0.4],
     )
     docs = _deduplicate_search_results(results)
@@ -160,18 +160,18 @@ async def search_tool_executor_node(
                 for q, result in zip(queries, results_list):
                     if isinstance(result, Exception):
                         logger.warning("multi_queyr_search_failed", query=q, error=str(result))
-                        summaries.append(f"쿼리='{q}': 실패")
+                        summaries.append(f"search_query='{q}': failed")
                     else:
                         d, s = result
                         docs.extend(d)
                         summaries.append(s)
                 summary = "\n---\n".join(summaries)
             else:
-                docs, summary = [], f"알 수 없는 tool: {tool_name}"
+                docs, summary = [], f"unknown tool: {tool_name}"
 
         except Exception as e:
             logger.warning("tool_executor_failed", tool=tool_name, error=str(e), exc_info=True)
-            docs, summary = [], f"실행 오류: {str(e)}"
+            docs, summary = [], f"execution error: {str(e)}"
 
         all_docs.extend(docs)
         tool_messages.append(ToolMessage(content=summary, tool_call_id=call_id))
