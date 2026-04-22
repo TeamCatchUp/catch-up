@@ -14,6 +14,9 @@ from sqlalchemy import select
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
+from catchup.connectors.channel_talk.full_sync_helper import CHANNEL_TALK_FULL_SYNC_TARGET_ID
+from catchup.connectors.channel_talk.full_sync_helper import load_channel_talk_connection
+from catchup.connectors.channel_talk.full_sync_helper import require_channel_talk_channel_id
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.client import GitHubApiClient
@@ -591,6 +594,34 @@ class SyncQueryService:
             targets=targets,
         )
 
+    async def _list_channel_talk_targets(
+        self,
+        *,
+        scope_id: str,
+    ) -> SyncTargetsResult:
+        normalized_scope_id = require_channel_talk_channel_id(scope_id)
+        connection = await run_in_threadpool(load_channel_talk_connection)
+        if connection is None:
+            raise ValueError("channel_talk is not connected")
+        if connection.channel_id != normalized_scope_id:
+            raise ValueError(
+                "Stored Channel Talk credentials do not match the requested channel"
+            )
+
+        return self._build_targets_result(
+            connector=SyncConnector.CHANNEL_TALK,
+            scope_id=normalized_scope_id,
+            targets=[
+                SyncTargetResult(
+                    target_id=CHANNEL_TALK_FULL_SYNC_TARGET_ID,
+                    display_name=CHANNEL_TALK_FULL_SYNC_TARGET_ID,
+                    target_type=SyncTargetType.RESOURCE,
+                    is_accessible=True,
+                    metadata={},
+                )
+            ],
+        )
+
     async def list_targets(
         self,
         *,
@@ -632,6 +663,8 @@ class SyncQueryService:
             return await self._list_confluence_targets(scope_id=scope_id)
         if connector == SyncConnector.SLACK:
             return await self._list_slack_targets(scope_id=scope_id)
+        if connector == SyncConnector.CHANNEL_TALK:
+            return await self._list_channel_talk_targets(scope_id=scope_id)
 
         raise ValueError(f"unsupported connector for target listing: {connector}")
 

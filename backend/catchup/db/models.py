@@ -1716,6 +1716,7 @@ class SyncConnector(StrEnum):
     GITHUB = "github"
     JIRA = "jira"
     CONFLUENCE = "confluence"
+    CHANNEL_TALK = "channel_talk"
 
 
 class SyncType(StrEnum):
