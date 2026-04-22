@@ -22,6 +22,10 @@ INDICES = [
     CREATE INDEX IF NOT EXISTS idx_fts_korean_bigm
     ON langchain_pg_embedding USING GIN (document gin_bigm_ops)
     """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_cmetadata_contextual_bigm
+    ON langchain_pg_embedding USING GIN ((cmetadata ->> 'contextual_content') gin_bigm_ops)
+    """,
 ]
 
 async def ensure_pg_indices() -> None:
