@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from catchup.connector_core.descriptors.models import ConnectorDescriptor
 from catchup.connector_core.descriptors.models import ConnectorRuntimePlan
-from catchup.connector_core.descriptors.models import ConnectorTargetPlan
 from catchup.connector_core.domain.structure import ConnectorBoundary
 from catchup.connector_core.domain.structure import ConnectorKey
 
@@ -18,10 +17,6 @@ CHANNEL_TALK_DESCRIPTOR = ConnectorDescriptor(
         supports_full_sync=False,
         supports_incremental=False,
         supports_observability=False,
-        targets=(
-            ConnectorTargetPlan(
-                target="user_chat",
-            ),
-        ),
+        targets=("user_chat",),
     ),
 )

@@ -113,7 +113,7 @@ class ChannelTalkFullSyncContractTests(TestCase):
         descriptor = CHANNEL_TALK_DESCRIPTOR
 
         self.assertFalse(descriptor.runtime.supports_full_sync)
-        self.assertEqual(descriptor.runtime.targets[0].target, "user_chat")
+        self.assertEqual(descriptor.runtime.targets[0], "user_chat")
 
 
 class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
