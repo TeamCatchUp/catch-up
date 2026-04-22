@@ -37,6 +37,7 @@ Previous gap analysis identified these missing pieces — prioritize filling the
 <instructions>
 - Execute the search plan steps in order, respecting step dependencies.
 - Use multi_query_search when a step has parallel=true or when queries are clearly independent.
+- When calling `single_query_search`, extract 1-3 core keywords/entities (e.g., project names, error codes, identifiers) into `keyword_tokens` to ensure precise matching.
 - When you find entity references (ticket IDs, PR numbers, usernames), use them in follow-up targeted searches.
 - Stop and return without a tool call when you have completed all plan steps or gathered enough information.
 </instructions>

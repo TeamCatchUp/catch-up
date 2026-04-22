@@ -23,7 +23,9 @@ Your goal is to convert a context-complete Korean question into **High-Density S
    - Include synonyms for development terms (e.g., "error" -> "Exception", "Stacktrace", "Log", "Troubleshooting").
 
 4. **Output Constraint:**
-   - Return a **JSON list** of objects. Each object contains "query", "reasoning", "start_date(optional)", and "end_date(optional)".
+   - Return a **JSON list** of objects. Each object contains "query", "keyword_tokens", "reasoning", "start_date(optional)", and "end_date(optional)".
+   - "query": Optimized for semantic search (English technical terms + Korean intent).
+   - "keyword_tokens": A list of 1-3 core keywords/entities for exact matching (e.g., project names, specific error codes, unique identifiers).
    - Do not generate more than 3 queries under any circumstances. Quality over quantity.
 
 5. **Strict Temporal Extraction (MANDATORY):**
@@ -50,10 +52,11 @@ Your goal is to convert a context-complete Korean question into **High-Density S
 <output_schema>
 [
   {
-    "query": "Key technical terms in English + Context keywords in Korean",
+    "query": "Optimized semantic query string",
+    "keyword_tokens": ["Key term 1", "Key term 2"],
     "start_date": "YYYY-MM-DDTHH:MM:SS or null",
     "end_date": "YYYY-MM-DDTHH:MM:SS or null",
-    "reasoning": "Why this specific query is needed for better retrieval"
+    "reasoning": "Why this query and tokens are generated"
   }
 ]
 </output_schema>

@@ -16,7 +16,7 @@ from catchup.rag.nodes.search_vector_db.search_vector_db import (
 )
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import resolve_temporal_context
-from catchup.rag.schemas.structures import VectorDbSearchQuery
+from catchup.rag.schemas.structures import VectorDbSearchQuery, MultiSearchRequest
 from catchup.rag.state import AgentState
 
 logger = structlog.get_logger()
@@ -30,21 +30,26 @@ logger = structlog.get_logger()
 def single_query_search(
     query: str,
     reason: str,
+    keyword_tokens: list[str] | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> str:
-    """벡터 DB에서 문서를 검색합니다.
-    이전 검색 결과가 부족하거나, 다른 각도의 쿼리가 필요할 때 호출하세요."""
+    """
+    벡터 DB에서 문서를 검색합니다.
+    이전 검색 결과가 부족하거나, 다른 각도의 쿼리가 필요할 때 호출하세요.
+    """
     raise NotImplementedError
 
 
 @tool
 def multi_query_search(
-    queries: list[str],
+    search_requests: list[MultiSearchRequest],
     reason: str,
 ) -> str:
-    """독립적인 여러 쿼리를 병렬로 실행하고 결과를 통합합니다.
-    서로 다른 관점의 정보를 동시에 수집해야 할 때 사용하세요."""
+    """
+    독립적인 여러 쿼리를 병렬로 실행하고 결과를 통합합니다.
+    서로 다른 관점의 정보를 동시에 수집해야 할 때 사용하세요.
+    """
     raise NotImplementedError
 
 
@@ -55,17 +60,20 @@ async def _run_search(
     query: str,
     tool_filters: list,
     vector_db_service: BaseVectorDbService,
+    keyword_tokens: list[str] | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> tuple[list[Document], str]:
-    """단일 쿼리 벡터 검색"""
+    """단일 쿼리 하이브리드 검색"""
     end_dt = datetime.fromisoformat(end_date) if end_date else None
-    # date-only 문자열("YYYY-MM-DD")은 자정으로 파싱되어 start==end==00:00:00이 되므로 하루 끝으로 보정
+    # date-only 문자열("YYYY-MM-DD")은 자정으로 파싱되어 
+    # start==end==00:00:00이 되므로 하루 끝으로 보정
     if end_dt and end_dt.hour == 0 and end_dt.minute == 0 and end_dt.second == 0 and end_dt.microsecond == 0:
         end_dt = end_dt.replace(hour=23, minute=59, second=59)
 
     search_query = VectorDbSearchQuery(
         query=query,
+        keyword_tokens=keyword_tokens or [],
         start_date=datetime.fromisoformat(start_date) if start_date else None,
         end_date=end_dt,
     )
@@ -104,10 +112,11 @@ async def search_tool_executor_node(
     state: AgentState,
     vector_db_service: BaseVectorDbService,
 ):
-    """Agent의 tool_calls를 읽어 벡터 검색을 실행하고 ToolMessage를 반환.
+    """
+    Agent의 tool_calls를 읽어 벡터 검색을 실행하고 ToolMessage를 반환.
 
     rerank는 여기서 수행하지 않는다. 모든 반복이 끝난 뒤
-    collect_docs_node → rerank_node에서 accumulated_docs 전체를 한 번만 rerank한다.
+    collect_docs_node -> rerank_node에서 accumulated_docs 전체를 한 번만 rerank한다.
     """
     messages = state.get("messages", [])
     if not messages:
@@ -133,6 +142,7 @@ async def search_tool_executor_node(
                     "tool_executing",
                     tool=tool_name,
                     query=args["query"],
+                    keyword_tokens=args.get("keyword_tokens"),
                     start_date=args.get("start_date"),
                     end_date=args.get("end_date"),
                 )
@@ -140,26 +150,36 @@ async def search_tool_executor_node(
                     query=args["query"],
                     tool_filters=tool_filters,
                     vector_db_service=vector_db_service,
+                    keyword_tokens=args.get("keyword_tokens"),
                     start_date=args.get("start_date"),
                     end_date=args.get("end_date"),
                 )
             elif tool_name == "multi_query_search":
-                queries: list[str] = args["queries"]
-                logger.debug("tool_executing", tool=tool_name, query_count=len(queries), queries=queries)
+                search_requests: list[dict] = args.get("search_requests", [])
+                logger.debug(
+                    "tool_executing",
+                    tool=tool_name,
+                    query_count=len(search_requests),
+                    requests=search_requests,
+                )
                 tasks = [
                     _run_search(
-                        query=q,
+                        query=req.get("query"),
                         tool_filters=tool_filters,
                         vector_db_service=vector_db_service,
+                        keyword_tokens=req.get("keyword_tokens"),
+                        start_date=req.get("start_date"),
+                        end_date=req.get("end_date"),
                     )
-                    for q in queries
+                    for req in search_requests
                 ]
                 results_list = await asyncio.gather(*tasks, return_exceptions=True)
                 docs = []
                 summaries = []
-                for q, result in zip(queries, results_list):
+                for req, result in zip(search_requests, results_list):
+                    q = req.get("query")
                     if isinstance(result, Exception):
-                        logger.warning("multi_queyr_search_failed", query=q, error=str(result))
+                        logger.warning("multi_query_search_failed", query=q, error=str(result))
                         summaries.append(f"search_query='{q}': failed")
                     else:
                         d, s = result
@@ -178,8 +198,13 @@ async def search_tool_executor_node(
 
     # 기존 누적 문서에 이번 턴 신규 문서를 id 기준 중복 제거 후 통합
     existing = state.get("accumulated_docs") or []
-    existing_ids = {doc.id for doc in existing if doc.id}
-    new_unique = [doc for doc in all_docs if doc.id not in existing_ids]
+    seen_ids = {doc.id for doc in existing if doc.id}
+    new_unique = []
+    for doc in all_docs:
+        doc_identifier = doc.id if doc.id else hash(doc.page_content)
+        if doc_identifier not in seen_ids:
+            new_unique.append(doc)
+            seen_ids.add(doc_identifier)
     merged = existing + new_unique
 
     logger.info(

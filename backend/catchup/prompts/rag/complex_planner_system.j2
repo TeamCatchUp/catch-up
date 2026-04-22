@@ -13,6 +13,7 @@ Create a SearchPlan with ordered steps to gather all information needed to fully
 - Set parallel=true and group multiple queries in one step when they are independent of each other.
 - Set depends_on=[N] for steps that require results from step N to formulate their queries (multi-hop).
 - Write search queries in the language most likely to match the underlying data (Korean for team communications, English for code/technical terms).
-- Aim for 3–7 steps. Cover all facets of the question without redundancy.
+- For each step, provide `keyword_tokens`: a list of 1-3 core keywords or entities (e.g., project names, specific error codes, unique identifiers) for exact matching to improve recall.
+- Aim for 3-7 steps. Cover all facets of the question without redundancy.
 - Each step's intent should clearly state what specific information it is trying to find.
 </instructions>
