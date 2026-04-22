@@ -5,7 +5,6 @@ from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
-from pydantic import ValidationInfo
 from pydantic import field_validator
 from pydantic import model_validator
 
@@ -14,13 +13,7 @@ from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connector_core.ports.full_sync import FullSyncExecutionRequest
 from catchup.connector_core.ports.full_sync import FullSyncExecutionResult
 from catchup.connector_core.ports.full_sync import FullSyncWindow
-
-
-def _require_text(value: str, field_name: str) -> str:
-    text = str(value or "").strip()
-    if not text:
-        raise ValueError(f"{field_name} is required")
-    return text
+from catchup.utils.validation import require_text
 
 
 class ChannelTalkUserChatState(StrEnum):
@@ -43,7 +36,7 @@ class ChannelTalkFullSyncCheckpoint(BaseModel):
     @field_validator("tenant_id")
     @classmethod
     def _validate_tenant_id(cls, value: str) -> str:
-        return _require_text(value, "tenant_id")
+        return require_text(value, "tenant_id")
 
 
 class ChannelTalkFullSyncExecutionRequest(FullSyncExecutionRequest):
@@ -97,7 +90,7 @@ class ChannelTalkFullSyncFetchResult(BaseModel):
         cls,
         value: tuple[str, ...],
     ) -> tuple[str, ...]:
-        return tuple(_require_text(item, "fetched_record_ids") for item in value)
+        return tuple(require_text(item, "fetched_record_ids") for item in value)
 
     @model_validator(mode="after")
     def _validate_checkpoint_alignment(self) -> "ChannelTalkFullSyncFetchResult":

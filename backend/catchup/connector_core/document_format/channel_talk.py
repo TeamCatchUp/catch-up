@@ -5,17 +5,12 @@ from datetime import datetime
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
+from pydantic import ValidationInfo
 from pydantic import field_validator
 from pydantic import model_validator
 
 from catchup.connector_core.document_format.base import DocumentBaseMetadata
-
-
-def _require_text(value: str, field_name: str) -> str:
-    text = str(value or "").strip()
-    if not text:
-        raise ValueError(f"{field_name} is required")
-    return text
+from catchup.utils.validation import require_text
 
 
 class ChannelTalkUserChatChatMetadata(BaseModel):
@@ -31,8 +26,8 @@ class ChannelTalkUserChatChatMetadata(BaseModel):
 
     @field_validator("channel_id", "user_chat_id", "state")
     @classmethod
-    def _validate_required_text(cls, value: str, info) -> str:
-        return _require_text(value, info.field_name)
+    def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name)
 
 
 class ChannelTalkUserChatCustomerMetadata(BaseModel):
@@ -55,7 +50,7 @@ class ChannelTalkUserChatCustomerMetadata(BaseModel):
     @field_validator("user_id")
     @classmethod
     def _validate_user_id(cls, value: str) -> str:
-        return _require_text(value, "user_id")
+        return require_text(value, "user_id")
 
 
 class ChannelTalkUserChatAssignmentMetadata(BaseModel):
@@ -188,35 +183,34 @@ class ChannelTalkUserChatLogicalMetadata(BaseModel):
         The logical contract remains nested, but shared read paths can continue to
         use top-level keys until the later all-data rewrite adopts nested storage.
         """
-        base = self.base.model_dump(mode="json")
-        core = self.user_chat_core.model_dump(mode="json")
-        chat = core["chat"]
-        customer = core["customer"]
-        assignment = core["assignment"]
-        messages = core["messages"]
-        timing = core["timing"]
-        tags = core["tags"]
-        chunk = core["chunk"]
+        base_storage = self.base.model_dump(mode="json")
+        core_storage = self.user_chat_core.model_dump(mode="json")
+        chat = self.user_chat_core.chat
+        customer = self.user_chat_core.customer
+        assignment = self.user_chat_core.assignment
+        messages = self.user_chat_core.messages
+        timing = self.user_chat_core.timing
+        tags = self.user_chat_core.tags
+        chunk = self.user_chat_core.chunk
 
         storage = {
-            **base,
+            **base_storage,
             "entity_type": "user_chat",
-            "channel_id": chat["channel_id"],
-            "user_chat_id": chat["user_chat_id"],
-            "state": chat["state"],
-            "user_id": customer["user_id"],
-            "assignee_id": assignment["assignee_id"],
-            "last_message_at": messages["last_message_at"],
-            "chunk_index": chunk["chunk_index"],
-            "chunk_count": chunk["chunk_count"],
-            "tag_keys": tags["keys"],
-            "tag_names": tags["names"],
-            "base": base,
-            "user_chat_core": core,
+            "channel_id": chat.channel_id,
+            "user_chat_id": chat.user_chat_id,
+            "state": chat.state,
+            "user_id": customer.user_id,
+            "assignee_id": assignment.assignee_id,
+            "last_message_at": messages.last_message_at,
+            "chunk_index": chunk.chunk_index,
+            "chunk_count": chunk.chunk_count,
+            "tag_keys": list(tags.keys),
+            "tag_names": list(tags.names),
+            "base": base_storage,
+            "user_chat_core": core_storage,
         }
 
-        updated_at = base.get("updated_at")
-        if updated_at is None and timing.get("desk_updated_at") is not None:
-            storage["updated_at"] = timing["desk_updated_at"]
+        if base_storage.get("updated_at") is None and timing.desk_updated_at is not None:
+            storage["updated_at"] = timing.desk_updated_at
 
         return storage

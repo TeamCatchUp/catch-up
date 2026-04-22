@@ -18,6 +18,7 @@ from pydantic import field_validator
 from catchup.connector_core.domain.structure import ConnectorKey
 from catchup.connector_core.ports.metadata_sync import MetadataSyncRequest
 from catchup.connector_core.ports.metadata_sync import MetadataSyncResult
+from catchup.utils.validation import require_text
 
 ParsedMetadataItem = TypeVar("ParsedMetadataItem")
 
@@ -30,7 +31,7 @@ class ChannelTalkConnectRequest(BaseModel):
     @field_validator("access_key", "access_secret", "webhook_token")
     @classmethod
     def validate_required_text(cls, value: str, info: ValidationInfo) -> str:
-        return _require_text(value, info.field_name)
+        return require_text(value, info.field_name)
 
 
 class ChannelTalkChannel(BaseModel):
@@ -52,7 +53,7 @@ class ChannelTalkChannel(BaseModel):
     @field_validator("channel_id", "channel_name")
     @classmethod
     def validate_channel_required_text(cls, value: str, info: ValidationInfo) -> str:
-        return _require_text(value, info.field_name)
+        return require_text(value, info.field_name)
 
     @classmethod
     def from_api_payload(cls, payload: Any) -> "ChannelTalkChannel":
@@ -144,7 +145,7 @@ class ChannelTalkCredentialsRecord(BaseModel):
     @field_validator("channel_id", "channel_name")
     @classmethod
     def validate_record_required_text(cls, value: str, info: ValidationInfo) -> str:
-        return _require_text(value, info.field_name)
+        return require_text(value, info.field_name)
 
     @property
     def webhook_token_configured(self) -> bool:
@@ -161,7 +162,7 @@ class ChannelTalkCredentialsUpsert(BaseModel):
     @field_validator("access_key", "access_secret", "webhook_token")
     @classmethod
     def validate_upsert_required_text(cls, value: str, info: ValidationInfo) -> str:
-        return _require_text(value, info.field_name)
+        return require_text(value, info.field_name)
 
     def to_record(self) -> ChannelTalkCredentialsRecord:
         return ChannelTalkCredentialsRecord(
@@ -220,7 +221,7 @@ class ChannelTalkMetadataSyncRequest(BaseModel):
     @field_validator("channel_id")
     @classmethod
     def validate_channel_id(cls, value: str) -> str:
-        return _require_text(value, "channel_id")
+        return require_text(value, "channel_id")
 
     def to_core_request(self) -> MetadataSyncRequest:
         # outer/domain layer의 channel_id를
@@ -239,7 +240,7 @@ class ChannelTalkGroupManagerMembership(BaseModel):
     @field_validator("channel_id", "group_id", "manager_id")
     @classmethod
     def validate_membership_required_text(cls, value: str, info: ValidationInfo) -> str:
-        return _require_text(value, info.field_name)
+        return require_text(value, info.field_name)
 
 
 class ChannelTalkMetadataSyncResult(BaseModel):
@@ -293,7 +294,7 @@ class ChannelTalkManagerMetadata(BaseModel):
     @field_validator("manager_id")
     @classmethod
     def validate_manager_id(cls, value: str) -> str:
-        return _require_text(value, "manager_id")
+        return require_text(value, "manager_id")
 
     @classmethod
     def from_api_payload(cls, payload: Any) -> "ChannelTalkManagerMetadata":
@@ -357,7 +358,7 @@ class ChannelTalkGroupMetadata(BaseModel):
     @field_validator("group_id", "group_name")
     @classmethod
     def validate_group_required_text(cls, value: str, info: ValidationInfo) -> str:
-        return _require_text(value, info.field_name)
+        return require_text(value, info.field_name)
 
     @classmethod
     def from_api_payload(cls, payload: Any) -> "ChannelTalkGroupMetadata":
@@ -438,7 +439,7 @@ class ChannelTalkUserFoundation(BaseModel):
     @field_validator("external_user_id")
     @classmethod
     def validate_external_user_id(cls, value: str) -> str:
-        return _require_text(value, "external_user_id")
+        return require_text(value, "external_user_id")
 
     @classmethod
     def from_api_payload(cls, payload: Any) -> "ChannelTalkUserFoundation":
@@ -511,7 +512,7 @@ class ChannelTalkUserChatListItem(BaseModel):
     @field_validator("user_chat_id")
     @classmethod
     def validate_user_chat_id(cls, value: str) -> str:
-        return _require_text(value, "user_chat_id")
+        return require_text(value, "user_chat_id")
 
     @classmethod
     def from_api_payload(
@@ -598,7 +599,7 @@ class ChannelTalkUserChatManagerRef(BaseModel):
     @field_validator("manager_id")
     @classmethod
     def validate_manager_id(cls, value: str) -> str:
-        return _require_text(value, "manager_id")
+        return require_text(value, "manager_id")
 
     @classmethod
     def from_api_payload(cls, payload: Any) -> "ChannelTalkUserChatManagerRef":
@@ -710,7 +711,7 @@ class ChannelTalkUserChatDetail(BaseModel):
     @field_validator("user_chat_id")
     @classmethod
     def validate_user_chat_id(cls, value: str) -> str:
-        return _require_text(value, "user_chat_id")
+        return require_text(value, "user_chat_id")
 
     @classmethod
     def from_api_payload(
@@ -908,7 +909,7 @@ class ChannelTalkUserChatMessage(BaseModel):
     @field_validator("message_id", "user_chat_id")
     @classmethod
     def validate_required_text(cls, value: str, info: ValidationInfo) -> str:
-        return _require_text(value, info.field_name)
+        return require_text(value, info.field_name)
 
     @classmethod
     def from_api_payload(
@@ -926,7 +927,7 @@ class ChannelTalkUserChatMessage(BaseModel):
         if message_id is None:
             raise ValueError("user chat message payload missing message id")
 
-        requested_user_chat_id = _require_text(user_chat_id, "user_chat_id")
+        requested_user_chat_id = require_text(user_chat_id, "user_chat_id")
         payload_user_chat_id = reader.text("userChatId", "user_chat_id")
         if payload_user_chat_id is not None and payload_user_chat_id != requested_user_chat_id:
             raise ValueError("user chat message payload user_chat_id mismatch")
@@ -941,7 +942,7 @@ class ChannelTalkUserChatMessage(BaseModel):
 
         return cls(
             message_id=message_id,
-            user_chat_id=_require_text(resolved_user_chat_id, "user_chat_id"),
+            user_chat_id=require_text(resolved_user_chat_id, "user_chat_id"),
             message_type=reader.text("type", "messageType", "message_type"),
             person_type=reader.text("personType", "person_type"),
             author=_parse_user_chat_message_author(reader, root_bots=root_bots),
@@ -1003,13 +1004,6 @@ class ChannelTalkUserChatMessagePage(BaseModel):
             next_cursor=next_cursor,
             quota_snapshot=_parse_quota_snapshot(headers),
         )
-
-
-def _require_text(value: str, field_name: str) -> str:
-    text = str(value or "").strip()
-    if not text:
-        raise ValueError(f"{field_name} is required")
-    return text
 
 
 def _parse_metadata_page(
@@ -1080,7 +1074,7 @@ def _resolve_user_chat_id(
     받아들인 뒤, 요청에 사용한 chat id와 일치하는지도 함께 검증한다.
     """
     requested_user_chat_id = (
-        _require_text(user_chat_id, "user_chat_id")
+        require_text(user_chat_id, "user_chat_id")
         if user_chat_id is not None
         else None
     )

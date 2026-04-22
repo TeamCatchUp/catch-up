@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from typing import Callable
+from typing import TypeVar
 
 import httpx
 
@@ -23,6 +25,8 @@ from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatState
 from catchup.utils.client import get_global_async_client
 
 logger = logging.getLogger(__name__)
+
+ParsedPayloadT = TypeVar("ParsedPayloadT")
 
 
 class ChannelTalkApiClient:
@@ -380,10 +384,10 @@ class ChannelTalkApiClient:
         self,
         payload: Any,
         *,
-        parser,
+        parser: Callable[[Any], ParsedPayloadT],
         log_event: str,
         error_message: str,
-    ):
+    ) -> ParsedPayloadT:
         try:
             return parser(payload)
         except ValueError as exc:

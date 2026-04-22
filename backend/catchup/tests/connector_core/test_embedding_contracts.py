@@ -100,6 +100,17 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
         self.assertIn("base", storage)
         self.assertIn("user_chat_core", storage)
 
+    def test_storage_projection_falls_back_to_desk_updated_at(self) -> None:
+        contract = self._build_contract()
+        contract.base.updated_at = None
+
+        storage = contract.to_storage_metadata()
+
+        self.assertEqual(
+            storage["updated_at"],
+            contract.user_chat_core.timing.desk_updated_at,
+        )
+
     def test_contract_rejects_record_id_mismatch(self) -> None:
         now = datetime(2026, 4, 22, 2, 10, tzinfo=timezone.utc)
 

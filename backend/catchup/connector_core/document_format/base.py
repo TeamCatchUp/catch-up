@@ -4,14 +4,10 @@ from datetime import datetime
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
+from pydantic import ValidationInfo
 from pydantic import field_validator
 
-
-def _require_text(value: str, field_name: str) -> str:
-    text = str(value or "").strip()
-    if not text:
-        raise ValueError(f"{field_name} is required")
-    return text
+from catchup.utils.validation import require_text
 
 
 class DocumentBaseMetadata(BaseModel):
@@ -34,5 +30,5 @@ class DocumentBaseMetadata(BaseModel):
 
     @field_validator("source", "record_id", "contextual_content")
     @classmethod
-    def _validate_required_text(cls, value: str, info) -> str:
-        return _require_text(value, info.field_name)
+    def _validate_required_text(cls, value: str, info: ValidationInfo) -> str:
+        return require_text(value, info.field_name)
