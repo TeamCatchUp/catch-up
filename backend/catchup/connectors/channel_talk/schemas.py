@@ -699,6 +699,7 @@ class ChannelTalkUserChatDetail(BaseModel):
     managed: bool | None = None
     priority: str | None = None
     name: str | None = None
+    description: str | None = None
     goal_state: str | None = None
     customer: ChannelTalkUserFoundation | None = None
     assignment: ChannelTalkUserChatAssignment = Field(default_factory=ChannelTalkUserChatAssignment)
@@ -744,6 +745,7 @@ class ChannelTalkUserChatDetail(BaseModel):
             managed=source.boolean("managed"),
             priority=source.text("priority"),
             name=source.text("name", "displayName", "display_name"),
+            description=source.text("description"),
             goal_state=source.text("goalState", "goal_state"),
             customer=customer,
             assignment=_parse_user_chat_assignment(source, root_reader=root_reader),

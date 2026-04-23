@@ -22,6 +22,7 @@ class ChannelTalkUserChatChatMetadata(BaseModel):
     managed: bool | None = None
     priority: str | None = None
     name: str | None = None
+    description: str | None = None
     goal_state: str | None = None
 
     @field_validator("channel_id", "user_chat_id", "state")
@@ -33,7 +34,7 @@ class ChannelTalkUserChatChatMetadata(BaseModel):
 class ChannelTalkUserChatCustomerMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    user_id: str
+    user_id: str | None = None
     member_id: str | None = None
     veil_id: str | None = None
     unified_id: str | None = None
@@ -49,7 +50,9 @@ class ChannelTalkUserChatCustomerMetadata(BaseModel):
 
     @field_validator("user_id")
     @classmethod
-    def _validate_user_id(cls, value: str) -> str:
+    def _validate_user_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         return require_text(value, "user_id")
 
 
@@ -185,28 +188,11 @@ class ChannelTalkUserChatLogicalMetadata(BaseModel):
         """
         base_storage = self.base.model_dump(mode="json")
         core_storage = self.user_chat_core.model_dump(mode="json")
-        chat = self.user_chat_core.chat
-        customer = self.user_chat_core.customer
-        assignment = self.user_chat_core.assignment
-        messages = self.user_chat_core.messages
         timing = self.user_chat_core.timing
-        tags = self.user_chat_core.tags
-        chunk = self.user_chat_core.chunk
 
         storage = {
             **base_storage,
             "entity_type": "user_chat",
-            "channel_id": chat.channel_id,
-            "user_chat_id": chat.user_chat_id,
-            "state": chat.state,
-            "user_id": customer.user_id,
-            "assignee_id": assignment.assignee_id,
-            "last_message_at": messages.last_message_at,
-            "chunk_index": chunk.chunk_index,
-            "chunk_count": chunk.chunk_count,
-            "tag_keys": list(tags.keys),
-            "tag_names": list(tags.names),
-            "base": base_storage,
             "user_chat_core": core_storage,
         }
 
