@@ -24,7 +24,14 @@ from catchup.connectors.channel_talk.schemas import ChannelTalkManagerMetadata
 from catchup.connectors.channel_talk.schemas import ChannelTalkMetadataSyncRequest
 from catchup.connectors.channel_talk.schemas import ChannelTalkMetadataSyncResult
 from catchup.connectors.channel_talk.schemas import ChannelTalkUninstallResult
+from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatDetail
+from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatListItem
+from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatListPage
+from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessage
+from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessagePage
+from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatState
 from catchup.connectors.channel_talk.schemas import ChannelTalkUserFoundation
+from catchup.connectors.channel_talk.schemas import FullSyncQuotaSnapshot
 
 __all__ = [
     "ChannelTalkApiClient",
@@ -48,6 +55,13 @@ __all__ = [
     "ChannelTalkPersistenceError",
     "ChannelTalkRateLimitError",
     "ChannelTalkTimeoutError",
+    "FullSyncQuotaSnapshot",
+    "ChannelTalkUserChatDetail",
+    "ChannelTalkUserChatListItem",
+    "ChannelTalkUserChatListPage",
+    "ChannelTalkUserChatMessage",
+    "ChannelTalkUserChatMessagePage",
+    "ChannelTalkUserChatState",
     "ChannelTalkUninstallResult",
     "ChannelTalkUpstreamError",
     "ChannelTalkUserFoundation",

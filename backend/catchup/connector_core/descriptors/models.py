@@ -6,15 +6,6 @@ from dataclasses import dataclass
 
 from catchup.connector_core.domain.structure import ConnectorBoundary
 from catchup.connector_core.domain.structure import ConnectorKey
-from catchup.connector_core.domain.structure import ConnectorStage
-
-
-@dataclass(frozen=True)
-class ConnectorTargetPlan:
-    """Tenant boundary 내부에서 어떤 target을 어떤 stage 순서로 다루는지 설명한다."""
-
-    target: str
-    stages: tuple[ConnectorStage, ...]
 
 
 @dataclass(frozen=True)
@@ -24,7 +15,7 @@ class ConnectorRuntimePlan:
     supports_full_sync: bool
     supports_incremental: bool
     supports_observability: bool
-    targets: tuple[ConnectorTargetPlan, ...] = ()
+    targets: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
