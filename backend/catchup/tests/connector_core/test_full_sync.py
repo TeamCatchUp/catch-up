@@ -477,6 +477,10 @@ class ConnectorFullSyncApplicationTests(IsolatedAsyncioTestCase):
         self.assertNotIn("base", stored_document.metadata)
         self.assertNotIn("channel_id", stored_document.metadata)
         self.assertEqual(
+            stored_document.metadata["url"],
+            "https://desk.channel.io/#/channels/channel-123/user_chats/chat-123",
+        )
+        self.assertEqual(
             stored_document.metadata["user_chat_core"]["chat"]["description"],
             "VIP renewal help",
         )

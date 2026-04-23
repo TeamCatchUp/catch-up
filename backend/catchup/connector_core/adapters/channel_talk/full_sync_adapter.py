@@ -540,7 +540,10 @@ class ChannelTalkFullSyncAdapter:
             base=DocumentBaseMetadata(
                 source="channel_talk",
                 record_id=bundle.detail.user_chat_id,
-                url=None,
+                url=self._build_desk_url(
+                    channel_id=execution.channel_id,
+                    user_chat_id=bundle.detail.user_chat_id,
+                ),
                 created_at=bundle.detail.timing.created_at,
                 updated_at=(
                     bundle.detail.timing.desk_updated_at
@@ -671,6 +674,14 @@ class ChannelTalkFullSyncAdapter:
         user_chat_id: str,
     ) -> str:
         return f"channel_talk:user_chat:{channel_id}:{user_chat_id}"
+
+    @staticmethod
+    def _build_desk_url(
+        *,
+        channel_id: str,
+        user_chat_id: str,
+    ) -> str:
+        return f"https://desk.channel.io/#/channels/{channel_id}/user_chats/{user_chat_id}"
 
     def _partition_messages(
         self,
