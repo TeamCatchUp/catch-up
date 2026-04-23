@@ -197,6 +197,6 @@ class ChannelTalkUserChatLogicalMetadata(BaseModel):
         }
 
         if base_storage.get("updated_at") is None and timing.desk_updated_at is not None:
-            storage["updated_at"] = timing.desk_updated_at
+            storage["updated_at"] = timing.desk_updated_at.isoformat()
 
         return storage

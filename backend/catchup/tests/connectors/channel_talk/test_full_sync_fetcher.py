@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from datetime import timezone
 from types import SimpleNamespace
@@ -185,7 +186,7 @@ class ChannelTalkFullSyncFetcherTests(IsolatedAsyncioTestCase):
         )
         fetcher = ChannelTalkFullSyncFetcher(client=client)
 
-        bundles = await fetcher.fetch_user_chats(
+        result = await fetcher.fetch_user_chats(
             connection=_connection(),
             states=(
                 ChannelTalkUserChatState.OPENED,
@@ -196,6 +197,7 @@ class ChannelTalkFullSyncFetcherTests(IsolatedAsyncioTestCase):
             checkpoint_state=ChannelTalkUserChatState.CLOSED,
             checkpoint_cursor="cursor-1",
         )
+        bundles = result.bundles
 
         self.assertEqual(len(bundles), 1)
         self.assertEqual(bundles[0].state, ChannelTalkUserChatState.CLOSED)
@@ -314,7 +316,7 @@ class ChannelTalkFullSyncFetcherTests(IsolatedAsyncioTestCase):
         )
         fetcher = ChannelTalkFullSyncFetcher(client=client)
 
-        bundles = await fetcher.fetch_user_chats(
+        result = await fetcher.fetch_user_chats(
             connection=_connection(),
             states=(
                 ChannelTalkUserChatState.OPENED,
@@ -322,6 +324,7 @@ class ChannelTalkFullSyncFetcherTests(IsolatedAsyncioTestCase):
             ),
             sync_window=_window(),
         )
+        bundles = result.bundles
 
         self.assertEqual(
             [bundle.detail.user_chat_id for bundle in bundles],
@@ -340,3 +343,219 @@ class ChannelTalkFullSyncFetcherTests(IsolatedAsyncioTestCase):
             [call.kwargs["since"] for call in client.list_user_chats.await_args_list],
             [None, "opened-page-2", None],
         )
+
+    async def test_fetch_user_chats_stops_current_state_when_desc_page_reaches_window_start(
+        self,
+    ) -> None:
+        page = ChannelTalkUserChatListPage(
+            items=[
+                _list_item(
+                    user_chat_id="chat-recent",
+                    state=ChannelTalkUserChatState.OPENED,
+                    ordering_marker=datetime(2026, 4, 21, 10, 0, tzinfo=timezone.utc),
+                ),
+                _list_item(
+                    user_chat_id="chat-old",
+                    state=ChannelTalkUserChatState.OPENED,
+                    ordering_marker=datetime(2026, 4, 20, 23, 59, tzinfo=timezone.utc),
+                ),
+                _list_item(
+                    user_chat_id="chat-after-old",
+                    state=ChannelTalkUserChatState.OPENED,
+                    ordering_marker=datetime(2026, 4, 21, 9, 0, tzinfo=timezone.utc),
+                ),
+            ],
+            next_cursor="opened-page-2",
+        )
+        client = SimpleNamespace(
+            list_user_chats=AsyncMock(return_value=page),
+            get_user_chat=AsyncMock(
+                return_value=_detail(
+                    user_chat_id="chat-recent",
+                    state=ChannelTalkUserChatState.OPENED,
+                )
+            ),
+            list_user_chat_messages=AsyncMock(
+                return_value=ChannelTalkUserChatMessagePage(messages=[])
+            ),
+        )
+        fetcher = ChannelTalkFullSyncFetcher(client=client)
+
+        result = await fetcher.fetch_user_chats(
+            connection=_connection(),
+            states=(ChannelTalkUserChatState.OPENED,),
+            sync_window=_window(),
+        )
+        bundles = result.bundles
+
+        self.assertEqual([bundle.detail.user_chat_id for bundle in bundles], ["chat-recent"])
+        client.get_user_chat.assert_awaited_once()
+        self.assertEqual(client.list_user_chats.await_count, 1)
+
+    async def test_fetch_user_chats_skips_records_newer_than_window_end(self) -> None:
+        page = ChannelTalkUserChatListPage(
+            items=[
+                _list_item(
+                    user_chat_id="chat-future",
+                    state=ChannelTalkUserChatState.OPENED,
+                    ordering_marker=datetime(2026, 4, 23, 0, 1, tzinfo=timezone.utc),
+                ),
+                _list_item(
+                    user_chat_id="chat-current",
+                    state=ChannelTalkUserChatState.OPENED,
+                    ordering_marker=datetime(2026, 4, 21, 9, 0, tzinfo=timezone.utc),
+                ),
+            ],
+            next_cursor=None,
+        )
+        client = SimpleNamespace(
+            list_user_chats=AsyncMock(return_value=page),
+            get_user_chat=AsyncMock(
+                return_value=_detail(
+                    user_chat_id="chat-current",
+                    state=ChannelTalkUserChatState.OPENED,
+                )
+            ),
+            list_user_chat_messages=AsyncMock(
+                return_value=ChannelTalkUserChatMessagePage(messages=[])
+            ),
+        )
+        fetcher = ChannelTalkFullSyncFetcher(client=client)
+
+        result = await fetcher.fetch_user_chats(
+            connection=_connection(),
+            states=(ChannelTalkUserChatState.OPENED,),
+            sync_window=_window(),
+        )
+
+        self.assertEqual(
+            [bundle.detail.user_chat_id for bundle in result.bundles],
+            ["chat-current"],
+        )
+        client.get_user_chat.assert_awaited_once_with(
+            access_key="access-key",
+            access_secret="access-secret",
+            user_chat_id="chat-current",
+        )
+
+    async def test_fetch_user_chats_emits_next_checkpoint_when_page_budget_is_reached(
+        self,
+    ) -> None:
+        page = ChannelTalkUserChatListPage(
+            items=[
+                _list_item(
+                    user_chat_id="chat-1",
+                    state=ChannelTalkUserChatState.OPENED,
+                    ordering_marker=datetime(2026, 4, 21, 10, 0, tzinfo=timezone.utc),
+                ),
+            ],
+            next_cursor="opened-page-2",
+        )
+        client = SimpleNamespace(
+            list_user_chats=AsyncMock(return_value=page),
+            get_user_chat=AsyncMock(
+                return_value=_detail(
+                    user_chat_id="chat-1",
+                    state=ChannelTalkUserChatState.OPENED,
+                )
+            ),
+            list_user_chat_messages=AsyncMock(
+                return_value=ChannelTalkUserChatMessagePage(messages=[])
+            ),
+        )
+        fetcher = ChannelTalkFullSyncFetcher(
+            client=client,
+            max_user_chat_pages_per_run=1,
+        )
+
+        result = await fetcher.fetch_user_chats(
+            connection=_connection(),
+            states=(ChannelTalkUserChatState.OPENED,),
+            sync_window=_window(),
+        )
+
+        self.assertEqual(
+            [bundle.detail.user_chat_id for bundle in result.bundles],
+            ["chat-1"],
+        )
+        self.assertEqual(result.next_checkpoint_state, ChannelTalkUserChatState.OPENED)
+        self.assertEqual(result.next_checkpoint_cursor, "opened-page-2")
+
+    async def test_fetch_user_chats_fetches_page_details_with_bounded_concurrency(
+        self,
+    ) -> None:
+        page = ChannelTalkUserChatListPage(
+            items=[
+                _list_item(
+                    user_chat_id="chat-1",
+                    state=ChannelTalkUserChatState.OPENED,
+                    ordering_marker=datetime(2026, 4, 21, 10, 0, tzinfo=timezone.utc),
+                ),
+                _list_item(
+                    user_chat_id="chat-2",
+                    state=ChannelTalkUserChatState.OPENED,
+                    ordering_marker=datetime(2026, 4, 21, 9, 0, tzinfo=timezone.utc),
+                ),
+            ],
+            next_cursor=None,
+        )
+
+        class ConcurrentClient:
+            def __init__(self) -> None:
+                self.list_user_chats = AsyncMock(return_value=page)
+                self.inflight_detail_calls = 0
+                self.max_inflight_detail_calls = 0
+
+            async def get_user_chat(
+                self,
+                *,
+                access_key: str,
+                access_secret: str,
+                user_chat_id: str,
+            ) -> ChannelTalkUserChatDetail:
+                _ = access_key
+                _ = access_secret
+                self.inflight_detail_calls += 1
+                self.max_inflight_detail_calls = max(
+                    self.max_inflight_detail_calls,
+                    self.inflight_detail_calls,
+                )
+                await asyncio.sleep(0)
+                self.inflight_detail_calls -= 1
+                return _detail(
+                    user_chat_id=user_chat_id,
+                    state=ChannelTalkUserChatState.OPENED,
+                )
+
+            async def list_user_chat_messages(
+                self,
+                *,
+                access_key: str,
+                access_secret: str,
+                user_chat_id: str,
+                since: str | None,
+                sort_order: str,
+            ) -> ChannelTalkUserChatMessagePage:
+                _ = access_key
+                _ = access_secret
+                _ = user_chat_id
+                _ = since
+                _ = sort_order
+                await asyncio.sleep(0)
+                return ChannelTalkUserChatMessagePage(messages=[])
+
+        client = ConcurrentClient()
+        fetcher = ChannelTalkFullSyncFetcher(
+            client=client,
+            max_concurrent_user_chat_fetches=2,
+        )
+
+        result = await fetcher.fetch_user_chats(
+            connection=_connection(),
+            states=(ChannelTalkUserChatState.OPENED,),
+            sync_window=_window(),
+        )
+        bundles = result.bundles
+
+        self.assertEqual([bundle.detail.user_chat_id for bundle in bundles], ["chat-1", "chat-2"])
+        self.assertEqual(client.max_inflight_detail_calls, 2)

@@ -882,6 +882,7 @@ class ChannelTalkUserChatMessageWebPage(BaseModel):
 
     url: str | None = None
     title: str | None = None
+    description: str | None = None
     site_name: str | None = None
     publisher: str | None = None
     author: str | None = None
@@ -1473,6 +1474,7 @@ def _parse_message_web_page(reader: "_PayloadReader") -> ChannelTalkUserChatMess
     return ChannelTalkUserChatMessageWebPage(
         url=web_page_reader.text("url", "href"),
         title=web_page_reader.text("title", "name"),
+        description=web_page_reader.text("description", "desc"),
         site_name=web_page_reader.text("siteName", "site_name"),
         publisher=web_page_reader.text("publisher"),
         author=web_page_reader.text("author"),
@@ -1606,7 +1608,11 @@ def _read_message_plain_text(
     if message_web_page is not None:
         web_page_text = "\n".join(
             value
-            for value in [message_web_page.title, message_web_page.url]
+            for value in [
+                message_web_page.title,
+                message_web_page.url,
+                message_web_page.description,
+            ]
             if value is not None
         )
         if web_page_text:

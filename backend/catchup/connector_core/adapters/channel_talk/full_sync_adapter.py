@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import Literal
 
+from fastapi.concurrency import run_in_threadpool
 from langchain_core.documents import Document
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -34,6 +34,9 @@ from catchup.connector_core.ports.full_sync import FullSyncExecutionRequest
 from catchup.connector_core.ports.full_sync import FullSyncExecutionResult
 from catchup.connector_core.ports.full_sync import FullSyncWindow
 from catchup.connectors.channel_talk.full_sync_fetcher import ChannelTalkFetchedUserChat
+from catchup.connectors.channel_talk.full_sync_fetcher import (
+    ChannelTalkFetchedUserChatsResult,
+)
 from catchup.connectors.channel_talk.full_sync_fetcher import ChannelTalkFullSyncFetcher
 from catchup.connectors.channel_talk.full_sync_helper import (
     load_channel_talk_connection,
@@ -45,15 +48,11 @@ from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessageAt
 from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessageButton
 from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessageForm
 from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessageLog
+from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatMessageWebPage
+from catchup.connectors.channel_talk.schemas import ChannelTalkUserChatState
 from catchup.connectors.channel_talk.schemas import ChannelTalkUserFoundation
 from catchup.sync.audit import SyncAuditContext
 from catchup.utils.validation import require_text
-
-
-class ChannelTalkUserChatState(StrEnum):
-    OPENED = "opened"
-    CLOSED = "closed"
-    SNOOZED = "snoozed"
 
 
 class ChannelTalkFullSyncCheckpoint(BaseModel):
@@ -240,11 +239,11 @@ class ChannelTalkFullSyncAdapter:
             sync_window=sync_window,
             fetch_states=fetch_states,
         )
-        connection = self._load_connection(execution=execution)
+        connection = await self._load_connection(execution=execution)
         managers_by_id = await self.fetcher.fetch_managers_by_id(
             connection=connection,
         )
-        bundles = await self.fetcher.fetch_user_chats(
+        fetched_user_chats = await self.fetcher.fetch_user_chats(
             connection=connection,
             states=fetch_states,
             sync_window=sync_window,
@@ -260,9 +259,16 @@ class ChannelTalkFullSyncAdapter:
         return ChannelTalkFullSyncFetchResult(
             states=fetch_states,
             sync_window=sync_window,
-            bundles=bundles,
+            bundles=fetched_user_chats.bundles,
             managers_by_id=managers_by_id,
-            fetched_record_ids=tuple(bundle.detail.user_chat_id for bundle in bundles),
+            fetched_record_ids=tuple(
+                bundle.detail.user_chat_id for bundle in fetched_user_chats.bundles
+            ),
+            next_checkpoint=self._build_next_checkpoint(
+                execution=execution,
+                sync_window=sync_window,
+                fetched_user_chats=fetched_user_chats,
+            ),
         )
 
     async def transform(
@@ -355,8 +361,6 @@ class ChannelTalkFullSyncAdapter:
             for document in transformed.documents
         ]
         document_ids = [document.document_id for document in transformed.documents]
-        if document_ids:
-            await repository.delete_documents(document_ids)
         persisted_ids = await repository.add_documents(documents, ids=document_ids)
         return ChannelTalkFullSyncPersistResult(
             persisted_count=len(persisted_ids),
@@ -408,12 +412,28 @@ class ChannelTalkFullSyncAdapter:
             ChannelTalkUserChatState.SNOOZED,
         )
 
-    def _load_connection(
+    @staticmethod
+    def _build_next_checkpoint(
+        *,
+        execution: ChannelTalkFullSyncExecutionRequest,
+        sync_window: FullSyncWindow,
+        fetched_user_chats: ChannelTalkFetchedUserChatsResult,
+    ) -> ChannelTalkFullSyncCheckpoint | None:
+        if fetched_user_chats.next_checkpoint_state is None:
+            return None
+        return ChannelTalkFullSyncCheckpoint(
+            tenant_id=execution.tenant_id,
+            state=fetched_user_chats.next_checkpoint_state,
+            window=sync_window,
+            next_cursor=fetched_user_chats.next_checkpoint_cursor,
+        )
+
+    async def _load_connection(
         self,
         *,
         execution: ChannelTalkFullSyncExecutionRequest,
     ) -> ChannelTalkCredentialsRecord:
-        connection = self._connection_loader()
+        connection = await run_in_threadpool(self._connection_loader)
         if connection is None:
             raise ValueError("channel_talk is not connected")
         if connection.channel_id != execution.channel_id:
@@ -734,7 +754,7 @@ class ChannelTalkFullSyncAdapter:
                 for message in included_messages
             )
         else:
-            lines.append("(포함된 공개 메시지 없음)")
+            lines.append("(포함된 메시지 없음)")
         return "\n".join(lines)
 
     @classmethod
@@ -819,14 +839,13 @@ class ChannelTalkFullSyncAdapter:
             content_parts.append(cls._render_attachments(message.attachments))
         if message.buttons:
             content_parts.append(cls._render_buttons(message.buttons))
-        if message.web_page is not None and not content_parts:
-            content_parts.append(
-                "\n".join(
-                    item
-                    for item in [message.web_page.title, message.web_page.url]
-                    if item
-                )
-            )
+        if message.web_page is not None:
+            web_page_text = cls._render_web_page(message.web_page)
+            if web_page_text and not cls._content_contains_web_page(
+                content_parts=content_parts,
+                web_page=message.web_page,
+            ):
+                content_parts.append(web_page_text)
         return " | ".join(item for item in content_parts if item) or "(내용 없음)"
 
     @staticmethod
@@ -885,6 +904,32 @@ class ChannelTalkFullSyncAdapter:
             )
             for button in buttons
         )
+
+    @staticmethod
+    def _render_web_page(web_page: ChannelTalkUserChatMessageWebPage) -> str:
+        return " | ".join(
+            item
+            for item in [
+                web_page.title,
+                web_page.url,
+                web_page.description,
+            ]
+            if item
+        )
+
+    @staticmethod
+    def _content_contains_web_page(
+        *,
+        content_parts: list[str],
+        web_page: ChannelTalkUserChatMessageWebPage,
+    ) -> bool:
+        content = "\n".join(content_parts)
+        expected_parts = [
+            web_page.title,
+            web_page.url,
+            web_page.description,
+        ]
+        return all(part in content for part in expected_parts if part)
 
     @staticmethod
     def _render_log_message(message_log: ChannelTalkUserChatMessageLog) -> str:

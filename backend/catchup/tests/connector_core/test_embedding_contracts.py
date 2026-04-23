@@ -47,6 +47,7 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
                 ),
                 messages=ChannelTalkUserChatMessageMetadata(
                     message_ids=["message-1", "message-2"],
+                    last_message_at=now,
                     included_message_count=2,
                     excluded_message_count=1,
                     author_types=["user", "manager"],
@@ -107,7 +108,19 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
 
         self.assertEqual(
             storage["updated_at"],
-            contract.user_chat_core.timing.desk_updated_at,
+            contract.user_chat_core.timing.desk_updated_at.isoformat(),
+        )
+
+    def test_storage_projection_keeps_nested_message_datetimes_json_serialized(
+        self,
+    ) -> None:
+        contract = self._build_contract()
+
+        storage = contract.to_storage_metadata()
+
+        self.assertEqual(
+            storage["user_chat_core"]["messages"]["last_message_at"],
+            "2026-04-22T02:10:00Z",
         )
 
     def test_storage_projection_includes_message_filter_flags(self) -> None:
