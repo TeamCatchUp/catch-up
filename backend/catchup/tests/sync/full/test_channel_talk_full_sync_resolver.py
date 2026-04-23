@@ -67,10 +67,19 @@ class ChannelTalkFullSyncResolverTests(IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             result.targets[0].target_name,
-            CHANNEL_TALK_FULL_SYNC_TARGET_ID,
+            "UserChat",
         )
         self.assertEqual(result.targets[0].target_type.value, "resource")
-        self.assertEqual(result.targets[0].metadata, {})
+        self.assertEqual(
+            result.targets[0].metadata,
+            {
+                "runtime_target_kind": "bootstrap",
+                "boundary": "tenant",
+                "target": CHANNEL_TALK_FULL_SYNC_TARGET_ID,
+                "stage": CHANNEL_TALK_FULL_SYNC_TARGET_ID,
+                "channel_id": CHANNEL_ID,
+            },
+        )
 
     async def test_resolver_rejects_unknown_target_ids(self) -> None:
         with patch(

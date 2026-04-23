@@ -35,6 +35,7 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
                     channel_id="channel-1",
                     user_chat_id="chat-123",
                     state="opened",
+                    description="VIP onboarding question",
                 ),
                 customer=ChannelTalkUserChatCustomerMetadata(
                     user_id="user-1",
@@ -88,17 +89,15 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
         self.assertEqual(storage["entity_type"], "user_chat")
         self.assertEqual(storage["contextual_content"], "Conversation transcript")
         self.assertEqual(storage["record_id"], "chat-123")
-        self.assertEqual(storage["channel_id"], "channel-1")
-        self.assertEqual(storage["user_chat_id"], "chat-123")
-        self.assertEqual(storage["state"], "opened")
-        self.assertEqual(storage["user_id"], "user-1")
-        self.assertEqual(storage["assignee_id"], "manager-1")
-        self.assertEqual(storage["chunk_index"], 0)
-        self.assertEqual(storage["chunk_count"], 1)
-        self.assertEqual(storage["tag_keys"], ["vip"])
-        self.assertEqual(storage["tag_names"], ["VIP"])
-        self.assertIn("base", storage)
+        self.assertNotIn("base", storage)
+        self.assertNotIn("channel_id", storage)
+        self.assertNotIn("user_chat_id", storage)
+        self.assertNotIn("included_message_count", storage)
         self.assertIn("user_chat_core", storage)
+        self.assertEqual(
+            storage["user_chat_core"]["chat"]["description"],
+            "VIP onboarding question",
+        )
 
     def test_storage_projection_falls_back_to_desk_updated_at(self) -> None:
         contract = self._build_contract()
@@ -110,6 +109,30 @@ class ChannelTalkUserChatLogicalMetadataTests(TestCase):
             storage["updated_at"],
             contract.user_chat_core.timing.desk_updated_at,
         )
+
+    def test_storage_projection_includes_message_filter_flags(self) -> None:
+        contract = self._build_contract()
+        contract.user_chat_core.messages.contains_bot_messages = True
+        contract.user_chat_core.messages.contains_private_events = True
+        contract.user_chat_core.messages.contains_form_messages = True
+
+        storage = contract.to_storage_metadata()
+
+        message_metadata = storage["user_chat_core"]["messages"]
+        self.assertEqual(message_metadata["included_message_count"], 2)
+        self.assertEqual(message_metadata["excluded_message_count"], 1)
+        self.assertTrue(message_metadata["contains_bot_messages"])
+        self.assertTrue(message_metadata["contains_private_events"])
+        self.assertTrue(message_metadata["contains_form_messages"])
+
+    def test_customer_metadata_allows_missing_user_id(self) -> None:
+        contract = self._build_contract()
+        contract.user_chat_core.customer.user_id = None
+
+        storage = contract.to_storage_metadata()
+
+        self.assertIsNone(contract.user_chat_core.customer.user_id)
+        self.assertIsNone(storage["user_chat_core"]["customer"]["user_id"])
 
     def test_contract_rejects_record_id_mismatch(self) -> None:
         now = datetime(2026, 4, 22, 2, 10, tzinfo=timezone.utc)

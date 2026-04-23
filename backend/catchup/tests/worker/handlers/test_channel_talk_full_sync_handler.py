@@ -89,6 +89,7 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
         self.handler._application.run_full_sync = AsyncMock(
             return_value=application_result
         )
+        context = _build_context()
 
         with patch(
             "catchup.worker.handlers.channel_talk_full_sync_handler.load_channel_talk_connection",
@@ -102,7 +103,7 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
             )
 
             result = await self.handler.handle(
-                context=_build_context(),
+                context=context,
                 service_cache={},
             )
 
@@ -111,6 +112,11 @@ class ChannelTalkFullSyncHandlerTests(IsolatedAsyncioTestCase):
         sync_window = self.handler._application.run_full_sync.await_args.kwargs["sync_window"]
 
         self.assertEqual(execution.channel_id, CHANNEL_ID)
+        self.assertEqual(execution.audit_context.connector, context.connector)
+        self.assertEqual(execution.audit_context.scope_id, context.scope_id)
+        self.assertEqual(execution.audit_context.target_id, context.target_id)
+        self.assertEqual(execution.audit_context.job_id, context.job_id)
+        self.assertEqual(execution.audit_context.task_id, context.event_id)
         self.assertEqual(sync_window.window_start.isoformat(), "2024-04-22T00:00:00+00:00")
         self.assertEqual(sync_window.window_end, fixed_now)
         self.assertEqual(result.error_count, 0)

@@ -82,10 +82,16 @@ class ChannelTalkSyncApiTests(TestCase):
                 "targets": [
                     {
                         "target_id": CHANNEL_TALK_FULL_SYNC_TARGET_ID,
-                        "display_name": CHANNEL_TALK_FULL_SYNC_TARGET_ID,
+                        "display_name": "UserChat",
                         "target_type": "resource",
                         "is_accessible": True,
-                        "metadata": {},
+                        "metadata": {
+                            "runtime_target_kind": "bootstrap",
+                            "boundary": "tenant",
+                            "target": CHANNEL_TALK_FULL_SYNC_TARGET_ID,
+                            "stage": CHANNEL_TALK_FULL_SYNC_TARGET_ID,
+                            "channel_id": CHANNEL_ID,
+                        },
                     }
                 ],
             },

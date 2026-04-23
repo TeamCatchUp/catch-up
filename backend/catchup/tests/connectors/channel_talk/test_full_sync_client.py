@@ -230,6 +230,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
                     "managed": True,
                     "priority": "urgent",
                     "name": "VIP onboarding",
+                    "description": "VIP renewal help",
                     "goalState": "resolved",
                     "userId": "user-123",
                     "managers": [
@@ -285,6 +286,7 @@ class ChannelTalkFullSyncClientTests(IsolatedAsyncioTestCase):
         self.assertEqual(detail.channel_id, "channel-123")
         self.assertEqual(detail.state, ChannelTalkUserChatState.OPENED)
         self.assertTrue(detail.managed)
+        self.assertEqual(detail.description, "VIP renewal help")
         self.assertEqual(detail.customer.external_user_id, "user-123")
         self.assertEqual(detail.customer.member_id, "member-123")
         self.assertEqual(detail.assignment.manager_ids, ("manager-1",))
