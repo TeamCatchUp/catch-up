@@ -12,6 +12,12 @@ from catchup.connectors.channel_talk.full_sync_helper import (
 from catchup.connectors.channel_talk.full_sync_helper import (
     require_channel_talk_channel_id,
 )
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    CHANNEL_TALK_BOOTSTRAP_DISPLAY_NAME,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    build_channel_talk_bootstrap_metadata,
+)
 from catchup.sync.common.exceptions import SyncRequestException
 from catchup.sync.common.protocols import FullSyncTargetResolverProtocol
 from catchup.sync.common.schemas import FullSyncDispatchRequest
@@ -55,9 +61,10 @@ class ChannelTalkFullSyncTargetResolver(FullSyncTargetResolverProtocol):
             rows=[CHANNEL_TALK_FULL_SYNC_TARGET_ID],
             target_type="resource",
             key_getter=lambda target_id: target_id,
-            name_getter=lambda target_name: target_name,
+            name_getter=lambda _: CHANNEL_TALK_BOOTSTRAP_DISPLAY_NAME,
             error_message="requested target_ids contain unknown channel_talk targets",
             error_metadata={"channel_id": channel_id},
+            metadata_getter=lambda _: build_channel_talk_bootstrap_metadata(channel_id),
             log_context={
                 "connector": "channel_talk",
                 "channel_id": channel_id,

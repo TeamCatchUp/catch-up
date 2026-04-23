@@ -14,9 +14,21 @@ from sqlalchemy import select
 from catchup.connectors.atlassian.oauth_client import AtlassianOAuthClient
 from catchup.connectors.atlassian.token_manager import AtlassianTokenManager
 from catchup.connectors.atlassian.token_manager import AtlassianTokenProvider
-from catchup.connectors.channel_talk.full_sync_helper import CHANNEL_TALK_FULL_SYNC_TARGET_ID
-from catchup.connectors.channel_talk.full_sync_helper import load_channel_talk_connection
-from catchup.connectors.channel_talk.full_sync_helper import require_channel_talk_channel_id
+from catchup.connectors.channel_talk.full_sync_helper import (
+    CHANNEL_TALK_FULL_SYNC_TARGET_ID,
+)
+from catchup.connectors.channel_talk.full_sync_helper import (
+    load_channel_talk_connection,
+)
+from catchup.connectors.channel_talk.full_sync_helper import (
+    require_channel_talk_channel_id,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    CHANNEL_TALK_BOOTSTRAP_DISPLAY_NAME,
+)
+from catchup.connectors.channel_talk.full_sync_target_contract import (
+    build_channel_talk_bootstrap_metadata,
+)
 from catchup.connectors.confluence.metadata_service import ConfluenceMetadataService
 from catchup.connectors.github.auth import get_github_app_service
 from catchup.connectors.github.client import GitHubApiClient
@@ -614,10 +626,10 @@ class SyncQueryService:
             targets=[
                 SyncTargetResult(
                     target_id=CHANNEL_TALK_FULL_SYNC_TARGET_ID,
-                    display_name=CHANNEL_TALK_FULL_SYNC_TARGET_ID,
+                    display_name=CHANNEL_TALK_BOOTSTRAP_DISPLAY_NAME,
                     target_type=SyncTargetType.RESOURCE,
                     is_accessible=True,
-                    metadata={},
+                    metadata=build_channel_talk_bootstrap_metadata(normalized_scope_id),
                 )
             ],
         )
