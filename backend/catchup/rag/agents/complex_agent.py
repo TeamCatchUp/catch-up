@@ -1,15 +1,14 @@
 import structlog
 from langchain.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 
-from catchup.costs.utils import extract_token_usages
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
-from catchup.rag.agents.standard_agent import _build_docs_summary
-from catchup.rag.agents.standard_agent import _drop_orphaned_tool_calls
 from catchup.rag.agents.tools.search_tools import REACT_TOOLS
+from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
+from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
+from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.structures import GapAnalysis
 from catchup.rag.schemas.structures import SearchPlan
@@ -38,17 +37,15 @@ async def complex_planner_node(state: AgentState, llm: BaseChatModel):
         method="function_calling",
         include_raw=True,
     )
-    token_usages = {"token_breakdown": {}}
-
+    
     try:
-        async with rag_semaphores.final_answer:
-            raw_response = await structured_llm.ainvoke(
-                input=[system_message, HumanMessage(content=query)]
-            )
-            token_usages = extract_token_usages(raw_response.get("raw"))
-            plan: SearchPlan = raw_response.get("parsed")
-    except Exception as e:
-        logger.warning("complex_planner_node_failed", error=str(e), exc_info=True)
+        response, token_usages = await ainvoke_llm_with_token_usage(
+            llm=structured_llm,
+            messages=[system_message, HumanMessage(content=query)],
+            semaphore=rag_semaphores.final_answer
+        )
+        plan: SearchPlan = response.get("parsed")
+    except Exception:
         return {"search_plan": None}
 
     logger.info(
@@ -95,7 +92,7 @@ async def complex_agent_node(state: AgentState, llm: BaseChatModel):
     system_prompt = prompt_loader.get_prompt(
         "rag/complex_agent_system",
         search_plan_text=_format_search_plan(search_plan),
-        accumulated_docs_summary=_build_docs_summary(accumulated_docs),
+        accumulated_docs_summary=build_docs_summary(accumulated_docs),
         gap_suggestions=gap_suggestions,
         **global_context,
     )
@@ -103,17 +100,15 @@ async def complex_agent_node(state: AgentState, llm: BaseChatModel):
     query = state.get("rewritten_query") or state.get("original_query", "")
 
     llm_with_tools = llm.bind_tools(REACT_TOOLS)
-    token_usages = {"token_breakdown": {}}
 
-    existing_messages = _drop_orphaned_tool_calls(state.get("messages", []))
+    existing_messages = drop_orphaned_tool_calls(state.get("messages", []))
     try:
-        async with rag_semaphores.final_answer:
-            response: AIMessage = await llm_with_tools.ainvoke(
-                input=[system_message, HumanMessage(content=query)] + existing_messages
-            )
-            token_usages = extract_token_usages(response)
-    except Exception as e:
-        logger.warning("complex_agent_node_failed", error=str(e), exc_info=True)
+        response, token_usages = await ainvoke_llm_with_token_usage(
+            llm=llm_with_tools,
+            messages=[system_message, HumanMessage(content=query)] + existing_messages,
+            semaphore=rag_semaphores.final_answer
+        )
+    except Exception:
         return {"agent_iteration": agent_iteration + 1}
 
     tool_calls = getattr(response, "tool_calls", None) or []
@@ -153,7 +148,7 @@ async def gap_analysis_node(state: AgentState, llm: BaseChatModel):
 
     system_prompt = prompt_loader.get_prompt(
         "rag/gap_analysis_system",
-        accumulated_docs_summary=_build_docs_summary(accumulated_docs),
+        accumulated_docs_summary=build_docs_summary(accumulated_docs),
         **global_context,
     )
     system_message = build_system_message(system_prompt)
@@ -163,17 +158,15 @@ async def gap_analysis_node(state: AgentState, llm: BaseChatModel):
         method="function_calling",
         include_raw=True,
     )
-    token_usages = {"token_breakdown": {}}
 
     try:
-        async with rag_semaphores.final_answer:
-            raw_response = await structured_llm.ainvoke(
-                input=[system_message, HumanMessage(content=query)]
-            )
-            token_usages = extract_token_usages(raw_response.get("raw"))
-            analysis: GapAnalysis = raw_response.get("parsed")
-    except Exception as e:
-        logger.warning("gap_analysis_node_failed", error=str(e), exc_info=True)
+        response, token_usages = await ainvoke_llm_with_token_usage(
+            llm=structured_llm,
+            messages=[system_message, HumanMessage(content=query)],
+            semaphore=rag_semaphores.final_answer
+        )
+        analysis: GapAnalysis = response.get("parsed")
+    except Exception:
         # 실패 시 충분한 것으로 간주해 generate 단계로 진행
         return {"gap_analysis": GapAnalysis(is_sufficient=True, reasoning="gap analysis 실패, 강제 진행")}
 

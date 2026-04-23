@@ -2,18 +2,22 @@ import functools
 import json
 import re
 import time
+from collections import Counter
 from re import DOTALL
 from typing import Annotated
+from typing import Any
 from typing import Awaitable
 from typing import Callable
 
 import structlog
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
+from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
 from langchain_core.messages import SystemMessage
 from langgraph.graph.message import add_messages
 
+from catchup.costs.utils import extract_token_usages
 from catchup.rag.policies import FALLBACK_ANSWER
 from catchup.rag.schemas.sources import BaseSource
 
@@ -21,9 +25,70 @@ from catchup.rag.schemas.sources import BaseSource
 logger = structlog.get_logger("catchup.graph")
 
 
+def drop_orphaned_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
+    """마지막 AIMessage에 tool_calls가 있지만 ToolMessage가 없는 경우 제거한다."""
+    if not messages:
+        return messages
+    last = messages[-1]
+    if isinstance(last, AIMessage) and getattr(last, "tool_calls", None):
+        logger.warning("dropping_orphaned_tool_call_message", message_id=getattr(last, "id", None))
+        return list(messages[:-1])
+    return messages
+
+
+def build_docs_summary(docs: list[Document], max_docs: int = 5) -> str:
+    if not docs:
+        return "아직 수집된 문서 없음"
+
+    source_counts = Counter(d.metadata.get("source", "unknown") for d in docs)
+    source_str = ", ".join(f"{src}:{cnt}" for src, cnt in source_counts.items())
+    lines = [f"총 {len(docs)}개 문서 수집됨 ({source_str})", ""]
+
+    for i, doc in enumerate(docs[:max_docs], 1):
+        source = doc.metadata.get("source", "unknown")
+        temporal = resolve_temporal_context(doc.metadata)
+        snippet = doc.page_content[:100].replace("\n", " ")
+        lines.append(f"[{i}] ({source}) {temporal}\n{snippet}")
+
+    if len(docs) > max_docs:
+        lines.append(f"... 외 {len(docs) - max_docs}개")
+
+    return "\n".join(lines)
+
+
+async def ainvoke_llm_with_token_usage(
+    llm: Any,
+    messages: list[BaseMessage],
+    semaphore: Any = None,
+    **kwargs: Any
+) -> tuple[Any, dict]:
+    """LLM을 호출하고 토큰 사용량을 추출한다. 에러 발생 시 예외를 전파한다."""
+    token_usages = {"token_breakdown": {}}
+    try:
+        if semaphore:
+            async with semaphore:
+                response = await llm.ainvoke(input=messages, **kwargs)
+        else:
+            response = await llm.ainvoke(input=messages, **kwargs)
+        
+        # response가 dict인 경우 (with_structured_output include_raw=True) 처리
+        raw_response = response.get("raw") if isinstance(response, dict) else response
+        token_usages = extract_token_usages(raw_response)
+        return response, token_usages
+    except Exception as e:
+        logger.warning("llm_call_failed", error=str(e), exc_info=True)
+        raise e
+
+
 # 사용자-어시스턴트 대화 전처리 함수들
 def filter_conversation(messages: Annotated[list, add_messages]):
     return [m for m in messages if isinstance(m, (HumanMessage, AIMessage))]
+
+
+def get_formatted_history_text(
+    conversation_history: list[HumanMessage | AIMessage],
+) -> str:
+    return "\n".join([f"{msg.type}: {msg.content}" for msg in conversation_history])
 
 
 def get_conversation_history(messages: Annotated[list, add_messages]):

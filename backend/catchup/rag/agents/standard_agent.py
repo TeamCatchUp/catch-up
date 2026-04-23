@@ -1,19 +1,15 @@
-from collections import Counter
-
 import structlog
 from langchain.chat_models import BaseChatModel
-from langchain_core.documents import Document
-from langchain_core.messages import AIMessage
-from langchain_core.messages import BaseMessage
 from langchain_core.messages import HumanMessage
 
-from catchup.costs.utils import extract_token_usages
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.agents.tools.search_tools import REACT_TOOLS
+from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
+from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
+from catchup.rag.nodes.utils import drop_orphaned_tool_calls
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.nodes.utils import resolve_temporal_context
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
 
@@ -38,24 +34,22 @@ async def standard_agent_node(state: AgentState, llm: BaseChatModel):
 
     system_prompt = prompt_loader.get_prompt(
         "rag/standard_agent_system",
-        accumulated_docs_summary=_build_docs_summary(accumulated_docs),
+        accumulated_docs_summary=build_docs_summary(accumulated_docs),
         **global_context,
     )
     system_message = build_system_message(system_prompt)
     query = state.get("rewritten_query") or state.get("original_query", "")
 
     llm_with_tools = llm.bind_tools(REACT_TOOLS)
-    token_usages = {"token_breakdown": {}}
 
-    existing_messages = _drop_orphaned_tool_calls(state.get("messages", []))
+    existing_messages = drop_orphaned_tool_calls(state.get("messages", []))
     try:
-        async with rag_semaphores.analysis:
-            response: AIMessage = await llm_with_tools.ainvoke(
-                input=[system_message, HumanMessage(content=query)] + existing_messages
-            )
-            token_usages = extract_token_usages(response)
-    except Exception as e:
-        logger.warning("standard_agent_node_failed", error=str(e), exc_info=True)
+        response, token_usages = await ainvoke_llm_with_token_usage(
+            llm=llm_with_tools,
+            messages=[system_message, HumanMessage(content=query)] + existing_messages,
+            semaphore=rag_semaphores.analysis
+        )
+    except Exception:
         return {"agent_iteration": agent_iteration + 1}
 
     tool_calls = getattr(response, "tool_calls", None) or []
@@ -108,36 +102,3 @@ async def collect_docs_node(state: AgentState):
         capped=len(accumulated) > _RERANK_INPUT_WINDOW,
     )
     return {"retrieved_docs": capped}
-
-
-def _drop_orphaned_tool_calls(messages: list[BaseMessage]) -> list[BaseMessage]:
-    """마지막 AIMessage에 tool_calls가 있지만 ToolMessage가 없는 경우 제거한다.
-    라우터 버그나 이전 오류로 인해 state에 남은 orphaned tool_use 블록을 정리해
-    Bedrock ValidationException을 예방한다."""
-    if not messages:
-        return messages
-    last = messages[-1]
-    if isinstance(last, AIMessage) and getattr(last, "tool_calls", None):
-        logger.warning("dropping_orphaned_tool_call_message", message_id=getattr(last, "id", None))
-        return list(messages[:-1])
-    return messages
-
-
-def _build_docs_summary(docs: list[Document]) -> str:
-    if not docs:
-        return "아직 수집된 문서 없음"
-
-    source_counts = Counter(d.metadata.get("source", "unknown") for d in docs)
-    source_str = ", ".join(f"{src}:{cnt}" for src, cnt in source_counts.items())
-    lines = [f"총 {len(docs)}개 문서 수집됨 ({source_str})", ""]
-
-    for i, doc in enumerate(docs[:5], 1):
-        source = doc.metadata.get("source", "unknown")
-        temporal = resolve_temporal_context(doc.metadata)
-        snippet = doc.page_content[:100].replace("\n", " ")
-        lines.append(f"[{i}] ({source}) {temporal}\n{snippet}")
-
-    if len(docs) > 5:
-        lines.append(f"... 외 {len(docs) - 5}개")
-
-    return "\n".join(lines)

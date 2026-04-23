@@ -24,3 +24,6 @@ Obsidian
 docs/
 .omx/
 .claude/
+conductor/
+GEMINI.md
+.gemini/
