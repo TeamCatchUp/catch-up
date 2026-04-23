@@ -8,13 +8,24 @@ from fastapi.concurrency import run_in_threadpool
 from catchup.audit.actions import FullSyncAction
 from catchup.audit.metadata import FullSyncEventAuditMetadata
 from catchup.audit.utils import audit_log
-from catchup.connector_core.adapters.channel_talk.full_sync_adapter import ChannelTalkFullSyncAdapter
-from catchup.connector_core.adapters.channel_talk.full_sync_adapter import ChannelTalkFullSyncExecutionRequest
+from catchup.connector_core.adapters.channel_talk.full_sync_adapter import (
+    ChannelTalkFullSyncAdapter,
+)
+from catchup.connector_core.adapters.channel_talk.full_sync_adapter import (
+    ChannelTalkFullSyncExecutionRequest,
+)
 from catchup.connector_core.application.full_sync import ConnectorFullSyncApplication
 from catchup.connector_core.ports.full_sync import FullSyncWindow
-from catchup.connectors.channel_talk.full_sync_helper import CHANNEL_TALK_FULL_SYNC_TARGET_ID
-from catchup.connectors.channel_talk.full_sync_helper import load_channel_talk_connection
-from catchup.connectors.channel_talk.full_sync_helper import require_channel_talk_channel_id
+from catchup.connectors.channel_talk.full_sync_helper import (
+    CHANNEL_TALK_FULL_SYNC_TARGET_ID,
+)
+from catchup.connectors.channel_talk.full_sync_helper import (
+    load_channel_talk_connection,
+)
+from catchup.connectors.channel_talk.full_sync_helper import (
+    require_channel_talk_channel_id,
+)
+from catchup.sync.audit import SyncAuditContext
 from catchup.sync.common.schemas import FullSyncContext
 from catchup.sync.common.schemas import TargetSyncResult
 from catchup.worker.handlers.base_full_sync_handler import BaseFullSyncHandler
@@ -63,6 +74,13 @@ class ChannelTalkFullSyncHandler(BaseFullSyncHandler):
         result = await self._application.run_full_sync(
             execution=ChannelTalkFullSyncExecutionRequest(
                 tenant_id=channel_id,
+                audit_context=SyncAuditContext(
+                    connector=context.connector,
+                    scope_id=context.scope_id,
+                    target_id=context.target_id,
+                    job_id=context.job_id,
+                    task_id=context.event_id,
+                ),
             ),
             sync_window=FullSyncWindow(
                 window_start=window_start,
