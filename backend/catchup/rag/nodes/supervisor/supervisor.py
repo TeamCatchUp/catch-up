@@ -1,15 +1,14 @@
 import structlog
 from langchain.chat_models import BaseChatModel
-from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
 
-from catchup.costs.utils import extract_token_usages
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
+from catchup.rag.nodes.utils import build_docs_summary
 from catchup.rag.nodes.utils import build_system_message
+from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
-from catchup.rag.nodes.utils import resolve_temporal_context
 from catchup.rag.schemas.structures import PipelinePlan
 from catchup.rag.semaphores import rag_semaphores
 from catchup.rag.state import AgentState
@@ -35,7 +34,7 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
 
     # doc_cache는 세션 내 누적 검색 결과 전체. retrieved_docs(최근 1턴)보다 넓은 맥락을 제공한다.
     doc_cache = state.get("doc_cache", [])
-    retrieved_docs_summary = _build_docs_summary(doc_cache)
+    retrieved_docs_summary = build_docs_summary(doc_cache, max_docs=_MAX_DOCS_SUMMARY)
 
     system_prompt = prompt_loader.get_prompt(
         "rag/supervisor",
@@ -56,10 +55,12 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
     )
 
     try:
-        async with rag_semaphores.final_answer:
-            raw_response = await structured_llm.ainvoke(input=input_messages)
-            token_usages = extract_token_usages(raw_response.get("raw"))
-            pipeline_plan: PipelinePlan = raw_response.get("parsed")
+        response, token_usages = await ainvoke_llm_with_token_usage(
+            llm=structured_llm,
+            messages=input_messages,
+            semaphore=rag_semaphores.final_answer
+        )
+        pipeline_plan: PipelinePlan = response.get("parsed")
 
         _NO_RETRIEVAL = {"direct_answer", "clarify"}
         intent = "chitchat" if pipeline_plan.pipeline_type in _NO_RETRIEVAL else "search_pipeline"
@@ -121,31 +122,4 @@ async def supervisor_node(state: AgentState, llm: BaseChatModel):
             "intent": "search_pipeline",
             "pipeline_plan": None,
             "turn_number": state.get("turn_number", 0) + 1,
-            **token_usages,
         }
-
-
-def _build_docs_summary(docs: list[Document]) -> str:
-    """Supervisor의 reuse 판단을 위한 retrieved_docs 요약 생성.
-
-    reuse 여부는 문서의 시간적 신선도가 아니라 현재 대화 맥락과의 의미적 관련성으로
-    판단해야 하므로, 기계적 stale 필터링 없이 항상 전체 요약을 반환한다.
-    """
-    if not docs:
-        return ""
-
-    shown = docs[:_MAX_DOCS_SUMMARY]
-    lines = []
-    for i, doc in enumerate(shown, 1):
-        source = doc.metadata.get("source", "unknown")
-        # page_content: ingestion 시점에 생성된 영문 요약 (Confluence 제외)
-        # Confluence는 요약 없이 원문이 들어있으므로 contextual_content를 슬라이싱
-        if source == "confluence":
-            content = (doc.metadata.get("contextual_content") or "")[:200]
-        else:
-            content = doc.page_content
-        temporal = resolve_temporal_context(doc.metadata)
-        lines.append(f"[{i}] (Source: {source}) {temporal}\n{content}")
-    if len(docs) > _MAX_DOCS_SUMMARY:
-        lines.append(f"... and {len(docs) - _MAX_DOCS_SUMMARY} more documents.")
-    return "\n\n".join(lines)

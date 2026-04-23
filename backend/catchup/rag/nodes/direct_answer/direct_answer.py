@@ -5,10 +5,10 @@ from langchain.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 
-from catchup.costs.utils import extract_token_usages
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import build_system_message
+from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.policies import FALLBACK_ANSWER
@@ -43,17 +43,17 @@ async def direct_answer_node(state: AgentState, llm: BaseChatModel):
         + [HumanMessage(content=query)]
     )
 
-    token_usages = {"token_breakdown": {}}
-
     try:
-        async with rag_semaphores.analysis:
-            raw_response = await llm.ainvoke(input=messages)
-            token_usages = extract_token_usages(raw_response)
-            logger.debug(
-                "direct_answer_generated",
-                original_query=state.get("original_query"),
-                answer=raw_response.content,
-            )
+        raw_response, token_usages = await ainvoke_llm_with_token_usage(
+            llm=llm,
+            messages=messages,
+            semaphore=rag_semaphores.analysis
+        )
+        logger.debug(
+            "direct_answer_generated",
+            original_query=state.get("original_query"),
+            answer=raw_response.content,
+        )
 
     except Exception as e:
         logger.error(

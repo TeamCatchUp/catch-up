@@ -1,9 +1,9 @@
 import structlog
 from langchain.chat_models import BaseChatModel
 
-from catchup.costs.utils import extract_token_usages
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
+from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.schemas.structures import VectorDbSearchPlan
 from catchup.rag.schemas.structures import VectorDbSearchQuery
@@ -31,10 +31,12 @@ async def generate_vector_queries_node(state: AgentState, llm: BaseChatModel):
     )
 
     try:
-        async with rag_semaphores.analysis:
-            raw_response = await structured_llm.ainvoke(input=prompt)
-            token_usages = extract_token_usages(raw_response.get("raw"))
-            plan: VectorDbSearchPlan = raw_response.get("parsed")
+        response, token_usages = await ainvoke_llm_with_token_usage(
+            llm=structured_llm,
+            messages=prompt,
+            semaphore=rag_semaphores.analysis
+        )
+        plan: VectorDbSearchPlan = response.get("parsed")
     
     except Exception as e:
         logger.warning(

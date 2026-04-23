@@ -6,10 +6,10 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.messages import HumanMessage
 
-from catchup.costs.utils import extract_token_usages
 from catchup.costs.utils import token_usage
 from catchup.prompts.loader import prompt_loader
 from catchup.rag.nodes.utils import build_system_message
+from catchup.rag.nodes.utils import ainvoke_llm_with_token_usage
 from catchup.rag.nodes.utils import get_conversation_history
 from catchup.rag.nodes.utils import log_node
 from catchup.rag.nodes.utils import mark_citations
@@ -89,17 +89,19 @@ async def generate_final_answer_node(state: AgentState, llm: BaseChatModel):
     
     # LLM 호출
     try:
-        async with rag_semaphores.final_answer:
-            raw_response = await llm.ainvoke(input=messages)
-            token_usages = extract_token_usages(raw_response)
-            full_answer = raw_response.content
-            
-            logger.debug(
-                "final_answer_generated",
-                original_query=state.get("original_query"),
-                rewritten_query=state.get("rewritten_query"),
-                full_answer=full_answer
-            )
+        raw_response, token_usages = await ainvoke_llm_with_token_usage(
+            llm=llm,
+            messages=messages,
+            semaphore=rag_semaphores.final_answer
+        )
+        full_answer = raw_response.content
+        
+        logger.debug(
+            "final_answer_generated",
+            original_query=state.get("original_query"),
+            rewritten_query=state.get("rewritten_query"),
+            full_answer=full_answer
+        )
 
     except Exception as e:
         logger.warning(
