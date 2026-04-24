@@ -118,13 +118,13 @@ export default function RagAnswerPage() {
               </div>
             )}
 
-            {/* 날짜 구분선 — 세션 첫 메시지의 생성 시각 기준 */}
-            <DateDivider
-              className="mb-8 w-full max-w-192.75"
-              date={
-                chat.chatData?.messages[0]?.timestamp ? new Date(chat.chatData.messages[0].timestamp) : undefined
-              }
-            />
+            {/* 날짜 구분선 — 세션 첫 메시지의 생성 시각 기준 (messages는 created_at 오름차순 정렬 — sessionDataLoader 참고) */}
+            {chat.chatData?.messages[0]?.timestamp && (
+              <DateDivider
+                className="mb-8 w-full max-w-192.75"
+                date={new Date(chat.chatData.messages[0].timestamp)}
+              />
+            )}
 
             {/* 모든 Q&A 쌍을 순서대로 렌더링 */}
             <div className="mx-auto flex w-full max-w-193.25 flex-1 flex-col gap-12">

@@ -3,7 +3,7 @@
 import { cn } from '@/shared/utils/cn';
 
 interface DateDividerProps {
-  date?: Date;
+  date: Date;
   formatDate?: (date: Date) => string;
   className?: string;
 }
@@ -14,7 +14,7 @@ const defaultFormatDate = (date: Date): string => {
   return `${month}.${day}`;
 };
 
-const DateDivider = ({ date = new Date(), formatDate = defaultFormatDate, className }: DateDividerProps) => {
+export default function DateDivider({ date, formatDate = defaultFormatDate, className }: DateDividerProps) {
   const formattedDate = formatDate(date);
 
   return (
@@ -26,6 +26,4 @@ const DateDivider = ({ date = new Date(), formatDate = defaultFormatDate, classN
       <div className="border-edge-neutral flex-1 border-t" />
     </div>
   );
-};
-
-export default DateDivider;
+}
