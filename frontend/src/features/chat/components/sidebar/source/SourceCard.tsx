@@ -1,5 +1,4 @@
 import type { ChatSource } from '@/features/chat/types';
-import LightbulbFilled from '@/public/icons/icon/lightbulb_filled.svg';
 import OpenInNew from '@/public/icons/icon/open_in_new.svg';
 import Tag from '@/public/icons/icon/tag.svg';
 import Confluence from '@/public/icons/logo/Confluence.svg';
@@ -18,9 +17,6 @@ interface Props {
 // source_type을 플랫폼 로고 카테고리로 매핑하기 위한 타입
 // code | pr | github_issue → 'github'로 통합
 type SourceLogoType = 'jira' | 'github' | 'slack' | 'confluence';
-
-// 이 출처가 사용된 이유(content) 미리보기 최대 글자 수
-const REASON_PREVIEW_MAX_LENGTH = 120;
 
 const INTEGRATION_LABEL: Record<SourceLogoType, string> = {
   slack: 'Slack',
@@ -59,15 +55,6 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
   const titleText = source.title?.trim() ? source.title : '-';
   // Slack 카드는 title을 따옴표로 감싸 메시지 원문처럼 표현
   const displayTitle = isSlack && source.title?.trim() ? `"${titleText}"` : titleText;
-  const reasonText = source.content?.trim() ? source.content : '-';
-
-  // content가 길면 120자까지 자르고 "...더보기" 표시
-  const reasonPreview =
-    reasonText.length > REASON_PREVIEW_MAX_LENGTH
-      ? reasonText.slice(0, REASON_PREVIEW_MAX_LENGTH).trimEnd()
-      : reasonText;
-  const isReasonTrimmed = reasonText.length > REASON_PREVIEW_MAX_LENGTH;
-
   const dateText = source.date?.trim() ? source.date : '-';
   const authorText = source.author?.trim() ? source.author : '-';
 
@@ -75,7 +62,7 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
     <button
       type="button"
       onClick={handleClick}
-      className="bg-fill-normal flex w-full cursor-pointer flex-col gap-2.5 rounded-xl px-1 py-2.5 text-left"
+      className="flex w-full cursor-pointer flex-col items-start gap-2.5 text-left"
     >
       {/* Row 1: 플랫폼 로고+카운트 배지 + 통합 이름 + 원문 열기 버튼 */}
       <div className="flex w-full items-center gap-2.5">
@@ -83,19 +70,19 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
           {renderSourceLogo(logoType)}
           {showCount && <span className="text-body-xsmall text-content-strong whitespace-nowrap">{count ?? 0}</span>}
         </div>
-        <span className="text-label-xsmall text-content-alternative min-w-0 flex-1 truncate">{integrationLabel}</span>
+        <span className="text-label-xsmall text-content-alternative truncate">{integrationLabel}</span>
         <span
           aria-hidden="true"
           className="bg-fill-strong border-edge-neutral flex size-6.5 shrink-0 items-center justify-center rounded-lg border p-0.5"
         >
-          <OpenInNew className="text-icon-alternative size-4.5" />
+          <OpenInNew className="text-icon-neutral size-4.5" />
         </span>
       </div>
 
       {/* Row 2: 태그 아이콘 + 채널/워크스페이스/저장소명 */}
       <div className="flex w-full items-center gap-2">
         <span className="bg-fill-normal border-edge-normal rounded-md2 flex shrink-0 items-center border p-0.5">
-          <Tag className="text-icon-alternative size-4" />
+          <Tag className="text-icon-neutral size-4" />
         </span>
         <span className="text-body-xsmall text-content-alternative min-w-0 flex-1 truncate">{repoText}</span>
       </div>
@@ -108,20 +95,6 @@ export default function SourceCard({ source, showCount = true, count }: Props) {
         <span className="whitespace-nowrap">{authorText}</span>
         <span className="bg-dim-black-10 size-1 shrink-0 rounded-full" />
         <span className="whitespace-nowrap">{dateText}</span>
-      </div>
-
-      {/* 이 출처가 사용된 이유 (content 필드, 최대 2줄 + 120자 truncate) — Spec 4에서 호버 카드로 전환 예정 */}
-      <div className="border-edge-neutral flex w-full flex-col gap-0.5 border-l-2 py-0.5 pl-3">
-        {source.is_cited && (
-          <div className="flex items-center gap-1">
-            <LightbulbFilled className="text-content-assistive h-4 w-4" />
-            <span className="text-body-xsmall text-content-alternative whitespace-nowrap">이 출처가 사용된 이유</span>
-          </div>
-        )}
-        <div className="text-body-small text-content-alternative line-clamp-2 wrap-break-word">
-          {reasonPreview}
-          {isReasonTrimmed && <span className="text-content-assistive"> ...더보기</span>}
-        </div>
       </div>
     </button>
   );
