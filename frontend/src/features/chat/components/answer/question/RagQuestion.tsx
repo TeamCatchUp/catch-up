@@ -4,9 +4,8 @@ import { useState } from 'react';
 
 import type { QAPair } from '@/features/chat/utils/render/chat';
 
-import CollapsibleQuestionText from './CollapsibleQuestionText';
 import EditMessageInput from './EditMessageInput';
-import QuestionEditButton from './QuestionEditButton';
+import QuestionActions from './QuestionActions';
 
 interface RagQuestionProps {
   currentQA: QAPair | undefined;
@@ -19,7 +18,6 @@ export default function RagQuestion({ currentQA, isLastPage, onSubmitEdit }: Rag
 
   const questionId = currentQA?.question.id ?? null;
   const questionContent = currentQA?.question.content ?? '';
-  const questionRenderKey = `${questionId}:${questionContent}`;
   const isEditing = questionId !== null && editingMessageId === questionId;
 
   if (!currentQA || !questionId) return null;
@@ -40,12 +38,15 @@ export default function RagQuestion({ currentQA, isLastPage, onSubmitEdit }: Rag
   }
 
   return (
-    <div className="group relative flex max-w-full items-start gap-1">
-      <div className="relative min-w-0 flex-1">
-        <CollapsibleQuestionText key={questionRenderKey} content={questionContent} />
+    <div className="group flex items-end justify-end gap-2.5">
+      {isLastPage && (
+        <div className="hidden group-hover:flex">
+          <QuestionActions content={questionContent} onEdit={() => setEditingMessageId(questionId)} />
+        </div>
+      )}
+      <div className="bg-fill-strong text-body-small text-content-neutral wrap-break-words max-w-135 rounded-2xl px-4 py-3 whitespace-pre-wrap">
+        {questionContent}
       </div>
-
-      {isLastPage && <QuestionEditButton onClick={() => setEditingMessageId(questionId)} />}
     </div>
   );
 }
