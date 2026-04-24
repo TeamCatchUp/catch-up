@@ -73,7 +73,7 @@ export default function RagAnswer({
         {currentQA.answer.content ? (
           <>
             {/* 마크다운 답변 */}
-            <div className="markdown-body wrap-break-words max-w-192.75">
+            <div className="markdown-body wrap-break-word max-w-192.75">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkBreaks]}
                 components={MarkDownComponents(currentQA.answer.sources, citationOrderMap)}
