@@ -78,7 +78,7 @@ export default function QuestionsHistoryPanel() {
         <div className="flex items-center gap-1.5 pl-1">
           <h2 className="text-heading-medium text-content-strong flex-1">내 질문 기록</h2>
           <Button variant="icon-only-gray" size="md" onClick={handleClose} aria-label="패널 닫기">
-            <Cancel className="text-icon-neutral h-6 w-6" />
+            <Cancel className="h-6 w-6" />
           </Button>
         </div>
         <div className="border-edge-neutral bg-fill-normal flex h-9 items-center gap-2 rounded-lg border px-2.5 py-1.5">

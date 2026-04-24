@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 
 // Chat Components
@@ -9,12 +9,15 @@ import RagAnswer from '@/features/chat/components/answer/RagAnswer';
 import DateDivider from '@/features/chat/components/DateDivider';
 import RagContentHeader from '@/features/chat/components/header/RagContentHeader';
 import RagInput from '@/features/chat/components/RagInput';
+import ScrollToBottomButton from '@/features/chat/components/ScrollToBottomButton';
 import RagSidebar from '@/features/chat/components/sidebar/RagSidebar';
 import useRagFilters from '@/features/chat/hooks/filter/useRagFilters';
 import useRagScroll from '@/features/chat/hooks/scroll/useRagScroll';
 // Hooks
 import useRagChat from '@/features/chat/hooks/useRagChat';
 import type { SourceType } from '@/shared/hooks/query/useSearchFilters';
+
+const ALLOWED_SOURCE_TYPES = new Set<string>(['jira', 'github', 'slack', 'confluence']);
 
 export default function RagAnswerPage() {
   const params = useParams();
@@ -24,7 +27,11 @@ export default function RagAnswerPage() {
   const repo = searchParams.get('repo');
   const initialQuery = searchParams.get('q');
   const scrollToMessageId = searchParams.get('scrollTo');
-  const initialSources = searchParams.get('sources')?.split(',').filter(Boolean) as SourceType[] | undefined;
+  // URL 쿼리의 sources를 허용된 값만 통과시킴 — 임의 문자열 주입 방지
+  const initialSources = searchParams
+    .get('sources')
+    ?.split(',')
+    .filter((s): s is SourceType => ALLOWED_SOURCE_TYPES.has(s));
 
   // Core hooks — useRagFilters를 먼저 호출하여 selectedSources를 useRagChat에 전달
   const filters = useRagFilters({ initialSources });
@@ -56,12 +63,15 @@ export default function RagAnswerPage() {
   // ---------------------------------------------------------------------------
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const scrollContainerForPaginationRef = useRef<HTMLDivElement | null>(null);
+  // ScrollToBottomButton은 element가 mount된 이후 스크롤 리스너 attach가 필요 → state로 추적
+  const [scrollContainerElement, setScrollContainerElement] = useState<HTMLDivElement | null>(null);
 
   // scrollContainerCallbackRef와 병행하여 scroll container 참조 유지
   const combinedScrollContainerRef = useCallback(
     (node: HTMLDivElement | null) => {
       scrollContainerCallbackRef(node);
       scrollContainerForPaginationRef.current = node;
+      setScrollContainerElement(node);
     },
     [scrollContainerCallbackRef],
   );
@@ -114,8 +124,13 @@ export default function RagAnswerPage() {
               </div>
             )}
 
-            {/* 날짜 구분선 */}
-            <DateDivider className="mb-8 w-full max-w-192.75" />
+            {/* 날짜 구분선 — 세션 첫 메시지의 생성 시각 기준 (messages는 created_at 오름차순 정렬 — sessionDataLoader 참고) */}
+            {chat.chatData?.messages[0]?.timestamp && (
+              <DateDivider
+                className="mb-8 w-full max-w-192.75"
+                date={new Date(chat.chatData.messages[0].timestamp)}
+              />
+            )}
 
             {/* 모든 Q&A 쌍을 순서대로 렌더링 */}
             <div className="mx-auto flex w-full max-w-193.25 flex-1 flex-col gap-12">
@@ -165,6 +180,8 @@ export default function RagAnswerPage() {
               )}
             </div>
           </div>
+
+          <ScrollToBottomButton container={scrollContainerElement} />
         </div>
 
         {/* 입력 영역 */}

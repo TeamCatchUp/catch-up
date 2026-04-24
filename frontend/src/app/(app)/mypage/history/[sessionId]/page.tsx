@@ -112,7 +112,7 @@ export default function HistoryDetailPage() {
             <div className="flex flex-col gap-3">
               <Badge className="rounded-md2 w-23.25 px-1.5 py-0.5">캐치스턴트 답변</Badge>
               {currentQA.answer?.content ? (
-                <div className="markdown-body wrap-break-words">
+                <div className="markdown-body wrap-break-word">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkBreaks]}
                     components={MarkDownComponents(currentQA.answer.sources, citationOrderMap)}

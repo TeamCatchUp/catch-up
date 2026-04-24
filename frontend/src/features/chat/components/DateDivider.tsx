@@ -1,28 +1,12 @@
-// ============================================================
-// 날짜 구분선 컴포넌트
-// 날짜를 중앙에 표시하는 가로 구분선
-// ============================================================
-
 'use client';
 
 import { cn } from '@/shared/utils/cn';
 
-// ============================================================
-// Types
-// ============================================================
-
 interface DateDividerProps {
-  /** 표시할 날짜 (기본: 오늘) */
-  date?: Date;
-  /** 날짜 포맷 함수 */
+  date: Date;
   formatDate?: (date: Date) => string;
-  /** 추가 CSS 클래스 */
   className?: string;
 }
-
-// ============================================================
-// Default formatter
-// ============================================================
 
 const defaultFormatDate = (date: Date): string => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -30,20 +14,16 @@ const defaultFormatDate = (date: Date): string => {
   return `${month}.${day}`;
 };
 
-// ============================================================
-// Component
-// ============================================================
-
-const DateDivider = ({ date = new Date(), formatDate = defaultFormatDate, className }: DateDividerProps) => {
+export default function DateDivider({ date, formatDate = defaultFormatDate, className }: DateDividerProps) {
   const formattedDate = formatDate(date);
 
   return (
-    <div className={cn('flex items-center justify-center gap-4', className)}>
-      <div className="border-edge-normal flex-1 border-t" />
-      <span className="text-body-xsmall text-content-alternative px-1.5 py-1">{formattedDate}</span>
-      <div className="border-edge-normal flex-1 border-t" />
+    <div className={cn('flex items-center justify-center', className)}>
+      <div className="border-edge-neutral flex-1 border-t" />
+      <span className="bg-fill-normal border-edge-neutral text-body-xsmall text-content-alternative rounded-full border px-5 py-1">
+        {formattedDate}
+      </span>
+      <div className="border-edge-neutral flex-1 border-t" />
     </div>
   );
-};
-
-export default DateDivider;
+}

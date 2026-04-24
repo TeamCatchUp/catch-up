@@ -137,7 +137,7 @@ export default function AnswerActionButtons({
             }}
             className={cn(
               'rounded-lg p-1.5',
-              isFeedbackDisabled ? 'cursor-default' : 'cursor-pointer icon-button-only-gray',
+              isFeedbackDisabled ? 'cursor-default' : 'icon-button-only-gray cursor-pointer',
               isThumbsDownPanelOpen && 'bg-fill-interaction-pressed border-edge-strong',
             )}
           >

@@ -101,7 +101,7 @@ export default function SideNavQuestions() {
             <div className="text-body-xsmall text-content-assistive py-2 text-center">불러오는 중...</div>
           )}
           <div ref={sentinelRef} className="h-1" />
-          <div className="to-fill-normal pointer-events-none sticky bottom-0 z-base h-12.5 w-full shrink-0 bg-linear-to-b from-transparent" />
+          <div className="to-fill-normal z-base pointer-events-none sticky bottom-0 h-12.5 w-full shrink-0 bg-linear-to-b from-transparent" />
         </div>
       </div>
     </div>
