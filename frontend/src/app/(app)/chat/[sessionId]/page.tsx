@@ -9,6 +9,7 @@ import RagAnswer from '@/features/chat/components/answer/RagAnswer';
 import DateDivider from '@/features/chat/components/DateDivider';
 import RagContentHeader from '@/features/chat/components/header/RagContentHeader';
 import RagInput from '@/features/chat/components/RagInput';
+import ScrollToBottomButton from '@/features/chat/components/ScrollToBottomButton';
 import RagSidebar from '@/features/chat/components/sidebar/RagSidebar';
 import useRagFilters from '@/features/chat/hooks/filter/useRagFilters';
 import useRagScroll from '@/features/chat/hooks/scroll/useRagScroll';
@@ -165,6 +166,8 @@ export default function RagAnswerPage() {
               )}
             </div>
           </div>
+
+          <ScrollToBottomButton scrollContainerRef={scrollContainerForPaginationRef} />
         </div>
 
         {/* 입력 영역 */}
