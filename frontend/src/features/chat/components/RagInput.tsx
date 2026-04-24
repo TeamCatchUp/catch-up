@@ -15,6 +15,9 @@ import { SearchOptionButton } from '@/shared/components/SearchOptionButton';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
+const INITIAL_TEXTAREA_HEIGHT_PX = 26;
+const MAX_TEXTAREA_HEIGHT_PX = 270;
+
 interface RagInputProps {
   filters: UseRagFiltersReturn;
   isLoading: boolean;
@@ -31,8 +34,8 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
     setNewInput(e.target.value);
 
     e.target.style.height = 'auto';
-    const newHeight = Math.min(e.target.scrollHeight, 270);
-    e.target.style.height = newHeight + 'px';
+    const newHeight = Math.min(e.target.scrollHeight, MAX_TEXTAREA_HEIGHT_PX);
+    e.target.style.height = `${newHeight}px`;
   };
 
   const handleSendMessage = async () => {
@@ -42,7 +45,7 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
     setNewInput('');
 
     if (textAreaRef.current) {
-      textAreaRef.current.style.height = '26px';
+      textAreaRef.current.style.height = `${INITIAL_TEXTAREA_HEIGHT_PX}px`;
     }
 
     onNewMessage();
@@ -155,7 +158,7 @@ export default function RagInput({ filters, isLoading, onSendMessage, onStop, on
                 <ArrowSend
                   className={cn(
                     'h-6 w-6 cursor-pointer',
-                    newInput.trim() ? 'brightness-0 invert' : 'text-content-assistive',
+                    newInput.trim() ? 'text-white' : 'text-content-assistive',
                   )}
                 />
               </button>
