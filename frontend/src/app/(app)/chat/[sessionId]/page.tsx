@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 
 // Chat Components
@@ -57,12 +57,15 @@ export default function RagAnswerPage() {
   // ---------------------------------------------------------------------------
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const scrollContainerForPaginationRef = useRef<HTMLDivElement | null>(null);
+  // ScrollToBottomButton은 element가 mount된 이후 스크롤 리스너 attach가 필요 → state로 추적
+  const [scrollContainerElement, setScrollContainerElement] = useState<HTMLDivElement | null>(null);
 
   // scrollContainerCallbackRef와 병행하여 scroll container 참조 유지
   const combinedScrollContainerRef = useCallback(
     (node: HTMLDivElement | null) => {
       scrollContainerCallbackRef(node);
       scrollContainerForPaginationRef.current = node;
+      setScrollContainerElement(node);
     },
     [scrollContainerCallbackRef],
   );
@@ -172,7 +175,7 @@ export default function RagAnswerPage() {
             </div>
           </div>
 
-          <ScrollToBottomButton scrollContainerRef={scrollContainerForPaginationRef} />
+          <ScrollToBottomButton container={scrollContainerElement} />
         </div>
 
         {/* 입력 영역 */}

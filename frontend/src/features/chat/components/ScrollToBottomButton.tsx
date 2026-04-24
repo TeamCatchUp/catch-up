@@ -1,22 +1,21 @@
 'use client';
 
-import { type RefObject,useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import ArrowDown from '@/public/icons/icon/arrow_down.svg';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 
 interface ScrollToBottomButtonProps {
-  scrollContainerRef: RefObject<HTMLDivElement | null>;
+  container: HTMLDivElement | null;
 }
 
 const SCROLL_THRESHOLD_PX = 100;
 
-export default function ScrollToBottomButton({ scrollContainerRef }: ScrollToBottomButtonProps) {
+export default function ScrollToBottomButton({ container }: ScrollToBottomButtonProps) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const container = scrollContainerRef.current;
     if (!container) return;
 
     const check = () => {
@@ -27,10 +26,9 @@ export default function ScrollToBottomButton({ scrollContainerRef }: ScrollToBot
     check();
     container.addEventListener('scroll', check, { passive: true });
     return () => container.removeEventListener('scroll', check);
-  }, [scrollContainerRef]);
+  }, [container]);
 
   const handleClick = () => {
-    const container = scrollContainerRef.current;
     container?.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
   };
 
