@@ -23,7 +23,6 @@ async def hybrid_search(
     limit: Annotated[int, Query(ge=1, le=100, description="최대 결과 수")] = 20,
     offset: Annotated[int, Query(ge=0, description="오프셋")] = 0,
     tool_filters: Annotated[list[SourceType], Query(description="협업 툴 검색 필터")] = [],
-    score_threshold: Annotated[float, Query(description="시맨틱 유사도 임계값")] = 0.4,
     service: PGVectorService = Depends(get_search_service),
 ) -> KeywordSearchResponse:
     """
@@ -34,7 +33,6 @@ async def hybrid_search(
         k=limit,
         tool_filters=tool_filters,
         offset=offset,
-        score_threshold=score_threshold,
         # keyword_tokens는 내부적으로 [query]로 처리됨
     )
 
