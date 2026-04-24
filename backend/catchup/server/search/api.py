@@ -75,8 +75,8 @@ async def hybrid_search(
     docs = service.hybrid_search(
         query=keyword,
         k=limit,
-        offset=offset,
         tool_filters=tool_filters,
+        offset=offset,
         score_threshold=score_threshold,
         # keyword_tokens는 내부적으로 [query]로 처리됨
     )

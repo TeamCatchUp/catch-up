@@ -268,11 +268,11 @@ class PGVectorService(BaseVectorDbService):
         self,
         query: str,
         k: int = 4,
-        offset: int = 0,
-        weights: list[float] = [0.2, 0.5, 0.3],
+        weights: list[float] = [0.3, 0.5, 0.2],
         tool_filters: list[SourceType] | None = None,
         temporal_filters: list[TemporalFilter] | None = None,
         keyword_tokens: list[str] | None = None,
+        offset: int = 0,
         score_threshold: float = 0.4,
     ) -> list[Document]:
         """
@@ -282,10 +282,12 @@ class PGVectorService(BaseVectorDbService):
             tool_filters=tool_filters,
             temporal_filters=temporal_filters,
             k=k,
-            offset=offset,
             weights=weights,
+            keyword_tokens=keyword_tokens,
+            offset=offset,
             score_threshold=score_threshold
         )
+
         
         return hybrid_search_chain.invoke({
             "semantic_query": query,
@@ -295,10 +297,11 @@ class PGVectorService(BaseVectorDbService):
     def _hybrid_search_chain(
         self,
         k: int = 4,
-        offset: int = 0,
         weights: list[float] = [0.3, 0.5, 0.2],  # [Vector, Title, Content]
         tool_filters: list[SourceType] | None = None,
         temporal_filters: list[TemporalFilter] | None = None,
+        keyword_tokens: list[str] | None = None,
+        offset: int = 0,
         score_threshold: float = 0.4
     ) -> RunnableSerializable[RetrieverInput, list[Document]]:
         """
@@ -390,9 +393,9 @@ class PGVectorService(BaseVectorDbService):
         self,
         query: str,
         k: int = 20,
-        offset: int = 0,
         tool_filters: list[SourceType] | None = None,
-        search_mode: Literal["title", "content", "both"] = "both"
+        search_mode: Literal["title", "content", "both"] = "both",
+        offset: int = 0,
     ) -> list[Document]:
         """
         Weighted Keyword Search Logic
