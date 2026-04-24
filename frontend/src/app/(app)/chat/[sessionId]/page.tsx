@@ -17,6 +17,8 @@ import useRagScroll from '@/features/chat/hooks/scroll/useRagScroll';
 import useRagChat from '@/features/chat/hooks/useRagChat';
 import type { SourceType } from '@/shared/hooks/query/useSearchFilters';
 
+const ALLOWED_SOURCE_TYPES = new Set<string>(['jira', 'github', 'slack', 'confluence']);
+
 export default function RagAnswerPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -25,7 +27,11 @@ export default function RagAnswerPage() {
   const repo = searchParams.get('repo');
   const initialQuery = searchParams.get('q');
   const scrollToMessageId = searchParams.get('scrollTo');
-  const initialSources = searchParams.get('sources')?.split(',').filter(Boolean) as SourceType[] | undefined;
+  // URL 쿼리의 sources를 허용된 값만 통과시킴 — 임의 문자열 주입 방지
+  const initialSources = searchParams
+    .get('sources')
+    ?.split(',')
+    .filter((s): s is SourceType => ALLOWED_SOURCE_TYPES.has(s));
 
   // Core hooks — useRagFilters를 먼저 호출하여 selectedSources를 useRagChat에 전달
   const filters = useRagFilters({ initialSources });
