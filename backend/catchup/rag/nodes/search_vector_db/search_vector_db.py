@@ -62,7 +62,7 @@ async def _get_hybrid_search_results(
     queries: list[VectorDbSearchQuery],
     tool_filters: list[SourceType] | None = None,
     k: int = 10,
-    weights: list[float] = [0.3, 0.5, 0.2],
+    weights: list[float] = [0.5, 0.3, 0.2],
 ):
     
     loop = asyncio.get_running_loop()
