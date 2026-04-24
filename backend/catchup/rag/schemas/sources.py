@@ -35,6 +35,9 @@ class EntityType(StrEnum):
     PR = "pr"
     # Common / Others
     COMMENT = "comment"
+    
+    # Channel Talk
+    USER_CHAT = "user_chat"
 
 
 # --------------------------------------------------------------------------
