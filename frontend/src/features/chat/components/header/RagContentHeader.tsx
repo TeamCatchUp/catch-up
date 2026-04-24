@@ -87,7 +87,7 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
         <div className="flex shrink-0 items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="icon-only-gray" size="md">
+              <Button variant="icon-only-gray" size="md" aria-label="더보기 메뉴">
                 <Kebeb className="h-6 w-6" />
               </Button>
             </DropdownMenuTrigger>
