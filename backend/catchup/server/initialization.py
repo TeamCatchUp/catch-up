@@ -29,6 +29,10 @@ HEAVY_INDICES = [
     CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cmetadata_contextual_bigm
     ON langchain_pg_embedding USING GIN ((cmetadata ->> 'contextual_content') gin_bigm_ops)
     """,
+    """
+    CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cmetadata_title_bigm
+    ON langchain_pg_embedding USING GIN ((cmetadata ->> 'title') gin_bigm_ops)
+    """,
 ]
 
 async def ensure_pg_indices() -> None:
@@ -41,7 +45,7 @@ async def ensure_pg_indices() -> None:
             
     # GIN은 autocommit 모드에서 Non-blocking으로 처리
     async with await psycopg.AsyncConnection.connect(conn_string, autocommit=True) as conn:
-        heavy_index_names = ["idx_fts_korean_bigm", "idx_cmetadata_contextual_bigm"]
+        heavy_index_names = ["idx_fts_korean_bigm", "idx_cmetadata_contextual_bigm", "idx_cmetadata_title_bigm"]
         for index_name in heavy_index_names:
             row = await (await conn.execute(f"""
                 SELECT indisvalid FROM pg_index
