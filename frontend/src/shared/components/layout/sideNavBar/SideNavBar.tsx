@@ -100,7 +100,7 @@ export default function SideNavBar() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="icon-only-gray" size="md" onClick={() => setSidebarOpen(false)}>
-                  <Close className="text-icon-neutral h-6 w-6" />
+                  <Close className="h-6 w-6" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>사이드바 닫기</TooltipContent>

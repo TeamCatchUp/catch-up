@@ -88,7 +88,7 @@ export default function RagHeader({ title, sessionId }: RagHeaderProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="icon-only-gray" size="md">
-                <Kebeb className="text-icon-normal h-6 w-6" />
+                <Kebeb className="h-6 w-6" />
               </Button>
             </DropdownMenuTrigger>
             <MoreButtonContent />
