@@ -23,7 +23,7 @@ interface UseRagFiltersOptions {
   initialSources?: SourceType[];
 }
 
-export const useRagFilters = (options?: UseRagFiltersOptions): UseRagFiltersReturn => {
+export default function useRagFilters(options?: UseRagFiltersOptions): UseRagFiltersReturn {
   // Filter Bar — initialSources가 있으면 자동으로 열기
   const [isFilterOpen, setIsFilterOpen] = useState(Boolean(options?.initialSources?.length));
 
@@ -45,6 +45,4 @@ export const useRagFilters = (options?: UseRagFiltersOptions): UseRagFiltersRetu
     selectedSources,
     toggleSource,
   };
-};
-
-export default useRagFilters;
+}
