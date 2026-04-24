@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/
 
 interface QuestionActionsProps {
   content: string;
-  onEdit: () => void;
+  onEdit?: () => void;
 }
 
 export default function QuestionActions({ content, onEdit }: QuestionActionsProps) {
@@ -20,14 +20,16 @@ export default function QuestionActions({ content, onEdit }: QuestionActionsProp
 
   return (
     <div className="flex items-center gap-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="icon-only-gray" size="md" type="button" onClick={onEdit} aria-label="질문 수정하기">
-            <EditPencil className="h-6 w-6" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">수정하기</TooltipContent>
-      </Tooltip>
+      {onEdit && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="icon-only-gray" size="md" type="button" onClick={onEdit} aria-label="질문 수정하기">
+              <EditPencil className="h-6 w-6" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">수정하기</TooltipContent>
+        </Tooltip>
+      )}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button variant="icon-only-gray" size="md" type="button" onClick={handleCopy} aria-label="질문 복사하기">
