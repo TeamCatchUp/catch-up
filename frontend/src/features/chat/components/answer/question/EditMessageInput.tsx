@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/shared/utils/cn';
 
+const MAX_TEXTAREA_HEIGHT_PX = 200;
+
 interface EditMessageInputProps {
   initialContent: string;
   onCancel: () => void;
-  onSubmit: (newContent: string) => void;
+  onSubmit: (newContent: string) => Promise<void>;
 }
 
 export default function EditMessageInput({ initialContent, onCancel, onSubmit }: EditMessageInputProps) {
@@ -25,8 +27,8 @@ export default function EditMessageInput({ initialContent, onCancel, onSubmit }:
   useEffect(() => {
     if (textAreaRef.current) {
       textAreaRef.current.style.height = 'auto';
-      const newHeight = Math.min(textAreaRef.current.scrollHeight, 200);
-      textAreaRef.current.style.height = newHeight + 'px';
+      const newHeight = Math.min(textAreaRef.current.scrollHeight, MAX_TEXTAREA_HEIGHT_PX);
+      textAreaRef.current.style.height = `${newHeight}px`;
     }
   }, [editText]);
 
