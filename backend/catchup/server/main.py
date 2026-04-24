@@ -42,7 +42,9 @@ from catchup.server.auth.api import router as auth_router
 from catchup.server.chat.api import router as chat_router
 from catchup.server.chat_room.api import router as chatroom_router
 from catchup.server.connector.atlassian.auth_api import router as atlassian_auth_router
-from catchup.server.connector.channel_talk.admin_api import router as channel_talk_admin_router
+from catchup.server.connector.channel_talk.admin_api import (
+    router as channel_talk_admin_router,
+)
 from catchup.server.connector.github.auth_api import router as github_auth_router
 from catchup.server.connector.github.webhook_api import router as github_webhook_router
 from catchup.server.connector.jira.webhook_api import router as jira_webhook_router
@@ -54,6 +56,7 @@ from catchup.server.initialization import ensure_vector_index
 from catchup.server.mapping.api import router as github_mapping_csv_router
 from catchup.server.middleware.request_context import request_context_middleware
 from catchup.server.onboarding.api import router as onboarding_router
+from catchup.server.search.api import router as search_router
 from catchup.server.settings.api import router as settings_router
 from catchup.server.state import state
 from catchup.server.stats.api import router as stats_router
@@ -456,6 +459,7 @@ app.include_router(onboarding_router)
 app.include_router(settings_router)
 app.include_router(sync_runtime_router)
 app.include_router(stats_router)
+app.include_router(search_router)
 app.include_router(audit_router)
 
 if settings.MCP_SERVER_ENABLED:

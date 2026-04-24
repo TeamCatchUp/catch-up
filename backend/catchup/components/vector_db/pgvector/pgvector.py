@@ -1,12 +1,21 @@
 import logging
-from typing import Optional, Dict, Any, override
+from datetime import datetime
+from typing import Any
+from typing import Dict
+from typing import Optional
+from typing import override
+
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
-from langchain_core.retrievers import BaseRetriever, RetrieverInput
-from langchain_core.runnables import RunnableLambda, RunnableParallel, RunnableSerializable
-from langchain_postgres import PGVector
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from sqlalchemy import Engine, text
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.retrievers import RetrieverInput
+from langchain_core.runnables import RunnableLambda
+from langchain_core.runnables import RunnableParallel
+from langchain_core.runnables import RunnableSerializable
+from langchain_postgres import PGVector
+from sqlalchemy import Engine
+from sqlalchemy import text
 
 from catchup.components.vector_db.base import BaseVectorDbService
 from catchup.components.vector_db.rank import weighted_reciprocal_rank
@@ -271,7 +280,87 @@ class PGVectorService(BaseVectorDbService):
         chain = retriever_parallel | RunnableLambda(apply_rrf)
         
         return chain
-    
+
+    def manual_keyword_search(
+        self,
+        keyword: str,
+        limit: int = 20,
+        offset: int = 0,
+        integrations: list[SourceType] | None = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> list[Document]:
+        """
+        SQLAlchemy를 사용하여 pg_bigm 기반 키워드 검색을 수행한다.
+        """
+        params = {
+            "collection_name": self.collection_name,
+            "query": keyword,
+            "limit": limit,
+            "offset": offset
+        }
+
+        # 동적 필터 구성
+        filter_clauses = []
+        if integrations:
+            filter_clauses.append("e.cmetadata ->> 'source' = ANY(:tools)")
+            params["tools"] = [t.value for t in integrations]
+        
+        if start_date and end_date:
+            # 기본적으로 created_at 필드를 기준으로 검색 (필요 시 확장 가능)
+            filter_clauses.append("(e.cmetadata ->> 'created_at')::timestamp BETWEEN :start_date AND :end_date")
+            params["start_date"] = start_date
+            params["end_date"] = end_date
+
+        filter_str = " AND ".join(filter_clauses)
+        if filter_str:
+            filter_str = f" AND {filter_str}"
+
+        # 하이브리드 키워드 필터: 유사도(=%) 또는 부분 일치(LIKE likequery)
+        # likequery()는 내부적으로 특수문자 이스케이프 및 앞뒤 % 추가를 처리함
+        keyword_filter = """
+            AND (
+                (e.cmetadata ->> 'contextual_content') =% :query
+                OR (e.cmetadata ->> 'contextual_content') LIKE likequery(:query)
+            )
+        """
+
+        # Precision 극대화: 
+        # 1. Exact Match 여부 (Boolean) - LIKE likequery 사용
+        # 2. 유사도 점수 (float)
+        # 3. 최신성 (timestamp)
+        search_sql = text(f"""
+            SELECT e.document, e.cmetadata, e.id,
+                   (CASE WHEN (e.cmetadata ->> 'contextual_content') LIKE likequery(:query) THEN 1 ELSE 0 END) as exact_match_boost,
+                   bigm_similarity(e.cmetadata ->> 'contextual_content', :query) as similarity_score
+            FROM langchain_pg_embedding e
+            JOIN langchain_pg_collection c ON e.collection_id = c.uuid
+            WHERE c.name = :collection_name
+              {filter_str}
+              {keyword_filter}
+            ORDER BY 
+                exact_match_boost DESC,
+                similarity_score DESC,
+                (e.cmetadata ->> 'created_at')::timestamp DESC
+            LIMIT :limit OFFSET :offset
+        """)
+
+        with self.session_factory() as session:
+            # 유사도 임계치 설정 (Recall 확보를 위해 낮게 유지)
+            session.execute(text("SET LOCAL pg_bigm.similarity_limit = 0.02"))
+            results = session.execute(search_sql, params).fetchall()
+
+        docs = []
+        for row in results:
+            docs.append(
+                Document(
+                    page_content=row[0],
+                    metadata=row[1] if row[1] else {},
+                    id=row[2]
+                )
+            )
+        return docs
+
     def similarity_search(
         self,
         query: str,
@@ -289,6 +378,7 @@ class PGVectorService(BaseVectorDbService):
             search_type=search_type, search_kwargs=search_kwargs
         )
         return retriever.invoke(query)
+
     
     def get_documents_by_ids(self, ids: list[str]) -> list[Document]:
         """Graph 확장 시 노드를 특정하기 위한 anchor id 리스트를 반환한다."""
